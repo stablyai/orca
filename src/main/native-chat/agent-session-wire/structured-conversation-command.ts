@@ -125,7 +125,7 @@ async function clearUnderSerialize(
         const blocked = conversationCommandBlocked(
           ctx,
           record,
-          context.readChildWork(sessionId),
+          { views: context.readChildWork(sessionId), open: context.childWorkOpen(sessionId) },
           context.sessions.get(sessionId)?.child ? undefined : 'at-rest'
         )
         if (blocked) {
@@ -137,7 +137,7 @@ async function clearUnderSerialize(
         const rechecked = conversationCommandBlocked(
           { ...ctx, fence },
           stopped,
-          context.readChildWork(sessionId),
+          { views: context.readChildWork(sessionId), open: context.childWorkOpen(sessionId) },
           'at-rest'
         )
         if (rechecked) {

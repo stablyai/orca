@@ -2,7 +2,7 @@ import { Readable } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { PipedChildProcess, PipedProcessSpec } from '@orca/process-host/process-spec'
-import { execCommand } from '../ssh/ssh-relay-exec-command'
+import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 
 const posix = process.platform !== 'win32'

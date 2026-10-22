@@ -1,6 +1,7 @@
 import { createElement, type RefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { TextInput } from 'react-native'
+import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { describe, expect, it, vi } from 'vitest'
 import { useTerminalTextFieldSubmitBinding } from './use-terminal-text-field-submit-binding'
 
@@ -10,11 +11,21 @@ import { useTerminalTextFieldSubmitBinding } from './use-terminal-text-field-sub
  */
 const mocks = vi.hoisted(() => {
   const boundHandlers: Array<() => void> = []
-  return { boundHandlers, unbindCount: 0, releasedCount: 0 }
+  return {
+    boundHandlers,
+    chordHandlers: new Array<(input: TerminalLiveAccessoryInput) => boolean>(),
+    unbindCount: 0,
+    releasedCount: 0
+  }
 })
 
 vi.mock('./terminal-text-field-submit-binding', () => ({
-  bindTerminalTextFieldSubmit: (_node: unknown, onSubmit: () => void) => {
+  bindTerminalTextFieldSubmit: (
+    _node: unknown,
+    onSubmit: () => void,
+    onChord: (input: TerminalLiveAccessoryInput) => boolean
+  ) => {
+    mocks.chordHandlers.push(onChord)
     mocks.boundHandlers.push(onSubmit)
     mocks.unbindCount += 1
     return () => {
@@ -32,9 +43,16 @@ const field: RefObject<TextInput | null> = { current: null }
  * `activeHandle`. This says the listener follows them.
  */
 function Harness({ value }: { readonly value: string }): null {
-  const bindField = useTerminalTextFieldSubmitBinding(field, () => {
-    submitted.push(value)
-  })
+  const bindField = useTerminalTextFieldSubmitBinding(
+    field,
+    () => {
+      submitted.push(value)
+    },
+    () => {
+      submitted.push(value)
+      return value === 'second'
+    }
+  )
   bindField(node)
   return null
 }
@@ -44,6 +62,7 @@ const node = {} as TextInput
 
 function reset(): void {
   submitted = []
+  mocks.chordHandlers.length = 0
   mocks.boundHandlers.length = 0
   mocks.unbindCount = 0
   mocks.releasedCount = 0
@@ -67,6 +86,22 @@ describe('the terminal text field submit binding', () => {
     })
 
     expect(submitted).toEqual(['second'])
+    act(() => renderer?.unmount())
+  })
+
+  it('refreshes a keyboard chord handler after a terminal or connection change', () => {
+    reset()
+    let renderer: ReactTestRenderer | null = null
+    act(() => {
+      renderer = create(createElement(Harness, { value: 'first' }))
+    })
+    const firstListener = mocks.chordHandlers[0]
+    expect(firstListener?.({ bytes: '\x03' })).toBe(false)
+    act(() => {
+      renderer?.update(createElement(Harness, { value: 'second' }))
+    })
+    expect(firstListener?.({ bytes: '\x03' })).toBe(true)
+    expect(submitted).toEqual(['first', 'second'])
     act(() => renderer?.unmount())
   })
 

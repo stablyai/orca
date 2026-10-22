@@ -9,7 +9,8 @@ import {
 } from '../slices/agent-status'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
-import { resolveTerminalStopRuntimeEnvironmentId } from './terminal-workspace-routing'
+import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { createTerminalShutdownGuardController } from './terminal-shutdown-guards'
 import { commitTerminalShutdownState } from './terminal-shutdown-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -36,7 +37,23 @@ export function createTerminalShutdownActions(
         tabs.flatMap((tab) => get().ptyIdsByTabId[tab.id] ?? [])
       )
       const expectedRuntimePtyIds = sortedUniquePtyIds(opts?.expectedRuntimePtyIds)
-      const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
+      const backendOwnsPtyTeardown = opts?.backendOwnsPtyTeardown === true
+      const teardownOwner = resolveTerminalTeardownOwner(
+        resolveTerminalPtyOwner(get(), worktreeId),
+        rendererShutdownPtyIds
+      )
+      // Why: treating an unattributable owner as local skips the host stop yet still clears
+      // bindings and writes resume records, so the agent runs on unseen and wake starts a twin.
+      // A backend-owned teardown already stopped its PTYs, so it has nothing to misroute.
+      if (teardownOwner.kind === 'refused' && !backendOwnsPtyTeardown) {
+        console.warn('[terminal-shutdown] refusing teardown: terminal owner is ambiguous', {
+          worktreeId,
+          shutdownReason
+        })
+        throw new Error(teardownOwner.reason)
+      }
+      const runtimeEnvironmentId =
+        teardownOwner.kind === 'resolved' ? teardownOwner.runtimeEnvironmentId : null
       // Only renderer-bound ids emit pane exit callbacks; raw RPC handles never enter this guard.
       const exitGuardPtyIds = rendererShutdownPtyIds
       const sleepingAgentSessionRecords = keepIdentifiers
@@ -61,7 +78,7 @@ export function createTerminalShutdownActions(
         get,
         keepIdentifiers,
         rendererShutdownPtyIds,
-        runtimeEnvironmentId,
+        runtimeOwnsRemotePtys: runtimeEnvironmentId !== null,
         set,
         tabs
       })
@@ -84,8 +101,9 @@ export function createTerminalShutdownActions(
         guards.markShutdownPending()
         guards.unregisterHandlers()
         try {
+          opts?.onAdmitted?.()
           // Backend ownership is opt-in; the default owner RPC prevents remote PTY leaks.
-          if (runtimeEnvironmentId && opts?.backendOwnsPtyTeardown !== true) {
+          if (runtimeEnvironmentId && !backendOwnsPtyTeardown) {
             await (shutdownReason === 'manual-sleep'
               ? requestRemoteWorktreeSleep({ environmentId: runtimeEnvironmentId, worktreeId })
               : callRuntimeRpc(

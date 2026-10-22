@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import {
   isDisconnectedRuntimeHostState,
@@ -162,8 +162,10 @@ export function useWorktreeCardFoundation({
       EMPTY_WORKSPACE_PORTS
   )
 
+  // Why no hostId: the host-qualified lookup scans every row, and this runs per card per write.
+  // The chip only reads status, so a twin falls back to the direct SSH state.
   const sshOwnerEnvironmentId = useAppStore((s) =>
-    repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
+    repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.

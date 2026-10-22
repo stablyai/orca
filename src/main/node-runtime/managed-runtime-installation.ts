@@ -1,8 +1,10 @@
 // Installs a managed runtime when the person asks, on the host that runs its chats. One instance per
 // runtime owns every change to its releases: it reclaims old ones once, first, then installs one at a
 // time. Publishing the release by rename is the commit point; a cancel after it changes nothing.
+// Remove deletes the releases only inside the host's ownership fence, never beside an install.
 
 import { randomUUID } from 'node:crypto'
+import { rm } from 'node:fs/promises'
 import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
@@ -17,13 +19,14 @@ import {
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
 
-const STATUS_WAIT_MS = 25_000
 const DEADLINE_MS = 45 * 60_000
 
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
   /** Whether a start would run a copy found outside Orca's releases (PATH, install folders). */
   findExternal: () => Promise<boolean>
+  /** Runs `work` once nothing on this host runs the runtime; rejects without running it otherwise. */
+  fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
 }
 
@@ -46,14 +49,13 @@ export class ManagedRuntimeInstallation {
     this.mutation = this.reclaim()
   }
 
-  /** At once without `shown`, else once the revision passes it or after a bounded wait. Disk and
-   *  PATH are reread on a first read and when the phase changes, never for byte progress alone. */
-  async status(shown?: number, signal?: AbortSignal): Promise<ManagedRuntimeInstallState> {
-    await this.state.waitForChange(shown, STATUS_WAIT_MS, signal)
+  /** Disk and PATH are reread on a `fresh` read and when the phase changes, never for byte
+   *  progress alone. */
+  async status(fresh = true): Promise<ManagedRuntimeInstallState> {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
-    if (shown === undefined || facts?.phase !== phase) {
+    if (fresh || facts?.phase !== phase) {
       const read = this.readInstalledFacts()
       facts = { phase, read }
       this.facts = facts
@@ -63,6 +65,11 @@ export class ManagedRuntimeInstallation {
       })
     }
     return { agent: this.agent, revision, ...(await facts.read), operation }
+  }
+
+  /** Calls `onChange` after every state revision until the returned unsubscribe. */
+  subscribe(onChange: () => void): () => void {
+    return this.state.subscribe(onChange)
   }
 
   private async readInstalledFacts(): Promise<InstalledFacts> {
@@ -76,9 +83,12 @@ export class ManagedRuntimeInstallation {
     return {
       available: pin !== null,
       version: pin?.version ?? null,
+      ...(pin && { downloadBytes: pin.archiveBytes }),
       installedVersion: release?.version ?? null,
       installedCurrent: release?.current ?? false,
       ...(pin && !release?.current && broken.includes(pin.version) && { damaged: true }),
+      // A damaged copy is removable too, though no launch runs it.
+      canRemove: release !== null || broken.length > 0,
       source
     }
   }
@@ -92,6 +102,9 @@ export class ManagedRuntimeInstallation {
     }
     const current = this.state.get().value
     const { running } = this
+    if (running && current?.kind === 'remove') {
+      throw new Error(`${label} is being removed. Try again after it finishes.`)
+    }
     if (current && current.id === running?.id && !running.controller.signal.aborted) {
       return current
     }
@@ -109,11 +122,38 @@ export class ManagedRuntimeInstallation {
     return operation
   }
 
+  /** Joins a running removal; refused while an install, or its cleanup, still runs. */
+  remove(): ManagedRuntimeOperation {
+    const current = this.state.get().value
+    if (this.running && current?.kind === 'remove') {
+      return current
+    }
+    if (this.running) {
+      throw new Error(`${this.runtime.label} is installing. Try again after it finishes.`)
+    }
+    const run: Run = { id: randomUUID(), controller: new AbortController(), committed: false }
+    const operation: ManagedRuntimeOperation = {
+      id: run.id,
+      kind: 'remove',
+      phase: 'removing',
+      downloadedBytes: 0,
+      totalBytes: null
+    }
+    this.running = run
+    this.state.set(operation)
+    this.mutation = this.mutation.then(() => this.runRemove(run))
+    return operation
+  }
+
   /** Resolves with the outcome once the work has unwound: `cancelled`, or `succeeded` when it had
    *  already committed. No install queues behind a running one, so `mutation` ends with it. */
   async cancel(operationId: string): Promise<ManagedRuntimeOperation | null> {
-    if (this.state.get().value?.id !== operationId) {
+    const current = this.state.get().value
+    if (current?.id !== operationId) {
       throw new Error(`That ${this.runtime.label} installation is no longer running.`)
+    }
+    if (current.kind === 'remove') {
+      throw new Error(`Removing ${this.runtime.label} cannot be cancelled.`)
     }
     const run = this.running
     if (run?.id === operationId && !run.committed) {
@@ -161,6 +201,18 @@ export class ManagedRuntimeInstallation {
           error: installFailureText(this.runtime.label, error, deadline)
         })
       }
+    } finally {
+      this.running = this.running === run ? null : this.running
+    }
+  }
+
+  private async runRemove(run: Run): Promise<void> {
+    try {
+      await this.deps.fence(() => rm(this.root, { recursive: true, force: true }))
+      this.publish(run, { phase: 'succeeded' })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.publish(run, { phase: 'failed', error: message })
     } finally {
       this.running = this.running === run ? null : this.running
     }

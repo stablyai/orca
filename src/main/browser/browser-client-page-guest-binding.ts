@@ -13,6 +13,7 @@ export type BrowserClientPageGuestBindingInput = {
  * the renderer at all.
  */
 export type BrowserClientPageGuestBinding = {
+  bindReplacement?(input: BrowserClientPageGuestBindingInput): void
   bind(input: BrowserClientPageGuestBindingInput): void
   release(registration: BrowserRoutePageGuestIdentity): void
 }
@@ -24,6 +25,24 @@ export function createBrowserClientPageGuestBinding(
   >
 ): BrowserClientPageGuestBinding {
   return {
+    bindReplacement: ({ registration, browserProfileId }) => {
+      const bound = browserManager.registerGuest(
+        {
+          browserPageId: registration.browserPageId,
+          sessionProfileId: browserProfileId,
+          webContentsId: registration.webContentsId,
+          rendererWebContentsId: registration.rendererWebContentsId
+        },
+        { retainPreviousGuestPolicies: true }
+      )
+      if (
+        !bound ||
+        browserManager.getGuestWebContentsId(registration.browserPageId) !==
+          registration.webContentsId
+      ) {
+        throw new Error('browser_client_page_guest_registration_failed')
+      }
+    },
     bind: ({ registration, browserProfileId }) => {
       if (
         browserManager.getGuestWebContentsId(registration.browserPageId) ===

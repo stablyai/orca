@@ -18,8 +18,11 @@ export function agentSessionOperationOutcomeReceipt(
   if ('fingerprint' in args) {
     // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
     return transactions.receipt((draft) => insertAcceptedAgentSessionOperationInto(draft, args), {
-      insertOperationsIfAbsent: true
+      insertOperationsIfAbsent: true,
+      submissionSessionId: args.outcome.status === 'succeeded' ? args.outcome.sessionId : undefined
     })
   }
-  return transactions.receipt((draft) => settleAgentSessionOperationInto(draft, args))
+  return transactions.receipt((draft) => settleAgentSessionOperationInto(draft, args), {
+    submissionSessionId: args.outcome.status === 'succeeded' ? args.outcome.sessionId : undefined
+  })
 }

@@ -116,12 +116,12 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 if (!delivery) {
                   return
                 }
-                void sendDiffNotesToNewAgent(delivery, () =>
-                  handleCreateTerminal(option.agent, {
+                void sendDiffNotesToNewAgent(delivery, async () => {
+                  await handleCreateTerminal(option.agent, {
                     initialPrompt: delivery.prompt,
                     onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
                   })
-                )
+                })
               }
             }))
           : createTabAgentLoadState === 'loaded'

@@ -3,14 +3,24 @@ import type { AppState } from '@/store/types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
+  getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { getPinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
-import { addHostSectionRows, type HostSectionRow } from './host-section-rows'
-import { orderHostSectionOptions } from './host-section-order'
+import { planSidebarRows } from '../../../../shared/sidebar-list/sidebar-row-plan'
+import { createSidebarPRGroupReader } from './worktree-list/grouping/pr-group-key'
+import {
+  getPinnedWorktreeDisplayPolicy,
+  type ImportedWorktreesCardCandidate,
+  type NewExternalWorktreesInboxCandidate,
+  type PendingCreationRef
+} from '../../../../shared/sidebar-list/row-types'
+import {
+  addHostSectionRows,
+  type HostSectionRow
+} from '../../../../shared/sidebar-list/host-section-rows'
+import { orderHostSectionOptions } from '../../../../shared/sidebar-list/host-section-order'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import { getLogicalRepoOrderRankById } from '../../../../shared/project-section-order'
 import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
@@ -19,12 +29,13 @@ import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from './worktree-list/listing/host-filtering'
+} from '../../../../shared/sidebar-list/host-filtering'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
-const EMPTY_IMPORTED_BY_REPO = Object.freeze(new Map()) as never
-const EMPTY_INBOX_BY_REPO = Object.freeze(new Map()) as never
-const EMPTY_PENDING_CREATIONS = Object.freeze([]) as never
+const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
+const EMPTY_INBOX_BY_REPO: ReadonlyMap<string, NewExternalWorktreesInboxCandidate> = new Map()
+const EMPTY_PENDING_CREATIONS: readonly PendingCreationRef[] = []
 
 /**
  * Orders already-filtered worktrees the way the sidebar would render them, for
@@ -64,38 +75,40 @@ export function computeRenderedSidebarRows(
     state.worktreeCardProperties
   )
 
-  const rows = buildRows(
-    state.groupBy,
-    [...visibleWorktrees],
-    getRepoMapFromState(state),
-    prCache,
-    state.collapsedGroups,
-    getLogicalRepoOrderRankById(state.repos.map((repo) => repo.id)),
-    state.workspaceStatuses,
-    state.projectOrderBy,
-    state.worktreeLineageById,
-    getWorktreeMapFromState(state),
-    true,
-    state.settings,
-    filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
+  const repoMap = getRepoMapFromState(state)
+  const rows = planSidebarRows({
+    groupBy: state.groupBy,
+    worktrees: [...visibleWorktrees],
+    repoMap,
+    prGroupOf: createSidebarPRGroupReader(repoMap, prCache),
+    repoOrder: getLogicalRepoOrderRankById(state.repos.map((repo) => repo.id)),
+    workspaceStatuses: state.workspaceStatuses,
+    projectOrderBy: state.projectOrderBy,
+    lineageById: state.worktreeLineageById,
+    worktreeMap: getWorktreeMapFromState(state),
+    nestLineage: true,
+    projectGroups: filterProjectGroupsForVisibleHosts(
+      projectGroups,
+      visibleHostIdSet,
+      defaultHostId
+    ),
     // Why empty: placeholder/imported/inbox/pending inputs never emit item or folder-workspace rows, the only two the order reads.
-    EMPTY_REPO_ID_SET,
-    EMPTY_IMPORTED_BY_REPO,
-    EMPTY_INBOX_BY_REPO,
-    EMPTY_PENDING_CREATIONS,
-    { projects: projection.projects, projectHostSetups: projection.setups },
-    filterFolderWorkspacesForVisibleHosts(
-      state.folderWorkspaces,
+    placeholderRepoIds: EMPTY_REPO_ID_SET,
+    importedWorktreesByRepo: EMPTY_IMPORTED_BY_REPO,
+    newExternalWorktreesInboxByRepo: EMPTY_INBOX_BY_REPO,
+    pendingCreations: EMPTY_PENDING_CREATIONS,
+    projectGrouping: { projects: projection.projects, projectHostSetups: projection.setups },
+    folderWorkspaces: filterFolderWorkspacesForVisibleHosts(
+      selectFolderWorkspaces(state),
       projectGroups,
       visibleHostIdSet,
       defaultHostId
     ),
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
-    undefined,
     defaultHostId,
     pinnedDisplayPolicy,
-    state.filterRepoIds
-  )
+    filterRepoIds: state.filterRepoIds
+  }).render(state.collapsedGroups)
 
   // Why lazy: with no host filter, addHostSectionRows is a pass-through, so skip building the whole host registry on a keystroke.
   // Deliberately a superset of its internal guards — on <=1 host it still no-ops, wasting only the registry build.
@@ -119,6 +132,7 @@ export function computeRenderedSidebarRows(
         workspaceHostScope: state.workspaceHostScope,
         visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
         defaultHostId,
+        localHostLabel: getLocalExecutionHostLabel(),
         collapsedHostKeys: state.collapsedGroups,
         forceCollapseHosts: false,
         preferProjectGrouping: true

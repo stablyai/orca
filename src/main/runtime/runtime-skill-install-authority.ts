@@ -16,8 +16,9 @@ import {
   resolveWslSkillProviderRoots,
   withClaudeSkillProviderRoot
 } from '../skills/skill-provider-runtime-roots'
-import type { SkillInstallRequest, SkillProviderRootOverrides } from './runtime-skill-types'
-import type { RuntimeSkillCommandHost } from './runtime-skill-command-surface'
+import type { SkillInstallRequest } from '../../shared/skill-install-contract'
+import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
+import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 
 /** Whether the destination lives on an SSH target; a workspace that cannot be placed throws. */
 export async function isSkillSshDestination(

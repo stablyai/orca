@@ -103,7 +103,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   const turns = new Map<string, string>()
   const working: boolean[] = []
   const fence = store.getRecord(SESSION)!.lease.runtimeFence
-  host.subscribe({
+  await host.subscribe({
     id: 'chat-1',
     sessionId: SESSION,
     emit: (event) => {
@@ -124,6 +124,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
       )
     }
   })
+  working.length = 0
   const body = hostTestMessage('hi')
   await host.send(CALLER, {
     envelope: {

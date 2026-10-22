@@ -88,43 +88,26 @@ afterEach(() => {
 })
 
 describe('queued message actions', () => {
-  it('joins repeated Clear presses until settlement while Resume and Steer stay available', async () => {
+  it('Clear deletes eight at a time and a repeated Clear sends nothing more', async () => {
     const ids = Array.from({ length: 10 }, (_, index) => `draft-${index + 1}`)
     const release = Promise.withResolvers<void>()
     const harness = createHarness({
       clearPending: release.promise,
       queuedMessages: ids.map((id, index) => draft(id, index + 1))
     })
-    expect(harness.result.current.clearCapable).toBe(true)
     let pending: Promise<boolean> = Promise.resolve(false)
     await act(async () => {
       pending = harness.result.current.clear()
-      expect(harness.result.current.clear()).toBe(pending)
-      await Promise.resolve()
+      expect(await harness.result.current.clear()).toBe(false)
+      expect(await harness.result.current.resume()).toBe(false)
     })
-    expect(harness.writeCalls).toEqual(
-      ids
-        .slice(0, 8)
-        .map((messageId) => [
-          'agentSession.queuedMessageDelete',
-          'agentSession.queuedMessageDelete',
-          { messageId }
-        ])
-    )
-    await act(async () => expect(await harness.result.current.resume()).toBe(false))
-    expect(
-      harness.mutateCalls.some(([method]) => method === 'agentSession.queuedMessagesResume')
-    ).toBe(true)
-    expect(harness.result.current.steerNewest()).toBe(true)
+    expect(harness.mutateCalls).toEqual([])
+    expect(harness.writeCalls.map(([, , fields]) => fields.messageId)).toEqual(ids.slice(0, 8))
+    expect(harness.result.current.queuePending).toBe('clear')
     release.resolve()
     await act(async () => expect(await pending).toBe(true))
     expect(harness.writeCalls).toHaveLength(ids.length)
-    await act(async () => {
-      const nextClear = harness.result.current.clear()
-      expect(nextClear).not.toBe(pending)
-      expect(await nextClear).toBe(true)
-    })
-    expect(harness.writeCalls).toHaveLength(ids.length * 2)
+    expect(harness.result.current.queuePending).toBeNull()
   })
 
   it('keeps Clear all unavailable while a local send has no host card', async () => {

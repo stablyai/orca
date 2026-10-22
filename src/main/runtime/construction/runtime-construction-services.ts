@@ -41,6 +41,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type * as PtyControllerContract from '../runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
+import type { RuntimeRepoSelector } from '../runtime-repo-selector'
 
 export abstract class RuntimeConstructionServices {
   abstract getOrchestrationDb(): OrchestrationDb
@@ -56,6 +57,9 @@ export abstract class RuntimeConstructionServices {
   abstract stopTerminalsForWorktree(
     ...args: Calls.StopTerminalsForWorktreeArgs
   ): Calls.StopTerminalsForWorktreeResult
+  abstract stopTerminalsForProject(
+    ...args: Calls.StopTerminalsForProjectArgs
+  ): Calls.StopTerminalsForProjectResult
   abstract resolveOrchestrationWorkerServer(
     ...args: Calls.ResolveOrchestrationWorkerServerArgs
   ): Calls.ResolveOrchestrationWorkerServerResult
@@ -176,7 +180,7 @@ export abstract class RuntimeConstructionServices {
     hostIds: ExecutionHostId[]
     omittedHostIds: ExecutionHostId[]
   }
-  protected abstract resolveRepoSelector(selector: string): Promise<Repo>
+  protected abstract resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo>
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
     repo: Repo,

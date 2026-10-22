@@ -5,8 +5,8 @@ import {
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from './worktree-activation-pty-inventory'
 import { gateWorktreeAgentActivation } from './worktree-agent-activation-gate'
 import {
@@ -70,15 +70,6 @@ export function createBackgroundSleepingAgentWakeDispatcher(
       unsubscribeReadiness = null
     }
   }
-}
-
-function getSleepingRecordTabId(record: SleepingAgentSessionRecord): string | null {
-  return (
-    record.tabId ??
-    parsePaneKey(record.paneKey)?.tabId ??
-    parseLegacyNumericPaneKey(record.paneKey)?.tabId ??
-    null
-  )
 }
 
 function dispatchBackgroundMount(worktreeId: string, tabIds: readonly string[] | undefined): void {

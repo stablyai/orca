@@ -100,8 +100,7 @@ function exitBeforeProof(): Promise<void> {
     acquisitionGeneration: `generation-${generation}`,
     reason: EXIT_REASON,
     failure: { kind: 'providerExited', detail: { text: EXIT_REASON, audience: 'log' } },
-    cause: 'unexpected-exit',
-    startupUnproven: true
+    cause: 'unexpected-exit'
   })
 }
 
@@ -118,7 +117,6 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   generation = 0
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
-    providerChildPhase: 'starting' as const,
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
@@ -135,6 +133,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: () => new Promise(() => {}),
       acquire,
       releaseAcquisition: vi.fn(async () => true),
       closeSession: vi.fn(async () => true),
@@ -254,10 +253,10 @@ describe('an open chat receives each row once', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     )
-    host['subscribers'].publish(SESSION, journal)
-
     expect(pane.received().statuses).toEqual(['host row'])
+    const delivered = pane.received().batches
+    host['subscribers'].publish(SESSION, journal)
     // The second publish found nothing past the reader's cursor, so it sent nothing at all.
-    expect(pane.received().batches).toBe(1)
+    expect(pane.received().batches).toBe(delivered)
   })
 })

@@ -11,12 +11,16 @@ import {
   worktreeMatchesVisibleHost
 } from './visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
+import {
+  buildWorktreeComparator,
+  sortWorktreesSmart
+} from '../../../../shared/sidebar-list/smart-sort'
 export {
   EMPTY_STRUCTURED_CHAT_WORKTREE_IDS,
   getWorktreeIdsWithStructuredChat
 } from './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
@@ -98,7 +102,7 @@ export function getVisibleWorktreeIds(): string[] {
   }
 
   const visibleIds = computeVisibleWorktreeIds(
-    state.worktreesByRepo,
+    selectWorktreesByRepo(state),
     sortedIds,
     buildVisibleWorktreeOptionsFromState(state, repoMap)
   )

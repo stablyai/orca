@@ -1,3 +1,9 @@
+import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
+import type {
+  PtyFencedTerminationRequest,
+  PtyFencedTerminationOutcome
+} from '../../shared/pty-fenced-termination'
+import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type {
   AgentProviderSessionMetadata,
@@ -10,7 +16,11 @@ import type {
   TerminalLeafMoveResult
 } from '../../shared/terminal-leaf-move'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
+import type {
+  PtyListedSession,
+  PtySessionListScope,
+  PtySessionLifecycle
+} from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
@@ -33,7 +43,6 @@ export type PtyApi = {
     cols: number
     rows: number
     cwd?: string
-    cwdFallback?: 'worktree'
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
@@ -53,6 +62,8 @@ export type PtyApi = {
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
+    // Layout-owner build: attach to `sessionId` or start nothing; older mains ignore it.
+    attachOnlyView?: boolean
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
     tabId?: string
     leafId?: string
@@ -106,8 +117,10 @@ export type PtyApi = {
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void
   resetInputModes: (id: string) => void
+  killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
-  ackColdRestore: (id: string) => void
+  /** The view painted the restore; `pane` names the pane it painted (layout-owner build). */
+  ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
   /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */
   ackHiddenOutputRestoreApplied: (id: string, hiddenDropEpisode?: number) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
@@ -160,13 +173,22 @@ export type PtyApi = {
     id: string,
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => Promise<boolean>
+  /** A local host pane whose Claude may open its diff panel unasked, judged from Claude's saved
+   *  config; false for any other pane. */
+  claudeDiffPanelMayAutoOpen: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ) => Promise<boolean>
   /** A held local session's last saved screen, read without spawning. */
   readNewerDaemonHeldScreen: (sessionId: string) => Promise<NewerDaemonHeldScreen | null>
   /** Stops the newer daemons; reopened only once each is confirmed exited. */
   reopenNewerDaemonTerminals: () => Promise<NewerDaemonReopenResult>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
-  listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
+  listSessions: (
+    scope?: PtySessionListScope,
+    admission?: ResourceViewAdmission
+  ) => Promise<PtyListedSession[]>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
@@ -254,13 +276,14 @@ export type PtyApi = {
       preserveRendererBinding?: boolean
       /** Which lifetime of `id` died; absent when the execution host predates the field. */
       incarnationId?: string
+      hostId?: string
       /** Set only when the owning relay disowned this id; never a claim that the process died. */
       ptySourceDisowned?: true
       /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
       replacedByRestart?: true
     }) => void
   ) => () => void
-  onSpawned: (callback: (data: { id: string }) => void) => () => void
+  onSpawned: (callback: (data: PtySessionLifecycle) => void) => () => void
   onSerializeBufferRequest: (
     callback: (data: {
       requestId: string

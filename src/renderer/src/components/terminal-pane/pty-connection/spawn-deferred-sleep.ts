@@ -23,6 +23,8 @@ import {
   resumeHostAutomaticRestores
 } from '@/runtime/resume-host-automatic-restores'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { releaseHiddenAgentResumeHold } from './hidden-agent-resume-deferral'
+import { startPaneThroughMainThenAttach } from './main-pane-start-request'
 import type {
   ColdRestoreAgentResumeStartup,
   FreshSpawnOptions,
@@ -207,7 +209,9 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
         clearPaneSpawnDeferral(session.cacheKey)
       }
     }
-    return session.startFreshSpawn(deferred.startupOverride, deferred.options).then(
+    return startPaneThroughMainThenAttach(session, () =>
+      session.startFreshSpawn(deferred.startupOverride, deferred.options)
+    ).then(
       (ptyId: string | null) => {
         settle()
         return ptyId
@@ -229,5 +233,6 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
     session.deferredSpawn = null
     cancelDeferredRestoreRetry(session.cacheKey)
     clearPaneSpawnDeferral(session.cacheKey)
+    releaseHiddenAgentResumeHold(session)
   }
 }

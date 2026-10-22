@@ -15,7 +15,11 @@ import {
   getEffectiveHooks,
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
-import { makeRuntimeStoreWithWorkspaceSession, store } from '../orca-runtime-test-fixtures.spec'
+import {
+  makeRuntimeStoreWithWorkspaceSession,
+  spawnedPtyEnv,
+  store
+} from '../orca-runtime-test-fixtures.spec'
 
 const WORKTREE_PATH = '/tmp/workspaces/native-chat-setup'
 const RUNNER = '/tmp/repo/.git/orca/setup-runner.sh'
@@ -134,11 +138,10 @@ describe('native-chat setup through renderer payload, RPC and execution host', (
     async (mode) => {
       const { spawn } = await createFromRendererPayload({ agent: 'codex', mode, startup: true })
       expect(spawn.mock.calls.map(([args]) => args.command)).toEqual(['codex', `bash ${RUNNER}`])
-      expect(spawn.mock.calls[0][0].env?.ORCA_TAB_ID).toEqual(expect.any(String))
-      expect(spawn.mock.calls[0][0].env?.ORCA_TAB_ID).not.toBe('')
-      expect(spawn.mock.calls[0][0].env?.ORCA_TAB_ID).not.toBe(
-        spawn.mock.calls[1][0].env?.ORCA_TAB_ID
-      )
+      const startupTabId = spawnedPtyEnv(spawn.mock.calls[0][0]).ORCA_TAB_ID
+      expect(startupTabId).toEqual(expect.any(String))
+      expect(startupTabId).not.toBe('')
+      expect(startupTabId).not.toBe(spawnedPtyEnv(spawn.mock.calls[1][0]).ORCA_TAB_ID)
     }
   )
 

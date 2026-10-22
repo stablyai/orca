@@ -1,21 +1,18 @@
 import type { AppState } from '../types'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
-import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isSmartSortRelevantAgentChange } from '../../../../shared/sidebar-list/smart-sort-agent-change'
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   findAgentPaneWorktreeId,
+  findTabForAgentEntry,
   isAgentCompletionState
 } from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
-import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
+import { liveResumeRecord } from '../../../../shared/agent-resume-record-from-status'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
@@ -62,24 +59,10 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     !isAgentCompletionState(existing.state)
       ? (entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey))
       : null
-  const wasFresh =
-    !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
   const attributionChanged =
     existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
-  const sameStateStateStartedAtChanged =
-    !!existing && existing.state === entry.state && entry.stateStartedAt !== existing.stateStartedAt
-  const sameStateDoneAttentionChanged =
-    existing?.state === 'done' &&
-    entry.state === 'done' &&
-    agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
   const sortRelevantChange =
-    !existing ||
-    existing.state !== entry.state ||
-    !wasFresh ||
-    attributionChanged ||
-    commandCodeNewTurn ||
-    sameStateStateStartedAtChanged ||
-    sameStateDoneAttentionChanged
+    isSmartSortRelevantAgentChange(existing, entry, updatedAt) || commandCodeNewTurn
   const doneRetentionFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&
@@ -109,22 +92,14 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     verdictChanged ||
     doneRetentionFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
-  const liveRecoveryWorktreeId =
-    entry.state === 'done' && !retainsResumableRecoveryIdentity
-      ? null
-      : (entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey))
-  const liveRecoveryRecord = liveRecoveryWorktreeId
-    ? sleepingRecordFromEntry({
-        state,
-        entry: retainsResumableRecoveryIdentity
-          ? { ...entry, prompt: '', lastAssistantMessage: undefined }
-          : entry,
-        worktreeId: liveRecoveryWorktreeId,
-        capturedAt: updatedAt,
-        launchConfig: launchConfigSource,
-        origin: 'live'
-      })
-    : null
+  const liveRecoveryRecord = liveResumeRecord({
+    entry,
+    retainsResumableIdentity: retainsResumableRecoveryIdentity,
+    worktreeIdOf: () => entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey),
+    tabOf: (worktreeId) => findTabForAgentEntry(state, worktreeId, entry),
+    capturedAt: updatedAt,
+    launchConfig: launchConfigSource
+  })
   const migrationUnsupported = pruneMigrationUnsupportedEntries(
     state.migrationUnsupportedByPtyId,
     (migrationEntry) => migrationEntry.paneKey === paneKey

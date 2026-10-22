@@ -1,14 +1,18 @@
-// The read-only layout stream (design 2.4) and the server snapshot read (design 6.3). Not
-// advertised as a capability and not on the mobile allowlist: no client calls them until the
-// switch, so they are inert.
+// The layout stream (design 2.4), the server snapshot read (design 6.3) and layout.apply. Paired
+// desktops may call them; a desktop relies on them only on a server advertising
+// `layout.intents.v1` (layout-intents-capability.ts). Not on the mobile allowlist.
 
 import {
   LayoutApplyParams,
+  LayoutReportViewParams,
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
 } from '../../../../shared/rpc-contract/workspace-layout-params'
+import { LayoutReopenHeldPanesParams } from '../../../../shared/rpc-contract/workspace-layout-held-panes-params'
 import type { WorkspaceLayoutStreamFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../core'
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import { listEnvironments } from '../../../../shared/runtime-environment-store'
 
 let layoutSubscriptionSeq = 0
 
@@ -30,8 +34,11 @@ export const WORKSPACE_LAYOUT_METHODS = [
         const subscriptionId = `layout-${connectionId ?? 'inproc'}-${++layoutSubscriptionSeq}`
         const cleanupKey = layoutCleanupKey(connectionId, subscriptionId)
         const release = (): void => runtime.cleanupSubscription(cleanupKey)
-        const { snapshot, seq, unsubscribe } = runtime.subscribeWorkspaceLayouts((event) => {
-          if (wanted(event.key)) {
+        const { snapshot, seq, epoch, unsubscribe } = runtime.subscribeWorkspaceLayouts((event) => {
+          if (event.type === 'records') {
+            // Sent even when it names none of them, so the subscriber's positions stay gapless.
+            emit({ ...event, workspaces: event.workspaces.filter((change) => wanted(change.key)) })
+          } else if (wanted(event.key)) {
             emit(event)
           }
         })
@@ -50,7 +57,8 @@ export const WORKSPACE_LAYOUT_METHODS = [
           type: 'snapshot',
           subscriptionId,
           workspaces: snapshot.filter((entry) => wanted(entry.key)),
-          seq
+          seq,
+          ...(epoch ? { epoch } : {})
         })
         if (signal?.aborted) {
           release()
@@ -71,7 +79,17 @@ export const WORKSPACE_LAYOUT_METHODS = [
     name: 'layout.getRemoteSnapshots',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime }) => ({ snapshots: runtime.getRemoteLayoutSnapshots() })
+    handler: async (_params, { runtime }) => {
+      // Only servers still paired: a removed server's last layout must not seed a view again.
+      const known = new Set(
+        listEnvironments(getAppEnvironment().getPath('userData')).map(({ id }) => id)
+      )
+      return {
+        snapshots: Object.fromEntries(
+          Object.entries(runtime.getRemoteLayoutSnapshots()).filter(([id]) => known.has(id))
+        )
+      }
+    }
   })
 ]
 
@@ -85,5 +103,30 @@ export const LAYOUT_APPLY_METHODS = [
     permission: 'workspace',
     params: LayoutApplyParams,
     handler: async (params, { runtime }) => runtime.applyLayoutCommand(params.command)
+  }),
+  // A paired desktop's Reopen of held panes; main's frames, not the reply, show them start.
+  defineMethod({
+    name: 'layout.reopenHeldPanes',
+    permission: 'workspace',
+    params: LayoutReopenHeldPanesParams,
+    handler: async (params, { runtime }) => runtime.reopenHeldTerminalPanes(params.panes)
+  })
+]
+
+/** A paired desktop's view of this server's workspaces, so a CLI or phone file opens in the group it
+ *  shows. Registered with layout.apply: only a server advertising `layout.intents.v1` takes it. */
+export const LAYOUT_VIEW_REPORT_METHODS = [
+  defineMethod({
+    name: 'layout.reportView',
+    permission: 'workspace',
+    params: LayoutReportViewParams,
+    handler: async (params, { runtime, connectionId, signal }) => {
+      // A report outlives the call, so it needs a connection whose close drops it (as sidebarInputs.reportView).
+      if (connectionId === undefined || signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      runtime.reportClientView(connectionId, params.activeGroupByWorkspace, params.refresh === true)
+      return { ok: true }
+    }
   })
 ]

@@ -32,8 +32,10 @@ on:
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/setup-pnpm/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
@@ -75,6 +77,8 @@ on:
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
       - 'config/.bun-version'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/setup-pnpm/**'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'
       - '!src/shared/**/*.test.[jt]sx'
@@ -92,6 +96,9 @@ concurrency:
   # three -- and a merge that breaks main there is exactly what `main-tests` checks for.
   group: mobile-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -153,6 +160,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Why here: pr.yml runs these import rules before mobile's install, when mobile's tsconfig
+      # (which extends expo's) can't load, so its import cycles were never seen. Zero tolerance.
+      - name: Lint mobile imports with mobile dependencies installed
+        working-directory: .
+        run: node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json mobile --deny-warnings
 
       # Call installed tools so pnpm's dependency refresh cannot race between checks.
       - name: Typecheck
@@ -232,6 +245,10 @@ jobs:
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_OPT_OUT_USAGE: '1'
         run: bundle exec fastlane lanes
+
+      - name: Smoke-check CocoaPods
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: bundle exec pod --version
 
       - name: Lint
         run: pnpm lint

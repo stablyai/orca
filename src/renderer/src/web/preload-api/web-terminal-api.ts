@@ -20,6 +20,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Likewise terminal.resetInputModes.
     resetInputModes: () => {},
     kill: () => Promise.resolve(),
+    killFenced: () => Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
     ackColdRestore: () => {},
     // Web panes never transit main's hidden-delivery gate, so there is no drop latch.
     ackHiddenOutputRestoreApplied: () => {},
@@ -47,6 +48,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     disableCodexSharedServerAutoStart: () => Promise.resolve(false),
     stopCodexSharedServer: () => Promise.resolve(false),
     openedBeforeClaudeAccounts: () => Promise.resolve(false),
+    claudeDiffPanelMayAutoOpen: () => Promise.resolve(false),
     // Why: the paired host owns its daemons; this client has none to stop.
     readNewerDaemonHeldScreen: () => Promise.resolve(null),
     reopenNewerDaemonTerminals: () => Promise.resolve({ reopened: false }),

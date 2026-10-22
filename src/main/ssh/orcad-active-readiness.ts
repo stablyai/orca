@@ -1,25 +1,28 @@
 /** Proving that the orcad an activation record names is the one actually serving. */
-import { evaluateOrcadActivation, type OrcadActivationExpectation } from './orcad-activation-gate'
+import {
+  evaluateOrcadActivation,
+  type OrcadActivationExpectation
+} from '../managed-server/activation/orcad-activation-gate'
 import {
   orcadLivenessProbeCommand,
   parseOrcadLiveness,
   type OrcadLaunchSpec,
   type OrcadReadinessParse
-} from './orcad-remote-launch'
+} from '../managed-server/install/orcad-remote-launch'
 import {
   execOrcadRemote,
   launchOrcadAndAwaitReadiness,
   type OrcadRemoteExecTarget
-} from './orcad-remote-runtime-control'
+} from '../managed-server/install/orcad-remote-runtime-control'
 import {
   parseOrcadReadinessWaitOutput,
   readOrcadReadinessNowCommand
-} from './orcad-remote-readiness-wait'
+} from '../managed-server/install/orcad-remote-readiness-wait'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { withOrcadLogTail } from './orcad-remote-log-tail'
+import { withOrcadLogTail } from '../managed-server/install/orcad-remote-log-tail'
 
 /** `exited` is proven absence; `unverifiable` means the host could not say, which is not death. */
-export type OrcadReadinessFailureVerdict = 'exited' | 'unverifiable' | 'rejected'
+type OrcadReadinessFailureVerdict = 'exited' | 'unverifiable' | 'rejected'
 
 export class OrcadActiveReadinessError extends Error {
   constructor(
@@ -62,7 +65,7 @@ function gatedReadiness(
  * handshake on a platform whose daemon never spawn-probes. A build that predates the coverage
  * field keeps the identity gate alone, so an older slot is not stranded.
  */
-export function orcadDaemonCoverageRefusal(readiness: ServeReadiness): string | null {
+function orcadDaemonCoverageRefusal(readiness: ServeReadiness): string | null {
   const health = readiness.health
   const coverage = health?.terminalDaemon?.selfTest?.coverage
   if (!health || coverage === undefined || coverage === 'pty-spawn') {

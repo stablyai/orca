@@ -145,14 +145,14 @@ describe('Resume on a held queue', () => {
     act(() => {
       pending = result.current.resume()
     })
-    expect(result.current.resuming).toBe(true)
+    expect(result.current.queuePending).toBe('resume')
     await act(() => result.current.resume())
     expect(mocks.call).toHaveBeenCalledTimes(1)
     await act(async () => {
       answer.resolve(RESUMED)
       await pending
     })
-    expect(result.current.resuming).toBe(false)
+    expect(result.current.queuePending).toBeNull()
   })
 
   it('a refused or failed Resume is one toast', async () => {
@@ -282,7 +282,7 @@ describe('Resume transcript navigation through the real mutation and queue contr
       const pending = startResume(hook)
       await act(async () => expect(await pending).toBe(false))
       expect(hook.result.current.scrollToEnd).not.toHaveBeenCalled()
-      expect(hook.result.current.submits.queuedMessages.resuming).toBe(false)
+      expect(hook.result.current.submits.queuedMessages.queuePending).toBeNull()
       expect(mocks.toastError).toHaveBeenCalledTimes(
         outcome === 'failed' || outcome === 'refused' ? 1 : 0
       )

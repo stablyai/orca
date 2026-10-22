@@ -1,5 +1,6 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
+import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
@@ -173,11 +174,13 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
+    savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.
     readClipboardFilePaths: async () => [],
     // Why empty: a browser has no local paste folder, so restored pastes stay to attach again.
     restoreNativeChatPastes: async () => [],
+    onAgentSessionUploadRemoved: () => noopUnsubscribe,
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
@@ -269,6 +272,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyTerminalPaneReveal: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
+    onSetPaneTitle: () => noopUnsubscribe,
     onFocusTerminal: () => noopUnsubscribe,
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
@@ -276,9 +280,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     respondSessionTabClose: () => {},
     onMoveSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
+    onRevealEditorTabFromRuntime: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
-    onMobileMarkdownRequest: () => noopUnsubscribe,
-    respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
     onTerminalTabCloseRequest: () => noopUnsubscribe,
     respondTerminalTabClose: () => {},

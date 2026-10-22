@@ -2,8 +2,12 @@
 // (planTerminalLeafMove) is, before any partition is written.
 
 import { randomUUID } from 'node:crypto'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { layoutContainsLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
+import {
+  collectLayoutLeafIdsInOrder,
+  layoutContainsLeafId
+} from '../../../shared/workspace-layout/terminal-pane-tree'
 import { findTerminal } from '../../../shared/workspace-layout/workspace-layout-command-steps'
 import type {
   CommandOf,
@@ -47,7 +51,14 @@ export function resolveWindowPaneDetach(
       .workspaces[command.workspace]
     const tab = workspace && findTerminal(workspace, command.tabId)
     return tab && layoutContainsLeafId(tab.panes.root, leafId)
-      ? [{ entityId: tab.entityId, ptyId: workspace.leaves?.[leafId]?.ptyId }]
+      ? [
+          {
+            hostId,
+            entityId: tab.entityId,
+            ptyId: workspace.leaves?.[leafId]?.ptyId,
+            panes: collectLayoutLeafIdsInOrder(tab.panes.root).length
+          }
+        ]
       : []
   })
   if (holders.length === 0) {
@@ -62,16 +73,31 @@ export function resolveWindowPaneDetach(
   ) {
     return { code: 'pane_in_other_tab' }
   }
+  const home = holders.find((holder) => holder.hostId === holderIds[0])
+  // Switch point: main holds every pane the window shows, so the home copy's last pane is the
+  // tab's; a stray copy in another partition still moves with it.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && home && home.panes < 2) {
+    return { code: 'last_pane' }
+  }
   const bound = new Set(holders.flatMap(({ ptyId }) => (ptyId ? [ptyId] : [])))
-  // The window's live terminal wins: after an SSH respawn one copy can still name the old one.
-  const ptyId = command.windowDetach.ptyId ?? (bound.size === 1 ? [...bound][0]! : null)
+  // Switch point: main's binding, not the window's claim, names the moved terminal; when an SSH
+  // respawn bound one copy before the other, the workspace's home partition holds the live one.
+  const ptyId = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? bound.size === 1
+      ? [...bound][0]!
+      : (home?.ptyId ?? null)
+    : (command.windowDetach.ptyId ?? (bound.size === 1 ? [...bound][0]! : null))
   if (bound.size > 0 && !(ptyId && bound.has(ptyId))) {
     return { code: 'pty_mismatch' }
   }
   return {
     command: {
       ...command,
-      windowDetach: { ptyId, tabId: command.windowDetach.tabId ?? randomUUID() }
+      windowDetach: {
+        ...command.windowDetach,
+        ptyId,
+        tabId: command.windowDetach.tabId ?? randomUUID()
+      }
     },
     sourceEntityId
   }

@@ -12,6 +12,7 @@ import type {
   WorkspaceSpaceScanProgress
 } from '../../shared/workspace-space-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { WorkspaceSpaceChange } from '../../shared/workspace-space-change'
 
 export type WorkspaceCleanupApi = {
   scan: (
@@ -41,9 +42,17 @@ export type WorkspaceSpaceApi = {
   onWindowStateRequested?: (callback: () => void) => () => void
   onWindowClosed?: (callback: () => void) => () => void
   onWindowState?: (callback: (state: unknown) => void) => () => void
-  revealWorktree?: (worktreeId: string, executionHostId?: ExecutionHostId) => Promise<void>
+  revealWorktree?: (
+    worktreeId: string,
+    executionHostId?: ExecutionHostId,
+    change?: WorkspaceSpaceChange
+  ) => Promise<void>
   onRevealWorktree?: (
-    callback: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+    callback: (
+      worktreeId: string,
+      executionHostId?: ExecutionHostId,
+      change?: WorkspaceSpaceChange
+    ) => void
   ) => () => void
   requestWorktreeRefresh?: () => Promise<void>
   onWorktreeRefreshRequested?: (callback: () => void) => () => void

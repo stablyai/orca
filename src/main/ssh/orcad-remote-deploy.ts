@@ -6,31 +6,37 @@
  * Every activation runs under the host's activation fence and journal
  * (`orcad-activation-lock.ts`), so an interrupted one is recoverable to exactly one slot.
  */
-import { logOrcadActivationOutcome } from './orcad-activation-outcome-log'
+import { logOrcadActivationOutcome } from '../managed-server/activation/orcad-activation-outcome-log'
 import { join } from 'node:path'
 import type { OrcadHostTransport } from './orcad-host-transport'
-import { ORCAD_INSTALL_MODEL } from './remote-install-model'
-import { computeRemoteInstallDir, readLocalFullVersion } from './remote-versioned-install'
-import { readOrcadActivationRecord } from './orcad-activation-record-store'
-import type { OrcadActivationRecord } from './orcad-activation-record'
-import type { OrcadActivationVerdict } from './orcad-activation-gate'
-import type { OrcadTerminalCensus } from './orcad-update-plan'
+import { ORCAD_INSTALL_MODEL } from '../managed-server/install/remote-install-model'
+import {
+  computeRemoteInstallDir,
+  readLocalFullVersion
+} from '../managed-server/install/remote-versioned-install'
+import { readOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
+import type { OrcadActivationVerdict } from '../managed-server/activation/orcad-activation-gate'
+import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { installOrcadBundle } from './orcad-remote-install'
+import { installOrcadBundle } from '../managed-server/install/orcad-remote-install'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../shared/orcad-profile-preflight'
 import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import { readOrcadBundleTarget } from './orcad-deployment-target'
-import { resolveOrcadRuntimeTarget } from './orcad-runtime-target'
-import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
+import { resolveOrcadRuntimeTarget } from '../managed-server/lifecycle/orcad-runtime-target'
+import {
+  materializeNodeRuntimeArchive,
+  nodeRuntimeArchiveCachePath
+} from '../node-runtime/pinned-runtime-materializer'
 import {
   orcadActivationFenceExists,
   resolveOrcadActivationReadinessTimeout,
   withOrcadActivationLock
-} from './orcad-activation-lock'
+} from '../managed-server/activation/orcad-activation-lock'
 import { activateInstalledOrcad } from './orcad-installed-activation'
-import { orcadActivationFenceRefusal } from './orcad-activation-fence-hold'
+import { orcadActivationFenceRefusal } from '../managed-server/activation/orcad-activation-fence-hold'
 
 export type OrcadDeployOptions = {
   conn: OrcadHostTransport
@@ -59,9 +65,15 @@ export type OrcadDeployOptions = {
   censusRecord?: OrcadActivationRecord
   /**
    * Counts again under the fence just before the incumbent stops, so a terminal opened during
-   * the upload still defers the update. Called only while the incumbent is the one counted.
+   * the upload still defers the update. Required, since `census` may predate a long upload.
+   * Called only while the incumbent is the one counted; any failure must read as unverifiable.
    */
-  recountCensus?: () => Promise<OrcadTerminalCensus>
+  recountCensus: () => Promise<OrcadTerminalCensus>
+  /**
+   * Reopens the terminal admission `recountCensus` closes, when the update then leaves the
+   * incumbent running. Best effort: the server reopens on its own once the fence lapses.
+   */
+  releaseIncumbentAdmission: () => Promise<void>
   force?: boolean
   /** The Orca app version activating, recorded so an older client never downgrades the host. */
   appVersion?: string
@@ -93,6 +105,8 @@ export async function deployOrcad(
     (input.localOrcadDir
       ? readOrcadBundleTarget(input.localOrcadDir)
       : await resolveOrcadRuntimeTarget(input))
+  const runtimeCacheRoot =
+    input.runtimeCacheRoot ?? join(getAppEnvironment().getPath('userData'), 'orcad-artifacts')
   const options = {
     ...input,
     target,
@@ -101,11 +115,8 @@ export async function deployOrcad(
       ORCAD_STARTUP_READINESS_TIMEOUT_MS
     ),
     nodeRuntimeArchive: () =>
-      materializeNodeRuntimeArchive(
-        target,
-        input.runtimeCacheRoot ?? join(getAppEnvironment().getPath('userData'), 'orcad-artifacts'),
-        { signal: input.signal }
-      ),
+      materializeNodeRuntimeArchive(target, runtimeCacheRoot, { signal: input.signal }),
+    nodeRuntimeOfflineArchivePath: nodeRuntimeArchiveCachePath(target, runtimeCacheRoot),
     localOrcadDir:
       input.localOrcadDir ?? (await materializeOrcadArtifact(target, { signal: input.signal }))
   }

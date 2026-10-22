@@ -9,7 +9,8 @@ import { SessionNotFoundError } from '../../../daemon/daemon-errors'
 import type { Store } from '../../../persistence'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { spawnForStablePane } from './stable-owner'
+import { adoptStablePane } from './adopt-stable'
+import * as providers from '../provider/registry'
 
 const CONNECTION = 'conn-1'
 const WORKTREE = 'repo-1::/tmp/pane-absence'
@@ -17,7 +18,6 @@ const TAB = 'tab-1'
 const LEAF = '1b3f2c4d-5e6a-4b7c-8d9e-0f1a2b3c4d5e'
 const SIBLING_LEAF = '2c4d3e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f'
 const PTY_ID = 'ssh:conn-1@@pty2:epoch-a:1'
-const OWNER = { tabId: TAB, leafId: LEAF, ptyId: PTY_ID, hasPersistedBinding: true as const }
 
 function paneStore(): { store: Store; read: () => WorkspaceSessionState } {
   let session = {
@@ -93,15 +93,16 @@ async function adoptAfterAttachRefusal(error: unknown): Promise<{
     .fn()
     .mockRejectedValueOnce(error)
     .mockResolvedValueOnce({ id: 'ssh:conn-1@@pty2:epoch-b:1', isReattach: false })
-  await spawnForStablePane({
-    runtime,
-    store,
-    provider: { spawn } as unknown as IPtyProvider,
-    spawnOptions: { cols: 80, rows: 24 },
-    owner: OWNER,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refusal exits attachment before any provider method other than spawn is used.
+  vi.spyOn(providers, 'getProvider').mockReturnValue({ spawn } as unknown as IPtyProvider)
+  await adoptStablePane(runtime, store, {
+    cols: 80,
+    rows: 24,
+    tabId: TAB,
+    leafId: LEAF,
     worktreeId: WORKTREE,
     connectionId: CONNECTION,
-    resolveOwner: () => null
+    spawnFresh: () => spawn({ cols: 80, rows: 24 })
   })
   return { runtime, store, read, spawn }
 }
@@ -122,16 +123,16 @@ describe('a stable pane whose reattach was refused', () => {
     const runtime = runtimeOwning(store)
     const spawn = vi.fn().mockRejectedValue(new Error(`PTY "pty2:epoch-a:1" not found`))
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rejected attachment calls only spawn and never admits this provider.
+    vi.spyOn(providers, 'getProvider').mockReturnValue({ spawn } as unknown as IPtyProvider)
     await expect(
-      spawnForStablePane({
-        runtime,
-        store,
-        provider: { spawn } as unknown as IPtyProvider,
-        spawnOptions: { cols: 80, rows: 24 },
-        owner: OWNER,
+      adoptStablePane(runtime, store, {
+        cols: 80,
+        rows: 24,
+        tabId: TAB,
+        leafId: LEAF,
         worktreeId: WORKTREE,
-        connectionId: CONNECTION,
-        resolveOwner: () => null
+        connectionId: CONNECTION
       })
     ).rejects.toThrow('not found')
 

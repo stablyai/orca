@@ -60,6 +60,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -93,6 +94,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'update',
       teardownId: TEARDOWN_CURRENT,
@@ -109,6 +111,7 @@ describe('deriving what was working at teardown', () => {
           [SESSION, { journal: journal([]), child: { fence: 1, phase: 'ready' as const } }]
         ]),
         getRecord: () => record(),
+        childWorkOpen: () => false,
         childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -130,6 +133,7 @@ describe('deriving what was working at teardown', () => {
           ]
         ]),
         getRecord: () => record(),
+        childWorkOpen: () => false,
         childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -147,6 +151,7 @@ describe('deriving what was working at teardown', () => {
           [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: null }]
         ]),
         getRecord: () => record(),
+        childWorkOpen: () => false,
         childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -170,6 +175,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -198,6 +204,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      childWorkOpen: () => false,
       childWork: () => [childRecord({ id: 'task-a', kind: 'agent', description: 'Review loop 4' })],
       trigger: 'update',
       teardownId: TEARDOWN_CURRENT,
@@ -225,6 +232,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      childWorkOpen: () => false,
       childWork: () => [
         childRecord({ id: 'gone', kind: 'agent', description: 'Finished agent', state: 'done' }),
         ...Array.from({ length: 20 }, (_, index) =>
@@ -257,6 +265,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      childWorkOpen: () => false,
       childWork: () => [
         childRecord({ id: 'task-m', kind: 'monitor', name: 'ci-watch', state: 'monitoring' })
       ],
@@ -282,6 +291,7 @@ describe('deriving what was working at teardown', () => {
           ]
         ]),
         getRecord: () => record(),
+        childWorkOpen: () => false,
         childWork: () => [
           childRecord({ id: 'task-a', kind: 'agent', state: 'done' }),
           childRecord({ id: 'task-b', kind: 'command', state: 'idle' })
@@ -306,6 +316,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => claudeRecord(null),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -328,6 +339,7 @@ describe('deriving what was working at teardown', () => {
           ]
         ]),
         getRecord: () => record({ chain: [] }),
+        childWorkOpen: () => false,
         childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -351,6 +363,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => claudeRecord(null),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -374,6 +387,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => claudeRecord(null),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -399,6 +413,7 @@ describe('deriving what was working at teardown', () => {
           ]
         ]),
         getRecord: () => claudeRecord(null),
+        childWorkOpen: () => false,
         childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -432,6 +447,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => claudeRecord(null),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,
@@ -458,6 +474,7 @@ describe('deriving what was working at teardown', () => {
         ]
       ]),
       getRecord: () => record(),
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,

@@ -37,6 +37,7 @@ import {
   type WorktreeCreateAttempt,
   type WorktreeCreateRequest
 } from './worktree-create-payload'
+import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   notifyWorktreeParentDropped,
   resolveWorktreeCreateParent,
@@ -249,6 +250,10 @@ export function createCreateWorktree(
             warnParentDroppedOnce()
           }
           applyCreatedWorktree(set, repoId, outcome.result, creationHostId)
+          const created = get().getKnownWorktreeById(outcome.result.worktree.id, creationHostId)
+          if (created) {
+            holdCreatedSidebarWorkspace({ worktree: created })
+          }
           const { result } = outcome
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
           if (result.baseFallback) {

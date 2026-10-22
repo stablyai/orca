@@ -4,7 +4,6 @@ import type {
   AgentSessionOptionResult
 } from '../../../shared/agent-session-wire'
 import { STRUCTURED_LAUNCH_OPTION_IDS } from '../../../shared/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -28,6 +27,11 @@ import {
   type AgentSessionWriteFailure
 } from '../../../shared/agent-session-write-failure'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
+import {
+  structuredAgentSessionModelOffers,
+  type StructuredAgentSessionOptionState
+} from '../../../shared/structured-agent-session-options'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -35,6 +39,18 @@ export type StructuredLaunchSelection = {
   seed?: Readonly<Record<string, string>>
   /** Encoded picks made before publish; the launch applies them before it publishes. */
   held: Readonly<Record<string, string>>
+  /** A paired server has not yet said what create seeds, so nothing can be picked against it. */
+  seedPending?: true
+}
+
+export function initialStructuredLaunchSelection(
+  intent: StructuredAgentSessionLaunchIntent
+): StructuredLaunchSelection {
+  return {
+    seed: intent.seedOptions,
+    held: {},
+    ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
+  }
 }
 
 export type StructuredLaunchOptionOutcome =
@@ -62,23 +78,29 @@ function repliesFor(state: StructuredLaunchState): Map<string, OptionReply> {
 export function holdStructuredAgentSessionLaunchOption(
   sessionId: string,
   id: string,
-  encoded: string
+  encoded: string,
+  /** The picker's list, under which a model pick keeps only the held values the model offers. */
+  picker?: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>
 ): Promise<StructuredLaunchOptionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state || state.cancelled || state.callers.outcome === 'published') {
     return null
   }
+  if (state.selection.seedPending) {
+    return null
+  }
   const replies = repliesFor(state)
-  const held = { ...state.selection.held }
-  // A model pick drops picks held under the model it replaces; the permission mode is the chat's.
-  const dropped =
-    id === 'model'
-      ? Object.keys(held).filter((key) => key !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
-      : [id]
-  for (const key of dropped) {
-    replies.get(key)?.({ kind: 'superseded' })
-    replies.delete(key)
-    delete held[key]
+  const held: Record<string, string> = {}
+  // Each held value is the chat's own: a pick supersedes an earlier pick of the same option.
+  for (const [key, value] of Object.entries(state.selection.held)) {
+    const offered =
+      id !== 'model' || !picker || structuredAgentSessionModelOffers(picker, encoded, key, value)
+    if (key !== id && offered) {
+      held[key] = value
+    } else {
+      replies.get(key)?.({ kind: 'superseded' })
+      replies.delete(key)
+    }
   }
   state.selection = { ...state.selection, held: { ...held, [id]: encoded } }
   notifyStructuredLaunchListeners()
@@ -148,12 +170,25 @@ function settleHeldOption(
   state.callers.onSettled()
 }
 
-/** Selections included in the durable create are already the host's option intent. */
+const createHeld = new WeakMap<StructuredLaunchState, Readonly<Record<string, string>>>()
+
+/** The held picks this create attempt carries, in whatever form it carries them. */
+export function holdStructuredLaunchCreatePicks(
+  state: StructuredLaunchState,
+  held: Readonly<Record<string, string>>
+): void {
+  createHeld.set(state, held)
+}
+
+/** Selections included in the durable create are already the host's option intent; a pick the
+ *  create carried in another form settles too, and a newer pick stays held. */
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
   options: Readonly<Record<string, string>>
 ): void {
-  for (const [id, encoded] of Object.entries(options)) {
+  const carried = { ...options, ...createHeld.get(state) }
+  createHeld.delete(state)
+  for (const [id, encoded] of Object.entries(carried)) {
     settleHeldOption(state, id, encoded, { kind: 'accepted', options })
   }
 }

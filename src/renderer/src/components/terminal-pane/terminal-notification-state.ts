@@ -19,6 +19,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -172,7 +173,7 @@ function findWorktreeRowOnItsOwnHost(
   state: StoreSnapshot,
   worktreeId: string
 ): { worktree: Worktree | undefined; hostId: ExecutionHostId | null } {
-  const rows = getIndexedWorktreesById(state.worktreesByRepo, worktreeId)
+  const rows = getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId)
   if (rows.length <= 1) {
     return { worktree: rows[0], hostId: null }
   }
@@ -218,7 +219,10 @@ export function getNotificationWorkspaceLabels(
   const scope = parseWorkspaceKey(workspaceId)
   const fallback = terminalTitle?.trim() || 'workspace'
   if (scope?.type === 'folder') {
-    const folder = findIndexedFolderWorkspaceOwner(state.folderWorkspaces, scope.folderWorkspaceId)
+    const folder = findIndexedFolderWorkspaceOwner(
+      selectFolderWorkspaces(state),
+      scope.folderWorkspaceId
+    )
     // The group ID is only unique per host, so qualify it with the folder's own host.
     const group =
       folder &&

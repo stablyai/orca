@@ -3,7 +3,8 @@
  *
  * Off a wide layout a detail route is served as before; on one it is served only by a page that
  * declares `canOwnHostArea`, because an older page would draw its own sidebar beside the native
- * one. The session rebuilds on the change, so the page's in-page stack does not survive it.
+ * one, so an older one is walled. The session rebuilds on the change, so the page's in-page stack
+ * does not survive it.
  */
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
@@ -56,7 +57,7 @@ vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
 vi.mock('../components/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => doubles.gates
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: {}, state: 'connected' })
 }))
 vi.mock('../transport/rpc-operation', () => ({
@@ -156,9 +157,9 @@ describe('a detail session across a layout-class change', () => {
     })
   })
 
-  it('goes native on a wide layout under a page without the declaration, and back', async () => {
+  it('walls on a wide layout under a page without the declaration, and serves again after', async () => {
     expect(await settledKinds(false, [false, true, false])).toEqual({
-      kinds: ['ready session-1', 'native-route', 'ready session-2'],
+      kinds: ['ready session-1', 'wall', 'ready session-2'],
       manifestReads: 3
     })
   })

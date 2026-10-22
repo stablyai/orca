@@ -17,7 +17,12 @@ import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
+import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import {
+  ensureJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY
+} from '../../../../shared/jcode-runtime-dir'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
@@ -63,10 +68,15 @@ export async function prepareRuntimePtySpawn(
     shellOverride: args.shellOverride,
     plannedPty: args.launchRuntime?.pty,
     projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
+    preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
   })
   ctx.cwd = target.cwd
+  ctx.requestedCwd = target.requestedCwd
+  ctx.prevalidatedCwd = target.prevalidatedCwd
+  ctx.startupCwdFallback = target.startupCwdFallback
+  ctx.correctStartupCwd = target.correctStartupCwd
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
@@ -105,8 +115,16 @@ export async function prepareRuntimePtySpawn(
   if (args.preAllocatedHandle) {
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
-  // Why: a dropped resume still applies here, but this controller's result has no field for
-  // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
+  if (ctx.env) {
+    // Why a copy: without a handle or Claude auth this is still the caller's env, which a split reuses.
+    ctx.env = { ...ctx.env }
+    const pane = ptySpawnPaneFromIds(args)
+    const jcodeEnv = pane ? await ensureJcodeRuntimeDir(pane.paneKey) : undefined
+    stampPtySpawnPaneEnv(ctx.env, {
+      pane,
+      jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY]
+    })
+  }
   const hostEnv = await resolvePtySpawnHostEnv({
     launchAgent: args.launchAgent,
     command: args.command,
@@ -129,6 +147,7 @@ export async function prepareRuntimePtySpawn(
   })
   ctx.launchCommand = hostEnv.launchCommand
   ctx.codexResumeArgvDropped = hostEnv.codexResumeLaunch.droppedResumeArgv
+  ctx.codexResumeUnavailable = hostEnv.codexResumeLaunch.notifyResumeUnavailable
   ctx.env = hostEnv.env
   ctx.selectedCodexHomePath = hostEnv.selectedCodexHomePath
   ctx.codexResumeHomeSelected = hostEnv.codexResumeHomeSelected

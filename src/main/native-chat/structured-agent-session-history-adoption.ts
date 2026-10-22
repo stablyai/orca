@@ -2,6 +2,7 @@
 //
 // Credential homes and transcripts must come from runtime-owned facts, never client-supplied paths.
 
+import { chatAgentsShareConversations } from '../../shared/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type {
@@ -93,7 +94,7 @@ export function findConflictingStructuredAdoption(input: {
     input.ownership.find(
       (owner) =>
         owner.sessionId !== input.selfSessionId &&
-        owner.provider === input.agent &&
+        chatAgentsShareConversations(owner.provider, input.agent) &&
         owner.providerSessionId === input.providerSessionId
     ) ?? null
   )

@@ -67,6 +67,14 @@ it('uses the shared Bun pin for every current-toolchain workflow', () => {
   }
 })
 
+it('checks formatting over the same tree the local format script writes', () => {
+  const check = steps.find((step) => step.name === 'Check formatting')
+  const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
+  expect(check.run.replace('node node_modules/oxfmt/bin/oxfmt', 'oxfmt')).toBe(
+    manifest.scripts.format.replace('--write', '--check')
+  )
+})
+
 it('keeps the Bun anti-slop scan aligned with the local audit', () => {
   const audit = steps.find((step) => step.name === 'Reject low-evidence patterns')
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'))
@@ -226,24 +234,23 @@ it('pins every foreground and background step to its selected phase', () => {
     (step) => !step.background && /outputs\.(static_analysis|typecheck)/.test(step.if ?? '')
   )
   expect(foreground.map((step) => [step.name ?? step.run ?? step.uses, step.if])).toEqual([
+    ['Check formatting', staticPhase],
     ['Reject low-evidence patterns', staticPhase],
     ['Enforce type-aware code-quality baseline', staticPhase],
     [
       './.github/actions/install-mobile-dependencies',
       `${staticPhase} && needs.code_paths.outputs.mobile_dependencies == 'true'`
     ],
+    ['Verify locked audit tools', staticPhase],
     ['Enforce React Doctor on changed lines', staticPhase],
     ['Check Zustand selector fan-out budget', staticPhase],
     ['Check reliability gate manifest', staticPhase],
     ['Enforce dead design-system classes', staticPhase],
     ['Check VM runtime rollback compatibility', staticPhase],
-    ['Enforce max-lines ratchet', staticPhase],
-    ['Enforce ts-nocheck ratchet', staticPhase],
-    ['Enforce runtime Electron-import ratchet', staticPhase],
-    ['Enforce focus-read ratchet', staticPhase],
-    ['Enforce layout-writer ratchets', staticPhase],
+    ['Enforce ratchets', staticPhase],
     ['Check Node runtime pin', staticPhase],
-    ['Boot orcad and round-trip a terminal', staticPhase],
+    ['Check root and mobile lock the same shared dependencies', staticPhase],
+    ['Decide whether the orcad terminal smoke runs', staticPhase],
     ['Verify the generated RPC params catalog', staticPhase],
     ['Verify the generated ACP protocol schema', staticPhase],
     ['Verify bundled skill guides', staticPhase],
@@ -272,7 +279,8 @@ it('pins every foreground and background step to its selected phase', () => {
 })
 
 it.each([
-  { changed: ['README.md'], static_analysis: false, typecheck: false, mobile_dependencies: false },
+  { changed: ['LICENSE'], static_analysis: false, typecheck: false, mobile_dependencies: false },
+  { changed: ['README.md'], static_analysis: true, typecheck: false, mobile_dependencies: false },
   {
     changed: ['mobile/src/App.tsx'],
     static_analysis: true,

@@ -6,6 +6,7 @@ import { useTerminalPaneStoreBindings } from './use-terminal-pane-store-bindings
 import { useTerminalPaneStartupActions } from './use-terminal-pane-startup-actions'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
 import { useTerminalPaneLayoutBindings } from './use-terminal-pane-layout-bindings'
+import { useHostPaneTitleSync } from './use-host-pane-title-sync'
 import { useTerminalPaneCloseActions } from './use-terminal-pane-close-actions'
 import { useTerminalPaneLifecycleStage } from './use-terminal-pane-lifecycle-stage'
 import { useTerminalPaneReconciliation } from './use-terminal-pane-reconciliation'
@@ -25,6 +26,7 @@ export function useTerminalPaneController(props: TerminalPaneProps) {
   const store = Object.assign(chat, useTerminalPaneStoreBindings(chat))
   const startup = Object.assign(store, useTerminalPaneStartupActions(store))
   const layout = Object.assign(startup, useTerminalPaneLayoutPersistence(startup))
+  useHostPaneTitleSync(layout)
   const bindings = Object.assign(layout, useTerminalPaneLayoutBindings(layout))
   const close = Object.assign(bindings, useTerminalPaneCloseActions(bindings))
   useTerminalPaneLifecycleStage(close)

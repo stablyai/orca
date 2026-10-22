@@ -3,6 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
 import { flushAsyncTicks } from './pty-connection-test-async'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
+import { expectMainFrameClosesExitedSplitPaneOnce } from './pty-connection-test-exited-split-pane-close'
 import {
   LEAF_1,
   LEAF_2,
@@ -80,6 +88,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         }
       })
       await installTerminalTestGlobals()
+      ;(await mainLayoutApplyTransport()).reset()
     })
 
     afterEach(async () => {
@@ -262,7 +271,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
       expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-pane-2')
       expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
-      expect(manager.closePane).toHaveBeenCalledWith(2)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectMainFrameClosesExitedSplitPaneOnce(manager)
+      } else {
+        expect(manager.closePane).toHaveBeenCalledWith(2)
+      }
     })
 
     it('keeps a worktree sole terminal mounted when its freshly-spawned PTY exits before input (direnv failure)', async () => {
@@ -523,16 +536,23 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       transport.connect.mockImplementation(
         async (options: { sessionId?: string; callbacks: ConnectCallbacks }) => {
           callbacks.push(options.callbacks)
-          if (options.sessionId) {
+          if (options.sessionId === 'lost-pty') {
             options.callbacks.onData?.('too many consoles in use, max consoles is 128')
             return { id: currentPtyId, sessionExpired: true }
           }
-          currentPtyId = 'resume-pty'
-          return currentPtyId
+          // Switch on, the replacement is main's start, which the window attaches to.
+          currentPtyId = options.sessionId ?? 'resume-pty'
+          return options.sessionId ? { id: currentPtyId } : currentPtyId
         }
       )
       transportFactoryQueue.push(transport)
       installSleepingCodexResumeState('lost-pty')
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await mainStartsPaneAs({
+          ptyId: 'pty-main',
+          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_1)
+        })
+      }
       const deps = createDeps({
         onPaneProcessDied: vi.fn(),
         restoredLeafId: LEAF_1,
@@ -542,10 +562,14 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
       await flushAsyncTicks(30)
       expect(callbacks).toHaveLength(2)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectWindowStartAskedMain(transport, makePaneKey('tab-1', LEAF_1))
+        expect(currentPtyId).toBe('pty-main')
+      }
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
         | undefined
-      onPtyExit?.('resume-pty', 1)
+      onPtyExit?.(currentPtyId, 1)
 
       expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
         paneId: 1,
@@ -761,7 +785,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       capturedDataCallback.current?.('shell prompt')
       onPtyExit?.('pty-pane-2')
 
-      expect(manager.closePane).toHaveBeenCalledWith(2)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectMainFrameClosesExitedSplitPaneOnce(manager)
+      } else {
+        expect(manager.closePane).toHaveBeenCalledWith(2)
+      }
     })
 
     it('removes the agent row when an established PTY exits through EOF (#12907)', async () => {
@@ -810,7 +838,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       terminalInputHandler?.('exit\r')
       onPtyExit?.('pty-pane-2')
 
-      expect(manager.closePane).toHaveBeenCalledWith(2)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await expectMainFrameClosesExitedSplitPaneOnce(manager)
+      } else {
+        expect(manager.closePane).toHaveBeenCalledWith(2)
+      }
     })
   })
 }

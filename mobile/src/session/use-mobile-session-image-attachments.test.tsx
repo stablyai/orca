@@ -6,7 +6,12 @@ import { useMobileSessionImageAttachments } from './use-mobile-session-image-att
 
 const mocks = vi.hoisted(() => ({
   useMobileImageAttachment: vi.fn(),
-  useMobileNativeChatImageAttachments: vi.fn()
+  useMobileNativeChatImageAttachments: vi.fn(),
+  useMobileNativeChatFileAttachments: vi.fn(() => ({
+    files: [],
+    attachFiles: vi.fn(),
+    removeFiles: vi.fn()
+  }))
 }))
 
 vi.mock('./use-mobile-image-attachment', () => ({
@@ -15,6 +20,10 @@ vi.mock('./use-mobile-image-attachment', () => ({
 
 vi.mock('./use-mobile-native-chat-image-attachments', () => ({
   useMobileNativeChatImageAttachments: mocks.useMobileNativeChatImageAttachments
+}))
+
+vi.mock('./use-mobile-native-chat-file-attachments', () => ({
+  useMobileNativeChatFileAttachments: mocks.useMobileNativeChatFileAttachments
 }))
 
 type HookArgs = Parameters<typeof useMobileSessionImageAttachments>[0]
@@ -33,6 +42,7 @@ function baseArgs(overrides: Partial<HookArgs> = {}): HookArgs {
     beforeTerminalSend: async () => true,
     nativeChatBaseSend: vi.fn().mockResolvedValue('accepted'),
     structuredNativeChat: true,
+    nativeChatSessionId: 'session-1',
     readSeededLaunchDraft: () => null,
     showToast: vi.fn(),
     onNativeChatSendError: vi.fn(),

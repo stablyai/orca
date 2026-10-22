@@ -4,11 +4,12 @@ import {
   findIndexedWorktreeOwner,
   findIndexedWorktreeOwnerForHost
 } from '@/lib/worktree-runtime-owner-index'
-import { getFolderWorkspaceHostId } from '@/store/folder-workspaces/folder-workspace-catalog'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 /** Resolves the edited workspace within its execution host, including folders. */
 export function useWorktreeMetaWorkspace(args: {
@@ -27,10 +28,10 @@ export function useWorktreeMetaWorkspace(args: {
     // reports as ambiguous rather than guessing. The row that opened the dialog
     // knows which one it is; the index stays the fallback for callers that cannot.
     const owner = executionHostId
-      ? findIndexedWorktreeOwnerForHost(s.worktreesByRepo, worktreeId, executionHostId)
-      : findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)
+      ? findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(s), worktreeId, executionHostId)
+      : findIndexedWorktreeOwner(selectWorktreesByRepo(s), worktreeId)
     return owner && (!ownerRepoId || owner.repoId === ownerRepoId)
-      ? s.worktreesByRepo[owner.repoId]?.find((item) => item === owner)
+      ? selectWorktreesByRepo(s)[owner.repoId]?.find((item) => item === owner)
       : undefined
   })
   // Why: folder workspaces are absent from worktreesByRepo, so the lookup above
@@ -42,7 +43,7 @@ export function useWorktreeMetaWorkspace(args: {
     if (workspaceScope?.type !== 'folder') {
       return null
     }
-    const candidates = s.folderWorkspaces.filter(
+    const candidates = selectFolderWorkspaces(s).filter(
       (item) =>
         item.id === workspaceScope.folderWorkspaceId &&
         (!executionHostId || getFolderWorkspaceHostId(item, s.projectGroups) === executionHostId)

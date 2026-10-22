@@ -1,3 +1,4 @@
+import type { JournalItemEcho } from './journal-item-echo'
 // Persisted journal row shapes plus read-time upcasting.
 //
 // The journal is append-only, so migration is upcasting on read and never an
@@ -22,6 +23,7 @@
 // sent-message kind.
 
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
@@ -68,6 +70,8 @@ export type JournalEpochRow = JournalRowBase & {
   kind: 'epoch'
   reason: AgentJournalEpochReason
   providerHandle: AgentSessionJournalProviderHandle
+  /** Original adoption, restated atomically when a same-conversation replacement retires it. */
+  historyOrigin?: unknown
 }
 
 export const AGENT_JOURNAL_EPOCH_REASONS = [
@@ -92,7 +96,8 @@ type JournalItemProvenance = {
 }
 
 export type JournalItemRow = JournalRowBase &
-  JournalItemProvenance & {
+  JournalItemProvenance &
+  JournalItemEcho & {
     kind: 'item'
     itemId: string
     revision: number
@@ -177,9 +182,9 @@ export type JournalSubmissionRow = JournalRowBase & {
   /** Who it is from: its `AgentSessionMessageSource`'s kind only (`AgentJournalSubmission`).
    *  Absent on rows from before it was recorded. Older readers keep the key and ignore it. */
   source?: { kind: string }
-  /** The model and effort the person's composer sent it with, applied when it is handed over.
-   *  Older readers keep the key and ignore it. */
-  options?: Readonly<Record<string, string>>
+  /** The choices it was accepted with, applied when the agent is handed it. A row from an older
+   *  build may carry other keys, which a read ignores. Older readers keep the key and ignore it. */
+  options?: AgentSessionExecutionOptions
 }
 
 export type JournalSubmissionOrigin = 'client' | 'host'
@@ -215,7 +220,8 @@ export type JournalDispatchRow = JournalRowBase & {
  *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
   | (AgentJournalProducerLinkage &
-      JournalItemProvenance & {
+      JournalItemProvenance &
+      JournalItemEcho & {
         kind: 'item'
         itemId: string
         revision: number

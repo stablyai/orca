@@ -15,7 +15,11 @@ export type LocalAiVaultScanProgressHandle = AiVaultServiceScanListener & {
 
 const MAX_PROGRESS_ENTRIES = 8
 const latest = new Map<string, AiVaultScanProgress>()
-const currentHandles = new Map<string, LocalAiVaultScanProgressHandle>()
+// Each key's running scan, with the finished entry its failure puts back.
+const currentScans = new Map<
+  string,
+  { handle: LocalAiVaultScanProgressHandle; fallback: AiVaultScanProgress | null }
+>()
 const listeners = new Set<Listener>()
 
 export function localAiVaultScanProgress(scanKey: string): AiVaultScanProgress | null {
@@ -47,12 +51,15 @@ function publish(scanKey: string, next: AiVaultScanProgress | null): void {
   }
 }
 
-/** A replacement clears its previous entry before roots preparation can yield. */
+/** A replacement takes over its key at once, so a window never sees the key empty mid-refresh. */
 export function startLocalAiVaultScanProgress(
   scanKey: string,
   scanId: string,
   now: () => number = Date.now
 ): LocalAiVaultScanProgressHandle {
+  const previous = latest.get(scanKey)
+  const fallback =
+    previous?.stage === 'finished' ? previous : (currentScans.get(scanKey)?.fallback ?? null)
   let current: AiVaultScanProgress = {
     scanId,
     stage: 'finding',
@@ -62,32 +69,27 @@ export function startLocalAiVaultScanProgress(
     settledAt: null
   }
   const handle: LocalAiVaultScanProgressHandle = {
-    sent: () => {
-      if (currentHandles.get(scanKey) === handle) {
-        publish(scanKey, current)
-      }
-    },
     work: (work) => {
-      if (currentHandles.get(scanKey) === handle) {
+      if (currentScans.get(scanKey)?.handle === handle) {
         current = { ...current, ...work }
         publish(scanKey, current)
       }
     },
     finish: (work) => {
-      if (currentHandles.get(scanKey) === handle) {
-        currentHandles.delete(scanKey)
+      if (currentScans.get(scanKey)?.handle === handle) {
+        currentScans.delete(scanKey)
         publish(scanKey, { ...current, ...work, stage: 'finished', settledAt: now() })
       }
     },
     fail: () => {
-      if (currentHandles.get(scanKey) === handle) {
-        currentHandles.delete(scanKey)
-        publish(scanKey, null)
+      if (currentScans.get(scanKey)?.handle === handle) {
+        currentScans.delete(scanKey)
+        publish(scanKey, fallback ?? { ...current, settledAt: now() })
       }
     }
   }
-  currentHandles.set(scanKey, handle)
-  publish(scanKey, null)
+  currentScans.set(scanKey, { handle, fallback })
+  publish(scanKey, current)
   return handle
 }
 
@@ -116,6 +118,6 @@ export async function requestLocalAiVaultScan<T extends { work: AiVaultScanWork 
 
 export function resetLocalAiVaultScanProgressForTests(): void {
   latest.clear()
-  currentHandles.clear()
+  currentScans.clear()
   listeners.clear()
 }

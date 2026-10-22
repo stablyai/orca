@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from './agent-session-journal-types'
 import type { AgentMessageSource } from './agent-session-message-source'
+import { AgentJournalSubmissionSchema } from './agent-session-journal-submission-schema'
 import { SendParams } from './rpc-contract/structured-agent-session-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 import {
@@ -26,6 +27,41 @@ const FROM: AgentMessageSource = {
 }
 
 describe('send fingerprints never cover the sender', () => {
+  it('fingerprints message choices with the operation, never the body', () => {
+    const send = (options?: { model: string; effort: string }) =>
+      structuredAgentSessionMessageSendMutation({
+        sessionId: 'session-1',
+        clientOperationId: 'op-1',
+        expectedRuntimeFence: 1,
+        body: BODY,
+        ...(options ? { options } : {})
+      })
+    const legacy = send()
+    const chosen = send({ model: 'model-a', effort: 'high' })
+    expect(chosen.envelope.payloadFingerprint).not.toBe(legacy.envelope.payloadFingerprint)
+    expect(chosen.options).toEqual({ model: 'model-a', effort: 'high' })
+    expect(SendParams.safeParse(legacy).success).toBe(true)
+    expect(SendParams.safeParse(chosen).success).toBe(true)
+  })
+
+  it('reads a saved submission’s choices, ignoring keys an older build stored', () => {
+    const submission = {
+      clientMessageId: 'message-1',
+      options: { model: 'model-a', unknownChoice: 'kept-by-an-older-build' },
+      fence: 1,
+      payloadFingerprint: 'a'.repeat(64),
+      dispatchState: 'accepted',
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: 2
+    }
+    expect(AgentJournalSubmissionSchema.parse(submission).options).toEqual({ model: 'model-a' })
+    expect(
+      AgentJournalSubmissionSchema.omit({ options: true }).parse(submission)
+    ).not.toHaveProperty('options')
+  })
+
   it('keeps the digest every stored submission and draft already holds', () => {
     // Pinned bytes: a stored fingerprint that changed would stop matching its provider echo.
     expect(agentSessionSendBodyFingerprint('session-1', BODY)).toBe(
@@ -87,6 +123,26 @@ describe('send fingerprints never cover the sender', () => {
       })
     )
     expect(SendParams.safeParse({ ...carried, body: BODY }).success).toBe(true)
+  })
+
+  it('binds source controls only into the operation hash while preserving the legacy payload', () => {
+    const input = {
+      sessionId: 'session-1',
+      clientOperationId: 'op-1',
+      expectedRuntimeFence: 1,
+      body: BODY
+    }
+    const legacy = structuredAgentSessionMessageSendMutation(input)
+    const bound = structuredAgentSessionMessageSendMutation({
+      ...input,
+      usageLimitContinuationOfTurnItemId: 'turn-1'
+    })
+    expect(legacy).not.toHaveProperty('usageLimitContinuationOfTurnItemId')
+    expect(legacy.envelope.payloadFingerprint).not.toBe(bound.envelope.payloadFingerprint)
+    expect(agentSessionSendBodyFingerprint('session-1', bound.body)).toBe(
+      legacy.envelope.payloadFingerprint
+    )
+    expect(SendParams.safeParse(bound).success).toBe(true)
   })
 
   it('refuses a client send whose body names a sender', () => {

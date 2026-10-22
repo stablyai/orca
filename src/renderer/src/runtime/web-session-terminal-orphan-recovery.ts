@@ -17,16 +17,18 @@ import {
 } from './web-session-terminal-orphan-recovery-adoption'
 import {
   buildTopologyCandidates,
-  isRemovedSnapshot,
-  isValidReadySurface,
   prepareTerminalOrphanRecovery,
   mergeRetainedTerminalSurfaces,
   captureTerminalRecoveryTopologyToken,
-  surfaceKey,
-  terminalRowsBySurface,
   type AnyRecoverySurface,
   type TerminalOrphanRecoveryState
 } from './web-session-terminal-orphan-recovery-surface'
+import {
+  isRemovedSnapshot,
+  isValidReadySurface,
+  surfaceKey,
+  terminalRowsBySurface
+} from './web-session-terminal-orphan-recovery-surface-index'
 import { resolveTerminalOrphanInventory } from './web-session-terminal-orphan-recovery-inventory'
 import { acceptPairedHostStructuredSessions } from './structured-agent-session-tab-retirement'
 import { resolvePersistedTerminalSurfaces } from './web-session-terminal-orphan-recovery-pane'
@@ -49,8 +51,6 @@ import {
   clearRetainedTerminalRetirementProofsForTests,
   mergeRetainedTerminalRetirementProofs
 } from './web-session-terminal-retirement-proof-ledger'
-
-export type { TerminalOrphanRecoveryState } from './web-session-terminal-orphan-recovery-surface'
 
 export type TerminalOrphanRecoveryOptions = {
   expectedEnvironmentPairingRevision?: number

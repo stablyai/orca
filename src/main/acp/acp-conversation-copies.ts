@@ -14,15 +14,21 @@ export class AcpConversationCopies {
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
 
   copy: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = async (input) => {
+    // A copy runs the agent too, so it is fenced like a chat start.
+    const gate = this.deps.spec.launchGate?.enter(this.shutdown.signal)
     const copy = copyAcpConversation(this.deps, input, {
-      signal: this.shutdown.signal,
-      track: (connection) => this.children.retainFailed(randomUUID(), connection)
+      signal: gate?.signal ?? this.shutdown.signal,
+      track: (connection) => {
+        this.children.retainFailed(randomUUID(), connection)
+        this.deps.spec.launchGate?.retain(connection)
+      }
     })
     this.pending.add(copy)
     try {
       return await copy
     } finally {
       this.pending.delete(copy)
+      gate?.leave()
     }
   }
 

@@ -85,8 +85,8 @@ it('activates the compiler and workspace-policy parser and preserves import grap
     )
   }
   cpSync(
-    new URL('../layout-owner-build.cjs', import.meta.url),
-    join(root, 'config', 'layout-owner-build.cjs')
+    new URL('../dark-build-switches.cjs', import.meta.url),
+    join(root, 'config', 'dark-build-switches.cjs')
   )
   mkdirSync(join(root, 'src', 'shared'), { recursive: true })
   cpSync(

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/structured-agent-session-launch-registry'
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({
@@ -10,8 +12,7 @@ const mocks = vi.hoisted(() => ({
   discardOutbox: vi.fn<(sessionId: string) => void>(),
   stopSends: vi.fn<(sessionId: string) => void>(),
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
-  markCancelled:
-    vi.fn<(worktreeId: string, sessionId: string, executionHostId: string) => boolean>(),
+  markCancelled: vi.fn<typeof markStructuredAgentSessionLaunchCancelled>(),
   reacceptLocal:
     vi.fn<(worktreeId: string, options?: { reacceptCurrentVersion?: boolean }) => Promise<void>>(),
   refreshPaired:
@@ -71,8 +72,13 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+
+const layoutOwner: StructuredLaunchSlotOwner = {
+  unifiedTabsByWorktree: {},
+  groupsByWorktree: {},
+  reorderUnifiedTabs: vi.fn()
+}
 
 const target: RuntimeClientTarget = { kind: 'local' }
 
@@ -127,12 +133,13 @@ const closing = (owner: string): boolean =>
 describe('structured agent session tab retirement', () => {
   it('marks cancellation and clears local launch state before host cleanup', async () => {
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
       provisional: true
     })
-    expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local')
+    expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local', layoutOwner)
     expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
     expect(mocks.stopSends).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
@@ -142,6 +149,7 @@ describe('structured agent session tab retirement', () => {
   // Withdrawn, as a Stop does: nothing more goes out, and nothing is dropped.
   it("never drops a published chat's sends when its tab closes", async () => {
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -175,6 +183,7 @@ describe('structured agent session tab retirement', () => {
         })
     )
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -204,33 +213,11 @@ describe('structured agent session tab retirement', () => {
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
   })
 
-  it('records no intent for a floating-panel chat, whose frames are never applied', async () => {
-    mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    beginStructuredAgentSessionTabClose({
-      target,
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      sessionId: 'session-1',
-      provisional: false
-    })
-    expect(
-      isWebSessionCloseIntentPending(
-        { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
-        FLOATING_TERMINAL_WORKTREE_ID,
-        'agent-session:session-1',
-        Date.now()
-      )
-    ).toBe(false)
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
-    warn.mockRestore()
-  })
-
   it('shows a chat the local host kept by re-reading its worktree', async () => {
     mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -255,6 +242,7 @@ describe('structured agent session tab retirement', () => {
     )
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target: paired,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -279,6 +267,7 @@ describe('structured agent session tab retirement', () => {
   it('re-reads a paired server after a successful close, since its frames travel apart from its answer', async () => {
     const paired = { kind: 'environment', environmentId: 'server-1' } as const
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target: paired,
       worktreeId: 'wt-1',
       sessionId: 'session-1',
@@ -307,6 +296,7 @@ describe('structured agent session tab retirement', () => {
     )
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
+      layoutOwner,
       target: paired,
       worktreeId: 'wt-1',
       sessionId: 'session-1',

@@ -22,6 +22,8 @@ import {
   pickRestoredActiveGroupId
 } from '../mobile-session-layout-projection'
 import {
+  appendChatTabOrder,
+  keepSnapshotChatTabs,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
@@ -210,7 +212,8 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs,
-        session
+        session,
+        this.store?.getSettings?.()?.tabAutoGenerateTitle === true
       ).filter(
         (tab) =>
           !runtimeOwnedOnly ||
@@ -243,7 +246,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
       const mergedTabs =
         options.onlyRuntimeOwnedTerminals === true && existing
           ? mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
-          : tabs
+          : keepSnapshotChatTabs(tabs, existing)
       const mergedActiveTab =
         existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
         activeTab ??
@@ -269,7 +272,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
           ? mergedActiveTab.parentTabId
           : mergedActiveTab.id
         : null
-      const nextTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
+      const rebuiltTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
         ? appendBrowserTabOrder(
             distributeHeadlessTabsAcrossGroups(
               persistedGroups.map((group) => ({
@@ -292,7 +295,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
               mergeMobileSessionTabGroups(
                 entryWorktreeId,
                 existing.tabGroups,
-                mergedTerminalTabs,
+                mergedTabs,
                 mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
               ),
               mergedBrowserOrder
@@ -306,6 +309,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
                 tabOrder
               }
             ]
+      const nextTabGroups = appendChatTabOrder(rebuiltTabGroups, existing?.tabGroups, mergedTabs)
       // Why: merging runtime tabs INTO a renderer publication must not reclass
       // the snapshot as headless-built — the preservation predicate would then
       // treat the renderer's own tabs as runtime-owned and resurrect tabs the

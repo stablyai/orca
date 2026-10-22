@@ -1,9 +1,10 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../shared/terminal-layout-equality'
 import {
   normalizeTerminalLayoutPtyOwnership,
   resolveTerminalLayoutPtyOwnershipTransfers
-} from '@/components/terminal-pane/terminal-layout-pty-ownership'
+} from '../../../../shared/terminal-layout-pty-ownership'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
   resolvePrimaryLayoutPtyId,
@@ -11,6 +12,7 @@ import {
   withTerminalTabPtyId
 } from './terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
+import { recordChatPaneInLayoutOwner } from './terminal-chat-pane-layout-owner'
 
 export function createTerminalLayoutActions(
   set: TerminalStoreSet,
@@ -75,6 +77,7 @@ export function createTerminalLayoutActions(
     },
     setTabLayout: (tabId, layout) => {
       let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []
+      const before = ORCA_LAYOUT_OWNER_IS_MAIN ? get().terminalLayoutsByTabId[tabId] : undefined
       set((s) => {
         if (!layout) {
           if (!(tabId in s.terminalLayoutsByTabId)) {
@@ -102,6 +105,10 @@ export function createTerminalLayoutActions(
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
+      // Switch point: the chat pane the window picks reaches main as a command, not by its save.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && layout) {
+        recordChatPaneInLayoutOwner(get(), tabId, before, get().terminalLayoutsByTabId[tabId])
+      }
     },
     syncPaneDetachPtyOwnership: ({
       detachedLeafId,

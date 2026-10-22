@@ -72,7 +72,6 @@ describe('AI Vault listing wsl.exe probes', () => {
       }),
       expect.anything(),
       expect.objectContaining({
-        sent: expect.any(Function),
         work: expect.any(Function),
         finish: expect.any(Function),
         fail: expect.any(Function)
@@ -99,7 +98,6 @@ describe('AI Vault listing wsl.exe probes', () => {
       expect.objectContaining({ wslHomeDirs: [WSL_HOME] }),
       expect.anything(),
       expect.objectContaining({
-        sent: expect.any(Function),
         work: expect.any(Function),
         finish: expect.any(Function),
         fail: expect.any(Function)

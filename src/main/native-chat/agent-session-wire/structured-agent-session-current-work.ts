@@ -28,6 +28,8 @@ import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 
 export type StructuredAgentSessionCurrentWorkJournal = Pick<
   AgentSessionJournal,
@@ -44,7 +46,7 @@ export type StructuredAgentSessionWorkEvidence = {
   /** The runtimes this one replaced for the chat (`AgentSessionRecordStore.replacedRuntime`). */
   replaced?: StructuredAgentSessionReplacedEnd | undefined
   /** This host's live child (`StructuredAgentSessionHostSession.child`); absent: not known. */
-  child?: { fence: number } | null
+  child?: { fence: number; heldSends?: () => ReadonlySet<string> | undefined } | null
 }
 
 /** Every fence at or below `fence` was granted by a runtime this one replaced. */
@@ -142,7 +144,9 @@ export class StructuredAgentSessionCurrentWork {
     private readonly ended?: StructuredAgentSessionSeenEnd,
     private readonly replaced?: StructuredAgentSessionReplacedEnd,
     /** `structuredAgentSessionOwnerUnverifiable`. */
-    private readonly ownerUnverifiable = false
+    private readonly ownerUnverifiable = false,
+    /** The live child's `heldSends`; absent, or answering undefined, every unanswered send is held. */
+    private readonly heldSends?: () => ReadonlySet<string> | undefined
   ) {}
 
   /** What a reader that published this answer compares to learn it changed with no row: the live
@@ -150,6 +154,56 @@ export class StructuredAgentSessionCurrentWork {
    *  moves on every generation-end signal: an end that changed nothing is published once. */
   viewKey(): string {
     return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}`
+  }
+
+  /** What a subscriber was last told of current work: the view, whether the agent works, and which
+   *  unanswered sends it holds. Not `viewKey`, which also owns the published requests marker. */
+  workViewKey(): string {
+    const sends = this.unansweredSends().map(
+      (submission) => `${submission.clientMessageId}:${this.holds(submission) ? 1 : 0}`
+    )
+    return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
+  }
+
+  /** A send as clients are told it. One handed to the live child that it no longer holds, with no
+   *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
+  publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
+    this.unanswered(submission) && !this.holds(submission)
+      ? {
+          ...submission,
+          dispatchState: 'unknown',
+          recovered: true,
+          reason: submission.reason ?? DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+        }
+      : submission
+
+  /** Handed to the live generation and neither answered nor refused. */
+  private unanswered(submission: AgentJournalSubmission): boolean {
+    return (
+      !isQueuedAgentJournalSubmission(submission) &&
+      this.liveFence !== null &&
+      isUnansweredStructuredAgentSessionDispatch(submission, this.liveFence)
+    )
+  }
+
+  private unansweredSends(): AgentJournalSubmission[] {
+    return this.journal.submissions().filter((submission) => this.unanswered(submission))
+  }
+
+  /** Every unanswered send as clients are told it, for a page or frame to restate: what the child
+   *  holds changes with no row, so no row's batch would carry it. */
+  restatedSubmissions(): AgentJournalSubmission[] {
+    return this.unansweredSends().map(this.publishedSubmission)
+  }
+
+  /** The live child still holds this send as its work, or the host is still handing it over. */
+  private holds(submission: AgentJournalSubmission): boolean {
+    const held = this.heldSends?.()
+    return (
+      held === undefined ||
+      held.has(submission.clientMessageId) ||
+      structuredAgentSessionHandingOver(this.journal).has(submission.clientMessageId)
+    )
   }
 
   /** Whether the live generation's execution produced this item. */
@@ -169,15 +223,13 @@ export class StructuredAgentSessionCurrentWork {
   }
 
   /** A send still owed: one this process may hand over, or one handed to the live generation that
-   *  it has neither answered nor refused (`isUnansweredStructuredAgentSessionDispatch`). */
+   *  it has neither answered nor refused and still holds. Working reads what the child holds, never
+   *  whether a delivery row was written: a send whose echo never comes stops being work. */
   owesSend(submission: AgentJournalSubmission): boolean {
     if (isQueuedAgentJournalSubmission(submission)) {
       return this.handsOver(submission)
     }
-    return (
-      this.liveFence !== null &&
-      isUnansweredStructuredAgentSessionDispatch(submission, this.liveFence)
-    )
+    return this.unanswered(submission) && this.holds(submission)
   }
 
   /** The live generation's running turn, with its record's item. */
@@ -294,7 +346,8 @@ export function structuredAgentSessionCurrentWork(
     evidence.revision,
     evidence.ended,
     evidence.replaced,
-    structuredAgentSessionOwnerUnverifiable(evidence)
+    structuredAgentSessionOwnerUnverifiable(evidence),
+    evidence.child?.heldSends
   )
 }
 

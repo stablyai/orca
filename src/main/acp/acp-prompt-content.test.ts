@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -55,26 +55,82 @@ describe('ACP prompt content', () => {
     ])
   })
 
-  it('refuses an image when the agent takes none', async () => {
-    expect(await refusal(message({ type: 'image-ref', path: pngPath }), false)).toMatchObject({
-      kind: 'attachmentInvalid',
-      attachment: { reason: 'unsupportedType' }
-    })
+  it("sends an image's path to an agent that takes none, refusing one with no file", async () => {
+    const spaced = join(dir, 'my shot.png')
+    await expect(
+      acpPromptBlocks(message({ type: 'image-ref', url: pathToFileURL(spaced).href }), false)
+    ).resolves.toEqual([{ type: 'text', text: `@"${spaced}"` }])
+    expect(
+      await refusal(
+        message({ type: 'image-ref', url: `data:image/png;base64,${PNG.toString('base64')}` }),
+        false
+      )
+    ).toMatchObject({ kind: 'attachmentInvalid', attachment: { reason: 'unsupportedType' } })
   })
 
-  it('refuses what it cannot read or send before anything leaves Orca', async () => {
+  it('refuses invalid sources and pathless formats before anything leaves Orca', async () => {
     expect(await refusal(message({ type: 'image-ref', path: 'relative.png' }))).toMatchObject({
       attachment: { reason: 'noSource' }
     })
-    expect(await refusal(message({ type: 'image-ref', path: join(dir, 'a.bmp') }))).toMatchObject({
-      attachment: { reason: 'unsupportedType' }
-    })
-    expect(await refusal(message({ type: 'image-ref', path: `${dir}.png` }))).toMatchObject({
-      kind: 'attachmentUnreadable'
+    expect(await refusal(message({ type: 'image-ref', url: 'file://[' }))).toMatchObject({
+      attachment: { reason: 'noSource' }
     })
     expect(
       await refusal(message({ type: 'image-ref', url: 'data:image/svg+xml;base64,PHN2Zz4=' }))
     ).toMatchObject({ attachment: { reason: 'unsupportedType' } })
+  })
+
+  it('keeps unrepresentable host files as references beside a native image, in order', async () => {
+    const paths = [
+      'a.svg',
+      'a.bmp',
+      'a.ico',
+      'big.png',
+      'missing.png',
+      'empty.png',
+      'folder.png'
+    ].map((name) => join(dir, name))
+    writeFileSync(paths[3]!, Buffer.alloc(ACP_PROMPT_IMAGE_MAX_BYTES + 1))
+    writeFileSync(paths[5]!, '')
+    mkdirSync(paths[6]!)
+    const blocks = await acpPromptBlocks(
+      message(...[...paths, pngPath].map((path) => ({ type: 'image-ref' as const, path }))),
+      true
+    )
+    expect(blocks).toEqual([
+      ...paths.map((path) => ({ type: 'text', text: `@${path}` })),
+      { type: 'image', mimeType: 'image/png', data: PNG.toString('base64') }
+    ])
+  })
+
+  it('keeps the twenty-first host image as a reference without reordering', async () => {
+    const blocks = await acpPromptBlocks(
+      message(...Array.from({ length: 21 }, () => ({ type: 'image-ref' as const, path: pngPath }))),
+      true
+    )
+    expect(blocks.slice(0, 20)).toEqual(
+      Array.from({ length: 20 }, () => ({
+        type: 'image',
+        mimeType: 'image/png',
+        data: PNG.toString('base64')
+      }))
+    )
+    expect(blocks[20]).toEqual({ type: 'text', text: `@${pngPath}` })
+  })
+
+  it('keeps a host path when native encoding would exceed room reserved for later text', async () => {
+    const path = join(dir, 'encoded.png')
+    writeFileSync(path, Buffer.alloc(9 * 1024 * 1024))
+    const text = 'x'.repeat(4 * 1024 * 1024)
+    const blocks = await acpPromptBlocks(
+      message({ type: 'image-ref', path }, { type: 'text', text }),
+      true
+    )
+    expect(blocks).toEqual([
+      { type: 'text', text: `@${path}` },
+      { type: 'text', text }
+    ])
+    expect(Buffer.byteLength(JSON.stringify(blocks))).toBeLessThan(16 * 1024 * 1024 - 64 * 1024)
   })
 
   it('keeps a message with images within one protocol line', async () => {

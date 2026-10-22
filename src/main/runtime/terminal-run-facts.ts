@@ -36,6 +36,13 @@ export class TerminalRunFactsRegister {
     string,
     { incarnationId: string | null; firstInputAt: number | null }
   >()
+  private readonly inputListeners = new Set<(ptyId: string, now: number) => void>()
+
+  /** Called on driving input from any client (not launch writes or replies); keep it cheap. */
+  onInput(listener: (ptyId: string, now: number) => void): () => void {
+    this.inputListeners.add(listener)
+    return () => this.inputListeners.delete(listener)
+  }
 
   reserveSpawnCommit(commit: TerminalSpawnCommit): void {
     if (!commit.incarnationId) {
@@ -94,6 +101,9 @@ export class TerminalRunFactsRegister {
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)
     if (inputKind === 'driving') {
+      for (const listener of this.inputListeners) {
+        listener(ptyId, now)
+      }
       const pending = this.pendingByPtyId.get(ptyId)
       if (pending) {
         pending.firstInputAt ??= now

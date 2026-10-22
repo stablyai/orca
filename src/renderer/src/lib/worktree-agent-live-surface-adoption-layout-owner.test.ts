@@ -14,7 +14,6 @@ import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-
 import { provideLayoutFrameTerminalPanes } from '../runtime/layout-frame-terminal-panes'
 import { openWorkspaceLayoutFrameSync } from '../runtime/workspace-layout-frame-sync'
 import type { WorkspaceLayoutFrameSync } from '../runtime/workspace-layout-frame-sync'
-import { reportWindowSessionWriteActivity } from './window-session-write-activity'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import { adoptLiveWorkspacePtySurfaces } from './worktree-agent-live-surface-adoption'
@@ -93,21 +92,21 @@ describe('adopting live terminals in a layout-owner build', () => {
   let sync: WorkspaceLayoutFrameSync | null = null
 
   beforeEach(() => {
-    reportWindowSessionWriteActivity(false)
     sync?.close()
     sync = null
-    provideLayoutFrameTerminalPanes(() => false)
+    provideLayoutFrameTerminalPanes({
+      holdsTerminalPane: () => false,
+      terminalTab: () => undefined
+    })
   })
 
-  it('makes no tab or pane of its own while frames are held; the frame then draws the bound tab', async () => {
+  it('makes no tab or pane of its own before frames draw; the frame then draws the bound tab', async () => {
     const { window: windowSession, main } = sessions()
     const store = createTestStore()
     await bootWindowFromPartitions(store, [{ hostId: 'local', session: windowSession }])
     sync = openWorkspaceLayoutFrameSync(store)
-    provideLayoutFrameTerminalPanes(sync.holdsTerminalPane)
-    sync.start()
-    // The window owes main a save, so main's tree waits.
-    reportWindowSessionWriteActivity(true)
+    provideLayoutFrameTerminalPanes(sync)
+    // Main's snapshot is in, but the window has not started drawing from frames yet.
     frames.onFrame!(snapshotOf(main))
     await flushMicrotasks()
     const createTab = vi.spyOn(store.getState(), 'createTab')
@@ -125,7 +124,7 @@ describe('adopting live terminals in a layout-owner build', () => {
     expect(setTabLayout).not.toHaveBeenCalled()
     expect(store.getState().tabsByWorktree[GIT_KEY]!.map((tab) => tab.id)).toEqual(['tab-other'])
 
-    reportWindowSessionWriteActivity(false)
+    sync.start()
     await flushMicrotasks()
     const layout = store.getState().terminalLayoutsByTabId['tab-split']
     expect(layout?.root).toMatchObject({
@@ -143,34 +142,38 @@ describe('adopting live terminals in a layout-owner build', () => {
     ).resolves.toEqual({ surfaced: true, declinedPtyIds: [] })
   })
 
+  // Main placed the terminals while answering the sweep's listing, so the listing is fresher than
+  // any frame this window has drawn: it is the verdict, and the frames catch up.
   it.each([
     ['binds to another terminal', [`${GIT_KEY}@@aaaa0008`, `${GIT_KEY}@@aaaa0009`]],
     ['leaves unbound', [undefined, undefined]]
   ] satisfies [string, [string?, string?]][])(
-    'declines a terminal whose pane main %s',
+    'counts the pane main’s listing names, though the last frame drawn %s, and writes nothing',
     async (_, ptyIds) => {
       const { window: windowSession, main } = sessions(ptyIds)
       const store = createTestStore()
       await bootWindowFromPartitions(store, [{ hostId: 'local', session: windowSession }])
       sync = openWorkspaceLayoutFrameSync(store)
-      provideLayoutFrameTerminalPanes(sync.holdsTerminalPane)
-      sync.start()
-      reportWindowSessionWriteActivity(true)
+      provideLayoutFrameTerminalPanes(sync)
       frames.onFrame!(snapshotOf(main))
       await flushMicrotasks()
+      const createTab = vi.spyOn(store.getState(), 'createTab')
+      const setTabLayout = vi.spyOn(store.getState(), 'setTabLayout')
 
       await expect(
         adoptLiveWorkspacePtySurfaces(store.getState, GIT_KEY, [LEFT_PTY], async () => owners)
-      ).resolves.toEqual({ surfaced: false, declinedPtyIds: [LEFT_PTY] })
+      ).resolves.toEqual({ surfaced: true, declinedPtyIds: [] })
+      expect(createTab).not.toHaveBeenCalled()
+      expect(setTabLayout).not.toHaveBeenCalled()
     }
   )
 
-  it('declines a terminal whose tab main does not hold, rather than making one', async () => {
+  it('counts a tab main’s listing names before its frame arrives, rather than making one', async () => {
     const { window: windowSession } = sessions()
     const store = createTestStore()
     await bootWindowFromPartitions(store, [{ hostId: 'local', session: windowSession }])
     sync = openWorkspaceLayoutFrameSync(store)
-    provideLayoutFrameTerminalPanes(sync.holdsTerminalPane)
+    provideLayoutFrameTerminalPanes(sync)
     sync.start()
     frames.onFrame!(snapshotOf(windowSession))
     await flushMicrotasks()
@@ -183,23 +186,24 @@ describe('adopting live terminals in a layout-owner build', () => {
       async () => owners
     )
 
-    expect(adoption).toEqual({ surfaced: false, declinedPtyIds: [LEFT_PTY] })
+    expect(adoption).toEqual({ surfaced: true, declinedPtyIds: [] })
     expect(createTab).not.toHaveBeenCalled()
+    expect(store.getState().tabsByWorktree[GIT_KEY]!.map((tab) => tab.id)).toEqual(['tab-other'])
   })
 
-  it('declines a terminal, then the snapshot arriving after the sweep draws its tab with no new sweep', async () => {
+  it('counts a terminal shown, then the snapshot arriving after the sweep draws its tab with no new sweep', async () => {
     const { window: windowSession, main } = sessions()
     const store = createTestStore()
     await bootWindowFromPartitions(store, [{ hostId: 'local', session: windowSession }])
     sync = openWorkspaceLayoutFrameSync(store)
-    provideLayoutFrameTerminalPanes(sync.holdsTerminalPane)
+    provideLayoutFrameTerminalPanes(sync)
     sync.start()
     const createTab = vi.spyOn(store.getState(), 'createTab')
     const readOwners = vi.fn(async () => owners)
 
     await expect(
       adoptLiveWorkspacePtySurfaces(store.getState, GIT_KEY, [LEFT_PTY, RIGHT_PTY], readOwners)
-    ).resolves.toEqual({ surfaced: false, declinedPtyIds: [LEFT_PTY, RIGHT_PTY] })
+    ).resolves.toEqual({ surfaced: true, declinedPtyIds: [] })
 
     frames.onFrame!(snapshotOf(main))
     await flushMicrotasks()
@@ -217,7 +221,7 @@ describe('adopting live terminals in a layout-owner build', () => {
     const store = createTestStore()
     await bootWindowFromPartitions(store, [{ hostId: 'local', session: emptySession() }])
     sync = openWorkspaceLayoutFrameSync(store)
-    provideLayoutFrameTerminalPanes(sync.holdsTerminalPane)
+    provideLayoutFrameTerminalPanes(sync)
     sync.start()
     frames.onFrame!(snapshotOf(main))
     await flushMicrotasks()

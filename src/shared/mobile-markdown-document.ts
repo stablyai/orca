@@ -13,34 +13,6 @@ export type RuntimeMarkdownReadOnlyReason =
   | 'unsupported_untitled'
   | 'file_too_large'
 
-export type RuntimeMobileMarkdownRequest =
-  | {
-      id: string
-      operation: 'read'
-      worktreeId: string
-      tabId: string
-    }
-  | {
-      id: string
-      operation: 'save'
-      worktreeId: string
-      tabId: string
-      baseVersion: string
-      content: string
-    }
-
-export type RuntimeMobileMarkdownResponse =
-  | {
-      id: string
-      ok: true
-      result: RuntimeMarkdownReadTabResult | RuntimeMarkdownSaveTabResult
-    }
-  | {
-      id: string
-      ok: false
-      error: string
-    }
-
 export type RuntimeMarkdownReadTabResult = {
   tabId: string
   filePath: string

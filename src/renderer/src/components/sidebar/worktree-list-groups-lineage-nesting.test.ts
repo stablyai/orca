@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
-import { getLineageGroupKey, getWorktreeLineageGroupKey } from './worktree-list/grouping/group-keys'
-import { getLineageRenderInfo, getWorktreeLineageAncestors } from './worktree-lineage-projection'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
+import {
+  getLineageGroupKey,
+  getWorktreeLineageGroupKey
+} from '../../../../shared/sidebar-list/group-keys'
+import {
+  getLineageRenderInfo,
+  getWorktreeLineageAncestors
+} from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'

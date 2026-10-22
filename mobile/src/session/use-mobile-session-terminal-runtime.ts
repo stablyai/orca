@@ -1,7 +1,7 @@
 import type { PendingSessionSelection } from './pending-session-selection'
 import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
-import type { Keyboard, TextInput } from 'react-native'
+import { Alert, type Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -14,6 +14,7 @@ import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-conne
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useBufferedTerminalDrafts } from '../terminal/use-buffered-terminal-drafts'
 import { useMobileTerminalInventoryRecoveryBridge } from './use-mobile-terminal-inventory-recovery'
 import type {
@@ -80,7 +81,21 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Why: don't subscribe until the WebView fires web-ready — iOS may defer JS in hidden WebViews and init() messages would queue unrendered.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
-  const bufferedTerminalDraftState = useBufferedTerminalDrafts({ activeHandle, activeHandleRef })
+  const executionHost = useWorkspaceExecutionHost()
+  const bufferedTerminalDraftState = useBufferedTerminalDrafts({
+    activeHandle,
+    activeHandleRef,
+    storageKey:
+      hostId && worktreeId
+        ? `orca:terminalDrafts:${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
+        : undefined,
+    storageScope: executionHost,
+    onStorageError: () =>
+      Alert.alert(
+        'Draft could not be saved',
+        'Keep this screen open to avoid losing the command draft.'
+      )
+  })
   const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingSelectionRef = useRef<PendingSessionSelection | null>(null)
@@ -114,7 +129,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
-    handleLiveInputSubmit
+    handleLiveInputSubmit,
+    sendLiveInputClick
   } = useTerminalLiveInputCommit({
     activeHandle,
     activeHandleRef,
@@ -203,6 +219,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     handleLiveInputChange,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
+    sendLiveInputClick,
     canCompose,
     canSend,
     liveInputEnabled,

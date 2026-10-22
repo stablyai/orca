@@ -14,6 +14,7 @@ import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'
+import { PairedServerRowsProducer } from '../sidebar-inputs/paired-server-rows-producer'
 
 function answer(capable: boolean): RuntimeStatus {
   return {
@@ -70,6 +71,7 @@ function fakeHosts(
     sshTargetLabels: new Map<string, string>(),
     sshConnectionStates: new Map<string, SshConnectionState>()
   }
+  // worktree.ps only; the producer's catalog reads go unanswered, as an older server's would.
   const call = vi.fn<MobileDesktopRelayHosts['call']>()
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
@@ -97,12 +99,17 @@ function fakeHosts(
       fence: 'unused',
       pairing: { v: 2, endpoint: 'ws://server', deviceToken: 'desktop', publicKeyB64: 'k' }
     }),
-    call,
+    call: (host, method, params, options) =>
+      method === 'worktree.ps'
+        ? call(host, method, params, options)
+        : Promise.reject(new Error('method_not_found')),
     hostsBrowserPage: () => false,
     onEnvironmentRetired: (listener) => {
       state.retire = listener
       return () => {}
-    }
+    },
+    onStatusChanged: () => () => {},
+    watchChanges: () => ({ close: () => {}, current: () => true })
   }
   return { hosts, call, state }
 }
@@ -114,9 +121,15 @@ function catalog(
     sessions?: Record<string, Partial<WorkspaceSessionState>>
   } = {}
 ) {
+  const serverRows = new PairedServerRowsProducer({
+    hasDemand: () => false,
+    hostLabelOverrides: () => new Map()
+  })
+  serverRows.attach(hosts)
   return {
     catalog: new MobileRelayHostCatalog({
       hosts,
+      serverRows,
       hostLabelOverrides: () => labels,
       getWorkspaceSession: (hostId) => {
         const session = desktop.sessions?.[hostId]
@@ -226,7 +239,7 @@ describe('mobile relay host catalog', () => {
       'worktree.ps',
       // The phone's full-catalog limit: the server's default page would silently truncate.
       { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
-      { timeoutMs: 5_000, expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
+      { expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
     )
   })
 
@@ -302,7 +315,7 @@ describe('mobile relay host catalog', () => {
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({ worktrees: null })
   })
 
-  it('has no rows when re-paired mid-fetch, and the next poll fetches the new server afresh', async () => {
+  it('never serves rows from before a re-pair mid-fetch, and the next poll fetches the new server afresh', async () => {
     const { hosts, call, state } = fakeHosts([
       { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
     ])
@@ -317,12 +330,17 @@ describe('mobile relay host catalog', () => {
     const next = hostCatalog.worktrees('runtime:env')
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(call).toHaveBeenLastCalledWith(expect.anything(), 'worktree.ps', expect.anything(), {
-      timeoutMs: 5_000,
       expected: { pairingRevision: 2, runtimeId: 'runtime-a' }
     })
     await expect(next).resolves.toMatchObject({ worktrees: [{ worktreeId: 'new-server-row' }] })
     answerOldFetch(psReply([{ worktreeId: 'old-server-row', hostId: 'local' }]))
-    await expect(rows).resolves.toEqual({ worktrees: null })
+    // The old server's late answer is dropped; the earlier request reads the new server's rows.
+    await expect(rows).resolves.toEqual({
+      worktrees: [{ worktreeId: 'new-server-row', hostId: 'runtime:env' }]
+    })
+    await expect(hostCatalog.worktrees('runtime:env')).resolves.toMatchObject({
+      worktrees: [{ worktreeId: 'new-server-row' }]
+    })
   })
 
   it("forgets a removed server's rows, even ones its last fetch delivers after removal", async () => {
@@ -376,7 +394,6 @@ describe('mobile relay host catalog', () => {
       worktrees: [{ worktreeId: 'w' }]
     })
     expect(call).toHaveBeenCalledWith(expect.anything(), 'worktree.ps', expect.anything(), {
-      timeoutMs: 5_000,
       expected: { pairingRevision: 1, runtimeId: null }
     })
   })

@@ -104,10 +104,29 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     if (!emit || semanticRowsEqual(before, after)) {
       return false
     }
-    const mutation: AgentHookStatusRowMutation = {
+    this.notifyStatusRowMutationListeners({
       before: toMutationIdentity(before),
       after: toMutationIdentity(after)
+    })
+    return true
+  }
+
+  /** Republish a row whose OSC 7501 facet alone changed, to the window and row-mutation readers only:
+   *  enriched listeners (plugins, recorder, titles) must not see progress ticks as transitions. */
+  protected republishProgramStatusFacet(paneKey: string): void {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const row = this.state.lastStatusByPaneKey.get(paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!row || row.providerSessionOnly === true) {
+      return
     }
+    this.onAgentStatus?.({ ...this.programStatusFacets.stitch(row), programStatusOnly: true })
+    const identity = toMutationIdentity(row)
+    this.notifyStatusRowMutationListeners({ before: identity, after: identity })
+  }
+
+  private notifyStatusRowMutationListeners(mutation: AgentHookStatusRowMutation): void {
     for (const listener of this.statusRowMutationListeners) {
       try {
         listener(mutation)
@@ -115,6 +134,5 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
         console.error('[agent-hooks] status-row mutation listener threw', error)
       }
     }
-    return true
   }
 }

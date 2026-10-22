@@ -39,6 +39,10 @@ export type ExtraUsageBalance = CurrencyExtraUsageBalance | CreditExtraUsageBala
 
 export type RateLimitBucket = RateLimitWindow & {
   name: string
+  /** Model-group name the pool belongs to (Antigravity), when the provider groups pools. */
+  group?: string
+  /** Provider's own window name for the pool, e.g. agy's "Weekly Limit Remaining". */
+  windowName?: string
 }
 
 export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
@@ -61,6 +65,12 @@ export type UsageRateLimitFailureKind =
   | 'usage-unavailable'
   | 'unknown'
 
+/** Renderer-only: why a provider set up on this device shows no usage under the owning host. */
+export type OwnerNotSetUpPlaceholder =
+  | { kind: 'not-configured'; ownerLabel: string; signInSavedHereOnly: boolean }
+  /** The host reports Claude on API-key billing and with no login alike, so it cannot say which. */
+  | { kind: 'claude-unknown'; ownerLabel: string }
+
 export type UsageRateLimitMetadata = {
   source?: UsageRateLimitSource
   attemptedSources?: UsageRateLimitSource[]
@@ -72,6 +82,8 @@ export type UsageRateLimitMetadata = {
   retryAtMs?: number
   /** Renderer-only: the remote host that owns this usage cannot vouch for it. Hosts never set it. */
   unverifiableOwner?: boolean
+  /** Renderer-only: set up on this device but not on the remote host that owns usage. Hosts never set it. */
+  ownerNotSetUp?: OwnerNotSetUpPlaceholder
 }
 
 export type ProviderRateLimits = {

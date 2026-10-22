@@ -20,6 +20,7 @@ import {
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/editable-target'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (
@@ -288,7 +289,7 @@ export function useFileExplorerKeys(opts: {
       }
     }
 
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [keybindings, rightSidebarExplorerView, rightSidebarOpen, rightSidebarTab, opts.containerRef])
 }

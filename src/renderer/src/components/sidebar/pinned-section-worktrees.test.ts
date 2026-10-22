@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getPinnedSectionWorktrees, isPinnedSectionWorktree } from './pinned-section-worktrees'
+import {
+  getPinnedSectionWorktrees,
+  isPinnedSectionWorktree
+} from '../../../../shared/sidebar-list/pinned-section-worktrees'
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 
 function makeWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
   return {

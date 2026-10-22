@@ -1,5 +1,5 @@
-// A person's message as an ACP prompt. Images go as the protocol's image blocks, and only to an
-// agent that advertised them; each is checked and read before anything reaches the agent.
+// Native images require advertised support and bounded materialization; host paths retain
+// their ordinary file-reference representation whenever native delivery cannot fit.
 
 import { extname, isAbsolute } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +12,7 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../shared/agent-session-failure-words'
+import { formatNativeChatFileReference } from '../../shared/agent-image-paste'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
 import type { NativeChatImageRefBlock } from '../../shared/native-chat-types'
@@ -21,7 +22,7 @@ import {
 } from '../../shared/node-bounded-file-reader'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { resolveAcpPeerOptions } from './acp-peer-limits'
-import { acpAgentName } from './acp-structured-acquire'
+import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { acpSessionAcceptsImages } from './acp-structured-options'
 import type { ContentBlock } from './generated/acp-protocol.generated'
@@ -44,6 +45,19 @@ export class AcpPromptContentError extends Error {
 
 function attachmentProblem(attachment: AgentSessionAttachmentProblem): AcpPromptContentError {
   return new AcpPromptContentError(agentSessionFailureFact('attachmentInvalid', { attachment }))
+}
+
+/** The image's absolute path on this host, from its path or a `file:` URL. */
+function hostImagePath(block: NativeChatImageRefBlock): string | null {
+  let path = block.path
+  if (!path && block.url?.startsWith('file:')) {
+    try {
+      path = fileURLToPath(block.url)
+    } catch {
+      return null
+    }
+  }
+  return path && isAbsolute(path) ? path : null
 }
 
 async function imageBlock(
@@ -70,36 +84,39 @@ async function imageBlock(
     }
     return { block: { type: 'image', mimeType: match[1], data: match[2] }, bytes }
   }
-  let path = block.path
-  if (!path && block.url?.startsWith('file:')) {
-    try {
-      path = fileURLToPath(block.url)
-    } catch {
-      throw attachmentProblem({ reason: 'noSource' })
-    }
-  }
-  if (!path || !isAbsolute(path)) {
+  const path = hostImagePath(block)
+  if (!path) {
     throw attachmentProblem({ reason: 'noSource' })
   }
   const mimeType = IMAGE_FILE_MIME_TYPES[extname(path).toLowerCase()]
-  if (!mimeType || !ACP_IMAGE_MIME_TYPES.has(mimeType)) {
-    throw attachmentProblem({ reason: 'unsupportedType' })
+  const fallback = {
+    block: { type: 'text' as const, text: formatNativeChatFileReference(path) },
+    bytes: 0
+  }
+  if (!mimeType || !ACP_IMAGE_MIME_TYPES.has(mimeType) || remainingBytes <= 0) {
+    return fallback
   }
   let data: Buffer
   try {
     data = (await readNodeFileWithinLimit(path, remainingBytes, { regularFileOnly: true, signal }))
       .buffer
   } catch (error) {
-    if (error instanceof NodeFileReadTooLargeError) {
-      throw tooLarge()
+    if (
+      error instanceof NodeFileReadTooLargeError ||
+      (signal.aborted && error === signal.reason) ||
+      (error instanceof Error &&
+        (error.message === 'Expected a regular file' ||
+          ('errno' in error &&
+            typeof error.errno === 'number' &&
+            'syscall' in error &&
+            typeof error.syscall === 'string')))
+    ) {
+      return fallback
     }
-    if (error instanceof Error && error.message === 'Expected a regular file') {
-      throw attachmentProblem({ reason: 'notAFile' })
-    }
-    throw new AcpPromptContentError(agentSessionFailureFact('attachmentUnreadable'))
+    throw error
   }
   if (data.byteLength === 0) {
-    throw attachmentProblem({ reason: 'empty' })
+    return fallback
   }
   return { block: { type: 'image', mimeType, data: data.toString('base64') }, bytes: data.length }
 }
@@ -109,25 +126,59 @@ export async function acpPromptBlocks(
   body: AgentJournalMessageItem,
   acceptsImages: boolean
 ): Promise<ContentBlock[]> {
-  const blocks: ContentBlock[] = []
+  // Reserve text and path slots, including those after each optional native image.
+  const blocks: ContentBlock[] = body.blocks.map((block) => {
+    if (block.type === 'text') {
+      return { type: 'text', text: block.text }
+    }
+    const path = block.type === 'image-ref' ? hostImagePath(block) : null
+    return { type: 'text', text: path ? formatNativeChatFileReference(path) : '' }
+  })
+  const blockBytes = (block: ContentBlock): number => Buffer.byteLength(JSON.stringify(block))
+  let encodedBytes =
+    2 + Math.max(0, blocks.length - 1) + blocks.reduce((n, b) => n + blockBytes(b), 0)
   const signal = AbortSignal.timeout(READ_TIMEOUT_MS)
   let imageCount = 0
   let imageBytes = 0
-  for (const block of body.blocks) {
+  for (const [index, block] of body.blocks.entries()) {
     if (block.type === 'text') {
-      blocks.push({ type: 'text', text: block.text })
       continue
     }
-    if (block.type !== 'image-ref' || !acceptsImages) {
+    if (block.type !== 'image-ref') {
       throw attachmentProblem({ reason: 'unsupportedType' })
     }
-    imageCount += 1
-    if (imageCount > MAX_IMAGE_COUNT) {
+    if (!acceptsImages) {
+      // As the composer would have written it, had it known before the agent's start answered.
+      const path = hostImagePath(block)
+      if (!path) {
+        throw attachmentProblem({ reason: 'unsupportedType' })
+      }
+      continue
+    }
+    const inline = block.url?.startsWith('data:')
+    if (inline && imageCount >= MAX_IMAGE_COUNT) {
       throw attachmentProblem({ reason: 'tooMany', limit: MAX_IMAGE_COUNT })
     }
-    const image = await imageBlock(block, ACP_PROMPT_IMAGE_MAX_BYTES - imageBytes, signal)
+    const previousBytes = blockBytes(blocks[index]!)
+    const path = hostImagePath(block)
+    const mimeType = IMAGE_FILE_MIME_TYPES[extname(path ?? '').toLowerCase()] ?? ''
+    const overhead = blockBytes({ type: 'image', mimeType, data: '' })
+    const encodedCapacity =
+      encodedBytes > ACP_PROMPT_LINE_BUDGET
+        ? 0
+        : 3 * Math.floor((ACP_PROMPT_LINE_BUDGET - encodedBytes + previousBytes - overhead) / 4)
+    const remainingBytes = inline
+      ? ACP_PROMPT_IMAGE_MAX_BYTES - imageBytes
+      : imageCount >= MAX_IMAGE_COUNT
+        ? 0
+        : Math.min(ACP_PROMPT_IMAGE_MAX_BYTES - imageBytes, encodedCapacity)
+    const image = await imageBlock(block, remainingBytes, signal)
+    if (image.block.type === 'image') {
+      imageCount += 1
+    }
     imageBytes += image.bytes
-    blocks.push(image.block)
+    blocks[index] = image.block
+    encodedBytes += blockBytes(image.block) - previousBytes
   }
   // Only images can carry a message past one line here; their words are the refusal's.
   if (imageCount > 0 && Buffer.byteLength(JSON.stringify(blocks)) > ACP_PROMPT_LINE_BUDGET) {
@@ -136,15 +187,28 @@ export async function acpPromptBlocks(
   return blocks
 }
 
+/** A message that is only one of the dialect's withheld commands, with no attachment. */
+function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly string[]): boolean {
+  const [block, ...rest] = body.blocks
+  const text = block?.type === 'text' && rest.length === 0 ? block.text.trim() : ''
+  return text.startsWith('/') && withheld.includes(text.slice(1))
+}
+
 /** The prompt for `body` to `session`'s agent, or Orca's refusal of it in words that name the
  *  agent. Images go only where `acpSessionAcceptsImages` allows them. */
 export async function acpDispatchPrompt(
   body: AgentJournalMessageItem,
   session: {
-    spec: Pick<AcpLaunchSpec, 'agent' | 'imagePrompts'>
+    spec: Pick<AcpLaunchSpec, 'agent' | 'dialect'>
     connection: Pick<AcpStructuredConnection, 'initialize'>
   }
 ): Promise<ContentBlock[] | AgentJournalDispatchRejection> {
+  if (isWithheldCommand(body, session.spec.dialect.withheldCommands ?? [])) {
+    return agentSessionFailureWords(agentSessionFailureFact('commandUnavailable'), {
+      surface: 'rejection',
+      agentName: acpAgentName(session.spec.agent)
+    })
+  }
   try {
     return await acpPromptBlocks(body, await acpSessionAcceptsImages(session))
   } catch (error) {

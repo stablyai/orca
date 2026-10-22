@@ -214,9 +214,11 @@ describe('CodexAccountService config sync', () => {
       codex: { activeAccountId: account.id }
     })
     expect(consume).toHaveBeenCalledOnce()
+    // A same-offer retry under a key whose reply was lost: the recorded outcome, no second spend.
     await expect(
       service.consumeRateLimitResetCredit('77777777-7777-4777-8777-777777777777', expectedScope)
-    ).rejects.toThrow('already attempted')
+    ).resolves.toMatchObject({ outcome: 'reset', scope: expectedScope })
+    expect(consume).toHaveBeenCalledOnce()
     await expect(
       service.consumeRateLimitResetCredit(idempotencyKey, {
         ...expectedScope,
@@ -225,7 +227,7 @@ describe('CodexAccountService config sync', () => {
     ).rejects.toThrow('different reset scope')
   })
 
-  it('blocks a different key after an ambiguous provider error but lets desktop retry', async () => {
+  it('answers a different key for the same offer as the attempt that claimed it', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
     const account = {
       id: 'account-1',
@@ -268,18 +270,85 @@ describe('CodexAccountService config sync', () => {
     await expect(service.consumeRateLimitResetCredit(firstKey, expectedScope)).rejects.toThrow(
       'provider response lost'
     )
+    // While the outcome is unknown, a new key resumes the pending attempt under its own key.
+    await expect(
+      service.consumeRateLimitResetCredit('44444444-4444-4444-8444-444444444444', expectedScope)
+    ).resolves.toMatchObject({ outcome: 'alreadyRedeemed', scope: expectedScope })
+    expect(consume).toHaveBeenCalledTimes(2)
+    expect(consume.mock.calls.map(([request]) => request.idempotencyKey)).toEqual([
+      firstKey,
+      firstKey
+    ])
     await expect(service.consumeCurrentRateLimitResetCredit()).resolves.toMatchObject({
       outcome: 'alreadyRedeemed',
       state
     })
-    expect(consume).toHaveBeenCalledTimes(2)
     await expect(
-      service.consumeRateLimitResetCredit('44444444-4444-4444-8444-444444444444', expectedScope)
-    ).rejects.toThrow('already attempted')
+      service.consumeRateLimitResetCredit('55555555-5555-4555-8555-555555555555', expectedScope)
+    ).resolves.toMatchObject({ outcome: 'alreadyRedeemed', scope: expectedScope })
     await expect(
       service.consumeRateLimitResetCredit(firstKey, expectedScope)
     ).resolves.toMatchObject({ outcome: 'alreadyRedeemed', scope: expectedScope })
     expect(consume).toHaveBeenCalledTimes(2)
+  })
+
+  it('spends once when two clients confirm the same offer under different keys at once', async () => {
+    const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+    const account = {
+      id: 'account-1',
+      email: 'user@example.com',
+      managedHomePath,
+      managedHomeRuntime: 'host' as const,
+      wslDistro: null,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    }
+    const settings = createSettings({
+      codexManagedAccounts: [account],
+      activeCodexManagedAccountId: account.id
+    })
+    const limits = createResetCreditLimits()
+    const state = createResetRateLimitState(limits)
+    const provider: { finish?: (value: { outcome: 'reset'; state: RateLimitState }) => void } = {}
+    const consume = vi.fn(
+      () =>
+        new Promise<{ outcome: 'reset'; state: RateLimitState }>((resolve) => {
+          provider.finish = resolve
+        })
+    )
+    const expectedScope = buildCodexResetCreditExpectedScope({
+      target: state.codexTarget,
+      account,
+      limits
+    })!
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      createStore(settings) as never,
+      {
+        ...createRateLimits(),
+        getState: vi.fn(() => state),
+        consumeCodexRateLimitResetCredit: consume
+      } as never,
+      createRuntimeHome() as never
+    )
+
+    const phone = service.consumeRateLimitResetCredit(
+      'c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1',
+      expectedScope
+    )
+    const tablet = service.consumeRateLimitResetCredit(
+      'c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2',
+      expectedScope
+    )
+    await vi.waitFor(() => expect(consume).toHaveBeenCalledOnce())
+    provider.finish?.({ outcome: 'reset', state })
+
+    await expect(Promise.all([phone, tablet])).resolves.toMatchObject([
+      { outcome: 'reset', scope: expectedScope },
+      { outcome: 'reset', scope: expectedScope }
+    ])
+    expect(consume).toHaveBeenCalledOnce()
   })
 
   it('hydrates a pending attempt after restart and replays it without current-offer CAS', async () => {
@@ -338,9 +407,16 @@ describe('CodexAccountService config sync', () => {
       createRuntimeHome() as never
     )
 
+    // The refresh after the unknown outcome moved the offer, so the retry names a newer one; it
+    // resumes the account's unresolved attempt under that attempt's own key and scope.
     await expect(
-      restarted.consumeRateLimitResetCredit('99999999-9999-4999-8999-999999999999', expectedScope)
-    ).rejects.toThrow('unknown outcome')
+      restarted.consumeRateLimitResetCredit('99999999-9999-4999-8999-999999999999', {
+        ...expectedScope,
+        offerRevision: 'v1:newer'
+      })
+    ).resolves.toMatchObject({ outcome: 'alreadyRedeemed', scope: expectedScope })
+    expect(replayConsume).toHaveBeenCalledOnce()
+    expect(replayConsume).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: key }))
     await expect(
       restarted.consumeRateLimitResetCredit(key, {
         ...expectedScope,
@@ -409,7 +485,7 @@ describe('CodexAccountService config sync', () => {
     })
     await expect(
       restarted.consumeRateLimitResetCredit('abababab-abab-4bab-8bab-abababababab', expectedScope)
-    ).rejects.toThrow('already attempted')
+    ).resolves.toMatchObject({ outcome: 'reset', scope: expectedScope })
     expect(replayConsume).not.toHaveBeenCalled()
   })
 

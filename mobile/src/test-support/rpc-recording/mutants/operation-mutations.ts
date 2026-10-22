@@ -258,24 +258,24 @@ export const OPERATION_MUTATIONS = {
   // Swaps the two quick-command members, so a saved shell command arrives as an agent prompt and an
   // agent prompt arrives as a startup command. Invisible to any scenario that fills neither.
   'create-quick-command-keys': {
-    file: 'use-mobile-session-terminal-create-actions.ts',
-    before: `        ...(options?.startupCommand ? { command: options.startupCommand } : {}),
-        ...(options?.startupCommandDelivery
-          ? { startupCommandDelivery: options.startupCommandDelivery }
-          : {}),
-        ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),`,
-    after: `        ...(options?.startupCommand ? { agentPrompt: options.startupCommand } : {}),
-        ...(options?.startupCommandDelivery
-          ? { startupCommandDelivery: options.startupCommandDelivery }
-          : {}),
-        ...(options?.agentPrompt ? { command: options.agentPrompt } : {}),`
+    file: 'mobile-session-terminal-create-request.ts',
+    before: `    ...(options?.startupCommand ? { command: options.startupCommand } : {}),
+    ...(options?.startupCommandDelivery
+      ? { startupCommandDelivery: options.startupCommandDelivery }
+      : {}),
+    ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),`,
+    after: `    ...(options?.startupCommand ? { agentPrompt: options.startupCommand } : {}),
+    ...(options?.startupCommandDelivery
+      ? { startupCommandDelivery: options.startupCommandDelivery }
+      : {}),
+    ...(options?.agentPrompt ? { command: options.agentPrompt } : {}),`
   },
   // Drops the in-flight guard, so a second tap while the host is still answering opens a second
   // terminal the user never asked for. Invisible to any scenario that taps once.
   'create-second-tap-in-flight': {
     file: 'use-mobile-session-terminal-create-actions.ts',
-    before: '    if (!client || creatingTerminalRef.current) {',
-    after: '    if (!client) {'
+    before: '    if (creatingTerminalRef.current) {',
+    after: '    if (false && creatingTerminalRef.current) {'
   },
   // Lets a refused tab load reject the startup sequence, so neither the terminal load behind it nor
   // the two refresh timers it arms ever run and the route sits on "Loading terminals" with no

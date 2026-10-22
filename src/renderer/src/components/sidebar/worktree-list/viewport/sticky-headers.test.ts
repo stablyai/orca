@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildRows } from '../grouping/build-rows'
+import { buildRows } from '../grouping/build-rows.test-fixture'
 import { getStickyHeaderIndexes } from './virtual-rows'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Row } from '../grouping/row-types'
+import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -22,7 +22,7 @@ const makeHeaderRow = (
   key,
   label: key,
   count: 0,
-  tone: 'text-foreground',
+  icon: { kind: 'project' },
   ...overrides
 })
 

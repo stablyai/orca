@@ -82,6 +82,7 @@ import {
   stopFolderRepoGitUpgradeWatch
 } from './folder-repo-git-upgrade'
 import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
+import { repoTarget } from '../persistence/repo-host-target-matcher.test-fixture'
 
 type TestWindow = {
   destroyed: boolean
@@ -128,7 +129,7 @@ function makeStore(
     getAllWorktreeMeta: () => worktreeMeta,
     getRepos: () => repos,
     getRepo: vi.fn((id: string) => repos.find((repo) => repo.id === id)),
-    updateRepo: vi.fn((id: string, updates: Partial<Repo>) => {
+    updateRepo: vi.fn(({ id }: Pick<Repo, 'id'>, updates: Partial<Repo>) => {
       const repo = repos.find((candidate) => candidate.id === id)
       if (!repo) {
         return null
@@ -199,7 +200,7 @@ describe('folder repo git upgrade watch', () => {
     gitInit(repoPath)
     await tick()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
+    expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('folder-repo'), {
       kind: 'git',
       folderUpgradeGitRootPath: repoPath.replaceAll('\\', '/'),
       externalWorktreeVisibility: 'hide'
@@ -226,7 +227,7 @@ describe('folder repo git upgrade watch', () => {
     // A fixed tick wait can finish before the marker stat resolves under load.
     await vi.waitFor(
       () => {
-        expect(store.updateRepo).toHaveBeenCalledWith('folder-repo', {
+        expect(store.updateRepo).toHaveBeenCalledWith(repoTarget('folder-repo'), {
           kind: 'git',
           folderUpgradeGitRootPath: join(root, 'symlinked-project').replaceAll('\\', '/')
         })
@@ -257,7 +258,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -316,7 +317,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -349,7 +350,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({ kind: 'git' })
     )
     expect(notifyReposChanged).toHaveBeenCalledWith(nextWindow)
@@ -374,7 +375,7 @@ describe('folder repo git upgrade watch', () => {
 
     expect(store.updateRepo).toHaveBeenCalledTimes(1)
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'repo-a',
+      repoTarget('repo-a'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -434,7 +435,7 @@ describe('folder repo git upgrade watch', () => {
     await tick(2)
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'late-repo',
+      repoTarget('late-repo'),
       expect.objectContaining({ kind: 'git' })
     )
   })
@@ -463,7 +464,7 @@ describe('folder repo git upgrade watch', () => {
     await tick()
 
     expect(store.updateRepo).toHaveBeenCalledWith(
-      'folder-repo',
+      repoTarget('folder-repo'),
       expect.objectContaining({
         kind: 'git'
       })

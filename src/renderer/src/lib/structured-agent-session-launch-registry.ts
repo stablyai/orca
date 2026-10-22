@@ -18,13 +18,20 @@ import {
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-persistence'
 import {
+  removeStructuredLaunchSlot,
+  type StructuredLaunchSlotOwner
+} from './structured-agent-session-launch-slot'
+import {
   markStructuredAgentLaunchCancellation,
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
 } from './launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { cancelStructuredAgentLaunchOnLocalHost } from './structured-agent-session-local-launch-cancel'
+import {
+  cancelStructuredAgentLaunchOnLocalHost,
+  resetStructuredAgentLocalLaunchCancelsForTests
+} from './structured-agent-session-local-launch-cancel'
 
 export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -52,6 +59,7 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   structuredLaunchesBySessionId.clear()
   structuredLaunchListeners.clear()
   resetStructuredAgentLaunchCancellationForTests()
+  resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
 export function notifyStructuredLaunchListeners(): void {
@@ -223,19 +231,17 @@ function markStructuredAgentSessionLaunchCancelledInternal(
   worktreeId: string,
   sessionId: string,
   executionHostId: ExecutionHostId,
-  notify: boolean
+  owner: StructuredLaunchSlotOwner | undefined
 ): boolean {
   const alreadyCancelled = hasStructuredAgentLaunchCancellationTombstonePersisted(sessionId)
   const state = getStructuredLaunchStateBySessionId(sessionId)
+  const surfaceAddress =
+    state?.intent.surfaceAddress ??
+    getPersistedStructuredAgentLaunchRecord(sessionId)?.surfaceAddress
   if (matchesLaunchWorktree(state, worktreeId) && state) {
     // The launch's own owner outranks the caller's: it is the host the create was sent to.
     if (ORCA_LAYOUT_OWNER_IS_MAIN && state.intent.executionHostId === LOCAL_EXECUTION_HOST_ID) {
-      cancelStructuredAgentLaunchOnLocalHost(
-        worktreeId,
-        sessionId,
-        notifyStructuredLaunchListeners,
-        state.promise
-      )
+      cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
     } else {
       markStructuredAgentLaunchCancellation(
         sessionId,
@@ -254,11 +260,14 @@ function markStructuredAgentSessionLaunchCancelledInternal(
     !alreadyCancelled &&
     executionHostId === LOCAL_EXECUTION_HOST_ID
   ) {
-    cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId, notifyStructuredLaunchListeners)
+    cancelStructuredAgentLaunchOnLocalHost(worktreeId, sessionId)
   } else if (!alreadyCancelled) {
     markStructuredAgentLaunchCancellation(sessionId, executionHostId, alreadyCancelled)
   }
-  if (!alreadyCancelled && notify) {
+  if (owner && surfaceAddress) {
+    removeStructuredLaunchSlot(owner, worktreeId, sessionId)
+  }
+  if (!alreadyCancelled && owner) {
     notifyStructuredLaunchListeners()
   }
   return !alreadyCancelled
@@ -268,13 +277,14 @@ function markStructuredAgentSessionLaunchCancelledInternal(
 export function markStructuredAgentSessionLaunchCancelled(
   worktreeId: string,
   sessionId: string,
-  executionHostId: ExecutionHostId
+  executionHostId: ExecutionHostId,
+  owner: StructuredLaunchSlotOwner
 ): boolean {
   return markStructuredAgentSessionLaunchCancelledInternal(
     worktreeId,
     sessionId,
     executionHostId,
-    true
+    owner
   )
 }
 
@@ -288,7 +298,7 @@ export function markStructuredAgentSessionLaunchCancelledSilently(
     worktreeId,
     sessionId,
     executionHostId,
-    false
+    undefined
   )
 }
 

@@ -3,7 +3,7 @@
  * What the preview mounts for each answer the shell gives, read off the element it renders.
  *
  * Its own file because of how the grant resolves here: this suite runs in a `node` environment whose
- * resolver has no `.web` precedence, so `MobileHtmlPreview.web.tsx`'s import of
+ * resolver has no `.web` precedence, so `MobileHtmlPreview.tsx`'s import of
  * `./use-html-preview-link-grant` lands on the native sibling, which answers yes unconditionally.
  * That is why `mobile-webview-editor-web-fallbacks.test.tsx` still measures the granted frame
  * without knowing a grant exists, and why the hidden path needs the module replaced to be reached
@@ -47,7 +47,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 const { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX, MOBILE_HTML_PREVIEW_SEALED_SANDBOX } =
-  await import('./MobileHtmlPreview.web')
+  await import('./MobileHtmlPreview')
 
 const ARTIFACT =
   '<!doctype html><html><body><a id="x" href="https://example.com/a">tap</a></body></html>'

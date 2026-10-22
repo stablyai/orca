@@ -57,4 +57,23 @@ export type MobileDesktopRelayHosts = {
   hostsBrowserPage: (environmentId: string, browserPageId: string) => boolean
   /** Fires when a server is removed, re-paired or disconnected; returns an unsubscribe. */
   onEnvironmentRetired: (listener: (environmentId: string) => void) => () => void
+  /** Fires whenever the desktop republishes a server's status; returns an unsubscribe. */
+  onStatusChanged: (listener: () => void) => () => void
+  /**
+   * The server's own workspace change events as the desktop itself, needing no window. `onChange`
+   * fires once the stream is ready, on `worktreesChanged`/`reposChanged`, and on a replay after a
+   * reconnect, which may have missed events; `onClose` when the stream ends. `catalog` is false
+   * only for `worktreesChanged`, which no repo or project-group write sends alone.
+   */
+  watchChanges: (
+    host: Pick<MobileDesktopRelayHost, 'environmentId'>,
+    expected: NonNullable<MobileDesktopRelayCallOptions['expected']>,
+    callbacks: { onChange: (change: { catalog: boolean }) => void; onClose: () => void }
+  ) => MobileDesktopRelayHostWatch
+}
+
+export type MobileDesktopRelayHostWatch = {
+  close: () => void
+  /** False once closed, ended, or its transport was replaced, which can end it without `onClose`. */
+  current: () => boolean
 }

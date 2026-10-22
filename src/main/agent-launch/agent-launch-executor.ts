@@ -3,7 +3,7 @@
 
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
 import {
   combineLaunchWarnings,
@@ -24,6 +24,7 @@ import {
   readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeReceipt,
+  type AgentLaunchModeSettlement,
   DEFAULT_LAUNCH_VOCABULARY,
   downgradeAgentLaunchModeForStructuredRefusal,
   warnStructuredLaunchDowngrade
@@ -35,7 +36,9 @@ import {
 } from './agent-launch-legacy-host'
 import {
   AgentLaunchStructuredSessionRefusedError,
-  type AgentLaunchStructuredSurface
+  terminalLaunchInputs,
+  type AgentLaunchStructuredSurface,
+  type AgentLaunchWorkspaceFactory
 } from './agent-launch-surface-factories'
 import type {
   AgentLaunchExecution,
@@ -70,8 +73,11 @@ export async function executeAgentLaunch(
           : {}),
         ...(execution.callerRendersStructured === false ? { callerRendersStructured: false } : {})
       },
-      settings: readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
+      settings: execution.terminalOnly
+        ? undefined
+        : readAgentLaunchModeSettings(runtime, intent.nativeChatDefault),
       ...(execution.terminalOnly ? { terminalOnly: true } : {}),
+      ...(intent.surface ? { surface: intent.surface } : {}),
       vocabulary
     })
   // The create's startup terminal is this launch's only surface, and the create delivers the text.
@@ -138,6 +144,12 @@ export async function executeAgentLaunch(
       }
     }
 
+    const settlement: AgentLaunchModeSettlement = {
+      phase: intent.target.kind === 'existing' ? 'before-effects' : 'created-workspace',
+      agent: intent.agent,
+      workspacePath: placed.workspacePath,
+      cwd: intent.cwd
+    }
     execution.onStage?.('mode_settle')
     // A caller's own decision about an existing workspace already carries that host's answer.
     let settled =
@@ -148,7 +160,8 @@ export async function executeAgentLaunch(
             preflight,
             placed.worktreeId,
             intent.agent,
-            vocabulary
+            vocabulary,
+            settlement
           )
 
     execution.onStage?.('surface_create')
@@ -164,7 +177,7 @@ export async function executeAgentLaunch(
       ) {
         throw error
       }
-      settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary)
+      settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary, settlement)
       created = await createTerminalSurface(execution, placed)
     }
     // Both CAN be set, so neither may be dropped. The create warns precisely when it produced no
@@ -215,20 +228,12 @@ async function resolveWorkspace(
   execution: AgentLaunchExecution,
   preflight: AgentLaunchModeReceipt,
   onWorkspaceCreated?: (worktreeId: string) => void
-): Promise<{
-  worktreeId: string
-  connectionId?: string | null
-  startupTerminalHandle: string | undefined
-  startupTerminalPaneKey?: string
-  warning?: string
-  /** True when this create folded the prompt into the agent's startup command. */
-  promptRodeLaunchCommand?: boolean
-}> {
+): Promise<Awaited<ReturnType<AgentLaunchWorkspaceFactory['createWorktree']>>> {
   const { intent } = execution
   if (intent.target.kind === 'existing') {
     // Nothing was created, so there is no create warning to carry.
-    const { worktree: worktreeId, connectionId } = intent.target
-    return { worktreeId, connectionId, startupTerminalHandle: undefined }
+    const { worktree: worktreeId, connectionId, workspacePath } = intent.target
+    return { worktreeId, connectionId, workspacePath, startupTerminalHandle: undefined }
   }
   const workspaces = execution.workspaces
   if (!workspaces) {
@@ -285,7 +290,8 @@ async function createSurface(
       agent: intent.agent,
       ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
-      ...(reservedTabId ? { tabId: reservedTabId } : {})
+      ...(reservedTabId ? { tabId: reservedTabId } : {}),
+      ...(intent.prompt ? {} : { withoutPrompt: true as const })
     })
     return {
       outcome: {
@@ -299,20 +305,6 @@ async function createSurface(
     }
   }
   return createTerminalSurface(execution, workspace)
-}
-
-/** What every route that builds a terminal agent passes on, so the startup terminal of a new
- *  workspace and the terminal of an existing one start the same agent. */
-function terminalLaunchInputs(intent: AgentLaunchIntent) {
-  return {
-    ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
-    // `null` is a value the caller meant, so this tests for absence rather than falsiness.
-    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {}),
-    ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.paneKey ? { paneKey: intent.paneKey } : {}),
-    ...(intent.accountEnv ? { accountEnv: intent.accountEnv } : {})
-  }
 }
 
 /**

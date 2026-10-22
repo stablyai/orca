@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { HostSectionRow } from './host-section-rows'
-import type { FolderWorkspaceRow } from './worktree-list/grouping/row-types'
+import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
+import type { FolderWorkspaceRow } from '../../../../shared/sidebar-list/row-types'
 import {
   getCyclableRowIdentity,
   getCyclableWorktreeRows,

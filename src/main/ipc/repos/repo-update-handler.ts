@@ -2,6 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
@@ -227,26 +228,27 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (args.hostId && !hostId) {
         return null
       }
+      // Why: some renderer callers send only the id; they keep the first row with it, as before.
+      const target: RepoHostTarget | undefined = hostId
+        ? { id: args.repoId, executionHostId: hostId }
+        : store.getRepo(args.repoId)
+      if (!target) {
+        return null
+      }
       const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
         if (isWslMoveSourceHost(args.hostId)) {
           assertWslMoveProjectWritable(store, { repoId: args.repoId })
         }
-        return hostId
-          ? store.updateRepo(args.repoId, { ...updates, ...proven }, hostId)
-          : store.updateRepo(args.repoId, { ...updates, ...proven })
+        return store.updateRepo(target, { ...updates, ...proven })
       }
       let updated: Repo | null
       if (updates.kind === 'git') {
-        const target = store
+        const targetHostId = getRepoExecutionHostId(target)
+        const row = store
           .getRepos()
-          .find(
-            (repo) =>
-              repo.id === args.repoId && (!hostId || getRepoExecutionHostId(repo) === hostId)
-          )
+          .find((repo) => repo.id === target.id && getRepoExecutionHostId(repo) === targetHostId)
         updated =
-          target && isFolderRepo(target)
-            ? await commitProvenRepoKindChange(store, target, write)
-            : write({})
+          row && isFolderRepo(row) ? await commitProvenRepoKindChange(store, row, write) : write({})
       } else {
         updated = write({})
       }

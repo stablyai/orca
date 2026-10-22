@@ -632,11 +632,9 @@ describe('codex journal translation', () => {
 
   it('a failed turn journals its error, not the thread status Codex reports beside it', () => {
     const tap = recorder()
-    const stopped: string[] = []
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
-      primaryThreadId: () => THREAD_ID,
-      onPrimaryThreadStoppedRunning: () => stopped.push(THREAD_ID)
+      primaryThreadId: () => THREAD_ID
     })
 
     translator.handle(TURN_STARTED)
@@ -666,7 +664,6 @@ describe('codex journal translation', () => {
       state: 'completed',
       outcome: 'failure'
     })
-    expect(stopped).toEqual([THREAD_ID])
   })
 
   it('writes nothing more after dispose', () => {

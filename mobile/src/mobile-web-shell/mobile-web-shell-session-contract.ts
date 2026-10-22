@@ -1,5 +1,5 @@
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
-import type { MobileWebPageRoute } from './page-route-policy'
+import type { MobileWebPageRoute, PageRouteRefusalVerdict } from './page-route-policy'
 import type {
   MobileWebBundleCompatManifest,
   MobileWebBundleCompatVerdict,
@@ -39,7 +39,7 @@ export type MobileWebShellManifestFacts = MobileWebBundleCompatManifest & {
   readonly buildId: string
   readonly totalBytes: number
   readonly totalAssets: number
-  /** Undefined for a desktop older than the field, which is every route staying native. */
+  /** Undefined for a desktop older than the field, which serves no route. */
   readonly routes: readonly MobileWebPageRoute[] | undefined
 }
 
@@ -57,10 +57,9 @@ export type CachedGeneration = {
   readonly compat: MobileWebBundleCompatManifest
 }
 
-export type MobileWebShellBlockedVerdict = Extract<
-  MobileWebBundleCompatVerdict,
-  { kind: 'blocked' }
->
+export type MobileWebShellBlockedVerdict =
+  | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
+  | PageRouteRefusalVerdict
 
 /** The shell's own failures plus the one the view cannot report: a download or a cache write that
  *  never produced a generation to hand it. */
@@ -105,14 +104,9 @@ export type MobileWebShellSessionState =
       readonly totalBytes: number
       readonly elapsedMs: number
     }
-  /**
-   * This route is the native screen's, and the caller renders it.
-   *
-   * Either the bundle does not list the route, or it lists it needing a grant this shell does not
-   * implement, or the desktop ships no bundle at all. Not a failure and not a wall: every route
-   * starts native, and the negotiation saying no leaves it where it was.
-   */
-  | { readonly kind: 'native-route' }
+  /** The page does not serve this screen and neither app can be named as the one to update: a
+   *  pathname this app has no screen for, or a manifest pattern this shell cannot read. */
+  | { readonly kind: 'route-unavailable' }
   | { readonly kind: 'wall'; readonly verdict: MobileWebShellBlockedVerdict }
   | {
       readonly kind: 'failed'
@@ -224,6 +218,9 @@ export type MobileWebShellSessionEvent =
 export type MobileWebShellSession = {
   /** The concrete route this session was opened for, matched against what the bundle lists. */
   readonly routePathname: string
+  /** False for the catch-all's pathnames: with no screen of its own here, an unserved one is not
+   *  evidence of an older desktop. */
+  readonly appNamesRoute: boolean
   /** A wide layout: served only under `canOwnHostArea`; the host route gets every route's grants. */
   readonly wide: boolean
   /** The route list the view below was built from, so a layout-class change can rebuild it. */

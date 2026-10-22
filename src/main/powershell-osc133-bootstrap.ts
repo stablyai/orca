@@ -1,7 +1,6 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../shared/managed-data-account-shell'
-import { getPowerShellCodexShellLaunchPreflight } from '../shared/codex-shell-function'
-import { getPowerShellClaudeShellFunction } from '../shared/claude-shell-function'
+import { getPowerShellAgentWrappers } from '../shared/powershell-agent-wrappers'
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 /**
@@ -59,7 +58,7 @@ if ($ExecutionContext.SessionState.LanguageMode -eq "FullLanguage" -and
     } catch { Write-Error $_ -ErrorAction Continue }
 
 ${getPowerShellOmpShellWrapper()}
-${getPowerShellCodexShellLaunchPreflight() + getPowerShellClaudeShellFunction()}
+${getPowerShellAgentWrappers()}
 
     $Global:__OrcaOsc133State = @{
         OriginalPrompt = $function:prompt
@@ -102,8 +101,15 @@ ${getPowerShellCodexShellLaunchPreflight() + getPowerShellClaudeShellFunction()}
 }
 `
 
+// Why strip comment lines: they document the source, but in the payload they only spend the
+// command-line budget that lets a startup command ride along (windows-shell-args.ts).
+const POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD = POWERSHELL_OSC133_BOOTSTRAP.replace(
+  /^[ \t]*#.*\n/gm,
+  ''
+)
+
 export function getPowerShellOsc133Bootstrap(): string {
-  return POWERSHELL_OSC133_BOOTSTRAP
+  return POWERSHELL_OSC133_BOOTSTRAP_PAYLOAD
 }
 
 export function isPowerShellExecutableName(shellName: string): boolean {

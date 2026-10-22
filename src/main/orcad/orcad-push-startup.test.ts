@@ -130,6 +130,11 @@ vi.mock('../server/serve-readiness', () => ({
 }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
+    readonly sidebarFacts = null
+    readonly agentTransitions = { seedRestoredRows() {} }
+    attachAgentStatusStore() {
+      return () => {}
+    }
     getRuntimeId() {
       return 'headless-runtime'
     }
@@ -140,6 +145,9 @@ vi.mock('../runtime/orca-runtime', () => ({
     async installPendingOrcadMigrationShellHistory() {}
     async stopLegacyWorkerTerminalRecovery() {}
     async closeNotificationDismissals() {}
+    flushPaneGrids() {
+      return null
+    }
     syncWindowGraph() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]

@@ -123,6 +123,36 @@ describe('opening into a new split', () => {
     })
   })
 
+  it('splits off a whole branch named by its first and last groups', () => {
+    const { ctx, model } = oneGroup()
+    const opened = build(
+      ctx,
+      [
+        editor('/w/b.ts', { tabId: 'b', groupId: 'g2', split: right }),
+        editor('/w/c.ts', {
+          tabId: 'c',
+          groupId: 'g3',
+          split: { besideGroupId: 'g1', besideLastGroupId: 'g2', direction: 'up' }
+        })
+      ],
+      model
+    )
+
+    expect(opened.model.workspaces[WS]!.groupLayout).toEqual({
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', groupId: 'g3' },
+      second: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'g1' },
+        second: { type: 'leaf', groupId: 'g2' },
+        ratio: 0.5
+      },
+      ratio: 0.5
+    })
+  })
+
   it('refuses a split it cannot make, and changes nothing', () => {
     const { ctx, model } = oneGroup()
     const refusal = (command: LayoutCommand) => {
@@ -136,6 +166,15 @@ describe('opening into a new split', () => {
           tabId: 'b',
           groupId: 'g2',
           split: { besideGroupId: 'missing', direction: 'right' }
+        })
+      )
+    ).toBe('group_not_found')
+    expect(
+      refusal(
+        editor('/w/b.ts', {
+          tabId: 'b',
+          groupId: 'g2',
+          split: { besideGroupId: 'g1', besideLastGroupId: 'missing', direction: 'right' }
         })
       )
     ).toBe('group_not_found')

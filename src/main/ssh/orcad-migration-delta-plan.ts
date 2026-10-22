@@ -10,9 +10,9 @@ import type { OrcadDeltaMovePreview, OrcadDeltaMoveRow } from '../../shared/orca
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
-import { isRetainedOrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
-import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
+import { isRetainedOrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
+import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
@@ -23,8 +23,8 @@ import {
   type OrcadMigrationCatalogIds
 } from './orcad-migration-manifest-export'
 import type { OrcadMigrationSnapshotSource } from './orcad-migration-snapshot-coordinator'
-import { collectUntransferredDependentBlockers } from './ssh-target-orcad-dependents'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
+import { collectUntransferredDependentBlockers } from './targets/ssh-target-orcad-dependents'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
 
 export type OrcadDeltaSourceStore = OrcadMigrationPreflightStore & OrcadMigrationSnapshotSource
 
@@ -53,16 +53,30 @@ export function committedOrcadMigrationChain(
 export function orcadDeltaSourceStore(
   store: Store,
   target: SshTarget,
-  moved: readonly OrcadMigrationSourceCutover[]
+  moved: readonly OrcadMigrationSourceCutover[],
+  /** A journaled delta's manifest: an older build may have exported server groups in it. */
+  journaled?: OrcadMigrationManifest
 ): OrcadDeltaSourceStore {
   const ids = orcadMigrationCatalogIds(moved.map((cutover) => cutover.manifest.payload))
-  // A linked project is the server's already, so a delta never moves it either.
+  // A linked project or group is the server's already, so a delta never moves it either.
   const linked = moved.flatMap((cutover) => cutover.linkedRepositoryIds ?? [])
+  const linkedGroups = moved.flatMap((cutover) => cutover.linkedProjectGroupIds ?? [])
+  const linkedFolders = moved.flatMap((cutover) => cutover.linkedFolderWorkspaceIds ?? [])
+  // The server's record of a group it got from a move or link wins: a new row in it references the
+  // server's group, since this desktop's retained copy may be stale and would conflict.
+  const serverGroups = new Set([...ids.projectGroupIds, ...linkedGroups])
+  const exported = new Set(journaled?.payload.projectGroups.map((group) => group.id))
   return orcadSourceStoreWithout(
     store,
     target,
-    { ...ids, repositoryIds: new Set([...ids.repositoryIds, ...linked]) },
-    moved.at(-1)?.destinationEnvironmentId
+    {
+      ...ids,
+      repositoryIds: new Set([...ids.repositoryIds, ...linked]),
+      folderWorkspaceIds: new Set([...ids.folderWorkspaceIds, ...linkedFolders]),
+      projectGroupIds: serverGroups
+    },
+    moved.at(-1)?.destinationEnvironmentId,
+    new Set([...serverGroups].filter((id) => !exported.has(id)))
   )
 }
 
@@ -71,7 +85,9 @@ export function orcadSourceStoreWithout(
   store: Store,
   target: SshTarget,
   owned: OrcadMigrationCatalogIds,
-  destinationEnvironmentId: string | undefined
+  destinationEnvironmentId: string | undefined,
+  /** Groups the server's record wins for: never exported, even while a moving row sits in one. */
+  serverGroupIds: ReadonlySet<string> = new Set()
 ): OrcadDeltaSourceStore {
   const ownedNow = createOrcadMigrationManifest(store, target, {
     destinationEnvironmentId,
@@ -80,6 +96,7 @@ export function orcadSourceStoreWithout(
   const view = store.createOrcadMigrationDeltaView(ownedNow)
   return {
     ...view,
+    serverOwnedProjectGroupIds: serverGroupIds,
     getSshTarget: (id) => store.getSshTarget(id),
     getSshRemotePtyLeases: (id) => store.getSshRemotePtyLeases(id),
     readOrcadMigrationSourceSnapshotChunk: (...args) =>
@@ -119,7 +136,7 @@ export function planOrcadDeltaMove(
   ) {
     throw new Error('orcad_delta_no_retained_migration')
   }
-  const source = orcadDeltaSourceStore(store, target, moved)
+  const source = orcadDeltaSourceStore(store, target, moved, resumes?.manifest)
   const manifest =
     resumes?.manifest ??
     createOrcadMigrationManifest(source, target, {

@@ -127,7 +127,7 @@ export function shellStallLine(
             `Web shell: page has not drawn after ${seconds}`,
             `build=${buildPrefix(state.buildId)} page ready=${yesNo(session.pageReady)} readyAsks=${trace.readyAsks} documentLoaded=${yesNo(trace.documentLoaded)}`
           )
-    case 'native-route':
+    case 'route-unavailable':
     case 'wall':
     case 'failed':
     case 'offline':
@@ -228,9 +228,10 @@ function transitionLine(
         ? flowLine('info', 'Web shell: activating app', 'source=download')
         : null
     case 'ready':
-    case 'native-route':
-      // `ready` is logged at paint; native is every native screen's normal outcome.
+      // Logged at paint.
       return null
+    case 'route-unavailable':
+      return flowLine('warn', 'Web shell: page does not serve this route')
     case 'wall': {
       const side = 'side' in after.verdict ? ` side=${after.verdict.side}` : ''
       return flowLine(

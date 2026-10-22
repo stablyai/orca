@@ -24,6 +24,7 @@ export function createHarnessStoreState(
     markWorktreeVisited: vi.fn(),
     recordWorktreeVisit: vi.fn(),
     isNavigatingHistory: false,
+    sleepingAgentSessionsByPaneKey: {},
     setActiveTabType: vi.fn(),
     setActiveTab: vi.fn(),
     revealWorktreeInSidebar: vi.fn(),

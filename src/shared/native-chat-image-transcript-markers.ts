@@ -4,10 +4,17 @@ import {
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from './ansi-escape-sequences'
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from './native-chat-types'
+import { imageReferenceToken, replaceImageReferences } from './native-chat-image-reference'
+import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from './agent-image-paste'
 
 const IMAGE_SOURCE_MARKER = /^\[Image:\s*source:\s*(.+?)\]\s*$/
 const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/
 const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
+// A quoted file reference is matched whole, so a path that reads like a marker is left as typed.
+const IMAGE_PROMPT_MARKER_NUMBERS_OUTSIDE_FILE_REFERENCES = new RegExp(
+  `(${NATIVE_CHAT_QUOTED_FILE_REFERENCE.source})|\\[Image #(\\d+)\\]`,
+  'g'
+)
 const IMAGE_PROMPT_MARKER_AT_START = /^[^\S\r\n]*\[Image #\d+\]/
 const IMAGE_PROMPT_MARKER_AT_END = /\[Image #\d+\][^\S\r\n]*$/
 const HORIZONTAL_WHITESPACE_START = /^[^\S\r\n]+/
@@ -46,8 +53,55 @@ export function isImageSourceUserTurn(message: NativeChatMessage): boolean {
   return imageSourcePathsFromMessage(message).length > 0
 }
 
+/** The text the agent reads: each composer chip becomes `[Image #N]`, N being its image's place
+ *  among the images sent with it, as the Claude and Codex TUIs number them. A chip whose image is
+ *  not sent is dropped. */
+export function imageReferencesToPromptMarkers(
+  text: string,
+  sentImageIds: readonly string[]
+): string {
+  return replaceImageReferences(text, (attachmentId) => {
+    const index = sentImageIds.indexOf(attachmentId)
+    return index === -1 ? '' : `[Image #${index + 1}]`
+  })
+}
+
+function replaceSentImagePromptMarkers(
+  text: string,
+  replace: (number: number, marker: string) => string
+): string {
+  return text.replace(
+    IMAGE_PROMPT_MARKER_NUMBERS_OUTSIDE_FILE_REFERENCES,
+    (match, fileReference: string | undefined, number: string) =>
+      fileReference === undefined ? replace(Number(number), match) : match
+  )
+}
+
+/** The inverse, for a sent message put back in the composer: `[Image #k]` becomes a chip for its
+ *  k-th image. A number past its images is left as typed. */
+export function promptMarkersToImageReferences(text: string, imageIds: readonly string[]): string {
+  return replaceSentImagePromptMarkers(text, (number, marker) => {
+    const attachmentId = imageIds[number - 1]
+    return attachmentId === undefined ? marker : imageReferenceToken(attachmentId)
+  })
+}
+
+/** A structured chat's sent text without the `[Image #k]` markers its send added for its
+ *  `imageCount` images. A number past its images is left as typed. */
+export function stripSentImagePromptMarkers(text: string, imageCount: number): string {
+  return withoutStrippedMarkerSpace(
+    text,
+    replaceSentImagePromptMarkers(text, (number, marker) =>
+      number >= 1 && number <= imageCount ? '' : marker
+    )
+  )
+}
+
 export function stripImagePromptMarker(text: string): string {
-  const stripped = text.replace(IMAGE_PROMPT_MARKERS, '')
+  return withoutStrippedMarkerSpace(text, text.replace(IMAGE_PROMPT_MARKERS, ''))
+}
+
+function withoutStrippedMarkerSpace(text: string, stripped: string): string {
   if (stripped === text) {
     return text
   }

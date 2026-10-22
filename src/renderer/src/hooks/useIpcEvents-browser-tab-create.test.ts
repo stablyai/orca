@@ -37,6 +37,7 @@ describe('useIpcEvents browser tab create routing', () => {
       closeModal: vi.fn(),
       openModal: vi.fn(),
       activeWorktreeId: 'wt-1',
+      sleepingAgentSessionsByPaneKey: {},
       activeView: 'terminal',
       setActiveRepo: vi.fn(),
       setActiveWorktree: vi.fn(),

@@ -13,7 +13,7 @@ import {
 } from './child-workspaces-toggle-target'
 import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
-import { getPinnedWorktreeDisplayPolicy } from './worktree-list/grouping/row-types'
+import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
 import {
   computeVisibleWorktrees,
   setVisibleWorktreeIds,

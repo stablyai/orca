@@ -1,5 +1,6 @@
-import { ALLOW_INSECURE_WEB_PAIRING_ENV } from '../../../shared/web-origin-security'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { placeUnshownLiveTerminalsBestEffort } from '../terminal/adoption/unshown-live-terminal-placement'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../rpc/transport'
@@ -200,10 +201,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       fallbackLadder: wsFallbackPortLadder(this.wsPort)
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
-    this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport, (ws) => ({
-      transport: 'direct',
-      ...wsTransport.webPageOf(ws)
-    }))
+    this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
 
     try {
       await wsTransport.start()
@@ -267,6 +265,17 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()
         }
+        // Switch point: a client attaching sees every live terminal of this host in a tab.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          void placeUnshownLiveTerminalsBestEffort(this.runtime)
+        }
+        // Why once per socket: only phones send runtime.clientCapabilities.update.
+        if (socket.device.scope === 'runtime') {
+          this.runtime.sidebarFacts?.noteRuntimeClient(
+            socket.connectionId,
+            socket.clientCapabilities
+          )
+        }
       },
       onClose: (socket, hasOtherConnections) => {
         if (!socket) {
@@ -282,7 +291,6 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           this.runtime.onClientDisconnected(socket.device.clientId)
         }
       },
-      allowInsecureWebPairing: () => process.env[ALLOW_INSECURE_WEB_PAIRING_ENV] === '1',
       // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
       onUnpairedDeviceAuthFailure: (metadata) => {
         if (metadata.transport === 'direct') {

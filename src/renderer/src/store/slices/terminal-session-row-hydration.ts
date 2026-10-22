@@ -42,7 +42,8 @@ export type WorkspaceTerminalRowHydration = {
 export function hydrateWorkspaceTerminalRows(
   session: WorkspaceSessionState,
   worktreeId: string,
-  rows: readonly TerminalTab[]
+  rows: readonly TerminalTab[],
+  liveTitleTabIds?: Pick<ReadonlySet<string>, 'has'>
 ): WorkspaceTerminalRowHydration {
   const canonical = readCanonicalTerminals(session, worktreeId, rows)
   const releasedPtyIdsByTabId = new Map<string, Set<string>>()
@@ -74,7 +75,9 @@ export function hydrateWorkspaceTerminalRows(
   return {
     rows: retained
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
-      .map((row, index) => restoreCanonicalMetadata(row, index, canonical)),
+      .map((row, index) =>
+        restoreCanonicalMetadata(row, index, canonical, liveTitleTabIds?.has(row.id) ?? false)
+      ),
     releasedPtyIdsByTabId,
     reconnectPtyIdByRetainedTabId,
     subsumedTabIds,
@@ -133,13 +136,15 @@ function readCanonicalTerminals(
 function restoreCanonicalMetadata(
   row: TerminalTab,
   index: number,
-  canonical: CanonicalTerminals
+  canonical: CanonicalTerminals,
+  titleIsLive: boolean
 ): TerminalTab {
   const quickCommandLabel =
     row.quickCommandLabel?.trim() || canonical.quickCommandLabelByTabId.get(row.id)
   const aiVaultTitle = row.aiVaultTitle ?? canonical.aiVaultTitleByTabId.get(row.id)
   return {
     ...clearTransientTerminalState(row, index),
+    ...(titleIsLive ? { title: row.title } : {}),
     ...(quickCommandLabel ? { quickCommandLabel } : {}),
     ...(aiVaultTitle ? { aiVaultTitle } : {}),
     sortOrder: index,

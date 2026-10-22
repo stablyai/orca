@@ -18,9 +18,14 @@ import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
   makeWorktreeMeta,
+  spawnedPtyEnv,
   store,
   makeRuntimeStoreWithWorkspaceSession
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { ProvisioningRuntime } from '../orca-runtime-layout-owner-start-fixture'
 
 describe('OrcaRuntimeService', () => {
   it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {
@@ -33,7 +38,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -106,7 +111,7 @@ describe('OrcaRuntimeService', () => {
         }),
         getAllWorktreeMeta: () => metaById,
         getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-        setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
           metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
           return metaById[worktreeId]
         }
@@ -176,7 +181,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -247,7 +252,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -333,8 +338,7 @@ describe('OrcaRuntimeService', () => {
         command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh'),
         env: expect.objectContaining({
           ORCA_ROOT_PATH: '/tmp/repo',
-          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split',
-          ORCA_WORKTREE_ID: result.worktree.id
+          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split'
         }),
         worktreeId: result.worktree.id
       })
@@ -355,8 +359,8 @@ describe('OrcaRuntimeService', () => {
     expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
     expect(startupScript).toContain(markerPath)
     expect(setupCommand).toContain(markerPath)
-    const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
-    const setupEnv = (spawn.mock.calls[1]![0] as { env?: Record<string, string> }).env ?? {}
+    const mainEnv = spawnedPtyEnv(spawn.mock.calls[0]![0])
+    const setupEnv = spawnedPtyEnv(spawn.mock.calls[1]![0])
     expect(result.setup).toBeUndefined()
     expect(result.setupReceipt).toMatchObject({
       state: 'running',
@@ -377,7 +381,11 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('hands only the host window a setup main tried and failed to start', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    // Main's own layout, where a layout-owner build keeps the setup pane that failed to start.
+    const mainLayout = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+    const runtime = new ProvisioningRuntime(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? mainLayout.runtimeStore : store
+    )
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-startup-main' })
@@ -445,6 +453,25 @@ describe('OrcaRuntimeService', () => {
     unsubscribe()
 
     expect(spawn).toHaveBeenCalledTimes(2)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main shows the failure in the setup pane it wrote; the window is handed nothing to retry.
+      expect(activateWorktree.mock.calls).toEqual([
+        ['repo-1', expect.any(String), undefined, undefined, undefined]
+      ])
+      const setupRow = Object.values(mainLayout.getSession().tabsByWorktree)
+        .flat()
+        .find((tab) => tab.customTitle === 'Setup')
+      const setupLayout = mainLayout.getSession().terminalLayoutsByTabId[setupRow!.id]
+      const [setupLeafId] = collectLeafIds(setupLayout?.root)
+      expect(runtime.startStatusOf(`${setupRow!.id}:${setupLeafId}`)).toEqual({
+        status: 'failed',
+        reason: 'setup spawn failed'
+      })
+      expect(
+        events.filter((event) => event.type === 'activateWorktree' && event.setup !== undefined)
+      ).toEqual([])
+      return
+    }
     expect(activateWorktree).toHaveBeenCalledWith(
       'repo-1',
       expect.any(String),
@@ -476,7 +503,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -562,7 +589,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }

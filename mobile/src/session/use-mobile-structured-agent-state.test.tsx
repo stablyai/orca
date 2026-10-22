@@ -3,9 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalCursor,
-  AgentJournalRenderItem
+  AgentJournalRenderItem,
+  AgentJournalResetReason
 } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session-wire'
+import { publishConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 
@@ -13,13 +15,17 @@ function cursorAt(sequence: number): AgentJournalCursor {
   return { epoch: 'epoch-1', sequence }
 }
 
-function said(sequence: number, agentId?: string): AgentJournalRenderItem {
+function said(
+  sequence: number,
+  agentId?: string,
+  role: 'assistant' | 'user' = 'assistant'
+): AgentJournalRenderItem {
   return {
     itemId: `item-${sequence}`,
     revision: 1,
     sequence,
     observedAt: sequence,
-    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `${sequence}` }] },
+    body: { kind: 'message', role, blocks: [{ type: 'text', text: `${sequence}` }] },
     ...(agentId === undefined ? {} : { agentId })
   }
 }
@@ -59,9 +65,10 @@ describe('useMobileStructuredAgentState older history', () => {
   })
 
   /** Mounts the hook on a session whose newest rows are `newest` (by default one of the
-   *  session's own, at 1000), with the host serving `older` by the cursor each read asks before. */
+   *  session's own, at 1000), with the host serving `older` by the cursor each read asks before:
+   *  a page, a reset, or a thrown error. */
   async function mountWithOlderPages(
-    older: Record<number, AgentSessionHistoryPage | undefined>,
+    older: Record<number, AgentSessionHistoryPage | AgentJournalResetReason | Error | undefined>,
     newest: AgentJournalRenderItem[] = [said(1_000)]
   ) {
     let onFrame: ((value: unknown) => void) | null = null
@@ -71,10 +78,16 @@ describe('useMobileStructuredAgentState older history', () => {
         return { ok: true, result: {} }
       }
       historyCursors.push(params.cursor.sequence)
-      const olderPage = older[params.cursor.sequence]
+      const olderPage = older[params.cursor.sequence] ?? 'cursor_ahead'
+      if (olderPage instanceof Error) {
+        throw olderPage
+      }
       return {
         ok: true,
-        result: olderPage ? { ok: true, page: olderPage } : { ok: false, reset: 'cursor_ahead' }
+        result:
+          typeof olderPage === 'string'
+            ? { ok: false, reset: olderPage }
+            : { ok: true, page: olderPage }
       }
     })
     const subscribe = vi.fn(
@@ -155,8 +168,115 @@ describe('useMobileStructuredAgentState older history', () => {
     const { hook, historyCursors } = await mountWithOlderPages({}, range(800, 1_000, 'task-1'))
 
     await vi.waitFor(() => expect(historyCursors).toEqual([800]))
-    await vi.waitFor(() => expect(hook.current!.loadingOlder).toBe(false))
+    await vi.waitFor(() => expect(hook.current!.olderPages).toBe('idle'))
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(historyCursors).toEqual([800])
+  })
+
+  it('keeps the chat readable when an older page fails, retries on a tap, and ends at unreadable history', async () => {
+    const older: Parameters<typeof mountWithOlderPages>[0] = { 1000: new Error('timed out') }
+    const { hook } = await mountWithOlderPages(older)
+
+    act(() => hook.current!.loadEarlier())
+    await vi.waitFor(() => expect(hook.current!.olderPages).toBe('failed'))
+    expect(hook.current!.state.status).toBe('ready')
+    expect(hook.current!.state.items.map((item) => item.sequence)).toEqual([1_000])
+
+    older[1000] = page(range(900, 1_000), true)
+    older[900] = Object.assign(new Error('agent_session_journal_unreadable'), {
+      data: {
+        refusal: { code: 'agent_session_journal_unreadable', details: { reason: 'journalCorrupt' } }
+      }
+    })
+    act(() => hook.current!.loadEarlier())
+    await vi.waitFor(() => expect(hook.current!.state.items[0]?.sequence).toBe(900))
+    expect(hook.current!.olderPages).toBe('idle')
+
+    act(() => hook.current!.loadEarlier())
+    await vi.waitFor(() => expect(hook.current!.olderPages).toBe('unavailable'))
+    expect(hook.current!.state.status).toBe('ready')
+    act(() => hook.current!.loadEarlier())
+    expect(hook.current!.olderPages).toBe('unavailable')
+  })
+})
+
+describe('useMobileStructuredAgentState live feed', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  it('reopens a feed that ended under a live connection from its last row', async () => {
+    vi.useFakeTimers()
+    const streams: { params: unknown; frame: (value: unknown) => void }[] = []
+    const subscribe = vi.fn((_method: string, params: unknown, frame: (value: unknown) => void) => {
+      streams.push({ params, frame })
+      return () => {}
+    })
+    const sendRequest = vi.fn(async () => ({ ok: true, result: {} }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an RPC client stub with the two members the hook calls.
+    const client = { sendRequest, subscribe } as unknown as RpcClient
+    const hook: { current: ReturnType<typeof useMobileStructuredAgentState> | null } = {
+      current: null
+    }
+    function Harness(): null {
+      hook.current = useMobileStructuredAgentState({
+        client,
+        sessionId: 'session-1',
+        sessionKey: 'session-1',
+        enabled: true,
+        connected: true
+      })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(streams).toHaveLength(1))
+    act(() =>
+      streams[0].frame({
+        type: 'snapshot',
+        sessionId: 'session-1',
+        fence: 1,
+        page: { ...page([said(58), said(59)], false), liveCursor: cursorAt(59) }
+      })
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    // The phone's bridge ends a stream past its backlog limit with an error frame.
+    act(() => streams[0].frame({ type: 'error', message: 'Stream ended' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+    await vi.waitFor(() => expect(streams).toHaveLength(2))
+    expect(streams[1].params).toEqual({ sessionId: 'session-1', cursor: cursorAt(59) })
+    act(() =>
+      streams[1].frame({
+        type: 'batch',
+        sessionId: 'session-1',
+        batch: {
+          cursor: cursorAt(61),
+          items: [said(59), said(60, undefined, 'user'), said(61)],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(hook.current!.state.items.map((item) => item.sequence)).toEqual([58, 59, 60, 61])
+    expect(hook.current!.state.error).toBeUndefined()
+
+    // A host-ended feed waiting to reopen goes now when the app comes back.
+    act(() => streams[1].frame({ type: 'end' }))
+    act(() => publishConnectionRevival('app-resume'))
+    await vi.waitFor(() => expect(streams).toHaveLength(3), { interval: 1, timeout: 50 })
+    expect(streams[2].params).toEqual({ sessionId: 'session-1', cursor: cursorAt(61) })
   })
 })

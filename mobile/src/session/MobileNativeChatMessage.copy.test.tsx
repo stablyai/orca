@@ -18,7 +18,6 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('lucide-react-native', () => ({ Copy: 'Copy', Check: 'Check' }))
-vi.mock('../components/MobileSelectableText', () => ({ MobileSelectableText: 'Text' }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({

@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
@@ -12,8 +13,7 @@ import {
   activateClientSessionTabSelection,
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
-} from '../../client-session-tab-selection'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../client-session-tab-selection-projection'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
@@ -22,11 +22,13 @@ import type {
   MobileTerminalResumeCommand,
   OrcaRuntimeWithResolveMobileSessionTerminalCommand as MobileTerminalStartup
 } from '../../terminal/launch/mobile-terminal-startup'
-import { runtimeWorktreeIdsEqual } from '../../runtime-worktree-path-identity'
+import type { OrcaRuntimeWithStopTerminalsForWorktree as SessionEditHost } from '../../terminal/stop/worktree-terminal-stop'
+import { claimWindowWakeRecordForPane, isWindowWakeSleepRecord } from './window-wake-sleep-record'
 import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot
 } from '../../mobile-session-layout-projection'
+import { findPaneSleepingRecord } from './pane-sleeping-record'
 
 export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
   protected abstract emitMobileSessionTabsSnapshotToClient(
@@ -38,6 +40,9 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   protected abstract isHeadlessMobileSessionPublication(
     ...args: Parameters<MobileSessionPreservation['isHeadlessMobileSessionPublication']>
   ): ReturnType<MobileSessionPreservation['isHeadlessMobileSessionPublication']>
+  protected abstract commitWorkspaceSessionEdit(
+    ...args: Parameters<SessionEditHost['commitWorkspaceSessionEdit']>
+  ): ReturnType<SessionEditHost['commitWorkspaceSessionEdit']>
 
   protected applyMobileSessionTabNavigation(
     snapshot: RuntimeMobileSessionTabsResult,
@@ -147,20 +152,21 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     }
     // Why: an originless record predates capture origins and carries no proof of which pane or
     // host wrote it, so it is left (record kept) for the window's legacy cleanup (#29303).
-    // A host that can never open a window (orcad, blocked serve) has no window wake, so the pane owns it.
+    // A host with no window right now has no window wake, so the pane owns the record and claims it.
+    // Switch point: a layout-owner window never wakes a pane itself, so main owns every wake.
     const paneOwned =
       record.origin === 'live' ||
       record.origin === 'quit' ||
       (record.origin === 'worktree-sleep' &&
         (record.state === 'done' ||
-          (this.getDesktopWindowStatusFn() === 'blocked' &&
-            !this.getAvailableAuthoritativeWindow())))
+          ORCA_LAYOUT_OWNER_IS_MAIN ||
+          !this.getAvailableAuthoritativeWindow()))
     return paneOwned ? record : null
   }
 
   /**
    * The pane's resume launch: undefined when it owns no record, `{}` (plain shell, record kept,
-   * as the window does) when the record cannot be resumed here.
+   * as the window does) when the record cannot be resumed here or the window will wake it.
    */
   protected async resolvePaneOwnedResumeStartup(
     worktreeId: string,
@@ -168,14 +174,18 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   ): Promise<MobileTerminalResumeCommand | Record<string, never> | undefined> {
     const record = this.getPaneOwnedResumeRecord(worktreeId, tab)
     if (!record) {
-      return undefined
+      const unowned = this.getPaneSleepingAgentRecord(worktreeId, tab)
+      // Why: a fresh launch would drop the conversation and its recorded flags (#29672).
+      return unowned && isWindowWakeSleepRecord(unowned) ? {} : undefined
     }
     // Why: nothing here spends the record, so a session another pane also records could be
     // resumed twice (two writers on one transcript), as could one already live in another pane.
     const records = this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey
-    const sharedWithAnotherPane = Object.values(records ?? {}).some(
-      (other) =>
+    const aliases = this.findPaneSleepingAgentRecord(worktreeId, tab)?.aliases ?? []
+    const sharedWithAnotherPane = Object.entries(records ?? {}).some(
+      ([paneKey, other]) =>
         other !== record &&
+        !aliases.includes(paneKey) &&
         other.agent === record.agent &&
         agentProviderSessionsEqual(record.agent, other.providerSession, record.providerSession)
     )
@@ -186,12 +196,25 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     ) {
       return {}
     }
+    let resume: MobileTerminalResumeCommand | null
     try {
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-      return this.resolveMobileSessionResumeCommand(workspace, record) ?? {}
+      resume = this.resolveMobileSessionResumeCommand(workspace, record)
     } catch {
       return {}
     }
+    if (!resume || !isWindowWakeSleepRecord(record)) {
+      return resume ?? {}
+    }
+    const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    const claimed = await claimWindowWakeRecordForPane(
+      (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
+      // Why: a window that attached during the awaits above now owns this record's wake.
+      // Switch point: a layout-owner window never starts a terminal, so main owns every wake.
+      () => !ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(this.getAvailableAuthoritativeWindow()),
+      record
+    )
+    return claimed ? resume : {}
   }
 
   /** The host's hook store places this conversation in another pane not proven exited. */
@@ -241,11 +264,11 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): SleepingAgentSessionRecord | null {
-    const record =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
-        makePaneKey(tab.parentTabId, tab.leafId)
-      ]
-    return record && runtimeWorktreeIdsEqual(record.worktreeId, worktreeId) ? record : null
+    return this.findPaneSleepingAgentRecord(worktreeId, tab)?.record ?? null
+  }
+
+  private findPaneSleepingAgentRecord(worktreeId: string, tab: RuntimeMobileSessionTerminalTab) {
+    return findPaneSleepingRecord(this.getWorkspaceSessionForWorktree(worktreeId), worktreeId, tab)
   }
 
   protected shouldMaterializeHeadlessMobileSessionTab(

@@ -1,5 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { basename } from '@/lib/path'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
+import type { NativeChatReservedAttachment } from './native-chat-session-attachment-drop'
 import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
 
 /**
@@ -27,6 +29,25 @@ export function useNativeChatPasteLifetime(args: {
     imageFile: Blob,
     options: { deferPreview: boolean; canShow: () => boolean }
   ) => { id: string | null; reveal: () => void }
+  /** Register the operation for the native clipboard's picture; `reveal` previews its thumbnail. */
+  startClipboardImageChip: (
+    owner: NativeChatAttachmentOwner,
+    pendingName?: string
+  ) => {
+    id: string | null
+    reveal: () => void
+  }
+  /** One chip per file a macOS paste may attach. `reveal` previews the first as the clipboard's
+   *  picture; `transfer` hands the chips still in the draft to the file intake to settle. */
+  startClipboardCandidateChips: (
+    owner: NativeChatAttachmentOwner,
+    paths: string[]
+  ) => {
+    reserved: NativeChatReservedAttachment[]
+    reveal: () => void
+    transfer: () => NativeChatReservedAttachment[]
+  }
+  dropImagePaste: (pendingId: string | null) => void
   keepStoreUploadAfterUnmount: (
     pendingId: string | null,
     saved: { status: string; tempPath?: string }
@@ -125,6 +146,60 @@ export function useNativeChatPasteLifetime(args: {
     },
     [attachmentScopeKey, beginPendingImageAttachment, lifetime, revealPendingImageAttachment, track]
   )
+  const startClipboardImageChip = useCallback(
+    (
+      owner: NativeChatAttachmentOwner,
+      pendingName?: string
+    ): { id: string | null; reveal: () => void } => {
+      const id = beginPendingImageAttachment(undefined, pendingName, owner.kind === 'remote')
+      if (id) {
+        track(id, '', owner)
+      }
+      const reveal = (): void => {
+        void window.api.ui
+          .readClipboardImageThumbnail()
+          .catch(() => null)
+          .then((thumbnail) => {
+            if (id && thumbnail) {
+              revealPendingImageAttachment?.(id, thumbnail.dataUrl)
+            }
+          })
+      }
+      return { id, reveal }
+    },
+    [beginPendingImageAttachment, revealPendingImageAttachment, track]
+  )
+  const startClipboardCandidateChips = useCallback(
+    (owner: NativeChatAttachmentOwner, paths: string[]) => {
+      const chips = paths.flatMap((path) => {
+        const chip = startClipboardImageChip(owner, basename(path))
+        return chip.id ? [{ path, chipId: chip.id, reveal: chip.reveal }] : []
+      })
+      const reserved = chips.map(({ path, chipId }) => ({ path, chipId }))
+      const transfer = (): NativeChatReservedAttachment[] => {
+        for (const { chipId } of reserved) {
+          lifetime.pending.delete(chipId)
+          lifetime.uploads.delete(chipId)
+        }
+        // A chip removed or cleared meanwhile starts no file work.
+        const current = attachmentScopeKey
+          ? nativeChatPendingAttachmentSnapshot(attachmentScopeKey)
+          : null
+        return reserved.filter(({ chipId }) => !current || current.some(({ id }) => id === chipId))
+      }
+      return { reserved, reveal: () => chips[0]?.reveal(), transfer }
+    },
+    [attachmentScopeKey, lifetime, startClipboardImageChip]
+  )
+  const dropImagePaste = useCallback(
+    (pendingId: string | null) => {
+      if (pendingId) {
+        lifetime.pending.delete(pendingId)
+        dropPendingImageAttachment(pendingId)
+      }
+    },
+    [lifetime, dropPendingImageAttachment]
+  )
   const keepStoreUploadAfterUnmount = useCallback(
     (pendingId: string | null, saved: { status: string; tempPath?: string }): boolean => {
       if (!pendingId || lifetime.active) {
@@ -156,5 +231,13 @@ export function useNativeChatPasteLifetime(args: {
     },
     [attachmentScopeKey, dropPendingImageAttachment, lifetime, resolvePendingImageAttachment]
   )
-  return { lifetime, track, startImageChip, keepStoreUploadAfterUnmount }
+  return {
+    lifetime,
+    track,
+    startImageChip,
+    startClipboardImageChip,
+    startClipboardCandidateChips,
+    dropImagePaste,
+    keepStoreUploadAfterUnmount
+  }
 }

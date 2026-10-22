@@ -8,7 +8,7 @@ import {
 } from '../../orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import { assertHelperStartScope, resolveWorkerStartRun } from './worker-start-authority'
-import { WorkerStartParams } from './worker-start-schema'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs

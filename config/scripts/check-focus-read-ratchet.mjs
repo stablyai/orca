@@ -110,7 +110,7 @@ function statementsFrom(body, start) {
           break
         }
         depth -= 1
-      } else if (char === '\n' && depth === 0) {
+      } else if (depth === 0 && (char === '\n' || (char === ',' && match[0].startsWith('=>')))) {
         break
       }
     }

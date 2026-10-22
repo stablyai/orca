@@ -1,49 +1,51 @@
 import { useAppStore } from '@/store'
-import { findRenamableUnifiedTab } from '@/store/terminals/renamable-unified-tab'
-import type { WindowLayoutCommand } from '@/runtime/layout-apply-send'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 
-type TabPropsActions<Item extends { unifiedTabId: string; isPinned: boolean }> = {
-  setCustomTitle: (tabId: string, title: string | null) => void
-  setTabColor: (tabId: string, color: string | null) => void
-  togglePinned: (item: Item) => void
+type PinnableItem = {
+  unifiedTabId: string
+  isPinned: boolean
+  type?: string
+  data?: { id: string }
 }
 
-type TabPropsChange = { title: string | null } | { color: string | null } | { isPinned: boolean }
+type TabPinActions<Item extends PinnableItem> = {
+  togglePinned: (item: Item) => void
+  makePreviewFilePermanent: (fileId: string, tabId?: string) => void
+}
 
 /**
- * The tab bar's rename, color and pin in a layout-owner build: main changes its copy first, then
- * the window's own action shows the same change. The window's action runs alone when main is not
- * asked: no such tab, or a paired server owns the workspace.
+ * The tab bar's pin in a layout-owner build: main changes its copy and its frame draws the pin.
+ * The window's own action runs when main is not asked or a paired server holds the tab. A tab's
+ * rename and color go to main from their store actions.
  */
-export function withLayoutOwnerTabProps<Item extends { unifiedTabId: string; isPinned: boolean }>(
-  actions: TabPropsActions<Item>,
+export function withLayoutOwnerTabProps<Item extends PinnableItem>(
+  actions: TabPinActions<Item>,
   worktreeId: () => string
-): TabPropsActions<Item> {
-  const change = (tabBarTabId: string | null, props: TabPropsChange, today: () => void): void => {
-    if (!tabBarTabId) {
-      today()
-      return
-    }
-    const command: WindowLayoutCommand =
-      'title' in props
-        ? { type: 'renameTab', tabId: tabBarTabId, kind: 'custom', title: props.title }
-        : { type: 'setTabProps', tabId: tabBarTabId, ...props }
-    if (!sendLayoutCommandToOwner(worktreeId(), command, { apply: today, asToday: today })) {
-      today()
-    }
-  }
+): Pick<TabPinActions<Item>, 'togglePinned'> {
   return {
-    setCustomTitle: (tabId, title) =>
-      change(renamableTabBarTabId(tabId), { title }, () => actions.setCustomTitle(tabId, title)),
-    setTabColor: (tabId, color) =>
-      change(renamableTabBarTabId(tabId), { color }, () => actions.setTabColor(tabId, color)),
-    togglePinned: (item) =>
-      change(item.unifiedTabId, { isPinned: !item.isPinned }, () => actions.togglePinned(item))
+    togglePinned: (item) => {
+      const today = (): void => actions.togglePinned(item)
+      const command = {
+        type: 'setTabProps' as const,
+        tabId: item.unifiedTabId,
+        isPinned: !item.isPinned
+      }
+      const shown = (): void => {
+        // Preview stays the window's until main opens files (phase C4): pinning a preview keeps it.
+        if (!item.isPinned && item.type === 'editor' && item.data) {
+          actions.makePreviewFilePermanent(item.data.id, item.unifiedTabId)
+        }
+        // A pin counts as a use of terminal tabs, as the window's own pin does.
+        void useAppStore.getState().recordFeatureInteraction?.('terminal-tabs')
+      }
+      if (
+        !sendLayoutCommandToOwner(worktreeId(), command, {
+          apply: shown,
+          asToday: today
+        })
+      ) {
+        today()
+      }
+    }
   }
-}
-
-/** The tab-bar tab a rename or color addresses: a terminal by its terminal's id, a chat by its own. */
-function renamableTabBarTabId(tabId: string): string | null {
-  return findRenamableUnifiedTab(useAppStore.getState().unifiedTabsByWorktree, tabId)?.id ?? null
 }

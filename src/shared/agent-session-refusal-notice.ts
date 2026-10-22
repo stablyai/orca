@@ -47,6 +47,7 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',
+  'queued-edit': 'notDoneQueuedEdit',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
   goal: 'notDoneGoal'
@@ -102,7 +103,7 @@ function reasonParts(
 ): AgentSessionWriteNoticePart[] | undefined {
   if (
     failure.code === 'agent_session_operation_invalid' &&
-    failure.details?.codexInstallation &&
+    (failure.details?.agentInstallation || failure.details?.codexInstallation) &&
     (write === 'send' || write === 'composer-send')
   ) {
     return [
@@ -265,6 +266,13 @@ export function agentSessionUnconfirmedSendParts(
     : []
   return [...cause, 'sendOutcomeLost']
 }
+
+/** A message over the host's size bound, caught before it is sent: what to do instead of resending. */
+export const AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS = [
+  'notDoneSend',
+  'messageTooLarge',
+  'shortenMessage'
+] as const satisfies readonly AgentSessionWriteNoticePart[]
 
 export function agentSessionWriteNoticeEnglish(
   parts: readonly AgentSessionWriteNoticePart[]

@@ -4,8 +4,8 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { parseTerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
-import { windowSaveForMain } from '../persistence/window-save-pane-trees'
-import { writeWindowSaveWatchingLayout } from '../persistence/window-save-divergence'
+import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/window-save-view'
+import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type {
   WorkspaceSessionPatch,
@@ -31,41 +31,37 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     return store.getWorkspaceSessionHostIds()
   })
 
-  // Switch point: main keeps its own pane trees over the window's, and reports any layout the
-  // save still changes.
-  const saveFromWindow = (hostId: string | null | undefined, write: () => void, source: string) =>
-    ORCA_LAYOUT_OWNER_IS_MAIN
-      ? writeWindowSaveWatchingLayout(
-          () => store.getWorkspaceSession(hostId),
-          hostId,
-          write,
-          source
-        )
-      : write()
-  const forMain = <T extends WorkspaceSessionState | WorkspaceSessionPatch>(
-    save: T,
-    hostId: string | null | undefined
-  ): T =>
-    ORCA_LAYOUT_OWNER_IS_MAIN
-      ? windowSaveForMain(store.getWorkspaceSession(hostId), save, hostId)
-      : save
+  // Switch point: main keeps its own layout over the window's and takes the window's view and
+  // facts; the drift check reports where the save's layout still differs from main's.
+  const sessionForMain = (args: WorkspaceSessionState, hostId: string | null | undefined) => {
+    const stored = store.getWorkspaceSession(hostId)
+    reportWindowSaveDrift(stored, args, hostId, 'session:set')
+    return windowViewSaveForMain(stored, args, hostId, (session, partition) =>
+      runtime.shutdownReconnectFactsFor(session, partition)
+    )
+  }
+  const patchForMain = (args: WorkspaceSessionPatch, hostId: string | null | undefined) => {
+    const stored = store.getWorkspaceSession(hostId)
+    reportWindowSaveDrift(stored, { ...stored, ...args }, hostId, 'session:patch')
+    return windowViewPatchForMain(stored, args, hostId, (session, partition) =>
+      runtime.shutdownReconnectFactsFor(session, partition)
+    )
+  }
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
     if (!isFenced(hostId)) {
-      saveFromWindow(
-        hostId,
-        () => store.setWorkspaceSession(forMain(args, hostId), hostId),
-        'session:set'
+      store.setWorkspaceSession(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? sessionForMain(args, hostId) : args,
+        hostId
       )
     }
   })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     if (!isFenced(hostId)) {
-      saveFromWindow(
-        hostId,
-        () => store.patchWorkspaceSession(forMain(args, hostId), hostId),
-        'session:patch'
+      store.patchWorkspaceSession(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? patchForMain(args, hostId) : args,
+        hostId
       )
     }
   })

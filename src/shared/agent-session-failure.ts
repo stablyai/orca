@@ -12,7 +12,15 @@ import {
   type AgentSessionArgumentProblem
 } from './agent-session-argument-problem'
 export type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
+import {
+  readAgentSessionUsageLimit,
+  type AgentSessionUsageLimit
+} from './agent-session-usage-limit'
 
+import {
+  readAgentSessionRequestTimeout,
+  type AgentSessionRequestTimeout
+} from './agent-session-request-timeout'
 import { structuralValuesEqualIgnoringUndefined } from './structural-value-equality'
 import {
   readAgentSessionRefusalReference,
@@ -44,6 +52,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'attachmentInvalid',
   'attachmentUnreadable',
   'emptyMessage',
+  /** One of the agent's own commands that its chats do not run, sent as a whole message. */
+  'commandUnavailable',
   'queueFull',
   'writeFailed',
   'cancelled',
@@ -67,6 +77,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'hostStopped',
   /** The provider is retrying a request its API refused; not a failure yet. */
   'providerRetrying',
+  /** The account hit one of the agent's usage limits, which ended the turn until it resets. */
+  'usageLimitReached',
   /** A child a Stop could not prove gone: its exit is unverifiable. Kept for rows hosts wrote. */
   'previousExitUnverifiable',
   /** The agent could not reopen the chat's saved session, so a fresh one without its memory continues it. */
@@ -88,6 +100,7 @@ const STATUS_ROW_ONLY_FAILURE_KINDS = [
   'backgroundTaskNotStopped',
   'answerUnconfirmed',
   'providerRetrying',
+  'usageLimitReached',
   'previousExitUnverifiable',
   'sessionNotRestored'
 ] as const satisfies readonly AgentSessionFailureKind[]
@@ -163,6 +176,8 @@ export type AgentSessionFailureFact = {
   attachment?: AgentSessionAttachmentProblem
   /** On `providerRetrying`: why the provider is retrying. */
   retry?: AgentSessionProviderRetry
+  /** On `usageLimitReached`: which limit, and when it resets. */
+  usageLimit?: AgentSessionUsageLimit
   /** A safe option name from Orca's saved Arguments parser, never an error message. */
   argumentProblem?: AgentSessionArgumentProblem
   /** Written only where Orca proves the agent never received the message: a Stop's withdrawal is
@@ -171,6 +186,8 @@ export type AgentSessionFailureFact = {
   neverReachedAgent?: true
   /** On `backgroundTaskNotStopped`: one named task, or every task the Stop reached. */
   backgroundStop?: AgentSessionBackgroundStop
+  /** On `startFailed`: the provider request that got no answer before Orca's deadline. */
+  requestTimeout?: AgentSessionRequestTimeout
 }
 
 export type AgentSessionBackgroundStop = 'task' | 'all'
@@ -205,9 +222,11 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     refusal?: AgentSessionRefusalReference
     attachment?: AgentSessionAttachmentProblem
     retry?: AgentSessionProviderRetry
+    usageLimit?: AgentSessionUsageLimit
     argumentProblem?: AgentSessionArgumentProblem
     neverReachedAgent?: true
     backgroundStop?: AgentSessionBackgroundStop
+    requestTimeout?: AgentSessionRequestTimeout
   } = {}
 ): AgentSessionFailureFact & { kind: TKind } {
   // Re-bounded here, so no writer can store more than the cap however it built the detail.
@@ -221,9 +240,11 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     ...(extra.refusal ? { refusal: extra.refusal } : {}),
     ...(extra.attachment ? { attachment: extra.attachment } : {}),
     ...(extra.retry ? { retry: extra.retry } : {}),
+    ...(extra.usageLimit ? { usageLimit: extra.usageLimit } : {}),
     ...(extra.argumentProblem ? { argumentProblem: extra.argumentProblem } : {}),
     ...(extra.neverReachedAgent ? { neverReachedAgent: true as const } : {}),
-    ...(extra.backgroundStop ? { backgroundStop: extra.backgroundStop } : {})
+    ...(extra.backgroundStop ? { backgroundStop: extra.backgroundStop } : {}),
+    ...(extra.requestTimeout ? { requestTimeout: extra.requestTimeout } : {})
   }
 }
 
@@ -291,7 +312,9 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   const refusal = readAgentSessionRefusalReference(value.refusal)
   const attachment = readAttachmentProblem(value.attachment)
   const retry = readProviderRetry(value.retry)
+  const usageLimit = readAgentSessionUsageLimit(value.usageLimit)
   const argumentProblem = readAgentSessionArgumentProblem(value.argumentProblem)
+  const requestTimeout = readAgentSessionRequestTimeout(value.requestTimeout)
   return agentSessionFailureFact(value.kind, {
     ...(value.account === 'managed' || value.account === 'system'
       ? { account: value.account }
@@ -300,11 +323,13 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
     ...(refusal ? { refusal } : {}),
     ...(attachment ? { attachment } : {}),
     ...(retry ? { retry } : {}),
+    ...(usageLimit ? { usageLimit } : {}),
     ...(argumentProblem ? { argumentProblem } : {}),
     ...(value.neverReachedAgent === true ? { neverReachedAgent: true as const } : {}),
     ...(value.backgroundStop === 'task' || value.backgroundStop === 'all'
       ? { backgroundStop: value.backgroundStop }
-      : {})
+      : {}),
+    ...(requestTimeout ? { requestTimeout } : {})
   })
 }
 

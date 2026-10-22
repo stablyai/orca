@@ -44,3 +44,9 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
   }
   return { worktreeId: candidate }
 }
+
+/** False only for an id minted for another worktree; an id in no minted form names no owner. */
+export function isPtySessionIdOwnedByWorktree(sessionId: string, worktreeId: string): boolean {
+  const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  return separatorIdx === -1 || sessionId.slice(0, separatorIdx) === worktreeId
+}

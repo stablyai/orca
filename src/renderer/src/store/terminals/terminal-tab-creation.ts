@@ -25,13 +25,15 @@ import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './termin
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   recordCreatedTerminalTabInLayoutOwner,
-  terminalTabCreateCommand
+  terminalTabCreateCommand,
+  withMainTerminalFacts
 } from './terminal-tab-create-through-layout-owner'
 import {
   getRemoteConnectionIdForWorktree,
   resolveCreatedTabShellOverride,
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
+import type { AppState } from '../types'
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
 
 function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
@@ -47,7 +49,8 @@ function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupComma
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
-  get: TerminalStoreGet
+  get: TerminalStoreGet,
+  subscribe: (listener: (state: AppState) => void) => () => void
 ): Pick<TerminalSlice, 'createTab'> {
   return {
     createTab: (worktreeId, targetGroupId, shellOverride, options) => {
@@ -136,6 +139,10 @@ export function createTerminalTabCreationActions(
           ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
+        }
+        // Switch point: a tab main already made is drawn with main's creation facts.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          tab = withMainTerminalFacts(tab)
         }
         if (options?.launchAgent === 'zcode') {
           // Why here: this is where a ZCode launch is first known, and it runs before the
@@ -284,7 +291,10 @@ export function createTerminalTabCreationActions(
       })
       // Switch point: main writes the tab under these ids before any later command names it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab))
+        recordCreatedTerminalTabInLayoutOwner(get(), terminalTabCreateCommand(get(), tab), {
+          tab,
+          store: { getState: get, setState: (patch) => set(patch), subscribe }
+        })
       }
       if (options?.initialPtyId) {
         // Why: a tab born with a live PTY (CLI/runtime create) wakes the workspace like any other bind.

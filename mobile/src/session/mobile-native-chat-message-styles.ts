@@ -69,97 +69,25 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
   unsentNotice: {
     maxWidth: '88%',
     marginTop: spacing.xs,
     color: colors.statusRed,
     fontSize: typography.metaSize
   },
-  toolRun: {
-    marginTop: spacing.xs
+  showFull: {
+    alignSelf: 'flex-start',
+    paddingTop: spacing.xs
   },
-  toolRunHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  toolRunToggle: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
-  },
-  toolRunCount: {
-    color: colors.statusGreen,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    fontWeight: '700'
-  },
-  toolRunLabel: {
-    flex: 1,
+  showFullText: {
     color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE
-  },
-  toolRunActive: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
-  },
-  toolRunActiveLabel: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  toolRunBody: {
-    paddingLeft: spacing.sm,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.borderSubtle,
-    marginTop: spacing.xs
-  },
-  toolLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 3
-  },
-  toolName: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE + 1,
+    fontSize: typography.metaSize,
     fontWeight: '600'
-  },
-  toolPreview: {
-    flex: 1,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE
-  },
-  toolPreviewLink: {
-    color: colors.accentBlue,
-    textDecorationLine: 'underline'
-  },
-  toolDetail: {
-    paddingLeft: spacing.lg,
-    paddingBottom: spacing.xs,
-    gap: spacing.xs
-  },
-  mono: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    lineHeight: MONO_SIZE + 5
-  },
-  toolResult: {
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    padding: spacing.md
-  },
-  toolResultError: {
-    backgroundColor: colors.diffDeletedBg
   },
   imageRef: {
     color: colors.textSecondary,
@@ -172,29 +100,5 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
-  },
-  diff: {
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    paddingVertical: spacing.xs,
-    overflow: 'hidden'
-  },
-  diffLine: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: MONO_SIZE,
-    lineHeight: MONO_SIZE + 5,
-    paddingHorizontal: spacing.sm
-  },
-  diffAdd: {
-    color: colors.gitDecorationAdded,
-    backgroundColor: colors.diffAddedBg
-  },
-  diffDel: {
-    color: colors.gitDecorationDeleted,
-    backgroundColor: colors.diffDeletedBg
-  },
-  diffMeta: {
-    color: colors.textMuted
   }
 })

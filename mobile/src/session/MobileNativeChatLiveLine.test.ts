@@ -28,6 +28,7 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
+vi.mock('../components/LoadingSpinner', () => ({ LoadingSpinner: 'LoadingSpinner' }))
 vi.mock('./MobileNativeChatReasoningRow', () => ({
   MobileNativeChatReasoningBody: 'ReasoningBody'
 }))
@@ -96,7 +97,7 @@ describe('MobileNativeChatLiveLine', () => {
   it('reads "Thinking" beside one spinner while the turn reasons', () => {
     const root = render()
     expect(labels(root)).toEqual(['Thinking'])
-    expect(byType(root, 'ActivityIndicator')).toHaveLength(1)
+    expect(byType(root, 'LoadingSpinner')).toHaveLength(1)
   })
 
   // The bar owns the clock; the tail line never repeats it.

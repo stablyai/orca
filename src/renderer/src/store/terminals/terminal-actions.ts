@@ -23,6 +23,7 @@ import type {
   TerminalTabRetirementPlan
 } from '../slices/terminal-tab-retirement'
 import type {
+  AccountRestartAgent,
   AutomaticAgentResumeClaim,
   CodexRestartNotice,
   HydrateWorkspaceSessionOptions
@@ -122,7 +123,7 @@ export type TerminalActions = {
       recordInteraction?: boolean
     }
   ) => void
-  setTabColor: (tabId: string, color: string | null) => void
+  setTabColor: (tabId: string, color: string | null, opts?: { recordInteraction?: boolean }) => void
   /** What the tab keeps about the launch that laid out one of its panes; undefined clears it.
    *  `remount` remounts the tab's panes, so one whose spawn was refused spawns again. */
   setTabAgentLaunchPane: (
@@ -147,6 +148,7 @@ export type TerminalActions = {
       sleepingPaneKeys?: string[]
       expectedRuntimePtyIds?: string[]
       backendOwnsPtyTeardown?: boolean
+      onAdmitted?: () => void
     }
   ) => Promise<void>
   /** Captures resumable pane evidence and publishes suppression before exact physical teardown. */
@@ -163,8 +165,9 @@ export type TerminalActions = {
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
-  queueCodexPaneRestarts: (ptyIds: string[]) => void
-  consumePendingCodexPaneRestart: (ptyId: string) => boolean
+  /** Codex also marks its restart notices answered. */
+  queuePaneAccountRestarts: (ptyIds: string[], agent: AccountRestartAgent) => void
+  consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {

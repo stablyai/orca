@@ -15,7 +15,7 @@ import {
 } from '@/store/worktree-repo-index'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { branchDisplayName } from '@/components/sidebar/WorktreeCardHelpers'
-import { getCyclicProjectedWorktreeLineageIds } from '@/components/sidebar/worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   clampWorktreeParentPickerIndex,
   filterWorktreeParentCandidates
@@ -43,6 +43,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { useRepoMap } from '@/store/selectors'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 /** Single-line row: text-sm leading (20px) over py-2. Set as the row's explicit height. */
 const NO_PARENT_ROW_HEIGHT = 36
@@ -96,7 +97,7 @@ function ComposerParentWorktreePickerImpl({
     if (!value) {
       return null
     }
-    const parent = getIndexedWorktreeById(s.worktreesByRepo, value)
+    const parent = getIndexedWorktreeById(selectWorktreesByRepo(s), value)
     return parent && !parent.isArchived ? parent.displayName : null
   })
 
@@ -214,7 +215,7 @@ function ParentWorktreeCandidateList({
   activeFolderWorkspaceId,
   onSelect
 }: ParentWorktreeCandidateListProps): React.JSX.Element {
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const repoMap = useRepoMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)

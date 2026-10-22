@@ -11,8 +11,8 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       'Remote Orca Servers'
     ),
     description: translate(
-      'auto.components.settings.runtime.environments.search.4575341c77',
-      'Add a saved remote Orca server, generate a pairing URL, or choose the default host for new projects.'
+      'auto.components.settings.runtime.environments.search.addShareDefault',
+      'Add a remote Orca server, share this computer, or choose where new projects open.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -74,10 +74,27 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
       ),
       ...translateSearchKeyword(
         'auto.components.settings.managedServers.search.title',
-        'Managed servers'
+        'Orca on your SSH hosts'
       ),
       ...translateSearchKeyword('auto.components.settings.managedServers.search.keywordSsh', 'ssh'),
-      // Why: Share this host mounts the machine name field, so its keywords open this pane.
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.shareComputerKeyword',
+        'share this computer'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.accessLinkKeyword',
+        'access link'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.runtime.environments.search.installKeyword',
+        'install server'
+      ),
+      // Why: the section's former name, so users who knew it can still find it.
+      ...translateSearchKeyword(
+        'auto.components.settings.managedServers.search.keywordFormerName',
+        'managed servers'
+      ),
+      // Why: Share this computer mounts the machine name field, so its keywords open this pane.
       ...getMachineNameSearchKeywords()
     ]
   })

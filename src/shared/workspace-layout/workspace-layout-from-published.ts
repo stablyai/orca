@@ -1,7 +1,8 @@
 // A published workspace read back into the layout model, so a window can build today's records
 // from a frame with the same Serializer main saves with. What the frame does not carry comes back
-// absent: a pane's incarnation and sleeping record, an editor tab's view, closed-tab records.
+// absent: a pane's incarnation and sleeping record, closed-tab records.
 
+import type { LayoutEditorView } from './layout-editor-view'
 import { pickStoredFields } from './stored-record-fields'
 import type {
   LayoutLeaf,
@@ -56,7 +57,11 @@ function layoutTab(tab: PublishedTab): LayoutTab {
 
 export function workspaceLayoutFromPublished(published: PublishedWorkspaceLayout): WorkspaceLayout {
   const leaves: Record<string, LayoutLeaf> = {}
+  const editorViews: Record<string, LayoutEditorView> = {}
   for (const tab of published.tabs) {
+    if (tab.editorView) {
+      editorViews[tab.id] = tab.editorView
+    }
     for (const pane of tab.terminal?.panes ?? []) {
       leaves[pane.leafId] = pickStoredFields(pane, ['ptyId', 'title'])
     }
@@ -67,6 +72,7 @@ export function workspaceLayoutFromPublished(published: PublishedWorkspaceLayout
     groups: published.groups.map((group) => ({ id: group.id, tabOrder: [...group.tabIds] })),
     ...(published.groupLayout ? { groupLayout: published.groupLayout } : {}),
     editorFiles: published.editorFiles.map((file) => ({ ...file })),
+    ...(Object.keys(editorViews).length > 0 ? { editorViews } : {}),
     browserTabs: published.browserTabs.map((tab) => ({
       ...tab,
       // A frame without it: the tab-bar tab showing this browser tab was created with it.

@@ -9,5 +9,6 @@ export const AgentSessionFailureFactSchema = z.object({
   refusal: z.object({ code: z.string().min(1), details: z.looseObject({}).optional() }).optional(),
   argumentProblem: z
     .object({ agent: z.string(), option: z.string(), problem: z.string() })
-    .optional()
+    .optional(),
+  requestTimeout: z.looseObject({}).optional()
 })

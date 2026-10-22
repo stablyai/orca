@@ -12,10 +12,14 @@ import {
 
 export type LegacyRelayBridgeApi = {
   listPanes: () => Promise<LegacyRelayBridgedPane[]>
-  attach: (args: { ptyId: string }) => Promise<LegacyRelayBridgeAttachResult>
+  /** `replayInStream`: the screen arrives as an `onReplay` in output order, and the reply's is empty. */
+  attach: (args: {
+    ptyId: string
+    replayInStream?: boolean
+  }) => Promise<LegacyRelayBridgeAttachResult>
   write: (args: { ptyId: string; data: string }) => void
   resize: (args: { ptyId: string; cols: number; rows: number }) => void
-  detach: (args: { ptyId: string }) => void
+  detach: (args: { ptyId: string; acquisitionId: number }) => void
   /** Stops the shell its closed tab ran. */
   close: (args: { ptyId: string }) => Promise<LegacyRelayBridgeCloseResult>
   setOutputPaused: (args: { ptyId: string; paused: boolean }) => void

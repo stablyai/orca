@@ -14,7 +14,6 @@ const launchHooks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: electronApp, powerMonitor: { on: vi.fn() } }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
@@ -40,7 +39,7 @@ vi.mock('./headless-serve-ssh-registration', () => ({
   })
 }))
 vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
-vi.mock('../ipc/runtime-environment-mobile-relay-hosts', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', () => ({
   createRuntimeEnvironmentMobileRelayHosts: vi.fn()
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))

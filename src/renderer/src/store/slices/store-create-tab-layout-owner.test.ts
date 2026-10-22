@@ -8,6 +8,12 @@ import {
   seedStore
 } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
+import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
+import type { PublishedTab } from '../../../../shared/workspace-layout/workspace-layout-published'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LayoutApplyParams } from '../../../../shared/rpc-contract/workspace-layout-params'
+import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
+import { layoutCommandsOf } from '@/runtime/layout-apply-test-double'
 
 const mocks = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
@@ -54,6 +60,7 @@ function storeWithWorktree() {
 beforeEach(() => {
   mocks.layoutOwnerIsMain = true
   mocks.callRuntimeRpc.mockClear()
+  provideLayoutFrameTerminalPanes({ holdsTerminalPane: () => false, terminalTab: () => undefined })
 })
 
 describe('createTab in a layout-owner build', () => {
@@ -77,6 +84,7 @@ describe('createTab in a layout-owner build', () => {
         leafId: LEAF,
         groupId: 'group-1',
         viewMode: 'chat',
+        createdAt: store.getState().unifiedTabsByWorktree[WORKTREE]![0]!.createdAt,
         creation: {
           defaultTitle: 'Terminal 1',
           shellOverride: 'zsh',
@@ -87,6 +95,82 @@ describe('createTab in a layout-owner build', () => {
     })
     // The window drew it first: its callers act on the tab at once.
     expect(store.getState().tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual([TAB])
+  })
+
+  it('draws a tab main made itself with main’s creation facts and sends no create', () => {
+    const mainTab: PublishedTab = {
+      id: TAB,
+      kind: 'terminal',
+      entityId: TAB,
+      executionHostId: 'local',
+      createdAt: 42,
+      customTitle: null,
+      color: null,
+      terminal: {
+        root: { type: 'leaf', leafId: LEAF },
+        panes: [{ leafId: LEAF, ptyId: 'pty-1' }],
+        defaultTitle: 'Terminal 3',
+        startupCwd: '/path/wt'
+      }
+    }
+    provideLayoutFrameTerminalPanes({
+      holdsTerminalPane: () => false,
+      terminalTab: (worktreeId, tabId) =>
+        worktreeId === WORKTREE && tabId === TAB ? mainTab : undefined
+    })
+    const store = storeWithWorktree()
+
+    const tab = store.getState().createTab(WORKTREE, undefined, 'zsh', {
+      id: TAB,
+      initialLeafId: LEAF,
+      initialPtyId: 'pty-1'
+    })
+
+    expect(tab).toMatchObject({
+      createdAt: 42,
+      title: 'Terminal 3',
+      defaultTitle: 'Terminal 3',
+      startupCwd: '/path/wt',
+      ptyId: 'pty-1'
+    })
+    // Main's copy names no shell: the one the window resolved stays.
+    expect(tab.shellOverride).toBe('zsh')
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE]?.[0]).toMatchObject({
+      createdAt: 42,
+      label: 'Terminal 3'
+    })
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('records a quick command tab’s label in main, so the window’s save of it changes nothing', () => {
+    const store = storeWithWorktree()
+
+    store.getState().createTab(WORKTREE, undefined, undefined, {
+      id: TAB,
+      initialLeafId: LEAF,
+      quickCommandLabel: ' Dev server '
+    })
+
+    const [command] = layoutCommandsOf(
+      LayoutApplyParams.parse(mocks.callRuntimeRpc.mock.calls[0]?.[2]).command
+    )
+    const applied = applyLayoutCommand(
+      {
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        workspaces: {},
+        records: {},
+        legacy: { terminalRowOwners: {} }
+      },
+      command!,
+      { mintId: () => 'minted', mintLeafId: () => 'minted-leaf', now: () => 1 }
+    )
+    expect(applied.ok && applied.model.workspaces[WORKTREE]?.tabs[0]).toMatchObject({
+      id: TAB,
+      quickCommandLabel: 'Dev server'
+    })
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE]?.[0]?.quickCommandLabel).toBe(
+      'Dev server'
+    )
   })
 
   it('sends the leaf id the window named the first pane with when the caller gave none', () => {

@@ -20,7 +20,7 @@ vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'
 vi.mock('expo-router', mocks['expo-router'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 
@@ -30,7 +30,6 @@ import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-f
 import {
   byName,
   trackRenderedScreen,
-  NativeFallback,
   SCREEN_BUILD_ID as BUILD_ID,
   SCREEN_DIRECTORY as DIRECTORY,
   hostParentOf,
@@ -282,8 +281,7 @@ describe('the hybrid shell screen', () => {
     const element = (next: Record<string, string>) =>
       createElement(MobileWebShellScreen, {
         hostId: 'host-1',
-        route: { pathname: '/h/host-1', params: next },
-        fallback: createElement(NativeFallback)
+        route: { pathname: '/h/host-1', params: next }
       })
     dependencies.state = readyState('session-one')
     const rendered: { tree: ReactTestRenderer | null } = { tree: null }
@@ -528,10 +526,10 @@ describe('the hybrid shell screen', () => {
   })
 })
 
-describe('the route the shell was not asked to render', () => {
-  it('hands the screen back to the caller rather than painting anything of its own', async () => {
-    const tree = await renderScreen({ kind: 'native-route' })
-    expect(tree.root.findAllByType(NativeFallback)).toHaveLength(1)
+describe('a route the page does not serve and no side can be blamed for', () => {
+  it('paints the unavailable screen itself, with no view and no spinner', async () => {
+    const tree = await renderScreen({ kind: 'route-unavailable' })
+    expect(textOf(tree)).toContain('This workspace screen is not available on this host.')
     expect(byName(tree, 'ShellViewProbe')).toEqual([])
     expect(byName(tree, 'ActivityIndicator')).toEqual([])
   })

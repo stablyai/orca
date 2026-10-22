@@ -1,5 +1,8 @@
 import type { JiraIssue } from '../../../shared/jira-types'
-import { buildJiraIssueKeyJql, buildJiraTextMatchJql } from '../../../shared/jira-search-input-jql'
+import {
+  buildJiraIssueKeyJql,
+  buildJiraTextMatchJql
+} from '../../../shared/jira/jira-search-input-jql'
 import { getJiraBadRequestReason } from './task-page-jira-load-state'
 
 /** Find the issue with this key, or failing that, issues whose text matches the input. */

@@ -48,7 +48,7 @@ export function useResourceUsageDerivedModel({
   projectGroups: AppState['projectGroups']
   browserTabsByWorktree: AppState['browserTabsByWorktree']
   workspaceSessionReady: boolean
-  sessionCount: number
+  sessionCount: number | null
   sessionsError: boolean
   memorySnapshotError: string | null
   snapshot: MemorySnapshot | null

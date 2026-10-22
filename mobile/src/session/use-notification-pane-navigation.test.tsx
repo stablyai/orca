@@ -1,25 +1,49 @@
 import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
-import { expect, it, vi } from 'vitest'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../src/shared/structured-agent-session-projection'
-import { notificationPaneTab } from './notification-pane-tab'
-import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-envelope'
 import type { MobileSessionTab } from './mobile-session-route-types'
-const route = vi.hoisted(() => ({ paneKey: '', setParams: vi.fn() }))
-vi.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ paneKey: route.paneKey }),
-  useRouter: () => ({ setParams: route.setParams })
+
+type RouteUpdateListener = (route: BridgeInitRoute | null) => void
+
+const bridge = vi.hoisted(() => {
+  const held: {
+    route: BridgeInitRoute | null
+    listeners: RouteUpdateListener[]
+    /** Every erase the page asked the shell for, in order (ruling 34). */
+    cleared: { param: string; value: string }[]
+  } = { route: null, listeners: [], cleared: [] }
+  return held
+})
+
+vi.mock('../transport/client-context.web', () => ({
+  usePageBridgeClient: () => ({
+    getShellSession: () => ({ route: bridge.route }),
+    onRouteUpdate: (listener: RouteUpdateListener) => {
+      bridge.listeners.push(listener)
+      return () => {
+        bridge.listeners = bridge.listeners.filter((held) => held !== listener)
+      }
+    },
+    clearRouteParam: (param: string, value: string) => {
+      bridge.cleared.push({ param, value })
+      return true
+    }
+  })
 }))
-const leaf = '11111111-1111-4111-8111-111111111111'
-const tabs: MobileSessionTab[] = [
+
+import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
+
+/** A real leaf id: `parsePaneKey` refuses anything that is not one, so a made-up key parses to
+ *  nothing and every case below would read as "the pane closed". */
+const LEAF = '11111111-1111-4111-8111-111111111111'
+
+const TABS: MobileSessionTab[] = [
   {
     type: 'terminal',
     id: 'first',
     parentTabId: 'tab-a',
-    leafId: leaf,
+    leafId: LEAF,
     title: 'first',
     terminal: 'pty-a',
     isActive: true
@@ -28,76 +52,149 @@ const tabs: MobileSessionTab[] = [
     type: 'terminal',
     id: 'second',
     parentTabId: 'tab-b',
-    leafId: leaf,
-    title: 'agent',
+    leafId: LEAF,
+    title: 'second',
     terminal: 'pty-b',
     isActive: false
   }
 ]
-function Probe(props: Parameters<typeof useNotificationPaneNavigation>[0]) {
-  useNotificationPaneNavigation(props)
+
+const switched: MobileSessionTab[] = []
+
+function Probe({ terminalsLoaded }: { terminalsLoaded: boolean }): null {
+  useNotificationPaneNavigation({
+    sessionTabs: TABS,
+    terminalsLoaded,
+    switchSessionTab: (tab) => switched.push(tab)
+  })
   return null
 }
-it('selects the originating split pane, not the first tab; closed and invalid panes fall back', () => {
-  expect(notificationPaneTab(tabs, `tab-b:${leaf}`)).toBe(tabs[1])
-  expect(notificationPaneTab(tabs, `closed:${leaf}`)).toBeUndefined()
-  expect(notificationPaneTab(tabs, 'invalid')).toBeUndefined()
-})
-it('waits for tabs, switches through the existing action, and consumes the navigation request', async () => {
-  route.paneKey = `tab-b:${leaf}`
-  const switchSessionTab = vi.fn()
-  const props = { sessionTabs: tabs, terminalsLoaded: true, switchSessionTab }
-  let renderer: ReturnType<typeof create>
-  await act(async () => {
-    renderer = create(createElement(Probe, { ...props, sessionTabs: [], terminalsLoaded: false }))
+
+function render(terminalsLoaded: boolean): ReactTestRenderer {
+  const rendered: { tree: ReactTestRenderer | null } = { tree: null }
+  act(() => {
+    rendered.tree = create(createElement(Probe, { terminalsLoaded }))
   })
-  expect(switchSessionTab).not.toHaveBeenCalled()
-  await act(async () => {
-    renderer.update(createElement(Probe, props))
-  })
-  expect(switchSessionTab).toHaveBeenCalledExactlyOnceWith(tabs[1])
-  expect(route.setParams).toHaveBeenCalledWith({ paneKey: '' })
-  route.paneKey = ''
-  await act(async () => {
-    renderer.update(createElement(Probe, props))
-  })
-  expect(switchSessionTab).toHaveBeenCalledOnce()
-  await act(async () => renderer.unmount())
-})
-it('targets published native parents by session and consumes absent targets without switching', async () => {
-  const nativeTabs = ['restored', 'reserved', 'headless'].map((sessionId) => ({
-    type: 'agent-session' as const,
-    id: sessionId === 'headless' ? `agent-session:${sessionId}` : `${sessionId}-tab`,
-    sessionId,
-    agent: 'codex' as const,
-    title: 'Review',
-    isActive: false
-  }))
-  const paneKey = (sessionId: string) =>
-    structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
-  const switchSessionTab = vi.fn()
-  const props = { sessionTabs: [...tabs], terminalsLoaded: true, switchSessionTab }
-  route.setParams.mockClear()
-  route.paneKey = paneKey('reserved')
-  let renderer: ReturnType<typeof create>
-  await act(async () => {
-    renderer = create(createElement(Probe, props))
-  })
-  expect(switchSessionTab).not.toHaveBeenCalled()
-  expect(route.setParams).toHaveBeenCalledExactlyOnceWith({ paneKey: '' })
-  route.paneKey = ''
-  props.sessionTabs = [...tabs, ...nativeTabs]
-  await act(async () => renderer.update(createElement(Probe, props)))
-  expect(switchSessionTab).not.toHaveBeenCalled()
-  for (const tab of nativeTabs) {
-    route.paneKey = paneKey(tab.sessionId)
-    await act(async () => renderer.update(createElement(Probe, props)))
-    expect(switchSessionTab).toHaveBeenLastCalledWith(tab)
+  if (rendered.tree === null) {
+    throw new Error('the probe did not render')
   }
-  route.paneKey = paneKey('absent')
-  await act(async () => renderer.update(createElement(Probe, props)))
-  expect(switchSessionTab).toHaveBeenLastCalledWith(nativeTabs[2])
-  expect(switchSessionTab).toHaveBeenCalledTimes(3)
-  expect(route.setParams).toHaveBeenCalledTimes(5)
-  await act(async () => renderer.unmount())
+  return rendered.tree
+}
+
+/** What the shell does: re-send `init`, which the client publishes as a route that moved. */
+function deliver(paneKey: string): void {
+  act(() => {
+    for (const listener of bridge.listeners.slice()) {
+      listener({ pathname: '/h/host-1/session/wt-1', params: { paneKey } })
+    }
+  })
+}
+
+beforeEach(() => {
+  bridge.route = null
+  bridge.listeners = []
+  bridge.cleared.length = 0
+  switched.length = 0
+})
+
+/**
+ * The page's pane hook, which has no route to read and no param to write back.
+ *
+ * Its native sibling reads `paneKey` off the app's route and clears it with `setParams`; inside
+ * the page the document is served at `/` with one history entry, so the request arrives as a
+ * re-sent `init` instead (ruling 33.1) and the shell clears the native param once this page has
+ * been handed one. The native file's test mounts the native file, and the bridge test stops at
+ * the client, so this is the only cover this half has.
+ */
+describe('the page pane hook', () => {
+  it('switches to the pane the page was opened on, which arrives in the first init', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    render(true)
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  })
+
+  it('holds that request until the terminals have loaded, rather than dropping it', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    const tree = render(false)
+    expect(switched).toEqual([])
+    act(() => {
+      tree.update(createElement(Probe, { terminalsLoaded: true }))
+    })
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  })
+
+  it('erases the param that carried the pane it applied', () => {
+    // The reader erases (ruling 34). The shell holds the request until the page that applied it
+    // says so, naming the value: a tap that moved on since leaves a newer one on the route, and
+    // the shell refuses this by comparison rather than by a sequence number.
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    render(true)
+    expect(bridge.cleared).toEqual([{ param: 'paneKey', value: `tab-b:${LEAF}` }])
+  })
+
+  it('switches again for a repeat tap on the pane already showing', () => {
+    // The clear between the two is what makes the second a request rather than a repetition: the
+    // shell erases the param, re-sends the route without it, and the tap writes it back.
+    render(true)
+    deliver(`tab-a:${LEAF}`)
+    deliver('')
+    deliver(`tab-a:${LEAF}`)
+    expect(switched.map((tab) => tab.id)).toEqual(['first', 'first'])
+    expect(bridge.cleared).toEqual([
+      { param: 'paneKey', value: `tab-a:${LEAF}` },
+      { param: 'paneKey', value: `tab-a:${LEAF}` }
+    ])
+  })
+
+  it('applies one pane once however many inits carry it', () => {
+    // A re-asked `ready` is answered with the route the shell holds, which is still this one while
+    // the clear is in flight or was lost. Applying is a no-op the second time; asking again is not,
+    // because a clear that never arrived is repaired by this.
+    render(true)
+    deliver(`tab-a:${LEAF}`)
+    deliver(`tab-a:${LEAF}`)
+    expect(switched.map((tab) => tab.id)).toEqual(['first'])
+    expect(bridge.cleared).toHaveLength(2)
+  })
+
+  it('takes the tap that arrived while it was applying the one before it', () => {
+    render(true)
+    deliver(`tab-a:${LEAF}`)
+    deliver(`tab-b:${LEAF}`)
+    expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
+    // Both are named back; the shell spends only the one its param still holds.
+    expect(bridge.cleared.map((entry) => entry.value)).toEqual([`tab-a:${LEAF}`, `tab-b:${LEAF}`])
+  })
+
+  it('takes a different pane as its own request', () => {
+    render(true)
+    deliver(`tab-a:${LEAF}`)
+    deliver(`tab-b:${LEAF}`)
+    expect(switched.map((tab) => tab.id)).toEqual(['first', 'second'])
+  })
+
+  it('asks for nothing and applies nothing when the route carries no pane', () => {
+    // Load-bearing rather than defensive: the shell's own erase comes back as a route that moved,
+    // and so does every `ready` answered after it.
+    render(true)
+    deliver(`tab-a:${LEAF}`)
+    bridge.cleared.length = 0
+    deliver('')
+    expect(switched.map((tab) => tab.id)).toEqual(['first'])
+    expect(bridge.cleared).toEqual([])
+  })
+
+  it('consumes a request for a pane that has since closed, so no later render serves it', () => {
+    render(true)
+    deliver(`gone:${LEAF}`)
+    expect(switched).toEqual([])
+    // A re-render with nothing new delivered must not go looking for it again.
+    deliver('')
+    expect(switched).toEqual([])
+  })
+
+  it('does nothing at all when the page was opened on no pane', () => {
+    render(true)
+    expect(switched).toEqual([])
+  })
 })

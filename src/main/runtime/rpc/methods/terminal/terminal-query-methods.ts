@@ -1,4 +1,5 @@
 import { defineMethod } from '../../core'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { remoteFileContentBudget } from '../files-remote-content-budget'
 import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-rpc-content-budget'
 import {
@@ -10,7 +11,8 @@ import {
   TerminalRecoverPane,
   TerminalRename,
   TerminalResolveActive,
-  TerminalResolvePane
+  TerminalResolvePane,
+  TerminalSetPaneTitle
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 
 export const TERMINAL_QUERY_METHODS = [
@@ -18,12 +20,18 @@ export const TERMINAL_QUERY_METHODS = [
     name: 'terminal.list',
     permission: 'workspace',
     params: TerminalListParams,
-    handler: async (params, { runtime }) =>
-      runtime.listTerminals(params.worktree, params.limit, {
+    handler: async (params, { runtime }) => {
+      // Switch point: main places the swept workspace's live terminals itself, so this listing
+      // names their panes and the window's sweep only reads it.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && params.placeUnshownLiveTerminals && params.worktree) {
+        await runtime.placeUnshownLiveTerminalsOf(params.worktree)
+      }
+      return runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
         includeVisualLayouts: params.includeVisualLayouts
       })
+    }
   }),
   defineMethod({
     name: 'terminal.resolveActive',
@@ -127,6 +135,14 @@ export const TERMINAL_QUERY_METHODS = [
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
       rename: await runtime.renameTerminal(params.terminal, params.title || null)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.setPaneTitle',
+    permission: 'workspace',
+    params: TerminalSetPaneTitle,
+    handler: async (params, { runtime }) => ({
+      paneTitle: await runtime.setPaneTitle(params.terminal, params.title)
     })
   }),
   defineMethod({

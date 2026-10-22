@@ -1,3 +1,5 @@
+import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
+import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
@@ -37,7 +39,13 @@ export type NewWorkspaceComposerCardProps = {
   onComposerNodeChange?: (node: HTMLDivElement | null) => void
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
-  onQuickAgentChange: (agent: TuiAgent | null) => void
+  agentSurfaceRows?: AgentComboboxSurfaceRows
+  onQuickAgentChange: (
+    agent: TuiAgent | null,
+    surface?: AgentComboboxSurfaceRows['surface']
+  ) => void
+  /** Where the quick agent would start; null keeps the picker's plain agent list. */
+  agentRows?: ComposerAgentRows | null
   /** Cleared picker: skip the agent and the extra shell when setup runs. */
   quickSetupOnly?: boolean
   onQuickSetupOnlySelect?: () => void

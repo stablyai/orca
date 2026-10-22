@@ -1419,3 +1419,19 @@ index b37c1550887d467d8af0c46da96defa296ede197..9569755e6d6b112c4403f424b5d2f394
 +      && (this.underlineColor & Attributes.CM_MASK) === 0;
    }
  }
+diff --git a/src/common/buffer/Buffer.ts b/src/common/buffer/Buffer.ts
+index e3a88bfeb4bbf79214d799adec30cba8e4dc1b49..ca7ee6b45245a2ea5a2b027e192b98cda7ea5e36 100644
+--- a/src/common/buffer/Buffer.ts
++++ b/src/common/buffer/Buffer.ts
+@@ -165,9 +165,9 @@ export class Buffer extends Disposable implements IBuffer {
+     let dirtyMemoryLines = 0;
+ 
+     // Increase max length if needed before adjustments to allow space to fill
+-    // as required.
++    // as required. Empty buffers must also shrink before their first activation.
+     const newMaxLength = this._getCorrectBufferLength(newRows);
+-    if (newMaxLength > this.lines.maxLength) {
++    if (newMaxLength > this.lines.maxLength || this.lines.length === 0) {
+       this.lines.maxLength = newMaxLength;
+     }
+ 

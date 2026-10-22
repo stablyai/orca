@@ -1,13 +1,29 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import type { Tab } from '../../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { withPreviewEnded } from '../../tabs/tab-preview-flag'
+import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
 import {
-  previewEditorTabsOf,
-  recordPromotedEditorTabsInLayoutOwner
-} from '../tabs/editor-tab-layout-owner'
+  endsPreviewHere,
+  promotePreviewTabsThroughLayoutOwner
+} from '../../tabs/preview-tab-promotion'
+import {
+  editorBufferOf,
+  updateEditorBuffer,
+  writeEditorBuffer
+} from '../buffers/editor-buffer-record'
+import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
+
+function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Record<string, T> {
+  const next = { ...record }
+  for (const key of keys) {
+    delete next[key]
+  }
+  return next
+}
 
 export function createOpenFileMutations(
   set: EditorSet,
@@ -15,13 +31,9 @@ export function createOpenFileMutations(
 ): Pick<
   EditorSlice,
   | 'setActiveFile'
-  | 'reorderFiles'
   | 'markFileDirty'
   | 'setExternalMutation'
   | 'setLastKnownDiskSignature'
-  | 'clearPendingDiskBaselineVerification'
-  | 'setPendingDiskBaselineVerification'
-  | 'setPendingLiveDiskVerification'
   | 'clearSelfMoveEcho'
   | 'clearUntitled'
 > {
@@ -66,24 +78,6 @@ export function createOpenFileMutations(
       }
     },
 
-    reorderFiles: (fileIds) =>
-      set((s) => {
-        const reorderedSet = new Set(fileIds)
-        const byId = new Map(s.openFiles.map((f) => [f.id, f]))
-        const reordered = fileIds.map((id) => byId.get(id)).filter(Boolean) as OpenFile[]
-        // Replace the reordered subset in-place: keep other-worktree files at their positions
-        const result: OpenFile[] = []
-        let ri = 0
-        for (const f of s.openFiles) {
-          if (reorderedSet.has(f.id)) {
-            result.push(reordered[ri++])
-          } else {
-            result.push(f)
-          }
-        }
-        return { openFiles: result }
-      }),
-
     markFileDirty: (fileId, dirty) => {
       const promoted: Tab[] = []
       set((s) => {
@@ -96,28 +90,50 @@ export function createOpenFileMutations(
         if (file.readOnly === true || file.csvPreviewOnly === true) {
           return s
         }
+        const buffer = editorBufferOf(s, file)
         const needsPreviewClear = dirty && file.isPreview
-        if (file.isDirty === dirty && !needsPreviewClear) {
+        // Why: a clean tab holds no draft of the disk text; a kept one could later restore stale
+        // text into a shared model. A draft that differs from disk (whitespace a Markdown view
+        // does not count as an edit) is a real unsaved edit and stays.
+        const draft = s.editorDrafts[fileId]
+        const dropDraft =
+          !dirty &&
+          draft !== undefined &&
+          (buffer.lastKnownDiskSignature === undefined ||
+            getDiskBaselineSignature(draft) === buffer.lastKnownDiskSignature)
+        if (
+          buffer.isDirty === dirty &&
+          file.isDirty === dirty &&
+          !needsPreviewClear &&
+          !dropDraft
+        ) {
           return s
         }
         if (ORCA_LAYOUT_OWNER_IS_MAIN && needsPreviewClear) {
           promoted.push(...previewEditorTabsOf(s.unifiedTabsByWorktree, fileId))
         }
-        const nextOpenFiles = s.openFiles.map((f) =>
-          f.id === fileId
-            ? { ...f, isDirty: dirty, ...(needsPreviewClear ? { isPreview: undefined } : {}) }
-            : f
-        )
         return {
-          openFiles: nextOpenFiles,
+          ...writeEditorBuffer(
+            s,
+            fileId,
+            { isDirty: dirty },
+            needsPreviewClear ? { isPreview: undefined } : undefined
+          ),
+          // Why every view: views of one record share one draft.
+          ...(dropDraft
+            ? { editorDrafts: withoutKeys(s.editorDrafts, editorBufferSiblingViewIds(s, fileId)) }
+            : {}),
           ...(needsPreviewClear
             ? {
                 unifiedTabsByWorktree: Object.fromEntries(
                   Object.entries(s.unifiedTabsByWorktree ?? {}).map(([worktreeId, tabs]) => [
                     worktreeId,
                     tabs.map((tab) =>
-                      tab.entityId === fileId && isEditorTabContentType(tab.contentType)
-                        ? { ...tab, isPreview: false }
+                      tab.entityId === fileId &&
+                      isEditorTabContentType(tab.contentType) &&
+                      // Switch point: main's frame ends a preview main owns.
+                      endsPreviewHere(s, worktreeId)
+                        ? withPreviewEnded(tab)
                         : tab
                     )
                   ])
@@ -126,82 +142,17 @@ export function createOpenFileMutations(
             : {})
         }
       })
-      // Switch point: main records that an edit made a preview tab permanent.
+      // Switch point: main makes the edited preview tabs permanent.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
-        recordPromotedEditorTabsInLayoutOwner(get(), promoted)
+        promotePreviewTabsThroughLayoutOwner(get(), set, promoted)
       }
     },
 
     setExternalMutation: (fileId, mutation) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file) {
-          return s
-        }
-        const next = mutation ?? undefined
-        if (file.externalMutation === next) {
-          return s
-        }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === fileId ? { ...f, externalMutation: next } : f
-          )
-        }
-      }),
+      set((s) => updateEditorBuffer(s, fileId, { externalMutation: mutation ?? undefined })),
 
     setLastKnownDiskSignature: (fileId, signature) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file || file.lastKnownDiskSignature === signature) {
-          return s
-        }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === fileId ? { ...f, lastKnownDiskSignature: signature } : f
-          )
-        }
-      }),
-
-    clearPendingDiskBaselineVerification: (fileId) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        if (!file?.pendingDiskBaselineVerification) {
-          return s
-        }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === fileId ? { ...f, pendingDiskBaselineVerification: undefined } : f
-          )
-        }
-      }),
-
-    setPendingDiskBaselineVerification: (fileId, value) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        const next = value || undefined
-        if (!file || file.pendingDiskBaselineVerification === next) {
-          return s
-        }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === fileId ? { ...f, pendingDiskBaselineVerification: next } : f
-          )
-        }
-      }),
-
-    setPendingLiveDiskVerification: (fileId, value) =>
-      set((s) => {
-        const file = s.openFiles.find((f) => f.id === fileId)
-        const next = value || undefined
-        if (!file || file.pendingLiveDiskVerification === next) {
-          return s
-        }
-        return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === fileId ? { ...f, pendingLiveDiskVerification: next } : f
-          )
-        }
-      }),
+      set((s) => updateEditorBuffer(s, fileId, { lastKnownDiskSignature: signature })),
 
     clearSelfMoveEcho: (fileId) =>
       set((s) => {

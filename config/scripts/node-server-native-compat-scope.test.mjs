@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
@@ -327,13 +328,17 @@ it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (d
   expect(floor.env).toMatchObject({ CC: 'gcc', CXX: 'g++' })
 
   const compat = workflow.jobs.linux_glibc217_compat
-  expect(compat.needs).toEqual(['changes', 'persistence'])
-  expect(compat.if).toContain(floor.if.slice(0, -3))
+  expect(compat.needs).toBe('changes')
+  expect(compat.if).toContain(
+    floor.if.replace("needs.mobile_web_bundle.result == 'success' && ", '').slice(0, -3)
+  )
   expect(compat.if).toContain("needs.changes.outputs.native_compatibility != 'false'")
   expect(compat.if).toContain(
     "github.event_name != 'pull_request' || inputs.build_template || inputs.ref != ''"
   )
-  expect(compat['runs-on']).toBe('ubuntu-22.04')
+  expect(runInNewContext(compat['runs-on'].slice(3, -2), { inputs: { fast_runners: false } })).toBe(
+    'ubuntu-22.04'
+  )
   const run = compat.steps.map((step) => step.run ?? '').join('\n')
   expect(run).toMatch(/quay\.io\/pypa\/manylinux2014_x86_64@sha256:[0-9a-f]{64} /)
   expect(run).toContain('--slot=linux-x64-glibc217 --print-runtime')
@@ -363,15 +368,19 @@ it.each([
   { expected: true, native: 'false', event: 'workflow_dispatch' },
   { expected: true, native: 'false', template: true },
   { expected: true, native: 'false', ref: 'other-commit' },
-  { expected: false, native: 'true', persistence: 'failure' },
-  { expected: false, native: 'true', persistence: 'cancelled' },
-  { expected: false, native: 'true', persistence: 'skipped' },
+  { expected: true, native: 'true', persistence: 'failure' },
+  { expected: true, native: 'true', persistence: 'cancelled' },
+  { expected: true, native: 'true', persistence: 'skipped' },
+  { expected: false, native: 'true', draft: true },
   { expected: false, native: 'true', qualification: 'false' },
   { expected: false, native: 'true', shouldRun: 'false' },
   { expected: false, native: 'true', cancelled: true }
 ])('evaluates the hosted native job guard with %j', (scenario) => {
   const context = {
-    github: { event_name: scenario.event ?? 'pull_request' },
+    github: {
+      event_name: scenario.event ?? 'pull_request',
+      event: { pull_request: { draft: scenario.draft ?? false } }
+    },
     inputs: { build_template: scenario.template ?? false, ref: scenario.ref ?? '' },
     needs: {
       persistence: { result: scenario.persistence ?? 'success' },

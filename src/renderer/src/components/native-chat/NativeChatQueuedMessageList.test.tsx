@@ -84,8 +84,9 @@ function controller(
     editor: undefined,
     pause,
     resume: vi.fn(async () => false),
-    resuming: false,
     clear: vi.fn(async () => true),
+    queuePending: null,
+    pending: () => null,
     steer: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),
     edit: vi.fn(async () => {}),
@@ -504,7 +505,7 @@ describe('NativeChatQueuedMessageList', () => {
   it('a paused queue holds every card, in order, under one header with Clear all and Resume', () => {
     renderHeldQueue([waitingDraft('a', 1), waitingDraft('b', 2)], { reason: 'stopped' })
     const header = screen.getByRole('list').previousElementSibling!
-    expect(header.textContent).toBe('Paused2Clear allResume')
+    expect(header.textContent).toBe('Paused·2Clear allResume')
     expect(screen.getAllByRole('button', { name: 'Steer' })).toHaveLength(2)
   })
 
@@ -518,7 +519,7 @@ describe('NativeChatQueuedMessageList', () => {
 
   it('a queue that drains on its own (or after a restart) reads Queued, with no Resume; no cards, nothing', () => {
     renderHeldQueue([waitingDraft('waiting', 1)], null)
-    expect(screen.getByRole('list').previousElementSibling?.textContent).toBe('Queued1')
+    expect(screen.getByRole('list').previousElementSibling?.textContent).toBe('Queued·1')
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Clear all' })).toBeNull()
     cleanup()
@@ -538,14 +539,14 @@ describe('NativeChatQueuedMessageList', () => {
       stopped
     )
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
-    expect(container.textContent).toContain('Queued3')
+    expect(container.textContent).toContain('Queued·3')
   })
 
   it('Resume shows it is pending and hands focus back', async () => {
     const focusComposer = vi.fn()
-    const owner = {
+    const owner: StructuredAgentSessionQueuedMessagesController = {
       ...controller([card({ messageId: 'waiting', hold: 'queue-paused' })], { reason: 'stopped' }),
-      resuming: true
+      queuePending: 'resume' as const
     }
     render(
       <TooltipProvider delayDuration={0}>
@@ -558,6 +559,11 @@ describe('NativeChatQueuedMessageList', () => {
     )
     const resume = screen.getByRole('button', { name: 'Resume' })
     expect(resume).toHaveProperty('disabled', true)
+    // Only the pressed button spins, and only after the deferral that keeps fast replies still.
+    expect(resume.querySelector('.animate-spin')).toBeNull()
+    await waitFor(() => expect(resume.querySelector('.animate-spin')).not.toBeNull())
+    const clearAll = screen.getByRole('button', { name: 'Clear all' })
+    expect(clearAll.querySelector('.animate-spin')).toBeNull()
     cleanup()
     const idle = controller([card({ messageId: 'waiting', hold: 'queue-paused' })], {
       reason: 'stopped'
@@ -622,7 +628,7 @@ describe('NativeChatQueuedMessageList', () => {
     )
     // The header is the box's first row, outside the list; the list is its second.
     expect(box.children).toHaveLength(2)
-    expect(box.firstElementChild?.textContent).toContain('Paused3')
+    expect(box.firstElementChild?.textContent).toContain('Paused·3')
     expect(box.lastElementChild).toBe(list)
     expect(list.className.split(' ')).toContain('divide-y')
     const rows = within(list).getAllByRole('listitem')

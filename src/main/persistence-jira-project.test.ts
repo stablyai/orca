@@ -18,13 +18,13 @@ describe('persisted repository Jira defaults', () => {
   it('persists and clears the project default across restart without requiring Git', () => {
     const store = createStore()
     store.addRepo(makeRepo({ kind: 'folder' }))
-    expect(store.updateRepo('r1', { defaultJiraProject: project })?.defaultJiraProject).toEqual(
-      project
-    )
+    expect(
+      store.updateRepo({ id: 'r1' }, { defaultJiraProject: project })?.defaultJiraProject
+    ).toEqual(project)
     store.flush()
     const reloaded = createStore()
     expect(reloaded.getRepo('r1')?.defaultJiraProject).toEqual(project)
-    reloaded.updateRepo('r1', { defaultJiraProject: null })
+    reloaded.updateRepo({ id: 'r1' }, { defaultJiraProject: null })
     reloaded.flush()
     expect(createStore().getRepo('r1')?.defaultJiraProject).toBeNull()
   })

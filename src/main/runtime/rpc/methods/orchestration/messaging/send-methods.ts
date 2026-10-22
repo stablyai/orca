@@ -23,7 +23,7 @@ import {
   readMutationReplayNudge,
   readWorkerDoneReplayNudge,
   stripMutationReplayNudge
-} from '../../../orchestration-mutation-executor'
+} from '../../../orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
 import {
   handBackReplayTargets

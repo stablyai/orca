@@ -1,5 +1,7 @@
+import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { Session } from './session'
-import { SessionNotFoundError } from './types'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
@@ -12,13 +14,16 @@ import type { InternalCreateOrAttachOptions } from './terminal-host-agent-sessio
 import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-session-generations'
 import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
-import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
+import {
+  listLiveTerminalHostSessions,
+  hasLiveTerminalHostSessions
+} from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
-import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
+import { inspectTerminalHostSession } from './terminal-host-process-inspection'
 import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
   confirmTerminalHostForegroundProcess,
@@ -95,7 +100,10 @@ export class TerminalHost {
         isLive: (owner) =>
           this.agentSessionGenerations.isCurrent(
             owner,
-            Boolean(this.sessions.get(owner.ptyId)?.isAlive)
+            Boolean(
+              this.sessions.get(owner.ptyId)?.isAlive &&
+              !this.sessions.get(owner.ptyId)?.isTerminating
+            )
           ),
         createOrAttach: async (options) => {
           this.assertCreateOrAttachAllowed(options)
@@ -187,6 +195,15 @@ export class TerminalHost {
     return Promise.resolve(killed)
   }
 
+  beginFencedTermination(request: PtyFencedTerminationRequest) {
+    return beginTerminalHostFencedTermination(request, {
+      sessions: this.sessions,
+      pendingCreations: this.pendingCreations,
+      owners: this.agentSessionOwners,
+      kill: (id, options) => this.kill(id, options)
+    })
+  }
+
   // Why: dispose a dead session's emulator so exited terminals don't pin their scrollback window for the daemon's life.
   private reapSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
@@ -229,31 +246,16 @@ export class TerminalHost {
 
   inspectProcess(
     sessionId: string,
-    options?: { expectedIncarnationId?: string; steadyState?: boolean }
+    options?: PtyProcessInspectionOptions
   ): Promise<TerminalHostProcessInspection> {
-    pruneRetiredPtyIncarnations(this.retiredIncarnations)
-    const session = this.sessions.get(sessionId)
-    if (
-      (!session || !session.isAlive) &&
-      !(
-        (this.retiredIncarnations.get(sessionId)?.expiresAt ?? 0) > Date.now() &&
-        options?.expectedIncarnationId === this.retiredIncarnations.get(sessionId)?.incarnationId
-      )
-    ) {
-      // Preserve the historical synchronous missing-session failure.
-      throw new SessionNotFoundError(sessionId)
-    }
-    return inspectTerminalHostProcess({
+    return inspectTerminalHostSession(
+      this.sessions,
+      this.retiredIncarnations,
       sessionId,
-      session: session?.isAlive ? session : null,
-      ...(options?.expectedIncarnationId
-        ? { expectedIncarnationId: options.expectedIncarnationId }
-        : {}),
-      ...(options?.steadyState === true ? { steadyState: true } : {}),
-      retiredIncarnation: this.retiredIncarnations.get(sessionId),
-      authorityGeneration: this.authorityGeneration,
-      nextObservationEpoch: () => ++this.observationEpoch
-    })
+      options,
+      this.authorityGeneration,
+      () => ++this.observationEpoch
+    )
   }
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {
@@ -314,12 +316,7 @@ export class TerminalHost {
   }
 
   hasLiveSessions(): boolean {
-    let hasLive = false
-    // Read every Session, even after a live one, to preserve the inventory's error order.
-    for (const session of this.sessions.values()) {
-      hasLive = session.isAlive || hasLive
-    }
-    return hasLive
+    return hasLiveTerminalHostSessions(this.sessions)
   }
 
   dispose(): Promise<void> {

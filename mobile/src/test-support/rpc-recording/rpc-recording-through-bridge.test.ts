@@ -73,12 +73,12 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * `BRIDGED_PARITY_MEMBERS` pins which goldens are in it — a count alone cannot see one golden
  * leaving a class as another arrives.
  *
- * 401 of the 795 replay byte for byte. The other 394 fall in five classes, 344 / 3 / 6 / 33 / 8,
+ * 401 of the 795 replay byte for byte. The other 394 fall in five classes, 350 / 3 / 6 / 27 / 8,
  * and none of them is a reason to re-record anything. `c1-page-closure.ts` then pins, golden by
  * golden, the 103 recorded at a call site the C1 page owns, because a count over 795 cannot tell a
  * domain's regression from another domain's improvement.
  *
- * 1. **result-absent-settlement, 344** and **2. result-absent-observation, 3.**
+ * 1. **result-absent-settlement, 350** and **2. result-absent-observation, 3.**
  *    `{ ok: true }` with no `result` key is refused by the page's reader and by `isRpcResponse`
  *    alike, so this one is not a bridge defect: the recorder injects that partition at the scripted
  *    sender port, below the frame validation both sides do, which is what the README means by not
@@ -96,7 +96,7 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  *    the recorder's next occurrence name for that method, so the scenario stops matching and the
  *    run throws before there is a recording to compare. The native client never refuses the frame,
  *    so it never reaches the release: the difference is the injected shape, not the release.
- * 4. **params-undefined, 33.** An own property whose value is `undefined` does not survive
+ * 4. **params-undefined, 27.** An own property whose value is `undefined` does not survive
  *    JSON — and it does not survive the native path either. `tw-smart-search-all-providers` records
  *    `{"filter":"assigned","limit":50}` as the bytes its `linear.listIssues` request put on the
  *    wire, with the scenario's `workspaceId` already gone, so the bridged run sends the identical
@@ -104,7 +104,7 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  *    against, which is the params as the shell's client received them, one level above any
  *    serialization. No transport can carry that difference, and the projection the brief named is
  *    not where it lives: `projectMobileRpcRequestParams` rewrites `worktree.ps` alone, none of the
- *    ten scenarios in this class calls it, and the bridge host forwards into the same
+ *    scenarios in this class calls it, and the bridge host forwards into the same
  *    `StableLogicalRpcClient` the native screens hold, so there is no shell-side copy to move.
  * 5. **write-ordinal, 8.** Not a reorder on the wire: the page posts its frames in the order
  *    the operation made them and the payloads publish below the bridge in that same order. What

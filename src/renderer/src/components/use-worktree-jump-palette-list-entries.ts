@@ -51,7 +51,7 @@ export function useWorktreeJumpPaletteListEntries({
     } = paletteSections
     // Exact entity matches keep priority; issue/PR URLs keep their jump and create rows first.
     const browserNavigationItem =
-      taskSourceUrl || middleLeadsSections
+      taskSourceUrl || !paletteSections.hasExactEntityDestination
         ? middleItems.find(
             (item) =>
               item.type === 'quick-action' && item.result.id === BROWSER_NAVIGATION_ACTION_ID

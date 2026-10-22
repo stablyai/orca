@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
     unifiedTabsByWorktree: { wt: [tab] },
     tabsByWorktree: {},
     settings: { experimentalNativeChat: true },
-    pendingCodexPaneRestartIds: [],
+    pendingPaneAccountRestarts: [],
     runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } },
     agentStatusByPaneKey: {},
     paneForegroundAgentByPaneKey: {},

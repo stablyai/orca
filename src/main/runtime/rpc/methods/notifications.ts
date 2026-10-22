@@ -1,8 +1,10 @@
 import { createNotificationStreamFilter } from './notification-stream-policy'
-import { defineStreamingMethod, defineMethod } from '../core'
+import { defineStreamingMethod, defineMethod, type RpcContext } from '../core'
+import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
+  NotificationReportDesktopPresenceParams,
   NotificationUnsubscribeParams,
   NotificationsSubscribeParams
 } from '../../../../shared/rpc-contract/notifications-params'
@@ -11,6 +13,25 @@ import {
 // Date.now() collision that could fire when two near-simultaneous
 // notifications.subscribe calls landed on the same millisecond.
 let notificationsSubscriptionSeq = 0
+
+type DesktopPresenceReportContext = Pick<RpcContext, 'clientKind' | 'connectionId' | 'signal'> & {
+  runtime: Pick<OrcaRuntimeService, 'reportDesktopClientPresence' | 'registerSubscriptionCleanup'>
+}
+
+/** Only a paired desktop's own socket speaks for a desktop; the report lives as long as it. */
+export function reportDesktopPresence(
+  params: { away: boolean },
+  { runtime, clientKind, connectionId, signal }: DesktopPresenceReportContext
+): { recorded: boolean } {
+  // A closed socket already ran its cleanups, so a late report would never be forgotten.
+  if (clientKind !== 'runtime' || !connectionId || signal?.aborted) {
+    return { recorded: false }
+  }
+  runtime.reportDesktopClientPresence(connectionId, params.away, (forget) =>
+    runtime.registerSubscriptionCleanup(`desktop-presence-${connectionId}`, forget, connectionId)
+  )
+  return { recorded: true }
+}
 
 // Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
 export const NOTIFICATION_METHODS = [
@@ -75,6 +96,12 @@ export const NOTIFICATION_METHODS = [
           : {})
       }
     }
+  }),
+  defineMethod({
+    name: 'notifications.reportDesktopPresence',
+    permission: 'workspace',
+    params: NotificationReportDesktopPresenceParams,
+    handler: async (params, context) => reportDesktopPresence(params, context)
   }),
   defineMethod({
     name: 'notifications.registerPush',

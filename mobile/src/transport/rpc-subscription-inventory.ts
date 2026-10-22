@@ -45,12 +45,12 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   // screen opens its own. Both decode the same snapshot, and neither is the wall — the loader
   // reaches `decodeAccountsSnapshot` and it throws its own domain error on a bad one.
   {
-    file: 'app/h/[hostId]/accounts.tsx',
+    file: 'src/accounts/MobileAccountsScreen.tsx',
     method: 'accounts.subscribe',
     release: 'ready-id',
     coverage: {
       kind: 'walled',
-      wall: 'The screen renders `react-native.ScrollView` and calls `react-native.Alert` to report a failed switch, neither a substituted member, so the mount trap refuses on the first render: `Unsubstituted native member: react-native.ScrollView`.'
+      wall: 'The screen renders `react-native.ScrollView`, not a substituted member, so the mount trap refuses on the first render: `Unsubstituted native member: react-native.ScrollView`.'
     }
   },
   {

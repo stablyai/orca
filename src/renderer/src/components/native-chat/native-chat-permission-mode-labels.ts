@@ -1,13 +1,25 @@
 import type { LucideIcon } from 'lucide-react'
 import { FilePenLine, Hand, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { AgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
+import {
+  AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
+  type AgentChatPermissionMode,
+  type AgentChatPermissionModeIconName
+} from '../../../../shared/agent-chat-permission-mode'
 
+const ICONS_BY_NAME: Record<AgentChatPermissionModeIconName, LucideIcon> = {
+  Hand,
+  FilePenLine,
+  ShieldCheck,
+  ShieldAlert
+}
+
+// A static record, not a lookup function: render must index it, not call it.
 export const NATIVE_CHAT_PERMISSION_MODE_ICONS = {
-  ask: Hand,
-  'accept-edits': FilePenLine,
-  auto: ShieldCheck,
-  'full-access': ShieldAlert
+  ask: ICONS_BY_NAME[AGENT_CHAT_PERMISSION_MODE_ICON_NAMES.ask],
+  'accept-edits': ICONS_BY_NAME[AGENT_CHAT_PERMISSION_MODE_ICON_NAMES['accept-edits']],
+  auto: ICONS_BY_NAME[AGENT_CHAT_PERMISSION_MODE_ICON_NAMES.auto],
+  'full-access': ICONS_BY_NAME[AGENT_CHAT_PERMISSION_MODE_ICON_NAMES['full-access']]
 } as const satisfies Record<AgentChatPermissionMode, LucideIcon>
 
 export function nativeChatPermissionModeLabel(mode: AgentChatPermissionMode): string {
@@ -47,6 +59,12 @@ export function nativeChatPermissionModeDescription(
         "Asks before edits and commands your settings don't allow"
       )
     case 'accept-edits':
+      if (agent === 'antigravity') {
+        return translate(
+          'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
+          'Approves file edits; asks for the rest'
+        )
+      }
       return translate(
         'components.native-chat.composer.permissionAcceptEditsDescription',
         'Approves file edits and file commands; asks for the rest'

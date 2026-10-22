@@ -84,13 +84,13 @@ describe('agent.launch with the real floating workspace resolver', () => {
   describe.each([true, false])('structured preference %s', (structuredPreference) => {
     it.each(selectors)('routes %s by preference, not by workspace kind', async (selector) => {
       const runtime = new OrcaRuntimeService()
-      vi.spyOn(runtime, 'getClientSettings').mockReturnValue(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only these preferences and optional agentCmdOverrides; no other settings consumer runs because terminal creation is stubbed.
-        {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these launch readers use only getSettings from the private store fixture.
+      vi.spyOn(runtime, 'requireStore').mockReturnValue({
+        getSettings: () => ({
           ...STRUCTURED_PREFERENCE,
           experimentalNativeChat: structuredPreference
-        } as ReturnType<OrcaRuntimeService['getClientSettings']>
-      )
+        })
+      } as never)
       const scope = vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope')
       const createSupport = vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport')
       const structuredHost = vi.spyOn(runtime, 'ensureStructuredAgentSessionHost')

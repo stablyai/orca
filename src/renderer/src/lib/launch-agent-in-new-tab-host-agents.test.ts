@@ -30,7 +30,11 @@ vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => false }
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({}))
 
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import * as localCapabilities from '@/runtime/local-runtime-capabilities'
+import {
+  resetHostStructuredAgentsForTests,
+  loadHostStructuredAgents
+} from '@/runtime/host-structured-agents'
 import {
   refreshLocalRuntimeCapabilities,
   setLocalRuntimeCapabilitiesForTests
@@ -118,6 +122,34 @@ describe('a new tab whose chat route waits on the host agent list', () => {
       focusIntent,
       agentSessionLaunchPlan: { route: 'structured-native-chat', requestId: 'request-1' }
     })
+  })
+
+  it('releases a timed-out capability waiter without starting host discovery', async () => {
+    vi.useFakeTimers()
+    setLocalRuntimeCapabilitiesForTests(null)
+    const waitForCapabilities = localCapabilities.awaitLocalRuntimeCapabilities
+    const stop = vi.fn()
+    vi.spyOn(localCapabilities, 'awaitLocalRuntimeCapabilities').mockImplementation(() => {
+      const wait = waitForCapabilities()
+      return {
+        known: wait.known,
+        stop: () => {
+          stop()
+          wait.stop()
+        }
+      }
+    })
+    const route = routeNewTabLaunch(storeWithSettings(SETTINGS), args, request)
+    if (!('awaited' in route)) {
+      throw new Error('expected bounded preparation')
+    }
+    await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS)
+    await route.awaited
+    setLocalRuntimeCapabilitiesForTests(REGISTERED)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(stop).toHaveBeenCalledOnce()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(console.warn).not.toHaveBeenCalled()
   })
 
   it('decides without the list once the bounded wait runs out', async () => {
@@ -239,5 +271,22 @@ describe("a new tab during startup, before this computer's runtime answered", ()
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('claude opens terminal-tui: runtime-capability-unknown')
     )
+  })
+})
+
+it('keeps a selected CLI terminal when native discovery and the catalog later allow chat', async () => {
+  const store = storeWithSettings(SETTINGS)
+  mocks.state.current.localDetectedAgentIdsByContext = { host: [] }
+  setLocalRuntimeCapabilitiesForTests(null)
+  const route = routeNewTabLaunch(store, args, { ...request, requestedSurface: 'terminal' })
+  if (!('plan' in route)) {
+    throw new Error('explicit surface must not wait')
+  }
+  mocks.state.current.localDetectedAgentIdsByContext = { host: ['opencode'] }
+  setLocalRuntimeCapabilitiesForTests(REGISTERED)
+  await loadHostStructuredAgents('local', REGISTERED, null)
+  expect(route.plan?.route).toBe('terminal-tui')
+  expect(routeNewTabLaunch(store, args, request)).toMatchObject({
+    plan: { route: 'structured-native-chat' }
   })
 })

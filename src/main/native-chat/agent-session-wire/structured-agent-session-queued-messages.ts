@@ -36,11 +36,8 @@ import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
-
-/** Text-only v1: any image block routes to the immediate path. */
-export function queuedMessageBodyIsTextOnly(body: AgentJournalMessageItem): boolean {
-  return body.blocks.every((block) => block.type === 'text')
-}
+import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 
 /** Waiting, not held on its own, and not positioned behind a returned card or a
  *  card the queue's pause holds: the queue never reorders. The admission rule
@@ -142,8 +139,8 @@ export function shouldQueueStructuredAgentSessionSend(
 /**
  * The accept branch: a capable send while the session is working (or behind an
  * actionable backlog) becomes a draft instead of a submission. Returns null for
- * the immediate path — an incapable client, an image body (text-only v1), a
- * replayed id the journal already answers, or an idle session.
+ * the immediate path — an incapable client, a replayed id the journal already
+ * answers, or an idle session.
  */
 export async function maybeQueueStructuredAgentSessionSend(
   context: {
@@ -151,12 +148,20 @@ export async function maybeQueueStructuredAgentSessionSend(
   },
   ctx: Pick<
     AgentSessionTurnContext,
-    'sessionId' | 'journal' | 'fence' | 'operationReceipt' | 'currentWork'
+    | 'sessionId'
+    | 'journal'
+    | 'fence'
+    | 'operationReceipt'
+    | 'currentWork'
+    | 'agents'
+    | 'agent'
+    | 'persistedOptions'
   >,
   params: {
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     /** A person's send at a chat surface: every attachment it names must still be stored. */
     userSend?: true
@@ -169,7 +174,11 @@ export async function maybeQueueStructuredAgentSessionSend(
   | null
 > {
   const clientMessageId = params.envelope.clientOperationId
-  if (params.delivery !== 'queue-if-active' || !queuedMessageBodyIsTextOnly(params.body)) {
+  if (
+    params.delivery !== 'queue-if-active' ||
+    (params.queuedImageCards === false &&
+      params.body.blocks.some((block) => block.type === 'image-ref'))
+  ) {
     return null
   }
   // Asked again with no ledger answer: a send this host queued answers as its replay would —
@@ -199,6 +208,10 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (refusal) {
     return { ok: false, refusal }
   }
+  const captured = captureStructuredExecutionOptions(ctx, params.options)
+  if ('refusal' in captured) {
+    return { ok: false, refusal: captured.refusal }
+  }
   // The insert notifies through the journal's commit listener: publication and
   // the drain re-derive with no call here to forget.
   let row: QueuedMessageRow
@@ -211,7 +224,7 @@ export async function maybeQueueStructuredAgentSessionSend(
         fingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
         hostInstance: structuredAgentSessionHostInstance(),
         // Applied when the card goes out, to the turn it starts.
-        ...(params.options ? { options: params.options } : {}),
+        options: captured.options,
         ...(params.userSend ? { requireAttachments: true } : {})
       },
       ctx.operationReceipt
@@ -240,6 +253,7 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
+  submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   logger: StructuredAgentSessionLogger
 }
 
@@ -347,7 +361,8 @@ export class StructuredAgentSessionQueuedMessageDrain {
           settledByOp: null,
           hostInstance: structuredAgentSessionHostInstance(),
           yieldsToPause: true
-        }
+        },
+        this.deps.submissionReceipt?.(sessionId)
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {

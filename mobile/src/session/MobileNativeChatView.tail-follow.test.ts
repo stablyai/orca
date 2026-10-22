@@ -36,9 +36,6 @@ vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 vi.mock('./MobileNativeChatComposer', async () => {
   const { composerStub } = await import('./MobileNativeChatView.render-stubs.test-fixture')
   return composerStub()
@@ -313,22 +310,39 @@ describe('MobileNativeChatView: tail-follow', () => {
   })
 
   // The view stays mounted across chat tabs, so the reader's place in one must not carry over.
-  it('opens another chat at its newest message, following, keeping the Tools toggle', async () => {
-    await render({ folded: [assistantTurn('a1', 'Chat A')] })
+  it('opens another chat at its newest message, following', async () => {
+    const toolTurn = (id: string): ReturnType<typeof assistantTurn> => ({
+      ...assistantTurn(id, ''),
+      blocks: [{ type: 'tool-call', name: 'Bash', callId: id, input: { command: 'ls' } }]
+    })
+    await render({ folded: [assistantTurn('a1', 'Chat A'), toolTurn('a2')] })
     await scrollAwayFromTail()
-    const label = (text: string) => root().findAllByProps({ children: text })
-    const jumpControls = () => root().findAllByProps({ accessibilityLabel: 'Scroll to latest' })
-    act(() => label('Tools')[0].parent!.props.onPress())
-    expect(jumpControls()).toHaveLength(1)
+    const control = (label: string) => root().findAllByProps({ accessibilityLabel: label })
+    expect(control('Scroll to latest')).toHaveLength(1)
     scrollToEnd.mockClear()
 
-    await update({ folded: [assistantTurn('b1', 'Chat B')], sendSurfaceId: 'tab-b' })
+    await update({
+      folded: [assistantTurn('b1', 'Chat B'), toolTurn('b2')],
+      sendSurfaceId: 'tab-b'
+    })
 
     expect(scrollToEnd).toHaveBeenCalledWith({ animated: false })
-    expect(jumpControls()).toHaveLength(0)
+    expect(control('Scroll to latest')).toHaveLength(0)
     act(() => list().props.onContentSizeChange(320, 900))
     expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 900 })
-    expect(label('Collapse')).toHaveLength(1)
+  })
+
+  it('starts an initially empty switched-to native chat following', async () => {
+    const toolTurn = (id: string): ReturnType<typeof assistantTurn> => ({
+      ...assistantTurn(id, ''),
+      blocks: [{ type: 'tool-call', name: 'Bash', callId: id, input: { command: 'ls' } }]
+    })
+    await render({ folded: [toolTurn('a')] })
+    await scrollAwayFromTail()
+    await update({ sendSurfaceId: 'tab-b', folded: [] })
+    await update({ sendSurfaceId: 'tab-b', folded: [toolTurn('b')] })
+    act(() => list().props.onContentSizeChange(320, 1300))
+    expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1300 })
   })
 
   it('repins after a keyboard-driven viewport layout only while following', async () => {

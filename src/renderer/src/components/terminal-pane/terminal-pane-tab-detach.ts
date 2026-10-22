@@ -50,6 +50,8 @@ function moveCreatedTabToIndex(args: {
   tabId: string
   targetIndex: number | undefined
   worktreeId: string
+  /** Main placed the new tab at this index itself. */
+  mainPlaced: boolean
 }): void {
   if (args.targetIndex === undefined) {
     return
@@ -64,7 +66,10 @@ function moveCreatedTabToIndex(args: {
   const insertionIndex = Math.min(Math.max(args.targetIndex, 0), orderWithoutCreatedTab.length)
   const nextOrder = [...orderWithoutCreatedTab]
   nextOrder.splice(insertionIndex, 0, args.tabId)
-  args.store.reorderUnifiedTabs(args.groupId, nextOrder, { recordInteraction: false })
+  args.store.reorderUnifiedTabs(args.groupId, nextOrder, {
+    recordInteraction: false,
+    layoutOwnerHandled: args.mainPlaced
+  })
 }
 
 function reportMoveFailed(): void {
@@ -144,10 +149,11 @@ async function moveLeafToNewTab(
   // Switch point: main moves the pane and names the new tab.
   const answer = await (
     ORCA_LAYOUT_OWNER_IS_MAIN
-      ? moveLeafThroughLayoutOwner(request, {
-          groupId: args.targetGroupId,
-          index: args.targetIndex
-        })
+      ? moveLeafThroughLayoutOwner(
+          request,
+          { groupId: args.targetGroupId, index: args.targetIndex },
+          args.sourcePaneCwd?.cwd
+        )
       : window.api.pty.moveLeafToNewTab(request)
   ).catch((error: unknown) => {
     console.warn('[terminal-pane-detach] main did not answer the move', error)
@@ -209,27 +215,38 @@ function applyMove(
   const sourceShellOverride = latestStore.tabsByWorktree[worktreeId]?.find(
     (candidate) => candidate.id === sourceTabId
   )?.shellOverride
-  const tab = latestStore.createTab(worktreeId, args.targetGroupId, sourceShellOverride, {
-    id: targetTabId,
-    activate: true,
-    ...(detachedLayout.chatLeafId ? { viewMode: 'chat' as const } : {}),
-    initialPtyId: ptyId ?? undefined,
-    ...(!ptyId
-      ? {
-          pendingActivationSpawn: true,
-          ...(args.sourcePaneCwd?.cwd ? { startupCwd: args.sourcePaneCwd.cwd } : {})
-        }
-      : { initialLeafId: leafId }),
-    recordInteraction: true
-  })
+  // Switch point: the reply runs after the frame with main's new tab, which may have drawn it.
+  const frameDrawn =
+    ORCA_LAYOUT_OWNER_IS_MAIN && mainMoved
+      ? latestStore.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === targetTabId)
+      : undefined
+  const tab =
+    frameDrawn ??
+    latestStore.createTab(worktreeId, args.targetGroupId, sourceShellOverride, {
+      id: targetTabId,
+      activate: true,
+      ...(detachedLayout.chatLeafId ? { viewMode: 'chat' as const } : {}),
+      initialPtyId: ptyId ?? undefined,
+      ...(!ptyId
+        ? {
+            pendingActivationSpawn: true,
+            ...(args.sourcePaneCwd?.cwd ? { startupCwd: args.sourcePaneCwd.cwd } : {})
+          }
+        : { initialLeafId: leafId }),
+      recordInteraction: true
+    })
   const afterCreateStore = args.getStore()
-  moveCreatedTabToIndex({
-    groupId: args.targetGroupId,
-    store: afterCreateStore,
-    tabId: tab.id,
-    targetIndex: args.targetIndex,
-    worktreeId
-  })
+  // Main's frame drew the tab where main placed it; the window places it only when it drew it.
+  if (!frameDrawn) {
+    moveCreatedTabToIndex({
+      groupId: args.targetGroupId,
+      store: afterCreateStore,
+      tabId: tab.id,
+      targetIndex: args.targetIndex,
+      worktreeId,
+      mainPlaced: mainMoved
+    })
+  }
   if (split) {
     afterCreateStore.setTabLayout(sourceTabId, split.sourceLayout)
   }

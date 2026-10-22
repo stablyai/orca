@@ -84,8 +84,10 @@ describe('WSL host deployment store', () => {
   function addWslManaged(record = wslRecord()) {
     const environment = addEnvironmentFromPairingCode(userDataPath, {
       name: 'Ubuntu',
+      // Why its own key: one key is one server, which the store refuses to save twice.
       pairingCode: encodePairingOffer({
         ...pairing,
+        publicKeyB64: Buffer.alloc(32, 2).toString('base64'),
         endpoint: `ws://127.0.0.1:${record.localPort}/runtime`
       }),
       now: 150
@@ -276,6 +278,7 @@ describe('WSL host deployment store', () => {
         name: 'Remote',
         pairingCode: encodePairingOffer({
           ...pairing,
+          publicKeyB64: Buffer.alloc(32, 3).toString('base64'),
           endpoint: 'wss://build.example.com/runtime'
         }),
         now: 150

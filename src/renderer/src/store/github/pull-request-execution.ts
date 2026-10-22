@@ -14,7 +14,6 @@ import type {
 import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github/pull-request-for-branch-outcome'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { debouncedSaveCache } from './cache-persistence'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getRuntimeRepoTarget } from './repository-routing'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
@@ -153,7 +152,6 @@ export function startPullRequestLookup(args: {
       }
       if (prRequestGenerations.get(cacheKey) === generation) {
         let skippedStaleLinkedPRLookup = false
-        let didUpdatePRCache = false
         set((s) => {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
           if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
@@ -189,14 +187,10 @@ export function startPullRequestLookup(args: {
             requestStartedAt,
             requestStartedEntry: requestStartedHostedReviewEntry
           })
-          didUpdatePRCache = updates.prCache !== undefined
           return updates.prCache || updates.hostedReviewCache ? updates : s
         })
         if (skippedStaleLinkedPRLookup) {
           return null
-        }
-        if (didUpdatePRCache) {
-          debouncedSaveCache(get())
         }
         const linkedPRWorktree =
           options?.worktreeId && linkedPRNumber != null

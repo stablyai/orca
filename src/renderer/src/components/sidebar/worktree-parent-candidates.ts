@@ -3,7 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
-import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 
 type ParentCandidateArgs = {
   child: Worktree

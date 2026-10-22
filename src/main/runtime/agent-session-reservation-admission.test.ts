@@ -214,6 +214,45 @@ describe('adopted conversation ownership', () => {
       )
     ).toThrow('agent_session_conflict')
   })
+
+  // `opencode` and `opencode2` run one OpenCode under two names, so an id either mints is one
+  // conversation; two adoptions racing are serialized by the store, so the second sees the first.
+  it.each([
+    ['opencode', 'opencode2', true],
+    ['opencode2', 'opencode', true],
+    ['grok', 'omp', false]
+  ] as const)(
+    'an %s adoption, then an %s one of the same id: refused %s',
+    (first, second, refused) => {
+      const OPENCODE_HOME = { kind: 'opencode', locator: { kind: 'unmanaged' } } as const
+      const adoptAs = (agent: typeof first | typeof second, sessionId: string) =>
+        reserveRequest({
+          sessionId,
+          provider: agent,
+          accountHome: OPENCODE_HOME,
+          adoptedHandleLink: adoptedLink({
+            linkId: `${agent}-1-ses_same`,
+            handle: { transport: 'acp', agent, nativeId: 'ses_same' }
+          })
+        })
+      const { record } = applyAgentSessionReservation(
+        storeState(),
+        adoptAs(first, 'session-first'),
+        LEASE_TTL_MS
+      )
+      const adoptSecond = () =>
+        applyAgentSessionReservation(
+          storeState([record]),
+          adoptAs(second, 'session-second'),
+          LEASE_TTL_MS
+        )
+      if (refused) {
+        expect(adoptSecond).toThrow('agent_session_conflict')
+      } else {
+        expect(adoptSecond).not.toThrow()
+      }
+    }
+  )
 })
 
 describe('re-create over a failed create', () => {

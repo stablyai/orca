@@ -9,6 +9,7 @@ const RPC_TO_RUNTIME_COMMAND = {
   'git.submoduleStatus': 'getRuntimeGitSubmoduleStatus',
   'git.history': 'getRuntimeGitHistory',
   'git.conflictOperation': 'getRuntimeGitConflictOperation',
+  'git.mutationInFlight': 'getRuntimeGitMutationInFlight',
   'git.abortMerge': 'abortRuntimeGitMerge',
   'git.abortRebase': 'abortRuntimeGitRebase',
   'git.checkout': 'checkoutRuntimeGitBranch',

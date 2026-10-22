@@ -117,9 +117,12 @@ describe('ACP launch resolution', () => {
   })
 
   // A chat's mode is its only full-access path, so an ACP agent with no modes would always ask.
-  it.each(ACP_LAUNCH_SPECS.map((spec) => spec.agent))('gives %s chats a Full access mode', (agent) => {
-    expect(agentChatPermissionModes(agent)?.modes).toContain('full-access')
-  })
+  it.each(ACP_LAUNCH_SPECS.map((spec) => spec.agent))(
+    'gives %s chats a Full access mode',
+    (agent) => {
+      expect(agentChatPermissionModes(agent)?.modes).toContain('full-access')
+    }
+  )
 
   it('resumes the chain head by its key, possibly unsaved only when this chat created it', async () => {
     const link = (origin: 'created' | 'resumed') => ({

@@ -10,11 +10,11 @@ import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-terminal-bu
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
-} from '@/lib/terminal-pane-title-sanitization'
+} from '../../../../shared/terminal-pane-title-sanitization'
 import type { TerminalPaneStartupController } from './use-terminal-pane-startup-actions'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { notePendingPaneTitleRename } from '@/runtime/pending-pane-title-renames'
 
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {
@@ -42,7 +42,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     chatOwnerRef.current = { chatLeafId, isChatViewMode }
   }, [chatLeafId, isChatViewMode])
   const persistLayoutSnapshot = useCallback(
-    (intent?: PaneLayoutEditIntent): void => {
+    (): void => {
       const manager = managerRef.current
       const container = containerRef.current
       if (!manager || !container) {
@@ -130,7 +130,15 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
         (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
       )
       if (hasRemotePane) {
-        remotePaneLayoutPusherRef.current?.push({ worktreeId, tabId, layout, intent })
+        // Why: a host keeps its titles when the field is absent, so clearing the last one sends {}.
+        const clearedEveryTitle =
+          !layout.titlesByLeafId &&
+          [...currentLeafIds].some((leafId) => removedTitleLeafIds.has(leafId))
+        remotePaneLayoutPusherRef.current?.push({
+          worktreeId,
+          tabId,
+          layout: clearedEveryTitle ? { ...layout, titlesByLeafId: {} } : layout
+        })
       }
       for (const leafId of currentLeafIds) {
         clearedScrollbackLeafIds.delete(leafId)
@@ -179,7 +187,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
         removedTitleLeafIdsRef.current.add(leafId)
       }
       // Why: every caller is a user clearing a pane title.
-      persistLayoutSnapshot('gesture')
+      persistLayoutSnapshot()
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [persistLayoutSnapshot]
@@ -192,25 +200,36 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       if (leafId) {
         removedTitleLeafIdsRef.current.delete(leafId)
       }
-      persistLayoutSnapshot('gesture')
+      persistLayoutSnapshot()
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refs are stable.
     [persistLayoutSnapshot]
   )
+  /** Shows a title main already holds, without asking main again. */
+  const showPaneTitle = useCallback(
+    (paneId: number, title: string | null): void =>
+      title === null ? removePaneTitleLocally(paneId) : setPaneTitleLocally(paneId, title),
+    [removePaneTitleLocally, setPaneTitleLocally]
+  )
   /** A user's title for a pane, trimmed and non-empty; null clears it. */
   const changePaneTitle = useCallback(
     (paneId: number, title: string | null) => {
-      const showTitle = (): void =>
-        title === null ? removePaneTitleLocally(paneId) : setPaneTitleLocally(paneId, title)
       const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
-      // Switch point: main renames the pane first; the window then shows the title.
+      const showTitle = (): void => {
+        if (leafId) {
+          const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
+          notePendingPaneTitleRename({ leafId, title, layout })
+        }
+        showPaneTitle(paneId, title)
+      }
+      // Switch point: main renames the pane and its frame draws the title.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         leafId &&
         sendLayoutCommandToOwner(
           worktreeId,
           { type: 'renamePane', tabId, leafId, title },
-          { apply: showTitle, asToday: showTitle }
+          { apply: () => {}, asToday: showTitle }
         )
       ) {
         return
@@ -218,7 +237,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       showTitle()
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refs are stable.
-    [removePaneTitleLocally, setPaneTitleLocally, tabId, worktreeId]
+    [showPaneTitle, tabId, worktreeId]
   )
   const removePaneTitle = useCallback(
     (paneId: number) => changePaneTitle(paneId, null),
@@ -281,6 +300,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     persistLayoutSnapshot,
     clearPaneScrollback,
     changePaneTitle,
+    showPaneTitle,
     removePaneTitle,
     handleClearPaneTitleShortcut
   }

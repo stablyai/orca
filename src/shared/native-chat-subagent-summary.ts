@@ -245,7 +245,7 @@ export function subagentGroupFallbackText(agents: readonly NativeChatSubagentEnt
  *  bare shape does not already carry, so it stays until such journals no longer
  *  matter. Keep in sync with `subagentGroupFallbackText`. */
 const SUBAGENT_GROUP_FALLBACK_PATTERN =
-  /^(?:Kicked off \d+ subagents?(?: — \d+ working)?|Ran \d+ subagents?)(?: \(\d+ [a-z][a-z-]*\))?$/
+  /^(?:Kicked off \d+ subagents?(?: \u2014 \d+ working)?|Ran \d+ subagents?)(?: \(\d+ [a-z][a-z-]*\))?$/
 
 export function isSubagentGroupFallbackText(text: string): boolean {
   return SUBAGENT_GROUP_FALLBACK_PATTERN.test(text)

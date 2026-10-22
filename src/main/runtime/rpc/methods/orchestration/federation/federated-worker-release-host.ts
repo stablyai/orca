@@ -10,8 +10,8 @@ import {
 } from '../../../../orchestration/worker-output-archive'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import { readArchivedWorkerOutput } from '../worker/worker-archive-read'
+import { archiveSummary } from '../worker/worker-terminal-resource-presentation'
 import {
-  archiveSummary,
   releaseUnknownRecovery,
   type WorkerReleaseReceipt
 } from '../worker/worker-release-completion'

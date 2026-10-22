@@ -1,7 +1,6 @@
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status-freshness'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../../shared/telemetry-events'
 
-// Why: co-located with the endpoint file in userData/agent-hooks/ so hook-server cross-restart artifacts stay together.
-export const LAST_STATUS_FILE_NAME = 'last-status.json'
 export const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 export const ASSISTANT_MESSAGE_RETRY_MS = 50
 export const CODEX_SUBAGENT_POLL_MS = 1_000
@@ -15,7 +14,7 @@ export const STATUS_PERSIST_MIN_INTERVAL_MS = 5_000
 export const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.
-export const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+export const HYDRATE_MAX_AGE_MS = AGENT_STATUS_HYDRATE_MAX_AGE_MS
 
 // Why: a long-closed tab can't receive status events; bound the set so it can't grow one entry per close for the whole session.
 export const CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024

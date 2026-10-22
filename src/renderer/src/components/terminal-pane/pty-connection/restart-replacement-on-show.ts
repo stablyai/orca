@@ -34,5 +34,5 @@ export function consumeRestartReplacement(session: ConnectPanePtySession): void 
   ) {
     return
   }
-  void session.startFreshColdRestoreAgentResume()
+  void session.spawnColdRestoreAgentResume()
 }

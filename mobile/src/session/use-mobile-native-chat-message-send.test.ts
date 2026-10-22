@@ -404,7 +404,7 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('  run the tests \n')
     })
     expect(sentArgs().text).toBe('  run the tests')
-    expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests')
+    expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests', undefined)
     expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
   })
 

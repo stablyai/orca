@@ -22,9 +22,9 @@ import {
   gateKey,
   gateState,
   gateVerdict,
-  NATIVE_ROUTE
+  ROUTE_UNAVAILABLE
 } from './mobile-web-shell-gates'
-import { routeViewOf, sameRouteView } from './page-route-policy'
+import { pageRouteRefusalVerdict, routeViewOf, sameRouteView } from './page-route-policy'
 import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-document-state'
 import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
@@ -32,10 +32,12 @@ import { AWAIT_DOCUMENT_LOAD, reducePageDocumentLifecycle } from './page-documen
 
 export function createMobileWebShellSession(
   routePathname: string,
-  wide = false
+  wide = false,
+  appNamesRoute = true
 ): MobileWebShellSession {
   return {
     routePathname,
+    appNamesRoute,
     wide,
     pageRoutes: [],
     pageRouteGrants: [],
@@ -105,8 +107,13 @@ function onCacheRead(
     if (generation === null) {
       return step(session, { cached: null, state: { kind: 'offline' } })
     }
-    // The cached bundle's own list, which is the only one an unreachable host can be judged by.
-    return openByOwnRoutes(session, generation, { patch: { cached: generation } })
+    // The cached bundle's own list, which is the only one an unreachable host can be judged by. A
+    // route it lacks is the offline screen, as with nothing cached: an unreachable host cannot be
+    // told too old, and connecting is what fetches the bundle that may carry the route.
+    return openByOwnRoutes(session, generation, {
+      unclaimed: { kind: 'offline' },
+      patch: { cached: generation }
+    })
   }
   return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
 }
@@ -119,15 +126,8 @@ function onManifestRead(
   if (gates === null) {
     return step(session, {})
   }
-  // Before the compat verdict, because a route that stays native has nothing to wall about: a
-  // bundle this shell could not open is not a reason to refuse a screen it was never going to open.
-  const view = {
-    ...routeViewOf(manifest.routes, session.routePathname, session.wide),
-    routes: manifest.routes
-  }
-  if (!rendersRoute(view.pageRoutes, session.routePathname)) {
-    return step(session, { ...view, state: NATIVE_ROUTE })
-  }
+  // Before the route question: a page below the floor is a desktop too old whatever it lists, and
+  // a schema this shell cannot read leaves the route list unreadable too.
   const verdict = evaluateMobileWebBundleCompat({
     hostCapabilities: gates.hostCapabilities,
     hostStatus: gates.hostStatus,
@@ -135,6 +135,19 @@ function onManifestRead(
   })
   if (verdict.kind === 'blocked') {
     return step(session, { state: { kind: 'wall', verdict } })
+  }
+  const view = {
+    ...routeViewOf(manifest.routes, session.routePathname, session.wide),
+    routes: manifest.routes
+  }
+  if (!rendersRoute(view.pageRoutes, session.routePathname)) {
+    // The view is kept so a layout flip that would serve the route restarts the session.
+    const refusal = session.appNamesRoute
+      ? pageRouteRefusalVerdict(manifest.routes, session.routePathname, session.wide)
+      : null
+    const state =
+      refusal === null ? ROUTE_UNAVAILABLE : ({ kind: 'wall', verdict: refusal } as const)
+    return step(session, { ...view, state })
   }
   // Same build id is the same bytes (the id is their digest), so the generation on disk opens as is.
   const cached = session.cached
@@ -253,6 +266,9 @@ function decideDownloadFailed(
     return step(session, { state: gated })
   }
   return openByOwnRoutes(session, cached, {
+    // The newer manifest claimed this route or never arrived, so the cache lacking it is this
+    // download's failure, with its retry.
+    unclaimed: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce },
     served: { updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null },
     wall: cachedGenerationWall(verdict, gates, cached.compat)
   })
@@ -266,7 +282,10 @@ function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileW
     return step(session, { wide })
   }
   // Still counting flows, so nothing the old session has in flight lands on this one.
-  const fresh = { ...createMobileWebShellSession(session.routePathname, wide), flow: session.flow }
+  const fresh = {
+    ...createMobileWebShellSession(session.routePathname, wide, session.appNamesRoute),
+    flow: session.flow
+  }
   return startFlow(fresh, session.gates)
 }
 

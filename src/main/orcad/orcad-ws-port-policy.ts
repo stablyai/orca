@@ -1,6 +1,6 @@
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 
-export type OrcadWsPortOptions = {
+type OrcadWsPortOptions = {
   wsPort?: number
   preferPinnedWsPort?: boolean
   requirePinnedWsPort?: boolean

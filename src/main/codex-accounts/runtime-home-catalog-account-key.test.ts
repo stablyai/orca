@@ -64,7 +64,8 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
     // The resolvers main-process-runtime-service hands the runtime.
     prepareCodexLaunchHome: codexStructuredLaunchHomeResolvers.prepareCodexStructuredLaunch,
     readCodexLaunchHome: codexStructuredLaunchHomeResolvers.resolveCodexStructuredLaunchHome,
-    workspaceTrustSettings: () => settings
+    workspaceTrustSettings: () => settings,
+    stateDirectory: '/orca-data'
   }
   const resolve = (purpose: 'launch' | 'read') =>
     codex.resolveAccountHome(

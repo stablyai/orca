@@ -266,6 +266,45 @@ describe('createNdjsonParser', () => {
     expect(records).toEqual([{ index: 0 }, { index: 1 }, { index: 2 }, { index: 3 }])
   })
 
+  it('discards only the paused oversized tail after delivering older records across re-pauses', () => {
+    const records: unknown[] = []
+    const rejected: unknown[] = []
+    let paused = false
+    const framer = createIncrementalNdjsonFramer(
+      (record) => {
+        records.push(record)
+        if (records.length <= 2) {
+          paused = true
+        }
+      },
+      (error) => rejected.push(error),
+      { maxLineBytes: 32, shouldPause: () => paused }
+    )
+    framer.feed('{"a":1}\n{"b":2}\n{"c":3}\n{"oversized":"')
+    framer.feed('x'.repeat(64 * 1024))
+    expect(rejected).toEqual([
+      expect.objectContaining({
+        prefix: expect.stringMatching(/^\{"oversized":/),
+        maxLineBytes: 64 * 1024
+      })
+    ])
+    expect(framer.takeTail()).toBe('')
+    paused = false
+    framer.resume()
+    expect(records).toEqual([{ a: 1 }, { b: 2 }])
+    paused = false
+    framer.feed('still discarded')
+    expect(records).toEqual([{ a: 1 }, { b: 2 }, { c: 3 }])
+    paused = true
+    framer.feed('"}\n{"d":4}\n{"e":')
+    expect(records).toHaveLength(3)
+    paused = false
+    framer.resume()
+    framer.feed('5}\n')
+    expect(records).toEqual([{ a: 1 }, { b: 2 }, { c: 3 }, { d: 4 }, { e: 5 }])
+    expect(rejected).toHaveLength(1)
+  })
+
   it('caps an actually incomplete paused suffix and recovers at the next delimiter', () => {
     const records: unknown[] = []
     const rejected: unknown[] = []
@@ -278,6 +317,8 @@ describe('createNdjsonParser', () => {
 
     framer.feed('{}\nx')
     framer.feed('y'.repeat(70_000))
+    expect(framer.takeTail()).toBe('')
+    framer.feed('more discarded bytes')
     paused = false
     framer.resume()
     framer.feed('\n{"recovered":true}\n')

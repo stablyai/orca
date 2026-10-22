@@ -99,7 +99,7 @@ const RATCHET = {
   header: [
     '# Files/globs currently allowed to exceed the oxlint `max-lines` budget.',
     '# This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —',
-    '# split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").',
+    '# split the oversized file instead.',
     '# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)'
   ],
   collect: collectCurrentSuppressions,
@@ -107,8 +107,7 @@ const RATCHET = {
     'An `inline` entry added an eslint/oxlint-disable max-lines comment; a `mobile-config` entry',
     'added a per-file max-lines bump in mobile/.oxlintrc.json. Orca caps file size (300',
     '.ts/.mts/.cts / 400 .tsx / 600 .mjs / 800 test — non-blank, non-comment lines).',
-    'Fix it: SPLIT the file into focused modules — do NOT suppress the rule.',
-    'See AGENTS.md → "Lint Rules: Do Not Disable Max Lines".'
+    'Fix it: SPLIT the file into focused modules — do NOT suppress the rule.'
   ]
 }
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcadActivationRecord } from './orcad-activation-record'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import type { OrcadSlotOptions } from './orcad-recovery-slot'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
@@ -11,13 +11,19 @@ const mocks = vi.hoisted(() => ({
   fenceRefusal: vi.fn()
 }))
 
-vi.mock('./orcad-activation-fence-hold', () => ({
+vi.mock('../managed-server/activation/orcad-activation-fence-hold', () => ({
   orcadActivationFenceRefusal: mocks.fenceRefusal
 }))
 
-vi.mock('./orcad-managed-wake', () => ({ wakeStoppedManagedOrcad: mocks.wake }))
-vi.mock('./orcad-activation-record-store', () => ({ readOrcadActivationRecord: mocks.readRecord }))
-vi.mock('./orcad-remote-build-hash', () => ({ readRemoteOrcadBuildHash: async () => 'hash' }))
+vi.mock('../managed-server/lifecycle/orcad-managed-wake', () => ({
+  wakeStoppedManagedOrcad: mocks.wake
+}))
+vi.mock('../managed-server/activation/orcad-activation-record-store', () => ({
+  readOrcadActivationRecord: mocks.readRecord
+}))
+vi.mock('../managed-server/install/orcad-remote-build-hash', () => ({
+  readRemoteOrcadBuildHash: async () => 'hash'
+}))
 vi.mock('./orcad-active-readiness', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   probeActiveOrcadReadiness: mocks.probe,

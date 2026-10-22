@@ -22,6 +22,7 @@ import {
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/local-only-worktree-meta-rehoming'
 
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
@@ -217,6 +218,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): bool
       changed = true
     }
   }
+  changed = rehomeLocalOnlyWorktreeMetadata(state) || changed
   if (aliasesCanProveReachability) {
     changed = pruneUnreferencedWorktreeIdentityMeta(state) || changed
   }

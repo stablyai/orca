@@ -114,6 +114,21 @@ describe('createBrowserSlice runtime guard', () => {
     })
   })
 
+  it("loads this computer's profiles on request while a server is selected", async () => {
+    const store = createTestStore()
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      { id: 'work', scope: 'isolated', partition: 'persist:work', label: 'Work', source: null }
+    ])
+    store.setState({ settings: settingsWithRuntime('env-1'), browserSessionProfiles: [] })
+
+    await store.getState().fetchBrowserSessionProfiles('local')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().browserSessionProfilesByHostId.local?.[0]?.id).toBe('work')
+    // The server's list, which Browser settings is showing, stays as it was.
+    expect(store.getState().browserSessionProfiles).toEqual([])
+  })
+
   it('keeps browser profile lists separate per host', async () => {
     const store = createTestStore()
     runtimeEnvironmentCall.mockResolvedValueOnce({

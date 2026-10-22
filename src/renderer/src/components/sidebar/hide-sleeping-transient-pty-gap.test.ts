@@ -3,7 +3,7 @@ import { computeVisibleWorktreeIds } from './visible-worktrees'
 import {
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
-} from './sleeping-sweep-retention'
+} from '../../../../shared/sidebar-list/sleeping-sweep-retention'
 import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'

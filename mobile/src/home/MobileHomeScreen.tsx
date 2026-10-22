@@ -6,19 +6,17 @@ import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
-import type { TaskProvider } from '../../../src/shared/task-providers'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { colors } from '../theme/mobile-theme'
 import {
   useDisconnectHostClient,
   useForceReconnect,
   useForgetHostClient
-} from '../transport/client-context'
+} from '../transport/host-client-hooks'
 import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
@@ -32,6 +30,7 @@ import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
+import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 
 export function MobileHomeScreen() {
   const data = useMobileHomeData()
@@ -65,15 +64,6 @@ export function MobileHomeScreen() {
       })
     },
     [data.router, openMobileSession]
-  )
-
-  const openTasks = useCallback(
-    (provider?: TaskProvider) => {
-      if (data.primaryHost) {
-        openMobileTasks(data.primaryHost.id, provider)
-      }
-    },
-    [data.primaryHost, openMobileTasks]
   )
 
   function openHost(host: HostCatalogEntry): void {
@@ -130,13 +120,16 @@ export function MobileHomeScreen() {
             <MobileHomeListFooter
               accountsHosts={data.accountsHosts}
               connectedHosts={data.connectedHosts}
-              primaryHost={data.primaryHost}
-              primaryTaskProviders={data.primaryTaskProviders}
               resumeCard={data.resumeCard}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+              taskProvidersByHost={data.taskProvidersByHost}
+              onCreateWorkspace={() =>
+                data.router.push(
+                  newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id))
+                )
+              }
               onOpenAccounts={openMobileAccounts}
               onOpenResume={openResume}
-              onOpenTasks={openTasks}
+              onOpenTasks={openMobileTasks}
               onPairDesktop={() => data.router.push('/pair-scan')}
             />
           }

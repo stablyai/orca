@@ -280,7 +280,11 @@ export type WorktreeSlice = {
    * the shortcut action visible even though pinned worktrees also remain in
    * their normal sidebar groups.
    */
-  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
+  /** Each target names its copy; a host-less id two hosts publish is skipped, not guessed. */
+  setWorktreesPinnedAndReveal: (
+    targets: readonly Pick<Worktree, 'id' | 'hostId'>[],
+    isPinned: boolean
+  ) => void
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
     link: TerminalGitHubPRLink,

@@ -1,3 +1,4 @@
+import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -29,6 +30,10 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
   retainedForLiveness?: true
+  /** The pane's OSC 7501 facet, stitched on at publish only (ProgramStatusFacetStore); never stored. */
+  programStatus?: ProgramStatusFacet
+  /** Marks a publish where only `programStatus` changed: state subscribers must not read a new state. */
+  programStatusOnly?: true
 }
 
 // `claudeRunningNonAgentTask` is persisted on purpose: it is the one child-work fact the row's
@@ -40,6 +45,8 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'launchToken'
   | 'hostTurnRevision'
   | 'promptInteractionKey'
+  | 'programStatus'
+  | 'programStatusOnly'
   | 'restoredUnconfirmed'
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.

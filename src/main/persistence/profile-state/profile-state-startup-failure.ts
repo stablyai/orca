@@ -1,9 +1,13 @@
+import { profileStateSectionLabels } from './profile-state-section-labels'
+
 type ProfileStateRecoveryFailure = {
   code: 'profile-state-recovery-required'
   dataFile: string
   databaseFile: string
   exportPaths: readonly string[]
   backupPaths?: readonly string[]
+  profileId?: unknown
+  repairableSections?: unknown
 }
 
 type ProfileStateAuthorityFailure = {
@@ -62,6 +66,15 @@ export function formatProfileStateStartupFailure(error: unknown): string | undef
       error.exportPaths.length === 0
         ? '  (none found)'
         : error.exportPaths.map((path) => `  ${path}`).join('\n')
+    const damagedSections = repairableSectionDomains(error)
+    if (damagedSections !== undefined && typeof error.profileId === 'string') {
+      return [
+        `Part of this profile's saved state is damaged: ${profileStateSectionLabels(damagedSections).join(', ')}. Everything else is intact.`,
+        `Stop Orca, then run \`orca profile state rollback --repair --profile-id ${error.profileId}\` to replace only the damaged parts from backups and keep everything else. Orca keeps a copy of the damaged file.`,
+        `SQLite path: ${error.databaseFile}`,
+        'To restore a whole backup instead, run `orca profile state exports`, then `orca profile state rollback --backup <id>`.'
+      ].join('\n')
+    }
     return [
       'Orca cannot safely open the active profile because its SQLite state is unreadable.',
       `Legacy JSON path: ${error.dataFile}`,
@@ -120,6 +133,17 @@ function isProfileStateRecoveryFailure(error: unknown): error is ProfileStateRec
       (Array.isArray(error.backupPaths) &&
         error.backupPaths.every((path) => typeof path === 'string')))
   )
+}
+
+function repairableSectionDomains(error: ProfileStateRecoveryFailure): string[] | undefined {
+  const sections = error.repairableSections
+  if (!Array.isArray(sections) || sections.length === 0) {
+    return undefined
+  }
+  const domains = sections.map((section: unknown) =>
+    isRecord(section) && typeof section.domain === 'string' ? section.domain : undefined
+  )
+  return domains.every((domain): domain is string => domain !== undefined) ? domains : undefined
 }
 
 function isProfileStateAuthorityFailure(error: unknown): error is ProfileStateAuthorityFailure {

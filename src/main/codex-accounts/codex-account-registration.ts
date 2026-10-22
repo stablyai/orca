@@ -42,13 +42,16 @@ type CodexAccountRegistrationDependencies = {
 export class CodexAccountRegistration {
   constructor(private readonly dependencies: CodexAccountRegistrationDependencies) {}
 
-  async add(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
+  async add(
+    target?: CodexAccountAddTarget,
+    login: (managedHomePath: string) => Promise<void> = this.dependencies.login
+  ): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedHome = await this.dependencies.managedHomes.create(accountId, target)
     const { managedHomePath } = managedHome
     try {
       this.prepareManagedHomeForLogin(managedHomePath, accountId)
-      await this.dependencies.login(managedHomePath)
+      await login(managedHomePath)
       return await this.persistCapturedAccount(accountId, managedHome)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)

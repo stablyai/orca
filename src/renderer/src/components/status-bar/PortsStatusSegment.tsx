@@ -3,11 +3,7 @@ import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import {
-  publishWorkspacePortScanForHost,
-  scanWorkspacePortsForTarget,
-  workspacePortScanKeyForTarget
-} from '@/lib/workspace-port-actions'
+import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
 import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
@@ -19,7 +15,6 @@ import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
 import { translate } from '@/i18n/i18n'
-import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 type PortsStatusSegmentProps = {
   compact?: boolean
@@ -38,7 +33,6 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
   const runtimeTarget = useWorktreeRuntimeTarget(activeWorktreeId)
-  const scanKey = runtimeTarget ? workspacePortScanKeyForTarget(runtimeTarget) : null
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
   const externalPorts = useMemo(() => getExternalWorkspacePorts(scan), [scan])
@@ -87,36 +81,18 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         return
       }
       recordFeatureInteraction('ports')
-      if (!runtimeTarget || !scanKey) {
+      if (!runtimeTarget) {
         return
       }
       // Why: the 30s background poll is intentionally quiet; opening the
       // popover should still collapse that stale window without flashing icons.
-      const publish = (result: WorkspacePortScanResult): void => {
-        publishWorkspacePortScanForHost({
-          scanKey,
-          scan: result,
-          replaceWorkspacePortScans,
-          getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey
-        })
-      }
-      void scanWorkspacePortsForTarget(runtimeTarget)
-        .then(publish)
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
-          // Why: one dropped scan must not clear the host's last-good ports the
-          // way the background poll's debounce does not; the failure is still
-          // recorded so the host is named by the unavailable notice below.
-          const previous = useAppStore.getState().workspacePortScansByKey[scanKey]
-          publish({
-            platform: previous?.platform ?? 'unknown',
-            scannedAt: Date.now(),
-            ports: previous?.ports ?? [],
-            unavailableReason: message || 'Workspace port scan failed.'
-          })
-        })
+      void refreshWorkspacePortScanForTarget({
+        runtimeTarget,
+        replaceWorkspacePortScans,
+        getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey
+      })
     },
-    [recordFeatureInteraction, runtimeTarget, scanKey, replaceWorkspacePortScans]
+    [recordFeatureInteraction, runtimeTarget, replaceWorkspacePortScans]
   )
 
   return (

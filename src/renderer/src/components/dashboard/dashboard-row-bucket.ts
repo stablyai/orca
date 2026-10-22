@@ -5,7 +5,7 @@ import {
   type DashboardCardDotState
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from './dashboard-card-bucket'
-import type { AgentRowState } from '@/lib/agent-row-decay-state'
+import type { AgentRowState } from '../../../../shared/agent-row-decay-state'
 import {
   isAgentSubjectUnread,
   type AgentAttentionTurnRecords

@@ -64,7 +64,7 @@ describe('JSON-lines RPC process ownership', () => {
       expect.objectContaining({
         cwd: '/execution-host/folder',
         env: expect.objectContaining({ PI_CODING_AGENT_DIR: '/host/account' }),
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
       })
     )
     expect(spawn.mock.calls[0][0].env).not.toHaveProperty('STRIPPED')
@@ -173,7 +173,10 @@ describe('JSON-lines RPC process ownership', () => {
     await close
     child.emit('exit', null, 'SIGKILL')
     await connection.close()
-    expect(connection.lastCloseResult).toEqual({ root: 'live', tree: 'unverifiable' })
+    expect(connection.lastCloseResult).toEqual({
+      root: 'live',
+      tree: 'unverifiable'
+    })
     expect(connection.rootVerdict).toBe('exited')
   })
 

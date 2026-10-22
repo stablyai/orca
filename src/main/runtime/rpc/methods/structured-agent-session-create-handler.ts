@@ -90,6 +90,7 @@ export async function handleStructuredAgentSessionCreate(
         worktree: params.worktree,
         agent: params.agent,
         caller: callerFor(ctx),
+        structuredAgentCliSourceEvidence: ctx.structuredAgentCliSourceEvidence,
         ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
         ...(params.tabId ? { tabId: params.tabId } : {}),
         ...(params.options ? { options: params.options } : {}),
@@ -117,6 +118,7 @@ export async function handleStructuredAgentSessionCreate(
     runtime: ctx.runtime,
     caller: callerFor(ctx),
     prepared,
-    activate: true
+    activate: true,
+    placedByWindow: ctx.caller?.kind === 'desktop'
   })
 }

@@ -98,6 +98,7 @@ jobs:
       - uses: ./.github/actions/prepare-windows-cli-launcher
         with:
           arches: x64
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the win32-x64 orcad template
         shell: bash
         env:

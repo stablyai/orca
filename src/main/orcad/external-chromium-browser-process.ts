@@ -6,7 +6,6 @@ import {
   ExternalChromiumBrowserSession,
   type ExternalChromiumLaunch
 } from './external-chromium-browser-session'
-export type { ExternalChromiumLaunch } from './external-chromium-browser-session'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import {
   externalChromiumCommandArguments,

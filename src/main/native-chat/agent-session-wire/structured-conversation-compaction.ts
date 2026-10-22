@@ -198,7 +198,10 @@ function acceptUnderSerialize(
           conversationCommandBlocked(
             ctx,
             record,
-            context.readChildWork(ctx.sessionId),
+            {
+              views: context.readChildWork(ctx.sessionId),
+              open: context.childWorkOpen(ctx.sessionId)
+            },
             context.sessions.get(ctx.sessionId)?.child ? undefined : 'at-rest'
           )
         const blocked =

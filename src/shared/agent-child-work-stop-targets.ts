@@ -57,6 +57,7 @@ export function agentChildWorkStopEvidence(
             type: 'stop-acknowledged' as const,
             observedAt,
             childWorkId: target.id,
+            handleId: target.providerId,
             invocation: { ...target.invocation },
             ...(ack.outcome !== undefined ? { outcome: ack.outcome } : {})
           }

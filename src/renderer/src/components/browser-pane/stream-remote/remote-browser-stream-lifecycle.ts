@@ -115,7 +115,7 @@ export class RemoteBrowserStreamLifecycle {
         }
         // Why this can be the loser of a race: the stream token is claimed before subscribe is
         // awaited, so a close can arrive and arm a restart while this promise is still rejecting —
-        // the host closes the subscription and only then throws (src/main/ipc/runtime-environments.ts
+        // the host closes the subscription and only then throws (src/main/ipc/runtime-environments/runtime-environments.ts
         // 'pairing changed'). Publishing 'stopped' over an armed restart shows a manual control for
         // one backoff step and then swaps it for a spinner. The armed restart is the newer owner.
         if (this.restartScheduler.isScheduled) {
@@ -132,7 +132,8 @@ export class RemoteBrowserStreamLifecycle {
 
   // Why: the runtime stream validates frames against its start viewport, so a resize needs a fresh
   // subscription or the new-size frames get rejected.
-  restartForViewport(pageId: string): void {
+  // Returns whether a restart was started.
+  restartForViewport(pageId: string): boolean {
     const current = this.subscription
     const nextViewportSize = this.deps.readViewportSize()
     if (
@@ -142,7 +143,7 @@ export class RemoteBrowserStreamLifecycle {
       areRemoteViewportSizesNear(this.streamViewportSize, nextViewportSize) ||
       !this.tokens.isCurrentStreamToken(current.token)
     ) {
-      return
+      return false
     }
     // Why: cancel() cannot recall a retry already dispatched into an await. Bumping the operation
     // generation — as every other supersession site does — makes that attempt's own token guard
@@ -183,6 +184,7 @@ export class RemoteBrowserStreamLifecycle {
         // A resize during a blip tears down a live subscription and never reaches the budget.
         this.setStatus(remoteBrowserStreamStopped(failure.message))
       })
+    return true
   }
 
   // Drops every handle this pane holds on a runtime page that is gone.
@@ -222,6 +224,9 @@ export class RemoteBrowserStreamLifecycle {
       return
     }
     this.subscription = subscription
+    // Why: a resize while this stream was opening found no subscription to restart, and nothing
+    // else would re-send the size, so the pane kept the old one until the next resize.
+    this.restartForViewport(subscription.token.remotePageId)
   }
 
   private async startStream(pageId: string): Promise<RemoteBrowserStreamSubscription | null> {

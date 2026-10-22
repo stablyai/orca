@@ -1,11 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalStatusItem,
-  AgentJournalToolCallItem
-} from '../../../src/shared/agent-session-journal-types'
-import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
+import type { AgentJournalStatusItem } from '../../../src/shared/agent-session-journal-types'
 import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -21,7 +17,7 @@ import { structuredQuestionTranscript } from '../../../src/shared/structured-age
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
 import { colors, typography } from '../theme/mobile-theme'
 import { ANSWERED_PROMPT_ITEMS } from './mobile-native-chat-answered-prompts.test-fixture'
-import { MobileNativeChatImageViewerContext } from './mobile-native-chat-image-viewer-context'
+import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { styles } from './mobile-native-chat-message-styles'
 
 vi.mock('react-native', async () => {
@@ -47,22 +43,35 @@ vi.mock('react-native', async () => {
     Text,
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    useWindowDimensions: () => ({ width: 400, height: 800 })
   }
 })
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   AlertCircle: 'AlertCircle',
-  MessageSquareMore: 'MessageSquareMore',
   AlertTriangle: 'AlertTriangle',
   ArrowUp: 'ArrowUp',
+  Bot: 'Bot',
   Brain: 'Brain',
+  Check: 'Check',
   ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
   Copy: 'Copy',
+  Eye: 'Eye',
+  FileMinus2: 'FileMinus2',
+  FilePen: 'FilePen',
+  FilePlus2: 'FilePlus2',
+  Folder: 'Folder',
+  Globe: 'Globe',
+  ListChecks: 'ListChecks',
+  MessageSquareMore: 'MessageSquareMore',
+  Pencil: 'Pencil',
+  Plug: 'Plug',
+  Search: 'Search',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
-  Wrench: 'Wrench',
-  ChevronRight: 'ChevronRight'
+  Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
@@ -91,9 +100,10 @@ describe('MobileNativeChatMessage', () => {
     message: NativeChatMessage,
     props: {
       fontScale?: number
-      toolsExpanded?: boolean
       structuredActivityUi?: boolean
       activeTurnIsWorking?: boolean
+      trailingRun?: boolean
+      foldedAway?: boolean
       turnExpanded?: boolean
       turnStatus?: {
         startedAt: number | null
@@ -155,12 +165,22 @@ describe('MobileNativeChatMessage', () => {
       const receipt = receipts.get(message.id)
       return receipt ? [words(render(message, { receipt }).root).join('')] : []
     })
+    // Each ends with when it was answered, in the device's own clock.
     expect(drawn).toEqual([
       expect.stringMatching(
-        /^Bash\{[\s\S]*echo receipt-check[\s\S]*\}AllowResolved · Answered on desktop-renderer$/
+        /^Bash\{[\s\S]*echo receipt-check[\s\S]*\}AllowResolved · Answered on desktop-renderer\d{1,2}:\d{2}(\s[AP]M)?$/
       ),
-      'Asked: Do you prefer tea or coffee?CoffeeResolved · Answered on desktop-renderer'
+      expect.stringMatching(
+        /^Asked: Do you prefer tea or coffee\?CoffeeResolved · Answered on desktop-renderer\d{1,2}:\d{2}(\s[AP]M)?$/
+      )
     ])
+  })
+
+  it("keeps an answered prompt's receipt when its settled turn folds away, as desktop does", () => {
+    const { messages, receipts } = structuredQuestionTranscript(ANSWERED_PROMPT_ITEMS)
+    const question = messages.find((message) => receipts.get(message.id)?.kind === 'question')!
+    const tree = render(question, { receipt: receipts.get(question.id), foldedAway: true })
+    expect(words(tree.root).join('')).toContain('Asked: Do you prefer tea or coffee?')
   })
 
   it('zooms a receipt with the chat, as its words were before it became a receipt', () => {
@@ -180,6 +200,10 @@ describe('MobileNativeChatMessage', () => {
     expect(tree.root.find((node) => String(node.type) === 'MessageSquareMore').props.size).toBe(
       15 * 1.5
     )
+    const time = tree.root.find(
+      (node) => String(node.type) === 'Text' && node.props.accessibilityLabel
+    )
+    expect(Object.assign({}, ...[time.props.style].flat()).fontSize).toBe(typography.metaSize * 1.5)
   })
 
   it("lists a group's questions once nobody can answer them here, as desktop does", () => {
@@ -240,6 +264,25 @@ describe('MobileNativeChatMessage', () => {
     expect(words(render(row, { receipt, awaiting: false }).root).join('')).toBe(
       'Asked: Do you prefer tea or coffee?'
     )
+  })
+
+  it('shows when your message and the reply were written, beside copy, zoomed with the chat, as desktop does', () => {
+    const at = new Date(2026, 9, 15, 15, 42).getTime()
+    const timeIn = (message: NativeChatMessage) =>
+      render(message, { fontScale: 1.5 })
+        .root.findAll((node) => String(node.type) === 'Text' && node.props.accessibilityLabel)
+        .map((node) => [
+          node.children.join(''),
+          Object.assign({}, ...[node.props.style].flat()).fontSize
+        ])
+    const shown = [[expect.stringMatching(/^(3:42\sPM|15:42)$/), typography.metaSize * 1.5]]
+    expect(timeIn({ ...userMessage([{ type: 'text', text: 'ship it' }]), timestamp: at })).toEqual(
+      shown
+    )
+    expect(timeIn({ ...toolMessage([{ type: 'text', text: 'Shipped.' }]), timestamp: at })).toEqual(
+      shown
+    )
+    expect(timeIn(userMessage([{ type: 'text', text: 'ship it' }]))).toEqual([])
   })
 
   it('draws a question call as the question awaited, then as asked, never as a raw tool line', () => {
@@ -470,8 +513,8 @@ describe('MobileNativeChatMessage', () => {
     act(() => {
       renderer = create(
         createElement(
-          MobileNativeChatImageViewerContext.Provider,
-          { value: openImage },
+          MobileNativeChatRowOverlaysContext.Provider,
+          { value: { openImage, openActions: vi.fn() } },
           createElement(MobileNativeChatMessage, {
             message: userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }])
           })
@@ -560,127 +603,6 @@ describe('MobileNativeChatMessage', () => {
     expect(markdown.props.rangeSelectable).toBe(true)
   })
 
-  it('labels a tool row with the target path instead of raw input JSON', () => {
-    const tree = render(
-      toolMessage([{ type: 'tool-call', name: 'Read', input: { file_path: 'src/index.ts' } }]),
-      { toolsExpanded: true }
-    )
-    const texts = textIn(tree.root)
-    expect(texts).toContain('src/index.ts')
-    expect(texts.some((text) => text.includes('"file_path":"src/index.ts"'))).toBe(false)
-  })
-
-  it('bounds expanded diff-less tool input before native text layout', () => {
-    const tree = render(
-      toolMessage([
-        { type: 'tool-call', name: 'CustomTool', input: { payload: 'x'.repeat(100_000) } }
-      ]),
-      { toolsExpanded: true }
-    )
-    const detail = textIn(tree.root).find((text) => text.startsWith('{\n'))
-    expect(detail).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
-    expect(detail?.endsWith('…')).toBe(true)
-  })
-
-  it('expands formatted detail for a collapsed JSON-string tool input', () => {
-    const tree = render(
-      toolMessage([
-        {
-          type: 'tool-call',
-          name: 'CustomTool',
-          input: '{"cmd":"git status","description":"Inspect changes"}'
-        }
-      ])
-    )
-    const pressableWith = (label: string): ReactTestInstance =>
-      tree.root.findAllByType('Pressable' as never).find((node) => textIn(node).includes(label))!
-
-    act(() => pressableWith('1×').props.onPress())
-    // The row label is the command, and the detail stays closed until tapped.
-    expect(textIn(tree.root)).toContain('git status')
-    expect(textIn(tree.root).some((text) => text.startsWith('{\n'))).toBe(false)
-
-    act(() => pressableWith('CustomTool').props.onPress())
-    expect(textIn(tree.root)).toContain(
-      '{\n  "cmd": "git status",\n  "description": "Inspect changes"\n}'
-    )
-  })
-
-  it('does not echo the row label as detail when a row has nothing to expand', () => {
-    // The Tools toggle opens every row at once, bypassing the tap guard — a row
-    // whose formatted input is its own label would echo itself in a panel that
-    // no tap can dismiss.
-    const tree = render(toolMessage([{ type: 'tool-call', name: 'ListTodos', input: '{}' }]), {
-      toolsExpanded: true
-    })
-    expect(textIn(tree.root).filter((text) => text === '{}')).toHaveLength(1)
-    // The chevron has to agree with the panel, or the row claims to be open over
-    // nothing and the tap that would close it is guarded off. Only the run header
-    // is open here; the row itself stays collapsed.
-    expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
-    expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
-  })
-
-  it('does not expand a plain input that already fits in the row label', () => {
-    const input = 'x'.repeat(60)
-    const tree = render(toolMessage([{ type: 'tool-call', name: 'CustomTool', input }]), {
-      toolsExpanded: true
-    })
-    expect(textIn(tree.root).filter((text) => text === input)).toHaveLength(1)
-    expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
-    expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
-  })
-
-  describe('output a call left when it ended early', () => {
-    function projectedCall(ending: Pick<AgentJournalToolCallItem, 'endedAs'>): NativeChatMessage {
-      const body: AgentJournalToolCallItem = {
-        kind: 'tool-call',
-        name: 'shell',
-        input: { command: 'sleep 20' },
-        state: 'failed',
-        ...ending,
-        output: { head: 'partial', byteLength: 7, digest: 'd', truncated: false }
-      }
-      const projected = projectStructuredItemToNativeChat({
-        itemId: 'call',
-        sequence: 1,
-        revision: 1,
-        observedAt: 100,
-        body
-      })
-      if (!projected) {
-        throw new Error('the call projects no message')
-      }
-      return { ...projected, id: 'a1', source: 'transcript' }
-    }
-    const outputStyle = (message: NativeChatMessage): unknown => {
-      const tree = render(message, { toolsExpanded: true })
-      const output = tree.root
-        .findAllByType('Text' as never)
-        .find((node) => node.children.join('') === 'partial')
-      // The tint is on the result box: the nearest View around the output text.
-      let box = output?.parent ?? null
-      while (box && String(box.type) !== 'View') {
-        box = box.parent
-      }
-      return box?.props.style
-    }
-
-    it('shows the output a stop cut short without the error tint', () => {
-      expect(outputStyle(projectedCall({ endedAs: 'interrupted' }))).toEqual([
-        expect.any(Object),
-        false
-      ])
-    })
-
-    it('keeps the error tint on a call nothing proved was cut short', () => {
-      expect(outputStyle(projectedCall({ endedAs: 'unverifiable' }))).toEqual([
-        expect.any(Object),
-        expect.objectContaining({ backgroundColor: expect.any(String) })
-      ])
-    })
-  })
-
   describe('structured activity UI', () => {
     const runningCall = {
       type: 'tool-call' as const,
@@ -695,66 +617,56 @@ describe('MobileNativeChatMessage', () => {
       state: 'completed' as const
     }
 
-    it('shows the live tool label with a terminal glyph while a command runs', () => {
+    it('keeps one live header while calls start and finish, naming the latest call beside it', () => {
       const tree = render(toolMessage([runningCall]), {
         structuredActivityUi: true,
         activeTurnIsWorking: true
       })
-      expect(textIn(tree.root)).toContain('Running npm test')
+      expect(textIn(tree.root)).toEqual(expect.arrayContaining(['Running 1 command', 'npm test']))
       expect(tree.root.findAllByType('SquareTerminal' as never)).toHaveLength(1)
-      expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
-    })
-
-    it('uses the wrench glyph for a non-command tool', () => {
-      const tree = render(
-        toolMessage([
-          { type: 'tool-call', name: 'Read', input: { file_path: 'a/b.ts' }, state: 'running' }
-        ]),
-        { structuredActivityUi: true, activeTurnIsWorking: true }
+      // A finished call, and a Codex diff that carries no state, keep the same header.
+      act(() =>
+        tree.update(
+          createElement(MobileNativeChatMessage, {
+            message: toolMessage([
+              { ...runningCall, state: 'completed' },
+              { type: 'tool-call', name: 'Diff', input: { path: 'src/a.ts' } }
+            ]),
+            structuredActivityUi: true,
+            activeTurnIsWorking: true
+          })
+        )
       )
-      expect(textIn(tree.root)).toContain('Running Read a/b.ts')
-      expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(1)
+      expect(textIn(tree.root)).toEqual(
+        expect.arrayContaining(['Running 1 command and editing 1 file', 'Diff src/a.ts'])
+      )
+      expect(textIn(tree.root).some((text) => text.startsWith('Running Diff'))).toBe(false)
     })
 
-    it('falls back to the collapsed count row once the run settles', () => {
-      const tree = render(toolMessage([settledCall]), {
+    it('settles to the past tense once the agent moves past the run', () => {
+      const tree = render(toolMessage([settledCall, runningCall]), {
         structuredActivityUi: true,
-        activeTurnIsWorking: true
+        activeTurnIsWorking: true,
+        trailingRun: false
       })
-      expect(textIn(tree.root)).not.toContain('Running Read a/b.ts')
-      expect(textIn(tree.root)).toContain('1×')
+      expect(textIn(tree.root)).toContain('Read 1 file and ran 1 command')
     })
 
-    it("hides a completed turn's activity until the turn caret discloses it", () => {
-      const collapsed = render(toolMessage([settledCall]), {
+    it('draws nothing for a row its settled turn folded away', () => {
+      const folded = render(toolMessage([settledCall]), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false,
+        foldedAway: true
+      })
+      expect(textIn(folded.root)).toEqual([])
+    })
+
+    it("keeps a settled turn's answer row whole, its own run included", () => {
+      const tree = render(toolMessage([{ type: 'text', text: 'Done.' }, settledCall]), {
         structuredActivityUi: true,
         activeTurnIsWorking: false
       })
-      expect(textIn(collapsed.root)).not.toContain('1×')
-      act(() => collapsed.unmount())
-
-      const disclosed = render(toolMessage([settledCall]), {
-        structuredActivityUi: true,
-        activeTurnIsWorking: false,
-        turnExpanded: true
-      })
-      expect(textIn(disclosed.root)).toContain('1×')
-    })
-
-    it('lets the global Tools toggle reveal a hidden settled run', () => {
-      // Otherwise the composer's Tools control is a no-op on every settled turn.
-      const tree = render(toolMessage([settledCall]), {
-        structuredActivityUi: true,
-        activeTurnIsWorking: false,
-        toolsExpanded: true
-      })
-      expect(textIn(tree.root)).toContain('1\u00d7')
-    })
-
-    it('keeps the bridge lane on its always-visible tool run', () => {
-      const tree = render(toolMessage([settledCall]), { activeTurnIsWorking: false })
-      expect(textIn(tree.root)).toContain('1×')
-      expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
+      expect(textIn(tree.root)).toContain('Read 1 file')
     })
 
     it('renders the settled turn status row under a user message', () => {

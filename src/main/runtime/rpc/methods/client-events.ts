@@ -1,4 +1,7 @@
-import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ssh/ssh-target-registry'
+import {
+  getRegisteredSshState,
+  listRegisteredSshTargets
+} from '../../../ssh/targets/ssh-target-registry'
 import { getPublicSshState } from '../../public-ssh-state'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'

@@ -5,6 +5,19 @@ import type { OpenFile } from '../types/open-file'
 import type { ConflictReviewState } from '../../../../../../shared/editor-tab-view-types'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
+import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
+import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import type { AppState } from '../../../types'
+
+/** The runtime owner `openFile` gives a file opened in this workspace; null when it cannot tell. */
+function conflictFileRuntimeOwner(s: AppState, worktreeId: string): string | null {
+  try {
+    return captureEditorFileOperationProvenance(s, worktreeId, undefined, false).generation.route
+      .runtimeEnvironmentId
+  } catch {
+    return null
+  }
+}
 
 export function createOpenConflictReview(
   set: EditorSet,
@@ -17,9 +30,20 @@ export function createOpenConflictReview(
         (tab) => tab.entityId === reviewFileId && tab.contentType === 'conflict-review'
       )
       let openedConflictFile = true
+      let conflictFileId = absolutePath
       set((s) => {
         const conflict = toOpenConflictMetadata(entry)
-        const existing = s.openFiles.find((f) => f.id === absolutePath)
+        const runtimeEnvironmentId = conflictFileRuntimeOwner(s, worktreeId)
+        // Why: a server's file is open under its owned id; looking up the bare path would open a second copy.
+        const fileId = resolveEditorFileIdForOwner(
+          s,
+          absolutePath,
+          worktreeId,
+          runtimeEnvironmentId,
+          ['edit']
+        )
+        conflictFileId = fileId
+        const existing = s.openFiles.find((f) => f.id === fileId)
         const nextTracked =
           entry.conflictStatus === 'unresolved' && entry.conflictKind
             ? {
@@ -35,7 +59,7 @@ export function createOpenConflictReview(
 
         const nextOpenFiles = existing
           ? s.openFiles.map((f) =>
-              f.id === absolutePath
+              f.id === fileId
                 ? {
                     ...f,
                     mode: 'edit' as const,
@@ -52,7 +76,7 @@ export function createOpenConflictReview(
                       ...f,
                       conflictReview: {
                         ...f.conflictReview,
-                        selectedFileId: absolutePath
+                        selectedFileId: fileId
                       }
                     }
                   : f
@@ -64,20 +88,21 @@ export function createOpenConflictReview(
                       ...f,
                       conflictReview: {
                         ...f.conflictReview,
-                        selectedFileId: absolutePath
+                        selectedFileId: fileId
                       }
                     }
                   : f
               ),
               {
-                id: absolutePath,
+                id: fileId,
                 filePath: absolutePath,
                 relativePath: entry.path,
                 worktreeId,
                 language,
                 isDirty: false,
                 mode: 'edit' as const,
-                conflict
+                conflict,
+                ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {})
               }
             ]
 
@@ -101,7 +126,7 @@ export function createOpenConflictReview(
       // Why: the conflict file needs a normal editor backing tab for save/close, but selecting from Conflict Review must keep the review tab visible; restore focus after.
       void openWorkspaceEditorItem(
         get(),
-        absolutePath,
+        conflictFileId,
         worktreeId,
         entry.path,
         'editor',

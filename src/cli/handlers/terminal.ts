@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -16,6 +17,7 @@ import {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
@@ -24,7 +26,8 @@ import {
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import {
   annotateOmittedHostScope,
@@ -74,7 +77,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         includeVisualLayouts: !json || flags.has('include-visual-layouts')
       }
     )
-    await annotateOmittedHostScope(client, result.result)
+    await annotateOmittedHostScope(result.result)
     printResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
@@ -151,6 +154,14 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       title: getOptionalStringFlag(flags, 'title') ?? null
     })
     printResult(result, json, formatTerminalRename)
+  },
+  'terminal set-pane-title': async ({ flags, client, cwd, json }) => {
+    const title = getRequiredStringFlagAllowingEmpty(flags, 'title')
+    const result = await client.call<{ paneTitle: RuntimeTerminalSetPaneTitle }>(
+      'terminal.setPaneTitle',
+      { terminal: await getTerminalHandle(flags, cwd, client), title }
+    )
+    printResult(result, json, formatTerminalSetPaneTitle)
   },
   'terminal create': async ({ flags, client, cwd, json }) => {
     if (client.isRemote && !flags.has('worktree')) {

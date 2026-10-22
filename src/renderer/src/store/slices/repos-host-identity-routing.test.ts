@@ -371,7 +371,7 @@ describe('repo slice host identity routing', () => {
     expect(ptyKill).toHaveBeenCalledWith('local-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
   })
-  it('purges hostless worktree state when two hosts collide on repoId and path', async () => {
+  it('keeps a tab with no host evidence when two hosts collide on repoId and path', async () => {
     const sharedWorktreeId = 'same-repo::/shared'
     const localWorktree = makeWorktree({
       id: sharedWorktreeId,
@@ -395,9 +395,10 @@ describe('repo slice host identity routing', () => {
     await store.getState().removeProject('same-repo', { hostId: 'local' })
 
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
-    // Terminal/editor maps are keyed by hostless worktree ID and are purged, but the
-    // host-scoped purge deliberately leaves the sibling's legacy bare recency key intact.
-    expect(store.getState().tabsByWorktree[sharedWorktreeId]).toBeUndefined()
+    // Why kept: nothing says which host this tab is on, so it may be the surviving twin's.
+    expect(store.getState().tabsByWorktree[sharedWorktreeId]?.map((tab) => tab.id)).toEqual([
+      'shared-tab'
+    ])
     expect(store.getState().lastVisitedAtByWorktreeId[sharedWorktreeId]).toBe(10)
   })
 

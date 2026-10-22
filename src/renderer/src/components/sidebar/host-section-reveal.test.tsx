@@ -9,7 +9,7 @@ import { useSidebarSectionRows } from './worktree-list/listing/use-section-rows'
 import { expandGroupsForWorktreeReveal } from './worktree-list/navigation/pending-reveal-inputs'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { WorktreeGroupBy } from './worktree-list/grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../shared/sidebar-list/row-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 

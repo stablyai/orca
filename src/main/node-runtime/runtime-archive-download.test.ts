@@ -114,8 +114,16 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
   // QA: a refused proxy was blamed on the release instead of the network.
   it('blames the release only for a proven mismatch', async () => {
     const failure = (response: () => Promise<Response>) =>
-      downloadVerifiedArchive(archive(), destination, vi.fn<typeof fetch>(response), undefined, [])
-        .then(() => '', (error: unknown) => downloadFailureMessage('Node', error))
+      downloadVerifiedArchive(
+        archive(),
+        destination,
+        vi.fn<typeof fetch>(response),
+        undefined,
+        []
+      ).then(
+        () => '',
+        (error: unknown) => downloadFailureMessage('Node', error)
+      )
     expect(
       await failure(async () => {
         throw new Error('net::ERR_PROXY_CONNECTION_FAILED')

@@ -166,6 +166,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         }
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
+      }),
+    claudeDiffPanelNoticeSeen: true,
+    markClaudeDiffPanelNoticeSeen: () =>
+      set((s) => {
+        if (s.claudeDiffPanelNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ claudeDiffPanelNoticeSeen: true }).catch(console.error)
+        return { claudeDiffPanelNoticeSeen: true }
       })
   }
 }

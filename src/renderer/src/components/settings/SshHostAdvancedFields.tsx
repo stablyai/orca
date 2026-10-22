@@ -119,7 +119,7 @@ export function SshHostAdvancedFields({
               <p className="text-muted-foreground">
                 {translate(
                   'auto.components.settings.SshTargetForm.allowRemoteCliControlHelp',
-                  "On by default. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server."
+                  "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server."
                 )}
               </p>
             </div>

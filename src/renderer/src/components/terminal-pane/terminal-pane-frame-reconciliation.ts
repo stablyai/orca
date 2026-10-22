@@ -1,20 +1,19 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import {
-  expectPaneToAppear,
   type PaneCloseKind,
-  takePaneAppearIntent,
-  takePaneCloseIntent
+  takePaneCloseIntent,
+  takePaneMountUnfocused
 } from '@/runtime/layout-owner-pane-intents'
 import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
-import { collectLeafIds } from './terminal-pane-layout-tree'
-import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 
 /**
  * A layout-owner build's mounted tab drawn from main's tree (the store's layout, which frames set).
- * The window's own split and close show here, with the inputs and close it asked for; a pane main
- * added or dropped without such an intent is left to main's notice. Then the panes take main's
- * shape (by moving, never recreating) and ratios. True when panes were added or closed.
+ * Every pane main added is mounted, whoever split it: main starts its terminal, and the pane
+ * attaches to it. The window's own close shows here with the close it asked for; a pane main
+ * dropped without one is left to main's notice. Then the panes take main's shape (by moving,
+ * never recreating) and ratios. True when panes were added or closed.
  */
 export function reconcileMountedPanesToLayout(args: {
   tabId: string
@@ -49,16 +48,14 @@ export function reconcileMountedPanesToLayout(args: {
     if (sourcePaneId === null || manager.getNumericIdForLeaf(insertion.newLeafId) !== null) {
       continue
     }
-    const intent = takePaneAppearIntent(tabId, insertion.newLeafId)
-    if (!intent) {
-      continue
-    }
     const ratio =
       insertion.ratio === undefined
         ? undefined
         : insertion.placement === 'before'
           ? 1 - insertion.ratio
           : insertion.ratio
+    const ptyId = layout.ptyIdsByLeafId?.[insertion.newLeafId]
+    const activeBefore = manager.getActivePane()
     const created = manager.splitPaneAroundLeafIds(
       insertion.sourceLeafIds,
       sourcePaneId,
@@ -67,16 +64,18 @@ export function reconcileMountedPanesToLayout(args: {
         leafId: insertion.newLeafId,
         placement: insertion.placement,
         ...(ratio !== undefined && { ratio }),
-        ...(intent.cwd ? { cwd: intent.cwd } : {}),
-        ...(intent.cwdPromise ? { cwdPromise: intent.cwdPromise } : {})
+        // Bound already: the pane attaches to main's terminal; unbound, it waits on main's start.
+        ...(ptyId ? { ptyId } : {})
       }
     )
-    if (!created) {
-      expectPaneToAppear(insertion.newLeafId, intent)
-      continue
+    if (created) {
+      changed = true
+      // As switch-off's startup split: the new pane mounts, focus stays on the source pane.
+      if (activeBefore && takePaneMountUnfocused(tabId, insertion.newLeafId)) {
+        const hadFocus = created.container.contains(document.activeElement)
+        manager.setActivePane(activeBefore.id, { focus: hadFocus })
+      }
     }
-    recordCreatedTerminalPaneSplit(created, intent.telemetry)
-    changed = true
   }
 
   if (args.isExpanded) {

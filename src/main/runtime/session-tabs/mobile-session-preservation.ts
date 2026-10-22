@@ -1,12 +1,11 @@
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithSyncMobileSessionTabs } from './mobile-session-reconciliation'
 import type {
-  RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-types'
 import {
+  appendChatTabOrder,
   getMobileSessionSnapshotTabIdentityKeys,
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
@@ -55,13 +54,10 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
-    const terminalTabs = tabs.filter(
-      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
-    )
     const tabGroups = mergeMobileSessionTabGroups(
       snapshot.worktree,
       snapshot.tabGroups ?? existing.tabGroups ?? [],
-      terminalTabs,
+      tabs,
       activeTab?.type === 'terminal' ? activeTab : null
     )
     return {
@@ -74,7 +70,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
       activeTabId: activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
-      tabGroups: this.mergeStructuredAgentSessionTabGroups(
+      tabGroups: appendChatTabOrder(
         tabGroups,
         existing.tabGroups ?? [],
         normalizedPreservedTabs,
@@ -82,30 +78,6 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       ),
       tabs
     }
-  }
-
-  protected mergeStructuredAgentSessionTabGroups(
-    groups: readonly RuntimeMobileSessionTabGroup[],
-    existingGroups: readonly RuntimeMobileSessionTabGroup[],
-    preservedTabs: readonly RuntimeMobileSessionSnapshotTab[],
-    activeTabId: string | null
-  ): RuntimeMobileSessionTabGroup[] {
-    const structuredTabs = preservedTabs.filter((tab) => tab.type === 'agent-session')
-    if (structuredTabs.length === 0) {
-      return [...groups]
-    }
-    const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
-    for (const tab of structuredTabs) {
-      const priorGroupId = existingGroups.find((group) => group.tabOrder.includes(tab.id))?.id
-      const target = next.find((group) => group.id === priorGroupId) ?? next[0]
-      if (target && !target.tabOrder.includes(tab.id)) {
-        target.tabOrder.push(tab.id)
-      }
-      if (target && tab.id === activeTabId) {
-        target.activeTabId = tab.id
-      }
-    }
-    return next
   }
 
   // Why: omitted from the renderer's publication AND from persistence = durably closed; a create in flight is not.
@@ -193,9 +165,6 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
-    const terminalTabs = tabs.filter(
-      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
-    )
     return {
       ...existing,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
@@ -204,11 +173,16 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       activeGroupId: existing.activeGroupId ?? getHeadlessMobileSessionGroupId(existing.worktree),
       activeTabId: activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
-      tabGroups: mergeMobileSessionTabGroups(
-        existing.worktree,
+      tabGroups: appendChatTabOrder(
+        mergeMobileSessionTabGroups(
+          existing.worktree,
+          existing.tabGroups ?? [],
+          tabs,
+          activeTab?.type === 'terminal' ? activeTab : null
+        ),
         existing.tabGroups ?? [],
-        terminalTabs,
-        activeTab?.type === 'terminal' ? activeTab : null
+        tabs,
+        activeTab?.id ?? null
       ),
       tabs
     }

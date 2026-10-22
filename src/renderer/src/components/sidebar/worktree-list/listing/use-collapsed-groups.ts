@@ -6,7 +6,10 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeGroupBy
+} from '../../../../../../shared/sidebar-list/row-types'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
@@ -28,7 +31,6 @@ export function useEffectiveCollapsedGroups(args: {
   worktreeLineageById: Record<string, WorktreeLineage>
   prCache: AppState['prCache'] | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  settings: AppState['settings']
   projectGroups: readonly ProjectGroup[]
   projectGrouping: ProjectGroupingModel
   folderWorkspaces: readonly FolderWorkspace[]
@@ -49,7 +51,6 @@ export function useEffectiveCollapsedGroups(args: {
     worktreeLineageById,
     prCache,
     workspaceStatuses,
-    settings,
     projectGroups,
     projectGrouping,
     folderWorkspaces,
@@ -94,7 +95,6 @@ export function useEffectiveCollapsedGroups(args: {
       pinnedDisplayPolicy,
       prCache,
       workspaceStatuses,
-      settings,
       projectGroups,
       projectGrouping
     })) {
@@ -115,7 +115,6 @@ export function useEffectiveCollapsedGroups(args: {
     projectGroups,
     projectGrouping,
     repoMap,
-    settings,
     workspaceStatuses,
     worktreeLineageById,
     worktreeMap,

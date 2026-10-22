@@ -130,7 +130,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -207,7 +207,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [...repos] as never,
       addRepo: (repo: Record<string, unknown>) => repos.push(repo),
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const repo = repos.find((entry) => entry.id === id)
         if (!repo) {
           return null
@@ -259,7 +259,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [...repos] as never,
       addRepo: (repo: Record<string, unknown>) => repos.push(repo),
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const repo = repos.find((entry) => entry.id === id)
         if (!repo) {
           return null
@@ -267,7 +267,7 @@ describe('OrcaRuntimeService', () => {
         Object.assign(repo, updates)
         return { ...repo } as never
       },
-      removeProjectForHost: (id: string) => {
+      removeProjectForHost: ({ id }: { id: string }) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index !== -1) {
           repos.splice(index, 1)
@@ -309,7 +309,7 @@ describe('OrcaRuntimeService', () => {
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
-      removeProjectForHost: (id: string) => {
+      removeProjectForHost: ({ id }: { id: string }) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index !== -1) {
           repos.splice(index, 1)
@@ -348,7 +348,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -465,7 +465,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -506,7 +506,7 @@ describe('OrcaRuntimeService', () => {
           repos.push(repo)
         },
         getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-        updateRepo: (id: string, updates: Record<string, unknown>) => {
+        updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
           const index = repos.findIndex((repo) => repo.id === id)
           if (index === -1) {
             return null
@@ -539,7 +539,7 @@ describe('OrcaRuntimeService', () => {
         repos.push(repo)
       },
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
-      updateRepo: (id: string, updates: Record<string, unknown>) => {
+      updateRepo: ({ id }: { id: string }, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index === -1) {
           return null
@@ -635,7 +635,7 @@ describe('OrcaRuntimeService', () => {
         .catch((error: unknown) => error)
 
       expect(() => runtime.addSshRepo({ connectionId: 'openclaw' })).toThrow(
-        'SSH connection "openclaw" not found or not connected'
+        "This Orca server can't add projects on its SSH hosts."
       )
 
       // Why: the defect was a silent local clone/probe recorded as remote, not a bad message,

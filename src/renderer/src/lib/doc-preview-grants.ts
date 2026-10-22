@@ -1,7 +1,7 @@
 import type { DocPreviewGrantRequest } from '../../../preload/api/doc-preview-api'
 import { basename, dirname, getRelativePathInsideRoot } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
 import type { AppState } from '@/store/types'
@@ -43,7 +43,8 @@ export function buildDocPreviewGrantRequest(
     // directory is often a home directory, which is where secrets live.
     return { owner: { kind: 'ssh', connectionId }, requestBase, root, entryRelativePath }
   }
-  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  // Why: a twin names no server to mint against, so it gets no grant.
+  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   // Outside the workspace, a chat's scratch folder stands in for it: its host serves it as a root.
   const base =
     worktreeRoot && worktreeRelativePath

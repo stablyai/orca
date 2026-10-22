@@ -59,11 +59,10 @@ function parseHttpUrl(query: string): ExplicitUrlClassification {
   }
 }
 
-// Why: a bare public suffix (`api.br`) is not a navigable host, so the typed string stays a search.
-// tldts' PRIVATE section is included so `foo.github.io` still reads as a domain.
+// Hosting-provider suffixes such as `github.io` are themselves registrable ICANN domains.
 function isListedDomain(host: string): boolean {
-  const parsed = parseDomain(host, { allowPrivateDomains: true })
-  return parsed.domain !== null && (parsed.isIcann === true || parsed.isPrivate === true)
+  const parsed = parseDomain(host, { allowPrivateDomains: false })
+  return parsed.domain !== null && parsed.isIcann === true
 }
 
 function splitHostCandidate(

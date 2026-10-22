@@ -8,7 +8,7 @@ import {
   cloneSleepingSweepRetentionState,
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
-} from '../../sleeping-sweep-retention'
+} from '../../../../../../shared/sidebar-list/sleeping-sweep-retention'
 
 type SweepActivityInputs = Pick<
   VisibleWorktreeOptions,

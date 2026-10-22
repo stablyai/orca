@@ -97,6 +97,23 @@ export function goToWorkspacePortOwner(port: WorkspacePort): boolean {
   return Boolean(worktreeId && activateAndRevealWorktree(worktreeId))
 }
 
+/** The URL a port opens at: its labelled localhost name when one is set up locally, else its raw URL. */
+export async function resolveWorkspacePortBrowserUrl(args: {
+  port: WorkspacePort
+  runtimeTarget: RuntimeClientTarget
+  localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
+}): Promise<string> {
+  const rawUrl = browserUrlForPort(args.port)
+  if (args.runtimeTarget.kind !== 'local' || !args.localhostLabelRoute) {
+    return rawUrl
+  }
+  try {
+    return (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
+  } catch {
+    return rawUrl
+  }
+}
+
 export async function openWorkspacePortInBrowser(args: {
   port: WorkspacePort
   activeWorktreeId?: string | null
@@ -109,15 +126,11 @@ export async function openWorkspacePortInBrowser(args: {
   if (!args.runtimeTarget) {
     return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
   }
-  const rawUrl = browserUrlForPort(args.port)
-  let url = rawUrl
-  if (args.runtimeTarget.kind === 'local' && args.localhostLabelRoute) {
-    try {
-      url = (await window.api.localhostWorktreeLabels.register(args.localhostLabelRoute)).url
-    } catch {
-      url = rawUrl
-    }
-  }
+  const url = await resolveWorkspacePortBrowserUrl({
+    port: args.port,
+    runtimeTarget: args.runtimeTarget,
+    localhostLabelRoute: args.localhostLabelRoute
+  })
   if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
     try {
       await window.api.shell.openUrl(url)

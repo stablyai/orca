@@ -5,12 +5,14 @@
 // shared host code read a definition through it and never branch on the agent's name.
 
 import type { AgentSessionCapabilities } from '../../../shared/agent-session-capabilities'
-import type { AgentSessionStoredAgent } from '../../../shared/agent-session-stored-agent'
+import type { AgentSessionStoredAgent } from '../../../shared/agent-session/lifecycle/agent-session-stored-agent'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 
 /** `agent` names the Orca agent whose sessions this describes; the storage fields bound its records. */
 export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   capabilities: AgentSessionCapabilities
+  /** Whether Orca provides this agent's chat program on this host; absent when it never does. */
+  managedRuntime?: () => boolean
   /** How a session's options read and change while no child runs. */
   restingOptions: {
     /** Whether the agent takes a pick of this option key. */

@@ -19,6 +19,7 @@ import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/re
 import { createPtyIpcSession } from '../ipc/pty/session'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { OrcaRuntimeService } from './orca-runtime'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import {
   INCARNATION_ID,
   LEAF_ID,
@@ -146,7 +147,7 @@ describe('intentional stops keep the pane through the exit', () => {
 
     expect(harness.boundPtyId()).toBeNull()
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID }
+      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID, hostId: 'local' }
     ])
   })
 
@@ -158,7 +159,13 @@ describe('intentional stops keep the pane through the exit', () => {
     expect(harness.tabIds()).toEqual([TAB_ID])
     expect(harness.boundPtyId()).toBe(PTY_ID)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID, preserveRendererBinding: true }
+      {
+        id: PTY_ID,
+        code: 0,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        preserveRendererBinding: true
+      }
     ])
   })
 
@@ -189,7 +196,13 @@ describe('intentional stops keep the pane through the exit', () => {
       ]
     ).toBe(REPLACEMENT_INCARNATION_ID)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID, replacedByRestart: true }
+      {
+        id: PTY_ID,
+        code: 0,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        replacedByRestart: true
+      }
     ])
   })
 
@@ -210,6 +223,7 @@ describe('intentional stops keep the pane through the exit', () => {
         id: PTY_ID,
         code: 0,
         incarnationId: INCARNATION_ID,
+        hostId: 'local',
         preserveRendererBinding: true,
         replacedByRestart: true
       }
@@ -224,7 +238,13 @@ describe('intentional stops keep the pane through the exit', () => {
     expect(harness.tabIds()).toEqual([TAB_ID])
     expect(harness.boundPtyId()).toBe(PTY_ID)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID, replacedByRestart: true }
+      {
+        id: PTY_ID,
+        code: -1,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        replacedByRestart: true
+      }
     ])
   })
 
@@ -233,9 +253,10 @@ describe('intentional stops keep the pane through the exit', () => {
 
     harness.emitDaemonRestartExit()
 
-    expect(harness.boundPtyId()).toBeNull()
+    // Switch-on, main keeps the pane as the window does on a -1 no host confirmed (lost contact).
+    expect(harness.boundPtyId()).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? PTY_ID : null)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID }
+      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID, hostId: 'local' }
     ])
   })
 
@@ -248,7 +269,13 @@ describe('intentional stops keep the pane through the exit', () => {
     expect(harness.tabIds()).toEqual([TAB_ID])
     expect(harness.boundPtyId()).toBe(PTY_ID)
     expect(harness.rendererExits()).toEqual([
-      { id: PTY_ID, code: -1, incarnationId: INCARNATION_ID, preserveRendererBinding: true }
+      {
+        id: PTY_ID,
+        code: -1,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        preserveRendererBinding: true
+      }
     ])
   })
 
@@ -277,7 +304,8 @@ describe('intentional stops keep the pane through the exit', () => {
     expect(harness.rendererExits().at(-1)).toEqual({
       id: PTY_ID,
       code: 0,
-      incarnationId: LATER_INCARNATION_ID
+      incarnationId: LATER_INCARNATION_ID,
+      hostId: 'local'
     })
   })
 

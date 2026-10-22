@@ -1,5 +1,5 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,

@@ -153,10 +153,8 @@ vi.mock('../gitea/pull-request-creation', () => ({
 }))
 
 import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
-import {
-  getRepoHostedReviewExecutionHostId,
-  hostedReviewSshConnectionId
-} from './hosted-review-execution-host'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { RuntimeHostedReviewCommands } from '../runtime/runtime-hosted-review-commands'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
@@ -417,16 +415,16 @@ describe('hosted-review host resolution', () => {
   it('answers with the SSH target for both spellings and local otherwise', () => {
     expect(hostedReviewSshConnectionId('ssh:ssh-a')).toBe('ssh-a')
     expect(hostedReviewSshConnectionId('local')).toBeNull()
-    expect(getRepoHostedReviewExecutionHostId({ executionHostId: 'ssh:ssh-a' })).toBe('ssh:ssh-a')
-    expect(getRepoHostedReviewExecutionHostId({ connectionId: 'ssh-b' })).toBe('ssh:ssh-b')
+    expect(getStoredRepoExecutionHostId({ executionHostId: 'ssh:ssh-a' })).toBe('ssh:ssh-a')
+    expect(getStoredRepoExecutionHostId({ connectionId: 'ssh-b' })).toBe('ssh:ssh-b')
   })
 
   it('reads a runtime stamp on a row in this store as self-addressing, not a second machine', () => {
     // The registration controller only adopts `runtime:` onto a row with no connectionId, so the
     // checkout is here; a nested target belongs to that server's namespace and is never dialed.
-    expect(getRepoHostedReviewExecutionHostId({ executionHostId: 'runtime:env-1' })).toBe('local')
+    expect(getStoredRepoExecutionHostId({ executionHostId: 'runtime:env-1' })).toBe('local')
     expect(
-      getRepoHostedReviewExecutionHostId({
+      getStoredRepoExecutionHostId({
         executionHostId: 'runtime:env-1',
         connectionId: 'ssh-b'
       })

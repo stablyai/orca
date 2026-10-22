@@ -33,7 +33,12 @@ import {
 } from './profile-cloud-dev-service'
 import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status'
 import { selectCloudOrg } from './profile-cloud-org-selection'
-import { clearRelayRegionPreferenceCache } from '../runtime/relay/relay-region-preference'
+import {
+  endOrcaCloudSignInProgress,
+  setOrcaCloudSignInLink,
+  startOrcaCloudSignInProgress
+} from './profile-cloud-sign-in-progress'
+import { clearRelayRegionPreferenceCache } from '../runtime/mobile-cloud-relay/relay-region-preference'
 
 export { refreshCurrentOrcaProfileAuth } from './profile-cloud-capability-refresh'
 
@@ -43,10 +48,7 @@ let linkedCloudConnectAttempt = 0
 function invalidateOutstandingCloudConnectAttempts(): void {
   nextCloudConnectAttempt += 1
   linkedCloudConnectAttempt = nextCloudConnectAttempt
-}
-
-function isUserCancelledAuthError(message: string): boolean {
-  return message === 'orca_cloud_auth_timeout' || message === 'orca_cloud_auth_denied'
+  endOrcaCloudSignInProgress()
 }
 
 function activeAuth(
@@ -83,8 +85,15 @@ export async function connectCurrentOrcaProfile(
   }
 
   const attempt = ++nextCloudConnectAttempt
+  const browserWait = new AbortController()
+  startOrcaCloudSignInProgress(attempt, () => browserWait.abort())
   try {
-    const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id)
+    const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id, {
+      signal: browserWait.signal,
+      onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link)
+    })
+    // Why: the callback listener closes once the browser answers, so the link is dead.
+    setOrcaCloudSignInLink(attempt, null)
     if (attempt < linkedCloudConnectAttempt) {
       return {
         status: 'cancelled',
@@ -112,7 +121,17 @@ export async function connectCurrentOrcaProfile(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (isUserCancelledAuthError(message)) {
+    if (message === 'orca_cloud_auth_timeout' && attempt === nextCloudConnectAttempt) {
+      return {
+        status: 'timed-out',
+        auth: getCurrentOrcaProfileAuthStatus(userDataPath)
+      }
+    }
+    if (
+      message === 'orca_cloud_auth_timeout' ||
+      message === 'orca_cloud_auth_denied' ||
+      message === 'orca_cloud_auth_cancelled'
+    ) {
       return {
         status: 'cancelled',
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
@@ -123,6 +142,8 @@ export async function connectCurrentOrcaProfile(
       auth: getCurrentOrcaProfileAuthStatus(userDataPath),
       error: message
     }
+  } finally {
+    endOrcaCloudSignInProgress(attempt)
   }
 }
 

@@ -91,6 +91,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
     tabId: string,
     props: {
       title?: string
+      customTitle?: string | null
       color?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
@@ -109,6 +110,9 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
       return {
         ...tab,
         ...(props.title !== undefined ? { title: props.title } : {}),
+        ...(props.customTitle !== undefined && tab.type === 'terminal'
+          ? { customTitle: props.customTitle }
+          : {}),
         ...(props.color !== undefined ? { color: props.color } : {}),
         ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
         ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})

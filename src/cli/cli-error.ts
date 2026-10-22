@@ -5,6 +5,7 @@ import {
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
+import { selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
@@ -12,6 +13,8 @@ export type CliErrorContext = {
   commandPath?: readonly string[]
   /** The `--worktree` value this invocation sent; the runtime's error never echoes it. */
   worktreeSelector?: string
+  /** The `--repo` value this invocation sent, for the same reason. */
+  repoSelector?: string
   /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
   remoteServerSelected?: boolean
 }
@@ -27,6 +30,13 @@ function contextRecovery(
 ): ContextRecovery | undefined {
   if (code === 'selector_not_found' && context.worktreeSelector) {
     return worktreeSelectorRecovery(context.worktreeSelector)
+  }
+  if (code === 'selector_ambiguous') {
+    return selectorAmbiguityRecovery({
+      repo: context.repoSelector,
+      worktree: context.worktreeSelector,
+      remoteServerSelected: context.remoteServerSelected
+    })
   }
   // Why: a paired server's handle sent to this machine reads as a dead terminal, not a missing flag.
   if (
@@ -74,6 +84,10 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
   if (conflict) {
     return formatMessageWithNextSteps(stripAutomationOwnerConflictCode(message), conflict.nextSteps)
   }
+  const sidecarExit = computerSidecarExitRecovery(error, context)
+  if (sidecarExit) {
+    return formatMessageWithNextSteps(message, sidecarExit.nextSteps)
+  }
   if (error instanceof RuntimeClientError) {
     const nextSteps = nextStepsFromData(error.data)
     if (nextSteps.length > 0) {
@@ -110,7 +124,10 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
   const selector = contextRecovery(errorCode(error), context)
   if (json) {
     if (error instanceof RuntimeRpcFailureError) {
-      const response = withAutomationOwnerConflictRecovery(error.response)
+      const sidecarExit = computerSidecarExitRecovery(error, context)
+      const response = sidecarExit
+        ? { ...error.response, error: { ...error.response.error, data: sidecarExit } }
+        : withAutomationOwnerConflictRecovery(error.response)
       console.log(
         JSON.stringify(
           selector
@@ -207,7 +224,24 @@ function nextStepsFromData(data: unknown): string[] {
   return []
 }
 
+/** Read here, not from the error's data: the servers that send this predate the hint (#31777). */
+function computerSidecarExitRecovery(error: unknown, context: CliErrorContext) {
+  if (
+    context.commandPath?.[0] !== 'computer' ||
+    errorCode(error) !== 'accessibility_error' ||
+    !(error instanceof Error) ||
+    !error.message.startsWith('computer sidecar exited with code')
+  ) {
+    return undefined
+  }
+  return computerUseErrorRecoveryData('accessibility_error', error.message)
+}
+
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
+  const sidecarExit = computerSidecarExitRecovery(error, context)
+  if (sidecarExit) {
+    return sidecarExit
+  }
   const selector = contextRecovery(errorCode(error), context)
   // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {

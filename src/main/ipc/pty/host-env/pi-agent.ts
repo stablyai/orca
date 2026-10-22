@@ -151,8 +151,6 @@ export function getInheritedAgentSessionStampEnvKeysToDelete(
   ]
 }
 
-export { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
-
 export function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
   return getAgentLaunchExecutableName(launchCommand) === 'mimo'
 }

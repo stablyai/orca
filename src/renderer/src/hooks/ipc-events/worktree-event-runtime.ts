@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
 import {
   hasHostRowsForSortOrders,
@@ -14,6 +15,11 @@ import {
 import { buildRuntimeClientEventEnvironmentKey } from './runtime-environment-subscription-selection'
 import { useAppStore } from '../../store'
 import {
+  captureWorkspaceSelection,
+  isWorkspaceSelected,
+  restoreWorkspaceSelection
+} from '@/lib/active-workspace-host'
+import {
   invalidateRemoteWorktreeLineage,
   isRemoteWorktreeLineageFresh
 } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
@@ -21,6 +27,10 @@ import {
   createWorktreeChangeRefreshQueue,
   type WorktreeChangeRefreshQueue
 } from '../worktree-change-refresh-queue'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 
@@ -31,13 +41,13 @@ function runtimeSortOrderFence(environmentId: string): string {
 const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
-  const detected = state.detectedWorktreesByRepo[repoId]
+  const detected = selectDetectedWorktreesByRepo(state)[repoId]
   return detected?.authoritative === true
     ? new Set(detected.worktrees.map((worktree) => worktree.id))
     : null
 }
 function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
-  return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+  return new Set((selectWorktreesByRepo(state)[repoId] ?? []).map((worktree) => worktree.id))
 }
 
 type WorktreeEventActivationOptions = {
@@ -99,6 +109,7 @@ export function createWorktreeEventRuntime(
     // Why: capture active-ness before migration moves the pointer; re-key maps before the diff so a rename isn't a deletion.
     const renamedWasActive =
       renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
+    const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
     if (renamed) {
       // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
       const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
@@ -142,7 +153,11 @@ export function createWorktreeEventRuntime(
     }
     // Why: an id change unmounts the active pane; re-activate so the tab reconciles, else it vanishes until re-select.
     if (renamedWasActive && renamed) {
-      useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
+      const renamedSelection = { ...selectionBeforeRename, worktreeId: renamed.newWorktreeId }
+      // Why only if unchanged: a workspace or twin copy picked during the refresh is the user's.
+      if (isWorkspaceSelected(useAppStore.getState(), renamedSelection)) {
+        restoreWorkspaceSelection(useAppStore.getState(), renamedSelection)
+      }
     }
     // Sweep expired rename-grace entries before any early return, else forced-local
     // (or non-authoritative) events let the map grow for the session.
@@ -189,7 +204,7 @@ export function createWorktreeEventRuntime(
         // A forced-local refresh owns only the local host's panes.
         (options?.forceLocalOwner ? LOCAL_EXECUTION_HOST_ID : undefined)
       afterState.purgeWorktreeTerminalState(
-        purgeHostId ? removed.map((id) => ({ id, hostId: purgeHostId })) : removed
+        purgeHostId ? removed.map((id) => hostWorktreeTarget({ id, hostId: purgeHostId })) : removed
       )
       afterState.removeWorkspaceSpaceWorktrees(removed)
     }

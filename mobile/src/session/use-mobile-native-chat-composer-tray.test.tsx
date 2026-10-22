@@ -14,6 +14,7 @@ import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-ba
 
 vi.mock('react-native', () => ({
   Dimensions: { get: () => ({ width: 430, height: 900 }) },
+  useWindowDimensions: () => ({ fontScale: 1 }),
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },

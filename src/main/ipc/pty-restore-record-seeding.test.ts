@@ -11,6 +11,7 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeResolvedWorktreeCache } from '../runtime/runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../runtime/runtime-worktree-path-identity'
@@ -282,8 +283,18 @@ describe('registerPtyHandlers', () => {
     })
 
     // The renderer owns the emulator snapshot here — but the list/read records
-    // are main-side only, so the record seed must still run.
-    expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    // are main-side only, so the record seed must still run. Under main's layout, main's copy is
+    // the history every view repaints from, so it is seeded too.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
+        'pty-gated-reattach',
+        'gated snapshot\r\n',
+        { cols: 80, rows: 24 },
+        {}
+      )
+    } else {
+      expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    }
     expect(runtime.seedTerminalRestoreTail).toHaveBeenCalledWith('pty-gated-reattach', {
       text: 'gated snapshot\r\n',
       lastTitle: 'gated-title'

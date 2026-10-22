@@ -27,7 +27,7 @@ import {
   reconcileSupersededSshRepos
 } from '../../store/repos/repo-catalog-merge'
 import { getProjectHostSetupProjectionFromState } from '../../store/project-host-setup-selector'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { worktree as worktreeFixture } from './worktree-list-groups-test-fixtures'
 import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
 import { getProjectSectionCatalogFromState } from '../../runtime/sync-runtime-graph/project-section-catalog'

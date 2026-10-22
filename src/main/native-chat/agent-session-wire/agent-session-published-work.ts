@@ -18,6 +18,9 @@ export type AgentSessionPublishedWork = Pick<
   | 'actionablePrompts'
   | 'working'
   | 'viewKey'
+  | 'workViewKey'
+  | 'publishedSubmission'
+  | 'restatedSubmissions'
   | 'requestProjection'
 >
 
@@ -46,13 +49,19 @@ export function agentSessionPublishedWorkFields(
   return publishedWorkFields(snapshotLatestTurn(journal.snapshot()), work)
 }
 
-/** A page as the host publishes it: its turn record scoped by the projection, an ended
- *  generation's turn running nowhere. */
+/** Page-local effective values; off-page sends ride separately budgeted subscriber batches. */
 export function withPublishedWork(
   page: AgentSessionHistoryPage,
   work: AgentSessionPublishedWork | undefined
 ): AgentSessionHistoryPage {
-  return work ? { ...page, ...publishedWorkFields(page.latestTurn, work) } : page
+  if (!work) {
+    return page
+  }
+  return {
+    ...page,
+    ...publishedWorkFields(page.latestTurn, work),
+    submissions: page.submissions.map(work.publishedSubmission)
+  }
 }
 
 export function withPublishedWorkResult(

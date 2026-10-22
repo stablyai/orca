@@ -18,6 +18,7 @@ import {
   planTypecheckBatches,
   resolveProjectCompiler,
   parseTypecheckOptions,
+  selectTypecheckCompiler,
   typecheckBatches,
   runTypecheckProjects
 } from './run-typecheck-projects-in-parallel.mjs'
@@ -132,16 +133,57 @@ describe('workspace package test typecheck', () => {
 })
 
 describe('CI compiler selection', () => {
-  it('keeps native incremental checking as the local default', () => {
-    expect(parseTypecheckOptions([]).compiler).toBe('native')
+  it('checks with Bun by default', () => {
+    expect(parseTypecheckOptions([]).compiler).toBe('bun')
   })
 
-  it.each(['--compiler=typo', '--bun-concurrency=0', '--bun-threads=NaN', '--bun-concurrency=5'])(
-    'rejects unsafe or unknown options: %s',
-    (argument) => {
-      expect(() => parseTypecheckOptions([argument])).toThrow()
-    }
-  )
+  it('pins the Bun devDependency to config/.bun-version', () => {
+    const manifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+    expect(manifest.devDependencies.bun).toBe(
+      readFileSync(join(repoRoot, 'config', '.bun-version'), 'utf8').trim()
+    )
+  })
+
+  it('narrows to the requested projects and rejects unknown ones', () => {
+    expect(parseTypecheckOptions(['--project=config/tsconfig.node.json']).projects).toEqual([
+      TYPECHECK_PROJECTS[0]
+    ])
+    expect(parseTypecheckOptions([]).projects).toEqual(TYPECHECK_PROJECTS)
+    expect(() => parseTypecheckOptions(['--project=config/tsconfig.json'])).toThrow()
+  })
+
+  it('runs the resolved Bun and refuses to silently fall back when it is missing', () => {
+    expect(
+      selectTypecheckCompiler('bun', {
+        root: repoRoot,
+        resolveBunExecutable: () => '/repo/node_modules/bun/bin/bun.exe'
+      })
+    ).toEqual({ compiler: 'bun', bunExecutable: '/repo/node_modules/bun/bin/bun.exe' })
+    expect(() =>
+      selectTypecheckCompiler('bun', { root: repoRoot, resolveBunExecutable: () => null })
+    ).toThrow('run pnpm install')
+  })
+
+  it('never probes Bun when tsc is requested', () => {
+    expect(
+      selectTypecheckCompiler('native', {
+        root: repoRoot,
+        resolveBunExecutable: () => {
+          throw new Error('probed')
+        }
+      })
+    ).toEqual({ compiler: 'native' })
+  })
+
+  it.each([
+    '--compiler=typo',
+    '--bun-concurrency=0',
+    '--bun-threads=NaN',
+    '--bun-concurrency=5',
+    '--project'
+  ])('rejects unsafe or unknown options: %s', (argument) => {
+    expect(() => parseTypecheckOptions([argument])).toThrow()
+  })
 
   it('bounds Bun project concurrency and reserves memory for overlapping checks', () => {
     const options = parseTypecheckOptions([

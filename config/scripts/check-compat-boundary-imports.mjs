@@ -4,17 +4,29 @@ import { collectProcessHostSources } from './check-process-host-imports.mjs'
 import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
-// Code kept only for old clients, servers or profiles. Each folder is reached through its
-// `index` and only from the listed importers, so deleting the folder plus those import lines
-// removes the path.
+// Code kept only for old clients, servers or profiles. Each folder is reached only through its
+// listed entry modules and only from the listed importers, so deleting the folder plus those
+// import lines removes the path.
 export const COMPAT_FOLDERS = [
-  // The RPC handler wiring joins in PR 6 step 6c.
-  { folder: 'src/shared/workspace-layout/old-client', importers: [] },
+  {
+    folder: 'src/shared/workspace-layout/old-client',
+    entries: [
+      'old-client-method-translation',
+      'old-client-session-tab-rows',
+      'old-client-session-tabs-projection'
+    ],
+    importers: [
+      'src/main/runtime/session-tabs/main-layout-session-tab-move.ts',
+      'src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts',
+      'src/main/runtime/terminal/surface/terminal-surface-index.ts'
+    ]
+  },
   {
     folder: 'src/main/remote-layout-snapshot',
+    entries: ['remote-layout-snapshot-persistence', 'remote-layout-snapshot-recorder'],
     importers: [
-      'src/main/ipc/runtime-environments.ts',
-      'src/main/ipc/runtime-environment-removal-cleanup.ts',
+      'src/main/ipc/runtime-environments/runtime-environments.ts',
+      'src/main/ipc/runtime-environments/runtime-environment-removal-cleanup.ts',
       'src/main/persistence/loading-store/store-domain-composition.ts'
     ]
   }
@@ -56,8 +68,10 @@ export function assessCompatBoundaryImports(
       if (!compat || file.startsWith(`${compat.folder}/`)) {
         continue
       }
-      if (target !== compat.folder && target !== `${compat.folder}/index`) {
-        violations.push(`${file}: import ${compat.folder} through its index, not ${specifier}`)
+      if (!compat.entries.some((entry) => target === `${compat.folder}/${entry}`)) {
+        violations.push(
+          `${file}: import ${compat.folder} through ${compat.entries.join(', ')}, not ${specifier}`
+        )
       } else if (!compat.importers.includes(file) && !isTestOnlySourcePath(file)) {
         violations.push(
           `${file}: only ${compat.importers.join(', ') || 'no file'} may import ${compat.folder}`

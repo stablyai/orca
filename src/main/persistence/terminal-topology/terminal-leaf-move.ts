@@ -1,5 +1,6 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
@@ -24,11 +25,13 @@ type PlannedTerminalLeafMove = {
   sessions: TerminalSessionPartition[]
 }
 
-function moveRecordKey<T>(
+export function moveRecordKey<T>(
   record: Record<string, T> | undefined,
   fromKey: string,
   toKey: string | null,
-  remap: (value: T) => T = (value) => value
+  remap: (value: T) => T = (value) => value,
+  /** Keep a value already at `toKey`; the moved one is dropped. */
+  keepTarget = false
 ): Record<string, T> | undefined {
   if (!record || !Object.hasOwn(record, fromKey)) {
     return record
@@ -36,7 +39,7 @@ function moveRecordKey<T>(
   const next = { ...record }
   const value = next[fromKey]
   delete next[fromKey]
-  if (toKey !== null && value !== undefined) {
+  if (toKey !== null && value !== undefined && !(keepTarget && Object.hasOwn(next, toKey))) {
     next[toKey] = remap(value)
   }
   return next
@@ -208,12 +211,16 @@ const PANE_KEYED_UI_RECORDS = [
   'manuallyUnreadTurnsByPaneKey'
 ] as const
 
-/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a moved leaf. */
-export function rekeyMovedLeafProfileRecords(
+type PaneAddress = { tabId: string; leafId: string }
+
+/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a pane to its new key. */
+export function rekeyPaneProfileRecords(
   state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
-  move: TerminalLeafMoveRequest
+  from: PaneAddress,
+  to: PaneAddress
 ): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
-  const { from: fromPaneKey, to: toPaneKey } = terminalLeafMovePaneKeys(move)
+  const fromPaneKey = makePaneKey(from.tabId, from.leafId)
+  const toPaneKey = makePaneKey(to.tabId, to.leafId)
   const ui = state.ui
   let nextUi: PersistedState['ui'] | undefined
   for (const key of PANE_KEYED_UI_RECORDS) {
@@ -224,15 +231,15 @@ export function rekeyMovedLeafProfileRecords(
   }
   const leases = state.sshRemotePtyLeases ?? []
   const leasesChanged = leases.some(
-    (lease) => lease.tabId === move.sourceTabId && lease.leafId === move.leafId
+    (lease) => lease.tabId === from.tabId && lease.leafId === from.leafId
   )
   return {
     ...(nextUi ? { ui: nextUi } : {}),
     ...(leasesChanged
       ? {
           sshRemotePtyLeases: leases.map((lease) =>
-            lease.tabId === move.sourceTabId && lease.leafId === move.leafId
-              ? { ...lease, tabId: move.targetTabId }
+            lease.tabId === from.tabId && lease.leafId === from.leafId
+              ? { ...lease, tabId: to.tabId, leafId: to.leafId }
               : lease
           )
         }
@@ -240,14 +247,33 @@ export function rekeyMovedLeafProfileRecords(
   }
 }
 
+/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a moved leaf. */
+export function rekeyMovedLeafProfileRecords(
+  state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
+  move: TerminalLeafMoveRequest
+): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
+  return rekeyPaneProfileRecords(
+    state,
+    { tabId: move.sourceTabId, leafId: move.leafId },
+    { tabId: move.targetTabId, leafId: move.leafId }
+  )
+}
+
 /** Pane-keyed UI marks and SSH leases follow a moved leaf; returns their restores. */
 export function writeMovedLeafProfileRecords(
   request: TerminalLeafMoveRequest,
   context: TerminalTopologyCommitContext
 ): (() => void)[] {
+  return writeRekeyedProfileRecords(rekeyMovedLeafProfileRecords(context.state, request), context)
+}
+
+/** Writes rekeyed UI marks and SSH leases; returns their restores. */
+export function writeRekeyedProfileRecords(
+  rekeyed: ReturnType<typeof rekeyPaneProfileRecords>,
+  context: TerminalTopologyCommitContext
+): (() => void)[] {
   const { state } = context
   const restores: (() => void)[] = []
-  const rekeyed = rekeyMovedLeafProfileRecords(state, request)
   if (rekeyed.ui) {
     restores.push(
       writeRestorable(

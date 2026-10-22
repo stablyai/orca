@@ -87,11 +87,8 @@ const electronMocks = vi.hoisted(() => {
 })
 
 const closeLocalWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
-const closeRemoteWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
 const restoreLocalWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
-const restoreRemoteWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
 const forgetLocalWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
-const forgetRemoteWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
 const scanLocalRepoWorktreesForResolutionMock: TestMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
@@ -100,11 +97,8 @@ vi.mock('electron', () => electronMocks)
 // would silently pass against the inert default. Same mocks, same expectations.
 setWorktreeWatcherRemoval({
   closeLocal: closeLocalWatcherForWorktreePathMock,
-  closeRemote: closeRemoteWatcherForWorktreePathMock,
   restoreLocal: restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemote: restoreRemoteWatcherAfterFailedRemovalMock,
-  forgetLocal: forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemote: forgetRemoteWatcherRemovalSnapshotMock
+  forgetLocal: forgetLocalWatcherRemovalSnapshotMock
 })
 
 const {
@@ -162,6 +156,7 @@ const {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,
@@ -248,6 +243,7 @@ const {
     listGitLabWorkItemsMock: vi.fn() as TestMock,
     listGitLabIssuesMock: vi.fn() as TestMock,
     listGitLabLabelsMock: vi.fn() as TestMock,
+    listGitLabAssignableUsersMock: vi.fn<TestMock>(),
     listGitLabTodosMock: vi.fn() as TestMock,
     getGitLabProjectRefForRemoteMock: vi.fn() as TestMock,
     getGitLabWorkItemByProjectRefMock: vi.fn() as TestMock,
@@ -291,7 +287,7 @@ vi.mock('../../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
@@ -357,15 +353,14 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
 })
 
 vi.mock('../../ipc/filesystem-auth', () => ({
-  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue),
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
-  invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock,
-  isENOENT: (error: unknown) =>
-    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+  resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
 vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
+vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
@@ -440,6 +435,7 @@ vi.mock('../../gitlab/client', async (importOriginal) => {
     listWorkItems: listGitLabWorkItemsMock,
     listIssues: listGitLabIssuesMock,
     listLabels: listGitLabLabelsMock,
+    listAssignableUsers: listGitLabAssignableUsersMock,
     listTodos: listGitLabTodosMock,
     getProjectRefForRemote: getGitLabProjectRefForRemoteMock,
     getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock,
@@ -529,11 +525,8 @@ export {
   findExistingWorktreeSymlinkPathsMock,
   resolveLocalGitUsernameMock,
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   scanLocalRepoWorktreesForResolutionMock,
   MOCK_GIT_WORKTREES,
   addSparseWorktreeMock,
@@ -589,6 +582,7 @@ export {
   listGitLabWorkItemsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabTodosMock,
   getGitLabProjectRefForRemoteMock,
   getGitLabWorkItemByProjectRefMock,

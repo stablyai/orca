@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type SyncDatabase from '../sqlite/sync-database'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
-import { asRecord, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import {
   opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
@@ -48,7 +48,11 @@ export function readOpenCode2TranscriptSignal(
   ) {
     throw new Error('OpenCode transcript signal is invalid')
   }
+  const source = columnExists(db, 'session_v2', 'directory')
+    ? asRecord(db.prepare('SELECT directory FROM session_v2 WHERE id = ?').get(sessionId))
+    : null
   return {
+    cwd: extractString(source?.directory),
     messageCount: row.count,
     partCount: 0,
     maxMessageRowId: row.latest,

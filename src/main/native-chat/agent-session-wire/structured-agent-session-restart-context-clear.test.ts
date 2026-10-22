@@ -61,6 +61,7 @@ describe('restart offers after context clear', () => {
           child: { fence: 2, phase: 'ready' }
         },
         getRecord: value,
+        childWorkOpen: () => false,
         childWork: () => undefined,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
@@ -80,6 +81,7 @@ describe('restart offers after context clear', () => {
       sessionId: SESSION,
       session: { journal: journal([clear, turn]), child: { fence: 2, phase: 'ready' } },
       getRecord: () => currentRecord,
+      childWorkOpen: () => false,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,

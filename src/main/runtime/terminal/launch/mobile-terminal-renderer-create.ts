@@ -1,9 +1,8 @@
-import { applyClaudeTerminalImageViewerEnv } from '../../terminal-image-viewer-env'
+import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
 import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobile-terminal-startup'
-import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-owned-create'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import { OrcaRuntimeWithCreateMobileSessionTerminal } from './mobile-terminal-create'
+import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
@@ -19,10 +18,12 @@ import {
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
 import { assertMobileTerminalShellSupported } from './mobile-terminal-shell-refusal'
+import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 
 export type MobileTerminalCreateOptions = {
   terminalImageViewerSupported?: boolean
   afterTabId?: string
+  sourceChatFork?: { sessionId: string }
   targetGroupId?: string
   command?: string
   shellOverride?: string
@@ -42,22 +43,11 @@ export type MobileTerminalCreateOptions = {
   signal?: AbortSignal
 }
 
-export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithCreateMobileSessionTerminal {
-  protected abstract captureReadyGraphEpoch(): number
-
+export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
     workspace: TerminalWorkspaceLaunchScope,
     opts: MobileTerminalCommandOptions
   ): Promise<MobileTerminalCommand>
-
-  protected abstract assertStableReadyGraph(expectedGraphEpoch: number): void
-
-  protected abstract createRuntimeOwnedMobileSessionTerminal(
-    worktreeId: string,
-    activate: boolean,
-    afterTabId?: string,
-    opts?: OwnedMobileTerminalCreateOptions
-  ): Promise<RuntimeMobileSessionCreateTerminalResult>
 
   protected abstract ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
@@ -110,18 +100,21 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       opts.clientNavigationId && opts.supportsSplitGroupPlacement === false
         ? undefined
         : requestedAfterTabId
-    let afterDesktopTabId: string | undefined
-    if (requestedAfterTabId) {
-      const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-      const anchor = snapshot?.tabs.find((tab) => tab.id === requestedAfterTabId)
-      if (!anchor) {
-        throw new Error('after_tab_not_found')
-      }
-      if (afterTabId) {
-        afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
-      }
+    if (opts.sourceChatFork) {
+      return this.createMobileChatForkTerminal({
+        workspace,
+        worktreeId,
+        opts,
+        afterTabId,
+        graphEpoch
+      })
     }
-    const startupCommand = applyClaudeTerminalImageViewerEnv(
+    const afterDesktopTabId = anchorTabOfCreate(
+      this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
+      requestedAfterTabId,
+      afterTabId !== undefined
+    )
+    const startupCommand = applyRemoteViewerLaunchEnv(
       await this.resolveMobileSessionTerminalCommand(workspace, opts),
       opts.terminalImageViewerSupported
     )
@@ -168,6 +161,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
+          ...mainPlacedAfter(
+            () => this.mainLayoutTabOfRow(worktreeId, requestedAfterTabId),
+            afterDesktopTabId
+          ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           launchConfig: startupCommand.launchConfig,
           launchRuntime: startupCommand.launchRuntime,

@@ -30,7 +30,7 @@ import type { FakeRpcClient } from './bridge-host-test-fakes'
 const doubles = vi.hoisted((): { client: FakeRpcClient | null } => ({ client: null }))
 
 // Reaching the real one imports the Expo runtime this test does not have; the hook reads one field.
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: doubles.client })
 }))
 

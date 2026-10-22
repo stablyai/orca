@@ -14,10 +14,10 @@ import {
   readHostKeyType,
   type KnownHostsEntry,
   type KnownHostsOutcome
-} from './ssh-known-hosts'
-import { decideHostKey, type HostKeyDecision } from './ssh-host-key-decision'
+} from './config/ssh-known-hosts'
+import { decideHostKey, type HostKeyDecision, type HostKeyPolicy } from './ssh-host-key-decision'
 
-export type TrustedHostKeyLookup = (query: {
+type TrustedHostKeyLookup = (query: {
   host: string
   port: number
   keyType: string
@@ -31,7 +31,7 @@ export type HostKeyVerifierDeps = {
   /** True when `host` came from HostKeyAlias; ssh looks those up without the port. */
   isHostKeyAlias?: boolean
   strictHostKeyChecking: string
-  isEphemeralRuntimeTarget: boolean
+  policy: HostKeyPolicy
   siteConfigSuppressed: boolean
   knownHostsUnreadable: boolean
   /** Already unioned across every known_hosts file. */
@@ -157,7 +157,7 @@ export function orderServerHostKeyAlgorithms(
   return [...preferred, ...supported.filter((algorithm) => !preferredSet.has(algorithm))]
 }
 
-export type VerifyCallback = (accept: boolean) => void
+type VerifyCallback = (accept: boolean) => void
 
 /**
  * The ssh2 `hostVerifier`.
@@ -222,7 +222,7 @@ export function createHostKeyVerifier(
         }),
         storeOutcome: deps.isTrusted({ host: deps.host, port: deps.port, keyType, key }),
         strictHostKeyChecking: deps.strictHostKeyChecking,
-        isEphemeralRuntimeTarget: deps.isEphemeralRuntimeTarget,
+        policy: deps.policy,
         siteConfigSuppressed: deps.siteConfigSuppressed,
         knownHostsUnreadable: deps.knownHostsUnreadable,
         displayHost: deps.displayHost,

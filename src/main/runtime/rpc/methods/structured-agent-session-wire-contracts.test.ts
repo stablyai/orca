@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
+  RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
@@ -28,6 +30,16 @@ import {
   STRUCTURED_CLIENT,
   STRUCTURED_MOBILE_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
+import {
+  createQueuedMessageTestRig,
+  eventually
+} from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+import {
+  HOST_TEST_SESSION as HOST_SESSION,
+  hostTestMessage,
+  hostTestOperationId
+} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { holdDelivery } from '../../../native-chat/agent-session-wire/structured-agent-session-delivery-hold.test-fixture'
 
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)
@@ -142,6 +154,40 @@ describe('agentSession.conversationOutline', () => {
     )
     expect(response).toMatchObject({ ok: false })
     expect(hostCalls.journalSnapshot).not.toHaveBeenCalled()
+  })
+})
+
+describe('agentSession.item', () => {
+  it('returns a whole output that every other read sends a head of', async () => {
+    const output = 'z'.repeat(64 * 1024)
+    const item = {
+      itemId: 'tool-1',
+      revision: 2,
+      sequence: 7,
+      observedAt: 7,
+      body: {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'cat big.log' },
+        state: 'completed',
+        output: { head: output, byteLength: output.length, digest: 'd', truncated: false }
+      }
+    }
+    hostCalls.journalSnapshot.mockReturnValueOnce({
+      sessionId: SESSION,
+      cursor: { epoch: 'epoch-a', sequence: 7 },
+      items: [item],
+      submissions: []
+    })
+
+    const response = await call(
+      'agentSession.item',
+      { sessionId: SESSION, itemId: 'tool-1' },
+      STRUCTURED_MOBILE_CLIENT
+    )
+
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+    expect(response).toMatchObject({ ok: true, result: { item } })
   })
 })
 
@@ -295,8 +341,7 @@ describe('legacy attach-shaped permission creation', () => {
           structuredAgentSessionLaunchSeedOptions: seed
         })
       ).toMatchObject({ ok: true })
-      expect(hostCalls.attach).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({
           options: { permissionMode: 'full-access' },
           envelope: params.envelope
@@ -424,6 +469,59 @@ describe('agentSession.send reply timing', () => {
       })
     }
     expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
+  })
+
+  it('keeps an old phone image send immediate and never recovers its interrupted send as a hidden card', async () => {
+    const rig = await createQueuedMessageTestRig()
+    hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
+    const imageSend = () => {
+      const body = hostTestMessage('from an old phone')
+      body.blocks.push({ type: 'image-ref', path: '/tmp/shot.png' })
+      const fields = { body, delivery: 'queue-if-active' as const }
+      const id = hostTestOperationId()
+      return { id, request: { envelope: rig.envelope(fields, 'agentSession.send', id), ...fields } }
+    }
+    let release = () => {}
+    try {
+      const working = await rig.workingSend()
+      const image = imageSend()
+      expect(
+        await call('agentSession.send', image.request, STRUCTURED_MOBILE_CLIENT)
+      ).toMatchObject({
+        ok: true,
+        result: { value: { submission: { clientMessageId: image.id } } }
+      })
+      expect(await rig.drafts()).toEqual([])
+      await rig.settleAccepted(working, 'working')
+      await eventually(async () => {
+        expect((await rig.submission(image.id))?.handedOverAt).toBeDefined()
+        expect(
+          rig.dispatch.mock.calls.find(([input]) => input.clientMessageId === image.id)?.[0].body
+        ).toEqual(image.request.body)
+      })
+      await rig.settleAccepted(image.id, 'image')
+
+      const hold = holdDelivery()
+      release = hold.release
+      const interrupted = imageSend()
+      expect(
+        await call('agentSession.send', interrupted.request, STRUCTURED_MOBILE_CLIENT)
+      ).toMatchObject({ ok: true, result: { value: { submission: expect.anything() } } })
+      await hold.held
+      const closed = rig.host.close(HOST_SESSION, 'user-close')
+      release()
+      await closed
+      rig.crashRestartHostProcess()
+      expect(await rig.drafts()).toEqual([])
+      expect(await rig.submission(interrupted.id)).toMatchObject({
+        source: { kind: 'user' },
+        dispatchState: 'rejected'
+      })
+      expect(await rig.submission(interrupted.id)).not.toHaveProperty('keptAsQueuedMessageId')
+    } finally {
+      release()
+      await rig.dispose()
+    }
   })
 })
 

@@ -89,7 +89,11 @@ export function orcadNodePtySlotFiles(target: string): string[] {
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
-      'conpty/OpenConsole.exe'
+      'conpty/OpenConsole.exe',
+      // node-pty's winpty backend, which it selects below Windows build 18309.
+      'pty.node',
+      'winpty.dll',
+      'winpty-agent.exe'
     ]
   }
   return target.startsWith('darwin-') ? ['pty.node', 'spawn-helper'] : ['pty.node']
@@ -116,6 +120,13 @@ export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js
 export const ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY = 'port-scan-command-worker-entry.js'
 // Equals AI_VAULT_SERVICE_ENTRY_FILENAME: the forked child that lists agent sessions.
 export const ORCAD_SESSION_SCANNER_SERVICE_ENTRY = 'session-scanner-service-entry.js'
+// Equals COMPUTER_SIDECAR_ENTRY_FILENAME, and the desktop's out/main entry name.
+export const ORCAD_COMPUTER_SIDECAR_ENTRY = 'computer-sidecar.js'
+/** Plain scripts, one copy for every target: each platform's sidecar runs only its own. */
+export const ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS = [
+  'computer-use-linux/runtime.py',
+  'computer-use-windows/runtime.ps1'
+] as const
 
 // Kept here because build-orcad.mjs imports this manifest directly under Node type stripping.
 export const ORCAD_RIPGREP_ARTIFACTS = [
@@ -139,6 +150,21 @@ export function orcadRipgrepArtifact(target: string): string {
   return artifact
 }
 
+/** Packaging-only references; deployed slots still contain their own verified binary. */
+export function orcadTemplatePackagedRipgrep(
+  schemaVersion: number,
+  target: string,
+  reference: unknown
+): string | null {
+  if (reference === undefined) {
+    return null
+  }
+  if (schemaVersion !== 4 || reference !== true || target.startsWith('darwin-')) {
+    throw new Error(`Invalid packaged ripgrep reference for ${target}`)
+  }
+  return orcadRipgrepArtifact(target)
+}
+
 export const ORCAD_RIPGREP_LICENSE_ARTIFACTS = [
   'ripgrep/licenses/JEMALLOC-COPYING',
   'ripgrep/licenses/LICENSE-MIT',
@@ -156,6 +182,47 @@ export const ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS = [
   'native-chat-visuals/.claude-plugin/plugin.json',
   'native-chat-visuals/skills/orca-chat-visuals/SKILL.md'
 ] as const
+
+/**
+ * The page phones load over mobileWeb.bundle.*, at the path getBundledMobileWebBundleRoot probes
+ * under the install root. Its assets are content-addressed, so only its manifest names them.
+ */
+export const ORCAD_MOBILE_WEB_DIR = 'out/mobile-web'
+export const ORCAD_MOBILE_WEB_MANIFEST = `${ORCAD_MOBILE_WEB_DIR}/manifest.json`
+
+// Mirrors manifest-contract ASSET_PATH_PATTERN; cannot import under type stripping.
+const MOBILE_WEB_ASSET_PATH = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
+
+/** A bundle-relative asset path that stays inside the page directory. */
+export function isOrcadMobileWebAssetPath(path: string): boolean {
+  return (
+    MOBILE_WEB_ASSET_PATH.test(path) &&
+    !path.split('/').some((segment) => segment === '.' || segment === '..')
+  )
+}
+
+/** Slot paths of every asset `manifestText` lists, sorted; throws rather than ship a partial page. */
+export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
+  const manifest: unknown = JSON.parse(manifestText)
+  const assets =
+    manifest && typeof manifest === 'object' && 'assets' in manifest ? manifest.assets : undefined
+  if (!Array.isArray(assets) || assets.length === 0) {
+    throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} lists no assets`)
+  }
+  const filenames = assets.map((asset: unknown) => {
+    const path = asset && typeof asset === 'object' && 'path' in asset ? asset.path : undefined
+    if (typeof path !== 'string' || !isOrcadMobileWebAssetPath(path)) {
+      throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} names an unsafe asset path: ${String(path)}`)
+    }
+    return `${ORCAD_MOBILE_WEB_DIR}/${path}`
+  })
+  return filenames.sort(compareCodeUnits)
+}
+
+/** Code-unit order: page asset lists feed the install hash, so they must not depend on locale. */
+export function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
 
 export type OrcadArtifact = {
   filename: string
@@ -186,6 +253,11 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Worker threads the account services start: CLI probes off the event loop, Claude account setup.
   { filename: 'worker-thread-child-process-entry.js' },
   { filename: 'claude-profile-setup-worker-entry.js' },
+  // Dictation's worker thread; it loads the recognizer `orca serve` names (#31174).
+  { filename: 'stt-worker.js' },
+  // `orca computer` forks it; it finds the platform runtimes below beside itself (#31777).
+  { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
+  ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_SERVER_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.
@@ -196,7 +268,9 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: ORCAD_LINEAR_SDK_ENTRY },
   ...ORCAD_NODE_PTY_JS_ARTIFACTS.map((filename) => ({ filename })),
   ...ORCAD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename })),
-  ...ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS.map((filename) => ({ filename }))
+  ...ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS.map((filename) => ({ filename })),
+  // Without it phones paired to this server get no page (mobileWeb.bundle.v1 is not advertised).
+  { filename: ORCAD_MOBILE_WEB_MANIFEST }
 ]
 
 /** Written after the artifacts, so it is never an input to its own hash. */
@@ -207,8 +281,14 @@ export const ORCAD_TEMPLATE_TARGETS_DIR = 'targets'
 /** Written last by the installer; its absence means a torn install. */
 export const ORCAD_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
-/** Every file a `target` slot ships, in hash order; `target` is `<os>-<arch>[-<libc>]`. */
-export function orcadArtifactFilenames(target: string): string[] {
+/**
+ * Every file a `target` slot ships, in hash order; `target` is `<os>-<arch>[-<libc>]`.
+ * `mobileWebAssets` is orcadMobileWebAssetFilenames of the slot's own page manifest.
+ */
+export function orcadArtifactFilenames(
+  target: string,
+  mobileWebAssets: readonly string[]
+): string[] {
   const filenames = ORCAD_ARTIFACTS.filter((artifact) => !artifact.optional).map(
     (artifact) => artifact.filename
   )
@@ -220,22 +300,26 @@ export function orcadArtifactFilenames(target: string): string[] {
       ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
     )
   }
+  filenames.push(...mobileWebAssets)
   return filenames
 }
 
 /** Files shared by every template target; the rest live under `targets/<target>/`. */
-export function orcadTemplateCommonFilenames(): string[] {
-  return ORCAD_ARTIFACTS.filter(
+export function orcadTemplateCommonFilenames(mobileWebAssets: readonly string[]): string[] {
+  const filenames = ORCAD_ARTIFACTS.filter(
     (artifact) =>
       !artifact.optional &&
       artifact.filename !== ORCAD_SERVER_TARGET_FILENAME &&
       artifact.filename !== ORCAD_NODE_RUNTIME_MARKER_FILENAME &&
       artifact.filename !== ORCAD_PARCEL_WATCHER_NATIVE
   ).map((artifact) => artifact.filename)
+  // The page is platform-independent, so the template keeps one copy for every target.
+  filenames.push(...mobileWebAssets)
+  return filenames
 }
 
 /** Files stored under the template's `targets/<target>/`, at their slot-relative paths. */
 export function orcadTemplateTargetFilenames(target: string): string[] {
-  const common = new Set(orcadTemplateCommonFilenames())
-  return orcadArtifactFilenames(target).filter((filename) => !common.has(filename))
+  const common = new Set(orcadTemplateCommonFilenames([]))
+  return orcadArtifactFilenames(target, []).filter((filename) => !common.has(filename))
 }

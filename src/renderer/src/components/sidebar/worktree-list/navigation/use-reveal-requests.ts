@@ -12,7 +12,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
 
 function workspacePassesFilters(

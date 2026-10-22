@@ -2,7 +2,7 @@ import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { assertSshMutationExpectation } from '../../ssh/ssh-connection-generation'
+import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
 
 export const RUNTIME_FILE_MUTATION_UPDATE_REQUIRED =
   'Remote file changes require a newer Orca client. Update the paired client and try again.'

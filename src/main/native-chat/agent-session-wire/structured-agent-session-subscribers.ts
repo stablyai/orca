@@ -1,5 +1,4 @@
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
-import type { AgentSessionPublishedWork } from './agent-session-published-work'
 // Per-subscriber cursors over one session's journal.
 //
 // Each subscriber advances independently: a client that connected two epochs
@@ -17,10 +16,14 @@ import {
   backgroundTaskFingerprint,
   emitSubscriberFrame,
   subscriberCommandsChanged,
-  type SubscriberFieldHooks
+  type SubscriberFieldHooks,
+  type SubscriberFieldState
 } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
-import { deliverToSubscriber } from './agent-session-subscriber-catch-up'
+import {
+  deliverToSubscriber,
+  type SubscriberDeliveryPort
+} from './agent-session-subscriber-catch-up'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
@@ -28,6 +31,7 @@ import { withPublishedWork } from './agent-session-published-work'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
+import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -38,6 +42,7 @@ export type AgentSessionSubscribeInput = {
   cursor?: AgentJournalCursor
   /** Every frame to fit a phone's bridge frame; the RPC sets it for every phone. */
   boundedFrames?: boolean
+  projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
   readsCurrentRequests?: boolean
   /** False for desktops that need exact replay to keep send echoes and current requests. */
   snapshotCatchUp?: boolean
@@ -50,9 +55,10 @@ export type Subscriber = CurrentRequestsSubscriber & {
   cursor: AgentJournalCursor
   fence: number
   boundedFrames: boolean
+  projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
   snapshotCatchUp?: boolean
   commands?: AgentSessionSlashCommand[] | null
-  /** The last draft list actually SENT — never advanced on a page that withheld
+  /** Canonical publication last sent — never advanced on a page that withheld
    *  it, or the final replacement would be suppressed by the identity dedup. */
   queuePublication?: QueuePublication
   /** Fingerprint of the background-task roster last SENT. */
@@ -93,17 +99,9 @@ export class AgentSessionSubscribers {
     return this.bySession.get(sessionId)?.size ?? 0
   }
 
-  open(input: {
-    id: string
-    sessionId: string
-    journal: AgentSessionJournal
-    fence: number
-    emit: AgentSessionSubscriberEmit
-    cursor?: AgentJournalCursor
-    boundedFrames?: boolean
-    readsCurrentRequests?: boolean
-    snapshotCatchUp?: boolean
-  }): () => void {
+  open(
+    input: AgentSessionSubscribeInput & { journal: AgentSessionJournal; fence: number }
+  ): () => void {
     const liveCursor = input.journal.cursor()
     const subscriber: Subscriber = {
       id: input.id,
@@ -111,8 +109,9 @@ export class AgentSessionSubscribers {
       emit: input.emit,
       cursor: input.cursor ?? { epoch: liveCursor.epoch, sequence: 0 },
       fence: input.fence,
-      readsCurrentRequests: input.readsCurrentRequests === true,
       boundedFrames: input.boundedFrames === true,
+      projectQueuePublication: input.projectQueuePublication,
+      readsCurrentRequests: input.readsCurrentRequests === true,
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
@@ -123,10 +122,7 @@ export class AgentSessionSubscribers {
     if (input.cursor) {
       this.deliver(subscriber, input.journal, hostNow, true)
       refreshDerivedStopNotes(
-        {
-          emit: (target, event, options) => this.emit(target, event, options),
-          isActive: (target) => this.isActive(target)
-        },
+        this.deliveryPort(),
         subscriber,
         input.journal,
         hostNow,
@@ -142,7 +138,6 @@ export class AgentSessionSubscribers {
         ),
         work
       )
-      subscriber.workView = work?.viewKey()
       this.emit(
         subscriber,
         {
@@ -156,6 +151,7 @@ export class AgentSessionSubscribers {
         { currentWork: work }
       )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
+      refreshPublishedWork(this.deliveryPort(), subscriber, input.journal, work, { hostNow })
     }
     const { sessionId, id } = subscriber
     return () => this.close(sessionId, id)
@@ -228,7 +224,6 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
       const page = pageFor(subscriber)
-      subscriber.workView = work?.viewKey()
       this.emit(
         subscriber,
         {
@@ -243,6 +238,7 @@ export class AgentSessionSubscribers {
       )
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
+      refreshPublishedWork(this.deliveryPort(), subscriber, journal, work, { hostNow })
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
@@ -301,18 +297,25 @@ export class AgentSessionSubscribers {
     emitCheckpoint = false,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    deliverToSubscriber(
-      {
-        hooks: this.hooks,
-        emit: (target, event, options) => this.emit(target, event, options),
-        isActive: (target) => this.isActive(target),
-        activity: (sessionId) => this.activityField(sessionId).activity
-      },
-      { subscriber, journal, hostNow, emitCheckpoint, activity }
-    )
+    deliverToSubscriber(this.deliveryPort(), {
+      subscriber,
+      journal,
+      hostNow,
+      emitCheckpoint,
+      activity
+    })
   }
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
+
+  private deliveryPort(): SubscriberDeliveryPort {
+    return {
+      hooks: this.hooks,
+      emit: (target, event, options) => this.emit(target, event, options),
+      isActive: this.isActive,
+      activity: (sessionId) => this.activityField(sessionId).activity
+    }
+  }
 
   private isActive = (subscriber: Subscriber): boolean =>
     this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
@@ -322,10 +325,7 @@ export class AgentSessionSubscribers {
   private emit(
     subscriber: Subscriber,
     event: AgentSessionSubscribeEvent,
-    options?: {
-      withholdQueued?: boolean
-      currentWork?: AgentSessionPublishedWork
-    }
+    options?: Parameters<SubscriberDeliveryPort['emit']>[2]
   ): void {
     try {
       emitSubscriberFrame(this.hooks, subscriber, event, options)

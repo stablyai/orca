@@ -18,7 +18,6 @@ import {
   sourceScopedRepoCacheKey
 } from './cache-identity'
 import { isFresh, withBoundedCacheEntry } from './cache-policy'
-import { debouncedSaveCache } from './cache-persistence'
 import {
   inflightChecksRequests,
   nextProviderRequestId,
@@ -93,7 +92,6 @@ export const createCheckActions = (
       )
       if (prStatusUpdate) {
         set(prStatusUpdate)
-        debouncedSaveCache(get())
       }
       return cachedChecks
     }
@@ -194,7 +192,6 @@ export const createCheckActions = (
 
         return nextState
       })
-      debouncedSaveCache(get())
       return checks
     })().finally(() => {
       if (ownsInflightRequest(inflightChecksRequests, inflightKey, requestId)) {

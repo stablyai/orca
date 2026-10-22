@@ -10,6 +10,7 @@ import { createOrcadMigrationManifest } from '../../ssh/orcad-migration-manifest
 import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
 import { collectOrcadMigrationUntransferredDependencyCensus } from './orcad-source-dependency-census'
 import { subtractOrcadMigrationSourceDormantState } from './orcad-source-dormant-subtraction'
+import { collectOrcadMigrationSourceDrafts } from './orcad-source-draft-rename'
 
 const TARGET = {
   id: 'ssh-prod',
@@ -60,6 +61,16 @@ function draft(): PersistedOpenFile {
     language: 'typescript',
     dirtyDraftContent: 'unsaved'
   }
+}
+
+/** The tab the server gets, while the draft stays here for the commit to rename. */
+function expectDraftKeptHere(state: PersistedState): void {
+  const manifest = exportState(state)
+  const { dirtyDraftContent: _draft, ...tab } = draft()
+  expect(manifest.payload.dormantState?.workspaceSession?.openFilesByWorktree?.[WORKTREE]).toEqual([
+    tab
+  ])
+  expect(collectOrcadMigrationSourceDrafts(state, manifest)[WORKTREE]).toEqual([draft()])
 }
 
 function sourceState(): PersistedState {
@@ -248,7 +259,7 @@ describe('migrating saved state from released SSH clients', () => {
       expect(census(state).totalCount).toBe(0)
       const session = exportState(state).payload.dormantState?.workspaceSession
       expect(session?.tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(['local'])
-      expect(session?.openFilesByWorktree?.[WORKTREE]).toEqual([draft()])
+      expectDraftKeptHere(state)
       expect(session?.sleepingAgentSessionsByPaneKey ?? {}).toEqual({})
     })
 
@@ -287,7 +298,7 @@ describe('migrating saved state from released SSH clients', () => {
       expect(census(state).totalCount).toBe(0)
       const session = exportState(state).payload.dormantState?.workspaceSession
       expect(session?.tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(['host'])
-      expect(session?.openFilesByWorktree?.[WORKTREE]).toEqual([draft()])
+      expectDraftKeptHere(state)
     })
 
     it('refuses when the host holds a different copy of the file with the local draft', () => {

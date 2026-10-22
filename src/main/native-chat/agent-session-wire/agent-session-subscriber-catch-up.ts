@@ -12,11 +12,8 @@ import {
 import { sameJournalCursor } from '../agent-session-journal/journal-cursor'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import {
-  agentSessionPublishedWorkFields,
-  withPublishedWork,
-  withPublishedWorkResult
-} from './agent-session-published-work'
+import { withPublishedWork, withPublishedWorkResult } from './agent-session-published-work'
+import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { AgentSessionPublishedWork } from './agent-session-published-work'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
@@ -104,7 +101,7 @@ export function deliverToSubscriber(
         ...shared
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
-      subscriber.workView = work?.viewKey()
+      refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return
     }
     const page = result.page
@@ -131,6 +128,7 @@ export function deliverToSubscriber(
         activity: port.activity(subscriber.sessionId)
       })
       subscriber.cursor = tail.liveCursor ?? tail.window.nextCursor
+      refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return
     }
     emit(
@@ -158,8 +156,8 @@ export function deliverToSubscriber(
       { withholdQueued: page.hasNewer }
     )
     subscriber.cursor = page.window.nextCursor
-    subscriber.workView = work?.viewKey()
     if (!page.hasNewer || !port.isActive(subscriber)) {
+      refreshPublishedWork(delivery, subscriber, journal, work, shared)
       return
     }
   }
@@ -183,14 +181,12 @@ function emitCaughtUp(
   // A generation that ended (or began) with no row, or an exit this host saw with no lease write,
   // changes what is current: the caught-up frame restates the view.
   const { work } = current
-  const workChanged = work !== undefined && work.viewKey() !== subscriber.workView
-  if (
-    emitCheckpoint ||
-    shared.activity !== undefined ||
-    commandsChanged ||
-    queuedChanged ||
-    workChanged
-  ) {
+  const workChanged = work !== undefined && work.workViewKey() !== subscriber.workView
+  if (workChanged) {
+    refreshPublishedWork(port, subscriber, current.journal, work, shared)
+    return
+  }
+  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
     port.emit(
       subscriber,
       {
@@ -198,13 +194,9 @@ function emitCaughtUp(
         sessionId: subscriber.sessionId,
         batch: emptyAgentSessionBatch(subscriber.cursor),
         fence: subscriber.fence,
-        ...(workChanged ? agentSessionPublishedWorkFields(current.journal, work) : {}),
         ...shared
       },
       { currentWork: work }
     )
-    if (workChanged) {
-      subscriber.workView = work.viewKey()
-    }
   }
 }

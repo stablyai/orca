@@ -1,16 +1,5 @@
 import type { AiVaultListResult, AiVaultScanIssue } from '../../../../shared/ai-vault-types'
 
-/** Banners describe only the scan whose result is applied. */
-export function currentAiVaultScanIssueResult(
-  result: AiVaultListResult | null,
-  localRefreshLoading = false
-): AiVaultListResult | null {
-  if (localRefreshLoading || !result) {
-    return null
-  }
-  return result
-}
-
 export function blockingAiVaultScanIssue(
   result: AiVaultListResult | null
 ): AiVaultScanIssue | null {

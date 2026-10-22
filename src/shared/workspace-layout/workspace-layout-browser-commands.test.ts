@@ -50,6 +50,15 @@ describe('openBrowserTab under the window’s ids', () => {
     expect(saved.browserTabsByWorktree?.[WS]?.at(-1)).toMatchObject({ pageIds: ['page-1'] })
   })
 
+  // Why: the window's next save carries its own timestamps; main's copy must hold the same ones.
+  it('keeps the times the window drew the entry and the record at', () => {
+    const { model } = build(testContext(), [
+      { ...WINDOW_OPEN, createdAt: 1_700_000_000_001, browserCreatedAt: 1_700_000_000_000 }
+    ])
+    expect(model.workspaces[WS]!.tabs.at(-1)?.createdAt).toBe(1_700_000_000_001)
+    expect(records(model)?.at(-1)?.createdAt).toBe(1_700_000_000_000)
+  })
+
   it('places the tab where the window drew it', () => {
     const { ctx, model, hostTab } = setup()
     const placed = build(
@@ -74,7 +83,7 @@ describe('openBrowserTab under the window’s ids', () => {
     ])
   })
 
-  it('places a tab whose group main lacks beside its anchor', () => {
+  it('places a tab whose group main lacks in the workspace’s first group', () => {
     const { ctx, model } = setup()
     const split = build(
       ctx,
@@ -98,8 +107,8 @@ describe('openBrowserTab under the window’s ids', () => {
       model
     ).model
     expect(split.workspaces[WS]!.groups.map((group) => group.tabOrder)).toEqual([
-      [expect.any(String)],
-      ['entry-1', 'entry-2']
+      [expect.any(String), 'entry-2'],
+      ['entry-1']
     ])
   })
 

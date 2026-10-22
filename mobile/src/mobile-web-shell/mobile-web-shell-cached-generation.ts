@@ -2,9 +2,9 @@ import type {
   CachedGeneration,
   MobileWebShellBlockedVerdict,
   MobileWebShellSession,
+  MobileWebShellSessionState,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
-import { NATIVE_ROUTE } from './mobile-web-shell-gates'
 import { matchesRoutePattern, routeViewOf } from './page-route-policy'
 import { step } from './mobile-web-shell-session-step'
 
@@ -34,32 +34,32 @@ export function openCached(
 }
 
 /**
- * Opens a generation already on disk under its own route list, or leaves the route native when that
- * list does not carry it. The only judge available when the newer manifest is absent or refused:
+ * Opens a generation already on disk under its own route list, or answers `unclaimed` when that list
+ * does not carry it. The only judge available when the newer manifest is absent or refused:
  * opening under a bundle this shell is not running would grant the page what other bytes declared.
  *
- * The route question comes first and `wall` is asked only on the served branch, the order
- * `onManifestRead` takes: a route this bundle never claimed is not a screen to refuse, and a
- * generation cached before routes were listed claims none at all. `patch` belongs to either answer;
- * `served` is what only an opened page gets, so the native one carries no notice about an update
- * for a screen it is not showing.
+ * `unclaimed` is the caller's because these bytes say nothing about what the host serves now: the
+ * screen the newer manifest would have answered with, never a version wall. `wall` is asked only on
+ * the served branch, since it judges bytes that are about to be shown. `patch` belongs to either
+ * answer; `served` is what only an opened page gets.
  */
 export function openByOwnRoutes(
   session: MobileWebShellSession,
   generation: CachedGeneration,
   options: {
+    unclaimed: MobileWebShellSessionState
     patch?: Partial<MobileWebShellSession>
     served?: Partial<MobileWebShellSession>
     wall?: MobileWebShellBlockedVerdict | null
-  } = {}
+  }
 ): MobileWebShellStep {
-  const { patch = {}, served = {}, wall = null } = options
+  const { unclaimed, patch = {}, served = {}, wall = null } = options
   const view = {
     ...routeViewOf(generation.routes, session.routePathname, session.wide),
     routes: generation.routes
   }
   if (!rendersRoute(view.pageRoutes, session.routePathname)) {
-    return step(session, { ...patch, ...view, state: NATIVE_ROUTE })
+    return step(session, { ...patch, ...view, state: unclaimed })
   }
   if (wall !== null) {
     return step(session, { ...patch, ...view, state: { kind: 'wall', verdict: wall } })

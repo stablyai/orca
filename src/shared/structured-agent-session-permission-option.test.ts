@@ -44,12 +44,7 @@ describe('the permission mode picker', () => {
       'codex',
       structuredAgentSessionSeedCatalog('codex')
     )
-    const view = structuredAgentSessionOptionView(
-      state,
-      { permissionMode: 'full-access' },
-      {},
-      true
-    )
+    const view = structuredAgentSessionOptionView(state, { permissionMode: 'full-access' }, {})
     expect(structuredAgentSessionOptionSnapshot(view).map((descriptor) => descriptor.id)).toEqual([
       'model',
       'permissionMode'
@@ -95,6 +90,14 @@ describe('the permission mode picker', () => {
       kind: { currentValue: 'auto' }
     })
     expect(offered(false, 'auto')).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
+    const changing = { ...live('claude', { permissionMode: 'ask' }, true), pendingId: 'model' }
+    expect(permission(changing)?.kind).toMatchObject({
+      choices: expect.not.arrayContaining([expect.objectContaining({ value: 'auto' })])
+    })
+    expect(permission({ ...changing, permissionMode: 'auto' })?.kind).toMatchObject({
+      currentValue: 'auto',
+      choices: expect.arrayContaining([expect.objectContaining({ value: 'auto' })])
+    })
   })
 
   // A new chat names no model: the host's catalog row for the CLI default decides, as the host's does.
@@ -112,7 +115,7 @@ describe('the permission mode picker', () => {
         { newLaunch: true }
       )
       const descriptor = permission(
-        structuredAgentSessionOptionView(state, { permissionMode: 'ask' }, {}, true)
+        structuredAgentSessionOptionView(state, { permissionMode: 'ask' }, {})
       )
       return descriptor?.kind.type === 'select' && descriptor.kind.choices.map((c) => c.value)
     }
@@ -133,13 +136,11 @@ describe('the permission mode picker', () => {
   it("shows a held pick over the host's value, and the host's over the seed", () => {
     const state = live('codex', { permissionMode: 'auto' })
     const seed = { permissionMode: 'ask' }
-    expect(permission(structuredAgentSessionOptionView(state, seed, {}, true))).toMatchObject({
+    expect(permission(structuredAgentSessionOptionView(state, seed, {}))).toMatchObject({
       kind: { currentValue: 'auto' }
     })
     expect(
-      permission(
-        structuredAgentSessionOptionView(state, seed, { permissionMode: 'full-access' }, true)
-      )
+      permission(structuredAgentSessionOptionView(state, seed, { permissionMode: 'full-access' }))
     ).toMatchObject({ kind: { currentValue: 'full-access' } })
   })
 

@@ -1,6 +1,31 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { runInNewContext } from 'node:vm'
 import { stripSearchExcerptMarkdown } from '../src/components/docs/search-excerpt.mjs'
+
+test('unterminated escaped link destinations do not backtrack exponentially', () => {
+  for (const prefix of ['![](', '[label](']) {
+    const input = prefix + '\\('.repeat(32_768)
+    const result = runInNewContext(
+      'strip(input)',
+      { strip: stripSearchExcerptMarkdown, input },
+      {
+        timeout: 250
+      }
+    )
+    assert.equal(result, input.replace(/\\\(/g, '('))
+  }
+})
+
+test('link destinations retain escaped closing parentheses and literal escapes', () => {
+  for (const prefix of ['![label](', '[label](']) {
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\)b)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\(b)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\\\))'), 'label)')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\\nb)'), 'label')
+  }
+})
 
 test('search excerpts omit inline Markdown syntax', () => {
   assert.equal(

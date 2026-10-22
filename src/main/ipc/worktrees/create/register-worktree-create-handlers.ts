@@ -28,6 +28,8 @@ import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-sche
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../worktree-create-execution-host-route'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { workspaceLifecycleKey } from '../../../runtime/workspaces/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspace-create-telemetry'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
@@ -67,6 +69,11 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           fromExistingBranch: typeof args.baseBranch === 'string' && args.baseBranch.length > 0,
           isFolder: isFolderRepo(repo)
         })
+        const creation = runtime.workspaceLifecycle?.openCreate({
+          creationId: args.creationId,
+          repoId: repo.id,
+          keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+        })
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
           if (isFolderRepo(repo)) {
@@ -88,13 +95,16 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
               store,
               mainWindow,
               runtime,
-              telemetry.timing
+              telemetry.timing,
+              creation?.named
             )
           }
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           telemetry.failed(error)
           throw error
+        } finally {
+          creation?.close()
         }
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
         if (result.timing) {

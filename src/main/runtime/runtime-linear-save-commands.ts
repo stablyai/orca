@@ -1,9 +1,9 @@
 import {
   LINEAR_WRITE_BODY_CAP,
   updateLinearIssueForAgent,
-  LinearWriteFailure,
-  linearError
+  LinearWriteFailure
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import type {
   LinearIssueTaskUpdateRequest,
   LinearIssueTaskUpdateResult,

@@ -17,6 +17,8 @@ import {
   compareAutomationRunsNewestFirst,
   paginateAutomationRuns
 } from '../../../shared/automation-run-cursor'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -199,7 +201,8 @@ export function updateAutomationRun(
     usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
     error: result.error ?? null,
     startedAt: current.startedAt ?? now,
-    dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
+    dispatchedAt:
+      result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
   }
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
@@ -217,16 +220,23 @@ export function updateAutomationRun(
 
 export function snapshotAutomationRunWorkspaceDisplayName(
   operations: AutomationRunOperations,
-  workspaceId: string,
+  target: HostWorktreeTarget,
   displayName: string
 ): number {
   const normalizedDisplayName = normalizeAutomationRunWorkspaceDisplayName(displayName)
   if (!normalizedDisplayName) {
     return 0
   }
+  // Folder ids are minted UUIDs (one row per id), and a run's project host may differ from it.
+  const hostScoped = parseWorkspaceKey(target.id)?.type !== 'folder'
   let updatedCount = 0
   operations.state.automationRuns = (operations.state.automationRuns ?? []).map((run) => {
-    if (run.workspaceId !== workspaceId || run.workspaceDisplayName === normalizedDisplayName) {
+    if (
+      run.workspaceId !== target.id ||
+      // A same-id twin's run names its own host; a run from before host context has none.
+      (hostScoped && run.runContext && run.runContext.hostId !== target.hostId) ||
+      run.workspaceDisplayName === normalizedDisplayName
+    ) {
       return run
     }
     updatedCount += 1

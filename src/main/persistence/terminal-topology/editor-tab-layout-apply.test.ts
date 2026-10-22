@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { Store } from '../loading-store/store'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { applyWindowLayoutCommand } from '../../runtime/runtime-layout-apply'
 import { WindowSession } from './terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
@@ -14,7 +16,7 @@ import {
 } from './terminal-topology-profile-fixture'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -84,6 +86,37 @@ describe.each([
     expect(session.openFilesByWorktree?.[worktreeId] ?? []).toEqual([])
     expect(session.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual([TAB])
   })
+
+  it('saves an open file renamed on disk under its new id and path durably', async () => {
+    const { store, directory } = await storeWithTerminal(worktreeId)
+    await store.applyLayoutCommand({ ...editorOpen(worktreeId, 'e1', '/a.ts'), preview: undefined })
+
+    await expect(
+      store.applyLayoutCommand({
+        type: 'renameEditorFiles',
+        workspace: worktreeId,
+        renames: [
+          {
+            fileId: '/a.ts',
+            newFileId: '/src/b.ts',
+            record: {
+              fromFilePath: '/a.ts',
+              file: { filePath: '/src/b.ts', relativePath: 'src/b.ts', language: 'typescript' }
+            }
+          }
+        ]
+      })
+    ).resolves.toEqual({ ok: true, result: { renamedTabIds: {} } })
+
+    const session = (await reopenTopologyStore(store, directory)).getWorkspaceSession()
+    expect(session.tabGroups?.[worktreeId]?.[0]?.tabOrder).toEqual([TAB, 'e1'])
+    expect(session.unifiedTabs?.[worktreeId]?.find((tab) => tab.id === 'e1')).toMatchObject({
+      entityId: '/src/b.ts'
+    })
+    expect(session.openFilesByWorktree?.[worktreeId]).toEqual([
+      expect.objectContaining({ filePath: '/src/b.ts', relativePath: 'src/b.ts' })
+    ])
+  })
 })
 
 describe('Store.applyLayoutCommand moveTabToWorkspace', () => {
@@ -116,5 +149,61 @@ describe('Store.applyLayoutCommand moveTabToWorkspace', () => {
     expect(session.openFilesByWorktree?.[to]).toEqual([
       expect.objectContaining({ filePath: path, relativePath: 'readme.md', worktreeId: to })
     ])
+  })
+})
+
+describe('a window moveTabToWorkspace between a local and an SSH workspace', () => {
+  const SSH_HOST = 'ssh:target-1'
+  const SSH_WORKTREE = 'repo-ssh::/home/dev/api'
+  const routes: Record<string, ExecutionHostId> = {
+    [FIXTURE_GIT_WORKTREE_ID]: 'local',
+    [SSH_WORKTREE]: SSH_HOST
+  }
+  const hostIdsFor = (worktreeId: string) => (routes[worktreeId] ? [routes[worktreeId]] : [])
+
+  it.each([
+    ['local to SSH', FIXTURE_GIT_WORKTREE_ID, SSH_WORKTREE],
+    ['SSH to local', SSH_WORKTREE, FIXTURE_GIT_WORKTREE_ID]
+  ])('moves a restored editor tab %s in one durable write', async (_name, from, to) => {
+    const { store, directory } = await storeWithTerminal(FIXTURE_GIT_WORKTREE_ID)
+    const path = '/fixture/other/readme.md'
+    const open = { ...editorOpen(from, 'e1', path), preview: undefined }
+    await store.applyLayoutCommand({ ...open, file: { ...open.file, relativePath: path } }, [
+      routes[from]!
+    ])
+    const newId = `editor:${to}:${path}`
+
+    await expect(
+      applyWindowLayoutCommand(store, hostIdsFor, {
+        type: 'moveTabToWorkspace',
+        workspace: from,
+        toWorkspace: to,
+        tabs: [{ tabId: 'e1', newTabId: 'e1', newEntityId: newId }],
+        groupId: `group-${to}`,
+        file: { filePath: path, relativePath: 'readme.md', language: 'markdown' }
+      })
+    ).resolves.toEqual({ ok: true, result: { tabId: 'e1', groupId: `group-${to}` } })
+
+    // The move resolves once durable; a reload would drop the SSH workspace, whose repo the fixture
+    // catalog lacks.
+    const source = store.getWorkspaceSession(routes[from])
+    const target = store.getWorkspaceSession(routes[to])
+    expect(source.unifiedTabs?.[from]?.some((tab) => tab.id === 'e1') ?? false).toBe(false)
+    expect(source.openFilesByWorktree?.[from] ?? []).toEqual([])
+    expect(target.unifiedTabs?.[to]?.find((tab) => tab.id === 'e1')).toMatchObject({
+      entityId: newId
+    })
+    expect(target.openFilesByWorktree?.[to]).toEqual([
+      expect.objectContaining({ filePath: path, relativePath: 'readme.md', worktreeId: to })
+    ])
+    const reopened = await reopenTopologyStore(store, directory)
+    expect(reopened.getWorkspaceSession('local').tabsByWorktree[FIXTURE_GIT_WORKTREE_ID]).toEqual([
+      expect.objectContaining({ id: TAB })
+    ])
+    expect(
+      reopened
+        .getWorkspaceSession('local')
+        .unifiedTabs?.[FIXTURE_GIT_WORKTREE_ID]?.some((tab) => tab.id === 'e1')
+    ).toBe(to === FIXTURE_GIT_WORKTREE_ID)
   })
 })

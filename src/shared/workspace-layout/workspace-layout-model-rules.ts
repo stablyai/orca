@@ -102,6 +102,13 @@ function checkWorkspace(
   if (strays.length > 0) {
     breach('leaf_without_pane', strays, `pane data for panes no tab holds`)
   }
+  // One disk entry holds a pane's record, so a leaf with both would lose one on save.
+  const doubled = Object.entries(workspace.leaves ?? {}).flatMap(([leafId, leaf]) =>
+    leaf.sleeping && leaf.resume ? [leafId] : []
+  )
+  if (doubled.length > 0) {
+    breach('leaf_sleeping_and_resume', doubled, `panes with both a sleep and a resume record`)
+  }
   return violations
 }
 

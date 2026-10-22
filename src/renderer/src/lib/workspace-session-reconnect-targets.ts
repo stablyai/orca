@@ -1,6 +1,6 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { isOwnedSshTargetId } from '../../../shared/execution-host'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 
 export function buildActiveConnectionIdsAtShutdown(
@@ -16,9 +16,7 @@ export function buildActiveConnectionIdsAtShutdown(
   // pane-level optimistic write could stamp one; exclude them here too.
   const targetIds = new Set(
     Array.from(snapshot.sshConnectionStates.entries())
-      .filter(
-        ([targetId, state]) => state.status === 'connected' && !isRuntimeOwnedSshTargetId(targetId)
-      )
+      .filter(([targetId, state]) => state.status === 'connected' && !isOwnedSshTargetId(targetId))
       .map(([targetId]) => targetId)
   )
 
@@ -34,7 +32,7 @@ export function buildActiveConnectionIdsAtShutdown(
   // renderer-driven ssh.connect would dispose the runtime's live relay session.
   for (const sessionId of Object.values(remoteSessionIdsByTabId ?? {})) {
     const connectionId = parseAppSshPtyId(sessionId)?.connectionId
-    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
+    if (!connectionId || isOwnedSshTargetId(connectionId)) {
       continue
     }
     const status = snapshot.sshConnectionStates.get(connectionId)?.status

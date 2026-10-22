@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AcpJsonRpcPeer } from './acp-json-rpc-peer'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
-import { AcpConnectionClosedError, AcpRpcError } from './acp-errors'
+import { AcpConnectionClosedError, AcpRequestTimeoutError, AcpRpcError } from './acp-errors'
 import type { RequestPermissionResponse } from './generated/acp-protocol.generated'
 
 const opened: { close: () => void }[] = []
@@ -219,18 +219,24 @@ describe('ACP caller-owned waits', () => {
     await rejected
   })
 
-  it('lets initialize and explicit authentication wait for slow first-run startup and login', async () => {
+  it('bounds each start step on its own, never by the peer default', async () => {
     vi.useFakeTimers()
     const { agent, runtime } = fixture({ peer: { requestTimeoutMs: 20 } })
     agent.on('initialize', () => {})
     const initialized = runtime.initialize()
-    await vi.advanceTimersByTimeAsync(120_001)
+    await vi.advanceTimersByTimeAsync(59_000)
     agent.reply(agent.frames[0], { protocolVersion: 1 })
     await initialized
     const authenticated = runtime.authenticate('caller-chosen')
-    await vi.advanceTimersByTimeAsync(120_001)
+    await vi.advanceTimersByTimeAsync(119_000)
     agent.reply(agent.frames[1], {})
     await expect(authenticated).resolves.toEqual({})
+    agent.on('session/new', () => {})
+    const started = expect(runtime.start(startOptions)).rejects.toBeInstanceOf(
+      AcpRequestTimeoutError
+    )
+    await vi.advanceTimersByTimeAsync(300_000)
+    await started
   })
 
   it('lets request owners withdraw vendor hooks after cancel', async () => {

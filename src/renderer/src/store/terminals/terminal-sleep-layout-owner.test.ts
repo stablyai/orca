@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { recordLayoutApply } from '@/runtime/layout-apply-send'
 import {
   recordPaneSleepThroughLayoutOwner,
-  recordPaneWakeThroughLayoutOwner
+  recordPaneWakeThroughLayoutOwner,
+  recordSleepingRecordChangesThroughLayoutOwner
 } from './terminal-sleep-layout-owner'
 
 const mocks = vi.hoisted(() => ({ send: vi.fn<typeof recordLayoutApply>() }))
@@ -26,6 +28,24 @@ function record(paneKey: string): SleepingAgentSessionRecord {
     state: 'done',
     capturedAt: 1,
     updatedAt: 1
+  }
+}
+
+/** A window holding these terminal tabs in WT. */
+function holding(tabIds: string[]): { tabsByWorktree: Record<string, TerminalTab[]> } {
+  return {
+    tabsByWorktree: {
+      [WT]: tabIds.map((id) => ({
+        id,
+        ptyId: null,
+        worktreeId: WT,
+        title: 'Terminal',
+        customTitle: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      }))
+    }
   }
 }
 
@@ -57,13 +77,38 @@ describe('sleep and wake through the layout owner', () => {
     expect(mocks.send).not.toHaveBeenCalled()
   })
 
-  it('wakes the one pane the window resumed', () => {
+  it('records the wake of the one pane the window resumed, and has main start nothing', () => {
     recordPaneWakeThroughLayoutOwner(STATE, WT, A2)
 
     expect(mocks.send).toHaveBeenCalledWith(STATE, WT, {
       type: 'wake',
       tabId: 'tab-a',
-      paneKeys: [A2]
+      paneKeys: [A2],
+      recordOnly: true
     })
+  })
+
+  it('records a live capture and a dropped record without stopping or starting anything', () => {
+    const live = { ...record(A1), state: 'working' as const, origin: 'live' as const }
+    const kept = record(B1)
+
+    recordSleepingRecordChangesThroughLayoutOwner(
+      holding(['tab-a', 'tab-b']),
+      { [A2]: record(A2), [B1]: kept },
+      { [A1]: live, [B1]: kept }
+    )
+
+    expect(mocks.send.mock.calls.map((call) => call[2])).toEqual([
+      { type: 'sleep', tabId: 'tab-a', paneKeys: [A1], records: [live], recordOnly: true },
+      { type: 'wake', tabId: 'tab-a', paneKeys: [A2], recordOnly: true }
+    ])
+  })
+
+  it('sends nothing for a tab the window closed: main dropped its records with the tab', () => {
+    recordSleepingRecordChangesThroughLayoutOwner(holding(['tab-b']), { [A2]: record(A2) }, {})
+    // A periodic capture from a stale agent status can name the closed tab again.
+    recordSleepingRecordChangesThroughLayoutOwner(holding(['tab-b']), {}, { [A1]: record(A1) })
+
+    expect(mocks.send).not.toHaveBeenCalled()
   })
 })

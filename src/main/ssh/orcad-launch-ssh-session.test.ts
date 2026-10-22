@@ -12,8 +12,8 @@ import {
   parseOrcadLaunchSshSession,
   writeOrcadLaunchSshSessionCommand
 } from './orcad-launch-ssh-session'
-import { orcadLaunchCommand } from './orcad-remote-launch'
-import { ORCAD_PID_FILENAME } from './orcad-remote-host-support'
+import { orcadLaunchCommand } from '../managed-server/install/orcad-remote-launch'
+import { ORCAD_PID_FILENAME } from '../managed-server/install/orcad-remote-host-support'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const mac = getRemoteHostPlatform('darwin-arm64')

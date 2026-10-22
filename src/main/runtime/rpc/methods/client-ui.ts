@@ -17,7 +17,10 @@ import {
   PRBotAuthorOverrideUpdate,
   SettingsUpdate
 } from '../../../../shared/rpc-contract/client-settings-params'
-import { FeatureInteractionIdParam, UiUpdate } from './client-ui-schemas'
+import {
+  FeatureInteractionIdParam,
+  UiUpdate
+} from '../../../../shared/rpc-contract/client-ui-params'
 // Type-only side effect: keeps the schema/PersistedUIState parity assertions in
 // the typecheck graph so drift fails the build instead of a paired client.
 

@@ -9,6 +9,11 @@ export function createTerminalTabAppearanceActions(
 ): Pick<TerminalSlice, 'setTabCustomTitle' | 'setTabColor'> {
   return {
     setTabCustomTitle: (tabId, title, opts) => {
+      // Why: a remote server's tab is named on that server, which republishes the name back here.
+      const state = get()
+      void import('@/runtime/web-runtime-terminal-rename').then(({ renameHostTerminalTab }) =>
+        renameHostTerminalTab(state, tabId, title)
+      )
       set((s) => {
         const next = { ...s.tabsByWorktree }
         for (const wId of Object.keys(next)) {
@@ -22,7 +27,7 @@ export function createTerminalTabAppearanceActions(
         get().setTabCustomLabel(item.id, title, opts)
       }
     },
-    setTabColor: (tabId, color) => {
+    setTabColor: (tabId, color, opts) => {
       set((s) => {
         const next = { ...s.tabsByWorktree }
         for (const wId of Object.keys(next)) {
@@ -32,7 +37,7 @@ export function createTerminalTabAppearanceActions(
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {
-        get().setUnifiedTabColor(item.id, color)
+        get().setUnifiedTabColor(item.id, color, opts)
         // Why: tab color is host-authoritative for remote-server tabs; mirror it so it persists instead of reverting on the next snapshot.
         const state = get()
         const owningWorktreeId = Object.keys(state.unifiedTabsByWorktree).find((wId) =>

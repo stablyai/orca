@@ -7,6 +7,10 @@ import {
   isWebHostUnreachableAtStartup
 } from './startup-web-host-unreachable'
 import {
+  announceWebPairingRefusedAtStartup,
+  isWebPairingRefusedAtStartup
+} from './startup-web-pairing-refused'
+import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
@@ -94,6 +98,8 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
   if (hostUnreachable) {
     // Still no-save until the reload: the host's catalog never loaded, so saving now would prune it.
     announceWebHostUnreachableAtStartup(abortSignal)
+  } else if (isWebPairingRefusedAtStartup(error)) {
+    announceWebPairingRefusedAtStartup(error)
   } else {
     announceDegradedStartup()
   }

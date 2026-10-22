@@ -29,7 +29,7 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.npmrc'
-      - '.pnpmfile.cjs'
+      - 'config/pnpmfile.cjs'
       - 'config/scripts/ensure-native-runtime.mjs'
       - 'config/scripts/initialize-windows-native-toolchain.mjs'
       - 'config/scripts/capture-windows-native-environment.cmd'

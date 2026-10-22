@@ -6,7 +6,7 @@ import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-a
 import type { TuiAgent } from '../tui-agent'
 import { isTuiAgent } from '../tui-agent-config'
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-command-prompt-limit'
-import { WindowsShellOverrideParam } from './terminal-unary-params'
+import { ResumeProviderSessionParam, WindowsShellOverrideParam } from './terminal-unary-params'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -35,7 +35,12 @@ export const ActivateTab = WorktreeTabSelector.extend({
 export const CloseTab = ActivateTab.extend({
   // Why: optional preserves authenticated legacy user closes; lifecycle intent
   // uses the additive evidence-bearing method instead.
-  reason: z.literal('user').optional()
+  // 'replay' is a held user close re-sent after reconnect; only sent to hosts advertising
+  // SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY.
+  reason: z.enum(['user', 'replay']).optional(),
+  // Why: the user confirmed closing a pinned tab. Older hosts strip it and keep refusing, so
+  // clients send it only to hosts advertising SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY.
+  force: z.literal(true).optional()
 })
 
 export const CloseLifecycleTab = ActivateTab.extend({
@@ -111,10 +116,6 @@ export const TerminalPaneLayoutNodeSchema = z
     })
   )
 
-const PaneLayoutEditIntentSchema = z.literal('gesture')
-
-export type PaneLayoutEditIntent = z.infer<typeof PaneLayoutEditIntentSchema>
-
 export const UpdatePaneLayout = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
@@ -124,8 +125,9 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   expandedLeafId: z.string().max(128).nullable().optional(),
   chatLeafId: z.string().max(128).nullable().optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional(),
-  // Why: marks a user's layout gesture; .catch keeps a newer client's unknown intent from failing the edit.
-  intent: PaneLayoutEditIntentSchema.optional().catch(undefined)
+  // Why: panes the user renamed in this edit; the rest of titlesByLeafId is a resend, not a rename.
+  // An older client's `intent: 'gesture'` tag is stripped unread: renamedLeafIds is the one delta.
+  renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined)
 })
 
 export const SetTabProps = WorktreeTabSelector.extend({
@@ -137,10 +139,16 @@ export const SetTabProps = WorktreeTabSelector.extend({
   color: z.string().max(64).nullable().optional(),
   isPinned: z.boolean().optional(),
   // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
-  viewMode: z.enum(['terminal', 'chat']).optional()
+  viewMode: z.enum(['terminal', 'chat']).optional(),
+  // A terminal tab's manual name; null clears it. Older hosts strip it and change nothing.
+  customTitle: z.string().max(512).nullable().optional()
 })
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({
+  sourceChatFork: z
+    .object({ sessionId: z.string().min(1) })
+    .strict()
+    .optional(),
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
@@ -152,6 +160,9 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   launchConfig: sleepingAgentLaunchConfigSchema,
   launchToken: z.string().min(1).max(128).optional(),
+  // Why: lets the host record which conversation the pane resumes before the agent reports it
+  // (#10923); a malformed value drops the hint, never the create. Older hosts strip it.
+  resumeProviderSession: ResumeProviderSessionParam.optional().catch(undefined),
   agent: z
     .custom<TuiAgent>(isTuiAgent, {
       message: 'Unknown agent preset'
@@ -180,6 +191,38 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   // returns the in-flight operation instead of spawning a duplicate terminal.
   clientMutationId: z.string().min(1).max(128).optional()
 }).superRefine((value, context) => {
+  if (value.sourceChatFork) {
+    if (!value.clientMutationId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['clientMutationId'],
+        message: 'A fork needs a mutation id'
+      })
+    }
+    for (const field of [
+      'command',
+      'shell',
+      'agent',
+      'agentPrompt',
+      'env',
+      'envToDelete',
+      'cwd',
+      'launchConfig',
+      'launchToken',
+      'resumeProviderSession',
+      'launchAgent',
+      'startupCommandDelivery',
+      'viewMode'
+    ] as const) {
+      if (value[field] !== undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: [field],
+          message: 'A fork uses host launch settings'
+        })
+      }
+    }
+  }
   if (value.agentPrompt !== undefined && value.agent === undefined) {
     context.addIssue({
       code: 'custom',

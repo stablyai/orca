@@ -16,7 +16,7 @@
  * never evidence that it holds nothing.
  */
 import { RELAY_DAEMON_SERVICE_ENTRY_FILENAMES } from './relay-install-artifacts'
-import { shellEscape } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
 /** Shell variable set to the daemon's direct-child count, or `unknown`. */
 export const RELAY_CHILD_COUNT_VAR = 'kids'
@@ -33,7 +33,7 @@ export const RELAY_UNRECOGNIZED_CHILD_COUNT_VAR = 'unrecognized_kids'
  */
 function serviceChildArgvPatterns(): string {
   return RELAY_DAEMON_SERVICE_ENTRY_FILENAMES.map(
-    (filename) => `*${shellEscape(`/${filename}`)}`
+    (filename) => `*${quotePosixShell(`/${filename}`)}`
   ).join('|')
 }
 

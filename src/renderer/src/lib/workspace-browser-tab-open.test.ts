@@ -176,6 +176,7 @@ describe('openWorkspaceBrowserTab', () => {
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
       url: 'https://example.com/docs?token=secret',
+      targetGroupId: 'group-1',
       intent: { kind: 'url' }
     })
 
@@ -183,7 +184,8 @@ describe('openWorkspaceBrowserTab', () => {
       worktreeId: WORKSPACE_ID,
       environmentId: 'hub-a',
       url: 'https://example.com/docs?token=secret',
-      targetGroupId: undefined,
+      targetGroupId: 'group-1',
+      clientTargetGroupId: 'group-1',
       selectWorktree: true,
       stagedTitle: 'example.com/docs',
       stagedFocusAddressBar: false,

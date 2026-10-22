@@ -1,22 +1,17 @@
-import type * as React from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import './pty-connection-mocks.spec'
+import { describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
-  createMockTransport,
-  createPane,
-  createManager,
-  type ConnectCallbacks,
-  type MockPane,
-  type MockTransport
-} from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
-import {
-  installTerminalTestGlobals,
-  restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
-import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
+  announceMainDrop,
+  BANNER_FRAGMENT,
+  connectVisiblePane,
+  installHiddenRestoreFloodSuiteHooks,
+  modelSnapshot,
+  OVERFLOW_CHUNK,
+  PTY_ID,
+  type MainSnapshot,
+  type PaneDrive
+} from './pty-connection-test-hidden-restore-flood'
 
 // STA-4869 — routes R3 (pending-queue overflow, pty-connection.ts:7696) and R4
 // (loop iteration cap, 7702) end in the QUIET abandon, which trades the loss
@@ -25,21 +20,7 @@ import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 // disclosed. These cases must also survive the pane being scrolled back or
 // hidden when the deferred repaint comes due.
 
-const {
-  resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
-  scheduleRuntimeGraphSync,
-  shouldSeedCacheTimerOnInitialTitle,
-  toastInfo,
-  notifyCodexPaneBoundForStaleSweep,
-  warnTerminalLifecycleAnomaly
-} = vi.hoisted(() => ({
-  resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
-  scheduleRuntimeGraphSync: vi.fn(),
-  shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
-  toastInfo: vi.fn(),
-  notifyCodexPaneBoundForStaleSweep: vi.fn(),
+const { warnTerminalLifecycleAnomaly } = vi.hoisted(() => ({
   warnTerminalLifecycleAnomaly: vi.fn()
 }))
 
@@ -50,146 +31,8 @@ vi.mock('./terminal-lifecycle-diagnostics', async (importOriginal) => ({
   warnTerminalLifecycleAnomaly
 }))
 
-let mockStoreState: StoreState
-let transportFactoryQueue: MockTransport[] = []
-let createdTransportOptions: Record<string, unknown>[] = []
-let storeSubscribers: ((state: StoreState) => void)[] = []
-
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
-
-vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resetAndRefreshAllTerminalWebglAtlases
-}))
-
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
-}))
-
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
-      }
-    }
-  }
-}))
-
-vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
-  return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
-})
-
-vi.mock('./cache-timer-seeding', () => ({
-  shouldSeedCacheTimerOnInitialTitle
-}))
-
-vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep
-}))
-
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof React>()
-  return {
-    ...actual,
-    useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
-  }
-})
-
-vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
-    createdTransportOptions.push(options)
-    const nextTransport = transportFactoryQueue.shift()
-    if (!nextTransport) {
-      throw new Error('No mock transport queued')
-    }
-    return nextTransport
-  })
-}))
-
-vi.mock('./remote-runtime-pty-transport', () => ({
-  createRemoteRuntimePtyTransport: vi.fn(
-    (_environmentId: string, options: Record<string, unknown>) => {
-      createdTransportOptions.push(options)
-      const nextTransport = transportFactoryQueue.shift()
-      if (!nextTransport) {
-        throw new Error('No mock transport queued')
-      }
-      return nextTransport
-    }
-  )
-}))
-
-vi.mock('./pty-dispatcher', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getEagerPtyBufferHandle: vi.fn(() => undefined)
-}))
-
-const PTY_ID = 'pty-id'
-const BANNER_FRAGMENT = 'main recovery was unavailable'
 const R3_MARKER = 'R3-LOST-4d17'
 const R4_MARKER = 'R4-LOST-8ba0'
-// One char over HIDDEN_OUTPUT_RESTORE_PENDING_CHARS (512KB): the queue discards
-// its whole backlog and latches overflow.
-const OVERFLOW_CHUNK = 'o'.repeat(512 * 1024 + 1)
-
-type MainSnapshot = { data: string; cols: number; rows: number; seq: number }
-
-function modelSnapshot(marker: string, seq: number): MainSnapshot {
-  return { data: `${marker}\r\n`, cols: 120, rows: 40, seq }
-}
-
-type PaneDrive = {
-  pane: MockPane
-  deps: PaneConnectionDeps
-  disposable: { dispose: () => void }
-  deliver: (data: string, seq: number) => void
-  setVisible: (visible: boolean) => void
-  writtenChunks: () => string[]
-}
-
-async function connectVisiblePane(): Promise<PaneDrive> {
-  const transport = createMockTransport(PTY_ID)
-  const captured: {
-    current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
-  } = { current: null }
-  transport.connect.mockImplementation(async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
-    captured.current = callbacks?.onData ?? null
-    return PTY_ID
-  })
-  transportFactoryQueue.push(transport)
-  const pane = createPane(1)
-  const deps = buildPaneConnectionDeps(() => mockStoreState, {
-    isVisibleRef: { current: true }
-  })
-  const disposable = await connectMockPanePty(pane, createManager(1), deps)
-  await flushAsyncTicks(6)
-  expect(captured.current).not.toBeNull()
-  return {
-    pane,
-    deps,
-    disposable,
-    deliver: (data, seq) => captured.current?.(data, { seq, rawLength: data.length }),
-    setVisible: (visible) => {
-      deps.isVisibleRef.current = visible
-    },
-    writtenChunks: () => pane.terminal.write.mock.calls.map(([data]) => String(data))
-  }
-}
-
-async function announceMainDrop(markerSeq: number): Promise<void> {
-  const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
-  _dispatchPtyModelRestoreNeededForTest({
-    id: PTY_ID,
-    reason: 'hidden-drop',
-    markerSeq
-  })
-}
 
 function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1
@@ -220,19 +63,7 @@ function expectDisclosedOrRecovered(disclosure: Disclosure): void {
 }
 
 describe('hidden-output restore quiet abandonment (STA-4869)', () => {
-  beforeEach(async () => {
-    vi.resetModules()
-    vi.clearAllMocks()
-    transportFactoryQueue = []
-    createdTransportOptions = []
-    storeSubscribers = []
-    mockStoreState = createInitialStoreState(() => mockStoreState)
-    await installTerminalTestGlobals()
-  })
-
-  afterEach(async () => {
-    await restoreTerminalTestGlobals()
-  })
+  installHiddenRestoreFloodSuiteHooks()
 
   // ── R3: foreground pending-queue overflow ───────────────────────────────
   describe('R3 pending-queue overflow', () => {

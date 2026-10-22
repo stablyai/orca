@@ -2,37 +2,10 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-nat
 import { X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
 import { colors, spacing } from '../theme/mobile-theme'
-import {
-  MobileNativeChatImageViewerContext,
-  type MobileNativeChatViewedImage
-} from './mobile-native-chat-image-viewer-context'
-import {
-  useMobileNativeChatConversationState,
-  type MobileNativeChatConversation
-} from './use-mobile-native-chat-conversation-state'
-
-/** The chat surface, from which any row can open an attachment full size. */
-export function MobileNativeChatImageViewerHost({
-  conversation,
-  children
-}: {
-  conversation: MobileNativeChatConversation
-  children: React.ReactNode
-}): React.JSX.Element {
-  // A picture belongs to the conversation it was opened in.
-  const [image, setImage] =
-    useMobileNativeChatConversationState<MobileNativeChatViewedImage>(conversation)
-  return (
-    <MobileNativeChatImageViewerContext.Provider value={setImage}>
-      {children}
-      {image ? <MobileNativeChatImageViewer {...image} onClose={() => setImage(null)} /> : null}
-    </MobileNativeChatImageViewerContext.Provider>
-  )
-}
 
 /** An attached image at full size, over everything, until closed. Desktop opens the same
  *  picture in its full-size preview dialog. iOS also zooms it with a pinch. */
-function MobileNativeChatImageViewer({
+export function MobileNativeChatImageViewer({
   uri,
   label,
   onClose

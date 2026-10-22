@@ -161,6 +161,19 @@ describe('handleRichMarkdownSaveShortcut (Cmd/Ctrl+S persistence site)', () => {
     expect(onContentChange).toHaveBeenCalledWith('# Title!\n\n_word_\n')
   })
 
+  it('skips the save when the flush rejected the pending edit', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    const editor = fakeEditor(() => '# Title!\n\n*word*')
+    const { ctx, onSave, onContentChange, flush } = saveContext(editor)
+    flush.mockReturnValue(true)
+    const event = saveEvent()
+
+    expect(handleRichMarkdownSaveShortcut(ctx, event)).toBe(true)
+    expect(event.preventDefault).toHaveBeenCalled()
+    expect(onSave).not.toHaveBeenCalled()
+    expect(onContentChange).not.toHaveBeenCalled()
+  })
+
   it('ignores non-save keystrokes and touches nothing', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const editor = fakeEditor(() => '# Title!\n\n*word*')

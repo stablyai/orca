@@ -1,6 +1,5 @@
-// What a start listed reaches the account's model catalog once, with the configured default its
-// start resolved: on `started`, or on Claude's settings readback that follows it. Bookkeeping: a
-// failure is logged, never the start's.
+// Session listings warm the account catalog; only startup/readback also resolves its default.
+// Catalog bookkeeping failures never reject the session action that supplied the listing.
 
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import type {
@@ -15,8 +14,8 @@ export type StructuredAgentSessionStartListingContext = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
 }
 
-/** A proven start's listing, saved inside its serialized step. */
-export function saveStructuredAgentSessionStartListing(
+/** Catalog persistence must not reject a valid start or options answer. */
+export function saveStructuredAgentSessionListing(
   context: Pick<StructuredAgentSessionStartListingContext, 'deps'>,
   sessionId: string,
   listing: AgentModelCatalogLiveListing
@@ -24,8 +23,8 @@ export function saveStructuredAgentSessionStartListing(
   try {
     context.deps.modelCatalog?.recordLiveListing(sessionId, listing)
   } catch (error) {
-    context.deps.logger.warn('saving what a started provider listed failed', {
-      scope: 'provider-started-catalog',
+    context.deps.logger.warn('saving what a provider listed failed', {
+      scope: 'provider-catalog',
       sessionId,
       error
     })

@@ -8,7 +8,7 @@ function usesWindowsPaths(): boolean {
 }
 
 const WINDOWS_RESERVED_DEVICE_STEM =
-  /^(?:con|prn|aux|nul|conin\$|conout\$|clock\$|com[0-9¹²³]|lpt[0-9¹²³])$/i
+  /^(?:con|prn|aux|nul|conin\$|conout\$|clock\$|com[0-9\u00B9\u00B2\u00B3]|lpt[0-9\u00B9\u00B2\u00B3])$/i
 
 /**
  * `NUL.png`, `com1 .jpg`, `Aux.`, `NUL:stream.png` name a Windows device, not a file, whatever the
