@@ -1,0 +1,16 @@
+System-wide power settings:
+ SleepDisabled		2
+Currently in use:
+ standby              1
+ Sleep On Power Button 1
+ hibernatefile        /var/vm/sleepimage
+ powernap             1
+ networkoversleep     0
+ disksleep            10
+ sleep                1 (sleep prevented by caffeinate, caffeinate, caffeinate, xcodebuild, caffeinate, Dia, coreaudiod, caffeinate, caffeinate, powerd, caffeinate)
+ hibernatemode        3
+ ttyskeepawake        1
+ displaysleep         0 (display sleep prevented by Dia)
+ tcpkeepalive         1
+ powermode            0
+ womp                 1

@@ -449,6 +449,13 @@ describe('registerSettingsHandlers', () => {
     expect(agentAwakeService.setMode).toHaveBeenCalledWith('auto')
   })
 
+  it('registers the system sleep hold channel', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler only uses the settings methods supplied by the fixture.
+    registerSettingsHandlers(store as never)
+
+    expect(handleMock.mock.calls.flat()).toContain('agentAwake:getSystemSleepHold')
+  })
+
   it('does not notify the agent awake service for unrelated setting changes', () => {
     const agentAwakeService = { setMode: vi.fn() }
     store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })

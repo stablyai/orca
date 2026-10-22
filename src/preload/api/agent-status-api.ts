@@ -6,7 +6,7 @@ import type {
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
-import type { ComputerAwakeStatus } from '../../shared/computer-awake-mode'
+import type { ComputerAwakeStatus, SystemSleepHold } from '../../shared/computer-awake-mode'
 
 export type AgentStatusApi = {
   /** Listen for agent status updates forwarded from native hook receivers. */
@@ -53,4 +53,6 @@ export type AgentStatusApi = {
 export type AgentAwakeApi = {
   getStatus: () => Promise<ComputerAwakeStatus>
   onChanged: (callback: (status: ComputerAwakeStatus) => void) => () => void
+  // Why optional: the web preload has no system to read, and old preloads lack it.
+  getSystemSleepHold?: () => Promise<SystemSleepHold>
 }

@@ -3850,7 +3850,15 @@
             "ariaLabel": "{{title}}、{{status}}",
             "onDescription": "このコンピュータを常にスリープさせない",
             "autoDescription": "Agent の作業中はスリープさせない",
-            "offDescription": "通常のシステムスリープを許可する"
+            "offDescription": "通常のシステムスリープを許可する",
+            "awakeLabel": "スリープ無効",
+            "holdSystem": "システム設定によりスリープしません",
+            "holdLidClosed": "蓋を閉じても、Orca が動いているこの Mac はスリープしません。",
+            "orcaOwnStatus": "Orca のスリープ防止: {{status}}。",
+            "holdUnchecked": "この Mac のスリープ設定を確認できませんでした",
+            "holdSentenceJoin": "{{first}}。{{second}}",
+            "holdSentenceAppend": "{{first}}{{second}}",
+            "holdSentenceEnd": "{{sentence}}。"
           },
           "StatusBar": {
             "9659e38343": "ポート",

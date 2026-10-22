@@ -2523,7 +2523,15 @@
             "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "Manter este computador ativo continuamente",
             "autoDescription": "Permanecer ativo enquanto um agente está trabalhando",
-            "offDescription": "Permitir o comportamento normal de suspensão do sistema"
+            "offDescription": "Permitir o comportamento normal de suspensão do sistema",
+            "awakeLabel": "Ativo",
+            "holdSystem": "Mantido ativo por uma configuração do sistema",
+            "holdLidClosed": "Este Mac (onde o Orca está em execução) permanece ativo com a tampa fechada.",
+            "orcaOwnStatus": "Manter ativo do Orca: {{status}}.",
+            "holdUnchecked": "Não foi possível verificar a configuração de suspensão deste Mac",
+            "holdSentenceJoin": "{{first}}. {{second}}",
+            "holdSentenceAppend": "{{first}} {{second}}",
+            "holdSentenceEnd": "{{sentence}}."
           },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "A conexão anterior foi encerrada",
