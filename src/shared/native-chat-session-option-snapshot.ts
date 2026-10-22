@@ -78,6 +78,7 @@ function optionDescriptor(args: {
   mode: NativeChatSessionOptionMode
   liveTransport: NativeChatLiveOptionTransport
   modelIsCliDefault: boolean
+  launchOptionDefaults: boolean
   composedModelApply: AgentSessionOptionCatalog['modelApply']
 }): SessionOptionDescriptor | null {
   const { option, tracked, mode, liveTransport, modelIsCliDefault, composedModelApply } = args
@@ -88,7 +89,9 @@ function optionDescriptor(args: {
   // own default no flag is sent at all, so its choice is nameable only where its listing states it.
   const cliStatesDefault =
     modelIsCliDefault && option.kind.type === 'select' && option.kind.defaultIsCliDefault === true
-  const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
+  const showDefault =
+    !tracked &&
+    (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault && args.launchOptionDefaults))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
     const choices = choiceWithCurrent(option.kind.choices, tracked)
@@ -262,6 +265,7 @@ export function nativeChatSessionOptionDescriptors(args: {
       mode,
       liveTransport,
       modelIsCliDefault: args.modelIsCliDefault,
+      launchOptionDefaults: catalog.launchOptionDefaults !== false,
       composedModelApply: catalog.modelApply
     })
     if (descriptor) {

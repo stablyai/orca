@@ -11,6 +11,7 @@ import {
   GEMINI_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-gemini-cursor'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import { KIRO_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-kiro'
 import { MUSE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import type {
@@ -40,6 +41,7 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   gemini: GEMINI_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
+  kiro: KIRO_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
   omp: OMP_SESSION_OPTION_CATALOG
 }
@@ -60,6 +62,18 @@ export function findCatalogOption(
   optionId: string
 ): CatalogOption | undefined {
   return model?.options.find((option) => option.id === optionId)
+}
+
+export function getCatalogModelOptions(
+  catalog: AgentSessionOptionCatalog,
+  modelId: string
+): CatalogOption[] {
+  return (
+    findCatalogModel(catalog, modelId)?.options ??
+    catalog.resolveModelOptions?.(modelId) ??
+    catalog.unknownModelOptions ??
+    []
+  )
 }
 
 /** Merge live rows over the static seed while retaining cataloged option mappings. */
@@ -84,14 +98,19 @@ export function mergeCatalogModels(
  *  global CLI flags, not per-model capabilities — dropping them would hide the picker entirely. */
 export function mergeDiscoveredAuthoritativeModels(
   seed: readonly CatalogModel[],
-  discovered: readonly CatalogModel[]
+  discovered: readonly CatalogModel[],
+  discoveredOptionsAreAuthoritative = false
 ): CatalogModel[] {
   const inheritedOptions = (seed.find((model) => model.isDefault) ?? seed[0])?.options ?? []
   return discovered.map((disc) => {
     const seedMatch = seed.find((model) => model.id === disc.id)
     const { isDefault: _seeded, ...merged } = seedMatch
-      ? { ...seedMatch, ...disc, options: seedMatch.options }
-      : { ...disc, options: inheritedOptions }
+      ? {
+          ...seedMatch,
+          ...disc,
+          options: discoveredOptionsAreAuthoritative ? disc.options : seedMatch.options
+        }
+      : { ...disc, options: discoveredOptionsAreAuthoritative ? disc.options : inheritedOptions }
     // Why: the probe reports which id the CLI defaults to today; a seed flag frozen at
     // release would keep naming the old one after the account's default moves.
     return disc.isDefault ? { ...merged, isDefault: true } : merged
