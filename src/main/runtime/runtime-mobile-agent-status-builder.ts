@@ -4,6 +4,7 @@ import {
 } from '../../shared/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
 import {
+  agentStatusAuthorityObservedAt,
   pickHostTurnEnd,
   type AgentStatusEntry,
   type AgentStatusIpcPayload
@@ -80,6 +81,12 @@ export function buildRuntimeMobileAgentStatus(
       // Why: a pending question is never inherited across hook events (unlike
       // `toolName`), so it proves the agent is parked on a selector right now.
       hookRow.live?.payload.interactivePrompt != null ||
+      // A first-turn hook can arrive while the pre-launch shell title is still painted.
+      (hookRow.live?.payload.agentType != null &&
+        agentStatusAuthorityObservedAt(hookRow.live) >
+          (pty?.lastOscTitleEpochMs ??
+            host.getPtyTitleObservedAtEpochMs?.(leaf?.ptyId ?? null) ??
+            0)) ||
       // Why: headless serve has no renderer to retain an OSC row, so hook evidence is the
       // only signal a hook-only pane can offer, and an agent that reports over HTTP need
       // never set a title this gate would recognize. With PTY status, only a shell or
