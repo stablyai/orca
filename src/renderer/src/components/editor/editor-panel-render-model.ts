@@ -66,6 +66,11 @@ export function getEditorPanelRenderModel({
   // to a plain source rendering here.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
   const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
+  const canShowMarkdownPreview = canOpenMarkdownPreview({
+    language: activeFile.terminalArtifactGrantId ? resolvedLanguage : viewerLanguage,
+    mode: activeFile.mode,
+    diffSource: activeFile.diffSource
+  })
   const worktreeEntries = gitStatusEntries ?? []
   const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
@@ -196,9 +201,10 @@ export function getEditorPanelRenderModel({
     // when the modified side still exists on disk (canOpen excludes deleted
     // files and commit diffs whose content may not match the working tree).
     canOpenPreviewToSide:
-      canOpenWorkspaceFileBrowser &&
-      canPreviewLanguage(viewerLanguage) &&
-      (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),
+      canShowMarkdownPreview ||
+      (canOpenWorkspaceFileBrowser &&
+        canPreviewLanguage(viewerLanguage) &&
+        (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen))),
     mdViewMode,
     hasViewModeToggle,
     availableEditorToggleModes,
@@ -211,10 +217,6 @@ export function getEditorPanelRenderModel({
     canShowMarkdownTableOfContents:
       viewerLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
-    canShowMarkdownPreview: canOpenMarkdownPreview({
-      language: activeFile.terminalArtifactGrantId ? resolvedLanguage : viewerLanguage,
-      mode: activeFile.mode,
-      diffSource: activeFile.diffSource
-    })
+    canShowMarkdownPreview
   }
 }

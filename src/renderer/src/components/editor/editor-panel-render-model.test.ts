@@ -277,6 +277,7 @@ it('offers a Markdown preview for a granted artifact without enabling rich editi
     activeFile: markdownFile({ readOnly: true, terminalArtifactGrantId: 'grant-1' })
   })
   expect(model.canShowMarkdownPreview).toBe(true)
+  expect(model.canOpenPreviewToSide).toBe(true)
   expect(model.inlineMarkdownRenderState).toBeNull()
   expect(model.mdViewMode).toBe('source')
   expect(

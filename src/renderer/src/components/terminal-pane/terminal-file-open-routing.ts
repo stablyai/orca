@@ -50,6 +50,7 @@ type TerminalFileOpenDeps = {
   worktreeId: string
   worktreePath: string
   nativeChatContext?: RuntimeNativeChatFileContext
+  markdownPreviewToSide?: boolean
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
   openWithSystemDefault?: boolean
@@ -259,6 +260,7 @@ export function openDetectedFilePath(
 
     const opened = openWorkspaceFile({
       kind: 'link',
+      markdownPreviewToSide: deps.markdownPreviewToSide,
       executionHostId: targetExecutionHostId,
       clientLocal,
       file: {

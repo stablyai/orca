@@ -5,6 +5,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { openMarkdownPreviewToSide } from '@/lib/markdown-preview-open'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
@@ -240,6 +241,10 @@ function EditorPanelInner({
           (t) => t.id === activeViewStateId
         )?.groupId ?? null)
       : null
+    if (model.resolvedLanguage === 'markdown') {
+      openMarkdownPreviewToSide(activeFile, { sourceGroupId, sourceFileId: activeFile.id })
+      return
+    }
     openFilePreviewToSide({
       language: model.resolvedLanguage,
       filePath: activeFile.filePath,
