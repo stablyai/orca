@@ -29,7 +29,7 @@ test('Create more clears the GitHub PR source before the next worktree', async (
   await openSidebarWorkspaceComposer(orcaPage)
   await orcaPage.evaluate(() => {
     const store = window.__store!
-    const repoId = store.getState().repos[0].id
+    const repoId = window.__projectCatalog!().repos[0].id
     const item = {
       id: 'pr-4242',
       provider: 'github' as const,

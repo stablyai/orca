@@ -119,12 +119,10 @@ export async function installFinalActivationGate(page: Page, targetPath: string)
     store.setState({
       fetchWorktrees: async (...args: Parameters<typeof originalFetchWorktrees>) => {
         const result = await originalFetchWorktrees(...args)
-        const targetRepo = store
-          .getState()
-          .repos.find(
-            (repo) =>
-              repo.path === pathToGate && repo.executionHostId?.startsWith('runtime:') === true
-          )
+        const targetRepo = window.__projectCatalog!().repos.find(
+          (repo) =>
+            repo.path === pathToGate && repo.executionHostId?.startsWith('runtime:') === true
+        )
         if (targetRepo?.id === args[0]) {
           gateWindow.__pr11346ActivationGate!.waiting = true
           await released

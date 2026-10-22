@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { selectRepos } from '@/store/project-catalog-selectors'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
@@ -96,6 +97,7 @@ export function useCreateRepo(
       // Why: Create Project is intentionally Git-only; non-Git folders use the
       // existing add-folder flows instead of this path.
       const createKind = 'git' as const
+      const reposBefore = selectRepos(useAppStore.getState())
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
@@ -122,11 +124,10 @@ export function useCreateRepo(
         setCreateError(result.error)
         return
       }
-      const { alreadyPresent: wasDeduped, repo } = upsertAddedRepoWithProjectHostSetup(
+      const { alreadyPresent: wasDeduped, repo } = await upsertAddedRepoWithProjectHostSetup(
         result.repo,
-        {
-          runtimeEnvironmentId: options.runtimeEnvironmentId
-        }
+        { runtimeEnvironmentId: options.runtimeEnvironmentId },
+        reposBefore
       )
       // Why: the IPC handler dedupes by path (see repos:create) and returns
       // the existing repo unchanged. If its host identity is already in our store, the

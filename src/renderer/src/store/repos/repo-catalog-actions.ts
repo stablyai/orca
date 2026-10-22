@@ -9,7 +9,6 @@ import {
   reconcileReadoptedSshRepoRows
 } from '../slices/superseded-ssh-repo-rows'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
@@ -36,6 +35,13 @@ import {
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 import { selectProjectHostSetups, selectProjects, selectRepos } from '../project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { awaitMainProjectCatalog } from '@/lib/main-project-catalog'
+import {
+  getRuntimeTargetHostId,
+  runtimeTargetForOwnerEnvironment
+} from '../../runtime/runtime-client-target'
+import { reconcileWindowWithMainCatalog } from './main-catalog-window-reconcile'
 
 export function createRepoCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -58,6 +64,10 @@ export function createRepoCatalogActions(
         )
         const repos = reconciliation.repos
         const worktreeState = reconcileReadoptedSshWorktreeState(s, pendingSshRepoReadoptions)
+        // Switch point: main's catalog already holds the re-adopted row; only window state moves.
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          return { pendingSshRepoReadoptions: reconciliation.pendingReadoptions, ...worktreeState }
+        }
         const remainingSetups = filterSetupsForPrunedRepoRows(
           selectProjectHostSetups(s),
           selectRepos(s),
@@ -96,6 +106,11 @@ export function createRepoCatalogActions(
 
     fetchRepos: async (options) => {
       const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
+      // Switch point: main's catalog is the window's only catalog; the window fetches none.
+      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        await reconcileWindowWithMainCatalog(set, get, getRuntimeTargetHostId(target))
+        return
+      }
       const settleLocalCatalog: (outcome: LocalRepoCatalogFetchOutcome) => void =
         target.kind === 'local' ? startLocalRepoCatalogFetch(get) : () => undefined
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
@@ -165,6 +180,14 @@ export function createRepoCatalogActions(
       }
     },
 
-    awaitLocalRepoCatalogSettlement: () => awaitLatestLocalRepoCatalogFetch(get)
+    awaitLocalRepoCatalogSettlement: () =>
+      ORCA_SIDEBAR_INPUTS_IS_MAIN
+        ? awaitMainProjectCatalog().then((arrived) => {
+            // Why throw: hydrating the session against no catalog would drop every saved tab as orphaned.
+            if (!arrived) {
+              throw new Error("main's project catalog never arrived")
+            }
+          })
+        : awaitLatestLocalRepoCatalogFetch(get)
   }
 }

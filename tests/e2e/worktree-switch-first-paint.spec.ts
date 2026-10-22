@@ -349,7 +349,7 @@ async function registerFillerWorktrees(
 ): Promise<{ ids: string[]; cleanup: () => void }> {
   const repoId = await page.evaluate(
     (repoPath) =>
-      window.__store!.getState().repos.find((repo) => repo.path === repoPath)?.id ?? null,
+      window.__projectCatalog!().repos.find((repo) => repo.path === repoPath)?.id ?? null,
     testRepoPath
   )
   if (!repoId) {

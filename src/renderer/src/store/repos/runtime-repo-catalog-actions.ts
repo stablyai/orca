@@ -21,6 +21,8 @@ import {
 import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { reconcileWindowWithMainCatalog } from './main-catalog-window-reconcile'
 import { selectProjectHostSetups, selectProjects, selectRepos } from '../project-catalog-selectors'
 
 export function createRuntimeRepoCatalogActions(
@@ -35,12 +37,50 @@ export function createRuntimeRepoCatalogActions(
       const fence = claimHostCatalogFence(get, 'repos', target)
       try {
         const [catalog, visibilitySnapshot] = await Promise.all([
-          fetchRepoCatalogForTarget(target),
+          ORCA_SIDEBAR_INPUTS_IS_MAIN ? null : fetchRepoCatalogForTarget(target),
           readRuntimeWorktreeVisibilitySnapshot(environmentId)
         ])
         const visibilityDefaults = visibilitySnapshot.defaults
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return []
+        }
+        const visibilityPatch = (s: AppState): Partial<AppState> => ({
+          ...(visibilityDefaults === undefined
+            ? {}
+            : {
+                worktreeVisibilityDefaultsByHost: {
+                  ...s.worktreeVisibilityDefaultsByHost,
+                  [targetHostId]: visibilityDefaults
+                }
+              }),
+          ...(visibilityDefaults !== undefined && s.settings
+            ? s.settings.activeRuntimeEnvironmentId === environmentId
+              ? visibilityDefaults
+                ? {
+                    settings: {
+                      ...s.settings,
+                      worktreeVisibilityDefaults: visibilityDefaults
+                    },
+                    worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: environmentId,
+                    worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
+                      visibilitySnapshot.sourceDefaultsSupported ? environmentId : null
+                  }
+                : {
+                    settings: Object.fromEntries(
+                      Object.entries(s.settings).filter(
+                        ([key]) => key !== 'worktreeVisibilityDefaults'
+                      )
+                    ) as GlobalSettings,
+                    worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
+                    worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null
+                  }
+              : {}
+            : {})
+        })
+        // Switch point: main's catalog is the window's only catalog; only the visibility defaults land here.
+        if (!catalog) {
+          set(visibilityPatch)
+          return reconcileWindowWithMainCatalog(set, get, targetHostId)
         }
         let finalizedHostRepos: Repo[] = []
         set((s) => {
@@ -74,37 +114,7 @@ export function createRuntimeRepoCatalogActions(
           )
           return {
             repos: finalizedRepos,
-            ...(visibilityDefaults === undefined
-              ? {}
-              : {
-                  worktreeVisibilityDefaultsByHost: {
-                    ...s.worktreeVisibilityDefaultsByHost,
-                    [targetHostId]: visibilityDefaults
-                  }
-                }),
-            ...(visibilityDefaults !== undefined && s.settings
-              ? s.settings.activeRuntimeEnvironmentId === environmentId
-                ? visibilityDefaults
-                  ? {
-                      settings: {
-                        ...s.settings,
-                        worktreeVisibilityDefaults: visibilityDefaults
-                      },
-                      worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: environmentId,
-                      worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
-                        visibilitySnapshot.sourceDefaultsSupported ? environmentId : null
-                    }
-                  : {
-                      settings: Object.fromEntries(
-                        Object.entries(s.settings).filter(
-                          ([key]) => key !== 'worktreeVisibilityDefaults'
-                        )
-                      ) as GlobalSettings,
-                      worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
-                      worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null
-                    }
-                : {}
-              : {}),
+            ...visibilityPatch(s),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
             ...mergedProjectCompatibility,

@@ -26,7 +26,7 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
         throw new Error('window.__store is unavailable')
       }
 
-      const sourceRepo = store.getState().repos[0]
+      const sourceRepo = window.__projectCatalog!().repos[0]
       if (
         !sourceRepo ||
         !(await store.getState().updateRepo(sourceRepo.id, { displayName: localProject }))

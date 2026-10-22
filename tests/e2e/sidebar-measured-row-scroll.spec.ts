@@ -110,7 +110,7 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
     }
     await store.getState().awaitLocalRepoCatalogSettlement()
     const repos = repoPaths.map((repoPath) => {
-      const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+      const repo = window.__projectCatalog!().repos.find((candidate) => candidate.path === repoPath)
       if (!repo) {
         throw new Error(`Fixture repo was not registered: ${repoPath}`)
       }
@@ -131,7 +131,9 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
     const state = store.getState()
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')
-    const collapsedSetup = state.projectHostSetups.find((setup) => setup.repoId === collapsed.id)
+    const collapsedSetup = window.__projectCatalog!().projectHostSetups.find(
+      (setup) => setup.repoId === collapsed.id
+    )
     const worktree = state.worktreesByRepo[expanded.id]?.find((entry) => entry.isMainWorktree)
     if (!collapsedSetup || !worktree) {
       throw new Error('Fixture project setup or worktree is missing')

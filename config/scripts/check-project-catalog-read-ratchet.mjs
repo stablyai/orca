@@ -28,6 +28,10 @@ export const SELECTOR_FILES = new Map([
   [
     'src/renderer/src/store/project-catalog-selectors.ts',
     'the selector module is the one read path by definition'
+  ],
+  [
+    'src/renderer/src/lib/main-project-catalog.ts',
+    "switch-on, main's catalog as the window reads it: the rows the selectors return"
   ]
 ])
 

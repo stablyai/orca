@@ -1,3 +1,4 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
@@ -129,7 +130,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
           manualRepoOrder,
           // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
-          repos: orderedRepos,
+          // Switch point: main's catalog applies the order itself.
+          ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? {} : { repos: orderedRepos }),
           hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
           hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
           hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,

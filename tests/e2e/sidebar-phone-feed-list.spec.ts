@@ -184,7 +184,7 @@ test.describe('switch on', () => {
     await expect
       .poll(() =>
         orcaPage.evaluate(
-          (id) => window.__store!.getState().repos.some((entry) => entry.id === id),
+          (id) => window.__projectCatalog!().repos.some((entry) => entry.id === id),
           folder.repo.id
         )
       )
@@ -198,7 +198,7 @@ test.describe('switch on', () => {
           throw new Error('Expected a project group')
         }
         const repoById = (id: string) => {
-          const found = state().repos.find((entry) => entry.id === id)
+          const found = window.__projectCatalog!().repos.find((entry) => entry.id === id)
           if (!found) {
             throw new Error(`Expected repo ${id}`)
           }
@@ -284,7 +284,7 @@ test.describe('switch on', () => {
       orcaPage.evaluate(
         async ({ repoId, groupId }) => {
           const state = window.__store!.getState()
-          const repo = state.repos.find((candidate) => candidate.id === repoId)
+          const repo = window.__projectCatalog!().repos.find((candidate) => candidate.id === repoId)
           return repo ? state.moveProjectToGroup(repo, groupId) : false
         },
         { repoId, groupId }

@@ -21,6 +21,9 @@ import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { selectProjectHostSetups, selectProjects, selectRepos } from '../project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '../main-project-catalog-writes'
+import { catalogRowShowsUpdate } from '../catalog-row-update-shown'
 
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
@@ -91,6 +94,52 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   return sanitized
 }
 
+/** A host that answers no row: the window applies the update to its row itself. */
+function mergeRepoUpdate(r: Repo, sanitizedUpdates: RepoUpdate): Repo {
+  let mergedRepo: Repo = r
+  const {
+    sourceControlAi,
+    externalWorktreeDiscoverySuppressedAt,
+    ghAccount,
+    externalWorktreeVisibility,
+    agentWorktreeVisibility,
+    ...updatesWithoutClearSentinels
+  } = sanitizedUpdates
+  mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
+  if (sourceControlAi === null) {
+    const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } = mergedRepo
+    mergedRepo = repoWithoutSourceControlAi
+  } else if (sourceControlAi !== undefined) {
+    mergedRepo = { ...mergedRepo, sourceControlAi }
+  }
+  if (externalWorktreeVisibility === null) {
+    const { externalWorktreeVisibility: _visibility, ...repoWithoutVisibility } = mergedRepo
+    mergedRepo = { ...repoWithoutVisibility, externalWorktreeVisibilityLegacy: false }
+  } else if (externalWorktreeVisibility !== undefined) {
+    mergedRepo = { ...mergedRepo, externalWorktreeVisibility }
+  }
+  if (agentWorktreeVisibility === null) {
+    const { agentWorktreeVisibility: _agentVisibility, ...repoWithoutAgentVisibility } = mergedRepo
+    mergedRepo = repoWithoutAgentVisibility
+  } else if (agentWorktreeVisibility !== undefined) {
+    mergedRepo = { ...mergedRepo, agentWorktreeVisibility }
+  }
+  if (externalWorktreeDiscoverySuppressedAt === null) {
+    const { externalWorktreeDiscoverySuppressedAt: _suppressedAt, ...repoWithoutSuppression } =
+      mergedRepo
+    mergedRepo = repoWithoutSuppression
+  } else if (externalWorktreeDiscoverySuppressedAt !== undefined) {
+    mergedRepo = { ...mergedRepo, externalWorktreeDiscoverySuppressedAt }
+  }
+  if (ghAccount === null) {
+    const { ghAccount: _ghAccount, ...repoWithoutGhAccount } = mergedRepo
+    mergedRepo = repoWithoutGhAccount
+  } else if (ghAccount !== undefined) {
+    mergedRepo = { ...mergedRepo, ghAccount }
+  }
+  return mergedRepo
+}
+
 export const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<boolean>>>()
 
 export function getRepoUpdateChains(get: () => AppState): Map<string, Promise<boolean>> {
@@ -144,6 +193,19 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
+          if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+            set({ folderWorkspacePathStatuses: {} })
+            const expected = updatedRepo
+              ? adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
+              : mergeRepoUpdate(ownerRepo, sanitizedUpdates)
+            return mainCatalogShowsWrite(target, (catalog) =>
+              catalog.repos.some(
+                (row) =>
+                  repoMatchesHostIdentity(row, projectId, ownerHostId) &&
+                  catalogRowShowsUpdate(row, expected, sanitizedUpdates)
+              )
+            )
+          }
           set((s) => {
             const nextRepos = selectRepos(s).map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -155,53 +217,7 @@ export function createRepoUpdateActions(
               if (updatedRepo) {
                 return adoptFromEndpoint(target, { kind: 'repo', row: updatedRepo })
               }
-              let mergedRepo: Repo = r
-              const {
-                sourceControlAi,
-                externalWorktreeDiscoverySuppressedAt,
-                ghAccount,
-                externalWorktreeVisibility,
-                agentWorktreeVisibility,
-                ...updatesWithoutClearSentinels
-              } = sanitizedUpdates
-              mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
-              if (sourceControlAi === null) {
-                const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } =
-                  mergedRepo
-                mergedRepo = repoWithoutSourceControlAi
-              } else if (sourceControlAi !== undefined) {
-                mergedRepo = { ...mergedRepo, sourceControlAi }
-              }
-              if (externalWorktreeVisibility === null) {
-                const { externalWorktreeVisibility: _visibility, ...repoWithoutVisibility } =
-                  mergedRepo
-                mergedRepo = { ...repoWithoutVisibility, externalWorktreeVisibilityLegacy: false }
-              } else if (externalWorktreeVisibility !== undefined) {
-                mergedRepo = { ...mergedRepo, externalWorktreeVisibility }
-              }
-              if (agentWorktreeVisibility === null) {
-                const { agentWorktreeVisibility: _agentVisibility, ...repoWithoutAgentVisibility } =
-                  mergedRepo
-                mergedRepo = repoWithoutAgentVisibility
-              } else if (agentWorktreeVisibility !== undefined) {
-                mergedRepo = { ...mergedRepo, agentWorktreeVisibility }
-              }
-              if (externalWorktreeDiscoverySuppressedAt === null) {
-                const {
-                  externalWorktreeDiscoverySuppressedAt: _suppressedAt,
-                  ...repoWithoutSuppression
-                } = mergedRepo
-                mergedRepo = repoWithoutSuppression
-              } else if (externalWorktreeDiscoverySuppressedAt !== undefined) {
-                mergedRepo = { ...mergedRepo, externalWorktreeDiscoverySuppressedAt }
-              }
-              if (ghAccount === null) {
-                const { ghAccount: _ghAccount, ...repoWithoutGhAccount } = mergedRepo
-                mergedRepo = repoWithoutGhAccount
-              } else if (ghAccount !== undefined) {
-                mergedRepo = { ...mergedRepo, ghAccount }
-              }
-              return mergedRepo
+              return mergeRepoUpdate(r, sanitizedUpdates)
             })
             return {
               repos: nextRepos,

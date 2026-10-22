@@ -34,7 +34,7 @@ test('Add Project opens a folder and preserves its workspace when Git appears', 
   await orcaPage.screenshot({ path: testInfo.outputPath('open-folder.png') })
   await dialog.getByRole('button', { name: 'Open as Folder', exact: true }).click()
   await expect
-    .poll(() => orcaPage.evaluate(() => window.__store!.getState().repos[0]?.kind))
+    .poll(() => orcaPage.evaluate(() => window.__projectCatalog!().repos[0]?.kind))
     .toBe('folder')
   await expect
     .poll(() =>
@@ -52,7 +52,7 @@ test('Add Project opens a folder and preserves its workspace when Git appears', 
   await orcaPage.screenshot({ path: testInfo.outputPath('folder-workspace.png') })
   await runFixtureGit({ program: 'git', args: ['init', folderPath] })
   await expect
-    .poll(() => orcaPage.evaluate(() => window.__store!.getState().repos[0]?.kind), {
+    .poll(() => orcaPage.evaluate(() => window.__projectCatalog!().repos[0]?.kind), {
       timeout: 30_000
     })
     .toBe('git')

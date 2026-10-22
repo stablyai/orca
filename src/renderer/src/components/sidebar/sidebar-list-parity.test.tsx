@@ -51,6 +51,13 @@ import {
 
 const SWITCH = '../../../../shared/sidebar-inputs-switch'
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+// The fixtures seed the catalog as store fields; main publishes what they seed.
+vi.mock(
+  '@/store/project-catalog-selectors',
+  async () =>
+    (await import('@/store/project-catalog-store-fields.test-support'))
+      .projectCatalogFromStoreFields
+)
 vi.mock('@/lib/sidebar-list-session', () => ({ useSidebarListSession: () => {} }))
 // The feed the window would install from main; set per list.
 let windowFeed: DesktopSidebarFeed | null = null

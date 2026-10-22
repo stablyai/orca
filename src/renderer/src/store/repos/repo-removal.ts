@@ -29,6 +29,8 @@ import {
 } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { worktreePurgeClosedFileIds } from '../slices/worktrees/teardown/worktree-purge-closed-files'
 import { selectRepos } from '../project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '../main-project-catalog-writes'
 
 type HostScopedWorktreeRef = { id: string; hostId?: string }
 
@@ -224,6 +226,14 @@ export function createRepoRemovalActions(
         get().purgeWorktreeTerminalState(exclusiveWorktreeIds)
         deleteWorkspaceChatDrafts(chatDraftKeys)
         get().clearLocalDetectedAgentContextsForProjects(localAgentContextProjectIds)
+        // Switch point: main's catalog drops the row; the window's own state follows once it has.
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          await mainCatalogShowsWrite(
+            target,
+            (catalog) =>
+              !catalog.repos.some((repo) => repoMatchesHostIdentity(repo, projectId, ownerHostId))
+          )
+        }
 
         set((s) => removedProjectStatePatch(s, projectId, ownerHostId, worktreeIds, twins))
       } catch (err) {

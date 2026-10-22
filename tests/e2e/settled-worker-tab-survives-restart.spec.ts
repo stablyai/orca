@@ -49,7 +49,7 @@ async function findSecondaryWorktree(
             return []
           }
           await Promise.all(
-            store.getState().repos.map((repo) => store.getState().fetchWorktrees(repo.id))
+            window.__projectCatalog!().repos.map((repo) => store.getState().fetchWorktrees(repo.id))
           )
           return Object.values(store.getState().worktreesByRepo)
             .flat()

@@ -149,7 +149,7 @@ test('removing a project from a paired client stops its shells on the host', asy
 
     const hostId = await paired.page.evaluate(
       (repoId) =>
-        window.__store?.getState().repos.find((repo) => repo.id === repoId)?.executionHostId ??
+        window.__projectCatalog!().repos.find((repo) => repo.id === repoId)?.executionHostId ??
         null,
       added.repo.id
     )

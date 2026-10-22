@@ -32,7 +32,7 @@ test('cycles visible folder workspaces with shortcuts and focused list arrows', 
       },
       { runtimeEnvironmentId: null }
     )
-    const repo = store.getState().repos[0]
+    const repo = window.__projectCatalog!().repos[0]
     const [first, last] = repo ? (store.getState().worktreesByRepo[repo.id] ?? []) : []
     if (!folder || !repo || !first || !last) {
       throw new Error('Expected two git worktrees and one folder workspace')

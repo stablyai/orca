@@ -20,6 +20,13 @@ import {
 } from './sidebar-list-golden-suite.test-fixture'
 
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+// The fixtures seed the catalog as store fields; main publishes what they seed.
+vi.mock(
+  '@/store/project-catalog-selectors',
+  async () =>
+    (await import('@/store/project-catalog-store-fields.test-support'))
+      .projectCatalogFromStoreFields
+)
 // Main's list session is a runtime call with no bearing on the rows.
 vi.mock('@/lib/sidebar-list-session', () => ({ useSidebarListSession: () => {} }))
 

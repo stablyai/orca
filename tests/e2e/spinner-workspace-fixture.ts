@@ -49,7 +49,7 @@ export async function seedSpinnerWorkspaces(
   await attachRepoAndOpenTerminal(page, repoPath)
   await page.evaluate(async () => {
     const store = window.__store!
-    const repo = store.getState().repos[0]
+    const repo = window.__projectCatalog!().repos[0]
     await store.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
     const paths = (store.getState().detectedWorktreesByRepo[repo.id]?.worktrees ?? [])
       .filter((worktree) => !worktree.selectedCheckout)

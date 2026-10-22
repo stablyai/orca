@@ -263,7 +263,10 @@ test('upgrades a legacy daemon session and keeps it stable after relaunch', asyn
     await execInTerminal(oldLaunch.page, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(oldLaunch.page, marker)
     const repoId = await oldLaunch.page.evaluate(
-      (repoPath) => window.__store?.getState().repos.find((repo) => repo.path === repoPath)?.id,
+      (repoPath) =>
+        (window.__projectCatalog?.() ?? window.__store!.getState()).repos.find(
+          (repo) => repo.path === repoPath
+        )?.id,
       repoPath
     )
     if (!repoId) {

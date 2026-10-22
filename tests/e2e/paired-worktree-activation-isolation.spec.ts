@@ -11,7 +11,7 @@ test('remote CLI creation updates the catalog while a paired desktop stays in it
   testRepoPath
 }, testInfo) => {
   test.setTimeout(180_000)
-  const hostRepoId = await orcaPage.evaluate(() => window.__store!.getState().repos[0].id)
+  const hostRepoId = await orcaPage.evaluate(() => window.__projectCatalog!().repos[0].id)
   const client = await launchPairedElectronClient(
     await createRuntimeDesktopPairingOffer(orcaPage),
     testInfo,

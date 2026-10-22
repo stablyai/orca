@@ -246,9 +246,9 @@ async function runSelectedRuntimeAddJourney(
           folder: store
             .getState()
             .folderWorkspaces.find((workspace) => workspace.folderPath === reconnectCatalogPath),
-          group: store
-            .getState()
-            .projectGroups.find((entry) => entry.parentPath === reconnectCatalogPath)
+          group: window.__projectCatalog!().projectGroups.find(
+            (entry) => entry.parentPath === reconnectCatalogPath
+          )
         }
       },
       {
@@ -569,7 +569,7 @@ async function runSelectedRuntimeAddJourney(
         .fetchFolderWorkspaces({ runtimeEnvironmentId: null, throwOnError: true })
       return {
         folderWorkspaces: store.getState().folderWorkspaces,
-        projectGroups: store.getState().projectGroups
+        projectGroups: window.__projectCatalog!().projectGroups
       }
     })
     expect(catalogAfterLocalRefresh.projectGroups).toEqual(

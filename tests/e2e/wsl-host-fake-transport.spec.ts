@@ -279,7 +279,7 @@ test('adds a WSL distro as a host, adds a project on it, and runs a terminal the
         () =>
           page.evaluate(
             (repoPath) =>
-              window.__store?.getState().repos.find((repo) => repo.path === repoPath)
+              window.__projectCatalog!().repos.find((repo) => repo.path === repoPath)
                 ?.executionHostId ?? null,
             projectPath
           ),

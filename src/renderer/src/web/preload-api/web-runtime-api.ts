@@ -41,6 +41,7 @@ export function createWebRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime'
     onBrowserRemoteViewersChanged: () => noopUnsubscribe,
     onClientHostedBrowserRowsChanged: () => noopUnsubscribe,
     // A web client builds its own view and never reads the host's sidebar feed.
-    onSidebarInputsChanged: () => noopUnsubscribe
+    onSidebarInputsChanged: () => noopUnsubscribe,
+    onSidebarCatalogChanged: () => noopUnsubscribe
   }
 }

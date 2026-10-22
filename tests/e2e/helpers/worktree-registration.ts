@@ -33,7 +33,7 @@ async function resolveE2eWorktreeId(
               throw new Error('window.__store is not available')
             }
             await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-            const repo = store.getState().repos.find((entry) => entry.path === repoPath)
+            const repo = window.__projectCatalog!().repos.find((entry) => entry.path === repoPath)
             if (!repo) {
               throw new Error(`Seeded E2E repo was not registered: ${repoPath}`)
             }

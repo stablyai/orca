@@ -8,7 +8,9 @@ import {
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { enrichRepoGitUsernames } from '../../repo-git-username-enrichment'
+import { onCatalogRecordsRead } from '../../runtime/sidebar-inputs/catalog-records-feed'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
@@ -21,6 +23,9 @@ import {
   isWslMoveSourceHost
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
+// One listener across window re-creations.
+let detachEnrichment: (() => void) | null = null
+
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,
   store: Store,
@@ -29,6 +34,16 @@ export function registerRepoCatalogHandlers(
   // Why one shared reference: enrichment dedupes coalesced callers by callback identity, so a fresh
   // closure per list call would stack up (and re-broadcast) for the length of a slow sweep.
   const broadcastReposChanged = (): void => notifyReposChanged(mainWindow)
+  // Switch point: the window reads main's catalog, not repos:list, so main fills the gaps itself.
+  if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+    const enrich = (): void => {
+      enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
+      enrichRepoGitUsernames(store, { onChanged: broadcastReposChanged })
+    }
+    // Why on each window catalog read: as repos:list did, so the git reads land when they did.
+    detachEnrichment?.()
+    detachEnrichment = onCatalogRecordsRead(enrich)
+  }
 
   ipcMain.handle('repos:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })

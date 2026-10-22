@@ -1,3 +1,4 @@
+import type { ProjectCatalogVersion } from '../project-catalog-version'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
@@ -168,6 +169,8 @@ export type RepoSlice = {
   activeRepoId: string | null
   // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
   reposFetchGeneration: number
+  /** Switch-on: names main's catalog this state reads (project-catalog-version.ts). */
+  projectCatalogVersion: ProjectCatalogVersion
   pendingSshRepoReadoptions: readonly SshRepoReadoption[]
   recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
   fetchRepos: (options: RuntimeCatalogFetchOptions) => Promise<void>

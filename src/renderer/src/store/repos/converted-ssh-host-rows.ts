@@ -5,6 +5,7 @@ import {
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
 import { selectRepos } from '../project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
 type ConvertedHostRows = Pick<
   AppState,
@@ -45,7 +46,8 @@ export function withoutConvertedSshHostRows(
     })
   )
   return {
-    ...(repos.length === selectRepos(state).length ? {} : { repos }),
+    // Switch point: main's catalog already hides the converted host's rows.
+    ...(ORCA_SIDEBAR_INPUTS_IS_MAIN || repos.length === selectRepos(state).length ? {} : { repos }),
     ...(worktreesByRepo === state.worktreesByRepo ? {} : { worktreesByRepo }),
     ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
     ...(pinned.length > 0

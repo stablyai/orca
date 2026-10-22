@@ -847,6 +847,10 @@
             }
           }
         }
+      },
+      "projectCatalog": {
+        "writeNotShown": "Could not confirm the change",
+        "writeNotShownDesc": "The host accepted it, but the sidebar has not shown it yet."
       }
     },
     "lib": {

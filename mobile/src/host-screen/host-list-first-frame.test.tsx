@@ -56,6 +56,16 @@ const INSTALLED: InstalledSidebarInputs = {
         ['|orca::/w/parent', FEED_ROWS.parent],
         ['|orca::/w/child', FEED_ROWS.child]
       ])
+    ],
+    [
+      'projectCatalog',
+      new Map<string, unknown>([
+        ['repos', [{ id: 'orca', displayName: 'orca', path: '/w' }]],
+        ['projects', []],
+        ['setups', []],
+        ['projectOrderBy', 'manual'],
+        ['projectGroups', []]
+      ])
     ]
   ])
 }
@@ -64,9 +74,7 @@ const INSTALLED: InstalledSidebarInputs = {
 const STATE = {
   view: phoneView(),
   search: '',
-  servedProjectSections: null,
   desktopRepos: [],
-  hostProjectGroups: [],
   repoHostIdByRepoId: new Map(),
   pinnedIds: [],
   showPinnedInGroups: false
@@ -121,6 +129,18 @@ describe("the host list's first frame under the feed", () => {
     await read({ snapshot: SNAPSHOT, unavailable: false })
     expect(drawn[0]?.icon).toBe('pin')
     expect(rowIds()).toContain('orca::/w/parent')
+  })
+
+  it('draws nothing from rows main installed without their catalog', async () => {
+    await open('host-1')
+    const domains = new Map(INSTALLED.domains)
+    domains.delete('projectCatalog')
+    await read({
+      snapshot: installSidebarFeedSnapshot({ ...INSTALLED, domains }, null),
+      unavailable: false
+    })
+    expect(kind).toBe('ready')
+    expect(drawn).toEqual([])
   })
 
   it("opens the list again on the host's last installed feed, not on worktree.ps", async () => {

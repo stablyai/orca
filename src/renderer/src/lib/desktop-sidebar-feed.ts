@@ -49,6 +49,11 @@ export function onDesktopSidebarFeedInstalled(
   return () => installListeners.delete(listener)
 }
 
+/** The last install, or null before main's first. */
+export function readDesktopSidebarFeed(): DesktopSidebarFeed | null {
+  return feed
+}
+
 /** Reads again now, so the next install reflects every write main has answered so far. */
 export function refreshDesktopSidebarFeed(): number {
   // Nothing is read yet; the first mount's first read is the earliest that shows the write.

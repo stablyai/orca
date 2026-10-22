@@ -10,19 +10,19 @@ import type { RuntimeRpcResponse } from '../runtime-rpc-envelope'
 import type { PairedServerCatalog } from './sidebar-project-catalog'
 import { salvagingArray } from '../zod-salvage'
 
-// The server's own rows as it sends them; the adoption and projection steps normalize the rest.
-function rowWith<T>(...keys: string[]) {
+/** A host's own row as it sends it, checked by identity only; a field this build lacks is kept. */
+export function catalogRowWith<T>(...keys: string[]) {
   const identity = z.looseObject(Object.fromEntries(keys.map((key) => [key, z.string()])))
   return z.custom<T>((value) => identity.safeParse(value).success)
 }
 
 const RepoListReplySchema = z.object({
-  repos: salvagingArray(rowWith<Repo>('id', 'path', 'displayName'))
+  repos: salvagingArray(catalogRowWith<Repo>('id', 'path', 'displayName'))
 })
 const ProjectGroupListReplySchema = z.object({ groups: salvagingArray(ProjectGroupSchema) })
-const ProjectListReplySchema = z.object({ projects: salvagingArray(rowWith<Project>('id')) })
+const ProjectListReplySchema = z.object({ projects: salvagingArray(catalogRowWith<Project>('id')) })
 const ProjectHostSetupListReplySchema = z.object({
-  setups: salvagingArray(rowWith<ProjectHostSetup>('id', 'projectId', 'repoId'))
+  setups: salvagingArray(catalogRowWith<ProjectHostSetup>('id', 'projectId', 'repoId'))
 })
 
 function answer<Schema extends z.ZodType>(

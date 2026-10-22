@@ -3,29 +3,32 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import {
-  hostProjectGroupsRead,
   projectSectionsRead,
   readServedProjectSections
 } from '../worktree/project-sections-operations'
-import { readHostMethodReply } from './host-sidebar-feed-operations'
 import type { HostScreenState } from './use-host-screen-state'
 
 const PROJECT_SECTIONS_REFRESH_MS = 60_000
 
-/**
- * The desktop sidebar's Project catalog, refreshed with repo metadata but as its own read, so a
- * slow or missing answer never holds the repo labels back. Skipped while the host's sidebar feed
- * carries the catalog, which installs it with the rows.
- */
-export function useHostProjectSections(args: {
+type FetchHostProjectSections = (options?: {
+  force?: boolean
+  queueIfInFlight?: boolean
+}) => Promise<void>
+
+type HostProjectSectionsArgs = {
   client: RpcClient | null
   connState: ConnectionState
   hostId: string | undefined
-  state: Pick<HostScreenState, 'clientRef' | 'setServedProjectSections' | 'setHostProjectGroups'>
-  feedCarriesCatalog?: () => boolean
-}): (options?: { force?: boolean; queueIfInFlight?: boolean }) => Promise<void> {
-  const { client, connState, hostId, state, feedCarriesCatalog } = args
-  const { clientRef, setServedProjectSections, setHostProjectGroups } = state
+  state: Pick<HostScreenState, 'clientRef' | 'setServedProjectSections'>
+}
+
+/**
+ * The desktop sidebar's Project catalog, refreshed with repo metadata but as its own read, so a
+ * slow or missing answer never holds the repo labels back.
+ */
+function useServedProjectSections(args: HostProjectSectionsArgs): FetchHostProjectSections {
+  const { client, connState, hostId, state } = args
+  const { clientRef, setServedProjectSections } = state
   const inFlight = useRef(new WeakSet<RpcClient>())
   // A read queued while one ran: that one may predate the change this was asked for.
   const queued = useRef(new WeakSet<RpcClient>())
@@ -34,7 +37,7 @@ export function useHostProjectSections(args: {
 
   return useCallback(
     async (options: { force?: boolean; queueIfInFlight?: boolean } = {}) => {
-      if (!client || connState !== 'connected' || !hostId || feedCarriesCatalog?.()) {
+      if (!client || connState !== 'connected' || !hostId) {
         return
       }
       if (inFlight.current.has(client)) {
@@ -58,15 +61,6 @@ export function useHostProjectSections(args: {
         if (sections.kind === 'answered') {
           fetchedAt.current.set(client, Date.now())
           setServedProjectSections(sections.value)
-          // Switch point: with no window catalog's groups, a feed-built list reads the host's own.
-          if (ORCA_SIDEBAR_INPUTS_IS_MAIN && !sections.value?.projectGroups) {
-            const groupReply = await hostProjectGroupsRead.request(client).catch(() => null)
-            const groups =
-              groupReply && readHostMethodReply(groupReply, hostProjectGroupsRead.interpret)
-            if (groups?.kind === 'answered' && clientRef.current === client) {
-              setHostProjectGroups(groups.value)
-            }
-          }
         }
         return true
       }
@@ -84,14 +78,12 @@ export function useHostProjectSections(args: {
         inFlight.current.delete(client)
       }
     },
-    [
-      client,
-      clientRef,
-      connState,
-      feedCarriesCatalog,
-      hostId,
-      setServedProjectSections,
-      setHostProjectGroups
-    ]
+    [client, clientRef, connState, hostId, setServedProjectSections]
   )
 }
+
+const readNothing: FetchHostProjectSections = async () => {}
+
+/** Switch point: the host's sidebar feed carries the catalog, installed with the rows. */
+export const useHostProjectSections: (args: HostProjectSectionsArgs) => FetchHostProjectSections =
+  ORCA_SIDEBAR_INPUTS_IS_MAIN ? () => readNothing : useServedProjectSections

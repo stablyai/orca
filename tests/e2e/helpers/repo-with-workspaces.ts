@@ -62,7 +62,7 @@ export async function addRepoWithWorkspaces(
         page.evaluate(async (repoId) => {
           const store = window.__store!
           await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-          return store.getState().repos.some((repo) => repo.id === repoId)
+          return window.__projectCatalog!().repos.some((repo) => repo.id === repoId)
         }, repoId),
       { message: 'the added repo never reached the store' }
     )

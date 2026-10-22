@@ -31,7 +31,7 @@ test('locally controlled project-group modal keeps child-toggle input', async ({
     if (!group) {
       throw new Error('Missing project group')
     }
-    const parentRepo = store.getState().repos.find((repo) => repo.id === parent.repoId)
+    const parentRepo = window.__projectCatalog!().repos.find((repo) => repo.id === parent.repoId)
     if (!parentRepo) {
       throw new Error('Missing parent repo')
     }

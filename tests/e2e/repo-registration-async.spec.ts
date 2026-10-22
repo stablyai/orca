@@ -70,7 +70,7 @@ test('registration resolves nested and linked paths to one existing project', as
   expect(result.persistedIds).toEqual([result.ids[0]])
   // A repos:changed refresh can supersede the explicitly awaited catalog fetch.
   await expect
-    .poll(() => orcaPage.evaluate(() => window.__store!.getState().repos.map((repo) => repo.id)))
+    .poll(() => orcaPage.evaluate(() => window.__projectCatalog!().repos.map((repo) => repo.id)))
     .toEqual(result.persistedIds)
   const linked = await orcaPage.evaluate(async (path) => window.api.repos.add({ path }), linkedPath)
   expect('repo' in linked && linked.repo.id).toBe(result.ids[0])

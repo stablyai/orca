@@ -46,7 +46,7 @@ async function loadTestWorktreeIds(
       if (!store) {
         return null
       }
-      const repo = store.getState().repos[0]
+      const repo = window.__projectCatalog!().repos[0]
       if (!repo) {
         return null
       }

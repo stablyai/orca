@@ -68,8 +68,9 @@
 2 src/renderer/src/store/github/worktree-refresh.ts
 2 src/renderer/src/store/project-groups/project-group-catalog-actions.ts
 4 src/renderer/src/store/project-groups/project-group-catalog.ts
-5 src/renderer/src/store/project-groups/project-group-mutations.ts
+2 src/renderer/src/store/project-groups/project-group-mutations.ts
 2 src/renderer/src/store/project-groups/project-group-removal-state.ts
+3 src/renderer/src/store/project-groups/project-move-to-group.ts
 2 src/renderer/src/store/project-host-setup-selector.ts
 2 src/renderer/src/store/projects/project-host-routing.ts
 11 src/renderer/src/store/projects/project-host-setup-actions.ts

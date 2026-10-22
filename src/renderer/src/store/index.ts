@@ -59,6 +59,8 @@ import {
 } from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
 import { installSettledSortEpoch } from './settled-sort-epoch'
+import { installProjectCatalogVersion } from './project-catalog-version'
+import { selectProjectCatalog } from './project-catalog-selectors'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
@@ -88,6 +90,8 @@ export const useAppStore = create<AppState>()(
         // Switch point: the stamp-sorted list reads no settled epoch.
         if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
           installSettledSortEpoch(a[2])
+        } else {
+          installProjectCatalogVersion(a[2])
         }
         // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
         installStoreListenerCensus(a[2])
@@ -176,6 +180,7 @@ export type { AppState } from './types'
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>
   testWindow.__store = useAppStore
+  testWindow.__projectCatalog = () => selectProjectCatalog(useAppStore.getState())
   if (e2eConfig.exposeStore) {
     testWindow.__webRuntimeSessionE2E = {
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>

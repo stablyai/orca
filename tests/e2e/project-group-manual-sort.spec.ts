@@ -87,7 +87,7 @@ async function seedProjectHeaderSortScenario(
     // stop firing repos:changed).
     const findSeededRepos = () =>
       paths.map((repoPath) =>
-        store.getState().repos.find((candidate) => candidate.path === repoPath)
+        window.__projectCatalog!().repos.find((candidate) => candidate.path === repoPath)
       )
     let repos = findSeededRepos()
     const deadline = Date.now() + 10_000

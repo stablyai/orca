@@ -8,6 +8,9 @@ import { getProjectSetupRuntimeTarget } from './project-host-routing'
 import { mergeUpdatedProjectCompatibilityProject } from '../../../../shared/project-compatibility-merge'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import { selectProjects } from '../project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '../main-project-catalog-writes'
+import { catalogRowShowsUpdate } from '../catalog-row-update-shown'
 
 export function createProjectUpdateActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -35,14 +38,28 @@ export function createProjectUpdateActions(
         // Why: the merge spreads updatedProject.sourceRepoIds, which throws if the host sent a non-array.
         const normalizedProject = normalizeProjectRow(updatedProject)
         const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
-        set((state) => ({
-          projects: selectProjects(state).map((project) =>
-            project.id === projectId
-              ? mergeUpdatedProjectCompatibilityProject(project, normalizedProject, updates)
-              : project
-          ),
-          folderWorkspacePathStatuses: {}
-        }))
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          set({ folderWorkspacePathStatuses: {} })
+          const shown = await mainCatalogShowsWrite(target, (catalog) =>
+            catalog.projects.some(
+              (project) =>
+                project.id === projectId &&
+                catalogRowShowsUpdate(project, normalizedProject, updates)
+            )
+          )
+          if (!shown) {
+            return false
+          }
+        } else {
+          set((state) => ({
+            projects: selectProjects(state).map((project) =>
+              project.id === projectId
+                ? mergeUpdatedProjectCompatibilityProject(project, normalizedProject, updates)
+                : project
+            ),
+            folderWorkspacePathStatuses: {}
+          }))
+        }
         if (runtimePreferenceChanged) {
           get().clearLocalDetectedAgents()
           notifyInstalledAgentSkillsChanged()

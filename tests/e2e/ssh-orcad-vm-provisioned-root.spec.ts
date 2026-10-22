@@ -120,7 +120,7 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
       .poll(
         () =>
           orcaPage.evaluate(
-            (repoId) => window.__store!.getState().repos.some((repo) => repo.id === repoId),
+            (repoId) => window.__projectCatalog!().repos.some((repo) => repo.id === repoId),
             adopted!.repoId
           ),
         { timeout: 30_000 }

@@ -49,6 +49,17 @@ function asDataUrl(mimeType: string, bytes: Uint8Array): string | null {
   return dataUrl.length <= MAX_REPO_ICON_DATA_URL_BYTES ? dataUrl : null
 }
 
+/** Every repo whose icon the feed names: this host's and, through it, its paired servers'. */
+export function repoIconSourceRepos(
+  store: { getRepos: () => readonly Repo[] } | null | undefined,
+  pairedServers: { catalogs: () => readonly { repos: readonly Repo[] }[] } | null
+): Repo[] {
+  return [
+    ...(store?.getRepos() ?? []),
+    ...(pairedServers?.catalogs().flatMap((server) => server.repos) ?? [])
+  ]
+}
+
 /**
  * The workspace icons the window shows (each repo's `repoIcon`), as small data URLs a phone can
  * draw even where its shell admits no https images. Without an encoder (orcad) small images pass

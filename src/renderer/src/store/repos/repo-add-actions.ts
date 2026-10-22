@@ -1,3 +1,5 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '../main-project-catalog-writes'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -100,8 +102,20 @@ export function createRepoAddActions(
         if (alreadyAdded) {
           get().clearOrcaHookTrustForRepo(repo.id)
         }
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          set({ folderWorkspacePathStatuses: {} })
+          const shown = await mainCatalogShowsWrite(target, (catalog) =>
+            catalog.repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
+          )
+          if (!shown) {
+            return null
+          }
+        }
         set((s) => {
-          if (selectRepos(s).some((r) => getRepoHostIdentity(r) === repoIdentity)) {
+          if (
+            ORCA_SIDEBAR_INPUTS_IS_MAIN ||
+            selectRepos(s).some((r) => getRepoHostIdentity(r) === repoIdentity)
+          ) {
             return s
           }
           const nextRepos = [...selectRepos(s), repo]

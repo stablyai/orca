@@ -704,6 +704,36 @@ describe('PairedServerRowsProducer', () => {
     expect(catalogCall.mock.calls.length).toBeGreaterThan(reads)
   })
 
+  it("re-reads a server's catalog after the window's write, so a server that announces nothing still shows it", async () => {
+    const { hosts, call, catalogCall, watches } = fakeHosts([{ id: 'box', live: true }])
+    call.mockResolvedValue(psReply([]))
+    let name = 'Old'
+    catalogCall.mockImplementation(async (_host, method) =>
+      method === 'repo.list'
+        ? {
+            id: method,
+            ok: true as const,
+            result: { repos: [{ id: 'r', path: '/srv/r', displayName: name }] },
+            _meta: { runtimeId: 'runtime-a' }
+          }
+        : { id: method, ok: false as const, error: { code: 'method_not_found', message: method } }
+    )
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(producer.catalogs()[0]?.repos[0]?.displayName).toBe('Old')
+
+    name = 'New'
+    const refreshed = producer.refreshCatalog('box')
+    await vi.advanceTimersByTimeAsync(0)
+    await refreshed
+    expect(producer.catalogs()[0]?.repos[0]?.displayName).toBe('New')
+  })
+
   it('reads no catalog for worktreesChanged, which no catalog write sends alone', async () => {
     const { hosts, call, catalogCall, watches } = fakeHosts([{ id: 'box', live: true }])
     call.mockResolvedValue(psReply([]))

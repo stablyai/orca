@@ -74,7 +74,7 @@ export async function openHostSplitWorktree(page: Page, userDataDir: string): Pr
       setupWorktreeId = await page.evaluate(async () => {
         const store = window.__store!
         await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-        for (const repo of store.getState().repos) {
+        for (const repo of window.__projectCatalog!().repos) {
           await store.getState().fetchWorktrees(repo.id)
         }
         return Object.values(store.getState().worktreesByRepo)

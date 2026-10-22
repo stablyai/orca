@@ -43,9 +43,11 @@ async function addSshFolderProject(args: {
     ...(args.displayName ? { displayName: args.displayName } : {})
   })
   return {
-    repo: upsertAddedRepoWithProjectHostSetup(added, {
-      runtimeEnvironmentId: args.runtimeEnvironmentId
-    }).repo,
+    repo: (
+      await upsertAddedRepoWithProjectHostSetup(added, {
+        runtimeEnvironmentId: args.runtimeEnvironmentId
+      })
+    ).repo,
     ownerOptions: worktreeRefreshOptions(args.runtimeEnvironmentId)
   }
 }

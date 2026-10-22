@@ -166,6 +166,19 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     return entry.refreshing
   }
 
+  /** Reads the server's catalog again now: after a write through this host, whether or not the
+   *  server (an older one may not) announces it. */
+  refreshCatalog(environmentId: string): Promise<void> {
+    const entry = this.servers.get(environmentId)
+    if (!entry) {
+      return Promise.resolve()
+    }
+    entry.catalogStale = true
+    // A fetch already in flight may predate the write, so one more runs after it.
+    entry.refreshAgain ||= entry.refreshing !== null
+    return this.refresh(environmentId)
+  }
+
   /** The server's raw rows as last fetched under this pairing; null when none were. */
   rows(environmentId: string, fence: string): readonly MobileRelayServerWorktreeRow[] | null {
     const entry = this.servers.get(environmentId)

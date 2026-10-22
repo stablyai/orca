@@ -108,7 +108,7 @@ test('shows an externally created worktree on a paired client without reconnect'
 
   try {
     const repos = await sharedPage.evaluate(
-      () => window.__store?.getState().repos.map((repo) => ({ id: repo.id, path: repo.path })) ?? []
+      () => window.__projectCatalog!().repos.map((repo) => ({ id: repo.id, path: repo.path })) ?? []
     )
     const repoId = repos.find((repo) => pathsMatch(repo.path, testRepoPath))?.id
     if (!repoId) {

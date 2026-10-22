@@ -8,6 +8,11 @@ import { RepoIconDataUrlsParams } from '../../../../shared/sidebar-list/repo-ico
 import { SetCollapsedParams } from '../../../../shared/rpc-contract/workspace-view-collapse-params'
 import { setCollapsedSection } from '../../workspace-view-collapse-writes'
 import { ClientWorkspaceViewParams } from '../../../../shared/rpc-contract/client-workspace-view-params'
+import { PairedServerCatalogRefreshParams } from '../../../../shared/rpc-contract/paired-server-catalog-refresh-params'
+import {
+  catalogRecordsFeedOf,
+  noteCatalogRecordsRead
+} from '../../sidebar-inputs/catalog-records-feed'
 
 // Registered only with ORCA_SIDEBAR_INPUTS=main, so the producers below always exist.
 
@@ -93,6 +98,43 @@ export const SIDEBAR_INPUT_METHODS = [
         )
       }
       return feed.read(params)
+    }
+  }),
+  defineMethod({
+    name: 'sidebarInputs.readCatalog',
+    permission: 'workspace',
+    params: SidebarInputsReadParams,
+    // The window's own catalog rows; a phone builds from the feed's projectCatalog instead.
+    handler: async (params, context) => {
+      const feed = requireSwitchedOn(catalogRecordsFeedOf(context.runtime))
+      const { connectionId } = context
+      if (context.caller?.kind !== 'desktop' || connectionId === undefined) {
+        throw Object.assign(new Error('Only this host’s own window reads its catalog feed.'), {
+          code: 'forbidden'
+        })
+      }
+      if (context.signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      noteCatalogRecordsRead()
+      if (feed.acquire(connectionId)) {
+        context.runtime.registerSubscriptionCleanup(
+          `sidebar-catalog-feed-${connectionId}`,
+          () => feed.release(connectionId),
+          connectionId
+        )
+      }
+      return feed.read(params)
+    }
+  }),
+  defineMethod({
+    name: 'sidebarInputs.refreshServerCatalog',
+    permission: 'workspace',
+    params: PairedServerCatalogRefreshParams,
+    // After a catalog write the window sent a paired server, so main's catalog shows it.
+    handler: async ({ environmentId }, { runtime }) => {
+      await requireSwitchedOn(runtime.pairedServerRows).refreshCatalog(environmentId)
+      return { ok: true }
     }
   }),
   defineMethod({

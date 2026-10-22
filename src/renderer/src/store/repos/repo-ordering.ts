@@ -7,6 +7,9 @@ import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { selectRepos } from '../project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '../main-project-catalog-writes'
+import { getRepoHostIdentity } from '../slices/repo-host-identity'
 
 export function createRepoOrderingActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -43,8 +46,9 @@ export function createRepoOrderingActions(
         return
       }
       const manualRepoOrder = getManualRepoOrder(next)
+      // Switch point: main's catalog reorders; the window writes no repos of its own.
       set({
-        repos: next,
+        ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? {} : { repos: next }),
         manualRepoOrder,
         folderWorkspacePathStatuses: {}
       })
@@ -77,6 +81,13 @@ export function createRepoOrderingActions(
         ])
         if (results.some((result) => result.status === 'rejected')) {
           await get().fetchReposForAllHosts()
+        } else if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          const order = next.map(getRepoHostIdentity)
+          const wanted = new Set(order)
+          await mainCatalogShowsWrite({ kind: 'local' }, (catalog) => {
+            const shown = catalog.repos.map(getRepoHostIdentity).filter((id) => wanted.has(id))
+            return shown.length === order.length && shown.every((id, index) => id === order[index])
+          })
         }
       } catch (err) {
         console.error('Failed to reorder repos:', err)

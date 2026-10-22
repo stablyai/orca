@@ -96,6 +96,7 @@ function useLegacyHostListSections({
 }
 
 const NO_SECTIONS: Section[] = []
+const NO_REPOS: SectionRepo[] = []
 
 /** The desktop sidebar's own list, built by the shared builder from the host's feed. */
 function useFeedHostListSections({
@@ -108,14 +109,11 @@ function useFeedHostListSections({
 }: HostListSectionsInputs): HostListSections {
   const collapsedGroups = useCollapsedGroups(state)
   const domains = feed?.kind === 'ready' ? feed.domains : null
-  // The catalog installed with the rows; a desktop that predates it answers mobileRelay.projectSections.
-  const served = domains?.projectCatalog ?? state.servedProjectSections
-  const uniqueRepos = useFilterRepos(served?.repos ?? state.desktopRepos, displayWorktrees)
+  // The catalog installed with the rows: the list draws once both are in.
+  const served = domains?.projectCatalog ?? null
+  const uniqueRepos = useFilterRepos(served?.repos ?? NO_REPOS, displayWorktrees)
   const projectOrderBy = state.view.projectOrderBy ?? served?.projectOrderBy ?? 'manual'
-  const catalog = useMemo(
-    () => buildSidebarFeedCatalog(served, state.desktopRepos, state.hostProjectGroups),
-    [served, state.desktopRepos, state.hostProjectGroups]
-  )
+  const catalog = useMemo(() => (served ? buildSidebarFeedCatalog(served, [], []) : null), [served])
   const view = useMemo(
     () =>
       buildHostFeedView({
@@ -127,7 +125,7 @@ function useFeedHostListSections({
     [state.view, projectOrderBy, domains, hostPlatform]
   )
   const built = useMemo(
-    () => (domains ? buildSidebarFeedRows(domains, catalog, view) : null),
+    () => (domains && catalog ? buildSidebarFeedRows(domains, catalog, view) : null),
     [domains, catalog, view]
   )
   const lastVisited = useLastVisitedWorktreeOnHost(hostId)
@@ -171,9 +169,8 @@ function useFeedHostListSections({
     const hostIcons = new Map(
       state.desktopRepos.map((repo) => [repoIconFeedKey(repo), repo.repoIcon])
     )
-    const repos = served?.repos ?? state.desktopRepos
     return new Map(
-      repos.map((repo) => {
+      (served?.repos ?? NO_REPOS).map((repo) => {
         const key = repoIconFeedKey(repo)
         const iconId = domains?.repoIcons.get(key)
         const dataUrl = iconId ? iconDataUrls.get(iconId) : undefined

@@ -5,30 +5,21 @@ import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from '../slices/project-group-removal-targets'
 import {
   getProjectGroupHostId,
-  isProjectGroupJoinableFromCatalog,
   projectGroupMatchesOwnerHost,
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
 } from '../slices/project-group-owner-routing'
-import {
-  findRepoForHost,
-  isSameRepoRow,
-  repoMatchesHostIdentity
-} from '../slices/repo-host-identity'
+import { findRepoForHost, repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
-import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { notifyProjectGroupOnOtherHost } from './project-group-other-host-notice'
-import {
-  selectProjectGroups,
-  selectProjectHostSetups,
-  selectProjects,
-  selectRepos
-} from '../project-catalog-selectors'
+import { moveProjectToGroup } from './project-move-to-group'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '../main-project-catalog-writes'
+import { selectProjectGroups, selectRepos } from '../project-catalog-selectors'
 
 export function createProjectGroupMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -65,6 +56,15 @@ export function createProjectGroupMutationActions(
               ).group
         const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: group })
         const ownerHostId = getProjectGroupHostId(ownedGroup)
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          set({ folderWorkspacePathStatuses: {} })
+          const shown = await mainCatalogShowsWrite(target, (catalog) =>
+            catalog.projectGroups.some((existing) =>
+              projectGroupMatchesOwnerHost(existing, ownedGroup.id, ownerHostId)
+            )
+          )
+          return shown ? ownedGroup : null
+        }
         set((s) => {
           // An overlapping catalog refresh may have already inserted a newer copy.
           if (
@@ -110,6 +110,16 @@ export function createProjectGroupMutationActions(
           return false
         }
         const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: updated })
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          set({ folderWorkspacePathStatuses: {} })
+          return mainCatalogShowsWrite(target, (catalog) =>
+            catalog.projectGroups.some(
+              (group) =>
+                projectGroupMatchesOwnerHost(group, groupId, ownerHostId) &&
+                group.updatedAt >= ownedGroup.updatedAt
+            )
+          )
+        }
         set((s) => ({
           projectGroups: selectProjectGroups(s).map((group) =>
             projectGroupMatchesOwnerHost(group, groupId, ownerHostId) ? ownedGroup : group
@@ -144,6 +154,21 @@ export function createProjectGroupMutationActions(
               ).deleted
         if (!deleted) {
           return false
+        }
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          // Main's catalog clears the members; only the window's folder rows cascade here.
+          set((s) => {
+            const { folderWorkspaces, folderWorkspacePathStatuses } =
+              applyProjectGroupDeleteCascade(s, groupId, ownerHostId)
+            return { folderWorkspaces, folderWorkspacePathStatuses }
+          })
+          return mainCatalogShowsWrite(
+            target,
+            (catalog) =>
+              !catalog.projectGroups.some((group) =>
+                projectGroupMatchesOwnerHost(group, groupId, ownerHostId)
+              )
+          )
         }
         set((s) => applyProjectGroupDeleteCascade(s, groupId, ownerHostId))
         return true
@@ -249,70 +274,7 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    moveProjectToGroup: async (project, groupId, order) => {
-      try {
-        const repo = selectRepos(get()).find((candidate) => isSameRepoRow(candidate, project))
-        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
-        const target = repoHostId ? ipcOrRuntimeTargetForHostId(repoHostId) : null
-        if (!repo || !repoHostId || !target) {
-          return false
-        }
-        if (
-          groupId &&
-          !isProjectGroupJoinableFromCatalog(selectProjectGroups(get()), groupId, target)
-        ) {
-          notifyProjectGroupOnOtherHost()
-          return false
-        }
-        const moved =
-          target.kind === 'local'
-            ? await window.api.projectGroups.moveProject({
-                projectId: repo.id,
-                groupId,
-                order,
-                hostId: repoHostId
-              })
-            : (
-                await callRuntimeRpc<{ repo: Repo | null }>(
-                  target,
-                  'projectGroup.moveProject',
-                  // Why connectionId: the server's own twins differ only by their SSH target there.
-                  { repo: repo.id, groupId, order, connectionId: repo.connectionId ?? null },
-                  { timeoutMs: 15_000 }
-                )
-              ).repo
-        if (!moved) {
-          return false
-        }
-        const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
-        const movedHostId = getRepoExecutionHostId(ownedMoved)
-        set((s) => {
-          const nextRepos = selectRepos(s).map((candidate) =>
-            isSameRepoRow(candidate, repo) ? ownedMoved : candidate
-          )
-          return {
-            repos: nextRepos,
-            ...mergeProjectCompatibilityForHostRepoChange({
-              previous: {
-                projects: selectProjects(s),
-                projectHostSetups: selectProjectHostSetups(s)
-              },
-              nextRepos,
-              hostId: movedHostId
-            }),
-            folderWorkspacePathStatuses: {}
-          }
-        })
-        // Why: hosts store an unknown group id as "no group" and still return the row (#13699).
-        if (groupId && (moved.projectGroupId ?? null) !== groupId) {
-          notifyProjectGroupOnOtherHost()
-          return false
-        }
-        return true
-      } catch (err) {
-        console.error('Failed to move repo to group:', err)
-        return false
-      }
-    }
+    moveProjectToGroup: (project, groupId, order) =>
+      moveProjectToGroup(set, get, project, groupId, order)
   }
 }

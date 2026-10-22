@@ -1,3 +1,4 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -77,11 +78,14 @@ export const createWorkItemMutationActions = (
     // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
     const issueSourcePreference = preference === 'auto' ? undefined : preference
     // Why: optimistically patch the row so the segmented control updates this frame; a twin's other row keeps its own.
-    set((s) => ({
-      repos: selectRepos(s).map((r) =>
-        repoMatchesHostIdentity(r, repoId, hostId) ? { ...r, issueSourcePreference } : r
-      )
-    }))
+    // Switch point: main's catalog shows the row once updateRepo's write lands.
+    if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+      set((s) => ({
+        repos: selectRepos(s).map((r) =>
+          repoMatchesHostIdentity(r, repoId, hostId) ? { ...r, issueSourcePreference } : r
+        )
+      }))
+    }
     // Why: updateRepo routes by the row's host, so a twin's write lands on the row the user changed.
     const saved = await get().updateRepo(repoId, { issueSourcePreference }, { hostId })
     if (!saved) {

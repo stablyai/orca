@@ -38,7 +38,7 @@ export type SidebarFeedDomains = {
     { freshness: 'live' | 'unverifiable'; host: PairedServerHostFacts | null }
   >
   pairedServerRows: ReadonlyMap<string, PairedServerWorkspaceRow>
-  /** Icon ids by `hostId|repoId` (repoIconFeedKey) for this host's repos; a paired server's have none. */
+  /** Icon ids by `hostId|repoId` (repoIconFeedKey) for this host's and its paired servers' repos. */
   repoIcons: ReadonlyMap<string, string>
   /** Null until the host's desktop facts arrive whole. */
   desktop: DesktopSidebarFacts | null
@@ -130,6 +130,44 @@ const readWorkspaceDomain = <Entity>(
 ): Map<HostScopedWorktreeKey, Entity> =>
   readKeyedDomain(installed, name, parse, parseWorktreeHostIdentity)
 
+const CATALOG_FIELDS = ProjectSectionCatalogSchema.shape
+
+/** Parses only the catalog fields that changed, so one group rename keeps every repo's object. */
+function readProjectCatalog(
+  installed: InstalledSidebarInputs,
+  previous: SidebarFeedRead | undefined
+): ServedProjectSections | null {
+  const domain = installed.domains.get('projectCatalog')
+  const before = previous?.installed.domains.get('projectCatalog')
+  const reused = previous?.domains.projectCatalog ?? null
+  const field = <Key extends keyof ServedProjectSections>(
+    key: Key,
+    schema: z.ZodType<ServedProjectSections[Key]>
+  ): { value: ServedProjectSections[Key] } | null => {
+    const raw = domain?.get(key)
+    if (reused && before?.has(key) && before.get(key) === raw) {
+      return { value: reused[key] }
+    }
+    const parsed = schema.safeParse(raw)
+    return parsed.success ? { value: parsed.data } : null
+  }
+  const repos = field('repos', CATALOG_FIELDS.repos)
+  const projects = field('projects', CATALOG_FIELDS.projects)
+  const setups = field('setups', CATALOG_FIELDS.setups)
+  const projectOrderBy = field('projectOrderBy', CATALOG_FIELDS.projectOrderBy)
+  const projectGroups = field('projectGroups', CATALOG_FIELDS.projectGroups)
+  if (!domain || !repos || !projects || !setups || !projectOrderBy || !projectGroups) {
+    return null
+  }
+  return {
+    repos: repos.value,
+    projects: projects.value,
+    setups: setups.value,
+    projectOrderBy: projectOrderBy.value,
+    projectGroups: projectGroups.value
+  }
+}
+
 /** An install and what was read off it, for the next read to reuse. */
 export type SidebarFeedRead = { installed: InstalledSidebarInputs; domains: SidebarFeedDomains }
 
@@ -148,11 +186,7 @@ export function readSidebarFeedDomains(
     Object.fromEntries(installed.domains.get('desktop') ?? [])
   )
   const projectCatalog =
-    unchanged('projectCatalog')?.projectCatalog ??
-    ProjectSectionCatalogSchema.safeParse(
-      Object.fromEntries(installed.domains.get('projectCatalog') ?? [])
-    ).data ??
-    null
+    unchanged('projectCatalog')?.projectCatalog ?? readProjectCatalog(installed, previous)
   const temporal = SidebarTemporalSnapshotSchema.pick({ retention: true }).safeParse(
     Object.fromEntries(installed.domains.get('temporal') ?? [])
   )

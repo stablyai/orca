@@ -71,7 +71,7 @@ async function openMockedPaginatedGitHubTasks(
     if (!store) {
       throw new Error('window.__store is not available')
     }
-    const repos = store.getState().repos.map((repo, index) =>
+    const repos = window.__projectCatalog!().repos.map((repo, index) =>
       index === 0
         ? {
             ...repo,

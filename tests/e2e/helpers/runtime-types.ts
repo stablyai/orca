@@ -68,6 +68,11 @@ declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     __store?: AppStore
+    /** The project catalog through the window's selectors: main's catalog with the switch on. */
+    __projectCatalog?: () => Pick<
+      AppState,
+      'repos' | 'projectGroups' | 'projects' | 'projectHostSetups'
+    >
     __dictationMeterE2E?: { publish(meter: DictationMeterState): void }
     __paneManagers?: Map<string, PaneManagerLike>
     __REACT_DEVTOOLS_GLOBAL_HOOK__?: ReactCommitHook

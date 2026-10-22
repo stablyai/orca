@@ -15,6 +15,7 @@ import {
   mergeFetchedProjectGroupCatalog
 } from './project-group-catalog'
 import { selectProjectGroups } from '../project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
 export function createProjectGroupCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -41,6 +42,10 @@ export function createProjectGroupCatalogActions(
 
   return {
     fetchProjectGroups: async (options) => {
+      // Switch point: main's catalog is the window's only catalog; the window fetches none.
+      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        return
+      }
       try {
         const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
         const fence = claimHostCatalogFence(get, 'project-groups', target)
@@ -55,6 +60,9 @@ export function createProjectGroupCatalogActions(
 
     // Why: startup renders an all-host sidebar; replacing groups with only the active host leaves other hosts' repos visible but ungrouped.
     fetchProjectGroupsForAllHosts: async (options) => {
+      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        return
+      }
       try {
         const target = { kind: 'local' as const }
         const fence = claimHostCatalogFence(get, 'project-groups', target)

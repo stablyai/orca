@@ -186,7 +186,7 @@ test.describe('Windows project runtime smoke', () => {
     ).toBeVisible()
 
     await orcaPage.evaluate(async (repoId) => {
-      const repo = window.__store!.getState().repos.find((entry) => entry.id === repoId)
+      const repo = window.__projectCatalog!().repos.find((entry) => entry.id === repoId)
       await window.api.repos.removeForHost({ repoId, hostId: repo?.executionHostId ?? 'local' })
     }, smoke.wslRepoId)
   })

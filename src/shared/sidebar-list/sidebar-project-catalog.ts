@@ -35,15 +35,23 @@ export type OwnProjectCatalog = {
   setups: readonly ProjectHostSetup[]
 }
 
+/** Every host's catalog rows, as the window's all-host fetch holds them: the desktop's one copy. */
+export type SidebarProjectCatalogRecords = {
+  repos: Repo[]
+  projectGroups: ProjectGroup[]
+  projects: Project[]
+  projectHostSetups: ProjectHostSetup[]
+}
+
 /**
- * The sidebar's project catalog: this host's own rows, then each paired server's, adopted and
- * folded host by host as the window's all-host fetch does, in the desktop's manual repo order.
+ * This host's own rows, then each paired server's, adopted and folded host by host as the
+ * window's all-host fetch does, in the desktop's manual repo order.
  */
-export function buildSidebarProjectCatalog(
+export function buildSidebarProjectCatalogRecords(
   own: OwnProjectCatalog,
   servers: readonly PairedServerCatalog[],
-  ui: Pick<PersistedUIState, 'manualRepoOrder' | 'projectOrderBy'> | undefined
-): MobileProjectSectionCatalog {
+  ui: Pick<PersistedUIState, 'manualRepoOrder'> | undefined
+): SidebarProjectCatalogRecords {
   const local = { kind: 'local' } as const
   // Folded host by host as the window's mergeFetchedReposForHost does: a server's copy of a
   // grouped project joins the group the copies listed before it have.
@@ -63,11 +71,9 @@ export function buildSidebarProjectCatalog(
   for (const { hostId, projection } of hosts) {
     rows = mergeFetchedHostProjectCatalog({ previous: rows, fetched: projection, repos, hostId })
   }
-  return buildMobileProjectSectionCatalog(
-    repos,
-    resolveProjectHostSetupProjection(repos, rows.projects, rows.projectHostSetups),
-    ui?.projectOrderBy ?? 'manual',
-    [
+  return {
+    repos: [...repos],
+    projectGroups: [
       // Stamped as the window's adoption stamps this host's groups.
       ...own.projectGroups.map((group) => ({
         ...group,
@@ -76,6 +82,29 @@ export function buildSidebarProjectCatalog(
           : LOCAL_EXECUTION_HOST_ID
       })),
       ...servers.flatMap((server) => server.projectGroups)
-    ]
+    ],
+    projects: [...rows.projects],
+    projectHostSetups: [...rows.projectHostSetups]
+  }
+}
+
+/** The sidebar's project catalog, as clients that build the list read it. */
+export function buildSidebarProjectCatalog(
+  own: OwnProjectCatalog,
+  servers: readonly PairedServerCatalog[],
+  ui: Pick<PersistedUIState, 'manualRepoOrder' | 'projectOrderBy'> | undefined
+): MobileProjectSectionCatalog {
+  return projectSectionCatalogOf(buildSidebarProjectCatalogRecords(own, servers, ui), ui)
+}
+
+export function projectSectionCatalogOf(
+  records: SidebarProjectCatalogRecords,
+  ui: Pick<PersistedUIState, 'projectOrderBy'> | undefined
+): MobileProjectSectionCatalog {
+  return buildMobileProjectSectionCatalog(
+    records.repos,
+    resolveProjectHostSetupProjection(records.repos, records.projects, records.projectHostSetups),
+    ui?.projectOrderBy ?? 'manual',
+    records.projectGroups
   )
 }

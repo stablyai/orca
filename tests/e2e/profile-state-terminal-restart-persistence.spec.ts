@@ -43,7 +43,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
         async ({ name, prompt }) => {
           const isRecord = (value: unknown): value is Record<string, unknown> =>
             typeof value === 'object' && value !== null && !Array.isArray(value)
-          const repo = window.__store?.getState().repos[0]
+          const repo = window.__projectCatalog!().repos[0]
           if (!repo) {
             throw new Error('SQLite candidate E2E did not find a seeded repository')
           }
@@ -337,7 +337,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       await waitForSessionReady(firstLaunch.page)
       const profileState = await firstLaunch.page.evaluate(async (repoId) => {
         const profiles = await window.api.orcaProfiles.list()
-        const repo = window.__store?.getState().repos.find((entry) => entry.id === repoId)
+        const repo = window.__projectCatalog!().repos.find((entry) => entry.id === repoId)
         if (!repo) {
           throw new Error('SQLite profile move E2E did not find the seeded repository')
         }
@@ -431,7 +431,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       })
       expect(
         await targetLaunch.page.evaluate(
-          (repoId) => window.__store?.getState().repos.some((repo) => repo.id === repoId),
+          (repoId) => window.__projectCatalog!().repos.some((repo) => repo.id === repoId),
           profileState.repoId
         )
       ).toBe(true)
@@ -456,7 +456,7 @@ test.describe('SQLite candidate terminal restart persistence', () => {
       })
       expect(
         await sourceLaunch.page.evaluate(
-          (repoId) => window.__store?.getState().repos.some((repo) => repo.id === repoId),
+          (repoId) => window.__projectCatalog!().repos.some((repo) => repo.id === repoId),
           profileState.repoId
         )
       ).toBe(false)

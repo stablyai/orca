@@ -10,7 +10,7 @@ import { getRepoHostIdentityForParts } from '../../../src/shared/repo-host-ident
  */
 export async function dismissSetupScriptPrompts(page: Page): Promise<void> {
   const repos = await page.evaluate(() =>
-    (window.__store?.getState().repos ?? []).map((repo) => ({
+    (window.__projectCatalog!().repos ?? []).map((repo) => ({
       id: repo.id,
       connectionId: repo.connectionId ?? null,
       executionHostId: repo.executionHostId ?? null

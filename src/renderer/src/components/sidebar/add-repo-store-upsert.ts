@@ -7,6 +7,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { selectRepos } from '../../store/project-catalog-selectors'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '@/store/main-project-catalog-writes'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 type AddedRepoOwner = {
   runtimeEnvironmentId?: string | null
@@ -25,16 +28,28 @@ function repoWithCapturedOwner(repo: Repo, owner: AddedRepoOwner): Repo {
   return repo
 }
 
-export function upsertAddedRepoWithProjectHostSetup(
+/**
+ * After an Add Project flow's own host call. `reposBefore` is the catalog from before that call:
+ * switch-on, main's catalog may already show the new row by the time the call answers.
+ */
+export async function upsertAddedRepoWithProjectHostSetup(
   repo: Repo,
-  owner: AddedRepoOwner = {}
-): { alreadyPresent: boolean; repo: Repo } {
+  owner: AddedRepoOwner = {},
+  reposBefore?: readonly Repo[]
+): Promise<{ alreadyPresent: boolean; repo: Repo }> {
   const state = useAppStore.getState()
   const ownedRepo = repoWithCapturedOwner(repo, owner)
   const repoIdentity = getRepoHostIdentity(ownedRepo)
-  const alreadyPresent = selectRepos(state).some(
-    (entry) => getRepoHostIdentity(entry) === repoIdentity
-  )
+  const known = ORCA_SIDEBAR_INPUTS_IS_MAIN && reposBefore ? reposBefore : selectRepos(state)
+  const alreadyPresent = known.some((entry) => getRepoHostIdentity(entry) === repoIdentity)
+  // Switch point: main's catalog holds the row; the window waits for it instead of writing one.
+  if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+    await mainCatalogShowsWrite(
+      runtimeTargetForOwnerEnvironment(owner.runtimeEnvironmentId ?? null),
+      (catalog) => catalog.repos.some((entry) => getRepoHostIdentity(entry) === repoIdentity)
+    )
+    return { alreadyPresent, repo: ownedRepo }
+  }
   const repos = alreadyPresent
     ? selectRepos(state).map((entry) =>
         getRepoHostIdentity(entry) === repoIdentity ? ownedRepo : entry

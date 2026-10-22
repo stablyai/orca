@@ -168,7 +168,7 @@ export async function activateGoldenWorktree(
             path: string
             worktrees: { id: string; path: string }[]
           }[] = []
-          for (const repo of store.getState().repos) {
+          for (const repo of window.__projectCatalog!().repos) {
             await store.getState().fetchWorktrees(repo.id)
             repos.push({
               id: repo.id,

@@ -84,7 +84,7 @@ test.describe('Reveal active workspace button', () => {
           await window
             .__store!.getState()
             .fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-          return window.__store!.getState().repos.some((repo) => repo.id === id)
+          return window.__projectCatalog!().repos.some((repo) => repo.id === id)
         }, filterRepoId)
       )
       .toBe(true)
@@ -104,7 +104,7 @@ test.describe('Reveal active workspace button', () => {
       throw new Error('Seeded secondary worktree is missing')
     }
     const targetRepoId = await orcaPage.evaluate(
-      (repoPath) => window.__store!.getState().repos.find((repo) => repo.path === repoPath)?.id,
+      (repoPath) => window.__projectCatalog!().repos.find((repo) => repo.path === repoPath)?.id,
       testRepoPath
     )
     if (!targetRepoId) {

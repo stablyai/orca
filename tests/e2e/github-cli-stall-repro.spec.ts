@@ -97,7 +97,7 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
     if (!store) {
       throw new Error('window.__store is not available')
     }
-    const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+    const repo = window.__projectCatalog!().repos.find((candidate) => candidate.path === repoPath)
     if (!repo) {
       throw new Error(`Expected repo to be loaded: ${repoPath}`)
     }

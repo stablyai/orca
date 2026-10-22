@@ -148,5 +148,11 @@ export const runtimeApi = {
       callback(data)
     ipcRenderer.on('runtime:sidebarInputsChanged', listener)
     return () => ipcRenderer.removeListener('runtime:sidebarInputsChanged', listener)
+  },
+  onSidebarCatalogChanged: (callback: (event: SidebarInputsChangedEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: SidebarInputsChangedEvent) =>
+      callback(data)
+    ipcRenderer.on('runtime:sidebarCatalogChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:sidebarCatalogChanged', listener)
   }
 } satisfies PreloadApi['runtime']

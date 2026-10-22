@@ -33,6 +33,8 @@ import {
 import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { reconcileWindowWithMainCatalog } from './main-catalog-window-reconcile'
 import { selectProjectHostSetups, selectProjects, selectRepos } from '../project-catalog-selectors'
 
 export function createAllHostRepoCatalogActions(
@@ -122,7 +124,11 @@ export function createAllHostRepoCatalogActions(
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
       const localFence = claimHostCatalogFence(get, 'repos', { kind: 'local' })
       try {
-        if (!applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }), localFence)) {
+        // Switch point: main's catalog holds every host's repos; the window fetches none.
+        if (
+          !ORCA_SIDEBAR_INPUTS_IS_MAIN &&
+          !applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }), localFence)
+        ) {
           failed = true
         }
       } catch (err) {
@@ -137,6 +143,9 @@ export function createAllHostRepoCatalogActions(
         return
       }
       if (options?.remoteHosts === 'skip') {
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          await reconcileWindowWithMainCatalog(set, get, null)
+        }
         return
       }
 
@@ -147,10 +156,12 @@ export function createAllHostRepoCatalogActions(
         'repos',
         async (target, fence) => {
           const [catalogResult, visibilitySnapshot] = await Promise.all([
-            fetchRepoCatalogForTarget(target).then(
-              (catalog) => ({ ok: true as const, catalog }),
-              (error: unknown) => ({ ok: false as const, error })
-            ),
+            ORCA_SIDEBAR_INPUTS_IS_MAIN
+              ? null
+              : fetchRepoCatalogForTarget(target).then(
+                  (catalog) => ({ ok: true as const, catalog }),
+                  (error: unknown) => ({ ok: false as const, error })
+                ),
             readRuntimeWorktreeVisibilitySnapshot(target.environmentId)
           ])
           const visibilityDefaults = visibilitySnapshot.defaults
@@ -174,6 +185,9 @@ export function createAllHostRepoCatalogActions(
                   }
             )
           }
+          if (!catalogResult) {
+            return
+          }
           if (catalogResult.ok) {
             if (!applyCatalog(catalogResult.catalog, fence)) {
               failed = true
@@ -189,7 +203,9 @@ export function createAllHostRepoCatalogActions(
         () => latestAllHostRepoCatalogGenerationByStore.get(get) === generation
       )
       // Why: validate repo-scoped UI only after every host answers; first-paint loads only local repos, so an offline runtime would erase its saved filters.
-      if (!failed && get().reposFetchGeneration === generation) {
+      if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+        await reconcileWindowWithMainCatalog(set, get, null)
+      } else if (!failed && get().reposFetchGeneration === generation) {
         validateRepoScopedUi()
       }
     }

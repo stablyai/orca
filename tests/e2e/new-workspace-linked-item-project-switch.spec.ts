@@ -77,8 +77,8 @@ async function getJiraSourceContext(page: Page): Promise<TaskSourceContext> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const activeWorktreeId = state?.activeWorktreeId
-    const setup = state?.projectHostSetups.find((candidate) =>
-      state.worktreesByRepo[candidate.repoId]?.some((worktree) => worktree.id === activeWorktreeId)
+    const setup = window.__projectCatalog!().projectHostSetups.find((candidate) =>
+      state?.worktreesByRepo[candidate.repoId]?.some((worktree) => worktree.id === activeWorktreeId)
     )
     if (!setup) {
       throw new Error('Active project host setup is unavailable')

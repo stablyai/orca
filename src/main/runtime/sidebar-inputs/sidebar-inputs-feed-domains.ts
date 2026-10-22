@@ -16,6 +16,7 @@ import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
 import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
 import { readSidebarProjectCatalog } from './sidebar-project-catalog'
+import { watchCatalogEvents, watchProjectCatalogWrites } from './catalog-watch'
 import {
   buildPairedServerReviewFacts,
   buildWorkspaceReviewFacts
@@ -33,14 +34,6 @@ export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSide
     wslStatuses: getWslHostService()?.getStatuses() ?? []
   })
 }
-
-// The bus every catalog, view and SSH change reaches clients through.
-const CATALOG_EVENTS = new Set<RuntimeClientEvent['type']>([
-  'worktreesChanged',
-  'reposChanged',
-  'workspaceViewChanged',
-  'sshStateChanged'
-])
 
 // The host's sidebar view settings, each its own entity; ui.get serves the same fields.
 const SIDEBAR_VIEW_UI_FIELDS = [
@@ -84,15 +77,7 @@ export function sidebarInputsFeedDomains(
 ): SidebarInputsFeedDomain[] {
   const { facts, pairedServerRows, workspaceLifecycle, workspaceRows } = sources
   const urgent = { urgent: true }
-  const watchCatalog = (changed: () => void): (() => void) =>
-    sources.onClientEvent(
-      (event) => {
-        if (CATALOG_EVENTS.has(event.type)) {
-          changed()
-        }
-      },
-      { consumesTerminalSideEffects: false }
-    )
+  const watchCatalog = (changed: () => void): (() => void) => watchCatalogEvents(sources, changed)
   const requireStore = (): RuntimeStore => {
     const store = sources.store()
     if (!store) {
@@ -232,27 +217,16 @@ export function sidebarInputsFeedDomains(
       // Each field its own entity, so a reader holds the catalog only once it is whole.
       name: 'projectCatalog',
       read: () => readSidebarProjectCatalog(requireStore(), pairedServerRows.catalogs()),
-      watch: (changed) => {
-        const detaches = [
-          watchCatalog(changed),
-          pairedServerRows.revision.onChange(changed),
-          // Manual repo order and project order live in the UI state.
-          sources.store()?.onUIChanged?.(() => changed()),
-          // Catalog writes are full saves, and some (a project rename) announce no event.
-          sources.store()?.onStateWritten?.((domains) => {
-            if (domains === undefined) {
-              changed()
-            }
-          })
-        ]
-        return () => detaches.forEach((detach) => detach?.())
-      }
+      watch: (changed) => watchProjectCatalogWrites(sources, changed)
     },
     {
       // Ids only: a reader fetches the images through sidebarInputs.repoIcons.
       name: 'repoIcons',
       read: () => sources.repoIcons.idsByRepo(),
-      watch: watchCatalog
+      watch: (changed) => {
+        const detaches = [watchCatalog(changed), pairedServerRows.revision.onChange(changed)]
+        return () => detaches.forEach((detach) => detach())
+      }
     },
     {
       name: 'review',

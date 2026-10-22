@@ -16,6 +16,7 @@ import { createRepoRemovalActions } from '../repos/repo-removal'
 import { createProjectUpdateActions } from '../projects/project-update'
 import { createRepoUpdateActions } from '../repos/repo-update'
 import { createRepoOrderingActions } from '../repos/repo-ordering'
+import { INITIAL_PROJECT_CATALOG_VERSION } from '../project-catalog-version'
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => {
   const repoCatalogActions = createRepoCatalogActions(set, get)
@@ -45,6 +46,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       set((s) => (s.floatingWorkspacePath === path ? s : { floatingWorkspacePath: path })),
     activeRepoId: null,
     reposFetchGeneration: 0,
+    projectCatalogVersion: INITIAL_PROJECT_CATALOG_VERSION,
     pendingSshRepoReadoptions: [],
     recordSshRepoReadoptions: repoCatalogActions.recordSshRepoReadoptions,
     fetchRepos: repoCatalogActions.fetchRepos,

@@ -1,3 +1,7 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { mainCatalogShowsWrite } from '../main-project-catalog-writes'
+import { projectGroupMatchesOwnerHost } from '../slices/project-group-owner-routing'
+import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -6,7 +10,10 @@ import type {
   ProjectGroupImportResult
 } from '../../../../shared/project-group-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import {
+  getRuntimeTargetHostId,
+  runtimeTargetForOwnerEnvironment
+} from '../../runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import type { RepoSlice } from '../repos/repo-state'
 
@@ -97,6 +104,26 @@ export function createNestedRepositoryActions(
                 { timeoutMs: 60_000 }
               )
         const catalogOptions = { runtimeEnvironmentId: args.runtimeEnvironmentId }
+        // Switch point: main's catalog shows the group and every imported project, or this failed.
+        if (ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          const hostId = getRuntimeTargetHostId(target)
+          const { group: importedGroup } = result
+          const importedIds = result.projects.flatMap((entry) =>
+            entry.status === 'imported' && entry.projectId ? [entry.projectId] : []
+          )
+          const shown = await mainCatalogShowsWrite(
+            target,
+            (catalog) =>
+              (!importedGroup ||
+                catalog.projectGroups.some((group) =>
+                  projectGroupMatchesOwnerHost(group, importedGroup.id, hostId)
+                )) &&
+              importedIds.every((id) =>
+                catalog.repos.some((repo) => repoMatchesHostIdentity(repo, id, hostId))
+              )
+          )
+          return shown ? result : null
+        }
         await get().fetchProjectGroups(catalogOptions)
         await get().fetchFolderWorkspaces(catalogOptions)
         await (args.runtimeEnvironmentId

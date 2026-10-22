@@ -548,7 +548,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
         async ({ repoId, command, windowsShell }) => {
           const state = window.__store?.getState()
           await state?.fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-          const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
+          const repo = window.__projectCatalog!().repos.find((candidate) => candidate.id === repoId)
           if (!repo) {
             return false
           }

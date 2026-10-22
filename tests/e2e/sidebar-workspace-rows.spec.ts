@@ -54,7 +54,7 @@ test('main lists the window’s git and folder workspaces and follows its metada
         { projectGroupId: group.id, name: 'Rows folder', folderPath: parentPath },
         { runtimeEnvironmentId: null }
       )
-    const repo = store.getState().repos[0]
+    const repo = window.__projectCatalog!().repos[0]
     const worktree = repo ? store.getState().worktreesByRepo[repo.id]?.[0] : undefined
     if (!folder || !worktree) {
       throw new Error('Expected a seeded worktree and a folder workspace')

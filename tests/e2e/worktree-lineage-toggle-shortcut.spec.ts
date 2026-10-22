@@ -35,7 +35,7 @@ async function waitForLineageWorktrees(page: Page): Promise<void> {
           if (!store) {
             return 0
           }
-          for (const repo of store.getState().repos) {
+          for (const repo of window.__projectCatalog!().repos) {
             await store.getState().fetchWorktrees(repo.id)
           }
           return Object.values(store.getState().worktreesByRepo)

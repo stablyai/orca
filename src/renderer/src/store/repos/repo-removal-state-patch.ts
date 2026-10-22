@@ -1,6 +1,7 @@
 import type { AppState } from '../types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getWorktreeIdFromVisitKey, getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
@@ -71,17 +72,21 @@ export function removedProjectStatePatch(
     .filter((r) => !survivingRepoIds.has(r.id))
     .map((r) => r.id)
   return {
-    repos: nextRepos,
+    ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
+      ? {}
+      : {
+          repos: nextRepos,
+          ...mergeProjectCompatibilityForHostRepoChange({
+            previous: {
+              projects: selectProjects(s),
+              projectHostSetups: selectProjectHostSetups(s)
+            },
+            nextRepos,
+            hostId: ownerHostId
+          })
+        }),
     // Why: drop removed repos' sparse-preset maps so they don't outlive the repo for the whole session.
     ...omitSparsePresetsForRepos(s, removedRepoIds),
-    ...mergeProjectCompatibilityForHostRepoChange({
-      previous: {
-        projects: selectProjects(s),
-        projectHostSetups: selectProjectHostSetups(s)
-      },
-      nextRepos,
-      hostId: ownerHostId
-    }),
     activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
     ...twinSelectionPatch(s, twins.twinHostIds, ownerHostId),
     filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),

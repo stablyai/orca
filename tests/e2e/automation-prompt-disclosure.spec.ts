@@ -19,7 +19,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
       if (!store) {
         throw new Error('window.__store is not available')
       }
-      const repo = store.getState().repos[0]
+      const repo = window.__projectCatalog!().repos[0]
       if (!repo) {
         throw new Error('Seeded test repo is not available')
       }

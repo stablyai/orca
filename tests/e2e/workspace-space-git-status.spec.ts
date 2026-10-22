@@ -37,7 +37,7 @@ test.describe('Workspace Space git status checks', () => {
         if (!store) {
           throw new Error('Expected e2e store to be exposed')
         }
-        const repo = store.getState().repos.find((item) => item.path === testRepoPath)
+        const repo = window.__projectCatalog!().repos.find((item) => item.path === testRepoPath)
         if (!repo) {
           throw new Error('Expected test repo to be loaded')
         }

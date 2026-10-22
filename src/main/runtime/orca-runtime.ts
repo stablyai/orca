@@ -42,7 +42,7 @@ import {
   type StructuredAgentAvailabilityReader
 } from './structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
-import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
+import { RepoIconDataUrls, repoIconSourceRepos } from './sidebar-inputs/repo-icon-data-urls'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
 import { getMainHttpClient } from '../network/http-client'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
@@ -78,7 +78,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   // Switch point: the phone's icon source.
   readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new RepoIconDataUrls({
-        repos: () => this.store?.getRepos() ?? [],
+        repos: () => repoIconSourceRepos(this.store, this.pairedServerRows),
         // Why not the shared desktop client: its net.fetch rejects every manual redirect.
         fetch: (url, init) => {
           const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon

@@ -1,3 +1,4 @@
+import { onCatalogRecordsChanged } from '../runtime/sidebar-inputs/catalog-records-feed'
 import { randomUUID } from 'node:crypto'
 
 import { ipcMain } from 'electron'
@@ -229,6 +230,10 @@ export function registerRuntimeWindowLifecycle(
         { consumesTerminalSideEffects: false }
       )
     : null
+  // Switch point: the window's project catalog, which only this window reads.
+  const detachCatalogNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? onCatalogRecordsChanged(runtime, (event) => send('runtime:sidebarCatalogChanged', event))
+    : null
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
@@ -246,6 +251,7 @@ export function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     detachSidebarInputsNotices?.()
+    detachCatalogNotices?.()
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

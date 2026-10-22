@@ -81,6 +81,7 @@ export type RuntimeApi = {
       callback: (event: ClientHostedBrowserRowsEvent) => void
     ) => () => void
     onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
+    onSidebarCatalogChanged: (callback: (event: SidebarInputsChangedEvent) => void) => () => void
   }
   runtimeEnvironments: {
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>

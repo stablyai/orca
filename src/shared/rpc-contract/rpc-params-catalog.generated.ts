@@ -461,6 +461,7 @@ import {
 } from './orchestration-worker-release-schemas-params'
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
+import { PairedServerCatalogRefreshParams } from './paired-server-catalog-refresh-params'
 import {
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,
@@ -1302,6 +1303,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'sidebarInputs.desktopFacts': null,
   'sidebarInputs.pairedServerRows': null,
   'sidebarInputs.read': SidebarInputsReadParams,
+  'sidebarInputs.readCatalog': SidebarInputsReadParams,
+  'sidebarInputs.refreshServerCatalog': PairedServerCatalogRefreshParams,
   'sidebarInputs.repoIcons': RepoIconDataUrlsParams,
   'sidebarInputs.reportView': ClientWorkspaceViewParams,
   'sidebarInputs.reviewFacts': null,

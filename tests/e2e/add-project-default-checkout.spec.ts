@@ -110,7 +110,9 @@ test.describe('Add project default checkout', () => {
             if (!state) {
               return null
             }
-            const repo = state.repos.find((candidate) => candidate.displayName === cloneName)
+            const repo = window.__projectCatalog!().repos.find(
+              (candidate) => candidate.displayName === cloneName
+            )
             if (!repo) {
               return null
             }
@@ -161,7 +163,9 @@ test.describe('Add project default checkout', () => {
             if (!state) {
               return null
             }
-            const repo = state.repos.find((candidate) => candidate.path === mainPath)
+            const repo = window.__projectCatalog!().repos.find(
+              (candidate) => candidate.path === mainPath
+            )
             if (!repo) {
               return null
             }

@@ -30,7 +30,7 @@ describe('useHostProjectSections', () => {
         client,
         connState: 'connected',
         hostId,
-        state: { clientRef, setServedProjectSections: () => {}, setHostProjectGroups: () => {} }
+        state: { clientRef, setServedProjectSections: () => {} }
       })
       return null
     }
@@ -71,8 +71,7 @@ describe('useHostProjectSections', () => {
         hostId: 'a',
         state: {
           clientRef,
-          setServedProjectSections: (value) => served.push(value),
-          setHostProjectGroups: () => {}
+          setServedProjectSections: (value) => served.push(value)
         }
       })
       return null
@@ -94,21 +93,21 @@ describe('useHostProjectSections', () => {
     expect(served).toEqual(['before', 'moved'])
   })
 
-  it('reads nothing while the sidebar feed carries the catalog', async () => {
+  it('reads nothing in a build whose list reads the catalog from the sidebar feed', async () => {
     request.mockReset()
+    vi.resetModules()
+    vi.doMock('../../../src/shared/sidebar-inputs-switch', () => ({
+      ORCA_SIDEBAR_INPUTS_IS_MAIN: true
+    }))
+    const switched = await import('./use-host-project-sections')
     const client = clientDouble()
     let refresh: () => Promise<void> = async () => {}
     function Probe() {
-      refresh = useHostProjectSections({
+      refresh = switched.useHostProjectSections({
         client,
         connState: 'connected',
         hostId: 'a',
-        state: {
-          clientRef: { current: client },
-          setServedProjectSections: () => {},
-          setHostProjectGroups: () => {}
-        },
-        feedCarriesCatalog: () => true
+        state: { clientRef: { current: client }, setServedProjectSections: () => {} }
       })
       return null
     }

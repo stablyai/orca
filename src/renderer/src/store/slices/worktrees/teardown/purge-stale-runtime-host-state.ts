@@ -1,3 +1,4 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { beginEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
 import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -255,9 +256,14 @@ export function createPurgeStaleRuntimeHostState(
           const rowsChanged = worktreesChanged || detectedChanged
           return {
             ...purgeState,
-            ...(reposChanged ? { repos: survivingRepos } : {}),
-            ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
-            ...(groupsChanged ? { projectGroups, folderWorkspaces } : {}),
+            // Switch point: main's catalog drops the removed hosts' rows itself.
+            ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
+              ? { folderWorkspaces }
+              : {
+                  ...(reposChanged ? { repos: survivingRepos } : {}),
+                  ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
+                  ...(groupsChanged ? { projectGroups, folderWorkspaces } : {})
+                }),
             ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
             ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
             ...(restoredSessionOwnersChanged

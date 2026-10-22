@@ -25,7 +25,7 @@ test.describe('worktree visibility with a remote runtime active', () => {
     await waitForActiveWorktree(orcaPage)
 
     const repoId = await orcaPage.evaluate(() => {
-      const repos = window.__store?.getState().repos ?? []
+      const repos = window.__projectCatalog!().repos ?? []
       // This case reproduces only for a local-host repo — one whose execution
       // host resolves to local (executionHostId unset or 'local') and which has
       // no connection binding. That is the repo whose list fetch an active
