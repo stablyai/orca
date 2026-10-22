@@ -2,7 +2,7 @@
 // speaks protocol extensions). Nothing outside `acp-dialects/` branches on an agent's name.
 
 import { join } from 'node:path'
-import type { AcpDialect } from './acp-dialects/acp-dialect'
+import { GENERIC_ACP_DIALECT, type AcpDialect } from './acp-dialects/acp-dialect'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
@@ -25,14 +25,16 @@ import {
 } from '../opencode/opencode-model-catalog-listing'
 import { agentSessionSignInFor } from '../../shared/agent-session-sign-in'
 import {
+  loadCopilotVisualsSkill,
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
   loadOpenCodeVisualsSkill,
   type AcpVisualsSkillLoader
 } from './acp-visuals-skill'
-import type {
-  StructuredAgentSessionHistory,
-  StructuredAgentTranscriptImport
+import {
+  resumeInvocationFromOptions,
+  type StructuredAgentSessionHistory,
+  type StructuredAgentTranscriptImport
 } from '../native-chat/structured-agent-cli-conversations'
 import { GROK_SESSION_HISTORY } from '../grok/grok-session-history'
 import { GROK_TRANSCRIPT_IMPORT } from '../grok/grok-transcript-import'
@@ -300,6 +302,17 @@ const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
   parseResumeArgs: () => null
 }
 
+const COPILOT_SESSION_HISTORY: StructuredAgentSessionHistory = {
+  rowAgents: ['copilot'],
+  rowSessionId: (link) => link.handle.nativeId,
+  // The CLI resumes its own session-state row by id; the ownership guard must see that target.
+  parseResumeArgs: (args) =>
+    resumeInvocationFromOptions(args, {
+      targetless: ['--continue'],
+      markers: ['--resume', '-r']
+    })
+}
+
 // Google's Antigravity ACP server, which Orca installs (the `agy` CLI has no ACP mode). Its chats
 // sign in to a folder of their own on each host; an `agy` login is not theirs.
 export const ANTIGRAVITY_LAUNCH_SPEC = {
@@ -339,12 +352,50 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
+// GitHub Copilot CLI serves ACP through `copilot --acp --stdio`; its token variables
+// (`COPILOT_GITHUB_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN`) and BYOK variables reach it as the user
+// set them. Terminal full access is `--yolo`, but the structured posture rides the lane instead:
+// `args` adds no bypass flag and Orca answers each permission request. The inherited
+// `COPILOT_ALLOW_ALL` switch is forced off so Ask is authoritative; Copilot's own `allow_all`
+// (observed off) and mode `autopilot` (observed `agent`) stay as the CLI left them. Recorded on
+// 1.0.98: lane-answered `allow_once` carried both full-access probes (a write outside the
+// workspace and a URL fetch) unflagged, an untrusted directory drew no trust prompt, and the
+// CLI's own `COPILOT_HOME` MCP config serves the session though Orca sends `mcpServers: []`.
+// Inline visuals mount Orca's plugin per launch (`--plugin-dir`), never an install: mounted skills
+// first reach invocation on 1.0.97, and the floor below is the release verified to carry them, so
+// older hosts start without visuals. The folder write is an ordinary approval card (AE1).
+const COPILOT_LAUNCH_SPEC: AcpLaunchSpec = {
+  agent: 'copilot',
+  command: 'copilot',
+  args: ({ pluginDir }) => ['--acp', '--stdio', ...(pluginDir ? ['--plugin-dir', pluginDir] : [])],
+  // Applies last, after the user's environment: a shell-wide allow-all must not override Ask.
+  env: { COPILOT_ALLOW_ALL: 'false' },
+  dialect: GENERIC_ACP_DIALECT,
+  loginCommand: agentSessionSignInFor('copilot')?.loginCommand ?? [],
+  // The directory Copilot's terminal chats read too: hooks and settings line up with this chat.
+  account: directoryAccountBinding('COPILOT_HOME', (homePath) => join(homePath, '.copilot')),
+  // `~/.local/bin` and Windows' npm prefix are directories the shared resolver already searches.
+  installDirectories: () => [],
+  // Stable releases from 1.0.98, the release verified to serve `--acp --stdio`.
+  supportsVersion: (version) => isStableCliVersionFrom(version, '1.0.98'),
+  modelDiscovery: {
+    kind: 'unavailable',
+    reason: 'initialize lists no models; each session fills the catalog'
+  },
+  imagePrompts: true,
+  visualsSkill: loadCopilotVisualsSkill,
+  compaction: true,
+  transcriptImport: null,
+  sessionHistory: COPILOT_SESSION_HISTORY
+}
+
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
-  ANTIGRAVITY_LAUNCH_SPEC
+  ANTIGRAVITY_LAUNCH_SPEC,
+  COPILOT_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

@@ -88,3 +88,9 @@ export const loadOpenCodeVisualsSkill: AcpVisualsSkillLoader = async ({ skill, e
 export const loadOmpVisualsSkill: AcpVisualsSkillLoader = async ({ skill }) => ({
   pluginDir: skill.pluginDir
 })
+
+// No gate: the spec's release floor refuses unsupported releases before this loader runs.
+/** Copilot takes Claude's plugin layout through `--plugin-dir`, for this process only. */
+export const loadCopilotVisualsSkill: AcpVisualsSkillLoader = async ({ skill }) => ({
+  pluginDir: skill.pluginDir
+})

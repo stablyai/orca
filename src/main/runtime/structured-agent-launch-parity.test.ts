@@ -163,7 +163,8 @@ const AGENTS = [
   'omp',
   'pi',
   'antigravity',
-  'opencode2'
+  'opencode2',
+  'copilot'
 ] as const
 type Agent = (typeof AGENTS)[number]
 
@@ -176,7 +177,9 @@ const VERSIONS: Record<Agent, string> = {
   omp: '17.1.0',
   pi: '1.1.0',
   antigravity: '1.3.0',
-  opencode2: '2.0.20'
+  opencode2: '2.0.20',
+  // The CLI's verbatim form, trailing sentence period included.
+  copilot: 'GitHub Copilot CLI 1.0.98.'
 }
 /** An agent whose binary is not named after it. */
 const BINARIES: Partial<Record<Agent, string>> = { antigravity: 'agy_acp_server.par' }
@@ -292,7 +295,8 @@ function configuredSettings(): Partial<GlobalSettings> {
       omp: '',
       pi: '',
       antigravity: '',
-      opencode2: ''
+      opencode2: '',
+      copilot: ''
     },
     agentDefaultEnv: Object.fromEntries(
       AGENTS.map((agent) => [
@@ -362,6 +366,8 @@ function accountHomeFor(agent: Agent): AgentSessionAccountHome {
       return { kind: 'opencode', locator: { kind: 'unmanaged' } }
     case 'omp':
       return { variable: 'PI_CODING_AGENT_DIR', path: directory('omp') }
+    case 'copilot':
+      return { variable: 'COPILOT_HOME', path: directory('copilot') }
     case 'pi':
       return { variable: 'PI_CODING_AGENT_DIR', path: directory('pi') }
     case 'antigravity':
@@ -390,6 +396,7 @@ async function resumedHandleFor(
     case 'opencode2':
     case 'omp':
     case 'antigravity':
+    case 'copilot':
       return { transport: 'acp', agent, nativeId: `acp-session-${sessionId}` }
   }
 }

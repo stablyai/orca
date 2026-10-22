@@ -31,7 +31,9 @@ describe('parseCliVersion', () => {
     ['agy version 1.1.11\n', '1.1.11'],
     ['v1.1.10 (darwin arm64)', '1.1.10'],
     ['1.1.11-rc.1', '1.1.11-rc.1'],
-    ['agy 1.2.4+build.7', '1.2.4+build.7']
+    ['agy 1.2.4+build.7', '1.2.4+build.7'],
+    ['GitHub Copilot CLI 1.0.98.\n', '1.0.98'],
+    ['GitHub Copilot CLI 1.0.98.', '1.0.98']
   ])('reads %j as %s', (output, expected) => {
     expect(parseCliVersion(output)).toBe(expected)
   })
@@ -41,6 +43,7 @@ describe('parseCliVersion', () => {
     'agy',
     'version unknown',
     'agy version 1.1.11.0',
+    '1.0.98.1',
     'agy version 1.1.11-',
     'agy version 1.1.11+',
     null,

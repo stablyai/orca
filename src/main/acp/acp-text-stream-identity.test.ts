@@ -14,7 +14,7 @@ afterEach(async () => {
 })
 
 describe('shared ACP text identity', () => {
-  it.each(['omp', 'opencode', 'grok'] as const)(
+  it.each(['omp', 'opencode', 'grok', 'copilot'] as const)(
     'keeps interleaved reasoning and answers separate for %s',
     async (agent) => {
       const rig = await openProviderTimelineRig()

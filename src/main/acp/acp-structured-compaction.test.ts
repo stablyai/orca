@@ -26,6 +26,7 @@ afterEach(async () => {
 
 const OPENCODE = acpLaunchSpecFor('opencode')!
 const OMP = acpLaunchSpecFor('omp')!
+const COPILOT = acpLaunchSpecFor('copilot')!
 
 function withoutCompaction(spec: AcpLaunchSpec): AcpLaunchSpec {
   const { compaction: _compaction, ...rest } = spec
@@ -84,7 +85,7 @@ async function ended(rig: AcpAdapterRig, command: StructuredAgentSessionCommandR
 }
 
 describe('ACP compaction capability', () => {
-  it('offers /compact for Grok, OpenCode and OMP, and for no ACP agent without it', () => {
+  it('offers /compact for Grok, OpenCode, OMP and Copilot, and for no ACP agent without it', () => {
     expect(
       Object.fromEntries(
         ACP_LAUNCH_SPECS.map((spec) => [
@@ -92,7 +93,14 @@ describe('ACP compaction capability', () => {
           acpStructuredAgentDefinition(spec).capabilities.compact
         ])
       )
-    ).toEqual({ grok: true, opencode: true, opencode2: true, omp: true, antigravity: false })
+    ).toEqual({
+      grok: true,
+      opencode: true,
+      opencode2: true,
+      omp: true,
+      antigravity: false,
+      copilot: true
+    })
     expect(acpStructuredAgentDefinition(withoutCompaction(GROK)).capabilities.compact).toBe(false)
   })
 
@@ -122,7 +130,8 @@ describe('ACP compaction request', () => {
 
   it.each([
     ['OpenCode', OPENCODE],
-    ['OMP', OMP]
+    ['OMP', OMP],
+    ['Copilot', COPILOT]
   ])('sends %s `/compact` as a plain prompt', async (_name, spec) => {
     const { prompt } = await compact(spec)
     expect(prompt.params).toEqual({
@@ -136,6 +145,7 @@ describe('ACP compaction settlement', () => {
   it.each([
     [
       'omp-v17-compact-skip',
+      OMP,
       {
         kind: 'status',
         tone: 'warning',
@@ -145,6 +155,7 @@ describe('ACP compaction settlement', () => {
     ],
     [
       'omp-v17-compact-tiny-skip',
+      OMP,
       {
         kind: 'status',
         tone: 'warning',
@@ -154,10 +165,12 @@ describe('ACP compaction settlement', () => {
     ],
     [
       'omp-v17-compact-success',
+      OMP,
       { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
     ],
     [
       'omp-v18-compact-skip',
+      OMP,
       {
         kind: 'status',
         tone: 'warning',
@@ -167,6 +180,7 @@ describe('ACP compaction settlement', () => {
     ],
     [
       'omp-v18-compact-tiny-skip',
+      OMP,
       {
         kind: 'status',
         tone: 'warning',
@@ -176,11 +190,17 @@ describe('ACP compaction settlement', () => {
     ],
     [
       'omp-v18-compact-success',
+      OMP,
+      { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+    ],
+    [
+      'copilot-v1-compact',
+      COPILOT,
       { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
     ]
-  ])('replays captured %s under the host command turn', async (fixture, body) => {
+  ])('replays captured %s under the host command turn', async (fixture, spec, body) => {
     const frames = await readAcpFixture(fixture)
-    const { rig, command } = await compact(OMP, frames)
+    const { rig, command } = await compact(spec, frames)
     const { turn, inside } = await ended(rig, command)
     expect(turn).toMatchObject({ state: 'completed', outcome: 'success' })
     expect(inside).toEqual([body])

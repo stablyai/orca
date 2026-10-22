@@ -21,7 +21,9 @@ function record(spec: AcpLaunchSpec): AgentSessionRecord {
       ? { kind: 'opencode', locator: { kind: 'unmanaged' } }
       : spec.agent === 'omp'
         ? { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' }
-        : { variable: 'GROK_HOME', path: '/home/user/.grok' }
+        : spec.agent === 'copilot'
+          ? { variable: 'COPILOT_HOME', path: '/home/user/.copilot' }
+          : { variable: 'GROK_HOME', path: '/home/user/.grok' }
   return {
     ...agentSessionRecordFixture(),
     provider: spec.agent,
@@ -120,6 +122,13 @@ describe('ACP launch visuals', () => {
     expect(launch.args).toEqual(['acp', '--plugin-dir', SKILL.pluginDir])
     expect(launch.env.PI_CONFIG_FILES).toBe('/user/overlay.yml')
     expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
+  })
+
+  it("gives Copilot the plugin folder and the chat's visuals folder", async () => {
+    const launch = await resolve('copilot', { version: '1.0.98' }).launch
+    expect(launch.args).toEqual(['--acp', '--stdio', '--plugin-dir', SKILL.pluginDir])
+    expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
+    expect(launch.envToDelete).not.toContain(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 
   it('still starts the chat when the skill cannot be prepared', async () => {

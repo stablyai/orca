@@ -9,7 +9,8 @@ export const AGENT_SESSION_SIGN_IN = [
   { agent: 'pi', loginCommand: ['pi'], slashCommand: '/login' },
   { agent: 'omp', loginCommand: [] },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
-  { agent: 'antigravity', loginCommand: [] }
+  { agent: 'antigravity', loginCommand: [] },
+  { agent: 'copilot', loginCommand: ['copilot', 'login'] }
 ] as const
 
 export function agentSessionSignInFor(agent: string | undefined) {
