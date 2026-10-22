@@ -243,19 +243,15 @@ describe('buildEditableContextMenuTemplate', () => {
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
   })
 
-  it.each([
-    ['regular text inputs', 'input-text' as const, false],
-    ['a plain-text contenteditable', 'none' as const, true]
-  ])('keeps %s to spelling and native edit actions', (_surface, formControlType, plainText) => {
+  it('keeps regular text inputs to spelling and native edit actions', () => {
     const send = vi.fn()
     const template = buildEditableContextMenuTemplate(
-      contextParams({ formControlType }),
+      contextParams({ formControlType: 'input-text' }),
       {
         replaceMisspelling: vi.fn(),
         send,
         session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
-      },
-      { plainText }
+      }
     )
 
     expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
@@ -275,6 +271,30 @@ describe('buildEditableContextMenuTemplate', () => {
     template[8].click?.({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent)
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
+  })
+
+  it('keeps a plain-text contenteditable to spelling and plain edit actions', () => {
+    const template = buildEditableContextMenuTemplate(
+      contextParams(),
+      {
+        replaceMisspelling: vi.fn(),
+        send: vi.fn(),
+        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
+      },
+      { plainText: true }
+    )
+
+    expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
+      'reference',
+      'reverence',
+      'separator',
+      'Add to dictionary',
+      'separator',
+      'cut',
+      'copy',
+      'Paste',
+      'selectAll'
+    ])
   })
 })
 

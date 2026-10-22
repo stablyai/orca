@@ -180,13 +180,16 @@ function buildMarkdownMenuTemplate(
 }
 
 function buildNativeEditMenuTemplate(
-  webContents: EditableContextMenuWebContents
+  webContents: EditableContextMenuWebContents,
+  { offerPlainTextPaste }: { offerPlainTextPaste: boolean }
 ): Electron.MenuItemConstructorOptions[] {
   return [
     { role: 'cut' },
     { role: 'copy' },
     editableContextPasteItem('Paste', webContents),
-    editableContextPasteItem('Paste as plain text', webContents, { plainTextOnly: true }),
+    ...(offerPlainTextPaste
+      ? [editableContextPasteItem('Paste as plain text', webContents, { plainTextOnly: true })]
+      : []),
     { role: 'selectAll' }
   ]
 }
@@ -229,7 +232,10 @@ export function buildEditableContextMenuTemplate(
           { x: params.x, y: params.y },
           options?.tableTarget ?? null
         )
-      : buildNativeEditMenuTemplate(webContents))
+      : // Why: a plain-text contenteditable (the chat composer) already pastes text literally and takes no text-only mode.
+        buildNativeEditMenuTemplate(webContents, {
+          offerPlainTextPaste: params.formControlType !== 'none'
+        }))
   )
 
   return template
