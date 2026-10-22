@@ -1,3 +1,4 @@
+import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -20,12 +21,15 @@ export type JournalLifecycleMutationInput = JournalItemAddress &
   (
     | {
         kind: 'item'
+        echoOf?: unknown
         body: AgentJournalItemBody
         /** Who wrote the row. Absent ⇒ the session's own agent on a first write,
          *  and the row's existing producer on a revision. */
         linkage?: AgentJournalProducerLinkage
         /** Which turn the row belongs to. Kept from the write that creates the row. */
         turnScope: AgentJournalTurnScope
+        /** The writer's provenance claim (`journalItemOwnerFence`); absent for host bookkeeping. */
+        ownerFence?: number
       }
     | { kind: 'tombstone' }
   )
@@ -46,14 +50,21 @@ export function journalLifecycleMutationItemId(mutation: JournalItemAddress): st
  *  settled before any checkpoint landed — and one batch can mix producers.
  *  The session's own rows carry no key at all: absence is the claim. */
 export function journalLifecycleItemMutation(
-  attribution: AgentJournalRowAttribution,
+  attribution: AgentJournalRowAttribution & JournalItemEcho,
   identity: AgentJournalItemIdentity,
   body: AgentJournalItemBody
 ): JournalLifecycleIdentityMutationInput {
   const { turnScope } = attribution
-  return namesAgentJournalProducer(attribution)
-    ? { kind: 'item', identity, body, turnScope, linkage: agentJournalLinkageFields(attribution) }
-    : { kind: 'item', identity, body, turnScope }
+  return {
+    kind: 'item',
+    identity,
+    body,
+    turnScope,
+    ...journalItemEchoFields(attribution),
+    ...(namesAgentJournalProducer(attribution)
+      ? { linkage: agentJournalLinkageFields(attribution) }
+      : {})
+  }
 }
 
 /** The persisted form of one mutation, shared with the partitioner's size probe
@@ -61,7 +72,9 @@ export function journalLifecycleItemMutation(
 export function journalLifecycleMutationRow(
   mutation: JournalLifecycleMutationInput,
   itemId: string,
-  revision: number
+  revision: number,
+  /** What an item mutation states (`journalItemOwnerFence`). */
+  ownerFence: number
 ): JournalLifecycleMutation {
   return mutation.kind === 'item'
     ? {
@@ -69,7 +82,9 @@ export function journalLifecycleMutationRow(
         itemId,
         revision,
         body: mutation.body,
+        ...journalItemEchoFields(mutation),
         turnScope: mutation.turnScope,
+        ownerFence,
         ...agentJournalLinkageFields(mutation.linkage)
       }
     : { kind: 'tombstone', itemId, revision }

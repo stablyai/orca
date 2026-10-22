@@ -7,7 +7,8 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session-wire'
 import { buildSubagentChildRows } from '../sidebar/worktree-subagent-child-rows'
-import { resolveAttention } from '../sidebar/smart-attention'
+import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-lineage-menu-actions'
+import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
@@ -46,8 +47,6 @@ vi.mock('@/store', async () => {
 })
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null,
   getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
     state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
@@ -70,6 +69,7 @@ import {
   useStructuredAgentSessionHostStopping
 } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { useAppStore } from '@/store'
 
 const structuredTab = {
   id: 'structured-tab-1',
@@ -649,6 +649,48 @@ describe('StructuredAgentSessionStatusBridge', () => {
     )
     expect(mocks.store?.getState().agentStatusByPaneKey).toBe(before)
     expect(mocks.setAgentStatus).toHaveBeenCalledTimes(calls)
+  })
+
+  it('keeps the host-fed chat row through Sleep and offers Sleep until its host marks the chat slept', async () => {
+    const state = (): AppState => useAppStore.getState()
+    const sleepable = (): boolean => hasSleepableWorkspaceActivity('wt-1', state())
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, executionHostId: 'local' }] }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 2 }) }))
+    const paneKey = statuses()[0].paneKey
+    mocks.store?.setState({ acknowledgedAgentsByPaneKey: { [paneKey]: 3 } })
+    expect(sleepable()).toBe(true)
+
+    // Sleep's terminal teardown drops the worktree's rows before the host's revoke reaches the feed.
+    act(() => state().dropAgentStatusByWorktree('wt-1', { shutdownReason: 'manual-sleep' }))
+    expect(state().agentStatusByPaneKey[paneKey]).toEqual(
+      expect.objectContaining({ state: 'done', structuredHostOwned: true })
+    )
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({ status: 'idle', updatedAt: 2, hostExecutionOwned: undefined })
+      })
+    )
+    expect(statuses()).toEqual([expect.objectContaining({ state: 'done' })])
+    expect(statuses()[0].structuredHostOwned).toBeUndefined()
+    expect(state().acknowledgedAgentsByPaneKey).toEqual({ [paneKey]: 3 })
+    // The host let go: only its Sleep mark stops offering Sleep, and the chat running again wakes it.
+    expect(sleepable()).toBe(true)
+    const slept = summary({
+      status: 'idle',
+      updatedAt: 2,
+      hostExecutionOwned: undefined,
+      sleptAt: 5
+    })
+    act(() => feed().emit({ type: 'status', session: slept }))
+    expect(state().structuredChatSleptAtByPaneKey).toEqual({ [paneKey]: 5 })
+    expect(sleepable()).toBe(false)
+    act(() => feed().emit({ type: 'status', session: summary({ updatedAt: 3, sleptAt: 5 }) }))
+    expect(Object.values(state().structuredChatSleptAtByPaneKey)).toEqual([null])
   })
 
   it('drops the status and the feed when the last structured tab closes', async () => {

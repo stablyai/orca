@@ -12,6 +12,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import type { Tab } from '../../../../shared/tab-types'
+import { makeWorktree } from './store-test-helpers'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -28,6 +29,24 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
+
+// Why: tabs are mirrored only from a paired server's workspace, which keeps today's close path.
+const pairedServerWorktrees = {
+  'repo-1': [
+    makeWorktree({
+      id: 'wt-1',
+      repoId: 'repo-1',
+      path: '/repo',
+      runtimeOwnerEnvironmentId: 'env-1'
+    }),
+    makeWorktree({
+      id: 'wt-2',
+      repoId: 'repo-1',
+      path: '/other',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+  ]
+}
 
 function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: string): Tab {
   return {
@@ -78,6 +97,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   })
 
   function seedRemoteWorktree(store: StoreApi<AppState>): void {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store under test reads only these fields of the partial state.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
@@ -86,7 +106,9 @@ describe('createEditorSlice untitled cleanup routing', () => {
           path: '/remote/repo',
           displayName: 'Repo',
           badgeColor: '#000',
-          addedAt: 0
+          addedAt: 0,
+          // Server rows are stamped as they land; focus alone never owns a write.
+          executionHostId: 'runtime:env-1'
         }
       ],
       worktreesByRepo: {
@@ -94,6 +116,8 @@ describe('createEditorSlice untitled cleanup routing', () => {
           {
             id: 'wt-1',
             repoId: 'repo1',
+            hostId: 'runtime:env-1',
+            runtimeOwnerEnvironmentId: 'env-1',
             path: '/remote/wt',
             branch: 'refs/heads/main',
             head: 'abc',
@@ -118,7 +142,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -127,7 +151,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -181,7 +205,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     remoteUntitledFileSize = 42
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -190,7 +214,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() =>
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
@@ -212,7 +236,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       repos: [],
       worktreesByRepo: {}
     } as Partial<AppState>)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -221,7 +245,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await flushAsyncRemoteRefresh()
 
@@ -232,7 +256,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile deletes untouched remote untitled files in their owning runtime after switching local', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -242,7 +266,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     })
     store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -264,7 +288,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile deletes untouched remote untitled files in their owning runtime after switching environments', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -274,7 +298,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     })
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-2' } as never })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
 
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -296,7 +320,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
   it('closeFile keeps untouched templated untitled files on disk', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
-    store.getState().openFile({
+    const fileId = store.getState().openFile({
       filePath: '/remote/wt/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: 'wt-1',
@@ -306,7 +330,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       mode: 'edit'
     })
 
-    store.getState().closeFile('/remote/wt/untitled.md')
+    store.getState().closeFile(fileId)
     await flushAsyncRemoteRefresh()
 
     expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
@@ -576,7 +600,8 @@ describe('closeFile host mirroring', () => {
 
   it('notifies the host for mirrored editors removed by close all in the active worktree', () => {
     const store = createEditorTabsStore()
-    store.getState().openFile({
+    store.setState({ worktreesByRepo: pairedServerWorktrees })
+    const a = store.getState().openFile({
       filePath: '/repo/a.ts',
       relativePath: 'a.ts',
       worktreeId: 'wt-1',
@@ -584,7 +609,7 @@ describe('closeFile host mirroring', () => {
       mode: 'edit',
       mirroredFromRuntimeSession: true
     })
-    store.getState().openFile({
+    const b = store.getState().openFile({
       filePath: '/other/b.ts',
       relativePath: 'b.ts',
       worktreeId: 'wt-2',
@@ -594,35 +619,31 @@ describe('closeFile host mirroring', () => {
     })
     store.setState({
       unifiedTabsByWorktree: {
-        'wt-1': [mirroredEditorUnifiedTab('host-tab-a', '/repo/a.ts', 'wt-1')],
-        'wt-2': [mirroredEditorUnifiedTab('host-tab-b', '/other/b.ts', 'wt-2')]
+        'wt-1': [mirroredEditorUnifiedTab('host-tab-a', a, 'wt-1')],
+        'wt-2': [mirroredEditorUnifiedTab('host-tab-b', b, 'wt-2')]
       },
       tabBarOrderByWorktree: {
         'wt-1': ['host-tab-a'],
         'wt-2': ['host-tab-b']
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().closeAllFiles()
 
     // Why: closeAllFiles mutates openFiles directly instead of calling closeFile,
     // so it must still run the host close hook for every removed mirrored editor.
     expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledTimes(1)
-    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
-      expect.anything(),
-      'wt-1',
-      '/repo/a.ts'
-    )
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(expect.anything(), 'wt-1', a)
     expect(store.getState().openFiles).toHaveLength(1)
-    expect(store.getState().openFiles[0]?.id).toBe('/other/b.ts')
+    expect(store.getState().openFiles[0]?.id).toBe(b)
     expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([])
     expect(store.getState().tabBarOrderByWorktree['wt-2']).toEqual(['host-tab-b'])
   })
 
   it('notifies the host for every mirrored editor when close all has no active worktree', () => {
     const store = createEditorTabsStore()
-    store.setState({ activeWorktreeId: null })
-    store.getState().openFile({
+    store.setState({ activeWorktreeId: null, worktreesByRepo: pairedServerWorktrees })
+    const a = store.getState().openFile({
       filePath: '/repo/a.ts',
       relativePath: 'a.ts',
       worktreeId: 'wt-1',
@@ -630,7 +651,7 @@ describe('closeFile host mirroring', () => {
       mode: 'edit',
       mirroredFromRuntimeSession: true
     })
-    store.getState().openFile({
+    const b = store.getState().openFile({
       filePath: '/other/b.ts',
       relativePath: 'b.ts',
       worktreeId: 'wt-2',
@@ -640,28 +661,20 @@ describe('closeFile host mirroring', () => {
     })
     store.setState({
       unifiedTabsByWorktree: {
-        'wt-1': [mirroredEditorUnifiedTab('host-tab-a', '/repo/a.ts', 'wt-1')],
-        'wt-2': [mirroredEditorUnifiedTab('host-tab-b', '/other/b.ts', 'wt-2')]
+        'wt-1': [mirroredEditorUnifiedTab('host-tab-a', a, 'wt-1')],
+        'wt-2': [mirroredEditorUnifiedTab('host-tab-b', b, 'wt-2')]
       },
       tabBarOrderByWorktree: {
         'wt-1': ['host-tab-a'],
         'wt-2': ['host-tab-b']
       }
-    } as Partial<AppState>)
+    })
 
     store.getState().closeAllFiles()
 
     expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledTimes(2)
-    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
-      expect.anything(),
-      'wt-1',
-      '/repo/a.ts'
-    )
-    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(
-      expect.anything(),
-      'wt-2',
-      '/other/b.ts'
-    )
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(expect.anything(), 'wt-1', a)
+    expect(notifyHostOfMirroredEditorCloseMock).toHaveBeenCalledWith(expect.anything(), 'wt-2', b)
     expect(store.getState().openFiles).toHaveLength(0)
   })
 })

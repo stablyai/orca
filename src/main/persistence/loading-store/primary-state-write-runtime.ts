@@ -19,11 +19,16 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'profileStateAuthority'
   | 'protectedSecrets'
   | 'quitFlushStarted'
+  | 'uncommittedDurableMutations'
+  | 'committedLeafHolders'
+  | 'captureCommittedLeafHolders'
   | 'state'
   | 'writeGeneration'
   | 'writeTimer'
   | 'writesFrozen'
   | 'workspaceSessionWriteListeners'
+  | 'workspaceSessionOperationListeners'
+  | 'layoutEditorViews'
 >
 
 export function markPrimaryStateWriteDurable(

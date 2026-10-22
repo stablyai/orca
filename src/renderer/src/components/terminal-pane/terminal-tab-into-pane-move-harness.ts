@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { SplitTerminalPaneDetail } from '@/constants/terminal'
+import type { SetTerminalPaneTitleDetail, SplitTerminalPaneDetail } from '@/constants/terminal'
 import type { TerminalLeafIntoTabResult } from '../../../../shared/terminal-leaf-move'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import {
@@ -43,6 +43,7 @@ export function createJoinHarness(store: Store, overrides: Partial<TerminalTabIn
   // Whether the target was still expanded when each split was dispatched.
   const expandedAtSplit: boolean[] = []
   const requests: unknown[] = []
+  const titleEvents: SetTerminalPaneTitleDetail[] = []
   let answer: () => Promise<TerminalLeafIntoTabResult> = () =>
     Promise.resolve({ status: 'moved', ptyId: P_A, sourceTabClosed: true })
   const mounted = [B, C]
@@ -84,6 +85,10 @@ export function createJoinHarness(store: Store, overrides: Partial<TerminalTabIn
       calls.push(`toggleExpand:${tabId}`)
       store.setState((s) => ({ expandedPaneByTabId: { ...s.expandedPaneByTabId, [tabId]: false } }))
     },
+    dispatchPaneTitle: (detail) => {
+      calls.push('title')
+      titleEvents.push(detail)
+    },
     scheduleGraphSync: () => calls.push('graphSync'),
     resyncParkedWatchers: (_worktreeId, tabId) => calls.push(`parked:${tabId}`),
     readMainSession: () => Promise.resolve(null),
@@ -99,6 +104,7 @@ export function createJoinHarness(store: Store, overrides: Partial<TerminalTabIn
     calls,
     splits,
     expandedAtSplit,
+    titleEvents,
     requests,
     remount,
     answerWith: (next: () => Promise<TerminalLeafIntoTabResult>) => {

@@ -8,7 +8,7 @@ import {
 } from '@/lib/workspace-file-drag'
 
 const mocks = vi.hoisted(() => ({ notice: vi.fn(), target: vi.fn(), navigate: vi.fn() }))
-vi.mock('@/lib/file-preview', () => ({
+vi.mock('@/lib/workspace-file-browser-open-target', () => ({
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE:
     'Open in Orca Browser is only available for local files.',
   getWorkspaceFileBrowserOpenTarget: mocks.target

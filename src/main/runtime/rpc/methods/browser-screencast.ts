@@ -1,5 +1,5 @@
 import { defineMethod, defineStreamingMethod } from '../core'
-import { Screencast } from './browser-schemas'
+import { Screencast } from '../../../../shared/rpc-contract/browser-params'
 import { BrowserError } from '../../../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-types'
 import { runtimeBrowserCommandsFactoryIsAvailable } from '../../runtime-browser-commands-factory'

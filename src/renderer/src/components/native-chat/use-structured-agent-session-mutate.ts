@@ -57,11 +57,16 @@ function namesWhatItStops(fingerprintMethod: string, fields: Record<string, unkn
 function notDone(
   failure: AgentSessionWriteFailure,
   fingerprintMethod: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  agentName: string | undefined
 ): { kind: 'not-done'; notice: string; failure: AgentSessionWriteFailure } {
   return {
     kind: 'not-done',
-    notice: agentSessionWriteFailureText(failure, writeKind(fingerprintMethod, fields)),
+    notice: agentSessionWriteFailureText(
+      failure,
+      writeKind(fingerprintMethod, fields),
+      agentName ? { agentName } : {}
+    ),
     failure
   }
 }
@@ -73,11 +78,13 @@ export function useStructuredAgentSessionMutate(args: {
   /** Read at settle time, not at call time: the fence can move while a request
    *  is in flight, and a result from the previous fence is not this session's. */
   stateRef: { current: { fence: number | null } }
+  /** The chat's agent, which a refusal about it names. */
+  agentName?: string
 }): {
   write: StructuredAgentSessionWrite
   mutate: StructuredAgentSessionMutate
 } {
-  const { enabled = true, sessionId, stateRef, target } = args
+  const { agentName, enabled = true, sessionId, stateRef, target } = args
   const inFlightStops = useRef(
     new Map<string, Promise<StructuredAgentSessionWriteOutcome<unknown>>>()
   )
@@ -144,13 +151,19 @@ export function useStructuredAgentSessionMutate(args: {
                 error instanceof RuntimeRpcCallError ? error.code : undefined
               ),
               fingerprintMethod,
-              fields
+              fields,
+              agentName
             )
           : { kind: 'dropped' }
       }
       if (!result.ok) {
         return settlesHere()
-          ? notDone(agentSessionRefusalFailure(result.refusal), fingerprintMethod, fields)
+          ? notDone(
+              agentSessionRefusalFailure(result.refusal),
+              fingerprintMethod,
+              fields,
+              agentName
+            )
           : { kind: 'dropped' }
       }
       if (!settlesHere()) {
@@ -158,7 +171,7 @@ export function useStructuredAgentSessionMutate(args: {
       }
       return { kind: 'done', value: result.value }
     },
-    [enabled, sessionId, stateRef, target]
+    [agentName, enabled, sessionId, stateRef, target]
   )
 
   const write = useCallback(

@@ -79,10 +79,7 @@ import {
   onboardingStepViewedSchema,
   onboardingTaskSourcesSnapshotSchema,
   onboardingTourOutcomeEventSchema,
-  onboardingWindowsTerminalSnapshotSchema,
-  smartSortClass1PromotionSchema,
-  smartSortClassDistributionSchema,
-  smartToRecentSwitchSchema
+  onboardingWindowsTerminalSnapshotSchema
 } from './telemetry-onboarding-event-schemas'
 import {
   addRepoDefaultCheckoutHandoffSchema,
@@ -208,9 +205,5 @@ export const eventSchemas = {
   ssh_host_server_conversion: sshHostServerConversionSchema,
   ssh_host_server_deploy_failed: sshHostServerDeployFailedSchema,
   ssh_host_server_move: sshHostServerMoveSchema,
-  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema,
-
-  smart_sort_class_distribution: smartSortClassDistributionSchema,
-  smart_sort_class_1_promotion: smartSortClass1PromotionSchema,
-  smart_to_recent_switch: smartToRecentSwitchSchema
+  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema
 } as const

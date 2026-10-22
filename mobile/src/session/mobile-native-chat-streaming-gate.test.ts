@@ -91,6 +91,33 @@ describe('deriveMobileNativeChatStreaming', () => {
     expect(results).toEqual([null, 'fresh answer', null])
   })
 
+  it('keeps the bubble hidden once a thought lands below the streamed reply', () => {
+    const asked: NativeChatMessage[] = [
+      {
+        id: 'u1',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'look' }],
+        timestamp: 0,
+        source: 'transcript'
+      }
+    ]
+    const landed = [...asked, assistant('a1', 'Checking the notes file now.')]
+    const thought: NativeChatMessage = {
+      id: 'a1:reasoning-2',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'The file is short.' }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+    const { results } = run([
+      { folded: asked },
+      { folded: asked, text: 'Checking the notes file now.', live: true },
+      { folded: landed, text: 'Checking the notes file now.', live: true },
+      { folded: [...landed, thought], text: 'Checking the notes file now.', live: true }
+    ])
+    expect(results).toEqual([null, 'Checking the notes file now.', null, null])
+  })
+
   it('suppresses an identical repeated reply once its own turn lands', () => {
     const prior = [assistant('a1', 'Done.')]
     const landed = [...prior, assistant('a2', 'Done.')]

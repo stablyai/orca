@@ -19,6 +19,7 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import {
+  nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../src/shared/native-chat-agent-support'
@@ -105,6 +106,11 @@ export function useMobileNativeChatAnswerSend(args: {
 
   const answerAsk = useCallback(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
+      if (nativeChatAskRequiresTerminal(agentRef.current)) {
+        cancelPending()
+        onSendError('Answer this question in terminal view')
+        return false
+      }
       const handle = handleRef.current
       if (!client || !handle || !enabled) {
         onSendError('Answer not sent (disconnected)')
@@ -166,7 +172,8 @@ export function useMobileNativeChatAnswerSend(args: {
             activeRoute.client !== client ||
             activeRoute.sessionId !== sessionId ||
             activeRoute.streamIdentity !== streamIdentity ||
-            handleRef.current !== handle
+            handleRef.current !== handle ||
+            nativeChatAskRequiresTerminal(agentRef.current)
           ) {
             return false
           }

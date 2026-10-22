@@ -14,10 +14,15 @@ import {
 import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useStatusBarDensity } from './status-bar-density'
+import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
+import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
-  const rateLimits = useAppStore((s) => s.rateLimits)
+  const localRateLimits = useAppStore((s) => s.rateLimits)
+  // Why: with a remote account owner the agents run there, so its usage is the one to show.
+  const { rateLimits, remoteOwner, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
+  const remoteOwned = remoteOwner !== null
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -38,7 +43,9 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalTriggerLocation =
     settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   // Why: gate per-CLI bars on PATH detection so an uninstalled agent isn't shown a noisy empty bar (auto re-shows when installed).
-  const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+  const localDetectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+  // Why: PATH detection describes this viewer, not the remote host whose bars are shown.
+  const detectedAgentIds = remoteOwned ? null : localDetectedAgentIds
   const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
   // Why: pet segment is driven purely by experimentalPet, not statusBarItems, to avoid double-toggling the surface (see design doc).
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
@@ -83,13 +90,13 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     setIsRefreshing(true)
     try {
       // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
+      await Promise.all([(refreshRemote ?? refreshRateLimits)(), refreshDetectedAgents()])
     } finally {
       if (mountedRef.current) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
+  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
@@ -101,11 +108,13 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
   const antigravityUsageConfigured =
+    !remoteOwned &&
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
+  // A remote owner's bars come from its snapshot alone; this viewer's setup says nothing about that host.
   const usageSettings = {
-    ...settings,
+    ...(remoteOwned ? {} : settings),
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
@@ -216,11 +225,16 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
     showZcode ? visibleZcode : null
-  ].filter((p): p is ProviderRateLimits => p !== null)
+  ]
+    .filter((p): p is ProviderRateLimits => p !== null)
+    // Why: the bar collapses chips from the end, so placeholders give way first.
+    .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
+  // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
+  const hostScope = getUsageOwnerHostScope(remoteOwner)
   const handleManageAccounts = (): void => {
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null })
+    openSettingsTarget({ pane: 'accounts', repoId: null, hostScope })
     openSettingsPage()
   }
   const handleUsageDetails = (): void => {
@@ -230,11 +244,17 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
   const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
     const sectionId = getUsageProviderAccountsSectionId(provider)
-    if (!sectionId) {
+    // Why: a placeholder for a CLI-owned provider still leads to the host's accounts.
+    if (!sectionId && !remoteOwner) {
       return
     }
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null, sectionId })
+    openSettingsTarget({
+      pane: 'accounts',
+      repoId: null,
+      hostScope,
+      ...(sectionId ? { sectionId } : {})
+    })
     openSettingsPage()
   }
   const canSignInFromUsageRow = (provider: ProviderRateLimits['provider']): boolean =>
@@ -271,6 +291,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     overflowing,
     petEnabled,
     recordFeatureInteraction,
+    remoteOwner,
     rosterProviders,
     segmentsIconOnly,
     segmentsRef,

@@ -21,6 +21,9 @@ import {
 } from '../pane/key-state'
 import { commitLeafIntoTabAndRekey, installPtyLeafMoveIpcHandler } from './leaf-move'
 
+// The window-applied join under test exists only while the layout-owner switch is off.
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 const LEAF = '22222222-2222-4222-8222-222222222222'
 const TARGET_LEAF = '11111111-1111-4111-8111-111111111111'
 const request: TerminalLeafIntoTabRequest = {

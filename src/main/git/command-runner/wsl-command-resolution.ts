@@ -3,9 +3,9 @@ import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand,
-  quotePosixShell,
   type WslCapturedLoginShellCommand
 } from '../../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../shared/git-output-locale'
 import type { WslGitReadEnvironment } from '../wsl-git-read-environment'
 import {
@@ -22,6 +22,25 @@ const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_EN
 const GIT_OUTPUT_LOCALE_ENV_ARGS = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV).map(
   ([key, value]) => `${key}=${value}`
 )
+
+// Why on the command string: a login profile runs first and could replace WSLENV-forwarded values;
+// alternates append to whatever the profile set, as Git's own scratch object stores do.
+function wslGitObjectStorePrefix(env: NodeJS.ProcessEnv | undefined): string {
+  const objectDirectory = env?.GIT_OBJECT_DIRECTORY
+  const alternates = env?.GIT_ALTERNATE_OBJECT_DIRECTORIES
+  // Why compare with process.env: only a quarantine's own values, never a Windows-side inherited one.
+  if (
+    objectDirectory === undefined ||
+    alternates === undefined ||
+    objectDirectory === process.env.GIT_OBJECT_DIRECTORY
+  ) {
+    return ''
+  }
+  return (
+    `GIT_OBJECT_DIRECTORY=${quotePosixShell(objectDirectory)} ` +
+    `GIT_ALTERNATE_OBJECT_DIRECTORIES="\${GIT_ALTERNATE_OBJECT_DIRECTORIES:+$GIT_ALTERNATE_OBJECT_DIRECTORIES:}"${quotePosixShell(alternates)} `
+  )
+}
 
 export type ResolvedCommand = {
   binary: string
@@ -92,7 +111,10 @@ export function resolveCommand(
 
   const translatedArgs = translateArgsForWsl(args)
   // Why: env on wsl.exe stays Windows-side (WSLENV forwards only named vars), so the locale must ride the command string (issue #7808).
-  const localePrefix = command === 'git' ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ` : ''
+  const localePrefix =
+    command === 'git'
+      ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ${wslGitObjectStorePrefix(options.env)}`
+      : ''
   const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
   // Why: shell-escape each arg to prevent word splitting / glob expansion inside the bash -c string.
   const escapedArgs = translatedArgs.map(quotePosixShell)

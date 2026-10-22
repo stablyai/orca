@@ -4,15 +4,24 @@
  *
  * Never evicted: a slot this process materialized (an SSH deploy may be reading it), the slot
  * a live local orcad serve runs from (named by the profile's instance lock), and the slot a
- * surviving terminal daemon runs from (named by its PID record).
+ * surviving terminal daemon runs from (named by its PID record). A record from another machine or
+ * boot is unverifiable, so its slot is kept too.
  */
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeRuntimeAsset } from '../../shared/node-runtime-pin'
-import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
+import {
+  ORCAD_LOCK_FILE_NAME,
+  orcadPeerPidIsJudgeableHere,
+  readOrcadInstanceLockRecord
+} from './orcad-instance-lock'
 import { materializedOrcadArtifactVersions } from './orcad-artifact-materializer'
 import { isProcessAlive } from '../daemon/daemon-process-inspection'
-import { liveDaemonOrcadSlots } from './orcad-daemon-slot-pins'
+import {
+  defaultOrcadSlotPeerJudge,
+  liveDaemonOrcadSlots,
+  type OrcadSlotPeerJudge
+} from './orcad-daemon-slot-pins'
 
 /** The in-use slot plus the two most recent others (the newest three when none is in use). */
 export const ORCAD_ARTIFACT_CACHE_KEEP = 3
@@ -76,12 +85,13 @@ export function pruneDesktopOrcadArtifactCache(
   alsoInUse: readonly string[] = []
 ): Promise<string[]> {
   const cacheRoot = join(userDataPath, 'orcad-artifacts')
-  const daemonSlots = liveDaemonOrcadSlots(userDataPath, cacheRoot)
+  const judge = defaultOrcadSlotPeerJudge()
+  const daemonSlots = liveDaemonOrcadSlots(userDataPath, cacheRoot, isProcessAlive, judge)
   if (!daemonSlots) {
     // An unreadable daemon record could name any slot; evicting nothing is the safe answer.
     return Promise.resolve([])
   }
-  const live = liveLocalOrcadServeVersion(userDataPath)
+  const live = liveLocalOrcadServeVersion(userDataPath, isProcessAlive, judge)
   return pruneOrcadArtifactCache(cacheRoot, {
     inUseVersions: new Set([
       ...materializedOrcadArtifactVersions(),
@@ -92,13 +102,23 @@ export function pruneDesktopOrcadArtifactCache(
   })
 }
 
-/** The slot version a live local orcad serve runs from, or null when none holds the profile. */
+/**
+ * The slot version a live local orcad serve runs from, or null when none holds the profile. A
+ * serve on another machine or boot (a shared home) is unverifiable from here, so its slot stays.
+ */
 export function liveLocalOrcadServeVersion(
   userDataPath: string,
-  isAlive: (pid: number) => boolean = isProcessAlive
+  isAlive: (pid: number) => boolean = isProcessAlive,
+  judge: OrcadSlotPeerJudge = defaultOrcadSlotPeerJudge()
 ): string | null {
   const record = readOrcadInstanceLockRecord(join(userDataPath, ORCAD_LOCK_FILE_NAME))
-  return record && record.role !== 'desktop' && isAlive(record.pid) ? record.version : null
+  if (!record || record.role === 'desktop') {
+    return null
+  }
+  const judgeable = orcadPeerPidIsJudgeableHere(record, judge.self, () =>
+    judge.dataRootIsOnLocalDisk(userDataPath)
+  )
+  return !judgeable || isAlive(record.pid) ? record.version : null
 }
 
 async function listNames(directory: string): Promise<string[]> {

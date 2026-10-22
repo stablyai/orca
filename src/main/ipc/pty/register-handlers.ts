@@ -1,3 +1,4 @@
+import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
@@ -14,6 +15,7 @@ import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/typ
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
 import { installPtyCodexSharedServerIpcHandler } from './ipc/codex-shared-server'
 import { installPtyClaudeOldTerminalIpcHandler } from './ipc/claude-old-terminal'
+import { installPtyClaudeDiffPanelNoticeIpcHandler } from './ipc/claude-diff-panel-notice'
 import { installPtyNewerDaemonHoldIpcHandlers } from './ipc/newer-daemon-hold'
 import {
   installPtyKillIpcHandler,
@@ -26,8 +28,7 @@ import { installPtyLeafMoveIpcHandler } from './ipc/leaf-move'
 import { installPtyRuntimeController } from './runtime/controller'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
 import {
-  assertFolderWorkspacePtyPathUsable as assertFolderWorkspacePtyPathUsableImpl,
-  localStartupCwdDirectoryExists,
+  assertWorkspaceAcceptsNewPty as assertWorkspaceAcceptsNewPtyImpl,
   resolvePtySpawnStartupCwd as resolvePtySpawnStartupCwdImpl
 } from './host-env/spawn-cwd'
 import {
@@ -104,7 +105,12 @@ export function registerPtyHandlers(
       return undefined
     }
     // Why: during cold start the daemon provider swap overlaps first paint, so local spawns must wait; SSH/headless don't use the desktop daemon.
-    return options?.awaitLocalPtyStartup?.()
+    const startup = options?.awaitLocalPtyStartup?.()
+    // A pane replaced by a restart spawns while it runs; it must reach the new daemon, not the old.
+    const restart = settledDaemonRestart()
+    return startup && restart
+      ? Promise.all([startup, restart]).then(() => undefined)
+      : (startup ?? restart)
   }
 
   const getLocalPtyProviderStartupPromise = (
@@ -131,6 +137,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
   ipcMain.removeHandler('pty:stopCodexSharedServer')
   ipcMain.removeHandler('pty:openedBeforeClaudeAccounts')
+  ipcMain.removeHandler('pty:claudeDiffPanelMayAutoOpen')
   ipcMain.removeHandler('pty:readNewerDaemonHeldScreen')
   ipcMain.removeHandler('pty:reopenNewerDaemonTerminals')
   ipcMain.removeHandler('pty:getCwd')
@@ -148,6 +155,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
+  ipcMain.removeAllListeners('pty:hiddenOutputRestoreApplied')
   ipcMain.removeAllListeners('pty:ackData')
   ipcMain.removeAllListeners('pty:deliveryResyncResponse')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
@@ -208,9 +216,10 @@ export function registerPtyHandlers(
     mainWindow.webContents.on('did-finish-load', finishLoadHandler)
   }
 
-  const assertFolderWorkspacePtyPathUsable = (
-    worktreeId: string | undefined
-  ): Promise<void> | void => assertFolderWorkspacePtyPathUsableImpl(store, worktreeId)
+  const assertWorkspaceAcceptsNewPty = (
+    worktreeId: string | undefined,
+    sessionId?: string
+  ): Promise<void> | void => assertWorkspaceAcceptsNewPtyImpl(store, worktreeId, sessionId)
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,
@@ -221,7 +230,10 @@ export function registerPtyHandlers(
   ): ReturnType<typeof prepareCodexResumeHome> =>
     prepareCodexResumeHome(options?.prepareCodexSessionResume, args)
   const adoptStablePaneBound = (args: Parameters<typeof adoptStablePane>[2]) =>
-    adoptStablePane(runtime, store, args)
+    adoptStablePane(runtime, store, {
+      ...args,
+      onAdopted: (result) => session.sendPtySpawnedToRenderer(result.id)
+    })
 
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   installPtyRuntimeController({
@@ -235,7 +247,7 @@ export function registerPtyHandlers(
     noCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome,
     stripSequencedStartupResumeArgv,
-    assertFolderWorkspacePtyPathUsable,
+    assertWorkspaceAcceptsNewPty,
     resolvePtySpawnStartupCwd,
     requestSerializedBuffer: session.requestSerializedBuffer,
     shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
@@ -275,9 +287,8 @@ export function registerPtyHandlers(
     options,
     getLocalPtyStartupPromise,
     adoptStablePane: adoptStablePaneBound,
-    assertFolderWorkspacePtyPathUsable,
+    assertWorkspaceAcceptsNewPty,
     resolvePtySpawnStartupCwd,
-    localStartupCwdDirectoryExists,
     prepareCodexResumeHome: prepareCodexResumeHomeBound,
     noCodexResumeLaunch,
     resolveCodexResumeLaunch,
@@ -295,6 +306,7 @@ export function registerPtyHandlers(
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyClaudeOldTerminalIpcHandler({ getLocalPtyProviderStartupPromise })
+  installPtyClaudeDiffPanelNoticeIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyNewerDaemonHoldIpcHandlers()
   installPtyKillIpcHandler(killDeps)
 }

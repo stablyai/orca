@@ -11,6 +11,7 @@ import {
   NATIVE_CHAT_VISUAL_PING_TYPE,
   NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS,
   NATIVE_CHAT_VISUAL_PONG_TYPE,
+  NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
   NATIVE_CHAT_VISUAL_THEME_TYPE
 } from '../../../../shared/native-chat-visual-shell'
@@ -21,20 +22,24 @@ vi.mock('@/lib/http-link-routing', () => ({
 }))
 
 import { NativeChatVisualFrame } from './NativeChatVisualFrame'
+import type { ReaderGesture } from './native-chat-autoscroll'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
 
-const visual = { revision: 'r1', html: '<p>chart</p>' }
+const visual = { revision: 'r1', html: '<p>chart</p>', path: '/v' }
 
-function Harness(props: { layout?: 'inline' | 'panel'; onRetired?: () => void }) {
+function Harness(props: {
+  onRetired?: () => void
+  onReaderGesture?: (gesture: ReaderGesture) => void
+}) {
   const scope = useRef<HTMLDivElement | null>(null)
   return (
     <div ref={scope}>
       <NativeChatVisualFrame
         document={visual}
         title="Chart"
-        layout={props.layout ?? 'inline'}
         themeScope={scope}
         onRetired={props.onRetired ?? (() => {})}
+        onReaderGesture={props.onReaderGesture}
       />
     </div>
   )
@@ -119,7 +124,7 @@ afterEach(() => {
 
 describe('NativeChatVisualFrame', () => {
   it('lets a dragged tab pass over the frame while a tab drag holds pointer passthrough', () => {
-    const { container } = render(<Harness layout="panel" />)
+    const { container } = render(<Harness />)
     const frame = frameOf(container)
     expect(frame.style.pointerEvents).toBe('')
 
@@ -153,6 +158,21 @@ describe('NativeChatVisualFrame', () => {
     post({ type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel, height: 900 }, window)
     post({ type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel: 'other', height: 900 }, frame.contentWindow)
     expect(box).toHaveStyle({ height: '420px' })
+  })
+
+  it('hands a wheel or touch its page could not take to the transcript as a reader gesture', () => {
+    const onReaderGesture = vi.fn()
+    const { container } = render(<Harness onReaderGesture={onReaderGesture} />)
+    const frame = frameOf(container)
+    const channel = channelOf(frame)
+    const scroll = { type: NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE, channel }
+    post({ ...scroll, input: 'wheel', deltaY: -30 }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenLastCalledWith({ kind: 'wheel', deltaY: -30, zoom: false })
+    post({ ...scroll, input: 'touch' }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenLastCalledWith({ kind: 'touch-drag' })
+    post({ ...scroll, input: 'wheel', deltaY: -30 }, window)
+    post({ ...scroll, channel: 'other', input: 'wheel', deltaY: -30 }, frame.contentWindow)
+    expect(onReaderGesture).toHaveBeenCalledTimes(2)
   })
 
   it('restyles in place on a theme change instead of reloading the visual', () => {
@@ -261,15 +281,5 @@ describe('NativeChatVisualFrame', () => {
     unmount()
     waitOutTheAnswer()
     expect(onRetired).not.toHaveBeenCalled()
-  })
-
-  it('fills a panel instead of fitting its height', () => {
-    const { container } = render(<Harness layout="panel" />)
-    const frame = frameOf(container)
-    post(
-      { type: NATIVE_CHAT_VISUAL_SIZE_TYPE, channel: channelOf(frame), height: 420 },
-      frame.contentWindow
-    )
-    expect(frame.parentElement?.style.height).toBe('')
   })
 })

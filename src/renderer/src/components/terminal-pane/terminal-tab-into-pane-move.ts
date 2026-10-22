@@ -92,6 +92,7 @@ export async function moveTerminalTabIntoPane(
   // No await sits between the eligibility check and this hold.
   const release = holdTerminalMoveKeys([
     terminalLeafMoveKey(leafId),
+    terminalLeafMoveKey(targetLeafId),
     terminalTabMoveKey(sourceTabId),
     terminalTabMoveKey(targetTabId)
   ])

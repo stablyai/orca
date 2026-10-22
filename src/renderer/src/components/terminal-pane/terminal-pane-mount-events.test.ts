@@ -43,6 +43,7 @@ function install(manager: ReturnType<typeof mountedManager>): void {
       isActive: true,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a ref holding the same stub.
       managerRef: { current: manager as unknown as PaneManager },
+      showPaneTitle: vi.fn(),
       persistLayoutSnapshot: vi.fn(),
       syncCanExpandState: vi.fn(),
       queueResizeAll: vi.fn()

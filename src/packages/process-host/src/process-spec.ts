@@ -44,6 +44,8 @@ export type ProcessSpec = {
   terminationBarrier?: boolean | ProcessTerminationBarrier
   /** Called once when the child exits or tree termination is verified. */
   onChildTerminated?: () => void
+  /** Every raw stderr chunk as it arrives, including any past the capture cap. */
+  onStderr?: (chunk: Buffer | string) => void
 }
 
 export type PipedChildProcess = ChildProcessWithoutNullStreams

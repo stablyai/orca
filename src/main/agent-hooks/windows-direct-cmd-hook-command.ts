@@ -27,7 +27,7 @@ export function wrapWindowsBatchHookCommand(scriptPath: string): string {
     wrapWindowsHookCommand(
       scriptPath,
       {},
-      // Same policy shortcut as wrapWindowsCmdHookCommand for guarded Unicode .cmd paths (#26382).
+      // Guarded Unicode .cmd paths skip loading the policy cmdlet (#26382).
       { useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(scriptPath) }
     )
   )

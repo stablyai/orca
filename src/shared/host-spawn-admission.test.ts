@@ -163,6 +163,24 @@ describe('decideSpawnAdmission', () => {
     expect(decide(state, f, 500)).toEqual({ kind: 'admit', charge: 'user' })
   })
 
+  it('paces a user resume past its allowance but never puts it back to sleep', () => {
+    const state = createSpawnAdmissionState(LIMITS, 0)
+    const f = facts({ declaredIntent: 'user-resume', deadlineAt: 5_000 })
+    state.liveAutomatic = LIMITS.maxLiveAutomatic
+    state.automaticBucket = { tokens: 0, updatedAt: 0 }
+    const paused = { kind: 'paused', reason: 'unclean_host_death', since: 0 } as const
+    for (const mode of [{ kind: 'normal' } as const, paused]) {
+      const args = { state, facts: f, charge: 'automatic' as const, pressure: 'ok' as const }
+      expect(decideSpawnAdmission({ ...args, mode, limits: LIMITS, now: 0 })).toMatchObject({
+        kind: 'wait'
+      })
+      expect(decideSpawnAdmission({ ...args, mode, limits: LIMITS, now: 5_000 })).toEqual({
+        kind: 'admit',
+        charge: 'automatic'
+      })
+    }
+  })
+
   it('M-1: random arrivals keep the pacing and live-cap invariants', () => {
     for (let seed = 1; seed <= 25; seed++) {
       const rng = mulberry32(seed)
@@ -226,7 +244,8 @@ describe('decideSpawnAdmission', () => {
           expect(state.inFlight.automatic).toBeLessThanOrEqual(LIMITS.automaticConcurrency)
           // Burst plus one token per second over a 10 s window.
           expect(automaticAdmitsInWindow.length).toBeLessThanOrEqual(LIMITS.automaticBurst + 10)
-          if (f.declaredIntent !== null) {
+          // A user resume past its allowance is paced like an old caller, never capped.
+          if (f.declaredIntent !== null && f.declaredIntent !== 'user-resume') {
             expect(state.liveAutomatic + state.inFlight.automatic).toBeLessThanOrEqual(
               LIMITS.maxLiveAutomatic
             )

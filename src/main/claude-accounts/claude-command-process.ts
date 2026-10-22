@@ -4,11 +4,8 @@ import {
   buildWindowsHostInteractiveLoginSpawn,
   type WindowsHostInteractiveLoginSpawn
 } from '../../shared/windows-interactive-login-spawn'
-import {
-  buildWslExecArgs,
-  buildWslLoginShellCommand,
-  quotePosixShell
-} from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
@@ -29,6 +26,10 @@ export type ClaudeCommandOptions = {
   keepStdinOpen?: boolean
   /** BROWSER for Claude, as Claude's own host sees the path. */
   browser?: string
+  /** Every stdout chunk as Claude prints it. */
+  onStdout?: (text: string) => void
+  /** Hands over a sender for lines to Claude's stdin; needs `keepStdinOpen`. */
+  onStdin?: (send: (text: string) => void) => void
 }
 
 export function runClaudeCommandProcess(
@@ -101,6 +102,7 @@ export function runClaudeCommandProcess(
         timeout = null
       }
       stdout?.off('data', appendOutput)
+      stdout?.off('data', forwardStdout)
       stderr?.off('data', appendOutput)
       child.off('error', onError)
       child.off(completionEvent, onDone)
@@ -129,6 +131,7 @@ export function runClaudeCommandProcess(
       terminationPending = true
       terminateClaudeProcess(child, interactiveLogin, afterKill)
     }
+    const forwardStdout = (chunk: Buffer): void => options?.onStdout?.(chunk.toString())
     const appendOutput = (chunk: Buffer): void => {
       output = `${output}${chunk.toString()}`
       if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
@@ -175,8 +178,23 @@ export function runClaudeCommandProcess(
     }, timeoutMs)
     stdout?.on('data', appendOutput)
     stderr?.on('data', appendOutput)
+    if (options?.onStdout) {
+      stdout?.on('data', forwardStdout)
+    }
     child.on('error', onError)
     child.on(completionEvent, onDone)
+    const stdin = options?.keepStdinOpen && !interactiveLogin ? child.stdin : null
+    if (stdin && options?.onStdin) {
+      // Why: a code written as Claude exits fails with EPIPE, which unhandled would crash the host.
+      stdin.on('error', (error) =>
+        console.warn('[claude-accounts] Claude login stdin:', error.message)
+      )
+      options.onStdin((text) => {
+        if (!settled && !stdin.destroyed) {
+          stdin.write(text)
+        }
+      })
+    }
     if (options?.signal?.aborted) {
       onAbort()
     } else {

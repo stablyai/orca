@@ -20,7 +20,20 @@
  * connected state, then the multiplexed stream is closed so recovery starts
  * with a live epoch, and only the resubscribe attempt fails.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

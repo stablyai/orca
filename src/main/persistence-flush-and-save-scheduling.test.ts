@@ -29,7 +29,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -469,6 +469,29 @@ describe('Store', () => {
       }
     )
 
+    it.each([undefined, 'ssh:ssh-1'])(
+      'persists a matching binding without cloning when only unrelated state is dirty on %s',
+      async (hostId) => {
+        const store = await createStore()
+        store.setWorkspaceSession(boundSession(), hostId)
+        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+        store.addRepo(makeRepo())
+        expect(runtimeCounters(store).lastDurableWriteGeneration).toBeLessThan(
+          runtimeCounters(store).writeGeneration
+        )
+        const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
+
+        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+
+        expect(cloneSpy).not.toHaveBeenCalled()
+        const counters = runtimeCounters(store)
+        expect(counters.lastDurableWriteGeneration).toBe(counters.writeGeneration)
+        expect(
+          store.getWorkspaceSession(hostId).terminalLayoutsByTabId.tab1?.ptyIdsByLeafId
+        ).toEqual({ [TEST_LEAF_1]: 'pty-1' })
+      }
+    )
+
     it('flushes while a save is pending, and the sync hash match makes the next call durable', async () => {
       const store = await createStore()
       store.setWorkspaceSession(boundSession())
@@ -775,13 +798,15 @@ describe('Store', () => {
           attributes: {
             'binding.outcome': 'flushed',
             'binding.eligible': false,
-            'binding.misses': 'not_durable'
+            'binding.misses': 'defaults_not_applied,not_durable',
+            'binding.path': 'mutation'
           }
         },
         {
           attributes: {
             'binding.outcome': 'fast_lane',
             'binding.eligible': true,
+            'binding.path': 'durable_match',
             'binding.generation_gap': 0,
             'binding.host': 'local'
           }

@@ -286,6 +286,21 @@ describe('acquisition path', () => {
       )
     ).rejects.toThrow('agent_session_conflict')
   })
+
+  it("takes request options only for a record it creates, so an existing chat's are kept", async () => {
+    const store = await open()
+    await establishOwner(store, { options: { permissionMode: 'ask' } })
+    await store.reserveOwner(
+      reserveRequest({
+        options: { permissionMode: 'full-access' },
+        expectedFence: 1,
+        probe: { outcome: 'pid-absent' },
+        operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
+      })
+    )
+    expect(store.getRecord('session-alpha')?.lease.runtimeFence).toBe(2)
+    expect(store.getRecord('session-alpha')?.permissionMode).toBe('ask')
+  })
 })
 
 describe('concurrent claims', () => {
@@ -723,25 +738,35 @@ describe('claim keys and unreadable rows', () => {
     expect(store.isClaimKeyVerifiable('key-unknown', NOW)).toBe(true)
   })
 
-  it.each([
-    [
-      'invalid checkpoint',
-      (record: PersistedAgentSessionRecord) =>
-        Object.assign(record.lease, { journalCheckpoint: { epoch: 'bad', sequence: 1 } })
-    ],
-    [
-      'missing live proof',
-      (record: PersistedAgentSessionRecord) =>
-        Object.assign(record.lease, { provenHandleLinkId: null })
-    ]
-  ])('quarantines a record with %s', async (_name, corrupt) => {
+  // No proof yet is a live owner whose provider has not answered; a proof naming no link is not.
+  it('quarantines a record with a live proof naming no handle', async () => {
     const first = await open()
     await establishOwner(first)
     await editPersistedTestAgentSessionStore(directory, (persisted) => {
-      corrupt(persisted.records['session-alpha'])
+      Object.assign(persisted.records['session-alpha'].lease, {
+        provenHandleLinkId: 'link-never-minted'
+      })
     })
     expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
   })
+
+  // Nothing reads the checkpoint any more, so even one this build could never have parsed loads.
+  it.each([null, { epoch: 3, sequence: 0 }, { epoch: 'bad', sequence: 1 }])(
+    "loads a record carrying an older build's journal checkpoint %o, and drops it on the next write",
+    async (journalCheckpoint) => {
+      const first = await open()
+      await establishOwner(first)
+      await editPersistedTestAgentSessionStore(directory, (persisted) => {
+        Object.assign(persisted.records['session-alpha'].lease, { journalCheckpoint })
+      })
+      const reopened = await open()
+      expect(reopened.isSessionUnreadable('session-alpha')).toBe(false)
+      await reopened.setConversationName('session-alpha', 'renamed')
+      const stored = (await readPersistedTestAgentSessionStore(directory)).records['session-alpha']
+      expect(stored.conversationName).toBe('renamed')
+      expect(stored.lease).not.toHaveProperty('journalCheckpoint')
+    }
+  )
 
   it('sets aside a row whose handle is in both stored forms and never rewrites it', async () => {
     const first = await open()

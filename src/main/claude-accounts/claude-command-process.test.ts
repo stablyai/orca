@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 type SpawnSpec = { program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
 const spawned = vi.hoisted(() => {
   const specs: SpawnSpec[] = []
-  return { specs }
+  const stdins: PassThrough[] = []
+  return { specs, stdins }
 })
 
 vi.mock('@orca/process-host', () => ({
@@ -18,6 +19,7 @@ vi.mock('@orca/process-host', () => ({
       pid: undefined,
       kill: vi.fn()
     })
+    spawned.stdins.push(child.stdin)
     queueMicrotask(() => child.emit('close', 0))
     return child
   }
@@ -33,10 +35,36 @@ import { runClaudeCommandProcess } from './claude-command-process'
 const originalPlatform = process.platform
 afterEach(() => {
   spawned.specs.length = 0
+  spawned.stdins.length = 0
   Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
 describe('runClaudeCommandProcess', () => {
+  it('survives a pasted code that reaches Claude just as it exits (EPIPE)', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let write: ((text: string) => void) | null = null
+    await runClaudeCommandProcess(
+      ['auth', 'login', '--claudeai'],
+      { windowsPath: '/data/claude-profiles/a/home', linuxPath: null, wslDistro: null },
+      1000,
+      {
+        keepStdinOpen: true,
+        onStdin: (next) => {
+          write = next
+          // Unhandled, this 'error' would throw and take the host process down.
+          spawned.stdins[0].emit(
+            'error',
+            Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
+          )
+        }
+      }
+    )
+    expect(write).not.toBeNull()
+    expect(warn).toHaveBeenCalledWith('[claude-accounts] Claude login stdin:', 'write EPIPE')
+    warn.mockRestore()
+  })
+
   it("logs in on the host with CLAUDE_CONFIG_DIR set to the account's folder", async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     await runClaudeCommandProcess(

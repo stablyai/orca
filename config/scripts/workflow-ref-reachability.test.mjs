@@ -10,7 +10,7 @@ const readWorkflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml
 const windowsVet = readWorkflow('dev-channel-win-build').jobs['build-win'].steps.find(
   (step) => step.id === 'vetted'
 )
-const macSteps = readWorkflow('adhoc-mac-build').jobs['build-adhoc-mac'].steps
+const macSteps = readWorkflow('adhoc-mac-build').jobs['build-adhoc-mac-arch'].steps
 const macVet = macSteps.find((step) => step.id === 'vetted')
 const macCheckout = macSteps.find((step) => step.name === 'Checkout the requested ref')
 const directory = mkdtempSync(join(tmpdir(), 'workflow-ref-reachability-'))
@@ -96,6 +96,8 @@ describe('release ref trust with case-twin names', () => {
   })
 
   it('checks out the vetted SHA shallowly without mirroring case-twin refs again', async () => {
+    expect(macCheckout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
+    expect(macCheckout.with['persist-credentials']).toBe(false)
     const checkout = join(directory, 'checkout')
     const env = { ...identity, ...macCheckout.env }
     await git(['init', checkout], env)

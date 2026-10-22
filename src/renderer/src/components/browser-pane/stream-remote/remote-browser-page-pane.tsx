@@ -323,11 +323,11 @@ export function RemoteBrowserPagePane({
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const element = imageRef.current
-      const container = remoteViewportRef.current
-      if (!element || !container) {
+      if (!element || !remoteViewportRef.current) {
         return null
       }
-      const rect = container.getBoundingClientRect()
+      // Why the image's box: the frame is letterboxed, and the pane's shape would distort it.
+      const rect = element.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }

@@ -19,7 +19,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   // A failed row opens the status feed; these cases never drive it.
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   sessionId,

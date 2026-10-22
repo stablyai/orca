@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
 import type * as Store from './zcode-plan-api-key-store'
 
@@ -25,7 +26,18 @@ const state = vi.hoisted((): NativeCase => ({
   nativeOutcomes: [],
   directories: []
 }))
-vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
+beforeEach(() =>
+  setSecretStore({
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error('unavailable')
+    },
+    decryptString: () => {
+      throw new Error('unavailable')
+    },
+    describeProtectionGap: () => 'unavailable'
+  })
+)
 vi.mock('node:os', async (original) => ({
   ...(await original<typeof os>()),
   homedir: () => state.home
@@ -34,12 +46,6 @@ vi.mock('node:fs', async (original) => {
   const real = await original<typeof fs>()
   return {
     ...real,
-    writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
-      if (++state.writes === 2 && state.fault === 'before-restore') {
-        throw new Error('Synthetic restore staging failure')
-      }
-      return real.writeFileSync(...args)
-    },
     renameSync: (...args: Parameters<typeof fs.renameSync>) => {
       real.renameSync(...args)
       if (++state.renames === 2 && state.fault === 'after-restore') {
@@ -48,30 +54,31 @@ vi.mock('node:fs', async (original) => {
     }
   }
 })
+// The real born-restricted create, with faults injected around it.
 vi.mock('../../shared/secure-path-windows-acl', async (original) => {
   const real = await original<typeof WindowsAcl>()
   const files = await vi.importActual<typeof fs>('node:fs')
   return {
     ...real,
-    restrictWindowsPathSync: (...args: Parameters<typeof WindowsAcl.restrictWindowsPathSync>) => {
-      const outcome = real.restrictWindowsPathSync(...args)
+    writeRestrictedWindowsFile: (path: string, contents: string) => {
+      if (++state.writes === 2 && state.fault === 'before-restore') {
+        throw new Error('Synthetic restore staging failure')
+      }
+      const outcome = real.writeRestrictedWindowsFile(path, contents)
       state.nativeOutcomes.push(outcome)
-      if (state.fault === 'competing' && args[0].endsWith('.tmp') && ++state.stages === 2) {
+      if (state.fault === 'competing' && ++state.stages === 2) {
         const competing = join(state.home, '.orca', 'competing-key')
-        files.writeFileSync(competing, envelope('synthetic-competing'))
-        expect(real.restrictWindowsPathSync(competing, false)).toBe(true)
+        expect(real.writeRestrictedWindowsFile(competing, envelope('synthetic-competing'))).toBe(
+          true
+        )
         files.renameSync(competing, join(state.home, '.orca', 'zcode-plan-api-key.enc'))
       }
       return state.reject ? false : outcome
     },
-    bestEffortRestrictWindowsPath: (
-      path: string,
-      directory: boolean,
-      settled?: (restricted: boolean) => void
-    ) =>
-      real.bestEffortRestrictWindowsPath(path, directory, (restricted) => {
+    restrictWindowsDirectory: (path: string) =>
+      real.restrictWindowsDirectory(path).then((restricted) => {
         state.directories.push(restricted)
-        settled?.(restricted)
+        return restricted
       })
   }
 })

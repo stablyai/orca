@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { shouldKeepHiddenStartupRendererQueriesLive } from './pty-connection/hidden-startup-renderer-query'
 import {
   isKnownTuiAgentTerminalStartupCommand,
   TERMINAL_STARTUP_COMMAND_TOKEN_MAX_CHARS
@@ -15,6 +17,16 @@ function getRegexWhitespaceSplitCalls(split: ReturnType<typeof vi.spyOn>): unkno
 }
 
 describe('terminal startup command classifier', () => {
+  it.each(Object.entries(TUI_AGENT_CONFIG))(
+    'keeps hidden %s startup queries live after sleep',
+    (_agent, config) => {
+      expect(isKnownTuiAgentTerminalStartupCommand(config.detectCmd)).toBe(true)
+      const command = `sleep 30 && ${config.detectCmd}`
+      expect(isKnownTuiAgentTerminalStartupCommand(command)).toBe(true)
+      expect(shouldKeepHiddenStartupRendererQueriesLive({ command })).toBe(true)
+    }
+  )
+
   it('extracts the first startup command token without regex whitespace splitting', () => {
     const split = vi.spyOn(String.prototype, 'split')
     const command = [' ', String.fromCharCode(160), 'codex\t--ask'].join('')

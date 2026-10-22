@@ -3,8 +3,10 @@ import type { BrowserScreenshotResult, BrowserEvalResult } from '../../shared/ru
 import { BrowserError } from './cdp-bridge'
 import { captureFullPageScreenshot } from './cdp-screenshot'
 import { acquireElectronDebugger } from './electron-debugger-lease'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-utility-commands'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
+import { captureRemoteCliBrowserWorkBound } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBridgeUtilityCommands {
   async screenshot(
@@ -60,6 +62,8 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserEvalResult> {
+    // Why captured here: the queue may run this later, outside the bridged command's context.
+    const bound = captureRemoteCliBrowserWorkBound()
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
@@ -68,11 +72,15 @@ export abstract class AgentBrowserBridgeCaptureCommands extends AgentBrowserBrid
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
-          const { result, exceptionDetails } = (await wc.debugger.sendCommand('Runtime.evaluate', {
-            expression,
-            returnByValue: true,
-            awaitPromise: true
-          })) as {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Runtime.evaluate with returnByValue always answers this CDP shape; unchanged from before the bound.
+          const { result, exceptionDetails } = (await bound(
+            sendGuestCdpCommand(wc, 'Runtime.evaluate', {
+              expression,
+              returnByValue: true,
+              awaitPromise: true
+            }),
+            () => void wc.debugger.sendCommand('Runtime.terminateExecution').catch(() => {})
+          )) as {
             result: { value?: unknown; description?: string }
             exceptionDetails?: { text: string; exception?: { description?: string } }
           }

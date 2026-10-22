@@ -6,6 +6,7 @@ import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-setting
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { applyAgentPermissionMode } from '../../../shared/tui-agent-permissions'
 
 // Simulates a profile created before the dedicated Experimental switch was persisted.
 function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedState['settings'] {
@@ -20,6 +21,20 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   const profile = prepareLoadedProfileSettings(parsed, defaults, noop)
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
+
+describe('retired setup placement', () => {
+  it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
+    'drops saved setup location %s without changing terminal preferences',
+    (setupScriptLaunchMode) => {
+      const normalized = normalizeLegacyProfile({
+        setupScriptLaunchMode,
+        terminalFocusFollowsMouse: true
+      })
+      expect(normalized).not.toHaveProperty('setupScriptLaunchMode')
+      expect(normalized.terminalFocusFollowsMouse).toBe(true)
+    }
+  )
+})
 
 describe('retired Agents sidebar setting', () => {
   it('does not mark new profiles as migrated', () => {
@@ -123,5 +138,47 @@ describe('chat appearance settings', () => {
         nativeChatAppearance: { fontSize: 14, codeFontSize: 12, width: 'comfortable' }
       }).nativeChatAppearance
     ).toBeUndefined()
+  })
+})
+
+describe('the new-chat permission setting', () => {
+  it.each([
+    ['manual', 'ask'],
+    ['yolo', 'full-access']
+  ] as const)('seeds a profile without it from %s Agent Permissions', (mode, expected) => {
+    const normalized = normalizeLegacyProfile({
+      nativeChatPermissionMode: undefined,
+      ...applyAgentPermissionMode({ mode })
+    })
+    expect(normalized.nativeChatPermissionMode).toBe(expected)
+  })
+
+  // Seeded once: after the next save the setting is the user's, not a mirror of Agent Permissions.
+  it('keeps a saved value when Agent Permissions change afterwards', () => {
+    const normalized = normalizeLegacyProfile({
+      nativeChatPermissionMode: 'ask',
+      ...applyAgentPermissionMode({ mode: 'yolo' })
+    })
+    expect(normalized.nativeChatPermissionMode).toBe('ask')
+  })
+})
+
+describe('scoped new-chat permission defaults', () => {
+  it('preserves an agent override across load while rejecting unsupported stored modes', () => {
+    const normalized = normalizeLegacyProfile({
+      nativeChatPermissionMode: 'full-access',
+      agentNativeChatPermissionModes: { codex: 'auto', claude: 'ask', omp: 'auto', unknown: 'auto' }
+    })
+    expect(normalized.agentNativeChatPermissionModes).toEqual({ codex: 'auto', claude: 'ask' })
+    expect(normalized.nativeChatPermissionMode).toBe('full-access')
+  })
+})
+
+describe('terminal default shell', () => {
+  it('trims a hand-edited value and treats whitespace-only as unset', () => {
+    expect(
+      normalizeLegacyProfile({ terminalDefaultShell: '  /bin/zsh  ' }).terminalDefaultShell
+    ).toBe('/bin/zsh')
+    expect(normalizeLegacyProfile({ terminalDefaultShell: '   ' }).terminalDefaultShell).toBe('')
   })
 })

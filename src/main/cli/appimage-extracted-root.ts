@@ -1,12 +1,22 @@
-import { createHash } from 'node:crypto'
-import { lstatSync, readlinkSync, statSync } from 'node:fs'
+import { lstatSync, readlinkSync } from 'node:fs'
 import { mkdir, mkdtemp, rename, rm, rmdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveCachedAppImagePayloadRoot } from './appimage-cache-layout'
+// Re-exported: callers in main keep importing the cache key from here.
+export {
+  readAppImageSourceOfNamespace,
+  resolveAppImageCacheKey
+} from '../../shared/appimage-cache-identity'
 import { removeExtractedAppImagePayload } from './appimage-payload-removal'
 import { LINUX_CLI_COMMAND_NAME } from './bundled-cli-launcher-path'
+import {
+  APPIMAGE_SOURCE_RECORD_NAME,
+  appImageCacheDigest,
+  appImageNamespaceKey,
+  resolveAppImageCacheKey
+} from '../../shared/appimage-cache-identity'
 import {
   APPIMAGE_EXTRACTION_TIMEOUT_MS,
   getAppImageActiveExtractionPath,
@@ -39,6 +49,8 @@ export type AppImageExtractRunner = (
 
 export type AppImageExtractionOptions = {
   appImagePath: string
+  /** Where the AppImage will run from once installed, when that is not `appImagePath` yet. */
+  installedAppImagePath?: string
   cacheRootPath?: string
   runExtract?: AppImageExtractRunner
   /** Absolute time (ms) by which every extraction attempt must have finished. */
@@ -50,24 +62,6 @@ export function getAppImageCacheRootPath(homePath = homedir()): string {
   const cacheHome =
     xdgCacheHome && isAbsolute(xdgCacheHome) ? xdgCacheHome : join(homePath, '.cache')
   return join(cacheHome, ...CACHE_DIR_SEGMENTS)
-}
-
-/**
- * Identity of the AppImage's *content*, used to key its extracted generation.
- *
- * Deliberately excludes ctime: it changes on any inode metadata write — `chmod +x` (which every
- * AppImage user is told to run), `chown`, an ACL or SELinux relabel, a backup restore — none of
- * which alter a byte of the payload. Including it re-keyed the cache on those, costing a full
- * ~519 MB re-extraction and a multi-second stall for nothing. An in-place content change moves
- * mtime and almost always size; a replacement moves the inode.
- */
-export function resolveAppImageCacheKey(appImagePath: string): string | null {
-  try {
-    const stats = statSync(appImagePath)
-    return digest(`${stats.dev}\0${stats.ino}\0${stats.size}\0${stats.mtimeMs}`)
-  } catch {
-    return null
-  }
 }
 
 export function resolveAppImageExtractedRoot(
@@ -164,12 +158,36 @@ export async function ensureAppImageExtractedRoot(
       )
       if (launcherPath === root.stableLauncherPath) {
         await rm(getAppImageActiveExtractionPath(root.rootPath), { force: true }).catch(() => {})
+        await recordAppImageSource(dirname(root.rootPath), installedPathOf(options))
         return root
       }
     }
     await cleanFailedEndpointPublication(root)
   }
   return null
+}
+
+/**
+ * Unpacks the generation without publishing it as the installed CLI launcher or pruning, so a
+ * desktop can prepare its daemon's copy, or an update's, without taking the `orca` command.
+ */
+export async function stageAppImageExtractedRoot(
+  options: AppImageExtractionOptions
+): Promise<AppImageExtractedRoot | null> {
+  const root = resolveAppImageExtractedRoot(options)
+  if (!root) {
+    return null
+  }
+  if (!isAppImageExtractionComplete(root)) {
+    await extractAppImageGeneration(options, root)
+    // Why: the marker fences a launcher publish, which a staged copy never makes.
+    await rm(getAppImageActiveExtractionPath(root.rootPath), { force: true }).catch(() => {})
+  }
+  if (!isAppImageExtractionComplete(root)) {
+    return null
+  }
+  await recordAppImageSource(dirname(root.rootPath), installedPathOf(options))
+  return root
 }
 
 async function cleanFailedEndpointPublication(root: AppImageExtractedRoot): Promise<void> {
@@ -213,25 +231,30 @@ function remainingExtractionMs(options: AppImageExtractionOptions): number {
     : Math.min(APPIMAGE_EXTRACTION_TIMEOUT_MS, options.deadlineAt - Date.now())
 }
 
-function digest(value: string): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, 24)
+/** Names the AppImage a namespace came from, so a server running from it notices that file being replaced. */
+async function recordAppImageSource(namespacePath: string, appImagePath: string): Promise<void> {
+  const recordPath = join(namespacePath, APPIMAGE_SOURCE_RECORD_NAME)
+  const temporaryPath = `${recordPath}.${process.pid}.tmp`
+  try {
+    await writeFile(temporaryPath, appImagePath, { mode: 0o600 })
+    await rename(temporaryPath, recordPath)
+  } catch {
+    // Best effort: without it a server only misses an in-place AppImage swap, as before.
+    await rm(temporaryPath, { force: true }).catch(() => {})
+  }
 }
 
-// Why a versioned key: builds before generation leases prune every generation in
-// digest(appImagePath) except their own, including one a newer build still runs from. They never
-// scan this namespace. Rolling back to such a build reopens that window for its own namespace only.
-const NAMESPACE_KEY_VERSION = 'generation-lease-v1'
-
 export function resolveAppImageNamespacePath(options: AppImageExtractionOptions): string {
-  return join(
-    resolveAppImageCacheRootPath(options),
-    digest(`${NAMESPACE_KEY_VERSION}\0${options.appImagePath}`)
-  )
+  return join(resolveAppImageCacheRootPath(options), appImageNamespaceKey(installedPathOf(options)))
+}
+
+function installedPathOf(options: AppImageExtractionOptions): string {
+  return options.installedAppImagePath ?? options.appImagePath
 }
 
 /** The namespace pre-lease builds used for this AppImage path. */
 export function resolveLegacyAppImageNamespacePath(options: AppImageExtractionOptions): string {
-  return join(resolveAppImageCacheRootPath(options), digest(options.appImagePath))
+  return join(resolveAppImageCacheRootPath(options), appImageCacheDigest(options.appImagePath))
 }
 
 export function resolveAppImageCacheRootPath(options: AppImageExtractionOptions): string {
@@ -291,14 +314,16 @@ async function renameRoot(sourcePath: string, destinationPath: string): Promise<
   }
 }
 
-async function runAppImageExtract(
+/** `niceProgram` runs the extraction under `nice -n 19`. */
+export async function runAppImageExtract(
   appImagePath: string,
   cwd: string,
-  timeoutMs: number
+  timeoutMs: number,
+  niceProgram?: string
 ): Promise<void> {
   const result = await runProcess({
-    program: appImagePath,
-    args: ['--appimage-extract'],
+    program: niceProgram ?? appImagePath,
+    args: niceProgram ? ['-n', '19', appImagePath, '--appimage-extract'] : ['--appimage-extract'],
     cwd,
     timeoutMs,
     maxOutputBytes: 1024 * 1024,

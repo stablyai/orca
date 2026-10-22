@@ -5,10 +5,7 @@ import type {
   AgentWorkingMode
 } from '../../agent-status-types'
 import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
-import {
-  reapUnconfirmedRestoredClaudeSubagents,
-  type ClaudeSubagentRoster
-} from '../../claude-subagent-roster'
+import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
@@ -211,7 +208,7 @@ export function seedClaudeSubagentRosterFromSnapshots(
       description: snapshot.description,
       // Why: the seed can be a phantom (child finished while Orca was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.
       backgroundTasksAuthoritative: true,
-      // Why: an idle parent never emits that list, so the inventory reap alone can strand the seed; mark it for the liveness reap below.
+      // Why: no child event in this runtime has confirmed the seed, so it must not count as live child work.
       restoredFromSnapshot: true
     })
   }
@@ -250,25 +247,6 @@ export function seedClaudeLeadTurnFromPersistedStatus(
       })
     }
   }
-}
-
-/** Reap this pane's unconfirmed restored seeds because no live agent process backs
- *  the pane any more (its PTY died while Orca was down, so no finish hook could
- *  arrive). Callers must have proven the pane is LOCAL-launched — a remote/SSH
- *  agent runs on the far host and can never appear in a local process index.
- *  Returns whether the roster changed. */
-export function reapRestoredClaudeSubagentsForDeadPane(
-  state: HookListenerState,
-  paneKey: string
-): boolean {
-  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  if (!roster || !reapUnconfirmedRestoredClaudeSubagents(roster)) {
-    return false
-  }
-  if (roster.size === 0) {
-    state.claudeSubagentRosterByPaneKey.delete(paneKey)
-  }
-  return true
 }
 
 /** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state. */

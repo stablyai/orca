@@ -149,7 +149,7 @@ describe('sleep-preserved parked exits (sole-owner sidecar)', () => {
     })
 
     expect(closeTerminalTab).not.toHaveBeenCalled()
-    expect(mockStoreState.clearRuntimePaneTitle).not.toHaveBeenCalledWith(TAB_ID, 1)
+    expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
     expect(startedWatcherDisposers[0]).toHaveBeenCalled()
     expect(entry.disposersByPtyId.size).toBe(0)
   })

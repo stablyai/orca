@@ -28,11 +28,8 @@ import { getDshManagedCommand, getDshRemoteManagedCommand } from '../dsh/hook-se
 import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import { getJcodeManagedCommand, getJcodeRemoteManagedCommand } from '../jcode/hook-settings'
 import { getKiroManagedCommand, getKiroRemoteManagedCommand } from '../kiro/hook-settings'
-import {
-  wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
-  wrapWindowsHookCommand
-} from './installer-utils'
+import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
+import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 import { REMOTE_MANAGED_HOOK_INSTALLER_AGENTS } from './remote-managed-hook-installers'
 import {
@@ -152,7 +149,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) =>
         process.platform === 'win32'
           ? ANTIGRAVITY_EVENTS.map((event) =>
-              wrapWindowsCmdHookCommand(
+              wrapWindowsBatchHookCommand(
                 path.replace('antigravity-hook.cmd', event.windowsWrapperFileName)
               )
             )

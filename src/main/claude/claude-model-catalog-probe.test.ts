@@ -101,6 +101,32 @@ describe('claude model catalog probe', () => {
     }
   )
 
+  // The rows `claude` 2.1.280 lists: what a chat naming no model runs, and its auto support.
+  it('marks the row the CLI default resolves to and keeps each row auto support', async () => {
+    const listing = `${JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'orca-model-discovery',
+        response: {
+          models: [
+            { value: 'default', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+            { value: 'opus[1m]', resolvedModel: 'claude-opus-5-5[1m]', supportsAutoMode: true },
+            { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', supportsAutoMode: null }
+          ]
+        }
+      }
+    })}\n`
+    const probe = createClaudeModelCatalogProbe({ ...probeDeps(), runListing: async () => listing })
+    const { models } = await probe(HOME('/homes/account-a'))
+    expect(
+      models.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
+    ).toEqual([
+      { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
+      { id: 'haiku', isDefault: false, supportsAutoMode: undefined }
+    ])
+  })
+
   it('pins no CLAUDE_CONFIG_DIR for the CLI default home, exactly as a session spawn does', async () => {
     const envs: (NodeJS.ProcessEnv | undefined)[] = []
     const probe = createClaudeModelCatalogProbe({
@@ -223,4 +249,18 @@ describe('Claude catalog availability', () => {
       rmSync(folder, { recursive: true, force: true })
     }
   })
+})
+
+// Only completed failed exits supply process facts to the shared retry policy.
+it.each([null, 0, 1])('enterprise retry uses the actual exit code %s', async (exitCode) => {
+  const stderr = 'You cannot use --strict-mcp-config when an enterprise MCP config is present'
+  const runListing = vi.fn(async () => LISTED)
+  runListing.mockRejectedValueOnce(
+    new AgentModelCatalogProbeError(stderr, 'exit', false, { exitCode, stdout: '', stderr })
+  )
+  const result = createClaudeModelCatalogProbe({ ...probeDeps(), runListing })(HOME('/homes/a'))
+  await (exitCode === 1
+    ? expect(result).resolves.toMatchObject({ models: [{ id: 'sonnet' }] })
+    : expect(result).rejects.toMatchObject({ failedExit: { exitCode } }))
+  expect(runListing).toHaveBeenCalledTimes(exitCode === 1 ? 2 : 1)
 })

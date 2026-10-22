@@ -19,6 +19,7 @@ import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult 
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
@@ -171,14 +172,19 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       if (!restoreInfo) {
         return null
       }
+      const requestedCwd = opts.cwd ?? resolveSafePtyDefaultCwd()
+      const recoveredCwd = normalizeWslColdRestoreCwd({
+        recoveredCwd: restoreInfo.cwd,
+        requestedCwd,
+        wslDistro: recoveryWslDistro
+      })
+      // Why: a recovered folder deleted since the crash yields to the request's already-resolved cwd.
       return {
         ...restoreInfo,
         cwd:
-          normalizeWslColdRestoreCwd({
-            recoveredCwd: restoreInfo.cwd,
-            requestedCwd: opts.cwd ?? resolveSafePtyDefaultCwd(),
-            wslDistro: recoveryWslDistro
-          }) ?? ''
+          recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
+            ? recoveredCwd
+            : requestedCwd
       }
     }
 

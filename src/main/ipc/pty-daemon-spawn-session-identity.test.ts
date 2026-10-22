@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openCodeClearPtyMock, piBuildPtyEnvMock, piClearPtyMock } from './pty-ipc-mock-registry'
+import { awaitExplicitPiOmpGuestReadiness } from '../agent-hooks/wsl-pi-omp-guest-readiness'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
+import {
+  buildJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY,
+  shouldInjectJcodeRuntimeDir
+} from '../../shared/jcode-runtime-dir'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -48,6 +54,9 @@ vi.mock('../codex/codex-pane-account-registry', () =>
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+vi.mock('../agent-hooks/wsl-pi-omp-guest-readiness', () => ({
+  awaitExplicitPiOmpGuestReadiness: vi.fn(async () => true)
+}))
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, recoveredAgentClaim, recoveredAgentSurface } = setupPtyIpcSuite()
@@ -320,6 +329,104 @@ describe('registerPtyHandlers', () => {
           { resetIncarnation: true }
         )
       })
+    })
+  })
+
+  // Pins main's host-env step (row 4, C5c-1): where the window (pty:spawn) and host (runtime
+  // controller) lanes build a daemon spawn's env differently today.
+  describe('daemon host env: where the lanes differ today', () => {
+    const { setupDaemonAdapter } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
+
+    function startLanes() {
+      const daemonSpawn = setupDaemonAdapter()
+      let controller: { spawn: (args: Record<string, unknown>) => Promise<unknown> } | undefined
+      const runtime = {
+        setPtyController: vi.fn((next) => {
+          controller = next
+        }),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      return {
+        daemonSpawn,
+        spawn: (lane: 'window' | 'host', request: Record<string, unknown>) =>
+          lane === 'window'
+            ? handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, ...request })
+            : controller!.spawn({ cols: 80, rows: 24, ...request })
+      }
+    }
+
+    // Only the id this request minted is swept; an operation id or caller id may name a live PTY.
+    it.each([
+      { lane: 'window', name: 'a minted id', request: {}, swept: true },
+      { lane: 'window', name: 'a caller id', request: { sessionId: 'caller-1' }, swept: false },
+      { lane: 'host', name: 'a minted id', request: {}, swept: true },
+      {
+        lane: 'host',
+        name: 'an operation id',
+        request: { worktreeId: 'wt-alpha', agentSessionCreateOperationId: 'a'.repeat(43) },
+        swept: false
+      },
+      {
+        lane: 'host',
+        name: 'a new caller id',
+        request: { sessionId: 'caller-1', isNewSession: true },
+        swept: false
+      }
+    ] as const)('$lane lane, $name: a failed env build sweeps per-PTY state: $swept', async (c) => {
+      const lanes = startLanes()
+      piBuildPtyEnvMock.mockImplementationOnce(() => {
+        throw new Error('env boom')
+      })
+
+      await expect(lanes.spawn(c.lane, { env: {}, ...c.request })).rejects.toThrow('env boom')
+      expect(lanes.daemonSpawn).not.toHaveBeenCalled()
+      expect(piClearPtyMock).toHaveBeenCalledTimes(c.swept ? 1 : 0)
+    })
+
+    // TEMPORARY (row 7): an empty id (the host trims a blank one to it) skips the host's host env; the
+    // window refuses it.
+    it('an empty session id: the window refuses it; the host spawns without host env', async () => {
+      const lanes = startLanes()
+      await expect(lanes.spawn('window', { env: {}, sessionId: '' })).rejects.toThrow(
+        /Invalid PTY session id/
+      )
+      await lanes.spawn('host', { env: {}, sessionId: '' })
+      expect(lanes.daemonSpawn.mock.calls.at(-1)![0].env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+    })
+
+    it('both daemon lanes run the WSL Pi/OMP guest readiness wait once', async () => {
+      const lanes = startLanes()
+      vi.mocked(awaitExplicitPiOmpGuestReadiness).mockClear()
+      await lanes.spawn('window', { env: {}, command: 'pi' })
+      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledOnce()
+      await lanes.spawn('host', { env: {}, command: 'pi' })
+      expect(vi.mocked(awaitExplicitPiOmpGuestReadiness)).toHaveBeenCalledTimes(2)
+    })
+
+    it('both daemon lanes stamp the pane identity and jcode dir from the spawn ids', async () => {
+      const lanes = startLanes()
+      const leafId = '11111111-2222-4333-8444-555555555555'
+      const paneKey = `tab-1:${leafId}`
+      const jcodeDir = shouldInjectJcodeRuntimeDir(process.platform)
+        ? buildJcodeRuntimeDir(paneKey)
+        : undefined
+      for (const lane of ['window', 'host'] as const) {
+        await lanes.spawn(lane, {
+          env: { ORCA_PANE_KEY: 'stale-tab:stale-leaf' },
+          tabId: 'tab-1',
+          leafId,
+          launchAgent: 'jcode'
+        })
+        const env = lanes.daemonSpawn.mock.calls.at(-1)![0].env
+        expect(env.ORCA_PANE_KEY).toBe(paneKey)
+        expect(env.ORCA_TAB_ID).toBe('tab-1')
+        expect(env[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(jcodeDir)
+      }
     })
   })
 })

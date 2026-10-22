@@ -8,4 +8,6 @@ export type TerminalModes = {
   alternateScreen: boolean
   /** Kitty keyboard protocol flags used only to reseed a warm daemon emulator. */
   kittyKeyboardFlags?: number
+  /** xterm modifyOtherKeys level (CSI > 4 ; n m); absent until the app first arms it. */
+  modifyOtherKeys?: number
 }

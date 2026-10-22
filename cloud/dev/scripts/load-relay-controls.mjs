@@ -33,9 +33,15 @@ import {
 import { createRelayLoadReaderEvidence } from './relay-load-reader-evidence.mjs'
 import { holdRelayLoadSplice, relayLoadSpliceReopenSummary } from './relay-load-splice-retry.mjs'
 import {
+  installRelayLoadResumeDevice,
+  relayLoadResumeSummary,
+  resumeRelayLoadPhoneOnce
+} from './relay-load-resume-phone.mjs'
+import {
   parseRelayLoadArguments,
   relayLoadPrincipalIndex,
   relayLoadReaderEvidenceError,
+  relayLoadResumePhoneIndexes,
   relayLoadSpliceIndexes,
   relayLoadSpliceProfile,
   relayLoadSpliceStartDelayMs
@@ -119,6 +125,7 @@ function report(state, final = false) {
       ...readerQueueEvidence.map(({ increaseBytes }) => increaseBytes)
     ),
     readerClosesByCode: state.readerClosesByCode,
+    resumePhones: relayLoadResumeSummary(state.resumeAttempts),
     // Every cell a control connected to, so a canary can prove its load reached the target.
     assignedCellOrigins: [...state.assignedCellOrigins].sort(),
     controlHeadroom: Math.max(0, state.controls - state.active.size),
@@ -251,6 +258,7 @@ const state = {
   spliceRetries: 0,
   spliceFailuresByReason: {},
   spliceFailedAt: new Map(),
+  resumeAttempts: [],
   spliceReopenGapsMs: [],
   slowReaderSplicesCompleted: 0,
   wedgedReaderSplicesClosed: 0,
@@ -410,6 +418,42 @@ for (let localIndex = 0; localIndex < config.controls; localIndex++) {
     config.controls === 1 ? 0 : Math.floor((localIndex / (config.controls - 1)) * config.rampMs)
   const offset = config.rampStartDelayMs + rampOffset
   initialConnections.push(delay(offset).then(() => connect(peer)))
+}
+function recordResumeAttempt(peer, attempt) {
+  state.resumeAttempts.push(attempt)
+  console.log(JSON.stringify({ event: 'relay_load_resume_attempt', index: peer.index, ...attempt }))
+}
+// A paired phone that reconnects every interval until the run stops; every attempt is a line.
+async function runResumePhone(peer, localIndex, endsAt) {
+  const relayDeviceId = `load-resume-device-${peer.index}`
+  // Spread the phones across one interval.
+  await delay(Math.floor((localIndex / Math.max(1, config.resumePhones)) * config.resumeIntervalMs))
+  let token
+  while (!state.stopping && Date.now() < endsAt) {
+    const startedAt = Date.now()
+    if (!token) {
+      try {
+        token = await installRelayLoadResumeDevice(peer, relayDeviceId)
+      } catch (error) {
+        recordResumeAttempt(peer, {
+          at: startedAt,
+          ok: false,
+          failure: 'install',
+          error: String(error.message).slice(0, 160)
+        })
+      }
+    } else {
+      recordResumeAttempt(peer, await resumeRelayLoadPhoneOnce(peer, { token, relayDeviceId }, {
+        holdMs: config.resumeHoldMs,
+        stopping: () => state.stopping,
+        delay
+      }))
+    }
+    await delay(Math.min(
+      Math.max(1_000, config.resumeIntervalMs - (Date.now() - startedAt)),
+      Math.max(0, endsAt - Date.now())
+    ))
+  }
 }
 const progressTimer = setInterval(() => report(state), 10_000)
 progressTimer.unref()
@@ -593,7 +637,11 @@ await runRelayLoadWithShutdown(async () => {
       })
     )
   )
-  await Promise.all([...splicePromises, delay(config.durationMs)])
+  const resumeEndsAt = Date.now() + config.durationMs
+  const resumePromises = relayLoadResumePhoneIndexes(config).map((index, localIndex) =>
+    runResumePhone(peers.get(index), localIndex, resumeEndsAt)
+  )
+  await Promise.all([...splicePromises, ...resumePromises, delay(config.durationMs)])
 }, async () => {
   state.stopping = true
   clearInterval(progressTimer)

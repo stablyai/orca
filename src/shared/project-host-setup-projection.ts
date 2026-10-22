@@ -59,6 +59,13 @@ export function getProjectProviderIdentity(
       }
     }
   }
+  return getGitRemoteProviderIdentity(repo)
+}
+
+/** The GitHub identity the folder's own primary remote names, ignoring stamped `upstream`. */
+export function getGitRemoteProviderIdentity(
+  repo: Pick<Repo, 'gitRemoteIdentity'>
+): ProjectProviderIdentity | null {
   // Why: the remote URL retains HTTP(S) endpoint ports that the canonical
   // key omits, so prefer it when reconstructing a host-qualified GHES identity.
   return (
@@ -104,6 +111,8 @@ export function isProjectRemoteIdentityPending(
 }
 
 const HOST_LOCAL_PROJECT_ID_PREFIX = 'repo:'
+/** A project keyed by its primary Git remote rather than a provider identity. */
+export const GIT_REMOTE_PROJECT_ID_PREFIX = 'git:'
 
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
@@ -114,7 +123,7 @@ export function getProjectIdentityKey(
   }
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   if (gitRemoteIdentity) {
-    return `git:${gitRemoteIdentity.canonicalKey}`
+    return `${GIT_REMOTE_PROJECT_ID_PREFIX}${gitRemoteIdentity.canonicalKey}`
   }
   return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
 }
@@ -197,7 +206,8 @@ function parseGitHubRemoteUrl(remoteUrl: string | undefined): ProjectProviderIde
   if (!trimmed) {
     return null
   }
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
+  // Why: SSH certificate orgs use `org-<id>@github.com:<owner>/<repo>`, so the user is not always `git`.
+  const sshMatch = trimmed.match(/^[^@\s/:]+@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
   if (sshMatch?.[1] && sshMatch[2] && sshMatch[3]) {
     return projectProviderIdentity(sshMatch[1], sshMatch[2], sshMatch[3])
   }

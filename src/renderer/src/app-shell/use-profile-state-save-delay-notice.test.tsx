@@ -62,9 +62,7 @@ it('restores a persistent warning from main and clears it on completion', async 
     {
       id: undefined,
       description: 'Further saves may be delayed while this operation finishes.',
-      duration: Infinity,
-      dismissible: false,
-      closeButton: false
+      duration: Infinity
     }
   )
   publish(false)

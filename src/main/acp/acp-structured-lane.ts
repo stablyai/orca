@@ -2,6 +2,7 @@
 // the shared assembler writes them. Events apply strictly in order; one the sink refuses under
 // backpressure holds every later one until the sink drains, so nothing is reordered or dropped.
 
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
   createProviderTimelineAssembler,
@@ -13,7 +14,6 @@ import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { AcpChildStops, AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
-import { acpSubagentChildWork, isAcpSubagentChildWorkEvent } from './acp-subagent-child-work'
 import {
   acpBackgroundTaskChildWork,
   isAcpBackgroundTaskChildWorkEvent
@@ -28,6 +28,10 @@ import type { AcpTextDrop } from './acp-turn-messages'
 
 /** How long a held event waits for the sink to say it drained before trying again on its own. */
 const BACKPRESSURE_RETRY_MS = 250
+
+/** Subagent evidence holds its place among the events: it reaches the host only after the journal
+ *  wrote what came before it. */
+type SubagentWork = { type: 'subagent.work'; evidence: AgentChildWorkEvidence[] }
 
 export type AcpStructuredLaneDeps = {
   sink: ProviderTimelineSink
@@ -52,11 +56,12 @@ export type AcpStructuredLaneDeps = {
 export class AcpStructuredLane {
   readonly translator: AcpTimelineTranslator
   private readonly assembler: ProviderTimelineAssembler
-  private readonly backlog: AcpTimelineEvent[] = []
+  private readonly backlog: (AcpTimelineEvent | SubagentWork)[] = []
   private readonly turnWatchers = new Set<() => void>()
   private readonly requestIdentity: ReturnType<typeof createLegacyProviderTimelineIdentityScheme>
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private failed = false
+  private ended = false
   private disposed = false
   private readonly logger: StructuredAgentSessionLogger
 
@@ -102,6 +107,10 @@ export class AcpStructuredLane {
       return
     }
     this.backlog.push(...events)
+    const evidence = this.translator.subagents.drainEvidence()
+    if (evidence.length > 0) {
+      this.backlog.push({ type: 'subagent.work', evidence })
+    }
     this.drain()
   }
 
@@ -165,11 +174,20 @@ export class AcpStructuredLane {
     this.clearRetry()
     while (this.backlog.length > 0 && !this.failed && !this.disposed) {
       const event = this.backlog[0]
+      if (event.type === 'subagent.work') {
+        if (!this.queueSubagentWork(event.evidence)) {
+          return
+        }
+        this.backlog.shift()
+        continue
+      }
       const { admission, dropped } = this.assembler.apply(
         event,
-        isAcpSubagentChildWorkEvent(event) || isAcpBackgroundTaskChildWorkEvent(event)
-          ? () => this.publishChildWork(event)
-          : undefined
+        event.type === 'session.ended'
+          ? () => this.publishSessionEnd()
+          : isAcpBackgroundTaskChildWorkEvent(event)
+            ? () => this.publishChildWork(event)
+            : undefined
       )
       if (dropped === 'stream-mismatch' && event.type === 'text.delta') {
         this.reportTextDrop({
@@ -182,17 +200,12 @@ export class AcpStructuredLane {
         })
       }
       if (!admission.accepted) {
-        if (admission.reason === 'backpressure') {
-          this.retryTimer = setTimeout(() => this.drain(), BACKPRESSURE_RETRY_MS)
-          return
-        }
-        this.failed = true
-        this.backlog.length = 0
-        this.notifyTurnWatchers()
-        this.deps.onFailed(admission.reason)
+        this.refused(admission.reason)
         return
       }
       this.backlog.shift()
+      // A subagent the provider reports after its session ended is no live child of it.
+      this.ended ||= event.type === 'session.ended' && dropped === undefined
       if (event.type === 'input.accepted') {
         this.deps.onInputAccepted(event.clientMessageId)
       }
@@ -203,14 +216,50 @@ export class AcpStructuredLane {
   private publishChildWork(event: AcpTimelineEvent): void {
     const observedAt = this.deps.now?.() ?? Date.now()
     const stops = this.deps.childStops?.()
-    const evidence = [
-      ...acpSubagentChildWork(event, observedAt, stops?.subagents === true),
-      ...acpBackgroundTaskChildWork(event, observedAt, stops?.backgroundTasks === true)
-    ]
-    if (!evidence.length) {
+    const evidence = acpBackgroundTaskChildWork(event, observedAt, stops?.backgroundTasks === true)
+    if (evidence.length > 0) {
+      this.publishEvidence(evidence)
+    }
+  }
+
+  private refused(reason: string): void {
+    if (reason === 'backpressure') {
+      this.retryTimer = setTimeout(() => this.drain(), BACKPRESSURE_RETRY_MS)
       return
     }
-    this.publishEvidence(evidence)
+    this.failed = true
+    this.backlog.length = 0
+    this.notifyTurnWatchers()
+    this.deps.onFailed(reason)
+  }
+
+  /** False when the sink held it back; it stays first in the backlog. */
+  private queueSubagentWork(evidence: AgentChildWorkEvidence[]): boolean {
+    if (this.ended) {
+      return true
+    }
+    const admission = this.deps.sink.tryAppendTransition({
+      steps: [],
+      lifecycle: false,
+      publish: false,
+      onPublished: () => this.publishSubagentWork(evidence)
+    })
+    if (!admission.accepted) {
+      this.refused(admission.reason)
+    }
+    return admission.accepted
+  }
+
+  /** A subagent's stop is offered only once the agent proved it honours one. */
+  private publishSubagentWork(evidence: AgentChildWorkEvidence[]): void {
+    const stoppable = this.deps.childStops?.().subagents === true
+    this.publishEvidence(
+      evidence.map((edge) =>
+        edge.type === 'live'
+          ? { ...edge, child: { ...edge.child, stoppable: stoppable && edge.child.stoppable } }
+          : edge
+      )
+    )
   }
 
   private publishEvidence(evidence: AgentChildWorkEvidence[]): void {
@@ -256,10 +305,11 @@ export class AcpStructuredLane {
 
 export function acpLaneChildWorkDelivery(
   deps: AcpStructuredSessionAdapterDeps,
-  sessionId: string
+  sessionId: string,
+  producer?: StructuredAgentSessionChildWorkProducer
 ): Pick<AcpStructuredLaneDeps, 'onChildWorkEvidence' | 'onChildWorkFailure'> {
   return {
-    onChildWorkEvidence: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence),
+    onChildWorkEvidence: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence, producer),
     onChildWorkFailure: (error) =>
       deps.logger?.error('publishing ACP child work failed', {
         scope: 'acp-child-work',

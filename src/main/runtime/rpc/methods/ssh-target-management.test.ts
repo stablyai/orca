@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   browseSshDirectory: vi.fn()
 }))
 
-vi.mock('../../../ssh/ssh-target-registry', () => ({
+vi.mock('../../../ssh/targets/ssh-target-registry', () => ({
   connectRegisteredSshTarget: vi.fn(),
   getRegisteredSshState: mocks.getRegisteredSshState,
   getRegisteredSshTargetMutations: () => mocks.mutations,
@@ -172,7 +172,11 @@ describe('server SSH target management RPC', () => {
 
     const response = await dispatch('ssh.addTarget', { target: validInput })
 
-    expect(mocks.mutations.add).toHaveBeenCalledWith({ ...validInput, source: 'manual' })
+    expect(mocks.mutations.add).toHaveBeenCalledWith({
+      ...validInput,
+      allowRemoteCliControl: false,
+      source: 'manual'
+    })
     expect(response).toMatchObject({
       ok: true,
       result: {
@@ -196,6 +200,33 @@ describe('server SSH target management RPC', () => {
     expect(updates.jumpHost).toBeUndefined()
     expect(response).toMatchObject({ ok: true })
     expectNoSecrets(response)
+  })
+
+  it('reads an omitted CLI control switch from an older client as off, and lists it explicitly', async () => {
+    mocks.mutations.update.mockReturnValue({ ...storedTarget, ...validInput })
+    await dispatch('ssh.updateTarget', { targetId: 'ssh-1', target: validInput })
+    expect(mocks.mutations.update.mock.calls[0][1]).toMatchObject({ allowRemoteCliControl: false })
+
+    await dispatch('ssh.updateTarget', {
+      targetId: 'ssh-1',
+      target: { ...validInput, allowRemoteCliControl: true }
+    })
+    expect(mocks.mutations.update.mock.calls[1][1]).toMatchObject({ allowRemoteCliControl: true })
+
+    mocks.listRegisteredSshTargets.mockReturnValue([
+      { ...validInput, id: 'absent' },
+      { ...validInput, id: 'off', allowRemoteCliControl: false }
+    ])
+    const listed = await dispatch('ssh.listEditableTargets')
+    expect(listed).toMatchObject({
+      ok: true,
+      result: {
+        targets: [
+          { id: 'absent', allowRemoteCliControl: true },
+          { id: 'off', allowRemoteCliControl: false }
+        ]
+      }
+    })
   })
 
   it('reports an unknown target instead of answering success', async () => {

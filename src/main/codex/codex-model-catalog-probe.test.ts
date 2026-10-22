@@ -80,11 +80,12 @@ describe('codex model catalog probe', () => {
         process.stdout.write(JSON.stringify({ id: message.id, result }) + '\n')
       })
     `
+    const configReadTimeouts: (number | null | undefined)[] = []
+    const configReadFailures: unknown[] = []
     const probe = createCodexModelCatalogProbe({
       resolveEnvironment: async () => ({ PATH: '/bin' }),
       resolveCommand: () => '/bin/codex',
-      // Real transport against a fake server; a session deadline shorter than the
-      // production one keeps the test fast while still outliving config/read's bound.
+      // Keep the real request timeout while checking the production budget below.
       runSession: (invocation, body) =>
         runCodexAppServerSession(
           {
@@ -94,10 +95,32 @@ describe('codex model catalog probe', () => {
             args: ['-e', server],
             timeoutMs: 6_000
           },
-          body
+          (rpc) =>
+            body({
+              ...rpc,
+              request: async (method, params, options) => {
+                if (method !== 'config/read') {
+                  return rpc.request(method, params, options)
+                }
+                configReadTimeouts.push(options?.timeoutMs)
+                try {
+                  return await rpc.request(method, params, { ...options, timeoutMs: 20 })
+                } catch (error) {
+                  configReadFailures.push(error)
+                  throw error
+                }
+              }
+            })
         )
     })
     const success = await probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    expect(configReadTimeouts).toEqual([3_000])
+    expect(configReadFailures).toEqual([
+      expect.objectContaining({
+        name: 'CodexAppServerTimeoutError',
+        message: 'codex app-server config/read exceeded 20ms'
+      })
+    ])
     expect(success.models.map((model) => ({ id: model.id, isDefault: model.isDefault }))).toEqual([
       { id: 'gpt-live', isDefault: true }
     ])

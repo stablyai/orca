@@ -1,6 +1,10 @@
 import { defineStreamingMethod } from '../../core'
 import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
-import { TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
+import {
+  TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
+  TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
+  TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
+} from '../../../../../shared/terminal-multiplex-flow-control'
 import { TerminalMultiplex } from '../../../../../shared/rpc-contract/terminal-stream-params'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
@@ -9,6 +13,7 @@ import { installMultiplexFlowControl } from './terminal-multiplex-flow-control'
 import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
+import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -40,6 +45,10 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         cursor: 0,
         streams: new Map<number, TerminalMultiplexStream>(),
         pendingPtyWaitControllers: new Map<number, Set<AbortController>>(),
+        ptyWaitAdmission: createMultiplexPtyWaitAdmission(
+          TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION,
+          TERMINAL_MULTIPLEX_MAX_QUEUED_PTY_WAITS_PER_CONNECTION
+        ),
         ackTotalInFlightBytes: 0,
         ackTotalWindowBytes: TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
         ackFlushCursorStreamId: null,

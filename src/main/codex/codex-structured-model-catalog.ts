@@ -171,7 +171,9 @@ export function composeCodexSessionOptionCatalog(
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(reportedTier !== undefined && input.current.serviceTier === undefined
         ? { confirmed: fastMode === undefined ? ['serviceTier'] : ['serviceTier', 'fastMode'] }
-        : {})
+        : {}),
+      // The listing's default stands in for a thread that reported no model of its own.
+      ...(input.current.model ? {} : { defaulted: ['model'] as const })
     }
   }
 }

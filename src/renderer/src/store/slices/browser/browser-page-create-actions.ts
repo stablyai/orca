@@ -14,6 +14,8 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { recordLayoutApply } from '@/runtime/layout-apply-send'
 
 export function createBrowserPageCreateActions(
   set: BrowserSliceSet,
@@ -85,6 +87,14 @@ export function createBrowserPageCreateActions(
         }
       })
 
+      // Switch point: main records the page under its id before any later command names it.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        recordLayoutApply(get(), workspace.worktreeId, {
+          type: 'openBrowserPage',
+          browserTabId: workspaceId,
+          pageId: page.id
+        })
+      }
       const nextWorkspace = findWorkspace(get().browserTabsByWorktree, workspaceId)
       if (nextWorkspace?.activePageId === page.id) {
         const item = Object.values(get().unifiedTabsByWorktree)
@@ -198,6 +208,14 @@ export function createBrowserPageCreateActions(
         return
       }
       const workspace = findWorkspace(get().browserTabsByWorktree, closedWorkspaceId)
+      // Switch point: main drops the page from its tab.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && workspace) {
+        recordLayoutApply(get(), workspace.worktreeId, {
+          type: 'closeBrowserPage',
+          browserTabId: closedWorkspaceId,
+          pageId
+        })
+      }
       const item = Object.values(get().unifiedTabsByWorktree)
         .flat()
         .find((entry) => entry.contentType === 'browser' && entry.entityId === closedWorkspaceId)

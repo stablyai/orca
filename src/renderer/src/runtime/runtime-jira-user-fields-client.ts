@@ -1,3 +1,4 @@
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
   JiraCreateIssueArgs,
   JiraCreateIssueResult,
@@ -39,10 +40,18 @@ export async function jiraListAssignableUsers(
   query?: string,
   siteId?: string | null
 ): Promise<JiraUser[]> {
+  return jiraListAssignableUsersForTarget(getJiraRuntimeTarget(settings), key, query, siteId)
+}
+
+export async function jiraListAssignableUsersForTarget(
+  target: RuntimeClientTarget,
+  key: string,
+  query?: string,
+  siteId?: string | null
+): Promise<JiraUser[]> {
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
-  const target = getJiraRuntimeTarget(settings)
   const args = { key, query, siteId: siteId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraUser[]>(target, 'jira.listAssignableUsers', args, { timeoutMs: 30_000 })

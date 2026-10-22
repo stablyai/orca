@@ -11,6 +11,12 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import {
+  noteAiVaultScanFileFound,
+  noteAiVaultScanWorkChanged,
+  openAiVaultScanSource
+} from './ai-vault-scan-progress'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
@@ -38,19 +44,30 @@ export async function discoverFiles(args: {
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
+  // A scoped scan walks every file this agent has, not only the newest `limit`.
+  keepScopeFiles?: boolean
+  signal?: AbortSignal
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
+  const scopeFiles: FileWithMtime[] | undefined = args.keepScopeFiles ? [] : undefined
   let refusedSidecar = false
   let paths: string[] = []
   let pending: Promise<SessionFileObservation[]> | null = null
   const native = !isWslUncPath(args.rootDir)
+  const source = { close: (): void => undefined }
 
   function consume(observations: readonly SessionFileObservation[]): void {
+    // A stat the cancel cut short is not an unreadable file; never record it.
+    throwIfAiVaultScanCancelled(args.signal)
     for (const observation of observations) {
       if ('issue' in observation) {
-        recordSessionScanIssue(args.issues, { agent: args.agent, ...observation.issue })
+        recordSessionScanIssue(args.issues, {
+          agent: args.agent,
+          ...observation.issue
+        })
         continue
       }
+      noteAiVaultScanFileFound(args.signal, args.agent, observation.file)
       if (observation.file.sidecar === 'unknown' && !refusedSidecar) {
         refusedSidecar = true
         recordSessionScanIssue(args.issues, {
@@ -61,8 +78,18 @@ export async function discoverFiles(args: {
       }
       try {
         const modifiedAt = new Date(observation.file.mtimeMs)
-        if (Number.isNaN(modifiedAt.getTime()) || files.wouldRetain(observation.file.mtimeMs)) {
-          files.add({ ...observation.file, modifiedAt: modifiedAt.toISOString() })
+        if (
+          Number.isNaN(modifiedAt.getTime()) ||
+          files.wouldRetain(observation.file.mtimeMs) ||
+          scopeFiles
+        ) {
+          const left = files.add({
+            ...observation.file,
+            modifiedAt: modifiedAt.toISOString()
+          })
+          if (left) {
+            scopeFiles?.push(left)
+          }
         }
       } catch (err) {
         recordSessionScanIssue(args.issues, {
@@ -72,6 +99,7 @@ export async function discoverFiles(args: {
         })
       }
     }
+    noteAiVaultScanWorkChanged(args.signal)
   }
 
   async function finishPending(): Promise<void> {
@@ -101,13 +129,29 @@ export async function discoverFiles(args: {
     const observations = await mapWithConcurrency(groups, NATIVE_DISCOVERY_CONCURRENCY, (group) =>
       withNativeDiscoverySlot(async () => {
         const files: SessionFileObservation[] = []
+        // Breaks rather than throws: `pending` is not awaited until the next
+        // batch, and `consume` reports the cancel when it is.
         for (const path of group) {
-          files.push(await observeSessionFile(path, args.contentDependencyPath))
+          if (args.signal?.aborted) {
+            break
+          }
+          files.push(await observeSessionFile(path, args.contentDependencyPath, args.signal))
         }
         return files
       })
     )
     return observations.flat()
+  }
+
+  async function readDirectory(path: string): Promise<Dirent[]> {
+    const entries = native
+      ? await withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan', args.signal))
+      : await wslGatedReaddir(path, 'scan', args.signal)
+    // A listed root is a history folder being walked; a missing one never shows.
+    if (path === args.rootDir) {
+      source.close = openAiVaultScanSource(args.signal, args.agent)
+    }
+    return entries
   }
 
   try {
@@ -120,16 +164,13 @@ export async function discoverFiles(args: {
           extensions: new Set(args.extensions),
           filePredicate: args.filePredicate,
           directoryPredicate: args.directoryPredicate,
-          ...(native
-            ? {
-                readDirectory: (path: string) =>
-                  withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan'))
-              }
-            : {})
+          signal: args.signal,
+          readDirectory
         },
         native
           ? queueNativeFile
-          : async (path) => consume([await observeSessionFile(path, args.contentDependencyPath)])
+          : async (path) =>
+              consume([await observeSessionFile(path, args.contentDependencyPath, args.signal)])
       )
     } finally {
       // One read batch overlaps directory traversal; commit in traversal order.
@@ -139,6 +180,7 @@ export async function discoverFiles(args: {
       }
     }
   } catch (err) {
+    throwIfAiVaultScanCancelled(args.signal)
     // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
     // stalled distro would otherwise reject the whole vault scan — including
     // every healthy local agent. Contain it to this root.
@@ -151,18 +193,21 @@ export async function discoverFiles(args: {
       message: err.message
     })
     return { agent: args.agent, rootDir: args.rootDir, files: [] }
+  } finally {
+    source.close()
   }
-  return { agent: args.agent, rootDir: args.rootDir, files: files.newest() }
+  return { agent: args.agent, rootDir: args.rootDir, files: files.newest(), scopeFiles }
 }
 
 async function observeSessionFile(
   path: string,
-  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
+  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>,
+  signal?: AbortSignal
 ): Promise<SessionFileObservation> {
   try {
-    const fileStat = await wslGatedStat(path, 'scan')
+    const fileStat = await wslGatedStat(path, 'scan', signal)
     const sidecarPath = contentDependencyPath ? await contentDependencyPath(path) : undefined
-    const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath) : 'none'
+    const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath, signal) : 'none'
     return {
       file: {
         path,
@@ -188,14 +233,19 @@ async function observeSessionFile(
  * a stalled WSL distro, EACCES, EIO — is `'unknown'`.
  */
 async function observeSessionSidecar(
-  filePath: string | undefined
+  filePath: string | undefined,
+  signal?: AbortSignal
 ): Promise<SessionSidecarObservation> {
   if (!filePath) {
     return 'none'
   }
   try {
-    const fileStat = await wslGatedStat(filePath, 'scan')
-    return { path: filePath, mtimeMs: fileStat.mtimeMs, sizeBytes: fileStat.size }
+    const fileStat = await wslGatedStat(filePath, 'scan', signal)
+    return {
+      path: filePath,
+      mtimeMs: fileStat.mtimeMs,
+      sizeBytes: fileStat.size
+    }
   } catch (error) {
     return isMissingSidecarError(error) ? 'none' : 'unknown'
   }
@@ -218,6 +268,7 @@ export type SessionFileWalkOptions = {
   // Return false to skip descending into a directory; depth 0 is a child of
   // rootDir, so pruned subtrees are never stat'd or parsed.
   directoryPredicate?: (name: string, depth: number) => boolean
+  strictErrors?: boolean
   readDirectory?: (dirPath: string) => Promise<Dirent[]>
   signal?: AbortSignal
 }
@@ -255,7 +306,10 @@ export async function forEachSessionFile(
     options.signal?.throwIfAborted()
     // Why: a gate refusal means the scan could not run, not that the tree is
     // empty — swallowing it would misreport a stalled distro as "no transcript".
-    if (error instanceof WslTranscriptFsError) {
+    if (
+      error instanceof WslTranscriptFsError ||
+      (options.strictErrors && !isMissingSidecarError(error))
+    ) {
       throw error
     }
     return

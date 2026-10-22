@@ -59,6 +59,55 @@ describe('StarNagService', () => {
     consoleInfoMock.mockRestore()
   })
 
+  it('preserves the counter and dismissal backoff after an app update', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service, emitAgentStarted, store, ui } = createHarness({
+      starNagAppVersion: '1.2.2',
+      starNagBaselineAgents: 10,
+      starNagNextThreshold: 70,
+      starNagDeferredUntil: 1
+    })
+
+    service.start()
+    expect(store.updateUI).not.toHaveBeenCalled()
+    expect(ui.starNagDeferredUntil).toBe(1)
+    emitAgentStarted(79)
+    await flushAsyncWork()
+    expect(window.webContents.send).not.toHaveBeenCalled()
+
+    emitAgentStarted(80)
+    await flushAsyncWork()
+    expect(window.webContents.send).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'shown', threshold: 70, agents_since_baseline: 70 })
+    )
+  })
+
+  it.each([undefined, null])('initializes a missing baseline (%s) only once', async (baseline) => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service, emitAgentStarted, ui } = createHarness({
+      starNagAppVersion: undefined,
+      starNagBaselineAgents: baseline,
+      starNagNextThreshold: undefined
+    })
+
+    service.start()
+    expect(ui.starNagBaselineAgents).toBe(45)
+    expect(ui.starNagNextThreshold).toBe(STAR_NAG_INITIAL_THRESHOLD)
+    service.stop()
+    mocks.appMock.getVersion.mockReturnValue('1.2.4')
+    service.start()
+    emitAgentStarted(79)
+    await flushAsyncWork()
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    emitAgentStarted(80)
+    await flushAsyncWork()
+    expect(window.webContents.send).toHaveBeenCalledTimes(1)
+  })
+
   it('logs a threshold exposure exactly once while the card remains visible', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
@@ -182,18 +231,32 @@ describe('StarNagService', () => {
     expect(ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
   })
 
-  it('does not show threshold prompts while the persisted cooldown is active', async () => {
+  it('preserves an active cooldown and backoff after an app update', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
-    const { service, emitAgentStarted } = createHarness({
+    const { service, emitAgentStarted, store, ui } = createHarness({
+      starNagAppVersion: '1.2.2',
+      starNagNextThreshold: 70,
       starNagDeferredUntil: Date.now() + 3 * 24 * 60 * 60 * 1000
     })
 
     service.start()
-    emitAgentStarted(45)
+    emitAgentStarted(80)
     await flushAsyncWork()
 
+    expect(checkOrcaStarredMock).not.toHaveBeenCalled()
     expect(window.webContents.send).not.toHaveBeenCalled()
     expect(trackMock).not.toHaveBeenCalled()
+    expect(store.updateUI).not.toHaveBeenCalled()
+
+    ui.starNagDeferredUntil = Date.now() - 1
+    emitAgentStarted(81)
+    await flushAsyncWork()
+
+    expect(window.webContents.send).toHaveBeenCalledTimes(1)
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
+      mode: 'gh',
+      surface: 'card'
+    })
   })
 })

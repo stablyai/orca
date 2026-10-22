@@ -6,7 +6,6 @@ import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
-import { createClaudeSessionStartup } from './claude-structured-session-startup-state'
 
 /** The session as published at spawn: nothing the CLI reports at init is assumed yet. */
 export function createClaudeSessionPublication(input: {
@@ -19,6 +18,7 @@ export function createClaudeSessionPublication(input: {
   acquisitionGeneration: string
   /** The record's chain already heads this provider session: the link resumes, never creates. */
   continuesChain: boolean
+  forkedFromKey?: string
   prompts: ClaudePromptRegistry
   translator: ClaudeJournalTranslator | null
   events: ClaudeSession['events']
@@ -27,18 +27,20 @@ export function createClaudeSessionPublication(input: {
   linkId?: string
   observedAt: number
   options?: ReadonlyMap<string, string>
+  initialization: ClaudeSession['initialization']
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
+  const link = claudeProviderHandleLink({
+    sessionId: input.providerSessionId,
+    leafUuid: input.leafUuid,
+    resumed: input.continuesChain,
+    ...(input.forkedFromKey ? { forkedFromKey: input.forkedFromKey } : {}),
+    fence: input.fence,
+    ...(input.linkId ? { linkId: input.linkId } : {}),
+    observedAt: input.observedAt
+  })
   return {
     acquisition: {
       process: input.process,
-      link: claudeProviderHandleLink({
-        sessionId: input.providerSessionId,
-        leafUuid: input.leafUuid,
-        resumed: input.continuesChain,
-        fence: input.fence,
-        ...(input.linkId ? { linkId: input.linkId } : {}),
-        observedAt: input.observedAt
-      }),
       acquisitionGeneration: input.acquisitionGeneration
     },
     session: {
@@ -63,13 +65,17 @@ export function createClaudeSessionPublication(input: {
       reportedOptions: {},
       reportedModelMutation: 0,
       confirmedOptions: new Set(),
-      restoreSkippedOptions: new Set(),
+      // Only choices carried in this child's launch can skip their first write.
+      appliedInputOptions: new Map(
+        [...(input.options ?? [])].filter(([key]) => key === 'model' || key === 'effort')
+      ),
       launchedModel: null,
       fastModeAtStart: false,
       translator: input.translator,
       events: input.events,
       ...(input.unbindReadingControl ? { unbindReadingControl: input.unbindReadingControl } : {}),
-      startup: createClaudeSessionStartup()
+      link,
+      initialization: input.initialization
     }
   }
 }

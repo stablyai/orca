@@ -13,9 +13,10 @@ import {
   resolveLegacyAppImageNamespacePath
 } from './appimage-extracted-root'
 import { pruneAppImageExtractedRoots } from './appimage-extraction-pruning'
+import { resolveGenerationStableLauncherPath } from './appimage-generation-stable-launcher'
 import { withAppImageRegistrationLock } from './appimage-registration-lock'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
-import { quoteShell } from './cli-install-path-format'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
 
 // Why: marks a dispatcher this function wrote so repeat serve starts overwrite
 // our own file idempotently but never clobber a user's own ~/.local/bin/orca.
@@ -79,7 +80,7 @@ export async function installLinuxBareOrcaDispatcher(
 
 /** Bare-`orca` script that execs the one Linux CLI launcher. */
 export function buildBareOrcaCliScript(launcherPath: string): string {
-  return `#!/usr/bin/env bash\nexec ${quoteShell(launcherPath)} "$@"\n`
+  return `#!/usr/bin/env bash\nexec ${quotePosixShellDoubleQuotedApostrophe(launcherPath)} "$@"\n`
 }
 
 /**
@@ -119,6 +120,10 @@ async function resolveStableLauncherPath(
       },
       { deadlineAt: options.appImageDeadlineAt }
     )
+  }
+  const stableLauncher = resolveGenerationStableLauncherPath(options.resourcesPath)
+  if (stableLauncher) {
+    return stableLauncher
   }
   const launcher = getBundledLauncherPath('linux', options.resourcesPath)
   // Why: getBundledLauncherPath only joins the path; guard existence so we never

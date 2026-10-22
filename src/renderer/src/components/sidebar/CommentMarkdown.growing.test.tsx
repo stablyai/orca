@@ -4,7 +4,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import CommentMarkdown from './CommentMarkdown'
 import type { DocumentCodeBlockRenderer } from './comment-markdown-element-renderers'
 
-afterEach(cleanup)
+// These fixtures exercise prose, links and images without rendering diagrams.
+const mocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
+
+vi.mock('./CommentMermaidBlock', () => ({ default: mocks.mermaid }))
+
+afterEach(() => {
+  cleanup()
+  expect(mocks.mermaid).not.toHaveBeenCalled()
+  mocks.mermaid.mockClear()
+})
 
 /** The rendered blocks, without the line breaks the renderer puts between them, which lay out as nothing. */
 function blocksOf(container: HTMLElement): string[] {

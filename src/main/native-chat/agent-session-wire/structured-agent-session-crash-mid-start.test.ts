@@ -11,6 +11,7 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../shared/agent-session-host-authority'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
 import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -22,6 +23,8 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
+  hostTestMessage,
+  hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
@@ -64,17 +67,23 @@ function openStore(generation: HostGeneration): Promise<AgentSessionRecordStore>
   return openTestAgentSessionRecordStore(generationRoot(generation))
 }
 
-/** A Codex adapter whose child spawns, reports its pid the way the real connection does, and then
- *  never answers the thread handshake: the host dies in that window. */
+/** A Codex adapter whose child spawns, reports its pid (the fake's `CHILD_PID`) the way the real
+ *  connection does, and then never answers the thread handshake: the host dies in that window. */
 function adapterThatNeverFinishesStarting(): StructuredAgentSessionAdapter {
   const codex = fakeCodex({
     'thread/start': () => new Promise(() => {}),
     'thread/resume': () => new Promise(() => {})
   })
+  return Object.assign(adapterFor(codex), { supportsCreate: () => true })
+}
+
+/** A Codex adapter whose child spawns and reports its pid, and whose acquire never answers: the
+ *  host dies with the child recorded and the create still unanswered. */
+function adapterThatNeverAnswersItsSpawn(): StructuredAgentSessionAdapter {
+  const codex = fakeCodex()
   const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
-    const connection = await codex.openConnection(launch, handlers)
-    await handlers.onSpawned?.(CHILD_PID)
-    return connection
+    await codex.openConnection(launch, handlers)
+    return new Promise(() => {})
   }
   return Object.assign(adapterFor({ ...codex, openConnection }), { supportsCreate: () => true })
 }
@@ -111,13 +120,15 @@ describe('a host that dies while its Codex child is starting', () => {
     const first = await openStore('dying')
     const dying = host('dying', first, adapterThatNeverFinishesStarting())
     void dying.attach(CALLER, hostTestAttachParams(null)).catch(() => {})
-    await vi.waitFor(() => expect(first.getRecord(SESSION)?.lease.ownerProcess).toBeTruthy())
-    // Durable before the handshake returned: the only record the next host will have.
-    expect(first.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'new-owner-proving',
-      ownerProcess: { pid: CHILD_PID, spawnToken: 'spawn-a' }
-    })
+    // Durable before the handshake returned, which never does: the only record the next host will
+    // have. The child is published at spawn, so its lease is already live while it starts.
+    await vi.waitFor(() =>
+      expect(first.getRecord(SESSION)?.lease).toMatchObject({
+        claimStatus: 'live',
+        handoffStage: null,
+        ownerProcess: { pid: CHILD_PID, spawnToken: 'spawn-a' }
+      })
+    )
 
     // The relaunch. The orphan is still alive until something stops it.
     let orphanAlive = true
@@ -167,10 +178,10 @@ describe('a create replayed after the host that ran it died', () => {
     AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 60_000
 
   it.each([
-    ['its child was recorded', adapterThatNeverFinishesStarting, 0],
+    ['its child was recorded', adapterThatNeverAnswersItsSpawn, 0],
     [
       'its child was recorded, and its operation row has since expired',
-      adapterThatNeverFinishesStarting,
+      adapterThatNeverAnswersItsSpawn,
       PAST_OPERATION_EXPIRY
     ],
     ['nothing was recorded beyond the reservation', adapterThatNeverSpawns, 0],
@@ -236,5 +247,56 @@ describe('a create replayed after the host that ran it died', () => {
       replayed: true
     })
     expect(restarted.connections).toHaveLength(1)
+  })
+})
+
+// The dying host answered the create at spawn, but the answer was lost on its way to the client.
+describe('a create answered before the host that ran it died', () => {
+  it('replays that answer with the chat at rest, and the next send starts the agent', async () => {
+    const params = hostTestAttachParams(null)
+    const first = await openStore('dying')
+    const dying = host('dying', first, adapterThatNeverFinishesStarting())
+    await expect(dying.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
+
+    const restarted = fakeCodex()
+    await crash(first)
+    const store = await openStore('relaunched')
+    const relaunched = host(
+      'relaunched',
+      store,
+      Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
+      { mintSpawnToken: () => 'spawn-b', probeOwner: async () => ({ outcome: 'pid-absent' }) }
+    )
+    await relaunched.restoreReadableSessions()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
+
+    // Before, `ownerUnproven`: the replay tried to start an agent from a reservation long gone.
+    await expect(relaunched.attach(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { sessionId: SESSION, fence: 2 }
+    })
+    expect(restarted.connections).toHaveLength(0)
+
+    const body = hostTestMessage('after the lost answer')
+    const sent = await relaunched.send(CALLER, {
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: 2,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.send',
+          sessionId: SESSION,
+          fields: { body }
+        })
+      },
+      body
+    })
+    expect(sent).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(restarted.connections).toHaveLength(1))
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      ownerProcess: { spawnToken: 'spawn-b' }
+    })
   })
 })

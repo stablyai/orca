@@ -13,7 +13,7 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-c
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
   nativeChatUserMessageFolds
-} from './native-chat-user-message-fold'
+} from '../../../../shared/native-chat-user-message-fold'
 
 /** What a row contains, reduced to the few numbers that drive its height. */
 export type NativeChatRowContentMetrics = {

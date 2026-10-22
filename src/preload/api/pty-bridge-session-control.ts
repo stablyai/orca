@@ -24,13 +24,13 @@ import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagn
 import type { AgentKind, LaunchSource, RequestKind } from '../../shared/telemetry-events'
 import type { PreloadApi } from '../api-types'
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
+import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
 
 export const ptySessionControlApi = {
   spawn: (opts: {
     cols: number
     rows: number
     cwd?: string
-    cwdFallback?: 'worktree'
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
@@ -58,6 +58,8 @@ export const ptySessionControlApi = {
     placement?: TerminalPanePlacement
     // Visible restores are `user-resume`, hidden ones `automatic-restore`; the fork gate validates.
     spawnIntent?: SpawnIntent
+    // The agent launch this pane's spawn starts; main admits and plans it.
+    agentLaunch?: AgentPaneLaunchRequest
     // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
@@ -120,6 +122,9 @@ export const ptySessionControlApi = {
   },
   ackColdRestore: (id: string): void => {
     ipcRenderer.send('pty:ackColdRestore', { id })
+  },
+  ackHiddenOutputRestoreApplied: (id: string, hiddenDropEpisode?: number): void => {
+    ipcRenderer.send('pty:hiddenOutputRestoreApplied', { id, hiddenDropEpisode })
   },
   ackData: (id: string, charCount: number, processedChars?: number): void => {
     ipcRenderer.send('pty:ackData', {

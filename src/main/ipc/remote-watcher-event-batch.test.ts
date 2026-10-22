@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { createRemoteWatcherEventBatch } from './remote-watcher-event-batch'
+import {
+  WATCH_BATCH_INTERVAL_MS,
+  WATCH_BATCH_LEADING_MS
+} from '../../shared/filesystem-watch-batch-window'
 
 const ROOT = '/home/u/repo'
 
@@ -8,8 +12,6 @@ function makeBatch(deliver: (events: FsChangeEvent[]) => void, maxEvents = 5_000
   return createRemoteWatcherEventBatch({
     rootPath: ROOT,
     deliver,
-    trailingMs: 150,
-    maxWaitMs: 500,
     maxEvents
   })
 }
@@ -23,31 +25,45 @@ describe('createRemoteWatcherEventBatch', () => {
     vi.useRealTimers()
   })
 
-  it('collapses many pushes inside the trailing window into one delivery', () => {
+  it('collapses pushes that arrive while a flush is armed into one delivery', () => {
     const deliver = vi.fn()
     const batch = makeBatch(deliver)
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 20; i++) {
       batch.push([{ kind: 'update', absolutePath: `${ROOT}/file-${i}.ts` }])
       vi.advanceTimersByTime(1)
     }
     expect(deliver).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(150)
+    vi.advanceTimersByTime(WATCH_BATCH_LEADING_MS - 20)
     expect(deliver).toHaveBeenCalledTimes(1)
-    expect(deliver.mock.calls[0][0]).toHaveLength(50)
+    expect(deliver.mock.calls[0][0]).toHaveLength(20)
   })
 
-  it('flushes at the max wait when pushes never stop', () => {
+  it('waits a full interval after a delivery before the next one', () => {
     const deliver = vi.fn()
     const batch = makeBatch(deliver)
 
-    for (let i = 0; i < 10; i++) {
+    batch.push([{ kind: 'update', absolutePath: `${ROOT}/a.ts` }])
+    vi.advanceTimersByTime(WATCH_BATCH_LEADING_MS)
+    expect(deliver).toHaveBeenCalledTimes(1)
+    batch.push([{ kind: 'update', absolutePath: `${ROOT}/b.ts` }])
+    vi.advanceTimersByTime(WATCH_BATCH_INTERVAL_MS - 1)
+    expect(deliver).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
+    expect(deliver).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps delivering on the interval when pushes never stop', () => {
+    const deliver = vi.fn()
+    const batch = makeBatch(deliver)
+
+    for (let i = 0; i < 100; i++) {
       batch.push([{ kind: 'update', absolutePath: `${ROOT}/a.ts` }])
-      vi.advanceTimersByTime(100)
+      vi.advanceTimersByTime(10)
     }
 
-    expect(deliver).toHaveBeenCalled()
+    expect(deliver.mock.calls.length).toBeGreaterThanOrEqual(9)
     expect(deliver.mock.calls[0][0]).toEqual([{ kind: 'update', absolutePath: `${ROOT}/a.ts` }])
   })
 
@@ -287,8 +303,6 @@ describe('createRemoteWatcherEventBatch', () => {
     const batch = createRemoteWatcherEventBatch({
       rootPath: 'C:\\Repo',
       deliver,
-      trailingMs: 150,
-      maxWaitMs: 500,
       maxEvents: 5_000
     })
 

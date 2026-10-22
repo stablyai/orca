@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { RouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
@@ -38,7 +38,7 @@ type Params = {
   busyActionRef: MutableRefObject<string | null>
   setBusyAction: (next: string | null) => void
   setActionError: (next: string | null) => void
-  setCommitMessage: (next: string) => void
+  setCommitMessage: Dispatch<SetStateAction<string>>
   setGeneratingMessage: (next: boolean) => void
   setShowActionSheet: (next: boolean) => void
   setLocalBranches: (next: RuntimeGitLocalBranches | null) => void
@@ -179,22 +179,6 @@ export function useMobileSourceControlRunners(params: Params) {
     await runGitAction('unstage-all', 'git.bulkUnstage', { filePaths: unstageablePaths })
   }, [runGitAction, unstageablePaths])
 
-  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
-    commitMessage,
-    stagedEntries,
-    sendGitRequest,
-    sendCommitRequest,
-    runGitSyncSteps,
-    runGitWorkflow,
-    loadStatus,
-    mountedRef,
-    busyActionRef,
-    setBusyAction,
-    setActionError,
-    setCommitMessage,
-    recordCommitFailure
-  })
-
   const { generateCommitMessage, cancelGenerateCommitMessage } = useMobileCommitMessageGeneration({
     client,
     worktreeId,
@@ -204,6 +188,23 @@ export function useMobileSourceControlRunners(params: Params) {
     setGeneratingMessage,
     setCommitMessage,
     setActionError
+  })
+
+  const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
+    commitMessage,
+    stagedEntries,
+    sendGitRequest,
+    sendCommitRequest,
+    cancelGenerateCommitMessage,
+    runGitSyncSteps,
+    runGitWorkflow,
+    loadStatus,
+    mountedRef,
+    busyActionRef,
+    setBusyAction,
+    setActionError,
+    setCommitMessage,
+    recordCommitFailure
   })
 
   const createPr = useMobileCreatePrRunner({
@@ -216,6 +217,7 @@ export function useMobileSourceControlRunners(params: Params) {
     mountedRef,
     runGitWorkflow,
     loadStatus,
+    cancelGenerateCommitMessage,
     setActionError,
     setCommitMessage,
     setShowActionSheet,

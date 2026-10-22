@@ -2,14 +2,17 @@ name: Cloud Verify
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - cloud/**
+      - src/packages/process-host/**
       - .github/workflows/cloud-*.yml
       - .github/actions/cloud-sql-rollout-lease/**
   push:
     branches: [main]
     paths:
       - cloud/**
+      - src/packages/process-host/**
       - .github/workflows/cloud-*.yml
       - .github/actions/cloud-sql-rollout-lease/**
 
@@ -27,6 +30,7 @@ defaults:
 jobs:
   # Public-repository hosted runners preserve Blacksmith allowance for macOS.
   security:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: Secret scan
     runs-on: ubuntu-22.04
     steps:
@@ -77,13 +81,15 @@ jobs:
   # Compiles the workspace. No Postgres service: nothing here reaches a
   # database, and the service container costs ~13s of startup.
   build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         with:
-          package_json_file: cloud/package.json
+          package-json-file: cloud/package.json
+          install: false
 
       - uses: actions/setup-node@v4
         with:
@@ -93,10 +99,11 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
 
-  # Runs in parallel with build. `pnpm test` compiles the one workspace
-  # package it needs through the relay pretest hook, so it does not depend on
+  # Runs in parallel with build. `pnpm test` compiles the workspace
+  # packages it needs through pretest hooks, so it does not depend on
   # `pnpm build` having run.
   test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-22.04
     services:
       postgres:
@@ -113,14 +120,16 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      ORCA_BACKGROUND_LAUNCH: '1'
       ORCA_PUSH_TEST_DATABASE_URL: postgres://relay_test:relay_test@127.0.0.1:5432/orca_relay_test
       ORCA_RELAY_TEST_POSTGRES_URL: postgres://relay_test:relay_test@127.0.0.1:5432/orca_relay_test
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v2
         with:
-          package_json_file: cloud/package.json
+          package-json-file: cloud/package.json
+          install: false
 
       - uses: actions/setup-node@v4
         with:
@@ -132,6 +141,7 @@ jobs:
   # Fork pull requests reach this job, so it never configures a backend, never plans, and never
   # holds a credential. Only the relay root ships here; foundation and apps stay private.
   terraform:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

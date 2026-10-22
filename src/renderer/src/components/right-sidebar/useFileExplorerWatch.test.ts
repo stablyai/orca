@@ -156,13 +156,14 @@ describe('getFileExplorerWatchRuntimeEnvironmentId', () => {
     }
   }
 
-  it('uses the active runtime for legacy unowned active worktrees', () => {
+  // Runtime rows are stamped as they land, so focus is never ownership evidence for an unowned row.
+  it('never routes an unowned worktree through the focused runtime', () => {
     expect(
       getFileExplorerWatchRuntimeEnvironmentId(
         makeState({ activeRuntimeEnvironmentId: 'focused-runtime' }),
         'wt-1'
       )
-    ).toBe('focused-runtime')
+    ).toBeNull()
   })
 
   it('uses the explicit runtime owner when another host is focused', () => {

@@ -7,7 +7,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } =
-  await import('./orca-runtime-adopt-terminal-orphans-from-inventory')
+  await import('./terminal/adoption/adopt-terminal-orphans-from-inventory')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

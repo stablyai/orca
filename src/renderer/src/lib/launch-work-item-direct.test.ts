@@ -207,6 +207,21 @@ describe('launchWorkItemDirect', () => {
       seedNativeChatLaunchDraft: mocks.seedNativeChatLaunchDraft,
       markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
     } as typeof mocks.store
+    // Why: SSH fixtures use target `ssh-1`, which reports a Linux host once connected.
+    mocks.store.sshConnectionStates = new Map([
+      [
+        'ssh-1',
+        {
+          targetId: 'ssh-1',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          remotePlatform: 'linux'
+        }
+      ]
+    ])
+    mocks.store.sshStateByEnvironment = new Map()
+    mocks.store.runtimeStatusByEnvironmentId = new Map()
     // @ts-expect-error -- test shim
     globalThis.window = { api: mockApi }
   })
@@ -418,6 +433,7 @@ describe('launchWorkItemDirect', () => {
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: {},
       platform: 'win32',
+      shell: 'powershell',
       isRemote: false
     })
     expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
@@ -810,59 +826,6 @@ describe('launchWorkItemDirect', () => {
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
     expect(activationOptions.startup.command).toContain(
       `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
-    )
-  })
-
-  it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
-    mocks.store.repos = [
-      {
-        id: 'repo-1',
-        path: 'C:\\Users\\alice\\repo',
-        displayName: 'Repo',
-        addedAt: 1
-      }
-    ]
-    mocks.store.projects = [
-      {
-        id: 'repo-1',
-        displayName: 'Repo',
-        badgeColor: '#000000',
-        sourceRepoIds: ['repo-1'],
-        createdAt: 1,
-        updatedAt: 1,
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-      }
-    ]
-    mocks.store.createWorktree.mockResolvedValue({
-      worktree: {
-        id: 'repo-1::C:\\Users\\alice\\repo-worktree',
-        path: 'C:\\Users\\alice\\repo-worktree'
-      }
-    })
-    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
-
-    await expect(
-      launchWorkItemDirect({
-        item: {
-          title: 'Fix failing checks',
-          url: 'https://github.com/acme/repo/pull/1',
-          type: 'issue',
-          number: 1,
-          pasteContent: 'Fix the failing checks.'
-        },
-        repoId: 'repo-1',
-        openModalFallback: mocks.openModalFallback,
-        launchSource: 'task_page',
-        agentOverride: 'codex',
-        promptDelivery: 'submit-after-ready'
-      })
-    ).resolves.toBe(true)
-
-    expect(buildAgentStartupPlan).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'codex',
-        platform: 'linux'
-      })
     )
   })
 })

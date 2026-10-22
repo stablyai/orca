@@ -254,7 +254,7 @@ describe('computeGitBranchLineTotal', () => {
     })
   })
 
-  it('omits the total when the ranged numstat fails instead of publishing untracked-only zeros', async () => {
+  it('invalidates the total when ranged numstat fails instead of publishing untracked-only zeros', async () => {
     const worktreePath = await createWorktreeDir({ 'new.txt': 'one\ntwo\n' })
 
     await expect(
@@ -267,7 +267,23 @@ describe('computeGitBranchLineTotal', () => {
           throw new Error('fatal: bad object')
         }
       })
-    ).resolves.toBeUndefined()
+    ).resolves.toBeNull()
+  })
+
+  it.each([
+    ['deleted base path', '0\t2\trecreated.txt\0'],
+    ['rename source', '0\t0\t\0recreated.txt\0renamed.txt\0']
+  ])('marks an untracked overlap with a %s unavailable', async (_case, numstat) => {
+    const worktreePath = await createWorktreeDir({ 'recreated.txt': 'one\nchanged\n' })
+    await expect(
+      computeGitBranchLineTotal({
+        worktreePath,
+        hostKey: 'native',
+        mergeBase: MERGE_BASE,
+        untrackedPaths: ['recreated.txt'],
+        runDiffNumstat: async () => numstat
+      })
+    ).resolves.toBeNull()
   })
 
   it('coalesces concurrent callers sharing a host, worktree and merge base into one exec', async () => {
@@ -484,7 +500,7 @@ describe('computeGitBranchLineTotal ranged-diff cooldown', () => {
     })
     const input = inputFor(runDiffNumstat)
 
-    await expect(computeGitBranchLineTotal(input)).resolves.toBeUndefined()
+    await expect(computeGitBranchLineTotal(input)).resolves.toBeNull()
     await expect(computeGitBranchLineTotal(input)).resolves.toBeUndefined()
     expect(runDiffNumstat).toHaveBeenCalledTimes(1)
   })

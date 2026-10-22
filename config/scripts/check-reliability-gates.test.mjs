@@ -227,6 +227,47 @@ describe('check-reliability-gates', () => {
     )
   })
 
+  it('preserves the executed command when evidence links to a renamed gate command', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const manifest = JSON.parse(validManifest())
+    manifest.gates[0].evidenceRuns[0].command = 'pnpm exec vitest run old-name.test.ts'
+    manifest.gates[0].evidenceRuns[0].currentCommand = manifest.gates[0].commands[0]
+    const root = makeTempRoot(JSON.stringify(manifest))
+
+    await expect(main(root)).resolves.toBe(0)
+  })
+
+  it.each(['', null, 42, 'pnpm exec vitest run unrelated.test.ts'])(
+    'rejects an invalid current command link: %s',
+    async (currentCommand) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const manifest = JSON.parse(validManifest())
+      manifest.gates[0].evidenceRuns[0].currentCommand = currentCommand
+      const root = makeTempRoot(JSON.stringify(manifest))
+
+      await expect(main(root)).resolves.toBe(1)
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('evidenceRuns[0].currentCommand')
+      )
+    }
+  )
+
+  it.each(['', null, 42])(
+    'requires the executed command even when a current command link exists: %s',
+    async (command) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const manifest = JSON.parse(validManifest())
+      manifest.gates[0].evidenceRuns[0].command = command
+      manifest.gates[0].evidenceRuns[0].currentCommand = manifest.gates[0].commands[0]
+      const root = makeTempRoot(JSON.stringify(manifest))
+
+      await expect(main(root)).resolves.toBe(1)
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('evidenceRuns[0].command must be a non-empty string')
+      )
+    }
+  )
+
   it('rejects protection none gates with evidence runs', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const root = makeTempRoot(

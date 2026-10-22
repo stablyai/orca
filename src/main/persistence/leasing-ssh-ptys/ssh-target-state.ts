@@ -6,7 +6,7 @@ import {
   MAX_REMOVED_SSH_TARGET_TOMBSTONES,
   capRemovedSshTargetTombstones,
   collectSshTargetRemovalEvidenceDependencies
-} from '../../ssh/removed-ssh-target-tombstone-retention'
+} from '../../ssh/targets/removed-ssh-target-tombstone-retention'
 import { normalizeSshTarget } from './ssh-normalization'
 import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import {

@@ -1,5 +1,9 @@
-import { SPLIT_TERMINAL_PANE_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
-import type { SplitTerminalPaneDetail } from '@/constants/terminal'
+import {
+  SET_TERMINAL_PANE_TITLE_EVENT,
+  SPLIT_TERMINAL_PANE_EVENT,
+  TOGGLE_TERMINAL_PANE_EXPAND_EVENT
+} from '@/constants/terminal'
+import type { SetTerminalPaneTitleDetail, SplitTerminalPaneDetail } from '@/constants/terminal'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { moveTerminalTabIntoPane } from './terminal-tab-into-pane-move'
@@ -36,6 +40,10 @@ export function createTerminalTabIntoPaneDeps(): TerminalTabIntoPaneDeps {
     dispatchToggleExpand: (tabId) =>
       window.dispatchEvent(
         new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, { detail: { tabId } })
+      ),
+    dispatchPaneTitle: (detail) =>
+      window.dispatchEvent(
+        new CustomEvent<SetTerminalPaneTitleDetail>(SET_TERMINAL_PANE_TITLE_EVENT, { detail })
       ),
     scheduleGraphSync: scheduleRuntimeGraphSync,
     resyncParkedWatchers: (worktreeId, targetTabId) => {

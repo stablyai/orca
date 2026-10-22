@@ -91,11 +91,11 @@ describe('a terminal tab whose tab-bar id and terminal id differ', () => {
     )
     const newLeaf = split.results[0]!.leafId!
     expect(split.results[0]!.paneKey).toBe(`term-agent:${newLeaf}`)
-    const record = loaded.layout.workspaces[GIT_KEY]!.leaves![leaf(3)]!.sleeping!
+    const record = loaded.layout.workspaces[GIT_KEY]!.leaves![leaf(3)]!.resume!
     const slept = build(
       context,
       [
-        { type: 'wake', workspace: GIT_KEY, paneKeys: [`term-agent:${leaf(3)}`] },
+        { type: 'wake', workspace: GIT_KEY, paneKeys: [`term-agent:${leaf(3)}`], recordOnly: true },
         {
           type: 'sleep',
           workspace: GIT_KEY,

@@ -22,6 +22,9 @@ export const ORCAD_MANAGED_STOP_REQUEST_FILE_FLAG = '--request-file'
 export const OrcadManagedStopInstanceSchema = z.object({
   pid: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   startedAtMs: z.number().finite().nonnegative().nullable(),
+  /** Linux only, copied from the lock; older clients omit it and older slots drop it. */
+  linuxStartTicks: z.string().regex(/^\d+$/).max(32).optional().catch(undefined),
+  bootId: z.string().min(1).max(255).optional().catch(undefined),
   nonce: z.string().min(1).max(255),
   lockPath: z.string().min(1).max(4096)
 })
@@ -40,6 +43,13 @@ export const OrcadManagedStopRequestSchema = z.object({
 
 export type OrcadManagedStopInstance = z.infer<typeof OrcadManagedStopInstanceSchema>
 export type OrcadManagedStopRequest = z.infer<typeof OrcadManagedStopRequestSchema>
+
+/** Equality key for a request; omits the incarnation, which an older client recovering it drops. */
+export function orcadManagedStopRequestKey(request: OrcadManagedStopRequest): string {
+  const { instance, ...rest } = OrcadManagedStopRequestSchema.parse(request)
+  const { linuxStartTicks: _ticks, bootId: _bootId, ...bound } = instance
+  return JSON.stringify({ ...rest, instance: bound })
+}
 /** What a stopping orcad must match before a managed request may stop it. */
 export type OrcadManagedStopContext = Omit<
   OrcadManagedStopRequest,

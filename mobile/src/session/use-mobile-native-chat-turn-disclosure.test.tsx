@@ -13,6 +13,17 @@ import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn
 
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
 
+/** A row the agent worked in, which a settled turn folds away. */
+function workRow(id: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'ls' }, state: 'completed' }],
+    timestamp: null,
+    source: 'transcript'
+  }
+}
+
 describe('useMobileNativeChatTurnDisclosure', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -50,6 +61,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(1_000)
+      // A turn offers its disclosure only when it folds something away, as on desktop.
       const messages: NativeChatMessage[] = [
         {
           id: 'u1',
@@ -57,7 +69,8 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           blocks: [{ type: 'text', text: 'go' }],
           timestamp: null,
           source: 'transcript'
-        }
+        },
+        workRow('a1')
       ]
       act(() => {
         renderer = create(createElement(Harness, { messages, enabled: true }))
@@ -97,7 +110,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(1_000)
-      const messages = [userMessage('u1')]
+      const messages = [userMessage('u1'), workRow('a1')]
       act(() => {
         renderer = create(createElement(Harness, { messages, enabled: true }))
       })
@@ -377,6 +390,19 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     })
   })
 
+  it('keeps a long message of yours open per message, so a recycled row reopens it', () => {
+    const messages = [userMessage('u1'), userMessage('u2')]
+    act(() => {
+      renderer = create(createElement(Harness, { messages, enabled: false }))
+    })
+    const before = renderer!.root.findByType(Result).props.disclosure
+    expect(before.resolveRow(0, messages[0]).userMessageOpen).toBe(false)
+    act(() => before.resolveRow(0, messages[0]).onToggleUserMessage('u1'))
+    const after = renderer!.root.findByType(Result).props.disclosure
+    expect(after.resolveRow(0, messages[0]).userMessageOpen).toBe(true)
+    expect(after.resolveRow(1, messages[1]).userMessageOpen).toBe(false)
+  })
+
   it('keeps at most the latest 128 turns expanded', () => {
     vi.useFakeTimers()
     try {
@@ -396,8 +422,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           renderer?.update(createElement(Harness, { messages, enabled: true, isWorking: false }))
         })
         const disclosureNow = renderer!.root.findByType(Result).props.disclosure
-        const row = disclosureNow.resolveRow(index, messages[index])
-        act(() => disclosureNow.onToggleTurn(row.turnKey))
+        act(() => disclosureNow.onToggleTurn(`u${index}`))
       }
 
       const disclosure = renderer!.root.findByType(Result).props.disclosure

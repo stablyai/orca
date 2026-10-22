@@ -27,6 +27,11 @@ import { argsLookIdempotent } from './gh-idempotency'
 import { applyGhHostToArgs, explicitGhHostname, explicitGhRepoHostname } from './gh-host-args'
 import { isGhBoundAccountError, resolveBoundGhExecEnv } from './gh-bound-account-env'
 import {
+  assertGhCallActive,
+  createGhLogicalLifetime,
+  type GhCaptureLifetimeHooks
+} from './gh-capture-lifetime'
+import {
   defaultGhExecTimeoutMs,
   isTransientGhError,
   sleep,
@@ -104,16 +109,18 @@ function assertGhRateLimitScopeAvailable(
  */
 export async function ghExecFileAsync(
   args: string[],
-  options: GhExecOptions = {}
+  options: GhExecOptions = {},
+  lifetimeHooks?: GhCaptureLifetimeHooks
 ): Promise<{ stdout: string; stderr: string }> {
-  const { stdout, stderr } = await ghExecFileWithScopeAsync(args, options)
+  const { stdout, stderr } = await ghExecFileWithScopeAsync(args, options, lifetimeHooks)
   return { stdout, stderr }
 }
 
 /** Includes the successful runtime's breaker scope after any host/WSL fallback. */
 export async function ghExecFileWithScopeAsync(
   args: string[],
-  options: GhExecOptions = {}
+  options: GhExecOptions = {},
+  lifetimeHooks?: GhCaptureLifetimeHooks
 ): Promise<{ stdout: string; stderr: string; rateLimitScope: string }> {
   // Why: retry safety must reflect the original call even when fallbacks replace the resolved command.
   const idempotent = options.idempotent ?? argsLookIdempotent(args)
@@ -135,7 +142,7 @@ export async function ghExecFileWithScopeAsync(
     command.wsl ? `wsl:${command.wsl.distro}` : 'native'
   // Why: unbound calls must reach the spawn in the same tick — callers that abort
   // synchronously would otherwise never get a child to kill.
-  const ensureBoundEnv = (): Promise<void> | null => {
+  const ensureBoundEnv = (hooks?: GhCaptureLifetimeHooks): Promise<void> | null => {
     const key = boundEnvKeyFor(resolved)
     if (boundEnvResolvedKey === key) {
       return null
@@ -145,7 +152,7 @@ export async function ghExecFileWithScopeAsync(
       boundEnvResolvedKey = key
       return null
     }
-    return resolveBoundGhExecEnv(options, resolved, args).then((env) => {
+    return resolveBoundGhExecEnv(options, resolved, args, hooks).then((env) => {
       boundEnv = env
       boundEnvResolvedKey = key
     })
@@ -172,12 +179,22 @@ export async function ghExecFileWithScopeAsync(
     return true
   }
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
+    const lifetime = lifetimeHooks ? createGhLogicalLifetime(lifetimeHooks) : null
+    if (lifetime) {
+      lifetimeHooks?.onTerminationPending(lifetime.terminated)
+    }
     try {
-      const boundEnvReady = ensureBoundEnv()
+      if (lifetime) {
+        assertGhCallActive(options.signal)
+      }
+      const boundEnvReady = ensureBoundEnv(lifetime?.hooks)
       if (boundEnvReady) {
         await boundEnvReady
         // Why: the breaker may have tripped while the token resolved.
         assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitExempt)
+      }
+      if (lifetime) {
+        await lifetime.waitPending(options.signal)
       }
       // Why to-termination and not execFileCapture: `gh` on PATH is routinely a
       // shim (mise, asdf, volta, a hand-written wrapper), so the deadline below
@@ -195,10 +212,14 @@ export async function ghExecFileWithScopeAsync(
           timeout: timeoutMs,
           env: nonInteractiveGhEnv(boundEnv ?? options.env),
           signal: options.signal,
+          onChildTerminated: lifetime?.capture(),
           onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
         },
         resolved.termination
       )
+      if (lifetime) {
+        await lifetime.waitPending(options.signal)
+      }
       return {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Capture decodes stdout with the requested string encoding above.
         stdout: stdout as string,
@@ -207,6 +228,25 @@ export async function ghExecFileWithScopeAsync(
         rateLimitScope: ghRateLimitScope(args, options, resolved)
       }
     } catch (err) {
+      if (lifetime) {
+        try {
+          await lifetime.waitPending(options.signal)
+        } catch (waitError) {
+          if (!options.signal?.aborted) {
+            throw err
+          }
+          if (
+            waitError instanceof Error &&
+            err &&
+            typeof err === 'object' &&
+            'outputTruncated' in err &&
+            typeof err.outputTruncated === 'boolean'
+          ) {
+            Object.assign(waitError, { outputTruncated: err.outputTruncated })
+          }
+          throw waitError
+        }
+      }
       lastError = err
       if (isGhBoundAccountError(err)) {
         if (tryHostFallbackAfterBoundResolveFailure(err)) {
@@ -260,6 +300,8 @@ export async function ghExecFileWithScopeAsync(
         continue
       }
       throw err
+    } finally {
+      lifetime?.seal()
     }
   }
   // Unreachable: the loop either returns or throws. Here for TS exhaustiveness.

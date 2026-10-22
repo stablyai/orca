@@ -15,12 +15,26 @@ import type {
 /**
  * Storage identity of the connection a page's partition is derived from.
  *
- * The legacy half names the partition an older build already populated, so a client
- * upgrade adopts that jar instead of deriving an empty one.
+ * The superseded identities name partitions an older build already populated, so a client
+ * upgrade adopts that jar instead of deriving an empty one: `pairingAuthorityConnectionIdentity`
+ * is the pairing-revision identity (equal to the current one for hosts that never re-pair in
+ * place), and `legacyAuthorityConnectionIdentity` the older per-process one.
  */
 export type BrowserClientPageAuthorityIdentity = {
   authorityConnectionIdentity: string
+  pairingAuthorityConnectionIdentity: string
   legacyAuthorityConnectionIdentity: string
+}
+
+// Why pick: transition inputs carry the whole host start, and only the identity belongs here.
+export function pageAuthorityIdentity(
+  input: BrowserClientPageAuthorityIdentity
+): BrowserClientPageAuthorityIdentity {
+  return {
+    authorityConnectionIdentity: input.authorityConnectionIdentity,
+    pairingAuthorityConnectionIdentity: input.pairingAuthorityConnectionIdentity,
+    legacyAuthorityConnectionIdentity: input.legacyAuthorityConnectionIdentity
+  }
 }
 
 export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuthorityIdentity & {
@@ -47,6 +61,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
     signal: AbortSignal
   ): Promise<unknown>
   retireAutomation(input: {
+    keepGuestBinding?: boolean
     browserPageId: string
     pageHostGeneration: number
     registration: BrowserClientRetainedPage['registration']

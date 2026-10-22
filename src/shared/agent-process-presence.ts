@@ -12,6 +12,10 @@ export type AgentProcessPresence = {
   agent: AgentType
   process?: AgentProcessIdentity
   ended?: true
+  /** This host verifies process ownership before accepting a different provider. */
+  sessionOwner?: true
+  /** Positive host observation of suspension, distinct from an unavailable process read. */
+  suspended?: true
 }
 
 export type AgentProcessVerdict = 'live' | 'unverifiable' | 'exited'
@@ -61,10 +65,28 @@ export function readAgentProcessPresence(value: unknown): AgentProcessPresence |
   return {
     agent: value.agent,
     ...(process ? { process } : {}),
-    ...('ended' in value && value.ended === true ? { ended: true as const } : {})
+    ...('ended' in value && value.ended === true ? { ended: true as const } : {}),
+    ...('sessionOwner' in value && value.sessionOwner === true
+      ? { sessionOwner: true as const }
+      : {}),
+    ...('suspended' in value && value.suspended === true ? { suspended: true as const } : {})
   }
 }
 
 export function isSameAgentProcess(a: AgentProcessIdentity, b: AgentProcessIdentity): boolean {
   return a.pid === b.pid && a.platform === b.platform && a.startTime === b.startTime
+}
+
+export function hasOtherAgentProcessOwner(
+  presence: AgentProcessPresence | undefined,
+  incoming: string
+): boolean {
+  return Boolean(
+    presence?.process &&
+    presence.sessionOwner &&
+    !presence.ended &&
+    !presence.suspended &&
+    presence.agent !== incoming &&
+    presence.agent !== 'unknown'
+  )
 }

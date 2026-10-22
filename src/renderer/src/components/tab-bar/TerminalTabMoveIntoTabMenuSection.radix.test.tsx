@@ -21,6 +21,9 @@ import {
 import type { TerminalTabIntoPaneState } from '../terminal-pane/terminal-tab-into-pane-eligibility'
 import { TerminalTabMoveIntoTabMenuSection } from './TerminalTabMoveIntoTabMenuSection'
 
+// The window-applied join under test exists only while the layout-owner switch is off.
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const moveMock = vi.hoisted(() => vi.fn())

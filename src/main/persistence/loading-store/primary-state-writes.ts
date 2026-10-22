@@ -13,7 +13,8 @@ import { writeToDiskSync } from './primary-state-write-sync'
 import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from './store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
-import { notifyWorkspaceSessionWritten } from './workspace-session-write-listeners'
+import { notifyWorkspaceSessionOperationEnded } from './workspace-session-write-listeners'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {
@@ -62,8 +63,15 @@ export class PrimaryStateWriteOperations {
         runtime.profileStateAuthority.assertWritable()
       }
       let mutation: DurableProfileStateMutation<T>
+      if (runtime.uncommittedDurableMutations === 0) {
+        runtime.committedLeafHolders = runtime.captureCommittedLeafHolders?.() ?? null
+      }
       try {
-        mutation = this.runAdmittedMutationCallback('mutate', mutate)
+        mutation = this.runAdmittedMutationCallback(
+          'mutate',
+          mutate,
+          (result) => result.writtenHostIds
+        )
       } catch (error) {
         await stopAfterFailedPrimaryStateMutation(runtime, error)
         throw error
@@ -77,6 +85,7 @@ export class PrimaryStateWriteOperations {
       }
       runtime.writeGeneration++
       const requiredGeneration = runtime.writeGeneration
+      runtime.uncommittedDurableMutations++
       try {
         const captured = runtime.profileStateAuthority?.asynchronous
           ? await writeToDiskAsync(this)
@@ -98,21 +107,33 @@ export class PrimaryStateWriteOperations {
           }
         }
         throw error
+      } finally {
+        runtime.uncommittedDurableMutations--
       }
       return mutation.value
     })
   }
 
-  private runAdmittedMutationCallback<T>(phase: 'mutate' | 'rollback', callback: () => T): T {
+  private runAdmittedMutationCallback<T>(
+    phase: 'mutate' | 'rollback',
+    callback: () => T,
+    /** The partitions the callback declared it wrote; a rollback's are any. */
+    writtenHostIdsOf: (result: T) => readonly ExecutionHostId[] | undefined = () => undefined
+  ): T {
     const { runtime } = this[primaryStateWriteOperationsContext]
     // Finalization drains admitted mutations; the disk wait must not admit new snapshots.
     runtime.durableMutationPhase = phase
+    let result: T | undefined
     try {
-      return callback()
+      result = callback()
+      return result
     } finally {
       runtime.durableMutationPhase = null
       // Durable writers may edit sessions without scheduling a save; a rollback republishes.
-      notifyWorkspaceSessionWritten(runtime)
+      notifyWorkspaceSessionOperationEnded(
+        runtime,
+        result === undefined ? null : (writtenHostIdsOf(result) ?? null)
+      )
     }
   }
 

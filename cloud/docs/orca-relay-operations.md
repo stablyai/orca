@@ -241,7 +241,22 @@ Every later change must use the selector CAS.
 Deploy the selector-compatible director before cutover. Blue/green deployment
 creates a separate `selector-rollback` revision at minimum instances zero,
 promotes a second compatible revision, and retains older revisions through the
-stabilization window. Cutover removes every older revision and refuses to
+stabilization window. With a floor above one, promotion first moves 20% of
+traffic and waits (up to six minutes) until every floor instance has served a
+request, because Cloud Run routes new floor instances only ~100 s after they
+start; a timeout returns all traffic to the previous serving revision. Each
+revision carries its own instance maximum. A service-level cap would be split by
+traffic share (a 20% candidate under a cap of 5 gets one instance), so the deploy
+resets any service cap below two full revisions to Cloud Run's default first.
+
+If the deploy job is cancelled or loses its runner during that wait, the 20/80
+split stays in place, and both the next deploy and the rehome workflow refuse a
+director without one 100% revision. Restore it with
+`gcloud run services update-traffic orca-cloud-relay --project onorca-cloud --region us-central1 --to-revisions=<previous serving revision>=100`
+(the revision that held 100% before the deploy). A timed-out deploy restores
+that itself but removes every tag, including `selector-rollback`, so the rehome
+workflow's rollback-digest check refuses (`rollback tag missing`) until the next
+successful director deploy. Cutover removes every older revision and refuses to
 proceed unless only the compatible active and rollback revisions remain.
 
 First inspect the current generation and exact membership:

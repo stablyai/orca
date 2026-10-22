@@ -153,7 +153,7 @@ function stripRows(
         childViews={sent}
         childRowContext={childRowContext}
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         indicatorActive
@@ -583,7 +583,7 @@ describe('the chat strip from views', () => {
           settledTasks={[]}
           childViews={children}
           supportsTaskStop
-          supportsStopAll
+          offersStopAll={false}
           stoppingTaskIds={new Set(['task-shell'])}
           stoppingAll={false}
           indicatorActive

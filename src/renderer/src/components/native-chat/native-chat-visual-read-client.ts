@@ -18,7 +18,8 @@ export type NativeChatVisualIdentity = {
   file: string
 }
 
-export type NativeChatVisualDocument = { revision: string; html: string }
+/** `path`: the visual's absolute path on the chat's host, which opens it like any file there. */
+export type NativeChatVisualDocument = { revision: string; html: string; path: string }
 
 /** `unavailable`: the host could not answer (contact lost, older host); never a verdict on the file. */
 export type NativeChatVisualReadOutcome =
@@ -80,10 +81,14 @@ function interpret(
       }
       return { ok: false, reason: 'unavailable' }
     }
-    if (typeof result.html !== 'string' || typeof result.revision !== 'string') {
+    if (
+      typeof result.html !== 'string' ||
+      typeof result.revision !== 'string' ||
+      typeof result.path !== 'string'
+    ) {
       return { ok: false, reason: 'unavailable' }
     }
-    const document = { revision: result.revision, html: result.html }
+    const document = { revision: result.revision, html: result.html, path: result.path }
     remember(key, document)
     return { ok: true, document }
   }
@@ -129,17 +134,25 @@ async function readOnce(
   }
 }
 
-/** One read per visual at a time; concurrent mounts of the same visual share it. */
+/**
+ * One read per visual at a time; concurrent mounts of the same visual share it. `fresh` waits out
+ * a read already in flight and then starts its own, so a read after a save never answers with
+ * bytes from before it.
+ */
 export function readNativeChatVisual(
-  identity: NativeChatVisualIdentity
+  identity: NativeChatVisualIdentity,
+  options?: { fresh?: boolean }
 ): Promise<NativeChatVisualReadOutcome> {
   const key = nativeChatVisualKey(identity)
   const pending = inFlight.get(key)
-  if (pending) {
+  if (pending && !options?.fresh) {
     return pending
   }
-  const read = readOnce(key, identity).finally(() => {
-    inFlight.delete(key)
+  const start = (): Promise<NativeChatVisualReadOutcome> => readOnce(key, identity)
+  const read = (pending ? pending.then(start) : start()).finally(() => {
+    if (inFlight.get(key) === read) {
+      inFlight.delete(key)
+    }
   })
   inFlight.set(key, read)
   return read

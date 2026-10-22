@@ -10,7 +10,9 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { getWorkspaceEditorSshHost } from '@/lib/workspace-editor-ssh-target'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
@@ -19,8 +21,11 @@ import {
   getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
-import { getRouteForLocalPathOpenOwner, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getRouteForLocalPathOpenOwner,
+  isRevealOrEditorOpenBlocked
+} from '@/lib/local-path-open-guard'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
   getOpenInEntryAvailability,
@@ -58,13 +63,16 @@ export function SourceControlEntryContextMenu({
   // Why: a repo can belong to a runtime other than the focused one, and the OS reveal
   // cannot tell that host's path from a local one of the same name.
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, currentWorktreeId)
+    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, currentWorktreeId)
   )
   const revealOwner = useAppStore((s) =>
     getWorkspaceFileRevealOwner(s, currentWorktreeId, { connectionId, runtimeEnvironmentId })
   )
-  const revealBlocked = isLocalPathOpenBlocked(revealOwner)
+  const revealBlocked = isRevealOrEditorOpenBlocked(revealOwner)
   const openInRoute = useMemo(() => getRouteForLocalPathOpenOwner(revealOwner), [revealOwner])
+  const runtimeSshHost = useAppStore(
+    useShallow((s) => getWorkspaceEditorSshHost(s, { workspaceId: currentWorktreeId }))
+  )
 
   const handleCopyPath = useCallback(() => {
     if (!absolutePath) {
@@ -102,10 +110,11 @@ export function SourceControlEntryContextMenu({
         target: 'external-editor',
         worktreePath: absolutePath,
         ...openInRoute,
+        workspace: { workspaceId: currentWorktreeId },
         command
       })
     },
-    [absolutePath, openInRoute]
+    [absolutePath, currentWorktreeId, openInRoute]
   )
 
   return (
@@ -143,7 +152,8 @@ export function SourceControlEntryContextMenu({
                 { ...application, target: 'external-editor' },
                 openInRoute.connectionId,
                 openInRoute.runtimeEnvironmentId,
-                openInRoute.ownerUnresolved
+                openInRoute.ownerUnresolved,
+                runtimeSshHost
               )
               return (
                 <ContextMenuItem

@@ -413,7 +413,9 @@ describe('orca skills CLI', () => {
     )
   })
 
-  it('runs npx without --global for --local', async () => {
+  it('runs npx without --global for --local, with git messages forced to English', async () => {
+    // A translated git error stops the skills CLI falling back to fetching the commit (#28914).
+    vi.stubEnv('LC_ALL', 'de_DE.UTF-8')
     const child = createFakeChild()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
@@ -426,7 +428,7 @@ describe('orca skills CLI', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       'npx',
       [...PINNED_ADD, '--skill', 'alpha', ...DETECTED_AGENTS, '-y'],
-      expect.objectContaining({ stdio: 'inherit' })
+      expect.objectContaining({ stdio: 'inherit', env: expect.objectContaining({ LC_ALL: 'C' }) })
     )
   })
 

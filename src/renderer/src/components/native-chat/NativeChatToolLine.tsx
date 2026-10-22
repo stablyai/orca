@@ -23,7 +23,7 @@ import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
 import { diffFromText, diffFromToolCall } from './native-chat-diff'
 import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
-import { truncateToolDetail } from './native-chat-tool-summary'
+import { NativeChatToolOutput } from './NativeChatToolOutput'
 
 const NO_SEARCH_RESULTS: NonNullable<NativeChatToolCallBlock['webSearchResults']> = []
 const TARGET_CLASS =
@@ -68,17 +68,7 @@ function ToolLineDetail({
           )}
         </pre>
       ) : null}
-      {body ? (
-        <pre
-          data-native-chat-code-content
-          className={cn(
-            'max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-chat-code-border bg-chat-code-surface p-2 font-mono text-chat-code scrollbar-sleek',
-            body.isError ? 'text-destructive' : 'text-chat-foreground'
-          )}
-        >
-          {truncateToolDetail(body.output)}
-        </pre>
-      ) : null}
+      {body ? <NativeChatToolOutput body={body} /> : null}
     </div>
   )
 }

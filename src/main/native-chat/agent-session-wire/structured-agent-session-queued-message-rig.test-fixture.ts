@@ -11,11 +11,15 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import {
+  StructuredAgentSessionHost,
+  type StructuredAgentSessionHostDeps
+} from './structured-agent-session-host'
 import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
 import {
   HOST_TEST_NOW as NOW,
@@ -35,7 +39,12 @@ import {
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
-type RigSendOptions = { internal?: true; from?: AgentMessageSource }
+type RigSendOptions = {
+  internal?: true
+  from?: AgentMessageSource
+  /** The choices the send carries, fingerprinted as a client's are. */
+  carried?: Readonly<Record<string, string>>
+}
 
 export function eventually(assertion: () => void | Promise<void>): Promise<void> {
   return vi.waitFor(assertion, { timeout: 10_000 })
@@ -49,13 +58,17 @@ export async function createQueuedMessageTestRig(
     idleSweep?: { idleMs: number; intervalMs: number }
     /** Teardown records its restart offers, which `restartOffers` lists. */
     recoveryCapsule?: true
+    /** Where the chat runs, when not the default worktree. */
+    location?: AgentSessionExecutionLocation
+    /** How the host probes a recorded owner; absent answers indeterminate. */
+    probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
   const store = await openTestAgentSessionRecordStore(root)
-  const provider = createQueuedRigProvider(store, options)
-  const { dispatch, compact, cancelTurn, closeSession } = provider
+  const provider = createQueuedRigProvider(store, options, () => host)
+  const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
   const makeHost = () =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexDeclared(),
@@ -66,13 +79,16 @@ export async function createQueuedMessageTestRig(
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
       now: () => NOW,
+      ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
   let host = makeHost()
-  expect(await host.attach(QUEUED_RIG_CALLER, hostTestAttachParams(null))).toMatchObject({
-    ok: true
-  })
+  const firstAttach = hostTestAttachParams(
+    null,
+    options.location ? { location: options.location } : {}
+  )
+  expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
 
   function envelope(
     fields: Record<string, unknown>,
@@ -95,7 +111,11 @@ export async function createQueuedMessageTestRig(
     const body = { ...hostTestMessage(text), ...(options?.from ? { from: options.from } : {}) }
     const clientOperationId = hostTestOperationId()
     // Fingerprinted as the host digests a send: the message without its sender.
-    const fields = { body: agentSessionMessagePayload(body), ...(delivery ? { delivery } : {}) }
+    const fields = {
+      body: agentSessionMessagePayload(body),
+      ...(delivery ? { delivery } : {}),
+      ...(options?.carried ? { options: options.carried } : {})
+    }
     const result = host.send(QUEUED_RIG_CALLER, {
       envelope: envelope(fields, 'agentSession.send', clientOperationId),
       ...fields,
@@ -177,7 +197,7 @@ export async function createQueuedMessageTestRig(
     await result
     await eventually(async () => {
       if (host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase === 'starting') {
-        await emitStarted()
+        await proveProviderOpen()
       }
       expect((await submission(id))?.handedOverAt).toBeDefined()
     })
@@ -248,25 +268,17 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  /** The starting child proves its start, as a publish-first provider's `started` event does: the
-   *  host hands it what it held. */
+  /** The starting child proves its open before the host hands it queued work. */
   async function proveStart(): Promise<void> {
     await eventually(() =>
       expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
     )
-    await emitStarted()
+    await proveProviderOpen()
   }
 
-  function emitStarted(): Promise<void> {
-    return host.handleAdapterEvent({
-      type: 'started',
-      sessionId: SESSION,
-      fence: store.getRecord(SESSION)!.lease.runtimeFence,
-      acquisitionGeneration: 'generation-1',
-      reportedOptions: { model: 'default' },
-      restoreSkippedOptions: [],
-      optionRevision: host.collaboratorsForTests().runtimeState.optionRevisions.current(SESSION)
-    })
+  async function proveProviderOpen(): Promise<void> {
+    provider.proveOpen()
+    await Promise.resolve()
   }
 
   async function dispose(): Promise<void> {
@@ -281,6 +293,7 @@ export async function createQueuedMessageTestRig(
       return host
     },
     dispatch,
+    setOption,
     cancelTurn,
     closeSession,
     compact,

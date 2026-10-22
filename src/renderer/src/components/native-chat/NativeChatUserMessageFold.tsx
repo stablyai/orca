@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
-import { nativeChatUserMessageFolds } from './native-chat-user-message-fold'
+import { nativeChatUserMessageFolds } from '../../../../shared/native-chat-user-message-fold'
 
 export function NativeChatUserMessageFold({
   messageId,

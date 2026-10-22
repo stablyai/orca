@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { Mock } from 'vitest'
-import { _resetPreflightCache } from './preflight'
+import { _resetPreflightCache } from '../preflight/agent-detection'
 
 export type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 

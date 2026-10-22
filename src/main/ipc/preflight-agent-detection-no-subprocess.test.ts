@@ -53,7 +53,7 @@ vi.mock('../azure-devops/client', () => ({
 vi.mock('../gitea/client', () => ({ getGiteaAuthStatus: getGiteaAuthStatusMock }))
 
 // Isolate the subprocess-spawn assertion from the fs-based install-dir fallback.
-vi.mock('./local-agent-install-dir-detection', () => ({
+vi.mock('../../shared/local-agent-install-dir-detection', () => ({
   detectCommandsInInstallDirs: detectCommandsInInstallDirsMock
 }))
 
@@ -63,11 +63,11 @@ vi.mock('../pty/windows-environment-path', () => ({
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
-import { _resetPreflightCache, detectInstalledAgents } from './preflight'
+import { _resetPreflightCache, detectInstalledAgents } from '../preflight/agent-detection'
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS
-} from './tui-agent-detection-commands'
+} from '../../shared/tui-agent-detection-commands'
 
 describe('#9297: local agent detection spawns zero where/which subprocesses', () => {
   const originalPlatform = process.platform

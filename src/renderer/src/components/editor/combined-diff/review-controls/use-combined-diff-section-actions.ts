@@ -6,16 +6,22 @@ import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
-import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
-import { getStoredTextDiffContent, getStoredTextDiffResult } from '../../large-diff-section-content'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult,
+  isPrunedTextDiffResult
+} from '../../large-diff-section-content'
 import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
 import type { DiffSection } from '../../diff-section-types'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
+import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { writeEditorSave } from '../../editor-save-disk-precondition'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type CombinedDiffSectionActions = {
   handleSectionSaveRef: DiffSectionItemProps['handleSectionSaveRef']
@@ -33,7 +39,6 @@ export function useCombinedDiffSectionActions({
   isAllMode,
   isBranchMode,
   isCommitMode,
-  sections,
   sectionsRef,
   setSectionHeights,
   setSections
@@ -152,9 +157,12 @@ export function useCombinedDiffSectionActions({
     ]
   )
 
-  const handleSectionSave = useCallback(
-    async (index: number) => {
-      const section = sections[index]
+  const writtenBySectionRef = useRef(new Map<string, string>())
+  const runSectionSave = useCallback(
+    async (sectionKey: string, mode?: 'overwrite') => {
+      // Why by key: rows can be rebuilt while a save waits; a gone section is not saved.
+      const index = sectionsRef.current.findIndex((s) => s.key === sectionKey)
+      const section = sectionsRef.current[index]
       if (!section) {
         return
       }
@@ -163,15 +171,30 @@ export function useCombinedDiffSectionActions({
         return
       }
 
-      const sectionKey = section.key
       const content = modifiedEditor?.getValue() ?? section.modifiedContent
       const absolutePath = joinPath(file.filePath, section.path)
+      // Why: edits live in modifiedContent; the diff result keeps the text loaded from (or last
+      // written to) disk, unless a large diff pruned it, in which case no version is known.
+      // Why first: a save earlier in this section's chain wrote it, maybe before state caught up.
+      const loaded =
+        writtenBySectionRef.current.get(section.key) ??
+        (section.diffResult?.kind === 'text' && !isPrunedTextDiffResult(section.diffResult)
+          ? section.diffResult.modifiedContent
+          : undefined)
+      const markConflict = (): void =>
+        setSections((prev) =>
+          prev.map((s) => (s.key === sectionKey ? { ...s, saveConflict: true } : s))
+        )
+      if (loaded === undefined && mode !== 'overwrite') {
+        markConflict()
+        return
+      }
       try {
         const state = useAppStore.getState()
         const worktree = file.worktreeId
-          ? findWorktreeById(state.worktreesByRepo, file.worktreeId)
+          ? findWorktreeById(selectWorktreesByRepo(state), file.worktreeId)
           : null
-        await writeRuntimeFile(
+        const writeResult = await writeEditorSave(
           getEditorFileOperationContext(
             state,
             {
@@ -182,8 +205,17 @@ export function useCombinedDiffSectionActions({
             worktree?.path ?? null
           ),
           absolutePath,
-          content
+          content,
+          undefined,
+          mode === 'overwrite' || loaded === undefined
+            ? { kind: 'explicit-overwrite' }
+            : { kind: 'guarded', signature: getDiskBaselineSignature(loaded), allowMissing: false }
         )
+        if (!writeResult.ok) {
+          markConflict()
+          return
+        }
+        writtenBySectionRef.current.set(sectionKey, content)
         // Why: the section list can be rebuilt while the write is pending, so re-resolve
         // by key — the captured index may now point at a different file.
         const savedIndex = sectionsRef.current.findIndex((s) => s.key === sectionKey)
@@ -196,29 +228,27 @@ export function useCombinedDiffSectionActions({
             if (s.key !== sectionKey) {
               return s
             }
-
-            if (s.diffResult?.kind !== 'text') {
-              return {
-                ...s,
-                modifiedContent: content,
-                dirty: false,
-                largeDiffRenderLimit: s.largeDiffRenderLimit
-              }
+            const written =
+              s.diffResult?.kind === 'text' ? { ...s.diffResult, modifiedContent: content } : null
+            // Why: edits made while this write was in flight are newer; only the baseline moves.
+            if (s.modifiedContent !== content) {
+              return written ? { ...s, diffResult: written, saveConflict: undefined } : s
             }
-
-            const nextDiffResult = { ...s.diffResult, modifiedContent: content }
+            if (!written) {
+              return { ...s, dirty: false, saveConflict: undefined }
+            }
             const nextLargeDiffRenderLimit = getLargeDiffRenderLimit({
               originalContent: s.originalContent,
               modifiedContent: content
             })
-            const storedContent = getStoredTextDiffContent(nextDiffResult, nextLargeDiffRenderLimit)
-
+            const storedContent = getStoredTextDiffContent(written, nextLargeDiffRenderLimit)
             return {
               ...s,
               modifiedContent: storedContent.modifiedContent,
               originalContent: storedContent.originalContent,
               dirty: false,
-              diffResult: getStoredTextDiffResult(nextDiffResult, nextLargeDiffRenderLimit),
+              saveConflict: undefined,
+              diffResult: getStoredTextDiffResult(written, nextLargeDiffRenderLimit),
               largeDiffRenderLimit: nextLargeDiffRenderLimit
             }
           })
@@ -232,11 +262,32 @@ export function useCombinedDiffSectionActions({
       file.operationProvenance,
       file.runtimeEnvironmentId,
       file.worktreeId,
-      sections,
       sectionsRef,
       setSectionHeights,
       setSections
     ]
+  )
+
+  // Why per section: each save builds its precondition only after the previous one settles.
+  const sectionSaveChainsRef = useRef(new Map<string, Promise<void>>())
+  const handleSectionSave = useCallback(
+    (index: number, mode?: 'overwrite'): Promise<void> => {
+      const key = sectionsRef.current[index]?.key
+      if (key === undefined) {
+        return Promise.resolve()
+      }
+      const chains = sectionSaveChainsRef.current
+      const next = (chains.get(key) ?? Promise.resolve()).then(() => runSectionSave(key, mode))
+      const tracked = next.finally(() => {
+        if (chains.get(key) === tracked) {
+          chains.delete(key)
+          writtenBySectionRef.current.delete(key)
+        }
+      })
+      chains.set(key, tracked)
+      return tracked
+    },
+    [runSectionSave, sectionsRef]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)

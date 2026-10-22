@@ -49,7 +49,10 @@ export async function joinPaneSpawn(
   try {
     return await reservation.promise
   } catch (error) {
-    if (isWorktreeTerminalsSleepingError(error)) {
+    if (
+      isWorktreeTerminalsSleepingError(error) ||
+      (error instanceof Error && error.message === 'terminal_pane_unbound')
+    ) {
       return null
     }
     throw error

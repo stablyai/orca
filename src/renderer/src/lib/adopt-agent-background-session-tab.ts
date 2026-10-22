@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { makePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey, parsePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AgentType } from '../../../shared/agent-status-types'
 import { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -98,7 +99,9 @@ export async function adoptAgentBackgroundSessionTab(args: {
     id: reservedTabId,
     initialPtyId: ptyId,
     activate: false,
-    recordInteraction: false
+    recordInteraction: false,
+    // Switch point: main records the tab under the pane id its terminal already runs as.
+    ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { initialLeafId: parsePaneKey(args.paneKey)?.leafId } : {})
   })
   const paneKey = args.paneKey
   store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)

@@ -11,9 +11,3 @@ export const MAX_CODEX_PENDING_PROMPTS = 128
 export const MAX_CODEX_IDENTITY_ENTRIES = 512
 export const MAX_CODEX_DETAIL_ENTRIES = 512
 export const MAX_CODEX_DETAIL_BYTES = 64 * 1024
-/** The shared subagent tracker's bounds, which Codex's spawn-group rows follow. */
-export { MAX_SUBAGENT_GROUPS as MAX_CODEX_SUBAGENT_GROUPS } from '../native-chat/subagent-tracker/subagent-tracker-groups'
-export { MAX_SUBAGENTS_PER_GROUP as MAX_CODEX_SUBAGENTS_PER_GROUP } from '../native-chat/subagent-tracker/subagent-tracker'
-/** Threads whose latest token total is retained. Usage frames arrive for
- *  threads that are not yet (or never become) roster children. */
-export const MAX_CODEX_TOKEN_USAGE_THREADS = 256

@@ -1,12 +1,10 @@
-import { execFile } from 'node:child_process'
-import { platform } from 'node:process'
 import type { Store } from './persistence'
+import { spawnProcessOnWorkerThread } from './worker-thread-child-process/worker-thread-child-process'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress
 } from '../shared/workspace-space-types'
 import { mapWithConcurrency } from '../shared/map-with-concurrency'
-import { escapeRegex } from '../shared/string-utils'
 import {
   WorkspaceSpaceScanCancelledError,
   createWorkspaceSpaceScanLimiter,
@@ -26,37 +24,14 @@ const DU_MAX_BUFFER_BYTES = 16 * 1024 * 1024
 
 export { WorkspaceSpaceScanCancelledError }
 
-function normalizeLocalDuPath(pathValue: string): string {
-  const separator = platform === 'win32' ? '\\' : '/'
-  const trimmed = pathValue.replace(new RegExp(`${escapeRegex(separator)}+$`), '')
-  return trimmed.length > 0 ? trimmed : pathValue
-}
-
-function parseWorkspaceSpaceDuOutput(stdout: string): Map<string, number> {
-  const sizes = new Map<string, number>()
-  for (const line of stdout.split('\n')) {
-    const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
-    if (!normalizedLine) {
-      continue
-    }
-    const match = /^(\d+)\s+(.+)$/.exec(normalizedLine)
-    if (!match) {
-      continue
-    }
-    sizes.set(normalizeLocalDuPath(match[2]), Number(match[1]) * 1024)
-  }
-  return sizes
-}
-
-async function readLocalDuDepthOne(
-  rootPath: string,
-  signal?: AbortSignal
-): Promise<Map<string, number>> {
-  const stdout = await new Promise<string>((resolve, reject) => {
+async function readLocalDuDepthOne(rootPath: string, signal?: AbortSignal): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     let settled = false
-    let child: ReturnType<typeof execFile> | undefined
+    let child: ReturnType<typeof spawnProcessOnWorkerThread> | undefined
     let onAbort: (() => void) | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
+    const chunks: Buffer[] = []
+    let outputBytes = 0
     const settle = (callback: () => void): void => {
       if (settled) {
         return
@@ -79,7 +54,7 @@ async function readLocalDuDepthOne(
     onAbort = () => {
       settle(() => {
         child?.kill()
-        reject(new Error('Workspace space scan cancelled'))
+        reject(new WorkspaceSpaceScanCancelledError())
       })
     }
     signal?.addEventListener('abort', onAbort, { once: true })
@@ -88,23 +63,33 @@ async function readLocalDuDepthOne(
       return
     }
     try {
-      child = execFile(
-        'du',
-        ['-k', '-d', '1', rootPath],
-        { encoding: 'utf8', maxBuffer: DU_MAX_BUFFER_BYTES, signal, timeout: DU_TIMEOUT_MS },
-        (error, output) => {
-          if (error) {
-            settle(() => reject(error))
-            return
-          }
-          settle(() => resolve(String(output)))
+      child = spawnProcessOnWorkerThread({ program: 'du', args: ['-k', '-d', '1', rootPath] })
+      child.stdout.on('data', (chunk: Buffer) => {
+        if (settled) {
+          return
         }
-      )
+        outputBytes += chunk.length
+        if (outputBytes > DU_MAX_BUFFER_BYTES) {
+          settle(() => {
+            child?.kill()
+            reject(new Error('du output exceeded the scan buffer limit'))
+          })
+          return
+        }
+        chunks.push(chunk)
+      })
+      child.on('error', (error: Error) => settle(() => reject(error)))
+      child.on('close', (code: number | null) => {
+        settle(() =>
+          code === 0
+            ? resolve(Buffer.concat(chunks).toString('utf8'))
+            : reject(new Error(`du exited with code ${code}`))
+        )
+      })
     } catch (error) {
       settle(() => reject(error))
     }
   })
-  return parseWorkspaceSpaceDuOutput(stdout)
 }
 
 export async function analyzeWorkspaceSpace(
@@ -138,8 +123,7 @@ export async function analyzeWorkspaceSpace(
       limiters,
       progress,
       options,
-      readLocalDuDepthOne,
-      normalizeLocalDuPath
+      readLocalDuDepthOne
     })
   )
   throwIfWorkspaceSpaceScanAborted(options.signal)

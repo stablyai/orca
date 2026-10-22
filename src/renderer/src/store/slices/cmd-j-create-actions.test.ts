@@ -8,6 +8,13 @@ import {
   MANAGED_BROWSER_UNAVAILABLE_MESSAGE
 } from '@/lib/client-creation-action-policy'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 

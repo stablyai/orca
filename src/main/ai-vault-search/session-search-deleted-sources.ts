@@ -136,7 +136,7 @@ export async function retireDeletedSessionSearchSources(
     // nothing and would leave the budget hostage to whichever directory the
     // rows happened to be sorted by.
     if (signal?.aborted || (asked.size >= directoryLimit && !asked.has(dirname(filePath)))) {
-      retirement.unchecked.push(...paths.slice(index))
+      retirement.unchecked = paths.slice(index)
       break
     }
     const root = configuredRootFor(filePath, args.roots)

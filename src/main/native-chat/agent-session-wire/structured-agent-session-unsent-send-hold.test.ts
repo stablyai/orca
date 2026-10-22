@@ -53,7 +53,11 @@ const CHAT_CLOSED = agentSessionFailureWords(agentSessionFailureFact('chatClosed
 /** A kept send: an ordinary waiting card, with no hold of its own. */
 const KEPT = { state: 'waiting' }
 
+import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
+
 let rig: QueuedMessageTestRig
+const observationClock = createStructuredSessionObservationClock(() => rig.host, SESSION)
+beforeEach(() => observationClock.start())
 
 beforeEach(async () => {
   rig = await createQueuedMessageTestRig({ restartable: true })
@@ -61,7 +65,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  await rig.dispose()
+  await observationClock.restoreBeforeCleanup(() => rig.dispose())
 })
 
 /** The exact request a client sends, so a test can send the same one again. */
@@ -209,7 +213,7 @@ describe('the next accepted turn releases a kept card', () => {
   it('a Resume sends it, and nothing sends it before', async () => {
     const id = await acceptWhileStarting(sendRequest('resume me'))
     await quitRestart()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
     await eventually(() => expect(dispatchedTexts()).toEqual(['resume me']))
@@ -263,9 +267,7 @@ describe('the next accepted turn releases a kept card', () => {
     const shown = projectStructuredAgentSessionMessages(
       page.page.items,
       [lingering],
-      page.page.submissions,
-      // The desktop's transcript, which draws a rejected send in place unless it was kept.
-      { rejectedInPlace: true }
+      page.page.submissions
     ).map((message) => ({
       text: message.blocks.map((block) => ('text' in block ? block.text : '')).join(''),
       unsent: message.unsent ?? false
@@ -291,7 +293,7 @@ describe('the next accepted turn releases a kept card', () => {
     await quitRestart()
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
     rig.crashRestartHostProcess()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
     const working = await rig.workingSend()
     const later = rig.send('queued after the restart', 'queue-if-active')
@@ -324,13 +326,13 @@ describe('the next accepted turn releases a kept card', () => {
     ).toMatchObject({ ok: true })
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
     expect(await rig.sendNow(id)).toMatchObject({ ok: true })
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect((await rig.handoff(id))?.handedOverAt).toBeUndefined()
     await quitRestart()
 
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
     expect(journal().queuedMessages.get(id)?.holdReason).toBeNull()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
   })
 })
@@ -420,7 +422,7 @@ describe('the queue at a quit', () => {
         release()
         await healing.mock.results[0]?.value
         // The step's append check runs on the turn after its heal resolves.
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await vi.advanceTimersByTimeAsync(0)
         expect(await rig.handoff(queued.id)).toBeUndefined()
       } else {
         const quitting = host.flushAllStreamedEvents()
@@ -446,7 +448,7 @@ describe('the queue at a quit', () => {
     const pushed = rig.send('pushed ahead', 'queue-if-active')
     await pushed.result
     expect(await rig.sendNow(pushed.id)).toMatchObject({ ok: true })
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect((await rig.handoff(pushed.id))?.handedOverAt).toBeUndefined()
     await quitRestart()
 
@@ -482,8 +484,7 @@ describe('a message accepted while the agent starts, then the chat closes', () =
       const texts = projectStructuredAgentSessionMessages(
         page.page.items,
         [],
-        page.page.submissions,
-        { rejectedInPlace: true }
+        page.page.submissions
       )
         .flatMap((shown) => shown.blocks.map((block) => ('text' in block ? block.text : '')))
         .join('|')
@@ -519,7 +520,7 @@ describe('the same send arriving again after the restart', () => {
     expect(again.ok && 'queued' in again.value).toBe(false)
     expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(submissionsBefore)
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
 
     // Retry on such a client sends the words under a new id, and the card follows that turn, as
@@ -704,7 +705,7 @@ describe("the reopen's mark", () => {
       await queued.result
       await rig.host.close(SESSION, cause)
       expect(await rig.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await observationClock.observe(100)
       expect(await rig.handoff(queued.id)).toBeUndefined()
       expect(dispatchedTexts()).toEqual(['work on this'])
       void working
@@ -727,7 +728,8 @@ describe("the reopen's mark", () => {
 
   // An idle eviction is Orca's own act: the person sees the same rows, and nothing new is held.
   it('an idle-sweep eviction of a stopped chat writes nothing, and its Stop row stays', async () => {
-    await rig.dispose()
+    await observationClock.restoreBeforeCleanup(() => rig.dispose())
+    observationClock.start()
     rig = await createQueuedMessageTestRig({ idleSweep: { idleMs: 0, intervalMs: 60 * 60 * 1000 } })
     const marks = vi.spyOn(AgentSessionJournal.prototype, 'appendQueueReopen')
     const working = await rig.workingSend()
@@ -761,7 +763,7 @@ describe("the reopen's mark", () => {
     rig.crashRestartHostProcess()
     await rig.host.restoreReadableSessions([SESSION])
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect(await rig.handoff(queued.id)).toBeUndefined()
     expect(rig.dispatch).toHaveBeenCalledTimes(sent)
     expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual(['restarted'])
@@ -790,7 +792,7 @@ describe("the reopen's mark", () => {
 
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
     expect(marks).toHaveBeenCalledOnce()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
 
     const next = rig.send('a new request')

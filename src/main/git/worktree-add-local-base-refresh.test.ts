@@ -43,7 +43,9 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock
       .mockReset()
       .mockImplementation((args: string[], opts: unknown) =>
-        (args[0] === 'worktree' && args[1] === 'add') || args[0] === 'config'
+        (args[0] === 'worktree' && args[1] === 'add') ||
+        args[0] === 'config' ||
+        (args[0] === 'branch' && args[1] === '--set-upstream-to')
           ? checkoutGitMock(args, opts)
           : refreshGitMock(args, opts)
       )
@@ -391,6 +393,13 @@ describe('addWorktree', () => {
       'feature-x',
       '/repo-feature-x',
       'refs/remotes/origin/feature-x'
+    ])
+    // #26344: the branch made from its own remote branch tracks it.
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+      'branch',
+      '--set-upstream-to',
+      'refs/remotes/origin/feature-x',
+      'feature-x'
     ])
     // No refresh probe raced the add, and nothing was mutated.
     expect(refreshGitMock.mock.calls.map((call) => call[0][0])).toEqual(['rev-parse'])

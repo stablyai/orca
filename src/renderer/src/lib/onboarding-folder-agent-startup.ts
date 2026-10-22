@@ -10,6 +10,7 @@ import type { StartupCommandDelivery } from '../../../shared/codex-startup-deliv
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type OnboardingFolderAgentStartup = {
@@ -21,23 +22,25 @@ export type OnboardingFolderAgentStartup = {
   telemetry: AgentStartedTelemetry
 }
 
-function getClientPlatform(): NodeJS.Platform {
-  if (navigator.userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  return navigator.userAgent.includes('Mac') ? 'darwin' : 'linux'
+type OnboardingStartupHost = {
+  platform: NodeJS.Platform
+  shell: AgentStartupShell | undefined
+  isRemote: boolean
+}
+
+export function onboardingFolderDefaultAgent(settings: GlobalSettings | null): TuiAgent | null {
+  const agent = settings?.defaultTuiAgent
+  return agent && agent !== 'blank' && isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
+    ? agent
+    : null
 }
 
 export function buildOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null
+  settings: GlobalSettings | null,
+  host: OnboardingStartupHost
 ): OnboardingFolderAgentStartup | undefined {
-  const agent = settings?.defaultTuiAgent
-  if (
-    !settings ||
-    !agent ||
-    agent === 'blank' ||
-    !isTuiAgentEnabled(agent, settings.disabledTuiAgents)
-  ) {
+  const agent = onboardingFolderDefaultAgent(settings)
+  if (!settings || !agent) {
     return undefined
   }
 
@@ -47,7 +50,7 @@ export function buildOnboardingFolderAgentStartup(
     cmdOverrides: settings.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    platform: getClientPlatform(),
+    ...host,
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
@@ -85,10 +88,11 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
 export function buildDismissedOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
   onboarding: OnboardingState | null,
-  hasExistingProject: boolean
+  hasExistingProject: boolean,
+  host: OnboardingStartupHost
 ): OnboardingFolderAgentStartup | undefined {
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
-  return buildOnboardingFolderAgentStartup(settings)
+  return buildOnboardingFolderAgentStartup(settings, host)
 }

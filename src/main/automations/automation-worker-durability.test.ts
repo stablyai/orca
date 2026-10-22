@@ -10,7 +10,7 @@ vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../ssh/ssh-config-parser', () => ({
+vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -210,7 +210,7 @@ describe('automation background writer durability', () => {
     try {
       const pending = service.runNow(automation.id)
       await acknowledgement.blocked
-      store.updateRepo('repo-local', { executionHostId: 'runtime:other-host' })
+      store.updateRepo({ id: 'repo-local' }, { executionHostId: 'runtime:other-host' })
       acknowledgement.release()
       await expect(pending).resolves.toMatchObject({ status: 'skipped_unavailable' })
       expect(dispatcher).not.toHaveBeenCalled()

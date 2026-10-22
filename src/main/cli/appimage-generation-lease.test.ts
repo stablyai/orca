@@ -51,6 +51,41 @@ describe('AppImage generation leases', () => {
     expect(resolveAppImageGenerationOfExecutable(join(rootPath, 'node'))).toBeNull()
   })
 
+  it('locates the generation its bundled Node runs from, as a terminal daemon does', async () => {
+    const { cacheRootPath, rootPath } = await makeCache()
+    const node = join(rootPath, 'resources', 'node-runtime', 'bin', 'node')
+    expect(resolveAppImageGenerationOfExecutable(node)).toEqual({
+      cacheRootPath,
+      namespaceKey: NAMESPACE,
+      generationKey: GENERATION,
+      rootPath
+    })
+    expect(
+      resolveAppImageGenerationOfExecutable(join(rootPath, 'resources', 'bin', 'node'))
+    ).toBeNull()
+    expect(
+      resolveAppImageGenerationOfExecutable('/opt/x/resources/node-runtime/bin/node')
+    ).toBeNull()
+  })
+
+  it('leases the generation for a daemon on its bundled Node', async () => {
+    const { cacheRootPath, rootPath } = await makeCache()
+    const lease = await leaseAppImageGenerationForCurrentProcess({
+      execPath: join(rootPath, 'resources', 'node-runtime', 'bin', 'node'),
+      pid: 11,
+      platform: 'linux',
+      reader: reader({ 11: { status: 'present', startTicks: '700' } })
+    })
+    expect(lease).not.toBeNull()
+    await expect(
+      inspectAppImageGenerationLeases(
+        cacheRootPath,
+        rootPath,
+        reader({ 11: { status: 'present', startTicks: '700' } })
+      )
+    ).resolves.toEqual({ status: 'live' })
+  })
+
   it('records nothing off Linux or outside an extracted generation', async () => {
     const { execPath } = await makeCache()
     const live = reader({ 10: { status: 'present', startTicks: '500' } })

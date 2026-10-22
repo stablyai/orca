@@ -68,7 +68,11 @@ export function isMirroredAgentPaneKeyForTabs(
  *  interactive question cards reach the host over its HTTP agent hook, never
  *  through PTY bytes, so they must pierce the client-authority fence. */
 export function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): boolean {
-  return entry.state === 'blocked' || entry.interactivePrompt != null
+  // Why: a row restored across a host restart is unverifiable, so it never outranks live bytes.
+  return (
+    entry.restoredUnconfirmed !== true &&
+    (entry.state === 'blocked' || entry.interactivePrompt != null)
+  )
 }
 
 /** True while this renderer's own byte-derived status owns the pane: it claimed
@@ -191,7 +195,8 @@ export function buildRetractedMirroredTabSweepPatch(
     retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
     sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
     // Keep the sweep state consistent with the accepted host inventory.
-    tabsByWorktree: nextTabsByWorktree
+    tabsByWorktree: nextTabsByWorktree,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree
   }
   // Why: a retraction can be a reconnect re-key, not pane death (ssh-execution-boundary); keeping
   // cutoffs means a republished pane cannot replay activity the user cleared on this client.

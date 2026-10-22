@@ -7,21 +7,7 @@ import {
   type PointerEventHandler,
   type RefObject
 } from 'react'
-import {
-  Clipboard,
-  Copy,
-  GitFork,
-  Image as ImageIcon,
-  Maximize2,
-  MessageSquarePlus,
-  Minimize2,
-  PanelBottomClose,
-  PanelsTopLeft,
-  PanelRightClose,
-  Pencil,
-  SquareTerminal,
-  X
-} from 'lucide-react'
+import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,17 +26,36 @@ import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shor
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
 import { isEditableTarget } from '@/lib/editable-target'
+import { findNativeChatPasteField } from '@/lib/native-chat-paste-request'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
+import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { TabSplitDirection } from '@/store/slices/tabs'
+import { AgentSessionContinuationMenuItem } from '@/components/terminal-pane/AgentSessionContinuationMenuItem'
+import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/AgentSessionContextCopyMenuItem'
+import {
+  noNativeChatContextMenuTarget,
+  readNativeChatContextMenuTarget,
+  type NativeChatContextMenuTarget
+} from './native-chat-context-menu-target'
+import {
+  NativeChatContextMenuTargetItems,
+  NativeChatFindMenuItem
+} from './NativeChatContextMenuItems'
+import type { NativeChatFileLinkContext } from './native-chat-file-link'
+import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 
 type NativeChatContextMenuState = {
   open: boolean
   point: { x: number; y: number }
   selectedText: string
   canPaste: boolean
+  pasteOrigin: HTMLTextAreaElement | null
   image?: NativeChatCopyImage
+  target: NativeChatContextMenuTarget
+  returnFocusTo: Element | null
 }
 
 type UseNativeChatContextMenuArgs = {
@@ -70,10 +75,20 @@ type UseNativeChatContextMenuArgs = {
   }
   /** A structured chat tab's Orca session ID; a chat in a terminal pane is that terminal's agent. */
   resolveOrcaSessionId?: () => Promise<string | null>
+} & NativeChatContextMenuTargetArgs
+
+/** What the menu needs to offer the rows for a right-clicked target. */
+export type NativeChatContextMenuTargetArgs = {
+  /** Answers which text a right-clicked message row copies. */
+  messageListRef?: RefObject<Pick<NativeChatMessageListHandle, 'messageCopyText'> | null>
+  fileLinkContext?: NativeChatFileLinkContext | null
+  /** Where the transcript offers rewind; absent where it never does. */
+  rewind?: NativeChatRewindSurface
+  onFind?: (returnFocusTo: Element | null) => void
 }
 
 export type NativeChatContextMenuActions = {
-  onPaste: () => void
+  onPaste: (origin?: HTMLTextAreaElement) => void
   onSplitRight: () => void
   onSplitDown: () => void
   canEqualizePaneSizes: boolean
@@ -84,7 +99,10 @@ export type NativeChatContextMenuActions = {
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
   onForkAgentSession: () => void
+  onCopyAgentSessionContext: () => void
   onSetTitle: () => void
+  canClearPaneTitle: boolean
+  onClearPaneTitle: () => void
   onCopyTerminalId: () => void
   onCopyPaneId: () => void
   canCopyAgentSessionId: boolean
@@ -105,7 +123,10 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
   canContinueAgentSessionInNewSession: false,
   onContinueAgentSessionInNewSession: () => {},
   onForkAgentSession: () => {},
+  onCopyAgentSessionContext: () => {},
   onSetTitle: () => {},
+  canClearPaneTitle: false,
+  onClearPaneTitle: () => {},
   onCopyTerminalId: () => {},
   onCopyPaneId: () => {},
   canCopyAgentSessionId: false,
@@ -123,7 +144,11 @@ export function useNativeChatContextMenu({
   showTerminalPaneActions = true,
   splitShortcutLabels,
   workspaceLayout,
-  resolveOrcaSessionId
+  resolveOrcaSessionId,
+  messageListRef,
+  fileLinkContext = null,
+  rewind,
+  onFind
 }: UseNativeChatContextMenuArgs): {
   onContextMenuCapture: MouseEventHandler<HTMLElement>
   onPointerDownCapture: PointerEventHandler<HTMLElement>
@@ -134,21 +159,27 @@ export function useNativeChatContextMenu({
     open: false,
     point: { x: 0, y: 0 },
     selectedText: '',
-    canPaste: false
+    canPaste: false,
+    pasteOrigin: null,
+    target: noNativeChatContextMenuTarget,
+    returnFocusTo: null
   })
   const shortcutLabel = nativeChatToggleShortcutLabel(isMacPlatform())
-  const { image } = state
-  // Copy, Copy image and Paste each show only when they apply to what was right-clicked.
+  const { image, target } = state
+  // Copy, Copy image, Paste and the target rows each show only when they apply to what was right-clicked.
   const hasSelection = state.selectedText.trim().length > 0
-  const hasEditItems = image !== undefined || hasSelection || state.canPaste
+  const hasEditItems =
+    image !== undefined ||
+    hasSelection ||
+    state.canPaste ||
+    Boolean(target.quoteText ?? target.link ?? target.codeText ?? target.messageText) ||
+    (target.rewindItemId !== null && rewind !== undefined)
+  const hasSessionItems = onFind !== undefined || showTerminalPaneActions
   const showWorkspaceLayout =
     workspaceLayout !== undefined &&
     canMoveTabToNewPaneColumn(workspaceLayout.unifiedTabId, workspaceLayout.groupId)
   const hasItems =
-    hasEditItems ||
-    showTerminalPaneActions ||
-    showWorkspaceLayout ||
-    resolveOrcaSessionId !== undefined
+    hasEditItems || hasSessionItems || showWorkspaceLayout || resolveOrcaSessionId !== undefined
 
   useEffect(() => {
     if (!enabled) {
@@ -171,10 +202,18 @@ export function useNativeChatContextMenu({
         point: { x: event.clientX, y: event.clientY },
         selectedText: getNativeChatSelectedText(rootRef.current),
         canPaste: isEditableTarget(event.target),
-        image: readNativeChatCopyImage(event.target)
+        pasteOrigin: findNativeChatPasteField(event.target, rootRef.current),
+        returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
+        image: readNativeChatCopyImage(event.target),
+        target: readNativeChatContextMenuTarget(event.target, {
+          root: rootRef.current,
+          composer: composerRef.current,
+          messageList: messageListRef?.current ?? null,
+          linkContext: fileLinkContext
+        })
       })
     },
-    [enabled, rootRef]
+    [composerRef, enabled, fileLinkContext, messageListRef, rootRef]
   )
 
   const setOpen = useCallback((open: boolean) => {
@@ -210,8 +249,14 @@ export function useNativeChatContextMenu({
           align="start"
           onCloseAutoFocus={(event) => {
             event.preventDefault()
-            // Drop the read image once the menu has faded out, so a large file isn't held.
-            setState((prev) => ({ ...prev, image: undefined }))
+            // Release captured targets once the menu has faded out.
+            setState((prev) => ({
+              ...prev,
+              image: undefined,
+              pasteOrigin: null,
+              target: noNativeChatContextMenuTarget,
+              returnFocusTo: null
+            }))
           }}
         >
           {image ? (
@@ -229,12 +274,19 @@ export function useNativeChatContextMenu({
               <DropdownMenuShortcut>{isMacPlatform() ? '⌘C' : 'Ctrl+C'}</DropdownMenuShortcut>
             </DropdownMenuItem>
           ) : null}
+          <NativeChatContextMenuTargetItems
+            target={target}
+            composerRef={composerRef}
+            rewind={rewind}
+          />
           {state.canPaste ? (
-            <DropdownMenuItem onSelect={actions.onPaste}>
+            <DropdownMenuItem onSelect={() => actions.onPaste(state.pasteOrigin ?? undefined)}>
               <Clipboard />
               {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
             </DropdownMenuItem>
           ) : null}
+          {hasEditItems && hasSessionItems ? <DropdownMenuSeparator /> : null}
+          {onFind ? <NativeChatFindMenuItem onSelect={() => onFind(state.returnFocusTo)} /> : null}
           {showTerminalPaneActions ? (
             <>
               {onSwitchToTerminal ? (
@@ -242,19 +294,15 @@ export function useNativeChatContextMenu({
                   <SquareTerminal />
                   {translate(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Switch to terminal view'
+                    'Continue with Terminal Agent'
                   )}
                   <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut>
                 </DropdownMenuItem>
               ) : null}
               {actions.canContinueAgentSessionInNewSession ? (
-                <DropdownMenuItem onSelect={actions.onContinueAgentSessionInNewSession}>
-                  <MessageSquarePlus />
-                  {translate(
-                    'components.agentSessionContinuation.handOffToAnotherAgent',
-                    'Hand Off to Another Agent'
-                  )}
-                </DropdownMenuItem>
+                <AgentSessionContinuationMenuItem
+                  onSelect={actions.onContinueAgentSessionInNewSession}
+                />
               ) : null}
               <DropdownMenuItem onSelect={actions.onForkAgentSession}>
                 <GitFork />
@@ -263,109 +311,24 @@ export function useNativeChatContextMenu({
                   'Fork Agent Session…'
                 )}
               </DropdownMenuItem>
+              <AgentSessionContextCopyMenuItem onSelect={actions.onCopyAgentSessionContext} />
             </>
           ) : null}
           {workspaceLayout ? (
             <TabWorkspaceLayoutMenuSection
               unifiedTabId={workspaceLayout.unifiedTabId}
               groupId={workspaceLayout.groupId}
-              leadingSeparator={hasEditItems}
+              leadingSeparator={hasEditItems || hasSessionItems}
               shortcutLabels={workspaceLayout.shortcutLabels}
             />
           ) : null}
           {showTerminalPaneActions ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={actions.onSplitRight}>
-                <PanelRightClose />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
-                  'Split Terminal Right'
-                )}
-                {splitShortcutLabels ? (
-                  <DropdownMenuShortcut>{splitShortcutLabels.right}</DropdownMenuShortcut>
-                ) : null}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={actions.onSplitDown}>
-                <PanelBottomClose />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',
-                  'Split Terminal Down'
-                )}
-                {splitShortcutLabels ? (
-                  <DropdownMenuShortcut>{splitShortcutLabels.down}</DropdownMenuShortcut>
-                ) : null}
-              </DropdownMenuItem>
-              {actions.canEqualizePaneSizes ? (
-                <DropdownMenuItem onSelect={actions.onEqualizePaneSizes}>
-                  <PanelsTopLeft />
-                  {translate(
-                    'auto.components.terminal.pane.TerminalContextMenu.06c2b0f043',
-                    'Equalize Pane Sizes'
-                  )}
-                </DropdownMenuItem>
-              ) : null}
-              {actions.canExpandPane ? (
-                <DropdownMenuItem onSelect={actions.onToggleExpand}>
-                  {actions.isPaneExpanded ? <Minimize2 /> : <Maximize2 />}
-                  {actions.isPaneExpanded
-                    ? translate(
-                        'auto.components.terminal.pane.TerminalContextMenu.df766809e0',
-                        'Collapse Pane'
-                      )
-                    : translate(
-                        'auto.components.terminal.pane.TerminalContextMenu.925f49f210',
-                        'Expand Pane'
-                      )}
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={actions.onSetTitle}>
-                <Pencil />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.39809d152f',
-                  'Set Title…'
-                )}
-              </DropdownMenuItem>
-              {actions.canCopyAgentSessionId ? (
-                <DropdownMenuItem onSelect={actions.onCopyAgentSessionId}>
-                  <Copy />
-                  {translate(
-                    'components.terminalPane.TerminalContextMenu.copySessionId',
-                    'Copy Session ID'
-                  )}
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem onSelect={actions.onCopyTerminalId}>
-                <Copy />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.copyTerminalId',
-                  'Copy Terminal ID'
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={actions.onCopyPaneId}>
-                <Copy />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.2cf85a6a55',
-                  'Copy Pane ID'
-                )}
-              </DropdownMenuItem>
-              {actions.canClosePane ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onSelect={actions.onClosePane}>
-                    <X />
-                    {translate(
-                      'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                      'Close Pane'
-                    )}
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </>
+            <NativeChatPaneMenuItems actions={actions} splitShortcutLabels={splitShortcutLabels} />
           ) : resolveOrcaSessionId ? (
             <>
-              {hasEditItems || showWorkspaceLayout ? <DropdownMenuSeparator /> : null}
+              {hasEditItems || hasSessionItems || showWorkspaceLayout ? (
+                <DropdownMenuSeparator />
+              ) : null}
               <NativeChatCopyOrcaSessionIdMenuItem resolveOrcaSessionId={resolveOrcaSessionId} />
             </>
           ) : null}

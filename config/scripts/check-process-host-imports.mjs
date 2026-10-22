@@ -40,7 +40,12 @@ function packageRelativeImport(file, specifier) {
   return path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier))
 }
 
-export function assessProcessHostImports(sources, manifest, baseline) {
+export function assessProcessHostImports(
+  sources,
+  manifest,
+  baseline,
+  specifiersFor = collectModuleSpecifiers
+) {
   const direct = new Set()
   const violations = []
   const dependencies = new Set([
@@ -50,7 +55,7 @@ export function assessProcessHostImports(sources, manifest, baseline) {
   ])
   for (const [file, contents] of sources) {
     const ownSource = file.startsWith(PACKAGE_SOURCE)
-    for (const sourceSpecifier of collectModuleSpecifiers(file, contents)) {
+    for (const sourceSpecifier of specifiersFor(file, contents)) {
       const specifier = normalized(sourceSpecifier)
       const local = packageRelativeImport(file, specifier)
       const selfImport = specifier === PACKAGE_NAME || specifier.startsWith(`${PACKAGE_NAME}/`)
@@ -117,12 +122,12 @@ export function collectProcessHostSources(root = ROOT) {
   )
 }
 
-export function main(root = ROOT) {
+export function main(root = ROOT, sharedSources, specifiersFor = collectModuleSpecifiers) {
   const manifest = JSON.parse(
     readFileSync(path.join(root, PACKAGE_DIRECTORY, 'package.json'), 'utf8')
   )
   const baseline = parseEntryBaseline(readFileSync(path.join(root, BASELINE_PATH), 'utf8'))
-  const sources = collectProcessHostSources(root)
+  const sources = sharedSources ?? collectProcessHostSources(root)
   if (
     ![...sources.keys()].some(
       (file) => file.startsWith(PACKAGE_SOURCE) && !isTestOnlySourcePath(file)
@@ -130,7 +135,7 @@ export function main(root = ROOT) {
   ) {
     throw new Error(`Missing process-host implementation under ${PACKAGE_SOURCE}`)
   }
-  const result = assessProcessHostImports(sources, manifest, baseline)
+  const result = assessProcessHostImports(sources, manifest, baseline, specifiersFor)
   const failures = [
     ...result.violations,
     ...result.added.map((file) => `${file}: new direct child_process import; use ${PACKAGE_NAME}`),

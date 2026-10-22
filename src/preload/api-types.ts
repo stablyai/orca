@@ -53,6 +53,7 @@ import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
 import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/repository-api'
 import type { RuntimeApi } from './api/runtime-api'
+import type { WslMoveApi } from './api/wsl-move-bridge'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
@@ -156,6 +157,7 @@ export type PreloadApi = {
   legacyRelayBridge?: LegacyRelayBridgeApi
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']
+  wslMove: WslMoveApi
   pwsh: RuntimeApi['pwsh']
   gitBash: RuntimeApi['gitBash']
   plugins: PluginsApi

@@ -9,6 +9,7 @@ import {
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
+import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -164,8 +165,9 @@ export function dispatchTerminalShortcutAction(
     if (expandedPaneIdRef.current !== null) {
       return
     }
-    manager.equalizePaneSizes()
-    ;(manager.getActivePane() ?? manager.getPanes()[0])?.terminal.focus()
+    equalizeTerminalPanes({ worktreeId, tabId, getManager: () => managerRef.current }, (current) =>
+      (current.getActivePane() ?? current.getPanes()[0])?.terminal.focus()
+    )
     return
   }
   if (action.type === 'toggleExpandActivePane') {

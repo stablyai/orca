@@ -59,7 +59,8 @@ it('skips jcode startup colors when only the command or telemetry names it', () 
   for (const launch of [
     { command: 'jcode', telemetry: { agent_kind: 'jcode' } },
     { telemetry: { agent_kind: 'jcode' } },
-    { command: 'jcode' }
+    { command: 'jcode' },
+    { command: 'sleep 30 && jcode' }
   ]) {
     expect(
       getStartupTerminalIngressIntent({

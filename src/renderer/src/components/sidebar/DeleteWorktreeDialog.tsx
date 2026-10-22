@@ -139,7 +139,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   // discover this limitation via a confusing force-delete dead-end.
   const isMainWorktree = !isBatchDelete && (worktree?.isMainWorktree ?? false)
   const childWorkspaceCount = lineageDelete.descendants.length
-  const hasLineageChildren = childWorkspaceCount > 0
   const canDeleteAllLineage =
     !isMainWorktree && !isBatchDelete && lineageDelete.deleteAllTargets.length > 1
   const lineageFolderWorkspaceDeleteCount = useMemo(
@@ -387,9 +386,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
           />
 
-          {hasLineageChildren && (
+          {childWorkspaceCount > 0 && (
             <DeleteWorktreeLineageNotice
               descendants={lineageDelete.descendants}
+              parent={worktree}
+              repoMap={repoMap}
               changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
               dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
               dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}

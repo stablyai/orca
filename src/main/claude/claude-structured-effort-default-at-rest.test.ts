@@ -15,9 +15,9 @@ import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-mode
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
+import { structuredAgentSessionSendSelection } from '../../shared/structured-agent-session-option-view'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { composeCodexSessionOptionCatalog } from '../codex/codex-structured-model-catalog'
-import { nativeSessionOptionsFromReport } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionEvent
@@ -27,7 +27,8 @@ import {
   fakeClaude,
   identityFor,
   recordingJournalSink,
-  claudeStartupSettled
+  claudeStartupSettled,
+  claudeOpened
 } from './claude-structured-session-test-support'
 
 const SESSION = 'session-1'
@@ -139,11 +140,15 @@ async function startChild(
   return adapter
 }
 
-function restingRecord(options: Record<string, string>): AgentSessionRecord {
+function restingRecord(
+  options: Record<string, string>,
+  providerHandleChain: { origin: string }[] = []
+): AgentSessionRecord {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
   return {
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: ACCOUNT_HOME },
+    providerHandleChain,
     location: { executionHostId: 'local', wslDistro: null },
     // Why released: a chat at rest has no live claim, so its next start reads the current account.
     lease: { claimStatus: 'released' },
@@ -174,7 +179,13 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   const resting = {
     child: null,
     params: { provider: 'claude' },
-    journal: { threadGoal: () => null, contextUsage: () => null, context: { floor: () => null } }
+    journal: {
+      threadGoal: () => null,
+      visitItems: () => {},
+      submissions: () => [],
+      contextUsage: () => null,
+      context: { floor: () => null }
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read touches only these members.
   const context = {
@@ -191,16 +202,26 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
 }
 
-function pickerEffort(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
+function pickerEffortRow(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
   const seed = getAgentSessionOptionCatalog(agent)!
   const state = applyStructuredAgentSessionOptions(
     createStructuredAgentSessionOptionState(agent, seed),
     seed,
     result
   )
-  const effort = structuredAgentSessionOptionSnapshot(state).find((row) => row.id === 'effort')
+  return structuredAgentSessionOptionSnapshot(state).find((row) => row.id === 'effort')
+}
+
+function pickerEffort(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
+  const effort = pickerEffortRow(result, agent)
   return effort?.kind.type === 'select' ? effort.kind.currentValue : undefined
 }
+
+/** The chat's own effort under a model its list does not name: one value, read-only. */
+const READ_ONLY_EFFORT = (value: string, label = value) => ({
+  settable: false,
+  kind: { type: 'select', currentValue: value, choices: [{ value, label }] }
+})
 
 describe('Claude effort default at rest', () => {
   it("learns the model's default from a live child's applied effort", async () => {
@@ -220,6 +241,30 @@ describe('Claude effort default at rest', () => {
 
     expect(result.current).toMatchObject({ model: 'opus[1m]', effort: 'medium' })
     expect(pickerEffort(result)).toBe('medium')
+  })
+
+  it('names the default for a reopened chat with no saved model, and its run reports that row', async () => {
+    const store = new AgentModelCatalogStore()
+    const child = await startChild(store)
+    const seed = getAgentSessionOptionCatalog('claude')!
+    const picker = (answer: Awaited<ReturnType<typeof readAtRest>>) => {
+      const state = applyStructuredAgentSessionOptions(
+        createStructuredAgentSessionOptionState('claude', seed),
+        seed,
+        answer
+      )
+      const row = structuredAgentSessionOptionSnapshot(state).find((entry) => entry.id === 'model')
+      const shown = row?.kind.type === 'select' ? row.kind.currentValue : undefined
+      return { shown, sends: structuredAgentSessionSendSelection(state)?.model }
+    }
+    const reopened = await readAtRest(store, restingRecord({}, [{ origin: 'adopted' }]))
+    expect(reopened.current).toMatchObject({ model: 'opus[1m]', defaulted: ['model', 'effort'] })
+    expect(picker(reopened)).toEqual({ shown: 'opus[1m]', sends: undefined })
+
+    // Its first turn runs what the CLI reports (claude-opus-5-5[1m]), as that row.
+    const ran = (await child.readOptions({ sessionId: SESSION, fence: 7 })).current
+    expect(ran).toMatchObject({ model: 'opus[1m]' })
+    expect(ran.defaulted ?? []).not.toContain('model')
   })
 
   it("shows the user's pick at rest over the default", async () => {
@@ -245,7 +290,7 @@ describe('Claude effort default at rest', () => {
     expect(catalogDefault(other, 'opus[1m]')).toBe('medium')
   })
 
-  it('offers no effort for a model the catalog does not list, at rest as live', async () => {
+  it('offers no effort menu for a model the catalog does not list, at rest as live', async () => {
     const store = new AgentModelCatalogStore()
     const unlisted = { model: 'claude-unlisted-9', effort: 'medium' }
     // The CLI runs a model its own catalog does not list, as a newer or pinned model can be.
@@ -258,8 +303,12 @@ describe('Claude effort default at rest', () => {
       result.models.find((entry) => entry.id === unlisted.model)
     expect(row(live)).toEqual(expect.objectContaining({ id: unlisted.model, efforts: [] }))
     expect(row(resting)).toEqual(row(live))
-    expect(pickerEffort(live)).toBeUndefined()
-    expect(pickerEffort(resting)).toBeUndefined()
+    // No menu: the chat's own effort shows read-only, named as a listed row names it. The host names
+    // the saved listing's ids for a live child that lists none of its own.
+    expect(pickerEffortRow({ ...live, listedModelIds: resting.listedModelIds })).toMatchObject(
+      READ_ONLY_EFFORT(unlisted.effort, 'Medium')
+    )
+    expect(pickerEffortRow(resting)).toMatchObject(READ_ONLY_EFFORT(unlisted.effort, 'Medium'))
   })
 
   it('lists an unlisted Codex model at rest exactly as its live child does', async () => {
@@ -268,6 +317,7 @@ describe('Claude effort default at rest', () => {
     const record = {
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
+      providerHandleChain: [],
       location: { executionHostId: 'local', wslDistro: null },
       options: { model: 'gpt-unlisted', effort: 'high' }
     } as unknown as AgentSessionRecord
@@ -301,7 +351,10 @@ describe('Claude effort default at rest', () => {
 
     expect(resting.models).toEqual(live.models)
     expect(live.models.find((entry) => entry.id === 'gpt-unlisted')).toMatchObject({ efforts: [] })
-    expect(pickerEffort(resting, 'codex')).toBeUndefined()
+    // The host names the saved listing's ids for a live child that lists none of its own.
+    for (const answer of [resting, { ...live, listedModelIds: resting.listedModelIds }]) {
+      expect(pickerEffortRow(answer, 'codex')).toMatchObject(READ_ONLY_EFFORT('high', 'High'))
+    }
   })
 
   it("keeps a Claude model's effort at rest with no catalog yet, as a live child with none does", async () => {
@@ -347,6 +400,7 @@ describe('Claude effort default at rest', () => {
     const record = {
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
+      providerHandleChain: [],
       location: { executionHostId: 'local', wslDistro: null },
       options: { model: 'gpt-5.5', effort: 'high' }
     } as unknown as AgentSessionRecord
@@ -364,6 +418,7 @@ describe('Claude effort default at rest', () => {
     const record = {
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
+      providerHandleChain: [],
       location: { executionHostId: 'local', wslDistro: null },
       options: { model: 'gpt-5.5' }
     } as unknown as AgentSessionRecord
@@ -390,21 +445,17 @@ describe('Claude effort default at rest', () => {
 
     const result = await readAtRest(store, record)
 
-    expect(result.current).toEqual({ model: 'gpt-5.5' })
+    expect(result.current).toEqual({ model: 'gpt-5.5', defaulted: [], permissionMode: 'ask' })
   })
 
   it("never saves the applied effort as the chat's pick, yet shows it at rest", async () => {
     const store = new AgentModelCatalogStore()
     const events: ClaudeStructuredSessionEvent[] = []
-    await startChild(store, undefined, events)
+    const adapter = await startChild(store, undefined, events)
 
-    const started = events.find((event) => event.type === 'started')
-    const reported = started?.type === 'started' ? started.reportedOptions : null
+    const reported = (await claudeOpened(adapter, SESSION)).reportedOptions
     expect(reported).not.toHaveProperty('effort')
-    // The record the start persists names the listed row the catalog learned under.
-    const record = restingRecord(
-      nativeSessionOptionsFromReport({ reported: reported!, restoreSkipped: [] })
-    )
+    const record = restingRecord({ model: 'opus[1m]' })
     expect(record.options).toEqual({ model: 'opus[1m]' })
     expect((await readAtRest(store, record)).current.effort).toBe('medium')
     expect(record.options).toEqual({ model: 'opus[1m]' })

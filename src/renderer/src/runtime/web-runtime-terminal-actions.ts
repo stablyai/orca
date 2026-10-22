@@ -3,11 +3,10 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import type { PaneLayoutEditIntent } from '../../../shared/rpc-contract/session-tabs-schemas-params'
-import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
-import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
@@ -200,10 +199,14 @@ export async function updateWebRuntimePaneLayout(args: {
   expandedLeafId: string | null
   chatLeafId?: string | null
   titlesByLeafId?: Record<string, string>
-  intent?: PaneLayoutEditIntent
+  renamedLeafIds?: string[]
 }): Promise<boolean> {
-  const environmentId =
-    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  // Why: a twin's edit must not reach either host on a guess; it stays local until one is chosen.
+  const environmentId = runtimeEnvironmentIdUnlessTwin(
+    useAppStore.getState(),
+    args.worktreeId,
+    'push a pane layout to its host'
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
@@ -221,7 +224,7 @@ export async function updateWebRuntimePaneLayout(args: {
         expandedLeafId: args.expandedLeafId,
         ...(args.chatLeafId !== undefined ? { chatLeafId: args.chatLeafId } : {}),
         ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {}),
-        ...(args.intent ? { intent: args.intent } : {})
+        ...(args.renamedLeafIds ? { renamedLeafIds: args.renamedLeafIds } : {})
       },
       timeoutMs: 15_000
     })
@@ -243,9 +246,13 @@ export function setWebRuntimeTabProps(args: {
   color?: string | null
   isPinned?: boolean
   viewMode?: 'terminal' | 'chat'
+  customTitle?: string | null
 }): boolean {
-  const environmentId =
-    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  const environmentId = runtimeEnvironmentIdUnlessTwin(
+    useAppStore.getState(),
+    args.worktreeId,
+    'push tab props to its host'
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
@@ -266,7 +273,8 @@ export function setWebRuntimeTabProps(args: {
           tabId: hostTabId,
           ...(args.color !== undefined ? { color: args.color } : {}),
           ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
-          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
+          ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {}),
+          ...(args.customTitle !== undefined ? { customTitle: args.customTitle } : {})
         },
         timeoutMs: 15_000
       })

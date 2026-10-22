@@ -178,4 +178,87 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     const census = store.inspectOrcadMigrationUntransferredDependencies(manifest)
     expect(census.counts['workspace-session']).toBe(0)
   })
+
+  // #30126: three parked shells' local-only scrollback, inlined, overflowed the 768 KB manifest.
+  it('moves local-only scrollback through the snapshot channel, not the manifest', () => {
+    const store = sourceStore()
+    const hostId = toSshExecutionHostId(TARGET.id)
+    const output = (tabId: string): string =>
+      Array.from({ length: 30_000 }, (_, line) => `${tabId} line ${line}\r\n`).join('')
+    const session = dormantSession('shared output\r\n')
+    const shell = session.tabsByWorktree[WORKTREE_ID]![0]!
+    const tabIds = ['tab-1', 'tab-2', 'tab-3']
+    // Pane ids are unique across tabs; the server refuses a repeat.
+    const leafOf = (tabId: string): string => (tabId === 'tab-1' ? 'leaf-1' : `leaf-${tabId}`)
+    session.tabsByWorktree[WORKTREE_ID] = tabIds.map((id, sortOrder) => ({
+      ...shell,
+      id,
+      sortOrder
+    }))
+    for (const tabId of tabIds.slice(1)) {
+      session.terminalLayoutsByTabId[tabId] = {
+        root: { type: 'leaf', leafId: leafOf(tabId) },
+        activeLeafId: leafOf(tabId),
+        expandedLeafId: null
+      }
+    }
+    session.localOnlyScrollbackByTabId = Object.fromEntries(
+      tabIds.map((tabId) => [tabId, { [leafOf(tabId)]: output(tabId) }])
+    )
+    store.setWorkspaceSession(session, hostId)
+    const saved = store.getWorkspaceSession(hostId).localOnlyScrollbackByTabId
+    expect(JSON.stringify(saved).length).toBeGreaterThan(768 * 1024)
+
+    const manifest = createOrcadMigrationManifest(store, TARGET)
+
+    const dormant = manifest.payload.dormantState
+    expect(dormant?.workspaceSession?.localOnlyScrollbackByTabId).toBeUndefined()
+    const snapshots = dormant?.terminalScrollbackSnapshots ?? []
+    expect(snapshots.map((snapshot) => snapshot.tabId)).toEqual(tabIds)
+    for (const snapshot of snapshots) {
+      expect(
+        dormant?.workspaceSession?.terminalLayoutsByTabId[snapshot.tabId]?.scrollbackRefsByLeafId
+      ).toEqual({ [leafOf(snapshot.tabId)]: snapshot.ref })
+      let bytes = ''
+      for (let offset = 0, eof = false; !eof;) {
+        const chunk = store.readOrcadMigrationSourceSnapshotChunk(manifest, snapshot.ref, offset)
+        const piece = Buffer.from(chunk.bytesBase64, 'base64')
+        bytes += piece.toString('utf8')
+        offset += piece.length
+        eof = chunk.eof
+      }
+      // The local-only copy wins over the shared one, as the renderer reads it.
+      expect(bytes).toBe(saved?.[snapshot.tabId]?.[leafOf(snapshot.tabId)])
+    }
+  })
+
+  it('retains the newer local-only bytes over an older file saved under the same ref', () => {
+    const store = sourceStore()
+    const hostId = toSshExecutionHostId(TARGET.id)
+    const storage = { snapshotRoot: getProfileTerminalScrollbackSnapshotRoot(dataFiles.at(-1)!) }
+    const stored = writeTerminalScrollbackSnapshotSync({
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      buffer: 'older shared output\r\n',
+      storage
+    })!
+    const session = dormantSession('')
+    session.terminalLayoutsByTabId['tab-1'] = {
+      ...session.terminalLayoutsByTabId['tab-1']!,
+      buffersByLeafId: {},
+      scrollbackRefsByLeafId: { 'leaf-1': stored }
+    }
+    session.localOnlyScrollbackByTabId = { 'tab-1': { 'leaf-1': 'newer parked output\r\n' } }
+    store.setWorkspaceSession(session, hostId)
+    const manifest = createOrcadMigrationManifest(store, TARGET)
+    const ref = manifest.payload.dormantState?.terminalScrollbackSnapshots?.[0]?.ref ?? ''
+    expect(ref).toBe(stored)
+    store.syncOrcadMigrationScrollbackRetention([manifest])
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), hostId)
+
+    const chunk = store.readOrcadMigrationSourceSnapshotChunk(manifest, ref, 0)
+    expect(Buffer.from(chunk.bytesBase64, 'base64').toString('utf8')).toBe(
+      'newer parked output\r\n'
+    )
+  })
 })

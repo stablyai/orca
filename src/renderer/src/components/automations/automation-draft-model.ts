@@ -1,6 +1,5 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
-import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   hasExtraAgentArgs,
@@ -36,19 +35,6 @@ export function buildDraftPrecheck(draft: AutomationDraft): AutomationPrecheck |
     command,
     timeoutSeconds: Number.isFinite(rawTimeout) ? rawTimeout : 60
   }
-}
-
-export function buildHermesCronSchedule(draft: AutomationDraft): string {
-  if (draft.preset === 'custom') {
-    return draft.customSchedule.trim()
-  }
-  const { hour, minute } = parseDraftTime(draft.time)
-  return buildAutomationCronSchedule({
-    preset: draft.preset,
-    hour,
-    minute,
-    dayOfWeek: Number(draft.dayOfWeek)
-  })
 }
 
 export function getAgentLabel(agentId: string): string {

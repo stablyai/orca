@@ -1,7 +1,7 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import {
   terminalLeafMovePaneKeys,
-  type TerminalPaneKeyMove
+  type TerminalLeafMoveRequest
 } from '../../../shared/terminal-leaf-move'
 
 /**
@@ -11,7 +11,7 @@ import {
  */
 export function aliasEntriesAfterMove(
   entries: readonly LegacyPaneKeyAliasEntry[],
-  move: TerminalPaneKeyMove,
+  move: TerminalLeafMoveRequest,
   ptyId: string,
   updatedAt: number
 ): LegacyPaneKeyAliasEntry[] {

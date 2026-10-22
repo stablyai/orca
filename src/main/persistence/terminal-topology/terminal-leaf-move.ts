@@ -1,16 +1,19 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
-  type TerminalLeafMoveResult,
-  type TerminalPaneKeyMove
+  type TerminalLeafMoveResult
 } from '../../../shared/terminal-leaf-move'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { retireLeavesFromTerminalLayout } from '../../runtime/mobile-session-terminal-retirement'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import { aliasEntriesAfterMove } from './terminal-leaf-move-alias'
+import { writeRestorable } from './restorable-write'
+import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 import {
   advanceTerminalTopologyRevision,
   isTerminalOwnerPartition,
@@ -27,7 +30,9 @@ export function moveRecordKey<T>(
   record: Record<string, T> | undefined,
   fromKey: string,
   toKey: string | null,
-  remap: (value: T) => T = (value) => value
+  remap: (value: T) => T = (value) => value,
+  /** Keep a value already at `toKey`; the moved one is dropped. */
+  keepTarget = false
 ): Record<string, T> | undefined {
   if (!record || !Object.hasOwn(record, fromKey)) {
     return record
@@ -35,7 +40,7 @@ export function moveRecordKey<T>(
   const next = { ...record }
   const value = next[fromKey]
   delete next[fromKey]
-  if (toKey !== null && value !== undefined) {
+  if (toKey !== null && value !== undefined && !(keepTarget && Object.hasOwn(next, toKey))) {
     next[toKey] = remap(value)
   }
   return next
@@ -53,21 +58,19 @@ function hasTabId(session: WorkspaceSessionState, tabId: string): boolean {
   )
 }
 
-/** Whether a live tab other than `tabId` shows the leaf. A layout left behind by a removed tab row owns nothing. */
-export function leafHeldOutsideTab(
-  owners: readonly TerminalSessionPartition[],
-  tabId: string,
+/** A tab other than the source holds the leaf; a layout left behind by a removed row owns nothing. */
+export function leafHeldByOtherTab(
+  session: WorkspaceSessionState,
+  sourceTabId: string,
   leafId: string
 ): boolean {
-  return owners.some(({ session }) => {
-    const tabIds = liveTabIds(session)
-    return Object.entries(session.terminalLayoutsByTabId ?? {}).some(
-      ([layoutTabId, layout]) =>
-        layoutTabId !== tabId &&
-        tabIds.has(layoutTabId) &&
-        layoutContainsLeafId(layout?.root ?? null, leafId)
-    )
-  })
+  const tabIds = liveTabIds(session)
+  return Object.entries(session.terminalLayoutsByTabId ?? {}).some(
+    ([tabId, layout]) =>
+      tabId !== sourceTabId &&
+      tabIds.has(tabId) &&
+      layoutContainsLeafId(layout?.root ?? null, leafId)
+  )
 }
 
 type SourceHolder = TerminalSessionPartition & {
@@ -172,8 +175,7 @@ export function planTerminalLeafMove(
   if (partitions.some(({ session }) => hasTabId(session, request.targetTabId))) {
     return refuse('target_tab_exists')
   }
-  const leafElsewhere = leafHeldOutsideTab(owners, sourceTabId, leafId)
-  if (leafElsewhere) {
+  if (owners.some(({ session }) => leafHeldByOtherTab(session, sourceTabId, leafId))) {
     return refuse('leaf_in_other_tab')
   }
   const holders = owners.flatMap(({ hostId, session }) => {
@@ -210,35 +212,104 @@ const PANE_KEYED_UI_RECORDS = [
   'manuallyUnreadTurnsByPaneKey'
 ] as const
 
-/** Pane-keyed UI marks and SSH lease leaf addresses that must follow moved leaves, in order. */
+type PaneAddress = { tabId: string; leafId: string }
+
+/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a pane to its new key. */
+export function rekeyPaneProfileRecords(
+  state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
+  from: PaneAddress,
+  to: PaneAddress
+): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
+  const fromPaneKey = makePaneKey(from.tabId, from.leafId)
+  const toPaneKey = makePaneKey(to.tabId, to.leafId)
+  const ui = state.ui
+  let nextUi: PersistedState['ui'] | undefined
+  for (const key of PANE_KEYED_UI_RECORDS) {
+    const moved = moveRecordKey(ui?.[key], fromPaneKey, toPaneKey)
+    if (ui && moved !== ui[key]) {
+      nextUi = { ...(nextUi ?? ui), [key]: moved }
+    }
+  }
+  const leases = state.sshRemotePtyLeases ?? []
+  const leasesChanged = leases.some(
+    (lease) => lease.tabId === from.tabId && lease.leafId === from.leafId
+  )
+  return {
+    ...(nextUi ? { ui: nextUi } : {}),
+    ...(leasesChanged
+      ? {
+          sshRemotePtyLeases: leases.map((lease) =>
+            lease.tabId === from.tabId && lease.leafId === from.leafId
+              ? { ...lease, tabId: to.tabId, leafId: to.leafId }
+              : lease
+          )
+        }
+      : {})
+  }
+}
+
+/** Pane-keyed UI marks and SSH lease leaf addresses that must follow a moved leaf. */
 export function rekeyMovedLeafProfileRecords(
   state: Pick<PersistedState, 'ui' | 'sshRemotePtyLeases'>,
-  moves: readonly TerminalPaneKeyMove[]
+  move: TerminalLeafMoveRequest
 ): { ui?: PersistedState['ui']; sshRemotePtyLeases?: SshRemotePtyLease[] } {
-  let ui = state.ui
-  let uiChanged = false
-  let leases = state.sshRemotePtyLeases ?? []
-  let leasesChanged = false
-  for (const move of moves) {
-    const { from: fromPaneKey, to: toPaneKey } = terminalLeafMovePaneKeys(move)
-    for (const key of PANE_KEYED_UI_RECORDS) {
-      const moved = moveRecordKey(ui?.[key], fromPaneKey, toPaneKey)
-      if (ui && moved !== ui[key]) {
-        ui = { ...ui, [key]: moved }
-        uiChanged = true
-      }
-    }
-    const isMoved = (lease: SshRemotePtyLease): boolean =>
-      lease.tabId === move.sourceTabId && lease.leafId === move.leafId
-    if (leases.some(isMoved)) {
-      leases = leases.map((lease) =>
-        isMoved(lease) ? { ...lease, tabId: move.targetTabId } : lease
+  return rekeyPaneProfileRecords(
+    state,
+    { tabId: move.sourceTabId, leafId: move.leafId },
+    { tabId: move.targetTabId, leafId: move.leafId }
+  )
+}
+
+/**
+ * Pane-keyed UI marks, SSH leases and, for a bound PTY, the old-key alias follow a moved leaf;
+ * returns their restores. `request.ptyId` is the terminal the committed move bound the pane to.
+ */
+export function writeMovedLeafProfileRecords(
+  request: TerminalLeafMoveRequest,
+  context: TerminalTopologyCommitContext
+): (() => void)[] {
+  const { state } = context
+  const restores = writeRekeyedProfileRecords(rekeyMovedLeafProfileRecords(state, request), context)
+  if (request.ptyId) {
+    // Why: the hook server's own save is debounced; a crash before it would strand the process's old key.
+    restores.push(
+      writeRestorable(
+        () => state.legacyPaneKeyAliasEntries,
+        (entries) => (state.legacyPaneKeyAliasEntries = entries),
+        aliasEntriesAfterMove(state.legacyPaneKeyAliasEntries, request, request.ptyId, Date.now())
       )
-      leasesChanged = true
-    }
+    )
+    context.markDirty('legacyPaneKeyAliasEntries')
   }
-  return {
-    ...(uiChanged && ui ? { ui } : {}),
-    ...(leasesChanged ? { sshRemotePtyLeases: leases } : {})
+  return restores
+}
+
+/** Writes rekeyed UI marks and SSH leases; returns their restores. */
+export function writeRekeyedProfileRecords(
+  rekeyed: ReturnType<typeof rekeyPaneProfileRecords>,
+  context: TerminalTopologyCommitContext
+): (() => void)[] {
+  const { state } = context
+  const restores: (() => void)[] = []
+  if (rekeyed.ui) {
+    restores.push(
+      writeRestorable(
+        () => state.ui,
+        (ui) => (state.ui = ui),
+        rekeyed.ui
+      )
+    )
+    context.markDirty('ui')
   }
+  if (rekeyed.sshRemotePtyLeases) {
+    restores.push(
+      writeRestorable(
+        () => state.sshRemotePtyLeases,
+        (leases) => (state.sshRemotePtyLeases = leases),
+        rekeyed.sshRemotePtyLeases
+      )
+    )
+    context.markDirty('sshRemotePtyLeases')
+  }
+  return restores
 }

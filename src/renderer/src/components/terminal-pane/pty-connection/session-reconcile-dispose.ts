@@ -1,9 +1,6 @@
 import { useAppStore } from '@/store'
-import {
-  shouldReconcileDeadSession,
-  shouldReconcileMissingSession,
-  type HasPty
-} from '../terminal-dead-session-reconcile'
+import { consumeRestartReplacement } from './restart-replacement-on-show'
+import { shouldReconcileMissingSession, type HasPty } from '../terminal-dead-session-reconcile'
 import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/pane-tree-ops'
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-resize-hold'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -18,31 +15,6 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { noteArmsHibernatedPaneWake } from './pty-exit-hibernate'
 
 export function installSessionReconcileDispose(session: ConnectPanePtySession): PanePtyBinding {
-  session.reconcileIfSessionDead = (
-    liveSessionIds: Set<string>,
-    snapshotRequestedAt?: number
-  ): void => {
-    if (session.disposed) {
-      return
-    }
-    const currentPtyId = session.transport.getPtyId()
-    if (
-      !currentPtyId ||
-      // Why: this exit was already handled — onExit guards it too, but skipping here avoids a redundant shouldReconcile evaluation.
-      session.handledExitPtyId === currentPtyId ||
-      !shouldReconcileDeadSession({
-        ptyId: currentPtyId,
-        connectionId: session.transport.getConnectionId?.(),
-        liveSessionIds,
-        ptyBoundAt: session.activePanePtyBindingBoundAt,
-        snapshotRequestedAt
-      })
-    ) {
-      return
-    }
-    session.onExit(currentPtyId)
-  }
-
   session.reconcileIfSessionMissing = (
     hasPty: HasPty,
     livenessRequestedAt = performance.now()
@@ -104,6 +76,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
       session.consumeHibernatedAgentWake()
+      consumeRestartReplacement(session)
       session.resumeDeferredSpawnOnReveal()
       session.requestKnownWindowsShiftEnterReconfirmation()
       session.sampleVisiblePaneForegroundAgent()
@@ -169,12 +142,12 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     markShortcutTerminalInputSent() {
       session.markInteractiveRedrawInput()
     },
-    reconcileIfSessionDead: session.reconcileIfSessionDead,
     reconcileIfSessionMissing: session.reconcileIfSessionMissing,
     isUntouchedFreshSpawnPty: (ptyId) =>
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()
       session.startupTiming?.finish('disposed')
       const unsentReplacedPtyId: string | null = session.claimPendingReplacedPtyId()
@@ -214,8 +187,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // Why: cancel the post-spawn reconcile's pending rAF so a torn-down pane can't keep fitting/resizing after disposal.
       session.ptySizeReconcileHandle?.cancel()
       session.ptySizeReconcileHandle = null
-      session.startupGridSettleHandle?.cancel()
-      session.startupGridSettleHandle = null
       session.ptySizeReassertion.dispose()
       session.terminalSelectionFitGuard?.dispose()
       session.terminalSelectionFitGuard = null
@@ -261,6 +232,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.cleanupHiddenOutputRestoreDeferredRetry()
       session.cleanupHiddenOutputRestoreForegroundDeadline()
       session.cleanupHiddenOutputRestoreFloodRepaint()
+      session.flushRemoteProgramRedraw()
       session.unregisterBacklogRecovery?.()
       session.unregisterBacklogRecovery = null
       session.unregisterDocumentVisibilityRecovery?.()

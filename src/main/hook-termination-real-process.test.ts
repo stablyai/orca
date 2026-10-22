@@ -30,14 +30,14 @@ async function survivorsAfterDeadline(
   try {
     const result = await runHook('archive', dir, REPO, dir, undefined, 400)
     expect(result.success).toBe(false)
-    // SIGTERM lands at the deadline, SIGKILL two seconds later.
-    await new Promise((resolve) => setTimeout(resolve, 3_500))
     expect(existsSync(pidFile)).toBe(true)
     pids = readFileSync(pidFile, 'utf8').trim().split(/\s+/).map(Number)
     // Without this, a script that recorded only the shell leaves `pids[1]` undefined, `alive`
     // throws, and the missing descendant reads as dead — a test that passes on nothing.
     expect(pids).toHaveLength(2)
     expect(pids.every((pid) => Number.isSafeInteger(pid) && pid > 0)).toBe(true)
+    // SIGTERM lands at the deadline; resistant descendants need the real SIGKILL grace.
+    await expect.poll(() => pids.some(alive), { timeout: 5_000, interval: 25 }).toBe(false)
     return { shell: alive(pids[0]!), child: alive(pids[1]!), output: result.output, pids }
   } finally {
     for (const pid of pids) {

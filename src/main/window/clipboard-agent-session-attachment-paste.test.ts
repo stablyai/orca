@@ -1,6 +1,10 @@
-// A structured chat on a paired server keeps pasted images in that server's attachment store, not
-// in its temp directory: a temp path has no owner and nothing ever removes it.
+// A structured chat keeps pasted images in its host's attachment store, not in a temp directory: a
+// temp path has no owner, so nothing can tell a sent paste from an abandoned one.
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -18,7 +22,7 @@ vi.mock('electron', () => ({
   ipcMain: { removeHandler: vi.fn(), handle: mocks.handle },
   nativeImage: { createFromBuffer: vi.fn() }
 }))
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -119,5 +123,32 @@ describe('clipboard:saveImageAsTempFile for a structured chat on a paired server
     registerClipboardHandlers({} as never)
     await saveHandler()(event, { runtimeEnvironmentId: 'remote-host-1' }).catch(() => {})
     expect(mocks.callRuntimeEnvironment.mock.calls[0][2]).toBe('clipboard.startImageUpload')
+  })
+})
+
+describe('clipboard:saveImageAsTempFile for a local structured chat', () => {
+  it("stores the image in this machine's attachment store, where a send can claim it", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-local-paste-store-'))
+    try {
+      const store = new AgentSessionAttachmentStore(root, { hasSession: () => false })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the image save path never reads the store.
+      registerClipboardHandlers({} as never, { localChatAttachmentStore: async () => store })
+
+      const saved = await saveHandler()(event, {
+        forNativeChatDraft: true,
+        forStructuredChat: true
+      })
+
+      expect(saved).toEqual(
+        expect.stringMatching(
+          /[\\/][0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[\\/]orca-paste-.+\.png$/
+        )
+      )
+      expect(String(saved).startsWith(root)).toBe(true)
+      expect(await readFile(String(saved), 'utf8')).toBe('png')
+      expect(mocks.callRuntimeEnvironment).not.toHaveBeenCalled()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })

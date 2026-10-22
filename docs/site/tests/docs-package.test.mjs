@@ -45,8 +45,8 @@ test('docs package has an isolated, reproducible app contract', async () => {
 
   assert.equal(packageJson.name, '@orca/docs')
   assert.equal(packageJson.private, true)
-  assert.equal(packageJson.packageManager, 'pnpm@10.34.6')
-  assert.equal(packageJson.engines.node, '22.x')
+  assert.equal(packageJson.packageManager.split('+')[0], 'pnpm@12.14.0')
+  assert.equal(packageJson.engines.node, '24.x')
   assert.equal(packageJson.scripts.build, 'next build')
   assert.equal(packageJson.scripts.postinstall, 'fumadocs-mdx')
   assert.equal(packageJson.scripts.prebuild, 'fumadocs-mdx')

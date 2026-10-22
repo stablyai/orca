@@ -102,7 +102,11 @@ export function stubQuickLaunchButton(): Record<string, unknown> {
   return {
     QuickLaunchAgentMenuItems: function QuickLaunchAgentMenuItems() {
       return null
-    }
+    },
+    ProjectedAgentMenuItems: function ProjectedAgentMenuItems() {
+      return null
+    },
+    useTabAgentMenuLaunch: () => () => undefined
   }
 }
 

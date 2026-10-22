@@ -48,6 +48,7 @@ describe('Delayed remote prompt delivery', () => {
   async function mountPausedRelay({ viewed = true, away = false } = {}) {
     const relayDirectory = join(fixture.directory, 'relay')
     const relay = new RuntimeMobileNotificationController()
+    fixture.relayControllers.push(relay)
     relay.configureDismissalStore(relayDirectory)
     const relayEvents: MobileNotificationEvent[] = []
     relay.onDispatched((event) => relayEvents.push(event))
@@ -408,6 +409,7 @@ describe('Remote prompt settlement', () => {
   async function mountRemoteRelay(options?: { promptStatus?: false; raise?: false }) {
     const relayDirectory = join(fixture.directory, 'relay')
     const relay = new RuntimeMobileNotificationController()
+    fixture.relayControllers.push(relay)
     relay.configureDismissalStore(relayDirectory)
     const delivery = createNotificationDeliveryService({
       readNotificationSettings: () => NOTIFICATION_SETTINGS,

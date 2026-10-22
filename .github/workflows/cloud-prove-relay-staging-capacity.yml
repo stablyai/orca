@@ -69,8 +69,8 @@ jobs:
       DIRECTOR_SERVICE_NAME: orca-cloud-relay-staging
       DIRECTOR_ORIGIN: https://relay-staging.onorca.dev
       CELL_ORIGIN: https://c3.relay-staging.onorca.dev
-      # These drains are unpaced, but restart-safe still needs a quiet runtime for the production
-      # pace window, the same one the same-cap drain uses.
+      # These drains are unpaced, but restart-safe still waits out the production pace window
+      # from the drain, the same one the same-cap drain uses.
       RESTART_SAFE_PACE_WINDOW_MS: '300000'
       TARGET_CELL_ID: staging-gce-c3
       FALLBACK_CELL_ORIGIN: https://c2.relay-staging.onorca.dev
@@ -91,6 +91,8 @@ jobs:
           id_token_include_email: true
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - uses: ./.github/actions/cloud-sql-rollout-lease
         with:
@@ -637,6 +639,8 @@ jobs:
           id_token_include_email: true
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - uses: ./.github/actions/cloud-sql-rollout-lease
         with:

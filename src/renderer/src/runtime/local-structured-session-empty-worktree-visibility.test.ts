@@ -40,6 +40,7 @@ function emptyState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabs
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},

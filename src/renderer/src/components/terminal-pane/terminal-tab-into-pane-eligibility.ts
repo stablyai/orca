@@ -2,6 +2,7 @@ import type { AppState } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { isHostAuthoritativeLayout } from './terminal-live-layout-reconciliation'
 import { isTerminalLeafMoveInFlight, isTerminalTabMoveInFlight } from './terminal-leaf-move-guard'
@@ -13,7 +14,6 @@ export type TerminalTabIntoPaneState = Pick<
   | 'pendingStartupByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'pendingInitialCwdByTabId'
-  | 'pendingSetupSplitByTabId'
   | 'pendingIssueCommandSplitByTabId'
   | 'unverifiedPtyLossTabIds'
   | 'sleepingAgentSessionsByPaneKey'
@@ -21,6 +21,7 @@ export type TerminalTabIntoPaneState = Pick<
 >
 
 export type TerminalTabIntoPaneRefusal =
+  | 'layout_owner_build'
   | 'same_tab'
   | 'source_missing'
   | 'target_missing'
@@ -44,6 +45,7 @@ export type TerminalTabIntoPaneEligibility =
   | { ok: false; reason: TerminalTabIntoPaneRefusal }
 
 const SOURCE_WIDE_REFUSALS: ReadonlySet<TerminalTabIntoPaneRefusal> = new Set([
+  'layout_owner_build',
   'source_missing',
   'source_not_single_pane',
   'source_chat',
@@ -73,7 +75,6 @@ function hasQueuedTabWork(state: TerminalTabIntoPaneState, tabId: string): boole
     state.pendingStartupByTabId,
     state.automaticAgentResumeClaimsByTabId,
     state.pendingInitialCwdByTabId,
-    state.pendingSetupSplitByTabId,
     state.pendingIssueCommandSplitByTabId
   ].some((byTabId) => tabId in byTabId)
 }
@@ -105,6 +106,10 @@ export function resolveTerminalTabIntoPaneEligibility(
     ok: false,
     reason
   })
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    // Layout-owner builds draw moves from main's frames; this window-applied join would land twice.
+    return refuse('layout_owner_build')
+  }
   if (sourceTabId === targetTabId) {
     return refuse('same_tab')
   }

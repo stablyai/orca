@@ -8,6 +8,7 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from '../worktree-scan-failure'
+import type { SmartTier } from '../sidebar-list/sort-stamps'
 
 export type WorkspaceAttachmentOrigin = {
   kind: 'observed'
@@ -79,6 +80,13 @@ export type WorktreeHeadIdentity = {
   branch: string | null
 }
 
+/** `worktreePaths` names the only checkouts whose status the burst can have
+ *  changed; absent means unattributed, so every listener must refresh. */
+export type GitStatusMetadataChangedEvent = {
+  repoId: string
+  worktreePaths?: string[]
+}
+
 // ─── Worktree (app-level, enriched) ──────────────────────────────────
 export type WorkspaceStatus = string
 
@@ -141,7 +149,15 @@ export type Worktree = {
   sortOrder: number
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
+  /** Recent's key, stamped by the owning host on events (and still by the window). */
   lastActivityAt: number
+  /** Smart's tier, stamped by the owning host on agent transitions; absent is Rest. */
+  smartTier?: SmartTier
+  /** When the workspace entered its tier. */
+  smartAt?: number
+  /** When a terminal last took input or a phone attached, by any device; the owning host writes
+   *  it, throttled, for "last active" readers such as cleanup. Never a sort key. */
+  lastTerminalUseAt?: number
   /** Set once when Orca creates the worktree. Absent for worktrees discovered
    *  on disk or persisted before this field existed. Used by the sidebar to
    *  grant newly-created worktrees a short grace window at the top of Recent,

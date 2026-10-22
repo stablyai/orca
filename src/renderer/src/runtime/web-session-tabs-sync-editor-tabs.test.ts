@@ -3,6 +3,7 @@ import { posix as pathPosix } from 'node:path'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { OpenFile } from '../store/slices/editor'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
@@ -15,6 +16,9 @@ import {
   makeState,
   resetWebSessionTabsSyncTestState
 } from './web-session-tabs-sync-test-harness'
+
+// Why: a server's file is named by its owned id from the first open, as restore names it.
+const README_ID = buildOwnedEditorFileId('/repo/README.md', WT, ENV)
 
 vi.mock('../store', () => ({
   useAppStore: {
@@ -67,7 +71,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const terminalId = patch.tabsByWorktree?.[WT]?.[0]?.id
     expect(patch.openFiles).toMatchObject([
       {
-        id: '/repo/README.md',
+        id: README_ID,
         filePath: '/repo/README.md',
         relativePath: 'README.md',
         worktreeId: WT,
@@ -81,7 +85,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: 'host-readme-unified',
-          entityId: '/repo/README.md',
+          entityId: README_ID,
           contentType: 'editor',
           label: 'README.md',
           color: '#16a34a',
@@ -93,8 +97,8 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabId: 'host-readme-unified',
       tabOrder: [terminalId, 'host-readme-unified']
     })
-    expect(patch.activeFileId).toBe('/repo/README.md')
-    expect(patch.activeFileIdByWorktree?.[WT]).toBe('/repo/README.md')
+    expect(patch.activeFileId).toBe(README_ID)
+    expect(patch.activeFileIdByWorktree?.[WT]).toBe(README_ID)
     expect(patch.activeTabType).toBe('editor')
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('editor')
   })
@@ -279,20 +283,20 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(patch.openFiles).toMatchObject([
       {
-        id: 'markdown-preview::/repo/README.md',
+        id: `markdown-preview::${README_ID}`,
         filePath: '/repo/README.md',
-        markdownPreviewSourceFileId: '/repo/README.md',
+        markdownPreviewSourceFileId: README_ID,
         mode: 'markdown-preview'
       }
     ])
     expect(patch.unifiedTabsByWorktree?.[WT]).toMatchObject([
       {
         id: 'host-preview-unified',
-        entityId: 'markdown-preview::/repo/README.md',
+        entityId: `markdown-preview::${README_ID}`,
         contentType: 'editor'
       }
     ])
-    expect(patch.activeFileId).toBe('markdown-preview::/repo/README.md')
+    expect(patch.activeFileId).toBe(`markdown-preview::${README_ID}`)
   })
 
   it('removes mirrored editor tabs when the host closes the file', () => {
@@ -324,12 +328,12 @@ describe('applyWebSessionTabsSnapshot', () => {
     const hydratedState = { ...makeState(), ...hydratedPatch } as WebSessionTabsSyncState
 
     expect(hydratedState.openFiles[0]).toMatchObject({
-      id: '/repo/README.md',
+      id: README_ID,
       mirroredFromRuntimeSession: true
     })
     expect(hydratedState.unifiedTabsByWorktree[WT]?.[0]).toMatchObject({
       id: 'host-readme-unified',
-      entityId: '/repo/README.md'
+      entityId: README_ID
     })
 
     const patch = applyWebSessionTabsSnapshot(

@@ -300,15 +300,15 @@ export async function publishTerminalSubscribeBinarySnapshot(
         typeof item.meta?.seq === 'number' &&
         typeof item.meta.rawLength === 'number'
       ) {
-        if (item.meta.rawLength === item.data.length) {
-          uncoveredMeta = { ...item.meta, rawLength: uncoveredData.length }
-        }
         uncoveredData = stripSnapshotBoundaryQuerySuffixes(
           uncoveredData,
           snapshotOutputSeq,
           snapshotOutputSeq,
           state.pendingQuerySequences
         )
+        if (!item.meta.transformed && item.meta.rawLength === item.data.length) {
+          uncoveredMeta = { ...item.meta, rawLength: uncoveredData.length }
+        }
       }
       if (uncoveredData) {
         state.outputBatcher.push(uncoveredData, uncoveredMeta)

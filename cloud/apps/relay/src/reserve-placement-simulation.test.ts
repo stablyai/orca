@@ -42,8 +42,9 @@ function expectInvariants(report: SimulationReport): void {
 }
 
 describe('step 5 deterministic simulation', () => {
+  // Invariant 9 (dead-man) never trips here; its own tests below cover it.
   it.each(SEEDS)(
-    'holds invariants 1-3 and 5-8 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
+    'holds invariants 1-8 across mixed versions, lagging polls, restarts and database stalls (seed %i)',
     async (seed) => {
       const report = await runReservePlacementSimulation({
         seed,
@@ -174,6 +175,48 @@ describe('step 5 deterministic simulation', () => {
     120_000
   )
 
+  // A desktop seated at the same epoch on two cells (a seat half-open within a poll lag, then
+  // placed again by a director that had not seen it): only the row breaks the tie. Short
+  // sessions and all five directors restarting each minute put boot reconciles on those seats.
+  const levelSeats = (seed: number, faults: SimulationConfig['faults']): SimulationConfig => ({
+    seed,
+    durationMs: 16 * 60_000,
+    directors: 5,
+    cells: Array.from({ length: 12 }, (_, index) => ({
+      cellId: `us${String(index).padStart(2, '0')}`,
+      region: 'us-central1' as const,
+      hardCap: 600,
+      ceiling: 480,
+      intakePerSec: 20,
+      mode: 'reserve' as const,
+      preseated: 100
+    })),
+    hosts: 3_000,
+    hostRegion: () => 'us-central1',
+    arrivalPerSec: 20,
+    meanSessionMs: 20_000,
+    reconnectDelayMs: [500, 2_000],
+    duplicateAssignShare: 0.05,
+    halfOpenShare: 0.5,
+    pollLagMs: (director) => [0, 200, 1_000, 2_000, 3_000][director]!,
+    rttMs: rtt,
+    directorRestarts: Array.from({ length: 75 }, (_, index) => ({
+      at: 60_000 + Math.floor(index / 5) * 60_000,
+      director: index % 5
+    })),
+    faults
+  })
+
+  it.each(SEEDS)(
+    'holds invariants 1-8 when directors contest level divergences (seed %i)',
+    async (seed) => {
+      const report = await runReservePlacementSimulation(levelSeats(seed, {}))
+      expect(report.contestedDivergences).toBeGreaterThan(0)
+      expectInvariants(report)
+    },
+    120_000
+  )
+
   // Each fault breaks one rule; the matching invariant must fire, or its check measures nothing.
   const mixed = (faults: SimulationConfig['faults']): SimulationConfig => ({
     seed: 11,
@@ -251,6 +294,9 @@ describe('step 5 deterministic simulation', () => {
     [1, nearFull({ bookPastCap: true })],
     [2, drain({ intakeBurst: 200, directorShare: 0.05 })],
     [3, drainedWithoutSupersede()],
+    // Half-open seats the booking map had not seen hold their cell until the silence close.
+    [3, levelSeats(11, { skipFeedSupersede: true })],
+    [4, levelSeats(11, { localTieBreak: true })],
     [5, mixed({ unguardedLedger: true })],
     // A director restart mid-queue loses its booked joins' rows until its boot reconcile.
     [5, restartedMidQueue()],
@@ -271,13 +317,6 @@ describe('step 5 deterministic simulation', () => {
     // A director whose map has not seen the leave yet may re-place level with the row; the
     // WRONG_CELL row read keeps that a small share (the rest are repaired by one more reconcile).
     expect(report.badFirstReseats / report.rowAheadDemotions).toBeLessThan(0.1)
-    const withoutRead = await runReservePlacementSimulation({ ...config, faults: { noWrongCellRowRead: true } })
-    process.stderr.write(
-      `row_ahead_repair ${JSON.stringify({
-        withRead: { demotions: report.rowAheadDemotions, badFirstReseats: report.badFirstReseats, perHost: report.rowAheadDemotionsPerHost },
-        withoutRead: { demotions: withoutRead.rowAheadDemotions, badFirstReseats: withoutRead.badFirstReseats, perHost: withoutRead.rowAheadDemotionsPerHost }
-      })}\n`
-    )
   }, 240_000)
 
   // Every director misses its feed polls for 150 s: each reserve cell's dead-man trips (60-120 s)

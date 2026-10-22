@@ -1,13 +1,4 @@
-import {
-  PanelLeftClose,
-  PanelRightClose,
-  Pin,
-  PinOff,
-  Pencil,
-  SquareTerminal,
-  X,
-  ListX
-} from 'lucide-react'
+import { Pin, PinOff, Pencil, SquareTerminal, X, ListX } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,11 +11,14 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TerminalTabMoveIntoTabMenuSection } from './TerminalTabMoveIntoTabMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
+import type { NativeChatTabSession } from './tab-session-history-switch'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
+import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 const TAB_COLORS = [
   {
@@ -90,7 +84,7 @@ const TAB_COLORS = [
 ] as const
 
 type SortableTabContextMenuProps = {
-  tab: TerminalTab
+  tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'color'>
   unifiedTabId: string
   groupId: string
   isActive: boolean
@@ -101,11 +95,14 @@ type SortableTabContextMenuProps = {
   hasTabsToLeft: boolean
   isPinned: boolean
   onOpenChange: (open: boolean) => void
+  onSessionSwitchComplete?: () => void
+  sessionSwitchOpening?: number | null
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
+  onCloseSplitPane?: () => void
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
@@ -119,8 +116,8 @@ type SortableTabContextMenuProps = {
   /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
   canSplitTerminal?: boolean
-  /** Set only for a native chat tab: the chat session it shows. */
-  structuredSessionId?: string
+  /** Set only for a native chat tab. */
+  nativeChat?: NativeChatTabSession
 }
 
 export function SortableTabContextMenu({
@@ -131,15 +128,14 @@ export function SortableTabContextMenu({
   open,
   point,
   tabCount,
-  hasTabsToRight,
-  hasTabsToLeft,
   isPinned,
   onOpenChange,
+  onSessionSwitchComplete,
+  sessionSwitchOpening,
   onActivate,
   onClose,
   onCloseOthers,
-  onCloseToRight,
-  onCloseToLeft,
+  onCloseSplitPane,
   onRenameOpen,
   onSetTabColor,
   onTogglePin,
@@ -147,7 +143,7 @@ export function SortableTabContextMenu({
   isChatView = false,
   onToggleViewMode,
   canSplitTerminal = true,
-  structuredSessionId
+  nativeChat
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -180,7 +176,7 @@ export function SortableTabContextMenu({
           splitDownShortcut={splitDownShortcut}
           showTerminalSplit={canSplitTerminal}
         />
-        {structuredSessionId === undefined && !isChatView ? (
+        {!ORCA_LAYOUT_OWNER_IS_MAIN && !isChatView ? (
           <TerminalTabMoveIntoTabMenuSection tabId={tab.id} worktreeId={tab.worktreeId} />
         ) : null}
         {showTerminalViewSwitch ? (
@@ -190,15 +186,17 @@ export function SortableTabContextMenu({
               <SquareTerminal className="size-3.5 shrink-0" />
               {translate(
                 'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                'Switch to terminal view'
+                'Continue with Terminal Agent'
               )}
             </DropdownMenuItem>
           </>
         ) : null}
         <TabSessionSurfaceSwitchMenuItems
+          key={sessionSwitchOpening}
           tab={tab}
-          structuredSessionId={structuredSessionId}
+          nativeChat={nativeChat}
           leadingSeparator={!showTerminalViewSwitch}
+          onComplete={onSessionSwitchComplete}
         />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>
@@ -222,20 +220,7 @@ export function SortableTabContextMenu({
           <ListX className="size-3.5" />
           {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
-          <PanelRightClose className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
-            'Close Tabs To The Right'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onCloseToLeft(tab.id)} disabled={!hasTabsToLeft}>
-          <PanelLeftClose className="size-3.5" />
-          {translate(
-            'components.tab.bar.SortableTabContextMenu.closeTabsToLeft',
-            'Close Tabs To The Left'
-          )}
-        </DropdownMenuItem>
+        <CloseSplitPaneMenuItem onCloseSplitPane={onCloseSplitPane} />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onRenameOpen}>
           <Pencil className="size-3.5" />

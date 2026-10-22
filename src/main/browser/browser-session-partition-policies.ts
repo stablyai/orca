@@ -9,6 +9,14 @@ import {
 } from './browser-session-proxy'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
+import {
+  browserSitePermissionRequestingOrigin,
+  browserSitePermissionsFor,
+  decideBrowserSitePermissions,
+  isBrowserSitePermissionAllowed,
+  savedBrowserSitePermissions,
+  sessionBrowserSitePermissions
+} from './browser-site-permission-prompt'
 import { installBrowserSessionUserAgentPolicy } from './browser-session-ua'
 import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 import {
@@ -17,6 +25,7 @@ import {
   installBrowserWebAuthnAccessHandlers
 } from './browser-webauthn-access'
 import { noticeDocPreviewDownloadBlocked } from './doc-preview-download-block-notice'
+import { isRemoteCliDrivenGuest } from './desktop-browser-bridge/remote-cli-driven-workspaces'
 
 // Why: one shared installer keeps every partition's deny-by-default permission/download policies from drifting apart.
 const configuredPartitions = new Set<string>()
@@ -48,15 +57,26 @@ function configureBrowserSessionUserAgentPolicy(sess: Session, installExceptions
   )
 }
 
+// Why: an SSH host scripting a page must not read the desktop clipboard through it.
+function deniesRemoteCliDrivenClipboardRead(permission: string, webContentsId?: number): boolean {
+  return permission === 'clipboard-read' && isRemoteCliDrivenGuest(webContentsId)
+}
+
 /** Drop only the installer memo; retired-session guards remain fail-closed. */
 export function forgetBrowserSessionPartitionConfiguration(partition: string): void {
   configuredPartitions.delete(partition)
 }
 const handleWillDownload = (
-  _event: Electron.Event,
+  event: Electron.Event,
   item: Electron.DownloadItem,
   webContents: Electron.WebContents
 ): void => {
+  // Why: a host-driven page could otherwise write a host-chosen file into this desktop's Downloads.
+  if (isRemoteCliDrivenGuest(webContents.id)) {
+    event.preventDefault()
+    console.info('[desktop-browser-bridge] refused a download from a page an SSH host drives')
+    return
+  }
   browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
 }
 
@@ -107,6 +127,8 @@ export async function installBrowserSessionPartitionPolicies(
     permissions?: BrowserPartitionPermissionPolicy
     applyAppWideProxy?: boolean
     userAgentExceptions?: boolean
+    /** `session`: answers last until Orca quits instead of being saved to the profile. */
+    sitePermissions?: 'saved' | 'session'
   } = {}
 ): Promise<void> {
   const { partition } = profile
@@ -129,53 +151,93 @@ export async function installBrowserSessionPartitionPolicies(
     sess.setPermissionCheckHandler(() => false)
     clearBrowserWebAuthnAccessHandlers(sess)
   } else {
+    const siteMemory =
+      options.sitePermissions === 'session'
+        ? sessionBrowserSitePermissions(partition)
+        : savedBrowserSitePermissions(profile.id)
     sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
-      // Why: defer media to macOS TCC; denying at the session layer throws NotAllowedError even after the user granted Camera/Mic to the OS.
-      if (permission === 'media') {
-        // Capture before async handling; opaque frames cannot be attributed to a named site.
-        const rawUrl = resolvePermissionNoticeUrl(webContents, details)
-        void requestSystemMediaAccess(
-          details as Electron.MediaAccessPermissionRequest | undefined
-        ).then(
-          (granted) => {
-            if (!granted) {
-              browserManager.notifyPermissionDenied({
-                guestWebContentsId: webContents.id,
-                permission,
-                rawUrl
-              })
-            }
-            callback(granted)
-          },
-          (error: unknown) => {
-            console.error('[permissions] Browser media access failed:', error)
-            browserManager.notifyPermissionDenied({
-              guestWebContentsId: webContents.id,
-              permission,
-              rawUrl
-            })
-            callback(false)
-          }
+      if (
+        permission === 'openExternal' &&
+        browserManager.requestExternalAppLaunch(
+          webContents,
+          'externalURL' in details ? details.externalURL : undefined,
+          () => resolvePermissionNoticeUrl(webContents, details) || null
         )
+      ) {
+        // Why: Orca launches the app itself after the user says yes, so Chromium's own launch stays denied.
+        callback(false)
         return
       }
-      const allowed = isAutoGrantedBrowserSessionPermission(permission)
-      if (!allowed) {
-        const rawUrl = resolvePermissionNoticeUrl(webContents, details)
+      // Capture before async handling; opaque frames cannot be attributed to a named site.
+      const rawUrl = resolvePermissionNoticeUrl(webContents, details)
+      const notifyDenied = (): void =>
         browserManager.notifyPermissionDenied({
           guestWebContentsId: webContents.id,
           permission,
           rawUrl
         })
+      if (deniesRemoteCliDrivenClipboardRead(permission, webContents.id)) {
+        notifyDenied()
+        callback(false)
+        return
       }
-      callback(allowed)
+      const mediaRequest = 'mediaTypes' in details ? details : undefined
+      const sitePermissions = browserSitePermissionsFor(permission, mediaRequest?.mediaTypes)
+      if (!sitePermissions) {
+        const allowed = isAutoGrantedBrowserSessionPermission(permission)
+        if (!allowed) {
+          notifyDenied()
+        }
+        callback(allowed)
+        return
+      }
+      const decide = async (): Promise<boolean> => {
+        const allowed = await decideBrowserSitePermissions({
+          requester: webContents,
+          frameOrigin: browserSitePermissionRequestingOrigin(webContents, details),
+          memory: siteMemory,
+          permissions: sitePermissions
+        })
+        if (!allowed || permission !== 'media') {
+          return allowed
+        }
+        // Why: macOS gates camera and mic per app too; the user allowed the site, so the notice names the OS refusal.
+        const granted = await requestSystemMediaAccess(mediaRequest)
+        if (!granted) {
+          notifyDenied()
+        }
+        return granted
+      }
+      void decide().then(callback, (error: unknown) => {
+        console.error('[permissions] Browser site permission failed:', error)
+        callback(false)
+      })
     })
-    sess.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-      if (permission === 'media') {
-        return hasSystemMediaAccess(details?.mediaType)
+    sess.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+      if (deniesRemoteCliDrivenClipboardRead(permission, webContents?.id)) {
+        return false
       }
       if (allowsBrowserWebAuthnPermission(permission, details)) {
         return true
+      }
+      const sitePermissions = browserSitePermissionsFor(
+        permission,
+        details?.mediaType ? [details.mediaType] : undefined
+      )
+      if (sitePermissions) {
+        return (
+          isBrowserSitePermissionAllowed({
+            // Why: a service worker has no contents; its origin is the site's.
+            source: {
+              pageUrl: webContents?.getURL() ?? requestingOrigin,
+              // Why: unlike request details, a check names the frame's real (inherited) origin.
+              frameOrigin: requestingOrigin
+            },
+            memory: siteMemory,
+            permissions: sitePermissions
+          }) &&
+          (permission !== 'media' || hasSystemMediaAccess(details?.mediaType))
+        )
       }
       return isAutoGrantedBrowserSessionPermission(permission)
     })

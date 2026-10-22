@@ -1,3 +1,4 @@
+import type { DraggedWorktreeCopies } from './worktree-list/drag/dragged-worktree-copies'
 import type React from 'react'
 
 import type { Repo } from '../../../../shared/repo-types'
@@ -24,6 +25,8 @@ export type WorktreeCardProps = {
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
   hostContextLabel?: string
+  /** Reuse the normal project badge for a nested child owned by another repo. */
+  showProjectName?: boolean
   inPinnedSection?: boolean
   activationRowKey?: string
   renameRowKey?: string
@@ -47,7 +50,7 @@ export type WorktreeCardProps = {
   onCardDragStart?: (
     event: React.DragEvent<HTMLDivElement>,
     worktreeId: string,
-    draggedIds: readonly string[]
+    draggedCopies: DraggedWorktreeCopies
   ) => void
   onCardDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void
   nativeDragEnabled?: boolean

@@ -55,4 +55,16 @@ describe('revealFloatingWorkspacePanel', () => {
     runFrames()
     expect(dispatchEvent).toHaveBeenCalledOnce()
   })
+
+  it('leaves the panel and the saved setting alone before settings hydrate', async () => {
+    const { dispatchEvent, runFrames } = stubWindow()
+    const unhydrated = { ...panelState({ enabled: false, open: false }), settings: null }
+
+    revealFloatingWorkspacePanel(unhydrated)
+    await settle()
+    runFrames()
+
+    expect(unhydrated.updateSettings).not.toHaveBeenCalled()
+    expect(dispatchEvent).not.toHaveBeenCalled()
+  })
 })

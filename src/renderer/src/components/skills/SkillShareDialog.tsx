@@ -4,9 +4,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import type {
-  SkillSharePreview,
-  SkillShareProgress
+import {
+  SKILL_SHARE_NAME_TAKEN_ERROR,
+  type SkillSharePreview,
+  type SkillShareProgress
 } from '../../../../shared/skill-sharing-contract'
 import type { ManagedSkillInstall } from '../../../../shared/skill-install-contract'
 import type { DiscoveredSkill } from '../../../../shared/skills'
@@ -38,6 +39,17 @@ function operationError(status: string): string {
         'auto.components.skills.SkillShareDialog.unconfigured',
         'Connect an Orca Cloud account before sharing.'
       )
+}
+
+// Why: IPC wraps the main-process message, so match it as a substring.
+function nameTakenError(cause: unknown, name: string): string | null {
+  return String(cause).includes(SKILL_SHARE_NAME_TAKEN_ERROR)
+    ? translate(
+        'auto.components.skills.SkillShareDialog.nameTaken',
+        'The skill name “{{name}}” is already in use. Rename your skill to share it.',
+        { name }
+      )
+    : null
 }
 
 export function SkillShareDialog({
@@ -78,6 +90,7 @@ export function SkillShareDialog({
     setError(null)
     setPublishingNewVersion(false)
     setPreparing(true)
+    const bundleName = derivedBundleName(selectedSkills)
     void (async () => {
       let managedInstall: ManagedSkillInstall | null = null
       try {
@@ -90,7 +103,7 @@ export function SkillShareDialog({
       }
       const nextPreview = await window.api.skills.prepareShare({
         skillIds: selectedSkills.map((skill) => skill.id),
-        bundleName: derivedBundleName(selectedSkills),
+        bundleName,
         ...(managedInstall ? { packageId: managedInstall.packageId } : {})
       })
       retainedPreparationId = nextPreview.preparationId
@@ -119,10 +132,11 @@ export function SkillShareDialog({
         console.warn('[skills] share preparation failed:', cause)
         if (generation.current === current) {
           setError(
-            translate(
-              'auto.components.skills.SkillShareDialog.prepareFailed',
-              'Could not prepare this skill for sharing.'
-            )
+            nameTakenError(cause, bundleName) ??
+              translate(
+                'auto.components.skills.SkillShareDialog.prepareFailed',
+                'Could not prepare this skill for sharing.'
+              )
           )
         }
       })

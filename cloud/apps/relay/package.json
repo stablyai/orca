@@ -1,7 +1,7 @@
 {
   "name": "@orca-cloud/relay",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "pretest": "pnpm --filter @orca-cloud/postgres-schema build && pnpm --filter @orca-cloud/relay-contract build",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "node --import tsx --conditions=orca-source ../../dev/scripts/run-relay-tests.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
