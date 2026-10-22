@@ -1,3 +1,4 @@
+import { clearMobileAiVaultMemoryCache } from '../agent-history/mobile-ai-vault-session-cache'
 import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
 import {
   sessionTabClose,
@@ -5,13 +6,16 @@ import {
   sessionTerminalRename
 } from './mobile-session-write-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
+import { removeRecentSessionCard } from './recent-session-cards'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     setTerminals,
+    terminals,
     terminalsRef,
     setSessionTabs,
     setFileDocs,
@@ -34,7 +38,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     scheduleDelayedAction,
     unsubscribeTerminal,
     subscribeToTerminal,
-    fetchTerminals
+    fetchTerminals,
+    fetchSessionTabs
   } = scope
   async function handleRenameTerminal(value: string) {
     if (!client || !renameTarget) {
@@ -45,10 +50,12 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
 
     try {
       const title = value.trim()
+      clearMobileAiVaultMemoryCache()
       const response = sessionTerminalRename.interpret(
         await sessionTerminalRename.request(client, { terminal: target.handle, title })
       )
       if (response.accepted) {
+        clearMobileAiVaultMemoryCache()
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
             terminal.handle === target.handle
@@ -58,7 +65,17 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           terminalsRef.current = next
           return next
         })
-        scheduleDelayedAction(() => void fetchTerminals(), 300)
+        const nextSessionTabs = sessionTabsRef.current.map((tab) =>
+          tab.type === 'terminal' && tab.terminal === target.handle
+            ? { ...tab, title: title || 'Terminal' }
+            : tab
+        )
+        sessionTabsRef.current = nextSessionTabs
+        setSessionTabs(nextSessionTabs)
+        scheduleDelayedAction(() => {
+          void fetchTerminals()
+          void fetchSessionTabs()
+        }, 300)
       }
     } catch {
       // Rename failed — refresh will restore the server title.
@@ -75,12 +92,16 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         await sessionTerminalClose.request(client, { terminal: target.handle })
       )
       if (response.accepted) {
+        clearMobileAiVaultMemoryCache()
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(hostId, worktreeId, undefined, target.handle)
+        }
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         clearTerminalLiveInputDefault(target.handle)
-        const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
-        terminalsRef.current = next
+        const next = terminals.filter((terminal) => terminal.handle !== target.handle)
         setTerminals(next)
+        terminalsRef.current = next
         if (activeHandleRef.current === target.handle) {
           const replacement = next[0] ?? null
           activeHandleRef.current = replacement?.handle ?? null
@@ -117,6 +138,15 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted) {
+        clearMobileAiVaultMemoryCache()
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(
+            hostId,
+            worktreeId,
+            tab.id,
+            tab.type === 'terminal' ? tab.terminal : undefined
+          )
+        }
         if (tab.type === 'markdown') {
           setMarkdownDocs((prev) => {
             const doc = prev.get(tab.id)

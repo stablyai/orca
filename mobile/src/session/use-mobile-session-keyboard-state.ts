@@ -1,11 +1,18 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useSoftKeyboard } from '../platform/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
+import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
+import {
+  buildRecentSessionCardFromTab,
+  hydrateRecentSessionCards,
+  reconcileRecentSessionCardsForWorktree,
+  recordRecentSessionCardVisit
+} from './recent-session-cards'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
+
+const EMPTY_SESSION_TABS: MobileSessionLifecycleModel['sessionTabs'] = []
 
 /**
  * Exactly the fields this hook reads, so the whole lifecycle model still fits and a test can build
@@ -38,12 +45,15 @@ export type MobileSessionKeyboardScope = Pick<
   | 'viewportMeasuredRef'
   | 'viewportRef'
   | 'worktreeId'
->
+> &
+  Partial<Pick<MobileSessionLifecycleModel, 'sessionTabs' | 'worktreeName'>>
 
 export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope) {
   const {
     hostId,
     worktreeId,
+    worktreeName,
+    sessionTabs = EMPTY_SESSION_TABS,
     router,
     connState,
     terminals,
@@ -101,32 +111,8 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     setKeyboardHeight(softKeyboard.height)
   }, [setKeyboardHeight, softKeyboard.height])
 
-  const heldTabStripRevealRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cancelHeldTabStripReveal = useCallback(() => {
-    if (heldTabStripRevealRef.current) {
-      clearTimeout(heldTabStripRevealRef.current)
-      heldTabStripRevealRef.current = null
-    }
-  }, [])
-  useEffect(() => cancelHeldTabStripReveal, [cancelHeldTabStripReveal])
-  // Why: a double-tap's second tap must land on the tab the first one hit, so a tap's reveal waits
-  // out that window and every other strip scroll, activation's included, holds until it runs.
-  const holdTabStripReveal = useCallback(
-    (offset: number, delayMs: number) => {
-      cancelHeldTabStripReveal()
-      heldTabStripRevealRef.current = setTimeout(() => {
-        heldTabStripRevealRef.current = null
-        if (offset !== tabStripOffsetRef.current) {
-          tabStripOffsetRef.current = offset
-          tabStripRef.current?.scrollTo({ x: offset, animated: true })
-        }
-      }, delayMs)
-    },
-    [cancelHeldTabStripReveal]
-  )
-
   const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
-    if (!tabId || heldTabStripRevealRef.current) {
+    if (!tabId) {
       return
     }
     const layout = tabLayoutsRef.current.get(tabId)
@@ -152,12 +138,43 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     return () => cancelAnimationFrame(id)
   }, [activeSessionTabId, scrollActiveTabIntoView])
 
-  const executionHost = useWorkspaceExecutionHost()
   useEffect(() => {
     if (hostId && worktreeId) {
-      void writeLastVisitedWorktree({ hostId, worktreeId, executionHost })
+      writeLastVisitedWorktree({ hostId, worktreeId })
     }
-  }, [hostId, worktreeId, executionHost])
+  }, [hostId, worktreeId])
+
+  useEffect(() => {
+    void hydrateRecentSessionCards().catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!hostId || !worktreeId) {
+      return
+    }
+    if (sessionTabs.length > 0) {
+      reconcileRecentSessionCardsForWorktree({
+        hostId,
+        worktreeId,
+        liveTabs: sessionTabs
+      })
+    }
+    if (!activeSessionTabId) {
+      return
+    }
+    const activeTab = sessionTabs.find((tab) => tab.id === activeSessionTabId)
+    if (!activeTab) {
+      return
+    }
+    recordRecentSessionCardVisit(
+      buildRecentSessionCardFromTab({
+        hostId,
+        worktreeId,
+        worktreeName: worktreeName || '',
+        tab: activeTab
+      })
+    )
+  }, [activeSessionTabId, hostId, sessionTabs, worktreeId, worktreeName])
 
   const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
     try {
@@ -177,8 +194,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     notifyKeyboardVisibility,
     notifyTerminalCellBoxChange,
     scrollActiveTabIntoView,
-    holdTabStripReveal,
-    cancelHeldTabStripReveal,
     handleDeleteCustomKey,
     handleManageShortcuts
   }

@@ -1,19 +1,92 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
-import {
-  type ActivePanel,
-  resolvePanelAction,
-  shouldShowSessionHeaderChecksAction,
-  panelRouteDescriptor
-} from './session-panel-host'
+import { readInitialMobileAgentHistoryWorktrees } from '../agent-history/mobile-agent-history-worktree-cache'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
   useWorkspaceExecutionHost,
   workspaceRouteHref,
   workspaceRouteParams
 } from '../navigation/workspace-execution-host'
+import { triggerError, triggerSuccess } from '../platform/haptics'
+import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
+import { sessionTabsListRead } from './mobile-session-read-operations'
+import {
+  activateMobileSessionTab,
+  requestLocalSessionTabFollow,
+  setPendingCrossWorktreeTabTarget
+} from './mobile-session-tab-activation'
+import {
+  getVisibleRecentSessionCards,
+  readAllRecentSessionCardsSync,
+  reconcileRecentSessionCardsForWorktree,
+  removeRecentSessionCard,
+  subscribeRecentSessionCards,
+  type RecentSessionCardRecord
+} from './recent-session-cards'
+import {
+  type ActivePanel,
+  resolvePanelAction,
+  shouldShowSessionHeaderChecksAction,
+  panelRouteDescriptor
+} from './session-panel-host'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
+
+type RecentCardWorktree = {
+  worktreeId: string
+  displayName?: string
+  isArchived?: boolean
+}
+
+function recentCardWorktrees(rows: readonly unknown[] | undefined): RecentCardWorktree[] {
+  return (rows ?? []).flatMap((row) =>
+    typeof row === 'object' &&
+    row !== null &&
+    'worktreeId' in row &&
+    typeof row.worktreeId === 'string' &&
+    row.worktreeId.length > 0
+      ? [
+          {
+            worktreeId: row.worktreeId,
+            displayName:
+              'displayName' in row && typeof row.displayName === 'string'
+                ? row.displayName
+                : undefined,
+            isArchived:
+              'isArchived' in row && typeof row.isArchived === 'boolean'
+                ? row.isArchived
+                : undefined
+          }
+        ]
+      : []
+  )
+}
+
+function recentCardSnapshotTabs(value: unknown): { id: string; terminal?: string }[] | null {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('tabs' in value) ||
+    !Array.isArray(value.tabs)
+  ) {
+    return null
+  }
+  return value.tabs.flatMap((item) =>
+    typeof item === 'object' &&
+    item !== null &&
+    'id' in item &&
+    typeof item.id === 'string' &&
+    item.id.length > 0
+      ? [
+          {
+            id: item.id,
+            terminal:
+              'terminal' in item && typeof item.terminal === 'string' ? item.terminal : undefined
+          }
+        ]
+      : []
+  )
+}
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
   const executionHost = useWorkspaceExecutionHost()
@@ -22,8 +95,18 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     worktreeId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
+    client,
+    connState,
     router,
     worktreeName,
+    sessionTabs,
+    activeSessionTabId,
+    switchSessionTab,
+    showToast,
+    showHeaderMoreActions,
+    setShowHeaderMoreActions,
+    showRecentSessionCards,
+    setShowRecentSessionCards,
     activePanel,
     setActivePanel,
     setSessionContentRowWidth,
@@ -43,111 +126,67 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     sendDiffNotesToNewAgent,
     handleCreateTerminal
   } = scope
-  const otherRuntimeAgentRow = {
-    label: 'Agents on Another Server',
-    hint: 'Pair that server directly',
-    icon: Bot,
-    disabled: true,
-    onPress: () => {}
-  }
-  const createTabAgentActions =
+  const noop = () => {}
+  const buildAgentRows = <T,>(
+    errorHint: string,
+    mapOption: (option: (typeof createTabAgentOptions)[number]) => T
+  ) =>
     createTabAgentLoadState === 'loading'
-      ? [
-          {
-            label: 'Detecting Agents',
-            icon: Bot,
-            disabled: true,
-            loading: true,
-            onPress: () => {}
-          }
-        ]
+      ? [{ label: 'Detecting Agents', icon: Bot, disabled: true, loading: true, onPress: noop }]
       : createTabAgentOptions.length > 0
-        ? createTabAgentOptions.map((option) => ({
-            label: option.label,
-            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
-            onPress: () => {
-              setShowCreateTabDrawer(false)
-              void handleCreateTerminal(option.agent)
-            }
-          }))
+        ? createTabAgentOptions.map(mapOption)
         : createTabAgentLoadState === 'loaded'
-          ? [
-              {
-                label: 'No Enabled Agents',
-                icon: Bot,
-                disabled: true,
-                onPress: () => {}
-              }
-            ]
+          ? [{ label: 'No Enabled Agents', icon: Bot, disabled: true, onPress: noop }]
           : createTabAgentLoadState === 'other-runtime'
-            ? [otherRuntimeAgentRow]
+            ? [
+                {
+                  label: 'Agents on Another Server',
+                  hint: 'Pair that server directly',
+                  icon: Bot,
+                  disabled: true,
+                  onPress: noop
+                }
+              ]
             : createTabAgentLoadState === 'error'
               ? [
                   {
                     label: 'Agent Presets Unavailable',
-                    hint: 'Check the host connection',
+                    hint: errorHint,
                     icon: Bot,
                     disabled: true,
-                    onPress: () => {}
+                    onPress: noop
                   }
                 ]
               : []
+  const createTabAgentActions = buildAgentRows('Check the host connection', (option) => ({
+    label: option.label,
+    renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
+    onPress: () => {
+      setShowCreateTabDrawer(false)
+      void handleCreateTerminal(option.agent)
+    }
+  }))
   const sendDiffNotesAgentActions =
     pendingDiffNotesDelivery === null
       ? []
-      : createTabAgentLoadState === 'loading'
-        ? [
-            {
-              label: 'Detecting Agents',
-              icon: Bot,
-              disabled: true,
-              loading: true,
-              onPress: () => {}
-            }
-          ]
-        : createTabAgentOptions.length > 0
-          ? createTabAgentOptions.map((option) => ({
-              label: option.label,
-              hint: 'New agent session',
-              icon: Bot,
-              onPress: () => {
-                const delivery = pendingDiffNotesDelivery
-                setPendingDiffNotesDelivery(null)
-                if (!delivery) {
-                  return
-                }
-                void sendDiffNotesToNewAgent(delivery, async () => {
-                  await handleCreateTerminal(option.agent, {
-                    initialPrompt: delivery.prompt,
-                    onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
-                  })
+      : buildAgentRows('Copy notes instead', (option) => ({
+          label: option.label,
+          hint: 'New agent session',
+          icon: Bot,
+          onPress: () => {
+            const delivery = pendingDiffNotesDelivery
+            setPendingDiffNotesDelivery(null)
+            if (delivery) {
+              void sendDiffNotesToNewAgent(delivery, async () => {
+                await handleCreateTerminal(option.agent, {
+                  initialPrompt: delivery.prompt,
+                  onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
                 })
-              }
-            }))
-          : createTabAgentLoadState === 'loaded'
-            ? [
-                {
-                  label: 'No Enabled Agents',
-                  icon: Bot,
-                  disabled: true,
-                  onPress: () => {}
-                }
-              ]
-            : createTabAgentLoadState === 'other-runtime'
-              ? [otherRuntimeAgentRow]
-              : createTabAgentLoadState === 'error'
-                ? [
-                    {
-                      label: 'Agent Presets Unavailable',
-                      hint: 'Copy notes instead',
-                      icon: Bot,
-                      disabled: true,
-                      onPress: () => {}
-                    }
-                  ]
-                : []
+              })
+            }
+          }
+        }))
 
-  // Panel-icon taps route through the dock-vs-push decision (U1): dock-capable rows dock, constrained rows push.
   const handleSessionContentRowLayout = useCallback((event: LayoutChangeEvent) => {
     const width = Math.round(event.nativeEvent.layout.width)
     setSessionContentRowWidth((prev) => (prev === width ? prev : width))
@@ -166,9 +205,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         hostId,
         worktreeId,
         name: worktreeName || '',
-        // SC + PR both land on the source-control hub with origin:'session' for post-diff-open dismissal (U2); Files opts out.
         ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
-        // The PR panel routes into the hub's Pull Request segment via descriptor params.
         ...descriptor.params,
         ...workspaceRouteParams(executionHost)
       }
@@ -176,7 +213,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
   }
 
   const openAgentSessionHistory = () => {
-    const params = new URLSearchParams({ name: worktreeName || '' })
+    const params = new URLSearchParams({ name: worktreeName || '', origin: 'session' })
     router.push(
       workspaceRouteHref(
         `/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`,
@@ -191,7 +228,162 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
-  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
+  const showRecentSessionCardsAction = !isFloatingWorkspaceRoute
+  const showHeaderMoreButton =
+    showRecentSessionCardsAction || showAgentSessionHistoryAction || showChecksAction
+  const [jumpingRecentCardKey, setJumpingRecentCardKey] = useState<string | null>(null)
+  const jumpLockRef = useRef(false)
+  const [, setRecentCardsRevision] = useState(0)
+  useEffect(() => subscribeRecentSessionCards(() => setRecentCardsRevision((rev) => rev + 1)), [])
+  const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
+    () => readInitialMobileAgentHistoryWorktrees(hostId)
+  )
+  useEffect(() => {
+    if (
+      !client ||
+      connState !== 'connected' ||
+      (!showHeaderMoreActions && !showRecentSessionCards)
+    ) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const reply = await worktreeCatalogRead.request(client, { limit: 10000 })
+        const catalog = !cancelled ? worktreeCatalogRead.interpret(reply) : null
+        const next = catalog?.accepted ? recentCardWorktrees(catalog.value.worktrees) : []
+        if (next.length > 0) {
+          setRecentCardsWorktrees(next)
+        }
+      } catch {
+        // A refused catalog leaves the cached rows in place.
+      }
+      if (!hostId || cancelled) {
+        return
+      }
+      const ids = Array.from(
+        new Set(
+          readAllRecentSessionCardsSync()
+            .filter((item) => item.hostId === hostId)
+            .map((item) => item.worktreeId)
+        )
+      )
+      await Promise.allSettled(
+        ids.map(async (targetId) => {
+          const reply = await sessionTabsListRead.request(client, { worktree: `id:${targetId}` })
+          const liveTabs =
+            !cancelled && reply.ok
+              ? recentCardSnapshotTabs(sessionTabsListRead.interpret(reply))
+              : null
+          if (liveTabs !== null) {
+            reconcileRecentSessionCardsForWorktree({
+              hostId,
+              worktreeId: targetId,
+              liveTabs,
+              allowEmpty: true
+            })
+          }
+        })
+      )
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [client, connState, hostId, showHeaderMoreActions, showRecentSessionCards])
+  const recentSessionCards = getVisibleRecentSessionCards({
+    hostId,
+    currentWorktreeId: worktreeId,
+    currentTabId: activeSessionTabId,
+    liveWorktrees: recentCardsWorktrees,
+    currentWorktreeTabs: sessionTabs
+  })
+  const closeRecentCardSheets = () => {
+    setShowRecentSessionCards(false)
+    setShowHeaderMoreActions(false)
+  }
+  const handleSelectRecentSessionCard = async (card: RecentSessionCardRecord) => {
+    if (jumpingRecentCardKey !== null || jumpLockRef.current) {
+      return
+    }
+    if (card.worktreeId === worktreeId) {
+      if (card.tabId === activeSessionTabId) {
+        closeRecentCardSheets()
+        return
+      }
+      const targetTab = sessionTabs.find(
+        (tab) =>
+          tab.id === card.tabId ||
+          (tab.type === 'terminal' &&
+            Boolean(card.terminalHandle) &&
+            tab.terminal === card.terminalHandle)
+      )
+      closeRecentCardSheets()
+      if (targetTab) {
+        switchSessionTab(targetTab)
+        triggerSuccess()
+      } else {
+        removeRecentSessionCard(hostId, card.worktreeId, card.tabId)
+        triggerError()
+        showToast('Card was closed')
+      }
+      return
+    }
+    if (!client || connState !== 'connected') {
+      triggerError()
+      showToast('Waiting for host…')
+      return
+    }
+    jumpLockRef.current = true
+    setJumpingRecentCardKey(`${card.worktreeId}:${card.tabId}`)
+    try {
+      requestLocalSessionTabFollow(card.worktreeId)
+      setPendingCrossWorktreeTabTarget({
+        worktreeId: card.worktreeId,
+        tabId: card.tabId,
+        leafId: card.leafId,
+        terminalHandle: card.terminalHandle
+      })
+      const response = await activateMobileSessionTab(client, {
+        worktree: `id:${card.worktreeId}`,
+        tabId: card.tabId,
+        ...(card.leafId ? { leafId: card.leafId } : {}),
+        notifyClients: false,
+        navigation: 'caller',
+        intent: 'user'
+      })
+      if (!response.ok) {
+        setPendingCrossWorktreeTabTarget(null)
+        removeRecentSessionCard(hostId, card.worktreeId, card.tabId)
+        if (
+          response.error.code === 'repo_not_found' ||
+          response.error.code === 'selector_not_found'
+        ) {
+          triggerError()
+          showToast('Workspace no longer exists')
+          closeRecentCardSheets()
+          return
+        }
+        showToast('Card was closed; opening workspace')
+      } else {
+        requestLocalSessionTabFollow(card.worktreeId)
+        triggerSuccess()
+      }
+      closeRecentCardSheets()
+      const query = card.worktreeName ? `?name=${encodeURIComponent(card.worktreeName)}` : ''
+      router.replace(
+        workspaceRouteHref(
+          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(card.worktreeId)}${query}`,
+          executionHost
+        )
+      )
+    } catch {
+      setPendingCrossWorktreeTabTarget(null)
+      triggerError()
+    } finally {
+      jumpLockRef.current = false
+      setJumpingRecentCardKey(null)
+    }
+  }
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
   return {
     createTabAgentActions,
@@ -201,6 +393,10 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
     showChecksAction,
+    showRecentSessionCardsAction,
+    recentSessionCards,
+    jumpingRecentCardKey,
+    handleSelectRecentSessionCard,
     showHeaderMoreButton,
     createTabBusy
   }

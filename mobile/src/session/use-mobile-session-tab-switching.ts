@@ -6,11 +6,33 @@ import { isCachedActiveDocumentRetap } from './mobile-session-active-document-re
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { activatedAtWorkspaceRoot } from './session-write-reply-schema'
 import type { MobileSessionTab } from './mobile-session-route-types'
+import { buildRecentSessionCardFromTab, recordRecentSessionCardVisit } from './recent-session-cards'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+
+function rememberRecentSessionCard(args: {
+  hostId: string | undefined
+  worktreeId: string | undefined
+  worktreeName: string | undefined
+  tab: MobileSessionTab
+}): void {
+  if (!args.hostId || !args.worktreeId) {
+    return
+  }
+  recordRecentSessionCardVisit(
+    buildRecentSessionCardFromTab({
+      hostId: args.hostId,
+      worktreeId: args.worktreeId,
+      worktreeName: args.worktreeName || '',
+      tab: args.tab
+    })
+  )
+}
 
 export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateModel) {
   const {
+    hostId,
     worktreeId,
+    worktreeName,
     client,
     sessionTabs,
     defaultTerminalHandlesToLiveInput,
@@ -63,6 +85,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         unsubscribeTerminal(handle)
       }
       subscribeToTerminal(handle)
+      if (matchingTab) {
+        rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab: matchingTab })
+      }
       if (client) {
         if (matchingTab) {
           void activateMobileSessionTab(client, {
@@ -80,11 +105,13 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     [
       client,
       defaultTerminalHandlesToLiveInput,
+      hostId,
       reportActivation,
       sessionTabs,
       subscribeToTerminal,
       unsubscribeTerminal,
-      worktreeId
+      worktreeId,
+      worktreeName
     ]
   )
 
@@ -93,6 +120,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (isCachedActiveDocumentRetap(tab, activeSessionTabId, { markdownDocs, fileDocs })) {
         return
       }
+      rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab })
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)
@@ -166,13 +194,15 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       activeSessionTabId,
       client,
       fileDocs,
+      hostId,
       markdownDocs,
       readFileTab,
       readMarkdownTab,
       reportActivation,
       switchTab,
       unsubscribeTerminal,
-      worktreeId
+      worktreeId,
+      worktreeName
     ]
   )
   // Ref to latest switchSessionTab so fetchSessionTabs can activate a synced browser tab without a dependency cycle.

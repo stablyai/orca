@@ -65,6 +65,25 @@ export function readLastVisitedWorktreeOnHost(
   return record?.hostId === hostId ? { worktreeId: record.worktreeId } : null
 }
 
+function extractRecentCards(raw: string | null): unknown[] | undefined {
+  if (!raw) {
+    return undefined
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (
+      !isRecord(parsed) ||
+      !Array.isArray(parsed.recentCards) ||
+      parsed.recentCards.length === 0
+    ) {
+      return undefined
+    }
+    return parsed.recentCards
+  } catch {
+    return undefined
+  }
+}
+
 /** The stored value with `record` as the latest visit and its host's entry. */
 export function withLastVisitedWorktree(
   raw: string | null,
@@ -78,11 +97,13 @@ export function withLastVisitedWorktree(
   // Re-inserted so the map's order is oldest visit first, which is what the cap drops.
   byHost.delete(record.hostId)
   byHost.set(record.hostId, visitOf(record.worktreeId, record.executionHost))
+  const recentCards = extractRecentCards(raw)
   const serialize = () =>
     JSON.stringify({
       hostId: record.hostId,
       worktreeId: record.worktreeId,
-      byHost: Object.fromEntries(byHost)
+      byHost: Object.fromEntries(byHost),
+      ...(recentCards ? { recentCards } : {})
     })
   let value = serialize()
   while (

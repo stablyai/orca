@@ -2,9 +2,17 @@ import { ListChecks } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
+import type { RecentSessionCardRecord } from './recent-session-cards'
+import { RecentSessionCardsSection } from './RecentSessionCardsSheet'
 
-type Props = {
+type MobileSessionHeaderMoreActionsSheetProps = {
   visible: boolean
+  showRecentSessionCards?: boolean
+  recentSessionCards?: readonly RecentSessionCardRecord[]
+  jumpingRecentCardKey?: string | null
+  currentWorktreeId?: string
+  currentTabId?: string | null
+  onSelectRecentSessionCard?: (card: RecentSessionCardRecord) => void
   showAgentSessionHistory: boolean
   showChecks: boolean
   onOpenAgentSessionHistory: () => void
@@ -14,12 +22,18 @@ type Props = {
 
 export function MobileSessionHeaderMoreActionsSheet({
   visible,
+  showRecentSessionCards,
+  recentSessionCards,
+  jumpingRecentCardKey,
+  currentWorktreeId,
+  currentTabId,
+  onSelectRecentSessionCard,
   showAgentSessionHistory,
   showChecks,
   onOpenAgentSessionHistory,
   onOpenChecks,
   onClose
-}: Props) {
+}: MobileSessionHeaderMoreActionsSheetProps) {
   return (
     <ActionSheetModal
       visible={visible}
@@ -52,6 +66,16 @@ export function MobileSessionHeaderMoreActionsSheet({
           : [])
       ]}
       onClose={onClose}
-    />
+    >
+      {showRecentSessionCards && onSelectRecentSessionCard ? (
+        <RecentSessionCardsSection
+          cards={recentSessionCards ?? []}
+          jumpingCardKey={jumpingRecentCardKey ?? null}
+          currentWorktreeId={currentWorktreeId}
+          currentTabId={currentTabId}
+          onSelectCard={onSelectRecentSessionCard}
+        />
+      ) : null}
+    </ActionSheetModal>
   )
 }

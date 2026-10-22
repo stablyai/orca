@@ -27,6 +27,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     client,
     worktreeName,
     sessionTabs,
+    activeSessionTabId,
     pendingDiffNotesDelivery,
     setPendingDiffNotesDelivery,
     showCreateTabDrawer,
@@ -89,9 +90,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     createTabAgentActions,
     sendDiffNotesAgentActions,
     handlePanelTap,
-    openAgentSessionHistory,
-    showAgentSessionHistoryAction,
-    showChecksAction
+    openAgentSessionHistory
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
@@ -99,8 +98,14 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     <>
       <MobileSessionHeaderMoreActionsSheet
         visible={showHeaderMoreActions}
-        showAgentSessionHistory={showAgentSessionHistoryAction}
-        showChecks={showChecksAction}
+        currentWorktreeId={worktreeId}
+        currentTabId={activeSessionTabId}
+        showRecentSessionCards={controller.showRecentSessionCardsAction}
+        recentSessionCards={controller.recentSessionCards}
+        jumpingRecentCardKey={controller.jumpingRecentCardKey}
+        onSelectRecentSessionCard={controller.handleSelectRecentSessionCard}
+        showAgentSessionHistory={controller.showAgentSessionHistoryAction}
+        showChecks={controller.showChecksAction}
         onOpenAgentSessionHistory={openAgentSessionHistory}
         onOpenChecks={() => handlePanelTap('pr')}
         onClose={() => setShowHeaderMoreActions(false)}
