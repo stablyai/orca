@@ -10,11 +10,7 @@ type ScreenRect = { x: number; y: number; width: number; height: number }
 const CURSOR_POLL_MS = 16
 const GEOMETRY_REFRESH_MS = 250
 
-/**
- * A page's DevTools open in their own window, which Orca's app menu and shortcut routing never
- * see. Give that window the two behaviours Chrome's has: the close-tab chord closes it, and on
- * macOS the page still gets hover while it is focused, so inspect mode can highlight.
- */
+/** Chrome's DevTools window behaviour that Orca's menu and shortcut routing never reach. */
 export function installGuestDevToolsWindowBehavior(args: {
   guest: Electron.WebContents
   getKeybindings: () => KeybindingOverrides | undefined
@@ -76,8 +72,7 @@ function installCloseShortcut(
     ) {
       return
     }
-    // Why deferred: AppKit is still routing this key through the DevTools view; destroying it
-    // synchronously crashes in performKeyEquivalent.
+    // Why deferred: closing while AppKit still routes this key crashes in performKeyEquivalent.
     setImmediate(() => {
       if (!guest.isDestroyed()) {
         guest.closeDevTools()
@@ -124,18 +119,14 @@ async function readGuestScreenRect(guest: Electron.WebContents): Promise<ScreenR
   }
 }
 
-/**
- * Why: on macOS Chromium drops mouse moves for views in a window that is neither main nor key.
- * Chrome lifts that while a debugger is attached; Electron does not, so while the DevTools window
- * is key the page never sees hover (#22789). Relay the cursor into the page instead.
- */
+// Why: macOS Chromium drops mouse moves to non-key windows unless (in Chrome only) a debugger is attached (#22789).
 function installMacHoverRelay(
   guest: Electron.WebContents,
   devTools: Electron.WebContents,
   isViewportEmulated: () => boolean
 ): void {
   let cursorTimer: ReturnType<typeof setInterval> | null = null
-  let geometryTimer: ReturnType<typeof setInterval> | null = null
+  let geometryTimer: ReturnType<typeof setTimeout> | null = null
   let guestRect: ScreenRect | null = null
   let devToolsRect: ScreenRect | null = null
   let lastPoint: { x: number; y: number } | null = null
@@ -154,6 +145,13 @@ function installMacHoverRelay(
       ])
     } catch {
       guestRect = null
+    }
+    // Why re-arm after the read: a busy renderer must not stack executeJavaScript calls.
+    if (cursorTimer && !geometryTimer) {
+      geometryTimer = setTimeout(() => {
+        geometryTimer = null
+        void refreshGeometry()
+      }, GEOMETRY_REFRESH_MS)
     }
   }
 
@@ -188,7 +186,7 @@ function installMacHoverRelay(
       cursorTimer = null
     }
     if (geometryTimer) {
-      clearInterval(geometryTimer)
+      clearTimeout(geometryTimer)
       geometryTimer = null
     }
     guestRect = null
@@ -199,9 +197,8 @@ function installMacHoverRelay(
     if (cursorTimer) {
       return
     }
-    void refreshGeometry()
-    geometryTimer = setInterval(() => void refreshGeometry(), GEOMETRY_REFRESH_MS)
     cursorTimer = setInterval(relayCursor, CURSOR_POLL_MS)
+    void refreshGeometry()
   }
 
   devTools.on('focus', start)

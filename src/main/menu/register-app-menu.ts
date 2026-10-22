@@ -198,8 +198,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
           // control, so raw Electron paste cannot know which Orca surface owns it.
           const focusedWindow = BrowserWindow.getFocusedWindow()
           if (focusedWindow) {
-            // Why: DevTools (docked or undocked) can hold focus inside this window; the paste
-            // belongs to them, not to the terminal the renderer last focused (#16285).
+            // Why: focused DevTools own the paste, not the terminal the renderer last focused (#16285).
             const nativeTarget = resolveNativeEditTarget(focusedWindow)
             if (nativeTarget) {
               return nativeTarget.paste()

@@ -32,8 +32,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     }
     guest.openDevTools({ mode: 'detach' })
     if (inspectAt) {
-      // Why after openDevTools: inspectElement alone opens DevTools in the last saved dock
-      // state, and a guest has nowhere to dock (#7399).
+      // Why after openDevTools: alone it opens in the saved dock state, and guests can't dock (#7399).
       guest.inspectElement(inspectAt.x, inspectAt.y)
     }
     return true

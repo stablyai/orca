@@ -38,8 +38,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       getKeybindings: () => this.settingsResolver?.().keybindings,
       isViewportEmulated: () => {
         const tabId = this.tabIdByWebContentsId.get(guest.id)
-        const state = tabId ? this.viewportPresetByTabId.get(tabId) : undefined
-        return state?.guestWebContentsId === guest.id && state.requested !== null
+        return tabId !== undefined && this.isViewportPresetActive(tabId, guest.id)
       }
     })
 

@@ -31,11 +31,6 @@ function isPagePoint(value: unknown): value is { x: number; y: number } {
   )
 }
 
-function pageGuest(guestId: number | null): Electron.WebContents | null {
-  const guest = guestId === null ? undefined : webContents.fromId(guestId)
-  return guest && !guest.isDestroyed() ? guest : null
-}
-
 export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:openDevTools')
   ipcMain.removeHandler('browser:addWordToDictionary')
@@ -55,6 +50,15 @@ export function registerBrowserGuestViewHandlers(): void {
     isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
       ? browserManager.getGuestWebContentsId(browserPageId)
       : null
+
+  const pageGuest = (
+    event: IpcMainInvokeEvent,
+    browserPageId: unknown
+  ): Electron.WebContents | null => {
+    const guestId = pageGuestId(event, browserPageId)
+    const guest = guestId === null ? undefined : webContents.fromId(guestId)
+    return guest && !guest.isDestroyed() ? guest : null
+  }
 
   ipcMain.handle(
     'browser:getPageSiteDisplay',
@@ -107,7 +111,7 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.handle(
     'browser:addWordToDictionary',
     (event, args: { browserPageId: string; word: unknown }): boolean => {
-      const guest = pageGuest(pageGuestId(event, args?.browserPageId))
+      const guest = pageGuest(event, args?.browserPageId)
       if (!guest || typeof args.word !== 'string' || !args.word) {
         return false
       }
@@ -118,7 +122,7 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.handle(
     'browser:copyImageAt',
     (event, args: { browserPageId: string; point: unknown }): boolean => {
-      const guest = pageGuest(pageGuestId(event, args?.browserPageId))
+      const guest = pageGuest(event, args?.browserPageId)
       if (!guest || !isPagePoint(args.point)) {
         return false
       }

@@ -1,5 +1,6 @@
 import { Fragment, type MutableRefObject } from 'react'
 import { useAppStore } from '@/store'
+import { isMac } from '@/app-shell/app-window-chrome'
 import { translate } from '@/i18n/i18n'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser-page-tab-opening'
 import {
@@ -21,8 +22,6 @@ const SEARCH_LABEL_MAX_CHARS = 32
 type MenuItem = { label: string; disabled?: boolean; run: () => void }
 
 type EditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'pasteAndMatchStyle' | 'selectAll'
-
-const isMac = navigator.userAgent.includes('Mac')
 
 function searchLabelText(selection: string): string {
   const collapsed = selection.replace(/\s+/g, ' ').trim()

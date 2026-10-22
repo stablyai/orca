@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { findPage, findWorkspace } from '@/store/slices/browser-page-records'
 import { redactKagiSessionToken } from '../../../shared/browser-url'
 import { resolveBrowserSourceUnifiedTab } from './browser-workspace-source-resolution'
 
@@ -11,16 +12,11 @@ export function openUrlInTabBesideBrowserPage(args: {
 }): void {
   const { sourcePageId, worktreeId, url, activate } = args
   const store = useAppStore.getState()
-  const sourcePage = Object.values(store.browserPagesByWorkspace)
-    .flat()
-    .find((page) => page.id === sourcePageId)
-  // Why: the new tab inherits the opener's cookie jar. Falling back to the default profile would let
-  // a page in an isolated session hand its links to the default one, silently crossing profiles.
+  const sourcePage = findPage(store.browserPagesByWorkspace, sourcePageId)
+  // Why: inherit the opener's cookie jar; the default profile would silently cross profiles.
   const sourceTab = sourcePage
-    ? (store.browserTabsByWorktree[worktreeId] ?? []).find(
-        (tab) => tab.id === sourcePage.workspaceId
-      )
-    : undefined
+    ? findWorkspace(store.browserTabsByWorktree, sourcePage.workspaceId)
+    : null
   const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(store, sourcePageId, worktreeId)
   store.createBrowserTab(worktreeId, url, {
     // Why: a Kagi private-session search URL carries a token; only the stored URL is redacted.

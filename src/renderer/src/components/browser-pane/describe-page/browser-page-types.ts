@@ -23,16 +23,14 @@ export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
 
 export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
-export type BrowserPageContextMenuState = {
+export type BrowserPageContextMenuState = Pick<
+  BrowserContextMenuRequestedEvent,
+  'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image'
+> & {
   x: number
   y: number
   /** Where the click landed in the guest's own viewport, for inspect and copy-image. */
   pagePoint: { x: number; y: number }
-  linkUrl: string | null
-  pageUrl: string
-  selectionText: string
-  editable: BrowserContextMenuRequestedEvent['editable']
-  image: BrowserContextMenuRequestedEvent['image']
 }
 
 export type BrowserPageGrabToastState = {
