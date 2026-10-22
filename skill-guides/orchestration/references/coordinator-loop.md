@@ -21,6 +21,19 @@ when an older CLI rejects the flag. A nested worker must respect
 
 ## Launch preferences
 
+Run `ORCA orchestration worker-start --help` for this CLI version's registered
+`--agent` IDs, including `omp`. A registered ID is not proof that its CLI is
+installed, enabled, or authenticated on the worker's execution host. Configured
+single-executable command aliases are also accepted. Check availability for the
+actual execution host; local availability does not establish availability on an
+SSH or connected worker server. If `worker-start` fails, inspect the CLI diagnostic
+and any failure receipt returned. Validation can reject an agent with
+`agent_unconfigured` before creating a Dispatch, so no failure receipt exists in
+that case. Do not silently switch providers.
+
+OMP accepts `--model` but not `--effort`. Omit `--model` to use its own configured
+model.
+
 For a fresh Claude, Codex, Cursor, Antigravity, or Muse terminal, `--model`
 accepts an opaque provider model ID. Pass it only when the user named a model;
 otherwise omit it so the worker inherits the user's configured agent default.
