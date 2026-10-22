@@ -8,7 +8,8 @@ import {
   DEFAULT_SEARCH_ENGINE,
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
-  SEARCH_ENGINE_LABELS
+  SEARCH_ENGINE_LABELS,
+  type SearchEngine
 } from '../../../../../shared/browser-url'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
 
@@ -30,20 +31,7 @@ function searchLabelText(selection: string): string {
     : collapsed
 }
 
-/**
- * Chrome's page menu: what was clicked decides the sections (editable field, link, image,
- * selection), and the page's own Back/Forward/Reload only show when nothing specific was.
- */
-export function BrowserPageContextMenuItems({
-  menu,
-  browserPageId,
-  worktreeId,
-  canGoBack,
-  canGoForward,
-  webviewRef,
-  onReload,
-  onClose
-}: {
+type BrowserPageContextMenuItemsProps = {
   menu: BrowserPageContextMenuState
   browserPageId: string
   worktreeId: string
@@ -52,10 +40,25 @@ export function BrowserPageContextMenuItems({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onReload: () => void
   onClose: () => void
-}): React.JSX.Element {
+}
+
+/**
+ * Chrome's page menu: what was clicked decides the sections (editable field, link, image,
+ * selection), and the page's own Back/Forward/Reload only show when nothing specific was.
+ */
+function buildMenuSections({
+  menu,
+  browserPageId,
+  worktreeId,
+  canGoBack,
+  canGoForward,
+  webviewRef,
+  onReload,
+  onClose,
+  searchEngine
+}: BrowserPageContextMenuItemsProps & { searchEngine: SearchEngine }): MenuItem[][] {
   const { editable, image, linkUrl, pageUrl, pagePoint } = menu
   const selectionText = menu.selectionText.trim() ? menu.selectionText : ''
-  const searchEngine = useAppStore((s) => s.browserDefaultSearchEngine) ?? DEFAULT_SEARCH_ENGINE
 
   const item = (label: string, run: () => void, disabled = false): MenuItem => ({
     label,
@@ -271,26 +274,32 @@ export function BrowserPageContextMenuItems({
     )
   ])
 
+  return sections.filter((section) => section.length > 0)
+}
+
+export function BrowserPageContextMenuItems(
+  props: BrowserPageContextMenuItemsProps
+): React.JSX.Element {
+  const searchEngine = useAppStore((s) => s.browserDefaultSearchEngine) ?? DEFAULT_SEARCH_ENGINE
+  const sections = buildMenuSections({ ...props, searchEngine })
   return (
     <>
-      {sections
-        .filter((section) => section.length > 0)
-        .map((section, sectionIndex) => (
-          <Fragment key={sectionIndex}>
-            {sectionIndex > 0 ? <div role="separator" className="my-1 h-px bg-border/70" /> : null}
-            {section.map((menuItem, itemIndex) => (
-              <button
-                key={itemIndex}
-                role="menuitem"
-                disabled={menuItem.disabled}
-                className={MENU_ITEM_CLASS}
-                onClick={menuItem.run}
-              >
-                {menuItem.label}
-              </button>
-            ))}
-          </Fragment>
-        ))}
+      {sections.map((section, sectionIndex) => (
+        <Fragment key={sectionIndex}>
+          {sectionIndex > 0 ? <hr className="my-1 h-px border-0 bg-border/70" /> : null}
+          {section.map((menuItem, itemIndex) => (
+            <button
+              key={itemIndex}
+              role="menuitem"
+              disabled={menuItem.disabled}
+              className={MENU_ITEM_CLASS}
+              onClick={menuItem.run}
+            >
+              {menuItem.label}
+            </button>
+          ))}
+        </Fragment>
+      ))}
     </>
   )
 }
