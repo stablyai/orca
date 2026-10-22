@@ -32,6 +32,104 @@ afterEach(() => {
 })
 
 describe('BrowserLoadFailureOverlay', () => {
+  it('waits for a local dev server, re-attempting the load with backoff until Stop', () => {
+    vi.useFakeTimers()
+    const refused = () => ({
+      code: -102,
+      description: 'ERR_CONNECTION_REFUSED',
+      validatedUrl: 'http://localhost:3000/'
+    })
+    const view = (loading: boolean) => (
+      <BrowserLoadFailureOverlay
+        loadError={refused()}
+        currentUrl="http://localhost:3000/"
+        httpsRecoveryUrl={null}
+        autoRetry={{ active: true, whileWindowHidden: false, loading }}
+        {...callbacks}
+      />
+    )
+    const { rerender } = render(view(false))
+    expect(screen.getByText('Nothing is running on localhost:3000 yet')).toBeInTheDocument()
+    expect(screen.getByText('ERR_CONNECTION_REFUSED')).toBeInTheDocument()
+    expect(screen.getByText(/Waiting for the server/)).toBeInTheDocument()
+
+    act(() => vi.advanceTimersByTime(1000))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
+    // An attempt in flight is left to settle, not aborted by the next one.
+    rerender(view(true))
+    act(() => vi.advanceTimersByTime(5000))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
+    // Each failed attempt delivers a fresh error object; the backoff carries on.
+    rerender(view(false))
+    act(() => vi.advanceTimersByTime(1000))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
+    act(() => vi.advanceTimersByTime(1999))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
+    act(() => vi.advanceTimersByTime(1))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(3)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(screen.queryByText(/Waiting for the server/)).toBeNull()
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(3)
+  })
+
+  it('stays still while the page is not on screen or the failure is not one waiting can fix', () => {
+    vi.useFakeTimers()
+    const { rerender } = render(
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: -102,
+          description: 'ERR_CONNECTION_REFUSED',
+          validatedUrl: 'http://localhost:3000/'
+        }}
+        currentUrl="http://localhost:3000/"
+        httpsRecoveryUrl={null}
+        autoRetry={{ active: false, whileWindowHidden: false, loading: false }}
+        {...callbacks}
+      />
+    )
+    rerender(
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: -105,
+          description: 'ERR_NAME_NOT_RESOLVED',
+          validatedUrl: 'https://example.com/'
+        }}
+        currentUrl="https://example.com/"
+        httpsRecoveryUrl={null}
+        autoRetry={{ active: true, whileWindowHidden: false, loading: false }}
+        {...callbacks}
+      />
+    )
+    expect(screen.getByText("Couldn't find example.com")).toBeInTheDocument()
+    expect(screen.queryByText(/Waiting for/)).toBeNull()
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(callbacks.onRetry).not.toHaveBeenCalled()
+  })
+
+  it('reloads an offline failure when the network comes back', () => {
+    render(
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: -106,
+          description: 'ERR_INTERNET_DISCONNECTED',
+          validatedUrl: 'https://example.com/'
+        }}
+        currentUrl="https://example.com/"
+        httpsRecoveryUrl={null}
+        autoRetry={{ active: true, whileWindowHidden: false, loading: false }}
+        {...callbacks}
+      />
+    )
+    expect(screen.getByText("You're offline")).toBeInTheDocument()
+    expect(callbacks.onRetry).not.toHaveBeenCalled()
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
+  })
+
   it('offers the connection-check undo only when a routed page provides it', () => {
     const onRecheckSshRoute = vi.fn()
     const loadError = {

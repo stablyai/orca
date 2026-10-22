@@ -184,6 +184,19 @@ export function useSshWorkspaceBrowserRoute(
   }
 }
 
+function useSshWorkspaceRouteTargetId(worktreeId: string): string | null {
+  const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
+  const browserRoutingSettings = useAppStore((s) => s.settings)
+  const environments = useAppStore((s) => s.runtimeEnvironments)
+  return (
+    resolveSshWorkspaceBrowserRouteEligibility(
+      executionHostId,
+      browserRoutingSettings,
+      environments
+    )?.targetId ?? null
+  )
+}
+
 /**
  * The undo for a persisted "Try anyway", surfaced where its cost shows up: on
  * a routed page's load-failure overlay. Returns null unless this workspace's
@@ -191,19 +204,11 @@ export function useSshWorkspaceBrowserRoute(
  * probing, which resurfaces the classified card if forwarding is still blocked.
  */
 export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
-  const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
-  const browserRoutingSettings = useAppStore((s) => s.settings)
-  const environments = useAppStore((s) => s.runtimeEnvironments)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const targetId =
-    resolveSshWorkspaceBrowserRouteEligibility(
-      executionHostId,
-      browserRoutingSettings,
-      environments
-    )?.targetId ?? null
+  const targetId = useSshWorkspaceRouteTargetId(worktreeId)
   if (!targetId || probeSkippedTargetIds?.includes(targetId) !== true) {
     return null
   }
@@ -213,4 +218,10 @@ export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void
         (id) => id !== targetId
       )
     })
+}
+
+/** Whether the SSH host a routed page browses through is connected — the same target the route dials. */
+export function useSshWorkspaceRouteHostConnected(worktreeId: string): boolean {
+  const targetId = useSshWorkspaceRouteTargetId(worktreeId)
+  return useWorktreeHostConnection(worktreeId, targetId).phase === 'connected'
 }

@@ -7,6 +7,12 @@ import type { BrowserLoadError } from '../../../../../shared/browser-workspace-t
 import { isChromiumCertificateErrorCode } from '../../../../../shared/browser-certificate-errors'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import {
+  BROWSER_LOAD_FAILURE_COPY as COPY,
+  formatBrowserLoadFailureText,
+  type BrowserLoadFailureCopyId,
+  type BrowserLoadFailureDescription
+} from '../../../../../shared/browser-load-failure'
 
 export type LoadFailureMeta = {
   host: string | null
@@ -103,12 +109,10 @@ export function formatByteCount(bytes: number | null): string | null {
 }
 
 export function formatLoadFailureDescription(
-  loadError: BrowserLoadErrorLike,
-  meta: LoadFailureMeta
+  loadError: BrowserLoadError,
+  meta: LoadFailureMeta,
+  failure: BrowserLoadFailureDescription
 ): string {
-  if (!loadError) {
-    return 'The page did not respond.'
-  }
   if (loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
     return loadError.description
   }
@@ -141,27 +145,60 @@ export function formatLoadFailureDescription(
       { value0: host }
     )
   }
-  if (meta.isLocalhostLike) {
-    return "We couldn't connect to your local server."
-  }
-  if (loadError.code === 0) {
-    return loadError.description
-  }
-  return "We couldn't connect to this page."
+  return formatLoadFailureNetworkText(loadError, failure).description
 }
 
-export function formatLoadFailureRecoveryHint(
-  meta: LoadFailureMeta,
-  loadError?: BrowserLoadErrorLike
-): string | null {
-  if (
-    !meta.isLocalhostLike ||
-    loadError?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE ||
-    (loadError && isChromiumCertificateErrorCode(loadError.code))
-  ) {
-    return null
+// Each piece whole, with its English as the fallback, so the catalog extractor sees every key.
+const LOAD_FAILURE_PIECES: Record<BrowserLoadFailureCopyId, (values: { host: string }) => string> =
+  {
+    notRunningTitle: (v) =>
+      translate('browser.loadFailure.notRunningTitle', COPY.notRunningTitle, v),
+    notRunningDescription: () =>
+      translate('browser.loadFailure.notRunningDescription', COPY.notRunningDescription),
+    refusedTitle: (v) => translate('browser.loadFailure.refusedTitle', COPY.refusedTitle, v),
+    refusedDescription: () =>
+      translate('browser.loadFailure.refusedDescription', COPY.refusedDescription),
+    dnsTitle: (v) => translate('browser.loadFailure.dnsTitle', COPY.dnsTitle, v),
+    dnsDescription: () => translate('browser.loadFailure.dnsDescription', COPY.dnsDescription),
+    offlineTitle: () => translate('browser.loadFailure.offlineTitle', COPY.offlineTitle),
+    offlineDescription: () =>
+      translate('browser.loadFailure.offlineDescription', COPY.offlineDescription),
+    timeoutTitle: (v) => translate('browser.loadFailure.timeoutTitle', COPY.timeoutTitle, v),
+    timeoutDescription: () =>
+      translate('browser.loadFailure.timeoutDescription', COPY.timeoutDescription),
+    resetTitle: (v) => translate('browser.loadFailure.resetTitle', COPY.resetTitle, v),
+    resetDescription: () =>
+      translate('browser.loadFailure.resetDescription', COPY.resetDescription),
+    routeDownTitle: () => translate('browser.loadFailure.routeDownTitle', COPY.routeDownTitle),
+    routeDownDescription: () =>
+      translate('browser.loadFailure.routeDownDescription', COPY.routeDownDescription),
+    otherTitle: (v) =>
+      translate('browser.loadFailure.cantReachHost', "Can't reach {{value0}}", {
+        value0: v.host
+      }),
+    otherTitleWithoutHost: () =>
+      translate('browser.loadFailure.cantLoadPage', COPY.otherTitleWithoutHost),
+    otherDescription: () =>
+      translate('browser.loadFailure.otherDescription', COPY.otherDescription),
+    waiting: () => translate('browser.loadFailure.waiting', COPY.waiting),
+    waitingForHost: () => translate('browser.loadFailure.waitingForHost', COPY.waitingForHost),
+    waitingForNetwork: () =>
+      translate('browser.loadFailure.waitingForNetwork', COPY.waitingForNetwork),
+    stopWaiting: () => translate('browser.loadFailure.stopWaiting', COPY.stopWaiting)
   }
-  return 'If this should be a local app, make sure the server is running and listening on the expected port.'
+
+export function translateLoadFailurePiece(id: BrowserLoadFailureCopyId): string {
+  return LOAD_FAILURE_PIECES[id]({ host: '' })
+}
+
+/** What a network failure means, in the user's words; certificate and crash pages keep their own copy. */
+export function formatLoadFailureNetworkText(
+  loadError: BrowserLoadError,
+  failure: BrowserLoadFailureDescription
+): { title: string; description: string } {
+  return formatBrowserLoadFailureText(loadError, failure, (id, values) =>
+    LOAD_FAILURE_PIECES[id](values)
+  )
 }
 
 export function isCertificateLoadError(loadError: BrowserLoadErrorLike): boolean {

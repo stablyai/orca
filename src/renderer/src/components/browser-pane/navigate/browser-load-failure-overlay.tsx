@@ -1,6 +1,15 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ExternalLink, Globe, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  Globe,
+  Loader2,
+  RefreshCw,
+  ServerOff,
+  ShieldAlert,
+  WifiOff
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -13,12 +22,20 @@ import type {
 import { isEligibleLocalCertificateHost } from '../../../../../shared/browser-url'
 import { normalizeCertificateError } from '../../../../../shared/browser-certificate-errors'
 import {
+  describeBrowserLoadFailure,
+  type BrowserLoadFailureRoute
+} from '../../../../../shared/browser-load-failure'
+import {
   formatLoadFailureDescription,
-  formatLoadFailureRecoveryHint,
+  formatLoadFailureNetworkText,
   isCertificateLoadError,
   type LoadFailureMeta
 } from './browser-notices'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import {
+  BrowserLoadFailureAutoRetryStatus,
+  type BrowserLoadFailureAutoRetry
+} from './browser-load-failure-auto-retry'
 
 type BrowserLoadFailureOverlayProps = {
   loadError: BrowserLoadError
@@ -36,6 +53,10 @@ type BrowserLoadFailureOverlayProps = {
   sshRoutedHint?: boolean
   /** Set when the page's SSH host carries a persisted "Try anyway": undoes it so the connection check runs again. */
   onRecheckSshRoute?: (() => void) | null
+  /** How the page reaches the network; omit when this pane can't tell. */
+  route?: BrowserLoadFailureRoute | null
+  /** Set by panes whose Retry goes out the page's own route, so the page can recover by itself. */
+  autoRetry?: BrowserLoadFailureAutoRetry
 }
 
 type CertificateProceedAttempt = {
@@ -131,7 +152,9 @@ export function BrowserLoadFailureOverlay({
   expectedBrowserPageId,
   onProceedCertificate,
   sshRoutedHint,
-  onRecheckSshRoute
+  onRecheckSshRoute,
+  route = null,
+  autoRetry
 }: BrowserLoadFailureOverlayProps): React.JSX.Element {
   const connectingTimerRef = useRef<{
     challengeId: string
@@ -157,7 +180,7 @@ export function BrowserLoadFailureOverlay({
   const meta = getLoadErrorMetadata(presentationLoadError)
   const certificateError = isCertificateLoadError(presentationLoadError)
   const guestRecoveryError = presentationLoadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
-  const recoveryHint = formatLoadFailureRecoveryHint(meta, presentationLoadError)
+  const failure = describeBrowserLoadFailure(presentationLoadError, route)
   const activeProceedAttempt =
     proceedAttempt?.challengeId === matchingCertificateFailure?.challengeId ? proceedAttempt : null
   const actionsDisabled = activeProceedAttempt?.state === 'submitting'
@@ -269,21 +292,25 @@ export function BrowserLoadFailureOverlay({
           className="flex max-w-lg flex-col items-center px-8 py-8 text-center"
         >
           <div className="mb-4 rounded-full border border-border bg-muted p-3 text-muted-foreground">
-            {certificateError ? <ShieldAlert className="size-5" /> : <Globe className="size-5" />}
+            {certificateError ? (
+              <ShieldAlert className="size-5" />
+            ) : failure.kind === 'not-running' ? (
+              <ServerOff className="size-5" />
+            ) : failure.kind === 'offline' ? (
+              <WifiOff className="size-5" />
+            ) : (
+              <Globe className="size-5" />
+            )}
           </div>
           <h2 className="text-base font-semibold text-foreground">
             {certificateError
               ? translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
               : guestRecoveryError
                 ? translate('browser.guestRecovery.title', 'Browser page stopped')
-                : meta.host
-                  ? translate('browser.loadFailure.cantReachHost', "Can't reach {{value0}}", {
-                      value0: meta.host
-                    })
-                  : translate('browser.loadFailure.cantLoadPage', "Can't load this page")}
+                : formatLoadFailureNetworkText(presentationLoadError, failure).title}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {formatLoadFailureDescription(presentationLoadError, meta)}
+            {formatLoadFailureDescription(presentationLoadError, meta, failure)}
           </p>
           {certificateError && meta.isLocalhostLike ? (
             <p className="mt-2 text-xs text-muted-foreground">
@@ -293,15 +320,18 @@ export function BrowserLoadFailureOverlay({
               )}
             </p>
           ) : null}
-          {recoveryHint ? (
-            <p className="mt-2 text-xs text-muted-foreground">{recoveryHint}</p>
-          ) : null}
-          {sshRoutedHint ? (
+          {sshRoutedHint && failure.kind !== 'route-down' ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              {translate(
-                'browser.loadFailure.sshRoutedHint',
-                "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site."
-              )}
+              {failure.kind === 'not-running'
+                ? translate(
+                    'browser.loadFailure.sshRoutedServerHint',
+                    "This page loads through the workspace's SSH host, so {{host}} is on that machine.",
+                    { host: meta.host ?? '' }
+                  )
+                : translate(
+                    'browser.loadFailure.sshRoutedHint',
+                    "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site."
+                  )}
               {onRecheckSshRoute ? (
                 <>
                   {' '}
@@ -319,6 +349,15 @@ export function BrowserLoadFailureOverlay({
               ) : null}
             </p>
           ) : null}
+          {failure.errorName ? (
+            <p className="mt-2 font-mono text-xs text-muted-foreground">{failure.errorName}</p>
+          ) : null}
+          <BrowserLoadFailureAutoRetryStatus
+            failureKey={`${presentationLoadError.validatedUrl}\n${failure.kind}`}
+            failure={failure}
+            autoRetry={autoRetry}
+            retry={onRetry}
+          />
           {activeProceedAttempt?.state === 'failed' && activeProceedAttempt.reason ? (
             <p role="alert" className="mt-3 text-xs text-destructive">
               {formatCertificateProceedFailure(activeProceedAttempt.reason)}

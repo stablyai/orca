@@ -384,6 +384,10 @@ export function BrowserPagePane({
               setResourceNotice={setResourceNotice}
               certificateFailure={certificateFailure}
               sshRouted={Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))}
+              autoRetry={{
+                active: isPaintable,
+                whileWindowHidden: isMobileDriven || isRemotelyViewed
+              }}
               isBlankTab={isBlankTab}
               containerRef={containerRef}
               markupPortalContainer={pageViewport?.content ?? null}

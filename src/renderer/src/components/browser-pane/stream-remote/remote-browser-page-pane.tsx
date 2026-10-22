@@ -420,7 +420,7 @@ export function RemoteBrowserPagePane({
         worktreeId={worktreeId}
         runtimeWorktree={runtimeWorktree}
         runtimeTarget={runtimeTarget}
-        onReload={() => void runRemoteNavigation('browser.reload')}
+        isActive={isActive}
         onGoto={(url) => void runRemoteNavigation('browser.goto', url)}
         onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}

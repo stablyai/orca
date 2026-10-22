@@ -238,8 +238,10 @@ export function ClientHostedBrowserPagePane({
       if (!isPageDocumentNavigationStart(event)) {
         return
       }
+      // Why: re-attempting the failed URL keeps the failure page up (and its auto-retry) until a load succeeds.
+      const standing = resolveActiveBrowserLoadFailure(activeLoadFailureRef.current, event.url)
       activeLoadFailureRef.current = null
-      updatePageStateFromGuest(browserTab.id, { loading: true, loadError: null })
+      updatePageStateFromGuest(browserTab.id, { loading: true, loadError: standing })
       const startMetadata = readBrowserClientPageGuestMetadataIfLive(webview, undefined, true)
       if (!startMetadata) {
         guestLoss.lose('unreadable')
@@ -374,6 +376,7 @@ export function ClientHostedBrowserPagePane({
             currentUrl={toDisplayUrl(failedNavigationUrl)}
             httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
             onRetry={() => reload.runReloadTrigger('reload')}
+            autoRetry={{ active: isActive, whileWindowHidden: false, loading: browserTab.loading }}
             onTryHttps={navigateToUrl}
             onCopy={(url) => void window.api.ui.writeClipboardText(url)}
             onOpenExternal={(url) => void window.api.shell.openUrl(url)}
@@ -383,10 +386,7 @@ export function ClientHostedBrowserPagePane({
             // Why: the guest is a local Electron webview on this desktop, so its certificate
             // decision is a local session decision — the same IPC the local pane proceeds through.
             onProceedCertificate={(challengeId) =>
-              window.api.browser.proceedCertificate({
-                browserPageId: browserTab.id,
-                challengeId
-              })
+              window.api.browser.proceedCertificate({ browserPageId: browserTab.id, challengeId })
             }
           />
         ) : null}

@@ -45,7 +45,7 @@ export function RemoteBrowserPageViewport({
   worktreeId,
   runtimeWorktree,
   runtimeTarget,
-  onReload,
+  isActive,
   onGoto,
   onNavigateToUrl,
   onReconnect,
@@ -70,7 +70,7 @@ export function RemoteBrowserPageViewport({
   worktreeId: string
   runtimeWorktree: string
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
-  onReload: () => void
+  isActive: boolean
   onGoto: (url: string) => void
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
@@ -156,7 +156,13 @@ export function RemoteBrowserPageViewport({
           externalUrl={remoteFailureExternalUrl}
           currentUrl={toDisplayUrl(remoteFailureUrl)}
           httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
-          onRetry={onReload}
+          // Why: reloading the server's error page only refreshes it; re-attempt the URL that failed.
+          onRetry={() => onGoto(remoteFailureUrl)}
+          autoRetry={{
+            active: isActive,
+            whileWindowHidden: false,
+            loading: browserTab.loading
+          }}
           onTryHttps={onGoto}
           onCopy={(url) => void window.api.ui.writeClipboardText(url)}
           onOpenExternal={(url) => void window.api.shell.openUrl(url)}

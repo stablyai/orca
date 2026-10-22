@@ -8,7 +8,11 @@ import type {
 } from '../../../../../shared/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import { useSshWorkspaceProbeSkipRecheck } from '../use-ssh-workspace-browser-route'
+import {
+  useSshWorkspaceProbeSkipRecheck,
+  useSshWorkspaceRouteHostConnected
+} from '../use-ssh-workspace-browser-route'
+import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failure-auto-retry'
 import BrowserFind from './BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import { BrowserGuestAnnotateOverlays } from '../annotate/browser-guest-annotate-overlays'
@@ -37,6 +41,7 @@ export function BrowserPageViewportOverlays({
   setResourceNotice,
   certificateFailure,
   sshRouted,
+  autoRetry,
   isBlankTab,
   containerRef,
   markupPortalContainer,
@@ -63,6 +68,7 @@ export function BrowserPageViewportOverlays({
   setResourceNotice: Dispatch<SetStateAction<string | null>>
   certificateFailure: BrowserCertificateFailure | null
   sshRouted: boolean
+  autoRetry: Omit<BrowserLoadFailureAutoRetry, 'loading'>
   isBlankTab: boolean
   containerRef: RefObject<HTMLDivElement | null>
   markupPortalContainer: HTMLDivElement | null
@@ -74,6 +80,7 @@ export function BrowserPageViewportOverlays({
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
 }): React.JSX.Element {
   const recheckSshRoute = useSshWorkspaceProbeSkipRecheck(worktreeId)
+  const sshRouteHostConnected = useSshWorkspaceRouteHostConnected(worktreeId)
   return (
     <>
       <BrowserGuestAnnotateOverlays
@@ -120,6 +127,10 @@ export function BrowserPageViewportOverlays({
           certificateFailure={certificateFailure}
           sshRoutedHint={sshRouted}
           onRecheckSshRoute={sshRouted ? recheckSshRoute : null}
+          route={
+            sshRouted ? { routed: true, routeConnected: sshRouteHostConnected } : { routed: false }
+          }
+          autoRetry={{ ...autoRetry, loading: browserTab.loading }}
           expectedBrowserPageId={browserTab.id}
           onProceedCertificate={(challengeId) =>
             window.api.browser.proceedCertificate({
