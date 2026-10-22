@@ -143,7 +143,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   localOnlyScrollbackByTabId: moveDisposition(25, { newManifestSection: true }),
   remoteSessionIdsByTabId: { disposition: 'drop-pty-binding', item: 36 },
   browserPagesByWorkspace: moveDisposition(29),
-  markdownFrontmatterVisible: moveDisposition(28),
+  markdownFrontmatterVisible: moveDisposition(28, {
+    rewriteDesktopCopy: true,
+    note: 'Keyed by a UNC file id; host-session-seed re-keys this desktop copy to the host file.'
+  }),
   sleepingAgentSessionsByPaneKey: moveDisposition(33),
   terminalPtyIncarnationsByPaneKey: {
     disposition: 'drop-pty-binding',
@@ -151,7 +154,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   },
   terminalTopologyRevisionByRepoId: { disposition: 'rederive', item: 35 },
   terminalSurfaceTombstonesByPaneKey: moveDisposition(34),
-  closedTerminalTabTombstonesByTabId: moveDisposition(34)
+  closedTerminalTabTombstonesByTabId: moveDisposition(34, {
+    rewriteDesktopCopy: true,
+    note: 'Laid over the host partition by host-session-seed, with the host worktree id.'
+  })
 } as const satisfies Record<keyof WorkspaceSessionState, WslMoveFieldDisposition>
 
 /** Nested PTY bindings dropped wherever they appear in moved session rows (item 36). */

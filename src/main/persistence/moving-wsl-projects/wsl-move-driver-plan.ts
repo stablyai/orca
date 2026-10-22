@@ -22,6 +22,7 @@ import type {
 import { assertWslMoveManifestFits } from './wsl-move-manifest-budget'
 import { WslMoveScopeChangedError } from './wsl-move-manifest-export'
 import { wslMoveHostReadiness } from './wsl-move-preflight'
+import { settleWslMoveOwedHostAborts } from './wsl-move-owed-host-aborts'
 import { resetWslMoveToZero } from './wsl-move-reset'
 import { assessWslMoveTerminals, type WslMoveGateBlocker } from './wsl-move-terminal-gate'
 
@@ -75,7 +76,10 @@ async function settleInterruptedWslMove(
   host: WslMoveHost,
   request: WslMoveRequest
 ): Promise<WslMoveRefusal | null> {
-  const head = listWslMoveCutoverChain(deps.userDataPath, wslMoveJournalKey(request.distro)).at(-1)
+  const journalKey = wslMoveJournalKey(request.distro)
+  // Before this move stages: a leftover stage of an earlier reset would refuse it.
+  await settleWslMoveOwedHostAborts(deps.userDataPath, journalKey, host.catalog)
+  const head = listWslMoveCutoverChain(deps.userDataPath, journalKey).at(-1)
   if (
     !head ||
     WSL_MOVE_CUTOVER_PHASES.indexOf(head.phase) >=
@@ -98,6 +102,37 @@ async function settleInterruptedWslMove(
     return refusal('wsl_move_finished_earlier_move')
   }
   return null
+}
+
+/**
+ * A move left waiting on a host whose distro is now unregistered can never hear back: the commit,
+ * if any, went with the distro's disk. Back to zero, so the projects are usable here again (R38).
+ */
+async function resetForUnregisteredDistro(
+  deps: WslMoveDriverDeps,
+  request: WslMoveRequest
+): Promise<boolean> {
+  const head = listWslMoveCutoverChain(deps.userDataPath, wslMoveJournalKey(request.distro)).at(-1)
+  if (
+    !head ||
+    WSL_MOVE_CUTOVER_PHASES.indexOf(head.phase) >=
+      WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed') ||
+    (await deps
+      .isDistroRegistered(request.distro, head.manifest.source.distroGuid)
+      .catch(() => null)) !== false
+  ) {
+    return false
+  }
+  const reset = await resetWslMoveToZero(
+    {
+      userDataPath: deps.userDataPath,
+      destination: null,
+      destinationUnregistered: true,
+      now: deps.now
+    },
+    head.migrationId
+  )
+  return reset.outcome === 'reset'
 }
 
 /** Fixed id and clock, so a re-export of unchanged state signs the same digest. */
@@ -130,8 +165,20 @@ export async function prepareWslMove(
   if (!wslHostsGateOpen()) {
     return refusal('wsl_move_unavailable')
   }
-  const host = await deps.connectHost(request.distro)
+  let host: WslMoveHost | null
+  try {
+    host = await deps.connectHost(request.distro)
+  } catch (error) {
+    // A kept host record whose distro is gone fails its connect rather than answering null.
+    if (settleInterrupted && (await resetForUnregisteredDistro(deps, request))) {
+      return refusal('wsl_move_host_unavailable', { detail: 'distro_unregistered' })
+    }
+    throw error
+  }
   if (!host) {
+    if (settleInterrupted && (await resetForUnregisteredDistro(deps, request))) {
+      return refusal('wsl_move_host_unavailable', { detail: 'distro_unregistered' })
+    }
     return refusal('wsl_move_host_unavailable')
   }
   if (wslMoveHostReadiness(host.capabilities) !== 'ready') {

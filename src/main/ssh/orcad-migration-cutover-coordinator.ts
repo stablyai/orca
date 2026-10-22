@@ -9,6 +9,7 @@
  */
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReference,
   OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
@@ -45,7 +46,7 @@ export type OrcadMigrationDestinationCatalog = {
   abort: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogAbortResult>
   /** Sends only the manifest's identity; for a journal whose manifest no request can carry. */
   abortByReference: (
-    manifest: OrcadMigrationManifest
+    manifest: OrcadMigrationCatalogReference
   ) => Promise<OrcadMigrationCatalogReferenceAbortResult>
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest

@@ -69,6 +69,11 @@ export type WslMoveDriverDeps = {
   readCatalog: () => WslMoveCatalogRows
   /** Null when the distro has no connected host. */
   connectHost: (distro: string) => Promise<WslMoveHost | null>
+  /**
+   * From the distro registrations: false only when the name is gone and so is the recorded GUID
+   * (a rename keeps it, and the renamed host may hold the commit); null when unreadable.
+   */
+  isDistroRegistered: (distro: string, distroGuid?: string) => Promise<boolean | null>
   exportManifest: WslMoveManifestExporter
   /** Busy, working, automation and dispatch facts for the scope, from their owning stores. */
   gateInputs: (scope: WslMoveTerminalScope) => Promise<WslMoveGateInputs>

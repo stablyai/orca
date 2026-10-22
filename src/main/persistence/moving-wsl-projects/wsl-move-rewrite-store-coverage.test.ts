@@ -65,6 +65,9 @@ const STORE_BY_ROW: Record<string, string> = {
   'session.activeWorktreeId': SESSION_GLOBALS,
   'session.activeWorkspaceExecutionHostId': SESSION_GLOBALS,
   'session.activeWorkspaceKey': SESSION_GLOBALS,
+  // This desktop's copy, laid over the host partition the seed writes.
+  'session.markdownFrontmatterVisible': HOST_SESSION_SEED,
+  'session.closedTerminalTabTombstonesByTabId': HOST_SESSION_SEED,
   'ui.lastActiveWorktreeId': UI_ROUTING,
   'ui.manualRepoOrder': UI_ROUTING,
   'ui.explorerDisplayRootByWorktree': UI_ROUTING,

@@ -14,6 +14,7 @@ import { getCanonicalUserDataPath } from '../persistence'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { recoverInterruptedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-reset'
+import { isWslDistroRegistered } from '../wsl/wsl-distro-registry-id'
 import { runWslMoveStartupRewrite } from '../persistence/moving-wsl-projects/wsl-move-startup-rewrite'
 import { installWslMoveRetention } from '../persistence/moving-wsl-projects/wsl-move-retention'
 import { registerWslMoveDesktopRewriteRegistry } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-registry'
@@ -177,7 +178,10 @@ export async function initializeReadyFoundation(): Promise<void> {
   state.wslMoveStartupRewriteReady = runWslMoveStartupRewrite(
     { userDataPath },
     {
-      recover: () => recoverInterruptedWslMoves(userDataPath),
+      recover: () =>
+        recoverInterruptedWslMoves(userDataPath, undefined, (distro, distroGuid) =>
+          isWslDistroRegistered(distro, distroGuid)
+        ),
       reapply: () => {
         reapplyWslMoveFocusRewrites(userDataPath, store)
       }

@@ -52,6 +52,7 @@ import { listRemoteOrcadFolderCatalog } from '../ssh/orcad-server-folder-workspa
 import { makeTerminalScrollbackSnapshotRef } from '../terminal-scrollback-snapshots'
 import { requestWorktreeSleepFromRenderer } from '../window/worktree-sleep-request-relay'
 import { getWslHostService } from '../wsl/wsl-host-service-instance'
+import { isWslDistroRegistered } from '../wsl/wsl-distro-registry-id'
 import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
 import { tryGetProviderForPty } from './pty/provider/registry'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
@@ -94,6 +95,7 @@ export function createWslMoveDriverDeps(
       projectGroups: store.getProjectGroups()
     }),
     connectHost: (distro) => connectWslMoveHost(userDataPath, distro),
+    isDistroRegistered: (distro, distroGuid) => isWslDistroRegistered(distro, distroGuid),
     exportManifest: (request) => exportWslMoveManifest(store, request),
     gateInputs: (scope) => collectWslMoveGateInputs(facts, scope),
     listPanes: (scope) => listWslMovePanes(facts, scope),

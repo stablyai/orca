@@ -178,6 +178,7 @@ export function createWslMoveWorld(userDataPath: string): WslMoveWorld {
     userDataPath,
     readCatalog: () => ({ repos: world.repos, folderWorkspaces: [], projectGroups: [] }),
     connectHost: async () => host,
+    isDistroRegistered: async () => true,
     exportManifest: (request) => {
       exports += 1
       const state = getDefaultPersistedState('C:\\Users\\dev')

@@ -9,6 +9,7 @@ import type { Store } from '../loading-store/store'
 import { wslMoveAutomationHostFilterUpdate } from './wsl-move-automation-filter-rewrite'
 import { registerWslMoveDesktopRewriteStore } from './wsl-move-desktop-rewrite-stores'
 import { wslMoveRewriteScope, type WslMoveRewriteScope } from './wsl-move-rewrite-scope'
+import { withWslMoveSeededViewState } from './wsl-move-seeded-view-state'
 import { wslMoveHostSessionSeed, wslMoveSessionGlobalsPatch } from './wsl-move-session-rewrite'
 import { rewriteWslMoveUiRouting } from './wsl-move-ui-routing-rewrite'
 
@@ -112,7 +113,7 @@ export function applyWslMoveSessionFocus(
 /** Seeds the host partition with the carried rows of moved workspaces it lacks; returns their ids. */
 export function applyWslMoveHostSessionSeed(
   profile: Pick<Store, 'getWorkspaceSession' | 'setWorkspaceSession'>,
-  cutover: Pick<WslMoveCutover, 'manifest'>,
+  cutover: Pick<WslMoveCutover, 'manifest' | 'destinationEnvironmentId'>,
   scope: WslMoveRewriteScope,
   alreadySeeded: ReadonlySet<string>
 ): string[] {
@@ -130,7 +131,13 @@ export function applyWslMoveHostSessionSeed(
   if (!seed) {
     return []
   }
+  const withViewState = withWslMoveSeededViewState(
+    seed.session,
+    profile.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID),
+    { ...scope, destinationEnvironmentId: cutover.destinationEnvironmentId },
+    new Set(seed.workspaceIds)
+  )
   // A move's one-shot seed, or its redo after a stale window; layout commands refuse runtime hosts.
-  profile.setWorkspaceSession(seed.session, hostId)
+  profile.setWorkspaceSession(withViewState ?? seed.session, hostId)
   return seed.workspaceIds
 }

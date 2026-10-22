@@ -28,6 +28,7 @@ import {
   removeUncommittedWslMoveCutover,
   writeWslMoveCutover
 } from './wsl-move-cutover-journal'
+import { recordWslMoveOwedHostAbort } from './wsl-move-owed-host-aborts'
 
 /** The only phase from which the desktop may ask the destination to commit. */
 export const WSL_MOVE_COMMIT_REQUEST_PHASE: WslMoveCutoverPhase = 'blobs-transferred'
@@ -40,7 +41,10 @@ export function assertWslMoveCommitRequestAllowed(cutover: Pick<WslMoveCutover, 
 }
 
 export type WslMoveResetResult =
-  | { outcome: 'reset'; evidence: 'no-record' | 'commit-never-requested' | 'catalog-absent' }
+  | {
+      outcome: 'reset'
+      evidence: 'no-record' | 'commit-never-requested' | 'catalog-absent' | 'distro-unregistered'
+    }
   | { outcome: 'committed'; cutover: WslMoveCutover }
   | { outcome: 'unverifiable'; reason: string }
 
@@ -48,11 +52,18 @@ export type WslMoveResetContext = {
   userDataPath: string
   /** The WSL host's catalog; null while it is unreachable. */
   destination: OrcadMigrationDestinationCatalog | null
+  /**
+   * The distro is proven unregistered (name and recorded GUID gone): its disk, and any commit on
+   * it, went too. Residual: an unregister then re-import under a new name between two startups (R38).
+   */
+  destinationUnregistered?: boolean
   now?: () => Date
 }
 
 const phaseIndex = (phase: WslMoveCutoverPhase): number => WSL_MOVE_CUTOVER_PHASES.indexOf(phase)
 const COMMITTED_FROM = phaseIndex('destination-committed')
+// The stage request goes out from `quiesced`, so from there the host may hold one.
+const STAGE_MAY_EXIST_FROM = phaseIndex('quiesced')
 
 export async function resetWslMoveToZero(
   context: WslMoveResetContext,
@@ -68,11 +79,20 @@ export async function resetWslMoveToZero(
     return { outcome: 'committed', cutover }
   }
   const commitMayExist = cutover.phase === WSL_MOVE_COMMIT_REQUEST_PHASE
-  const release = (evidence: 'commit-never-requested' | 'catalog-absent'): WslMoveResetResult => {
+  const release = (
+    evidence: 'commit-never-requested' | 'catalog-absent' | 'distro-unregistered',
+    hostConfirmedAbsent = false
+  ): WslMoveResetResult => {
+    if (!hostConfirmedAbsent && phaseIndex(cutover.phase) >= STAGE_MAY_EXIST_FROM) {
+      recordWslMoveOwedHostAbort(context.userDataPath, cutover)
+    }
     removeUncommittedWslMoveCutover(context.userDataPath, migrationId)
     return { outcome: 'reset', evidence }
   }
   if (!context.destination) {
+    if (context.destinationUnregistered) {
+      return release('distro-unregistered', true)
+    }
     return commitMayExist
       ? { outcome: 'unverifiable', reason: 'destination_unreachable' }
       : release('commit-never-requested')
@@ -94,7 +114,7 @@ export async function resetWslMoveToZero(
     return commitMayExist ? byReference() : release('commit-never-requested')
   }
   if (state.state === 'absent') {
-    return release(commitMayExist ? 'catalog-absent' : 'commit-never-requested')
+    return release(commitMayExist ? 'catalog-absent' : 'commit-never-requested', true)
   }
   if (state.state !== 'committed') {
     return { outcome: 'unverifiable', reason: `catalog_${state.state}` }
@@ -114,7 +134,10 @@ async function resetByReference(
   context: WslMoveResetContext & { destination: OrcadMigrationDestinationCatalog },
   cutover: WslMoveCutover,
   commitMayExist: boolean,
-  release: (evidence: 'commit-never-requested' | 'catalog-absent') => WslMoveResetResult
+  release: (
+    evidence: 'commit-never-requested' | 'catalog-absent',
+    hostConfirmedAbsent?: boolean
+  ) => WslMoveResetResult
 ): Promise<WslMoveResetResult> {
   let aborted: OrcadMigrationCatalogReferenceAbortResult
   try {
@@ -125,7 +148,7 @@ async function resetByReference(
       : release('commit-never-requested')
   }
   if (aborted.state === 'absent') {
-    return release(commitMayExist ? 'catalog-absent' : 'commit-never-requested')
+    return release(commitMayExist ? 'catalog-absent' : 'commit-never-requested', true)
   }
   if (!commitMayExist) {
     return { outcome: 'unverifiable', reason: 'committed_without_commit_request' }
@@ -180,7 +203,9 @@ export type WslMoveStartupRecovery = {
  */
 export async function recoverInterruptedWslMoves(
   userDataPath: string,
-  warn: (message: string) => void = (message) => console.warn(message)
+  warn: (message: string) => void = (message) => console.warn(message),
+  /** Asked only for a move that may have committed; one whose distro is gone resets too. */
+  isDistroRegistered?: (distro: string, distroGuid?: string) => Promise<boolean | null>
 ): Promise<WslMoveStartupRecovery> {
   const result: WslMoveStartupRecovery = { reset: [], waitingForHost: [] }
   if (!wslHostsGateOpen()) {
@@ -198,8 +223,15 @@ export async function recoverInterruptedWslMoves(
   }
   for (const cutover of inFlight) {
     try {
+      const destinationUnregistered =
+        cutover.phase === WSL_MOVE_COMMIT_REQUEST_PHASE && isDistroRegistered
+          ? (await isDistroRegistered(
+              cutover.manifest.source.distro,
+              cutover.manifest.source.distroGuid
+            ).catch(() => null)) === false
+          : false
       const outcome = await resetWslMoveToZero(
-        { userDataPath, destination: null },
+        { userDataPath, destination: null, destinationUnregistered },
         cutover.migrationId
       )
       if (outcome.outcome === 'reset') {
