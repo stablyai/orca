@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
@@ -278,6 +279,80 @@ describe('buildDashboardSnapshot folder workspaces', () => {
         hostLabel: 'openclaw'
       })
     ])
+  })
+
+  it.each(['local', 'ssh:builder', 'runtime:environment-1'] as const)(
+    'keeps %s navigation identity without running card-only work',
+    (hostId) => {
+      const leanWorktree = folderWorkspaceToWorktree({
+        ...folderWorkspace(),
+        connectionId: null,
+        executionHostId: hostId
+      })
+      Object.defineProperty(leanWorktree, 'linkedPR', {
+        get: () => {
+          throw new Error('Dock snapshots must not resolve reviews')
+        }
+      })
+      const leanState = state()
+      leanState.folderWorkspaces = []
+      leanState.repos = [
+        { id: 'r1', path: '/r1', displayName: 'Docs', badgeColor: 'neutral', addedAt: 0 }
+      ]
+      leanState.worktreesByRepo = { r1: [leanWorktree] }
+      for (const slice of [
+        'prCache',
+        'hostedReviewCache',
+        'detectedAgentIds',
+        'remoteDetectedAgentIds',
+        'runtimeDetectedAgentIds',
+        'runtimeEnvironments',
+        'workspaceStatuses'
+      ]) {
+        Object.defineProperty(leanState, slice, {
+          get: () => {
+            throw new Error(`Dock snapshots must not read ${slice}`)
+          }
+        })
+      }
+      const snapshot = buildDashboardSnapshot(leanState, NOW, {
+        includeCardDetails: false,
+        includeFilterOptions: false,
+        includeExecutionHostId: true
+      })
+
+      expect(snapshot.cards[0]).toMatchObject({
+        executionHostId: hostId,
+        tabId: TAB_ID,
+        leafId: LEAF_ID
+      })
+      expect(snapshot.cards[0].terminalInput).toBeUndefined()
+      expect(snapshot.cards[0].review).toBeUndefined()
+      expect(snapshot.cards[0].hostKind).toBeUndefined()
+      expect(snapshot.filterOptions).toBeUndefined()
+      expect(snapshot.launchableAgentsByWorktreeId).toBeUndefined()
+      expect(snapshot.workspaces).toBeUndefined()
+      expect(snapshot.repoIconsByRepoId).toEqual({})
+    }
+  )
+
+  it('keeps folder-workspace navigation targets in lightweight snapshots', () => {
+    const snapshot = buildDashboardSnapshot(state(), NOW, {
+      includeCardDetails: false,
+      includeFilterOptions: false,
+      includeExecutionHostId: true
+    })
+
+    expect(snapshot.cards[0]).toMatchObject({
+      repoId: 'folder-workspace:group-1',
+      worktreeId: WORKSPACE_ID,
+      executionHostId: 'ssh:ssh-1',
+      tabId: TAB_ID,
+      leafId: LEAF_ID
+    })
+    expect(snapshot.cards[0].terminalInput).toBeUndefined()
+    expect(snapshot.workspaces).toBeUndefined()
+    expect(snapshot.filterOptions).toBeUndefined()
   })
 
   it('classifies a folder workspace from its own runtime host stamp', () => {
