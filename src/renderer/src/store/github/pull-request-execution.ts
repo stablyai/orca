@@ -27,6 +27,7 @@ import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
 } from './worktree-refresh'
+import { buildUnselectLinkedReviewUpdate } from './linked-review-unselect'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
@@ -209,7 +210,7 @@ export function startPullRequestLookup(args: {
           // Why: only clear the durable link that produced this exact probe; drift means the stale result no longer owns the worktree.
           void get().updateWorktreeMeta(
             options.worktreeId,
-            { linkedPR: null },
+            buildUnselectLinkedReviewUpdate(linkedPRWorktree),
             {
               shouldApply: () =>
                 shouldApplyDivergedLinkedPRClear({
@@ -240,7 +241,7 @@ export function startPullRequestLookup(args: {
         ) {
           void get().updateWorktreeMeta(
             options.worktreeId,
-            { linkedPR: null },
+            buildUnselectLinkedReviewUpdate(linkedPRWorktree),
             {
               // Why: the branch-scoped PR refetch below updates both caches; the generic metadata refresh would duplicate provider work.
               suppressHostedReviewRefresh: true,

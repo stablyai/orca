@@ -17,6 +17,7 @@ import {
   shouldApplyDivergedLinkedPRClear,
   shouldClearDivergedLinkedMergedPR
 } from './worktree-refresh'
+import { buildUnselectLinkedReviewUpdate } from './linked-review-unselect'
 import { startPullRequestLookup } from './pull-request-execution'
 
 export const createPullRequestActions = (
@@ -88,7 +89,7 @@ export const createPullRequestActions = (
         ) {
           void get().updateWorktreeMeta(
             options.worktreeId,
-            { linkedPR: null },
+            buildUnselectLinkedReviewUpdate(findWorktreeById(get(), options.worktreeId)),
             {
               shouldApply: (worktree) =>
                 shouldApplyDivergedLinkedPRClear({
