@@ -8,6 +8,10 @@ vi.mock('os', () => ({
 
 const mockExistsSync = vi.fn().mockReturnValue(false)
 const mockReadFileSync = vi.fn()
+const mockStatSync = vi.fn().mockImplementation(() => ({
+  isFile: () => true,
+  size: 1024
+}))
 const TEST_HOME = '/home/testuser'
 
 function testHomePath(...parts: string[]): string {
@@ -16,7 +20,8 @@ function testHomePath(...parts: string[]): string {
 
 vi.mock('fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
-  readFileSync: (...args: unknown[]) => mockReadFileSync(...args)
+  readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
+  statSync: (...args: unknown[]) => mockStatSync(...args)
 }))
 
 import { buildConnectConfig } from './ssh-connect-config'
@@ -33,10 +38,39 @@ describe('findDefaultKeyFile', () => {
     mockExistsSync.mockReset()
     mockExistsSync.mockReturnValue(false)
     mockReadFileSync.mockReset()
+    mockStatSync.mockReset()
+    mockStatSync.mockImplementation(() => ({
+      isFile: () => true,
+      size: 1024
+    }))
   })
 
   it('returns undefined when no default keys exist', () => {
     expect(findDefaultKeyFile()).toBeUndefined()
+  })
+
+  it('ignores a default key when it is not a regular file (e.g. directory or device)', () => {
+    mockExistsSync.mockImplementation((path: unknown) => {
+      return path === testHomePath('.ssh', 'id_ed25519')
+    })
+    mockStatSync.mockReturnValue({
+      isFile: () => false,
+      size: 0
+    })
+    expect(findDefaultKeyFile()).toBeUndefined()
+    expect(mockReadFileSync).not.toHaveBeenCalled()
+  })
+
+  it('ignores a default key when its file size exceeds 256 KB', () => {
+    mockExistsSync.mockImplementation((path: unknown) => {
+      return path === testHomePath('.ssh', 'id_ed25519')
+    })
+    mockStatSync.mockReturnValue({
+      isFile: () => true,
+      size: 256 * 1024 + 1
+    })
+    expect(findDefaultKeyFile()).toBeUndefined()
+    expect(mockReadFileSync).not.toHaveBeenCalled()
   })
 
   it('returns the first existing key file', () => {
@@ -157,6 +191,11 @@ describe('buildConnectConfig', () => {
     mockExistsSync.mockReset()
     mockExistsSync.mockReturnValue(false)
     mockReadFileSync.mockReset()
+    mockStatSync.mockReset()
+    mockStatSync.mockImplementation(() => ({
+      isFile: () => true,
+      size: 1024
+    }))
     process.env.SSH_AUTH_SOCK = '/tmp/agent.sock'
   })
 
@@ -359,6 +398,26 @@ describe('buildConnectConfig', () => {
 
     expect(config.agent).toBeUndefined()
     expect(config.privateKey).toEqual(Buffer.from('not-a-key'))
+  })
+
+  it('ignores target.identityFile when the path is not a regular file', () => {
+    mockStatSync.mockReturnValue({
+      isFile: () => false,
+      size: 0
+    })
+    const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
+    expect(config.privateKey).toBeUndefined()
+    expect(mockReadFileSync).not.toHaveBeenCalledWith('/home/user/.ssh/custom')
+  })
+
+  it('ignores target.identityFile when the file size exceeds 256 KB', () => {
+    mockStatSync.mockReturnValue({
+      isFile: () => true,
+      size: 256 * 1024 + 1
+    })
+    const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
+    expect(config.privateKey).toBeUndefined()
+    expect(mockReadFileSync).not.toHaveBeenCalledWith('/home/user/.ssh/custom')
   })
 
   it('includes unencrypted target.identityFile auth when an agent is available', () => {

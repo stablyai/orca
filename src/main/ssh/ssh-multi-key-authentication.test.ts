@@ -16,10 +16,15 @@ vi.mock('os', () => ({
 
 const mockExistsSync = vi.fn().mockReturnValue(false)
 const mockReadFileSync = vi.fn()
+const mockStatSync = vi.fn().mockImplementation(() => ({
+  isFile: () => true,
+  size: 1024
+}))
 
 vi.mock('fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
-  readFileSync: (...args: unknown[]) => mockReadFileSync(...args)
+  readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
+  statSync: (...args: unknown[]) => mockStatSync(...args)
 }))
 
 import { buildConnectConfig } from './connection/ssh-connect-config'

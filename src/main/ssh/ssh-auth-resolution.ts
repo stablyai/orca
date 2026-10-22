@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
@@ -20,6 +20,8 @@ const WINDOWS_OPENSSH_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
 // Why: resolved IdentityFile paths are expanded before auth resolution, so they
 // won't match the ~/... form in DEFAULT_KEY_PATHS.
+export const MAX_SSH_PRIVATE_KEY_BYTES = 256 * 1024
+
 const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_IDENTITY_PATHS.map(resolveSshConfigHomePath)
 
 export type PrivateKeyFile = { path: string; contents: Buffer }
@@ -33,6 +35,10 @@ export function findDefaultKeyFile(): PrivateKeyFile | undefined {
     const resolved = resolveSshConfigHomePath(keyPath)
     try {
       if (!existsSync(resolved)) {
+        continue
+      }
+      const stats = statSync(resolved)
+      if (!stats.isFile() || stats.size > MAX_SSH_PRIVATE_KEY_BYTES) {
         continue
       }
       const contents = readFileSync(resolved)
@@ -121,6 +127,10 @@ export function resolveIdentityFilePaths(
 function readPrivateKey(keyPath: string): PrivateKeyFile | undefined {
   try {
     const resolvedPath = resolveSshConfigHomePath(keyPath)
+    const stats = statSync(resolvedPath)
+    if (!stats.isFile() || stats.size > MAX_SSH_PRIVATE_KEY_BYTES) {
+      return undefined
+    }
     return { path: keyPath, contents: readFileSync(resolvedPath) }
   } catch {
     return undefined
