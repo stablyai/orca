@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
 import { DashboardSnapshotCache } from './dashboard-snapshot.js'
 import { createGcloudClient } from './gcloud-client.js'
@@ -64,7 +65,7 @@ app.get('/api/snapshot', async (context) => {
     }, 503)
   }
 })
-app.post('/api/staging/power', async (context) => {
+app.post('/api/staging/power', async (context, next) => {
   if (!controlsEnabled) return context.json({ error: 'Staging controls are disabled' }, 403)
   const origin = context.req.header('origin')
   const expectedOrigin = `http://127.0.0.1:${port}`
@@ -72,6 +73,11 @@ app.post('/api/staging/power', async (context) => {
   if (!safeEqual(context.req.header('x-csrf-token') ?? '', csrfToken)) {
     return context.json({ error: 'Request token rejected' }, 403)
   }
+  await next()
+}, bodyLimit({
+  maxSize: 4 * 1024,
+  onError: (context) => context.json({ error: 'Staging power request is too large' }, 413)
+}), async (context) => {
   try {
     const request = parseStagingPowerRequest(await context.req.json())
     await dispatchStagingPowerWorkflow(request)
