@@ -77,36 +77,40 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
     }))
   )
   const currentPlatform = getCurrentPlatform()
-  const windowsCapabilities = useWindowsTerminalCapabilities(currentPlatform === 'win32')
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const localAuthority = hasLocalSkillRuntimeAuthority(runtimeTarget)
+  const windowsCapabilities = useWindowsTerminalCapabilities(
+    localAuthority && currentPlatform === 'win32'
+  )
 
   const resolved = useMemo(() => {
     const wslContext = {
       wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
       availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
     }
-    const projectRuntime =
-      getLocalProjectExecutionRuntimeContext(
-        runtimeState,
-        undefined,
-        currentPlatform,
-        wslContext
-      ) ??
-      // Global WSL is the only no-project default that changes the install target (#12103).
-      (hasLocalSkillRuntimeAuthority(runtimeTarget)
-        ? wslOnly(
-            getGlobalWindowsExecutionRuntimeContext(
-              runtimeState,
-              undefined,
-              currentPlatform,
-              wslContext
-            )
+    // Why: skill discovery and install terminals route to runtimeTarget; a local
+    // Windows/WSL project must not override a remote or unresolved runtime host.
+    const projectRuntime = localAuthority
+      ? (getLocalProjectExecutionRuntimeContext(
+          runtimeState,
+          undefined,
+          currentPlatform,
+          wslContext
+        ) ??
+        // Global WSL is the only no-project default that changes the install target (#12103).
+        wslOnly(
+          getGlobalWindowsExecutionRuntimeContext(
+            runtimeState,
+            undefined,
+            currentPlatform,
+            wslContext
           )
-        : undefined)
+        ))
+      : undefined
     if (!projectRuntime) {
       // Why: buildSkillCommandForRuntime still builds a Windows host command
       // without a project runtime, so the terminal has to match that shell.
-      const terminalShellOverride = hasLocalSkillRuntimeAuthority(runtimeTarget)
+      const terminalShellOverride = localAuthority
         ? getProjectAgentSkillTerminalShellOverride(
             currentPlatform,
             runtimeState.settings,
@@ -133,7 +137,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
       installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime),
       canUseLocalSkillFreshness: shouldUseLocalSkillFreshness(runtimeTarget, agentRuntime)
     }
-  }, [currentPlatform, runtimeState, runtimeTarget, windowsCapabilities])
+  }, [currentPlatform, localAuthority, runtimeState, runtimeTarget, windowsCapabilities])
 
   // Content-equal runtimes keep one reference so effect keys do not thrash.
   // Adjust during render (not a ref write) when serialized identity changes.

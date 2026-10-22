@@ -92,6 +92,53 @@ describe('useActiveProjectSkillRuntime', () => {
     expect(result.current.terminalShellOverride).toBeUndefined()
   })
 
+  it('does not leak an active local WSL project runtime into a remote environment', () => {
+    useAppStore.setState({
+      activeRepoId: 'repo-1',
+      repos: [
+        {
+          id: 'repo-1',
+          path: '\\\\wsl$\\Ubuntu\\home\\user\\repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 1
+        }
+      ],
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        terminalWindowsShell: 'git-bash',
+        activeRuntimeEnvironmentId: 'ssh-production'
+      },
+      runtimeEnvironments: [
+        {
+          id: 'ssh-production',
+          name: 'SSH Production',
+          createdAt: 1,
+          updatedAt: 1,
+          lastUsedAt: null,
+          runtimeId: null,
+          endpoints: [
+            {
+              id: 'ws-ssh-production',
+              kind: 'websocket',
+              label: 'WebSocket',
+              endpoint: 'ws://127.0.0.1:8080'
+            }
+          ],
+          preferredEndpointId: 'ws-ssh-production'
+        }
+      ]
+    })
+    const { result } = renderHook(() => useActiveProjectSkillRuntime())
+
+    expect(result.current.projectRuntime).toBeUndefined()
+    expect(result.current.discoveryTarget).toBeUndefined()
+    expect(result.current.agentRuntime).toBeUndefined()
+    expect(result.current.terminalShellOverride).toBeUndefined()
+    expect(result.current.installDisabledReason).toBeNull()
+    useAppStore.setState({ activeRepoId: null, repos: [] })
+  })
+
   it('leaves the shell alone on non-Windows hosts', () => {
     setPlatform('darwin')
     const { result } = renderHook(() => useActiveProjectSkillRuntime())
