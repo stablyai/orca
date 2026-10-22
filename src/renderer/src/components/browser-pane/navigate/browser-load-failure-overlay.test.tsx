@@ -32,7 +32,7 @@ afterEach(() => {
 })
 
 describe('BrowserLoadFailureOverlay', () => {
-  it('waits for a local dev server, re-attempting the load with backoff until Stop', () => {
+  it('waits for a local dev server, re-attempting the load with backoff until Stop', async () => {
     vi.useFakeTimers()
     const refused = () => ({
       code: -102,
@@ -53,24 +53,24 @@ describe('BrowserLoadFailureOverlay', () => {
     expect(screen.getByText('ERR_CONNECTION_REFUSED')).toBeInTheDocument()
     expect(screen.getByText(/Waiting for the server/)).toBeInTheDocument()
 
-    act(() => vi.advanceTimersByTime(1000))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
     // An attempt in flight is left to settle, not aborted by the next one.
     rerender(view(true))
-    act(() => vi.advanceTimersByTime(5000))
+    await act(() => vi.advanceTimersByTimeAsync(5000))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
     // Each failed attempt delivers a fresh error object; the backoff carries on.
     rerender(view(false))
-    act(() => vi.advanceTimersByTime(1000))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
-    act(() => vi.advanceTimersByTime(1999))
+    await act(() => vi.advanceTimersByTimeAsync(1999))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
-    act(() => vi.advanceTimersByTime(1))
+    await act(() => vi.advanceTimersByTimeAsync(1))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(3)
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
     expect(screen.queryByText(/Waiting for the server/)).toBeNull()
-    act(() => vi.advanceTimersByTime(60_000))
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(3)
   })
 
@@ -108,8 +108,37 @@ describe('BrowserLoadFailureOverlay', () => {
     expect(callbacks.onRetry).not.toHaveBeenCalled()
   })
 
-  it('reloads an offline failure when the network comes back', () => {
+  it('never starts an attempt while the previous one is still settling', async () => {
+    vi.useFakeTimers()
+    let settle = (): void => {}
+    callbacks.onRetry.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (settle = resolve))
+    )
     render(
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: -120,
+          description: 'ERR_SOCKS_CONNECTION_FAILED',
+          validatedUrl: 'http://localhost:3000/'
+        }}
+        currentUrl="http://localhost:3000/"
+        httpsRecoveryUrl={null}
+        route={{ routed: true, routeConnected: true }}
+        autoRetry={{ active: true, whileWindowHidden: false, loading: false }}
+        {...callbacks}
+      />
+    )
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
+    await act(async () => settle())
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
+  })
+
+  it('reloads an offline failure when the network comes back, even while it was off screen', () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const view = (active: boolean) => (
       <BrowserLoadFailureOverlay
         loadError={{
           code: -106,
@@ -118,16 +147,23 @@ describe('BrowserLoadFailureOverlay', () => {
         }}
         currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
-        autoRetry={{ active: true, whileWindowHidden: false, loading: false }}
+        autoRetry={{ active, whileWindowHidden: false, loading: false }}
         {...callbacks}
       />
     )
+    const { rerender } = render(view(true))
     expect(screen.getByText("You're offline")).toBeInTheDocument()
     expect(callbacks.onRetry).not.toHaveBeenCalled()
     act(() => {
       window.dispatchEvent(new Event('online'))
     })
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
+
+    rerender(view(false))
+    onLine.mockReturnValue(true)
+    rerender(view(true))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
+    onLine.mockRestore()
   })
 
   it('offers the connection-check undo only when a routed page provides it', () => {

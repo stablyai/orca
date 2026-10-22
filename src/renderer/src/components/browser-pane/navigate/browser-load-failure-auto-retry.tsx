@@ -18,6 +18,9 @@ export type BrowserLoadFailureAutoRetry = {
   loading: boolean
 }
 
+/** Re-attempts the failed load; a pane whose attempt settles later returns a promise for it. */
+export type BrowserLoadFailureRetry = () => void | Promise<void>
+
 // Why faster than Chrome's 1s/5s/30s: a dev server usually comes up within seconds, and a
 // refused attempt costs one local connect.
 const RETRY_DELAYS_MS = [1000, 1000, 2000, 3000, 5000]
@@ -33,19 +36,18 @@ function useBrowserLoadFailureAutoRetry({
   failureKey: string
   recovery: BrowserLoadFailureRecovery
   autoRetry: BrowserLoadFailureAutoRetry | undefined
-  retry: () => void
+  retry: BrowserLoadFailureRetry
 }): { waiting: boolean; stop: () => void } {
   const [stoppedKey, setStoppedKey] = useState<string | null>(null)
   const enabled = Boolean(autoRetry?.active) && recovery !== null && stoppedKey !== failureKey
   const whileWindowHidden = autoRetry?.whileWindowHidden ?? false
   const loading = autoRetry?.loading ?? false
   const retryNow = useEffectEvent(retry)
-  const attempt = useEffectEvent((): boolean => {
+  const attempt = useEffectEvent((): Promise<void> | null => {
     if (loading || (!whileWindowHidden && !isWindowVisible())) {
-      return false
+      return null
     }
-    retry()
-    return true
+    return Promise.resolve(retry()).catch(() => {})
   })
 
   useEffect(() => {
@@ -53,30 +55,43 @@ function useBrowserLoadFailureAutoRetry({
       return
     }
     if (recovery === 'online') {
-      const onOnline = (): void => retryNow()
+      const onOnline = (): void => void retryNow()
+      // Why: the network may have come back while this page was off screen and not listening.
+      if (navigator.onLine) {
+        onOnline()
+      }
       window.addEventListener('online', onOnline)
       return () => window.removeEventListener('online', onOnline)
     }
     // Why per run: coming back to a hidden tab starts again from the short delays.
     let attempts = 0
     let timer: ReturnType<typeof setTimeout> | null = null
+    let cancelled = false
     const schedule = (): void => {
+      if (cancelled) {
+        return
+      }
       if (attempts >= MAX_ATTEMPTS) {
         setStoppedKey(failureKey)
         return
       }
       timer = setTimeout(
         () => {
-          if (attempt()) {
-            attempts += 1
+          const pending = attempt()
+          if (!pending) {
+            schedule()
+            return
           }
-          schedule()
+          attempts += 1
+          // Why: a remote attempt can take a round trip before it reports loading; never overlap it.
+          void pending.then(schedule)
         },
         RETRY_DELAYS_MS[Math.min(attempts, RETRY_DELAYS_MS.length - 1)]
       )
     }
     schedule()
     return () => {
+      cancelled = true
       if (timer) {
         clearTimeout(timer)
       }
@@ -99,7 +114,7 @@ export function BrowserLoadFailureAutoRetryStatus({
   failureKey: string
   failure: BrowserLoadFailureDescription
   autoRetry: BrowserLoadFailureAutoRetry | undefined
-  retry: () => void
+  retry: BrowserLoadFailureRetry
 }): React.JSX.Element | null {
   const { waiting, stop } = useBrowserLoadFailureAutoRetry({
     failureKey,

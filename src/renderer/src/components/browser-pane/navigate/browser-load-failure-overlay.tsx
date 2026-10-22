@@ -34,7 +34,8 @@ import {
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 import {
   BrowserLoadFailureAutoRetryStatus,
-  type BrowserLoadFailureAutoRetry
+  type BrowserLoadFailureAutoRetry,
+  type BrowserLoadFailureRetry
 } from './browser-load-failure-auto-retry'
 
 type BrowserLoadFailureOverlayProps = {
@@ -42,7 +43,7 @@ type BrowserLoadFailureOverlayProps = {
   externalUrl?: string | null
   currentUrl: string
   httpsRecoveryUrl: string | null
-  onRetry: () => void
+  onRetry: BrowserLoadFailureRetry
   onTryHttps: (url: string) => void
   onCopy: (url: string) => void
   onOpenExternal?: (url: string) => void
@@ -252,7 +253,7 @@ export function BrowserLoadFailureOverlay({
       variant={certificateError && !externalUrl ? 'default' : 'outline'}
       className="h-9 gap-2 px-3"
       disabled={actionsDisabled}
-      onClick={onRetry}
+      onClick={() => void onRetry()}
     >
       <RefreshCw className="size-4" />
       {translate('browser.loadFailure.retry', 'Retry')}

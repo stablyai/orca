@@ -71,7 +71,7 @@ export function RemoteBrowserPageViewport({
   runtimeWorktree: string
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   isActive: boolean
-  onGoto: (url: string) => void
+  onGoto: (url: string) => Promise<void>
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
   onReconnect: () => void
@@ -163,7 +163,7 @@ export function RemoteBrowserPageViewport({
             whileWindowHidden: false,
             loading: browserTab.loading
           }}
-          onTryHttps={onGoto}
+          onTryHttps={(url) => void onGoto(url)}
           onCopy={(url) => void window.api.ui.writeClipboardText(url)}
           onOpenExternal={(url) => void window.api.shell.openUrl(url)}
           certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
