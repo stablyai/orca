@@ -13,7 +13,7 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { parse } from 'yaml'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { classifyPrJobs, PR_CHECK_JOBS } from './pr-code-change-scope.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const unit = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
@@ -350,7 +350,7 @@ function createMobileCiScopeRepository(
     writeFileSync(join(directory, file), 'export const revision = 1\n')
   }
   const base = commit()
-  const detect = (stepId = 'filter') => {
+  const detect = (stepId = 'filter', eventName = 'pull_request') => {
     const output = join(
       directory,
       stepId === 'filter' ? 'github-output' : `github-output-${stepId}`
@@ -367,7 +367,7 @@ function createMobileCiScopeRepository(
       env: {
         ...process.env,
         BASE_SHA: base,
-        GITHUB_EVENT_NAME: 'pull_request',
+        GITHUB_EVENT_NAME: eventName,
         GITHUB_OUTPUT: output,
         ORCA_BACKGROUND_LAUNCH: '1'
       }
@@ -467,6 +467,20 @@ describe.skipIf(process.platform === 'win32')('Daemon mock complete Git change e
     const routes = readFileSync(e2e.output, 'utf8')
     expect(routes).toContain('test_files=[]\n')
     expect(routes).toContain('should_run=false\n')
+  })
+  it('runs every check on main and merge-queue runs, whatever the diff', () => {
+    const repo = createMobileCiScopeRepository(true, helper)
+    writeFileSync(repo.tool, 'export const revision = 2\n')
+    repo.commit()
+    for (const event of ['push', 'merge_group']) {
+      const { result, output } = repo.detect('filter', event)
+      expect(result.code, result.stderr).toBe(0)
+      const flags = readFileSync(output, 'utf8')
+      for (const name of PR_CHECK_JOBS) {
+        expect(flags, `${event}/${name}`).toContain(`${name}=true\n`)
+      }
+      rmSync(output)
+    }
   })
   it.each(['addition', 'deletion', 'rename', 'type change'])(
     'keeps platform packages for an actual %s',

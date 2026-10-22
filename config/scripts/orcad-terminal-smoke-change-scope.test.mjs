@@ -94,7 +94,8 @@ it('only skips the unchanged smoke after a successful diff and dependency analys
   )
   const steps = workflow.jobs.preflight.steps
   const scope = steps.find((candidate) => candidate.id === 'orcad-smoke-scope')
-  expect(scope.env).toEqual({ BASE_SHA: '${{ github.event.pull_request.base.sha }}' })
+  expect(scope.env).toBeUndefined()
+  expect(workflow.env.BASE_SHA).toMatch(/^\$\{\{ github\.event\.pull_request\.base\.sha \|\| /)
   // See the localization gate: HEAD^1 removes the merge-base computation, so a shallow checkout
   // is enough and the payload head SHA is unused.
   expect(scope.run).toContain('node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA"')

@@ -100,9 +100,8 @@ it('preserves deleted and renamed inputs and falls back to extraction on detecti
   const step = workflow.jobs.preflight.steps.find(
     (candidate) => candidate.name === 'Verify localization extraction'
   )
-  expect(step.env).toMatchObject({
-    BASE_SHA: '${{ github.event.pull_request.base.sha }}'
-  })
+  expect(step.env.BASE_SHA).toBeUndefined()
+  expect(workflow.env.BASE_SHA).toMatch(/^\$\{\{ github\.event\.pull_request\.base\.sha \|\| /)
   // The base side comes from the merge ref's first parent, so the gate needs no merge base and
   // works on a shallow checkout. The payload head SHA is no longer read: HEAD is the merged tree
   // the gate is actually deciding about.

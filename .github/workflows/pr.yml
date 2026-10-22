@@ -1,5 +1,5 @@
 name: PR Checks
-run-name: "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
+run-name: "${{ github.event_name == 'pull_request' && format('PR {0}', github.event.pull_request.number) || github.ref_name }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
 
 on:
   pull_request:
@@ -9,10 +9,21 @@ on:
       - reopened
       - ready_for_review
       - converted_to_draft
+  # Why main pushes: two PRs that each passed against an older main can break it together, and
+  # nothing else re-checks main. merge_group stays dormant until the repository enables a queue.
+  push:
+    branches: [main]
+  merge_group:
 
+# Why main never cancels in progress: merges land faster than a full run finishes, so cancelling
+# would leave main without a result all day. One run plus one queued (newest wins) bounds cost.
 concurrency:
-  group: pr-checks-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Off PRs, diff gates compare against the commit this push or queue group builds on.
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
 
 permissions:
   contents: read
@@ -93,8 +104,6 @@ jobs:
           persist-credentials: false
 
       - name: Reject new root-level files and folders
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           node .github/scripts/check-root-directory-entries.mjs "$DIFF_BASE" HEAD
@@ -122,8 +131,6 @@ jobs:
 
       - name: Classify changed paths
         id: filter
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           # Why HEAD^1 and not --merge-base: HEAD is the pull request merge commit, so its first
@@ -133,6 +140,11 @@ jobs:
           # Why --no-renames: name-only rename detection can report only the destination.
           # A code file moved under docs/ must still expose its code-side deletion.
           CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
+          # Why everything off PRs: a main or queue run also stands in for the merges it superseded,
+          # so it fails closed through the empty-diff rule rather than trusting one push's diff.
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            CHANGED=""
+          fi
           echo "Changed paths:"
           printf '%s\n' "$CHANGED"
           MOBILE_CI_ARGS=()
@@ -147,8 +159,7 @@ jobs:
         if: github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'
         run: |
           set -euo pipefail
-          BASE="${{ github.event.pull_request.base.sha }}"
-          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE")"
+          DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           CHANGED="$(git diff --name-only --diff-filter=AMCR "$DIFF_BASE" HEAD)"
           E2E_SCOPE_ARGS=()
           if git diff --quiet --no-renames --diff-filter=ACDRTUXB "$DIFF_BASE" HEAD; then
@@ -320,7 +331,7 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          node config/scripts/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
+          node config/scripts/check-changed-code-quality.mjs "$BASE_SHA"
 
       - name: Verify locked audit tools
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -330,7 +341,7 @@ jobs:
 
       - name: Enforce React Doctor on changed lines
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/check-react-doctor-changed.mjs "${{ github.event.pull_request.base.sha }}"
+        run: node config/scripts/check-react-doctor-changed.mjs "$BASE_SHA"
 
       - wait: changed-code-quality
 
@@ -360,8 +371,6 @@ jobs:
 
       - name: Check VM runtime rollback compatibility
         if: needs.code_paths.outputs.static_analysis == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --quiet "$DIFF_BASE" HEAD -- \
@@ -405,7 +414,6 @@ jobs:
         env:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           # Detection failures run the full check; renames retain the removed input path.
@@ -420,8 +428,6 @@ jobs:
       - name: Decide whether the orcad terminal smoke runs
         id: orcad-smoke-scope
         if: needs.code_paths.outputs.static_analysis == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           # Detection failures run the smoke; renames retain the removed input path.
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
@@ -1022,8 +1028,8 @@ jobs:
       # The label is read from the event payload, so push again after applying it.
       - name: Runtime launcher change does not bump daemon protocol
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP: ${{ contains(github.event.pull_request.labels.*.name, 'allow-runtime-launcher-protocol-bump') }}
+          # Off PRs there are no labels; the PR run already enforced this one.
+          ORCA_ALLOW_RUNTIME_LAUNCHER_PROTOCOL_BUMP: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'allow-runtime-launcher-protocol-bump') }}
         run: |
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           pnpm run check:runtime-launcher-protocol-ratchet -- --base "$DIFF_BASE"
@@ -1260,7 +1266,7 @@ jobs:
       # Kept briefly so a reviewer can run this exact AppImage on a real Linux desktop.
       - uses: actions/upload-artifact@v7
         with:
-          name: orca-linux-appimage-${{ github.event.pull_request.head.sha }}
+          name: orca-linux-appimage-${{ github.event.pull_request.head.sha || github.sha }}
           path: dist/orca-linux.AppImage
           retention-days: 3
           compression-level: 0
@@ -1444,7 +1450,7 @@ jobs:
     with:
       # The synthetic pull-request merge ref can disappear while this reusable
       # workflow is queued. The head SHA is immutable and works for every PR.
-      ref: ${{ github.event.pull_request.head.sha }}
+      ref: ${{ github.event.pull_request.head.sha || github.sha }}
       test_files: ${{ needs.code_paths.outputs.test_files }}
       run_changed_e2e: ${{ needs.code_paths.outputs.e2e_run_changed != 'false' }}
       needs_build: ${{ needs.code_paths.outputs.e2e_needs_build != 'false' }}
@@ -1562,7 +1568,7 @@ jobs:
   verify:
     name: PR checks passed
     # Publish an explicit result after every required dependency settles.
-    if: ${{ !cancelled() && github.event.pull_request.draft != true }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     needs:
       - code_paths
       - preflight

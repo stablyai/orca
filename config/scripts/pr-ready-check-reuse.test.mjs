@@ -127,7 +127,7 @@ describe('ready-for-review required check reuse', () => {
 
   it('keeps required skips conditional on proof and leaves advisory routing eligible', () => {
     expect(workflow['run-name']).toBe(
-      "PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
+      "${{ github.event_name == 'pull_request' && format('PR {0}', github.event.pull_request.number) || github.ref_name }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }} | unit ${{ github.event.pull_request.draft && vars.ORCA_UNIT_SELECTION_MODE == 'selected' && 'selected' || 'full' }}"
     )
     expect(workflow.on.pull_request.types).toContain('ready_for_review')
     const detector = workflow.jobs.code_paths

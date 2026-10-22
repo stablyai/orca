@@ -61,6 +61,8 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 If changing code around `git`, `gh`, source-control, or review behavior read [`docs/reference/git-workflow.md`](./docs/reference/git-workflow.md).
 
+PR Checks also runs on pushes to `main` (one active run and at most one queued; newer pushes replace the queued run). Before fixing a red main, inspect the latest completed `main` run of `.github/workflows/pr.yml`, its `PR checks passed` aggregate and failing jobs, use history to identify the introducing change, and check open PRs for a fix already in flight.
+
 # Tests
 
 Avoid adding low-value tests. These might be fine for development but offer low value when checked in. [Anti-patterns](./docs/reference/test-antipatterns.md)
