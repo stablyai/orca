@@ -4,14 +4,12 @@ import { translate } from '@/i18n/i18n'
 import { toHttpsRecoveryUrl } from '../../../../../shared/browser-url'
 import type {
   BrowserCertificateFailure,
+  BrowserLoadError,
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import {
-  useSshWorkspaceProbeSkipRecheck,
-  useSshWorkspaceRouteHostConnected
-} from '../use-ssh-workspace-browser-route'
+import { useSshWorkspaceBrowserLoadFailureRoute } from '../use-ssh-workspace-browser-route'
 import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failure-auto-retry'
 import BrowserFind from './BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
@@ -79,8 +77,6 @@ export function BrowserPageViewportOverlays({
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
 }): React.JSX.Element {
-  const recheckSshRoute = useSshWorkspaceProbeSkipRecheck(worktreeId)
-  const sshRouteHostConnected = useSshWorkspaceRouteHostConnected(worktreeId)
   return (
     <>
       <BrowserGuestAnnotateOverlays
@@ -99,11 +95,17 @@ export function BrowserPageViewportOverlays({
       <BrowserPageZoomIndicator state={browserZoomIndicatorState} percent={browserZoomPercent} />
       <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
       {showFailureOverlay && browserTab.loadError ? (
-        <BrowserLoadFailureOverlay
+        <BrowserPageLoadFailure
+          browserTab={browserTab}
           loadError={browserTab.loadError}
-          externalUrl={failureExternalUrl}
-          currentUrl={toDisplayUrl(failedNavigationUrl)}
-          httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
+          failedNavigationUrl={failedNavigationUrl}
+          failureExternalUrl={failureExternalUrl}
+          certificateFailure={certificateFailure}
+          sshRouted={sshRouted}
+          worktreeId={worktreeId}
+          autoRetry={autoRetry}
+          navigateToUrl={navigateToUrl}
+          setResourceNotice={setResourceNotice}
           onRetry={() => {
             const webview = webviewRef.current
             if (!webview) {
@@ -116,37 +118,64 @@ export function BrowserPageViewportOverlays({
             }
             retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
           }}
-          onTryHttps={navigateToUrl}
-          onCopy={(url) => {
-            void window.api.ui.writeClipboardText(url)
-            setResourceNotice(
-              translate('browser.loadFailure.addressCopied', 'Copied the current page address.')
-            )
-          }}
-          onOpenExternal={(url) => void window.api.shell.openUrl(url)}
-          certificateFailure={certificateFailure}
-          sshRoutedHint={sshRouted}
-          onRecheckSshRoute={sshRouted ? recheckSshRoute : null}
-          route={
-            !sshRouted
-              ? { routed: false }
-              : // Why: after "Try anyway" nothing proved the host forwards ports, so a SOCKS failure
-                // can't be read as "nothing is running".
-                recheckSshRoute
-                ? null
-                : { routed: true, routeConnected: sshRouteHostConnected }
-          }
-          autoRetry={{ ...autoRetry, loading: browserTab.loading }}
-          expectedBrowserPageId={browserTab.id}
-          onProceedCertificate={(challengeId) =>
-            window.api.browser.proceedCertificate({
-              browserPageId: browserTab.id,
-              challengeId
-            })
-          }
         />
       ) : null}
       {isBlankTab ? <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} /> : null}
     </>
+  )
+}
+
+/** Mounted only while the page shows a failure, so its SSH-route reads cost nothing otherwise. */
+function BrowserPageLoadFailure({
+  browserTab,
+  loadError,
+  failedNavigationUrl,
+  failureExternalUrl,
+  certificateFailure,
+  sshRouted,
+  worktreeId,
+  autoRetry,
+  navigateToUrl,
+  setResourceNotice,
+  onRetry
+}: {
+  browserTab: BrowserPageState
+  loadError: BrowserLoadError
+  failedNavigationUrl: string
+  failureExternalUrl: string | null
+  certificateFailure: BrowserCertificateFailure | null
+  sshRouted: boolean
+  worktreeId: string
+  autoRetry: Omit<BrowserLoadFailureAutoRetry, 'loading'>
+  navigateToUrl: (url: string) => void
+  setResourceNotice: Dispatch<SetStateAction<string | null>>
+  onRetry: () => void
+}): React.JSX.Element {
+  const ssh = useSshWorkspaceBrowserLoadFailureRoute(worktreeId)
+  return (
+    <BrowserLoadFailureOverlay
+      loadError={loadError}
+      externalUrl={failureExternalUrl}
+      currentUrl={toDisplayUrl(failedNavigationUrl)}
+      httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
+      onRetry={onRetry}
+      onTryHttps={navigateToUrl}
+      onCopy={(url) => {
+        void window.api.ui.writeClipboardText(url)
+        setResourceNotice(
+          translate('browser.loadFailure.addressCopied', 'Copied the current page address.')
+        )
+      }}
+      onOpenExternal={(url) => void window.api.shell.openUrl(url)}
+      certificateFailure={certificateFailure}
+      sshRoutedHint={sshRouted}
+      onRecheckSshRoute={sshRouted ? ssh.recheck : null}
+      route={sshRouted ? ssh.route : { routed: false }}
+      autoRetry={{ ...autoRetry, loading: browserTab.loading }}
+      expectedBrowserPageId={browserTab.id}
+      onProceedCertificate={(challengeId) =>
+        window.api.browser.proceedCertificate({ browserPageId: browserTab.id, challengeId })
+      }
+    />
   )
 }

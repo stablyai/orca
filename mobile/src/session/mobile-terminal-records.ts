@@ -1,6 +1,7 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import { browserLoadErrorsEqual } from '../../../src/shared/browser-load-failure'
 
 export type TerminalRecord = {
   handle: string
@@ -165,8 +166,7 @@ function mobileSessionTabEqual(
         a.browserPageId === b.browserPageId &&
         a.url === b.url &&
         a.loading === b.loading &&
-        a.loadError?.code === b.loadError?.code &&
-        a.loadError?.validatedUrl === b.loadError?.validatedUrl &&
+        browserLoadErrorsEqual(a.loadError, b.loadError) &&
         a.canGoBack === b.canGoBack &&
         a.canGoForward === b.canGoForward
       )

@@ -13,7 +13,7 @@ export type BrowserLoadFailureAutoRetry = {
   /** The page is on screen somewhere: this desktop, a phone, or a paired viewer. */
   active: boolean
   /** Keep going while this window is hidden, because someone else is looking at the page. */
-  whileWindowHidden: boolean
+  whileWindowHidden?: boolean
   /** An attempt is in flight; the next one waits for it to settle instead of aborting it. */
   loading: boolean
 }
@@ -21,8 +21,7 @@ export type BrowserLoadFailureAutoRetry = {
 /** Re-attempts the failed load; a pane whose attempt settles later returns a promise for it. */
 export type BrowserLoadFailureRetry = () => void | Promise<void>
 
-// Why faster than Chrome's 1s/5s/30s: a dev server usually comes up within seconds, and a
-// refused attempt costs one local connect.
+// Why faster than Chrome's 1s/5s/30s: a dev server comes up in seconds and a refused attempt is cheap.
 const RETRY_DELAYS_MS = [1000, 1000, 2000, 3000, 5000]
 const MAX_ATTEMPTS = 120
 

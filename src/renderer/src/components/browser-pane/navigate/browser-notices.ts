@@ -108,6 +108,19 @@ export function formatByteCount(bytes: number | null): string | null {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`
 }
 
+export function formatLoadFailureTitle(
+  loadError: BrowserLoadError,
+  failure: BrowserLoadFailureDescription
+): string {
+  if (isChromiumCertificateErrorCode(loadError.code)) {
+    return translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
+  }
+  if (loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
+    return translate('browser.guestRecovery.title', 'Browser page stopped')
+  }
+  return formatLoadFailureNetworkText(loadError, failure).title
+}
+
 export function formatLoadFailureDescription(
   loadError: BrowserLoadError,
   meta: LoadFailureMeta,
@@ -191,8 +204,7 @@ export function translateLoadFailurePiece(id: BrowserLoadFailureCopyId): string 
   return LOAD_FAILURE_PIECES[id]({ host: '' })
 }
 
-/** What a network failure means, in the user's words; certificate and crash pages keep their own copy. */
-export function formatLoadFailureNetworkText(
+function formatLoadFailureNetworkText(
   loadError: BrowserLoadError,
   failure: BrowserLoadFailureDescription
 ): { title: string; description: string } {

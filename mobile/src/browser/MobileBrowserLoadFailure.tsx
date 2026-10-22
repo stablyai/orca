@@ -1,7 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
 import {
-  BROWSER_LOAD_FAILURE_COPY,
   describeBrowserLoadFailure,
   formatBrowserLoadFailureText,
   isBrowserNetworkLoadFailure
@@ -15,9 +14,7 @@ export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoad
   }
   // Why no route: the phone can't see the SSH host's state, so SOCKS failures read as "can't reach".
   const failure = describeBrowserLoadFailure(loadError, null)
-  const text = formatBrowserLoadFailureText(loadError, failure, (id, values) =>
-    BROWSER_LOAD_FAILURE_COPY[id].replace('{{host}}', values.host)
-  )
+  const text = formatBrowserLoadFailureText(loadError, failure)
   return (
     <View pointerEvents="none" style={styles.page}>
       <Text style={styles.title}>{text.title}</Text>
@@ -38,7 +35,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 16,
+    fontSize: typography.titleSize,
     fontWeight: '600',
     textAlign: 'center'
   },

@@ -44,7 +44,7 @@ describe('BrowserLoadFailureOverlay', () => {
         loadError={refused()}
         currentUrl="http://localhost:3000/"
         httpsRecoveryUrl={null}
-        autoRetry={{ active: true, whileWindowHidden: false, loading }}
+        autoRetry={{ active: true, loading }}
         {...callbacks}
       />
     )
@@ -85,7 +85,7 @@ describe('BrowserLoadFailureOverlay', () => {
         }}
         currentUrl="http://localhost:3000/"
         httpsRecoveryUrl={null}
-        autoRetry={{ active: false, whileWindowHidden: false, loading: false }}
+        autoRetry={{ active: false, loading: false }}
         {...callbacks}
       />
     )
@@ -98,7 +98,7 @@ describe('BrowserLoadFailureOverlay', () => {
         }}
         currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
-        autoRetry={{ active: true, whileWindowHidden: false, loading: false }}
+        autoRetry={{ active: true, loading: false }}
         {...callbacks}
       />
     )
@@ -124,7 +124,7 @@ describe('BrowserLoadFailureOverlay', () => {
         currentUrl="http://localhost:3000/"
         httpsRecoveryUrl={null}
         route={{ routed: true, routeConnected: true }}
-        autoRetry={{ active: true, whileWindowHidden: false, loading: false }}
+        autoRetry={{ active: true, loading: false }}
         {...callbacks}
       />
     )
@@ -147,7 +147,7 @@ describe('BrowserLoadFailureOverlay', () => {
         }}
         currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
-        autoRetry={{ active, whileWindowHidden: false, loading: false }}
+        autoRetry={{ active, loading: false }}
         {...callbacks}
       />
     )
@@ -176,7 +176,7 @@ describe('BrowserLoadFailureOverlay', () => {
         }}
         currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
-        autoRetry={{ active: true, whileWindowHidden: false, loading }}
+        autoRetry={{ active: true, loading }}
         {...callbacks}
       />
     )

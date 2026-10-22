@@ -1,9 +1,8 @@
-// What a failed browser load means for the user, read from Chromium's net error code. English
-// copy lives here so desktop (which translates each piece with it as the fallback) and mobile
-// (which shows it as is) never say different things.
+// English copy lives here so desktop (translating each piece) and mobile never say different things.
 
 import type { BrowserLoadError } from './browser-workspace-types'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { isWildcardBindHost } from './browser-url'
 import { isChromiumCertificateErrorCode } from './browser-certificate-errors'
 
 export type BrowserLoadFailureKind =
@@ -75,14 +74,19 @@ const KIND_COPY: Record<
   other: { title: 'otherTitle', description: 'otherDescription' }
 }
 
-/**
- * The headline and sentence for a failure. `render` turns a copy id into text: desktop
- * translates it, mobile fills in the English.
- */
+export type BrowserLoadFailureCopyRender = (
+  id: BrowserLoadFailureCopyId,
+  values: { host: string }
+) => string
+
+const renderEnglish: BrowserLoadFailureCopyRender = (id, values) =>
+  BROWSER_LOAD_FAILURE_COPY[id].replace('{{host}}', values.host)
+
+/** The headline and sentence for a failure; desktop passes a translating `render`. */
 export function formatBrowserLoadFailureText(
   loadError: BrowserLoadError,
   failure: BrowserLoadFailureDescription,
-  render: (id: BrowserLoadFailureCopyId, values: { host: string }) => string
+  render: BrowserLoadFailureCopyRender = renderEnglish
 ): { title: string; description: string } {
   const copy = KIND_COPY[failure.kind]
   const host = failure.host ?? ''
@@ -98,40 +102,38 @@ export function formatBrowserLoadFailureText(
 
 const REFUSED = -102
 const OFFLINE = -106
-const DNS_CODES = new Set([-105, -137])
-const TIMEOUT_CODES = new Set([-7, -118])
-const RESET_CODES = new Set([-100, -101, -103, -324])
-// Why: Chromium reports every SOCKS failure as one code, so through the SSH route "nothing is
-// listening" and "the SSH host is gone" look the same; only the host's state tells them apart.
-const PROXY_CODES = new Set([-120, -121, -130])
-// Failures a server coming up or a host reconnecting can fix; certificate, blocked and HTTP
-// errors are not here because a reload can't change them (Chrome's auto-reload skips them too).
+const DNS_CODES = [-105, -137]
+const TIMEOUT_CODES = [-7, -118]
+const RESET_CODES = [-100, -101, -103, -324]
+// Why: every SOCKS failure is one code, so on the SSH route only the host's state tells "not listening" from "host gone".
+const PROXY_CODES = [-120, -121, -130]
+// Why: reloads can't fix certificate, blocked or HTTP errors (Chrome's auto-reload skips them too).
 const RETRYABLE_CODES = new Set([
-  -7, -21, -100, -101, -102, -103, -104, -105, -109, -118, -120, -121, -130, -137, -324
+  REFUSED,
+  ...DNS_CODES,
+  ...TIMEOUT_CODES,
+  ...RESET_CODES,
+  ...PROXY_CODES,
+  -21, // ERR_NETWORK_CHANGED
+  -104, // ERR_CONNECTION_FAILED
+  -109 // ERR_ADDRESS_UNREACHABLE
 ])
 
+/** Hosts a developer runs themselves: this machine, the LAN, the tailnet, or a dev-only name. */
 function readHost(url: string): { host: string | null; isDevHost: boolean } {
   try {
-    const parsed = new URL(url)
-    if (!parsed.hostname) {
+    const { host, hostname } = new URL(url)
+    if (!hostname) {
       return { host: null, isDevHost: false }
     }
-    const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase()
-    return { host: parsed.host, isDevHost: isDevHostname(hostname) }
+    const isDevHost =
+      isWildcardBindHost(hostname) ||
+      /\.(?:local|test|internal|lan)$/i.test(hostname) ||
+      classifyRemotePairingHostname(hostname) !== 'public'
+    return { host, isDevHost }
   } catch {
     return { host: null, isDevHost: false }
   }
-}
-
-/** Hosts a developer runs themselves: this machine, the LAN, the tailnet, or a dev-only name. */
-export function isDevHostname(hostname: string): boolean {
-  if (hostname === '0.0.0.0' || hostname === '::') {
-    return true
-  }
-  if (/\.(?:local|test|localhost|internal|lan)$/.test(hostname)) {
-    return true
-  }
-  return classifyRemotePairingHostname(hostname) !== 'public'
 }
 
 function classifyKind(
@@ -145,16 +147,16 @@ function classifyKind(
   if (code === OFFLINE) {
     return 'offline'
   }
-  if (DNS_CODES.has(code)) {
+  if (DNS_CODES.includes(code)) {
     return 'dns'
   }
-  if (TIMEOUT_CODES.has(code)) {
+  if (TIMEOUT_CODES.includes(code)) {
     return 'timeout'
   }
-  if (RESET_CODES.has(code)) {
+  if (RESET_CODES.includes(code)) {
     return 'reset'
   }
-  if (PROXY_CODES.has(code) && route?.routed) {
+  if (PROXY_CODES.includes(code) && route?.routed) {
     if (!route.routeConnected) {
       return 'route-down'
     }
@@ -188,5 +190,24 @@ export function describeBrowserLoadFailure(
 export function isBrowserNetworkLoadFailure(loadError: BrowserLoadError): boolean {
   return (
     loadError.code < 0 && loadError.code > -1000 && !isChromiumCertificateErrorCode(loadError.code)
+  )
+}
+
+export function browserLoadErrorsEqual(
+  a: BrowserLoadError | null | undefined,
+  b: BrowserLoadError | null | undefined
+): boolean {
+  const left = a ?? null
+  const right = b ?? null
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  return (
+    left.code === right.code &&
+    left.description === right.description &&
+    left.validatedUrl === right.validatedUrl
   )
 }

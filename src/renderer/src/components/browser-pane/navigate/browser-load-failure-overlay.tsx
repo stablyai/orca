@@ -27,7 +27,7 @@ import {
 } from '../../../../../shared/browser-load-failure'
 import {
   formatLoadFailureDescription,
-  formatLoadFailureNetworkText,
+  formatLoadFailureTitle,
   isCertificateLoadError,
   type LoadFailureMeta
 } from './browser-notices'
@@ -182,6 +182,13 @@ export function BrowserLoadFailureOverlay({
   const certificateError = isCertificateLoadError(presentationLoadError)
   const guestRecoveryError = presentationLoadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
   const failure = describeBrowserLoadFailure(presentationLoadError, route)
+  const FailureIcon = certificateError
+    ? ShieldAlert
+    : failure.kind === 'not-running'
+      ? ServerOff
+      : failure.kind === 'offline'
+        ? WifiOff
+        : Globe
   const activeProceedAttempt =
     proceedAttempt?.challengeId === matchingCertificateFailure?.challengeId ? proceedAttempt : null
   const actionsDisabled = activeProceedAttempt?.state === 'submitting'
@@ -293,22 +300,10 @@ export function BrowserLoadFailureOverlay({
           className="flex max-w-lg flex-col items-center px-8 py-8 text-center"
         >
           <div className="mb-4 rounded-full border border-border bg-muted p-3 text-muted-foreground">
-            {certificateError ? (
-              <ShieldAlert className="size-5" />
-            ) : failure.kind === 'not-running' ? (
-              <ServerOff className="size-5" />
-            ) : failure.kind === 'offline' ? (
-              <WifiOff className="size-5" />
-            ) : (
-              <Globe className="size-5" />
-            )}
+            <FailureIcon className="size-5" />
           </div>
           <h2 className="text-base font-semibold text-foreground">
-            {certificateError
-              ? translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
-              : guestRecoveryError
-                ? translate('browser.guestRecovery.title', 'Browser page stopped')
-                : formatLoadFailureNetworkText(presentationLoadError, failure).title}
+            {formatLoadFailureTitle(presentationLoadError, failure)}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
             {formatLoadFailureDescription(presentationLoadError, meta, failure)}
@@ -327,7 +322,7 @@ export function BrowserLoadFailureOverlay({
                 ? translate(
                     'browser.loadFailure.sshRoutedServerHint',
                     "This page loads through the workspace's SSH host, so {{host}} is on that machine.",
-                    { host: meta.host ?? '' }
+                    { host: failure.host ?? '' }
                   )
                 : translate(
                     'browser.loadFailure.sshRoutedHint',

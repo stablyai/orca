@@ -82,9 +82,7 @@ export function RemoteBrowserPageViewport({
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
-  // Why: a host snapshot clears the error while the server re-attempts the URL (headless hosts
-  // also publish loading: false); keep the failure page and its retry state until this pane's
-  // own command settles.
+  // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
   const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
   if (
     browserTab.loadError !== standingFailure &&
@@ -172,7 +170,6 @@ export function RemoteBrowserPageViewport({
           onRetry={() => onGoto(remoteFailureUrl)}
           autoRetry={{
             active: isActive,
-            whileWindowHidden: false,
             loading: browserTab.loading
           }}
           onTryHttps={(url) => void onGoto(url)}

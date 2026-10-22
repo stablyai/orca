@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BROWSER_LOAD_FAILURE_COPY,
   describeBrowserLoadFailure,
   formatBrowserLoadFailureText,
   isBrowserNetworkLoadFailure,
@@ -19,9 +18,7 @@ function english(
 ) {
   const loadError = { code, description, validatedUrl: url }
   const failure = describeBrowserLoadFailure(loadError, route)
-  const text = formatBrowserLoadFailureText(loadError, failure, (id, values) =>
-    BROWSER_LOAD_FAILURE_COPY[id].replace('{{host}}', values.host)
-  )
+  const text = formatBrowserLoadFailureText(loadError, failure)
   return { ...text, kind: failure.kind, recovery: failure.recovery }
 }
 

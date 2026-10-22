@@ -31,7 +31,7 @@ export function ClientHostedBrowserLoadFailure({
       currentUrl={toDisplayUrl(failedNavigationUrl)}
       httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
       onRetry={onRetry}
-      autoRetry={{ active: isActive, whileWindowHidden: false, loading: browserTab.loading }}
+      autoRetry={{ active: isActive, loading: browserTab.loading }}
       onTryHttps={onNavigate}
       onCopy={(url) => void window.api.ui.writeClipboardText(url)}
       onOpenExternal={(url) => void window.api.shell.openUrl(url)}

@@ -233,10 +233,8 @@ export function ClientHostedBrowserPagePane({
       if (!isPageDocumentNavigationStart(event)) {
         return
       }
-      // Why: re-attempting the failed URL keeps the failure page up (and its auto-retry) until a load succeeds.
-      const standing = resolveActiveBrowserLoadFailure(activeLoadFailureRef.current, event.url)
-      activeLoadFailureRef.current = standing
-      updatePageStateFromGuest(browserTab.id, { loading: true, loadError: standing })
+      // Why: a standing failure (and its auto-retry) stays up until a load commits or fails anew.
+      updatePageStateFromGuest(browserTab.id, { loading: true })
       const startMetadata = readBrowserClientPageGuestMetadataIfLive(webview, undefined, true)
       if (!startMetadata) {
         guestLoss.lose('unreadable')

@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
+import type { BrowserLoadFailureRoute } from '../../../../shared/browser-load-failure'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
 
@@ -220,8 +221,14 @@ export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void
     })
 }
 
-/** Whether the SSH host a routed page browses through is connected — the same target the route dials. */
-export function useSshWorkspaceRouteHostConnected(worktreeId: string): boolean {
+/** How a routed page's load failure reads: the state of the SSH host the route dials. */
+export function useSshWorkspaceBrowserLoadFailureRoute(worktreeId: string): {
+  route: BrowserLoadFailureRoute | null
+  recheck: (() => void) | null
+} {
+  const recheck = useSshWorkspaceProbeSkipRecheck(worktreeId)
   const targetId = useSshWorkspaceRouteTargetId(worktreeId)
-  return useWorktreeHostConnection(worktreeId, targetId).phase === 'connected'
+  const routeConnected = useWorktreeHostConnection(worktreeId, targetId).phase === 'connected'
+  // Why: after "Try anyway" nothing proved the host forwards ports, so a SOCKS failure can't mean "nothing is running".
+  return { route: recheck ? null : { routed: true, routeConnected }, recheck }
 }

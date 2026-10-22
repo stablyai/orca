@@ -18,7 +18,6 @@ import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { BrowserPageUrlSetter, BrowserTabPageState } from '../describe-page/browser-page-types'
 import { getBrowserDisplayTitle, toDisplayUrl } from '../describe-page/browser-page-url-display'
-import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import type {
   RemoteBrowserPaneNotice,
   RemoteBrowserRuntimeTarget
@@ -133,14 +132,8 @@ export function useRemoteBrowserPageNavigation({
       }
       setPaneBusy(true)
       setPaneNotice(null)
-      // Why: re-attempting the failed URL keeps the failure page up (and its auto-retry) until it loads.
-      onUpdatePageState(browserTab.id, {
-        loading: true,
-        loadError:
-          method === 'browser.goto' && url
-            ? resolveActiveBrowserLoadFailure(browserTab.loadError, url)
-            : null
-      })
+      // Why: a standing failure (and its auto-retry) stays up until a load succeeds or fails anew.
+      onUpdatePageState(browserTab.id, { loading: true })
       try {
         const params =
           method === 'browser.goto'
@@ -162,8 +155,7 @@ export function useRemoteBrowserPageNavigation({
         }
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
         setPaneNotice({ kind: 'consequence', text: message })
-        // Why: the server's goto rejects with Electron's "ERR_NAME (-code) loading '…'" text, the
-        // only place a streamed page's net error survives; older servers send the same text.
+        // Why: goto results carry no load error, but the rejection keeps Electron's "ERR_NAME (-code)" text.
         const netError = /\b(ERR_[A-Z_]+) \((-\d+)\)/.exec(message)
         onUpdatePageState(browserTab.id, {
           loading: false,
@@ -183,7 +175,6 @@ export function useRemoteBrowserPageNavigation({
     [
       applyRemoteTabInfo,
       browserTab.id,
-      browserTab.loadError,
       browserTab.url,
       createRemoteOperationToken,
       lifecycle,
