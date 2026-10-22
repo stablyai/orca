@@ -3,7 +3,10 @@ import type {
   AgentStatusEntry,
   AgentStatusState
 } from '../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import {
+  getAgentRowConversationName,
+  type ConversationNameTab
+} from '../../../shared/agent-row-conversation-name'
 import type { Worktree } from '../../../shared/worktree/types'
 import {
   getAgentRowPrimaryText,
@@ -96,8 +99,11 @@ export function getActivityThreadWorkspaceTitle(
 
 /** Stable task identity for Activity sidebar rows — not the latest follow-up turn. */
 export function getActivityThreadTaskTitle(args: {
-  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt' | 'stateHistory'>
-  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title' | 'defaultTitle'>
+  entry: Pick<
+    AgentStatusEntry,
+    'orchestration' | 'prompt' | 'stateHistory' | 'agentType' | 'providerSession'
+  >
+  tab: ConversationNameTab
   generatedTitlesEnabled: boolean
 }): string {
   const customTitle = args.tab.customTitle?.trim()
@@ -110,11 +116,18 @@ export function getActivityThreadTaskTitle(args: {
     return orchestrationLabel
   }
 
-  // Why: respect the user's tabAutoGenerateTitle setting — a disabled generated
-  // title must not resurface here (mirrors resolveTerminalTabTitle's gate).
-  const generatedTitle = args.generatedTitlesEnabled ? args.tab.generatedTitle?.trim() : ''
-  if (generatedTitle) {
-    return generatedTitle
+  // Why: the agent's own session name (OSC title, updated on /rename) outranks the
+  // last typed prompt, matching the sidebar. This also keeps the tabAutoGenerateTitle
+  // gate for generated titles.
+  const conversationName = getAgentRowConversationName(
+    args.tab,
+    args.entry.agentType,
+    args.generatedTitlesEnabled,
+    undefined,
+    args.entry.providerSession?.id
+  )
+  if (conversationName) {
+    return conversationName
   }
 
   // Why: a substantive live prompt is genuine new work and must win — the row
