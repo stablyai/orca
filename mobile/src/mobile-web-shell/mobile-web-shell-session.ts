@@ -244,7 +244,7 @@ function decideDownloadFailed(
 ): MobileWebShellStep {
   const cached = session.cached
   const gates = session.gates
-  if (cached === null || gates === null) {
+  if (gates === null) {
     return step(session, {
       state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
     })
@@ -255,6 +255,17 @@ function decideDownloadFailed(
   const gated = gateState(verdict, session.retriedOnce)
   if (gated !== null) {
     return step(session, { state: gated })
+  }
+  if (cached === null) {
+    if (session.state.kind === 'ready') {
+      return step(session, {
+        offeredRoutes: null,
+        updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null
+      })
+    }
+    return step(session, {
+      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+    })
   }
   return cachedFallback(session, cached, {
     // The newer manifest claimed this route or never arrived, so the cache lacking it is this

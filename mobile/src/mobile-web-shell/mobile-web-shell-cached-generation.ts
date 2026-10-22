@@ -104,15 +104,19 @@ export function reconcileManifestCache(
   view: ServedView
 ): MobileWebShellStep {
   const cached = session.cached
-  if (cached?.buildId === manifest.buildId) {
+  const activeMatchesManifest =
+    session.state.kind === 'ready' && session.state.buildId === manifest.buildId
+  if (cached?.buildId === manifest.buildId || activeMatchesManifest) {
     const live = session.state.kind === 'activating' || session.state.kind === 'ready'
     if (live && sameRouteView(view, session)) {
       return step(session, view)
     }
-    return openCached(session, cached, view)
+    if (cached !== null) {
+      return openCached(session, cached, view)
+    }
   }
   const live =
-    cached !== null && (session.state.kind === 'activating' || session.state.kind === 'ready')
+    (cached !== null && session.state.kind === 'activating') || session.state.kind === 'ready'
   if (live) {
     return step(
       session,
@@ -179,6 +183,9 @@ export function generationActivated(
   }
 ): MobileWebShellStep {
   const cachedBuildId = session.cached?.buildId ?? null
+  if (session.state.kind !== 'activating' && session.state.kind !== 'ready') {
+    return step(session, {})
+  }
   if (
     session.state.kind === 'ready' &&
     cachedBuildId !== null &&
@@ -187,11 +194,11 @@ export function generationActivated(
   ) {
     return step(session, {})
   }
+  const activeBuildId = session.state.kind === 'ready' ? session.state.buildId : cachedBuildId
   const downloadLanded =
     (session.state.kind === 'activating' && session.state.source === 'download') ||
     (session.requestedBuildId !== null &&
-      cachedBuildId !== null &&
-      event.buildId !== cachedBuildId)
+      (activeBuildId === null || event.buildId !== activeBuildId))
   const offered =
     downloadLanded && session.offeredRoutes !== null
       ? {
@@ -204,6 +211,7 @@ export function generationActivated(
     {
       ...CLEAR_PAGE_DOCUMENT_STATE,
       ...offered,
+      requestedBuildId: downloadLanded ? null : session.requestedBuildId,
       offeredRoutes: downloadLanded ? null : session.offeredRoutes,
       state: {
         kind: 'ready',
