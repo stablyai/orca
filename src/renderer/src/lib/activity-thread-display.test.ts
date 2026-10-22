@@ -67,6 +67,43 @@ describe('getActivityThreadTaskTitle', () => {
     ).toBe('Refactor auth middleware')
   })
 
+  it('prefers a meaningful agent session title over the last prompt', () => {
+    expect(
+      getActivityThreadTaskTitle({
+        entry: { prompt: 'ok go ahead', stateHistory: [], agentType: 'claude' },
+        tab: { ...tab, generatedTitle: undefined, title: '✳ Fix checkout race' },
+        generatedTitlesEnabled: false
+      })
+    ).toBe('Fix checkout race')
+    expect(
+      getActivityThreadTaskTitle({
+        entry: {
+          prompt: 'Investigate the flaky login test',
+          stateHistory: [],
+          agentType: 'claude'
+        },
+        tab: { ...tab, generatedTitle: undefined, title: '✳ Fix checkout race' },
+        generatedTitlesEnabled: false
+      })
+    ).toBe('Fix checkout race')
+  })
+
+  it('keeps the prompt when the live tab title is only a default or status label', () => {
+    for (const title of ['Claude', '✳ Claude Code', 'Terminal 2', '✳']) {
+      expect(
+        getActivityThreadTaskTitle({
+          entry: {
+            prompt: 'Investigate the flaky login test',
+            stateHistory: [],
+            agentType: 'claude'
+          },
+          tab: { ...tab, generatedTitle: undefined, title },
+          generatedTitlesEnabled: false
+        })
+      ).toBe('Investigate the flaky login test')
+    }
+  })
+
   it('ignores terse live prompts and uses generated title or history', () => {
     expect(
       getActivityThreadTaskTitle({
