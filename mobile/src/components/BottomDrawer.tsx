@@ -12,6 +12,8 @@ type Props = {
   // TextInput can sit above the keyboard while results reflow in flex space
   // above it — content-sized sheets make that field ride every list change.
   fillAvailable?: boolean
+  // Why: rename (and similar prompts) open over an IME that is already up.
+  seedKeyboard?: boolean
   // Why: pin an outer content-sized sheet under an inner fill picker without
   // letting it take touches, draw a second backdrop, or keyboard-lift.
   interactive?: boolean
