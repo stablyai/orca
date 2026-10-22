@@ -20,10 +20,7 @@ import {
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
 import { resolveActiveSessionTab } from './active-session-tab'
-import {
-  activateMobileSessionTab,
-  consumeLocalSessionTabFollow
-} from './mobile-session-tab-activation'
+import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
@@ -122,8 +119,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         applicationRevision
       }
 
-      const followsHost =
-        result.navigationIntent === 'follow' || consumeLocalSessionTabFollow(result.worktree)
+      const followsHost = result.navigationIntent === 'follow'
       if (followsHost) {
         pendingSelectionRef.current = withoutPendingHandle(
           pendingSelectionRef.current?.kind === 'launched' ? null : pendingSelectionRef.current
@@ -153,7 +149,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       const resolved = resolveActiveSessionTab(nextTabs, {
         pendingActiveSessionTabId,
         selectedSessionTabId: selectedSessionTabIdRef.current,
-        navigationIntent: followsHost ? 'follow' : result.navigationIntent
+        navigationIntent: result.navigationIntent
       })
       let active = resolved.activeTab
       let selectionSource: string = resolved.selectionSource

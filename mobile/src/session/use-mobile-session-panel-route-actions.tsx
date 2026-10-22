@@ -176,10 +176,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
   }
 
   const openAgentSessionHistory = () => {
-    const params = new URLSearchParams({
-      name: worktreeName || '',
-      origin: 'session'
-    })
+    const params = new URLSearchParams({ name: worktreeName || '' })
     router.push(
       workspaceRouteHref(
         `/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`,

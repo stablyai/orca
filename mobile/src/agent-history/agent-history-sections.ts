@@ -32,7 +32,6 @@ export function buildMobileAgentHistorySections(
     scopeFilterPaths: readonly string[]
     activeWorktreePath: string | null
     now: number
-    closedSessionIds?: ReadonlySet<string>
   }
 ): MobileAgentHistorySection[] {
   // Why: narrow scoped tabs by cwd path-prefix. When the worktree list hasn't
@@ -54,12 +53,7 @@ export function buildMobileAgentHistorySections(
     key: group.key,
     label: group.label,
     data: group.sessions.map((session) =>
-      buildMobileAgentHistoryCard(
-        session,
-        options.activeWorktreePath,
-        options.now,
-        options.closedSessionIds
-      )
+      buildMobileAgentHistoryCard(session, options.activeWorktreePath, options.now)
     )
   }))
 }
