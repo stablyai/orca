@@ -21,6 +21,44 @@ import {
   resetMainWindowMocks
 } from './createMainWindow-test-harness'
 
+function openMainWindowForContextMenu() {
+  const windowHandlers: Record<string, (...args: any[]) => void> = {}
+  const webContents = {
+    on: vi.fn((event, handler) => {
+      windowHandlers[event] = handler
+    }),
+    setZoomLevel: vi.fn(),
+    setBackgroundThrottling: vi.fn(),
+    invalidate: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    send: vi.fn(),
+    isDevToolsOpened: vi.fn(),
+    openDevTools: vi.fn(),
+    closeDevTools: vi.fn(),
+    replaceMisspelling: vi.fn(),
+    session: { addWordToSpellCheckerDictionary: vi.fn() }
+  }
+  const browserWindowInstance = {
+    webContents,
+    on: vi.fn(),
+    isDestroyed: vi.fn(() => false),
+    isMaximized: vi.fn(() => true),
+    isFullScreen: vi.fn(() => false),
+    getSize: vi.fn(() => [1200, 800]),
+    setSize: vi.fn(),
+    maximize: vi.fn(),
+    show: vi.fn(),
+    loadFile: vi.fn(() => Promise.resolve()),
+    loadURL: vi.fn(() => Promise.resolve())
+  }
+  browserWindowMock.mockImplementation(function () {
+    return browserWindowInstance
+  })
+
+  createMainWindow(null)
+  return { webContents, windowHandlers, browserWindowInstance }
+}
+
 describe('createMainWindow', () => {
   beforeEach(() => {
     resetMainWindowMocks()
@@ -467,40 +505,7 @@ describe('createMainWindow', () => {
   })
 
   it('opens a table-aware context menu synchronously without a renderer query', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isDevToolsOpened: vi.fn(),
-      openDevTools: vi.fn(),
-      closeDevTools: vi.fn(),
-      replaceMisspelling: vi.fn(),
-      session: { addWordToSpellCheckerDictionary: vi.fn() }
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
+    const { webContents, windowHandlers, browserWindowInstance } = openMainWindowForContextMenu()
 
     const tableTargetListener = vi
       .mocked(ipcMain.on)
@@ -531,5 +536,39 @@ describe('createMainWindow', () => {
       ])
     )
     expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
+  })
+
+  it('builds the plain edit menu for the one right-click the renderer marks as plain text', () => {
+    const { webContents, windowHandlers } = openMainWindowForContextMenu()
+    const params = {
+      x: 10,
+      y: 20,
+      isEditable: true,
+      formControlType: 'none',
+      dictionarySuggestions: ['reference'],
+      misspelledWord: 'refrence'
+    } as Electron.ContextMenuParams
+    const plainTextListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'rich-markdown:plain-text-context-target')?.[1]
+
+    plainTextListener?.({ sender: webContents } as never)
+    windowHandlers['context-menu']({} as never, params)
+    windowHandlers['context-menu']({} as never, params)
+
+    const labels = buildFromTemplateMock.mock.calls.map(([template]) =>
+      template.map((item: Electron.MenuItemConstructorOptions) => item.label ?? item.role)
+    )
+    expect(labels[0]).toEqual([
+      'reference',
+      undefined,
+      'Add to dictionary',
+      undefined,
+      'cut',
+      'copy',
+      'Paste',
+      'selectAll'
+    ])
+    expect(labels[1]).toContain('Format')
   })
 })

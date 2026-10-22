@@ -272,30 +272,6 @@ describe('buildEditableContextMenuTemplate', () => {
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: false })
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
   })
-
-  it('keeps a plain-text contenteditable to spelling and plain edit actions', () => {
-    const template = buildEditableContextMenuTemplate(
-      contextParams(),
-      {
-        replaceMisspelling: vi.fn(),
-        send: vi.fn(),
-        session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
-      },
-      { plainText: true }
-    )
-
-    expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
-      'reference',
-      'reverence',
-      'separator',
-      'Add to dictionary',
-      'separator',
-      'cut',
-      'copy',
-      'Paste',
-      'selectAll'
-    ])
-  })
 })
 
 describe('rich markdown context-menu table targets', () => {
