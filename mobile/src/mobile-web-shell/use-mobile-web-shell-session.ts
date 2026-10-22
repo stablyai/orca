@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useHostClient } from '../transport/host-client-hooks'
 import type { GenerationStore } from './generation-store'
+import type { GenerationOwner } from './generation-owners'
 import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
 import {
@@ -106,6 +107,8 @@ export function useMobileWebShellSession(args: {
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
   const [backClaimed, setBackClaimed] = useState(() => shellPageBackClaimed(sessionRef.current))
   const hostKey = useMemo(() => deriveHostCacheKey(hostId), [hostId])
+  const generationOwnersRef = useRef(new Map<number, GenerationOwner>())
+  const mountedOwnerRef = useRef<GenerationOwner | null>(null)
   const startedAtRef = useRef(runtime.now())
   // Bumped by anything that invalidates work in flight; every dispatch out of an effect checks it.
   const epochRef = useRef(0)
@@ -153,6 +156,12 @@ export function useMobileWebShellSession(args: {
       cancel()
     }
     timersRef.current.clear()
+    for (const [flow, owner] of generationOwnersRef.current) {
+      if (owner !== mountedOwnerRef.current) {
+        owner.release()
+      }
+      generationOwnersRef.current.delete(flow)
+    }
   }, [])
 
   const runEffect = useCallback(
@@ -162,11 +171,19 @@ export function useMobileWebShellSession(args: {
         return
       }
       const send = (event: MobileWebShellSessionEvent) => dispatch(epoch, event)
+      const generationOwner = (): GenerationOwner => {
+        let owner = generationOwnersRef.current.get(flow)
+        if (owner === undefined || owner === mountedOwnerRef.current) {
+          owner = store.createOwner()
+          generationOwnersRef.current.set(flow, owner)
+        }
+        return owner
+      }
       switch (effect.kind) {
         case 'delete-cache':
           // Reports nothing: the store serialises its own queue, so the sweep and read the reducer
           // queued behind this one already run after it.
-          await store.deleteHostCache(hostKey).catch(() => undefined)
+          await store.deleteHostCache(hostKey, true).catch(() => undefined)
           return
         case 'record-update-failure':
           // Stamped here because the reducer holds neither: the host is the mount's, the time the
@@ -177,7 +194,11 @@ export function useMobileWebShellSession(args: {
           await store.forgetHostUpdateFailures(hostId)
           return
         case 'open-cache':
-          send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
+          send({
+            type: 'cache-read',
+            flow,
+            generation: await openCache(store, hostKey, generationOwner())
+          })
           return
         case 'read-manifest':
           await readManifest(client, flow, send)
@@ -186,6 +207,7 @@ export function useMobileWebShellSession(args: {
           await download({
             client,
             store,
+            owner: generationOwner(),
             hostKey,
             flow,
             runtime,
@@ -232,6 +254,14 @@ export function useMobileWebShellSession(args: {
       void runEffect(epoch, flow, effect)
     }
   }, [runEffect])
+
+  useEffect(
+    () => () => {
+      mountedOwnerRef.current?.release()
+      mountedOwnerRef.current = null
+    },
+    []
+  )
 
   useEffect(() => {
     // A new host is a new session: the old one's latches, cache handle and in-flight work all go.
@@ -290,6 +320,38 @@ export function useMobileWebShellSession(args: {
     statusPending,
     statusReadable
   ])
+
+  const mountedDirectory = state.kind === 'ready' ? state.generationDirectory : null
+  useLayoutEffect(() => {
+    if (mountedDirectory === null) {
+      return
+    }
+    const owner = generationOwnersRef.current.get(sessionRef.current.flow)
+    if (owner === undefined) {
+      return
+    }
+    mountedOwnerRef.current = owner
+  }, [mountedDirectory])
+
+  useEffect(() => {
+    const current = sessionRef.current
+    const mounted = mountedOwnerRef.current
+    const directory = current.state.kind === 'ready' ? current.state.generationDirectory : null
+    if (directory === null && mounted !== null) {
+      mounted.release()
+      mountedOwnerRef.current = null
+    }
+    const inFlight =
+      current.state.kind === 'checking' ||
+      current.state.kind === 'fetching' ||
+      current.state.kind === 'activating'
+    for (const [flow, owner] of generationOwnersRef.current) {
+      if (owner !== mountedOwnerRef.current && (!inFlight || flow !== current.flow)) {
+        owner.release()
+        generationOwnersRef.current.delete(flow)
+      }
+    }
+  }, [state])
 
   const retry = useCallback(() => {
     // A fresh epoch first: a failed download still in flight must not land on the retried session.

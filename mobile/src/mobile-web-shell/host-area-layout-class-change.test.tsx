@@ -75,6 +75,7 @@ import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 
 const store: GenerationStore = {
   // The same build on disk, so a session opens it and reaches `ready` without a download.
+  createOwner: () => ({ release: () => undefined }),
   readActiveGeneration: async () => ({
     buildId: 'b'.repeat(64),
     directory: 'file:///cache/gen',

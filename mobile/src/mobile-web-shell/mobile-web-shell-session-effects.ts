@@ -3,6 +3,7 @@ import { mobileWebBundleManifestRead } from '../transport/mobile-web-bundle-oper
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GenerationStore } from './generation-store'
+import type { GenerationOwner } from './generation-owners'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { generationDirectoryPath } from './generation-store-file-system'
 import type {
@@ -23,12 +24,13 @@ import {
  */
 export async function openCache(
   store: GenerationStore,
-  hostKey: string
+  hostKey: string,
+  owner?: GenerationOwner
 ): Promise<CachedGeneration | null> {
   try {
     // Here and nowhere earlier: only a mounted shell sweeps, so nothing sweeps a cache it never wrote.
     await store.sweepStagedGenerations()
-    const active = await store.readActiveGeneration(hostKey)
+    const active = await store.readActiveGeneration(hostKey, owner)
     return active === null
       ? null
       : {
@@ -93,6 +95,7 @@ export async function readManifest(
 export async function download(args: {
   client: RpcClient | null
   store: GenerationStore
+  owner?: GenerationOwner
   hostKey: string
   flow: number
   runtime: MobileWebShellRuntime
@@ -131,7 +134,7 @@ export async function download(args: {
       await store.abortStagedGeneration(staged).catch(() => undefined)
       return
     }
-    const committed = await store.commitGeneration(staged)
+    const committed = await store.commitGeneration(staged, args.owner)
     send({
       type: 'activated',
       flow,

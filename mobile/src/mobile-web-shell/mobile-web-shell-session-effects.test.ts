@@ -53,6 +53,7 @@ function storeThat(fail: 'stage' | 'commit' | null): GenerationStore {
   }
   const staged = { hostKey: 'k', buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }
   return {
+    createOwner: () => ({ release: () => undefined }),
     readActiveGeneration: async () => null,
     stageGeneration: fail === 'stage' ? reject : async () => staged,
     commitGeneration:
@@ -138,6 +139,7 @@ describe('the page version the floor reads', () => {
   it('is carried from the cached manifest to the generation judged against the host', async () => {
     const store: GenerationStore = {
       ...storeThat(null),
+      createOwner: () => ({ release: () => undefined }),
       readActiveGeneration: async () => ({
         buildId: MANIFEST.buildId,
         directory: 'd',

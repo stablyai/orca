@@ -1,4 +1,11 @@
 import { z } from 'zod'
+import { createGenerationOwners, type GenerationOwner } from './generation-owners'
+import {
+  invalidateActiveBuild,
+  INVALID_ACTIVE_BUILD,
+  readActiveBuild,
+  writeActiveBuild
+} from './generation-active-index'
 import {
   MobileWebBundleManifestReadSchema,
   type MobileWebBundleManifestRead
@@ -7,6 +14,7 @@ import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-
 import { joinUri } from './generation-cache-uri'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
 import { isHostCacheKey } from './host-cache-key'
+import { requireExactBytes, requireHostKey, requireStorablePath } from './generation-asset-path'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
   forgetHostUpdateFailuresIn,
@@ -38,12 +46,13 @@ export type StagedGeneration = {
 }
 
 export type GenerationStore = {
-  readActiveGeneration(hostKey: string): Promise<ActiveGeneration | null>
+  createOwner(): GenerationOwner
+  readActiveGeneration(hostKey: string, owner?: GenerationOwner): Promise<ActiveGeneration | null>
   stageGeneration(hostKey: string, result: MobileWebBundleFetchResult): Promise<StagedGeneration>
-  commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
+  commitGeneration(staged: StagedGeneration, owner?: GenerationOwner): Promise<ActiveGeneration>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
   sweepStagedGenerations(): Promise<void>
-  deleteHostCache(hostKey: string): Promise<void>
+  deleteHostCache(hostKey: string, preserveLive?: boolean): Promise<void>
   /** Why an update read failed, kept for Troubleshoot. Never rejects: it is only evidence. */
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
   /** Oldest first; empty when nothing was recorded or the log cannot be read. */
@@ -64,6 +73,10 @@ export function createGenerationStore(options: {
   // `commitGeneration` rename over, and `abortStagedGeneration` delete, a directory of the caller's
   // choosing. Only handles this store minted are honoured.
   const issuedHandles = new WeakSet<StagedGeneration>()
+  const invalidHosts = new Set<string>()
+  const owners = createGenerationOwners(() => {
+    void serialize(reclaim).catch(() => undefined)
+  })
 
   const hostRoot = (hostKey: string): string => joinUri(fs.rootUri, requireHostKey(hostKey))
   const generationsRoot = (hostKey: string): string =>
@@ -118,7 +131,7 @@ export function createGenerationStore(options: {
     await fs.delete(hostRoot(hostKey))
   }
 
-  async function enforceHostLimit(order: readonly string[]): Promise<void> {
+  async function enforceHostLimit(order: readonly string[], protectedHost?: string): Promise<void> {
     const hosts = await listActivatedHosts()
     // A host missing from the order sorts first: the index is recency, not truth, so a lost or
     // truncated one costs eviction order rather than a generation. The host just activated is
@@ -126,6 +139,7 @@ export function createGenerationStore(options: {
     const evicted = new Set(
       [...hosts]
         .sort((left, right) => order.indexOf(left) - order.indexOf(right))
+        .filter((hostKey) => !owners.holdsHost(hostKey) && hostKey !== protectedHost)
         .slice(0, Math.max(0, hosts.length - MAX_CACHED_HOSTS))
     )
     for (const host of evicted) {
@@ -135,16 +149,27 @@ export function createGenerationStore(options: {
   }
 
   async function readActive(hostKey: string): Promise<ActiveGeneration | null> {
+    if (invalidHosts.has(hostKey)) {
+      return null
+    }
     const generations = generationsRoot(hostKey)
     const directories = (await fs.list(generations)).filter((entry) => entry.isDirectory)
     if (directories.length === 0) {
       return null
     }
-    // Two directories means a commit was interrupted between dropping the old generation and
-    // renaming the new one. There is no activation file to break the tie, and a manifest that
-    // names another build is a tree from some other bundle, so the host's cache goes and the next
-    // open redownloads it.
-    const only = directories.length === 1 ? directories[0] : null
+    const selected = await readActiveBuild(fs, hostRoot(hostKey))
+    if (selected === INVALID_ACTIVE_BUILD) {
+      if (!owners.holdsHost(hostKey)) {
+        await dropHostTree(hostKey)
+      }
+      return null
+    }
+    const only =
+      selected === null
+        ? directories.length === 1
+          ? directories[0]
+          : null
+        : (directories.find((entry) => entry.name === selected) ?? null)
     if (only !== null) {
       const directory = joinUri(generations, only.name)
       // Older builds' manifest-next.json is never read; alone it reads as no manifest.
@@ -161,7 +186,9 @@ export function createGenerationStore(options: {
         return { buildId: manifest.buildId, directory, manifest }
       }
     }
-    await dropHostTree(hostKey)
+    if (!owners.holdsHost(hostKey)) {
+      await dropHostTree(hostKey)
+    }
     return null
   }
 
@@ -201,7 +228,10 @@ export function createGenerationStore(options: {
     return staged
   }
 
-  async function commit(staged: StagedGeneration): Promise<ActiveGeneration> {
+  async function commit(
+    staged: StagedGeneration,
+    owner?: GenerationOwner
+  ): Promise<ActiveGeneration> {
     requireIssuedHandle(staged)
     const generations = generationsRoot(staged.hostKey)
     const target = joinUri(generations, staged.buildId)
@@ -217,11 +247,16 @@ export function createGenerationStore(options: {
     // through and is replaced by the staged tree, which was verified byte for byte.
     const existing = entries.find((entry) => entry.name === staged.buildId)
     if (
+      !invalidHosts.has(staged.hostKey) &&
       existing?.isDirectory === true &&
       (await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))
     ) {
       // Still an activation: without this a host that redownloads the bundle it already has stays
       // the least recently used and is evicted first.
+      await writeActiveBuild(fs, hostRoot(staged.hostKey), staged.buildId)
+      invalidHosts.delete(staged.hostKey)
+      owners.retain(owner, staged.hostKey, staged.buildId)
+      await removeRetired(staged.hostKey, staged.buildId)
       await touchHost(staged.hostKey)
       await fs.delete(staged.directory)
       return active
@@ -231,11 +266,13 @@ export function createGenerationStore(options: {
     if (!(await fs.fileExists(joinUri(staged.directory, MANIFEST_FILE_NAME)))) {
       throw new Error(`staged generation ${staged.buildId} is no longer on disk`)
     }
-    // Every other generation goes before the rename, never after. A crash between the two leaves
-    // zero generations, which the runbook's redownload rule already covers; the other order can
-    // leave two directories under `generations/` with nothing to say which one is the activation.
+    if (owners.holds(staged.hostKey, staged.buildId)) {
+      throw new Error('cannot replace a damaged generation while another view is using it')
+    }
     for (const entry of entries) {
-      await fs.delete(joinUri(generations, entry.name))
+      if (!owners.holds(staged.hostKey, entry.name)) {
+        await fs.delete(joinUri(generations, entry.name))
+      }
     }
     await fs.createDirectory(generations)
     await fs.moveDirectory(staged.directory, target)
@@ -246,18 +283,52 @@ export function createGenerationStore(options: {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
     }
+    await writeActiveBuild(fs, hostRoot(staged.hostKey), staged.buildId)
+    invalidHosts.delete(staged.hostKey)
+    owners.retain(owner, staged.hostKey, staged.buildId)
+    await removeRetired(staged.hostKey, staged.buildId)
     // Enforced here rather than left to a caller: the host ceiling is this module's invariant.
-    await enforceHostLimit(withHostLast(await readHostOrder(), staged.hostKey))
+    await enforceHostLimit(withHostLast(await readHostOrder(), staged.hostKey), staged.hostKey)
     return active
   }
 
-  async function openActive(hostKey: string): Promise<ActiveGeneration | null> {
+  async function openActive(
+    hostKey: string,
+    owner?: GenerationOwner
+  ): Promise<ActiveGeneration | null> {
     const active = await readActive(hostKey)
     // An open is use, so a daily host downloaded long ago is not evicted first.
     if (active !== null) {
+      owners.retain(owner, hostKey, active.buildId)
       await touchHost(hostKey)
     }
     return active
+  }
+
+  async function removeRetired(hostKey: string, activeBuildId: string): Promise<void> {
+    for (const entry of await fs.list(generationsRoot(hostKey))) {
+      if (entry.name !== activeBuildId && !owners.holds(hostKey, entry.name)) {
+        await fs.delete(joinUri(generationsRoot(hostKey), entry.name))
+      }
+    }
+  }
+
+  async function reclaim(): Promise<void> {
+    for (const host of await listHostDirectories()) {
+      if (invalidHosts.has(host.name)) {
+        await removeRetired(host.name, '')
+        if (!owners.holdsHost(host.name)) {
+          await dropHostTree(host.name)
+          invalidHosts.delete(host.name)
+        }
+        continue
+      }
+      const active = await readActive(host.name)
+      if (active !== null) {
+        await removeRetired(host.name, active.buildId)
+      }
+    }
+    await enforceHostLimit(await readHostOrder())
   }
 
   async function sweep(): Promise<void> {
@@ -266,9 +337,17 @@ export function createGenerationStore(options: {
     for (const host of await listHostDirectories()) {
       await fs.delete(joinUri(fs.rootUri, host.name, STAGING_DIRECTORY_NAME))
     }
+    await reclaim()
   }
 
-  async function deleteHost(hostKey: string): Promise<void> {
+  async function deleteHost(hostKey: string, preserveLive = false): Promise<void> {
+    if (preserveLive && owners.holdsHost(hostKey)) {
+      invalidHosts.add(hostKey)
+      await invalidateActiveBuild(fs, hostRoot(hostKey))
+      await removeRetired(hostKey, '')
+      return
+    }
+    invalidHosts.delete(hostKey)
     await dropHostTree(hostKey)
     const order = await readHostOrder()
     if (order.includes(hostKey)) {
@@ -288,13 +367,14 @@ export function createGenerationStore(options: {
   }
 
   return {
-    readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
+    createOwner: owners.create,
+    readActiveGeneration: (hostKey, owner) => serialize(() => openActive(hostKey, owner)),
     stageGeneration: (hostKey, result) => serialize(() => stage(hostKey, result)),
-    commitGeneration: (staged) => serialize(() => commit(staged)),
+    commitGeneration: (staged, owner) => serialize(() => commit(staged, owner)),
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
     sweepStagedGenerations: () => serialize(sweep),
-    deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
+    deleteHostCache: (hostKey, preserveLive) => serialize(() => deleteHost(hostKey, preserveLive)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),
     readUpdateFailures: () => serialize(() => readUpdateFailureLog(fs)),
@@ -320,43 +400,4 @@ function parseJson(text: string): unknown {
   } catch {
     return null
   }
-}
-
-function requireHostKey(hostKey: string): string {
-  if (!isHostCacheKey(hostKey)) {
-    throw new Error('generation store was handed something that is not a host cache key')
-  }
-  return hostKey
-}
-
-/** The manifest schema bans traversal already, but this is the last code between a manifest and a
- *  write, and both manifest names are the store's own rather than an asset's to take: the pending
- *  one would be read back as an activation. Folded, because APFS and NTFS are case-insensitive and
- *  `Manifest.JSON` would land on the same file. */
-function requireStorablePath(path: string): string {
-  const segments = path.split('/')
-  const folded = path.toLowerCase()
-  const storable =
-    path.length > 0 &&
-    folded !== MANIFEST_FILE_NAME &&
-    !path.includes('\\') &&
-    segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
-  if (!storable) {
-    throw new Error(`generation store refuses to stage the asset path ${path}`)
-  }
-  return path
-}
-
-function requireExactBytes(
-  bytes: Uint8Array | undefined,
-  asset: { path: string; byteLength: number }
-): Uint8Array {
-  // Only complete generations activate, so the check is before the first write rather than after
-  // the last: a manifest asset that is absent or the wrong length never reaches disk.
-  if (bytes === undefined || bytes.byteLength !== asset.byteLength) {
-    throw new Error(
-      `bundle asset ${asset.path} is ${bytes?.byteLength ?? 'absent'}, not the manifest's ${asset.byteLength}`
-    )
-  }
-  return bytes
 }

@@ -75,6 +75,7 @@ describe('generation store', () => {
     const build = BUILD
     expect(fs.paths()).toEqual([
       HOST,
+      `${HOST}/active-build.json`,
       `${HOST}/generations`,
       `${HOST}/generations/${build}`,
       `${HOST}/generations/${build}/assets`,
@@ -169,10 +170,11 @@ describe('generation store', () => {
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
   })
 
-  it('reads two generations as no activation and drops the host tree', async () => {
+  it('reads two legacy generations without an active index as no activation and drops the host tree', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     await activate(store, HOST)
+    await fs.delete(`${ROOT}/${HOST}/active-build.json`)
     fs.seed(`${HOST}/generations/${'c'.repeat(64)}/manifest.json`, {
       kind: 'file',
       bytes: new TextEncoder().encode('{}')
