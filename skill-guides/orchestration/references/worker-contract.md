@@ -38,13 +38,18 @@ enqueue is durable but does not interrupt you, so nothing arrives unless you
 look:
 
 ```text
-ORCA orchestration check --terminal <worker_handle> --json
+ORCA orchestration check --terminal <worker_handle> --dispatch <dispatch_id> --json
 ```
 
 Run it at each natural checkpoint — before starting a new file, after a test
 run — and once more immediately before `worker_done`, so a redirect or a
 cancellation lands before the Task settles. `check` names its caller with
-`--terminal`, never `--from`. Stop checking after `worker_done`.
+`--terminal`, never `--from`. Always include `--dispatch <dispatch_id>`
+(the same ID used in `worker_done`/heartbeat): it pins the check to the
+exact Dispatch you were admitted under, so a Run that happens to be bound
+to your pane for an unrelated reason (for example, one you created for your
+own sub-workers) can never be read by mistake. Stop checking after
+`worker_done`.
 
 If `check` returns `consumer_fenced`, this process no longer owns its Dispatch:
 the Attempt was re-attached to another worker or settled without you. Stop, do

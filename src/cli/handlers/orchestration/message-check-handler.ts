@@ -60,6 +60,7 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
         inject: flags.has('inject') ? true : undefined,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
         run: getOptionalStringFlag(flags, 'run'),
+        dispatch: getOptionalStringFlag(flags, 'dispatch'),
         ack: getOptionalStringFlag(flags, 'ack'),
         wait: wait ? true : undefined,
         timeoutMs

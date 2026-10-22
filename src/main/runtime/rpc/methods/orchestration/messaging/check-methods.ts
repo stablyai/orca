@@ -42,6 +42,55 @@ export const ORCHESTRATION_CHECK_METHODS = [
         paneKey: runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
       })
       const paneKey = caller.paneKey ?? undefined
+
+      // Why: an admitted worker's own self-check is pinned to the Dispatch it was admitted
+      // under (openloop-i0lrpa.3177.3011). Once a caller names --dispatch, resolve and
+      // validate that exact dispatch_contexts row and never fall through to
+      // getCurrentRunForCoordinator: a worker that is ALSO a sub-run coordinator (per the
+      // buildSubDispatchSection preamble) may have a Run bound to this same pane for reasons
+      // that have nothing to do with the Dispatch it is reporting against, and routing an
+      // unpinned self-check through that Run's mailbox is exactly the bug this closes. A
+      // caller that wants its own sub-run's mailbox keeps using --run with no --dispatch,
+      // which is untouched below.
+      if (params.dispatch) {
+        const dispatch = db.getDispatchContextById(params.dispatch)
+        if (!dispatch || !['pending', 'dispatched'].includes(dispatch.status)) {
+          throw dispatchFenced()
+        }
+        const processIncarnation = runtime.getTerminalProcessIncarnation(handle)
+        const owned =
+          db.isDispatchProcessCurrent({
+            dispatchId: dispatch.id,
+            paneKey: paneKey ?? null,
+            processIncarnation
+          }) ||
+          (!dispatch.process_incarnation &&
+            db.isDispatchMessageSender({
+              dispatchId: dispatch.id,
+              handle,
+              paneKey,
+              allowCanonicalDispatchHandle: true
+            }))
+        if (!owned) {
+          throw dispatchFenced()
+        }
+        if (params.run && params.run !== dispatch.run_id) {
+          throw dispatchFenced()
+        }
+        return checkWorkerMailbox({
+          params,
+          runtime,
+          db,
+          handle,
+          paneKey,
+          typeFilter,
+          signal,
+          activeDispatch: dispatch,
+          remoteAttachment: undefined,
+          recordMutationReceipt
+        })
+      }
+
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
       if (params.run || boundRun) {
         return checkRunMailbox({

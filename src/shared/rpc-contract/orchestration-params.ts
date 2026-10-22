@@ -44,6 +44,10 @@ export const CheckParams = z
     compatibilityQuestionAck: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     run: OptionalString,
+    // Why: pins an admitted worker's self-check to the exact dispatch_contexts row it was
+    // admitted under, so it is never routed through a Run merely bound to the caller's pane
+    // for an unrelated reason (e.g. the caller is also a sub-run coordinator).
+    dispatch: OptionalString,
     wait: OptionalBoolean,
     timeoutMs: OptionalFiniteNumber
   })

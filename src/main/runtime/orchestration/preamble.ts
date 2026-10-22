@@ -142,7 +142,7 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # arrives when you look, so run this at each natural checkpoint — before you
   # start a new file and after a test run — and once more immediately before
   # you send worker_done, so a redirect lands before the task settles.
-  ${cli} orchestration check --terminal ${params.workerHandle} --json
+  ${cli} orchestration check --terminal ${params.workerHandle} --dispatch ${params.dispatchId} --json
 \`\`\`
 
 ${postDoneInstructions}`
