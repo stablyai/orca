@@ -1,9 +1,13 @@
 // What a status feed reads of the host: its held sessions, their records, and where it reports.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary
+} from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
+  StructuredChatNamingFailure,
   StructuredAgentSessionEndedChild,
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
@@ -45,6 +49,30 @@ export type StructuredAgentSessionStatusFeedDeps = {
     sessionId: string,
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
+  namingActiveSessionIds?: () => string[]
+  /** The chat's last failed naming run, if any; the summary decides whether it still applies. */
+  namingFailure?: (sessionId: string) => StructuredChatNamingFailure | undefined
   /** The session's agent proved a start: its row's phase became `ready`. */
   onAgentStarted?: (sessionId: string) => void
+}
+
+export type StructuredAgentSessionStatusSubscriber = {
+  id: string
+  emit: (event: AgentSessionStatusEvent) => void
+}
+
+export type StatusPublication = {
+  summary: AgentSessionStatusSummary
+  firstInputSubmissionKey: string | null
+}
+
+/** Naming activity does not depend on any readable journal or retained summary. */
+export function structuredAgentSessionNamingSnapshot(
+  deps: StructuredAgentSessionStatusFeedDeps
+): AgentSessionStatusEvent {
+  return {
+    type: 'snapshot',
+    sessions: [],
+    namingActiveSessionIds: deps.namingActiveSessionIds?.() ?? []
+  }
 }

@@ -121,13 +121,21 @@ export function collectOrcadMigrationSessionEntityOwners(
   session: WorkspaceSessionState
 ): Map<string, string> {
   const owners = new Map<string, string>()
-  const add = (key: string, owner: string): void => {
+  visitOrcadMigrationSessionEntities(session, (key, owner) => {
     const current = owners.get(key)
     // A duplicate entity id is invalid even when both rows claim the same owner. Marking every
     // repeat lets the caller reject duplicates within the incoming payload as well as conflicts
     // with already-committed state.
     owners.set(key, current === undefined ? owner : '\0')
-  }
+  })
+  return owners
+}
+
+/** Each identity the destination keeps unique (`kind:id`), with its owning worktree or tab id. */
+export function visitOrcadMigrationSessionEntities(
+  session: WorkspaceSessionState,
+  add: (key: string, owner: string) => void
+): void {
   for (const [owner, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
     tabs.forEach((tab) => add(`terminal:${tab.id}`, owner))
   }
@@ -162,5 +170,4 @@ export function collectOrcadMigrationSessionEntityOwners(
   for (const [owner, groups] of Object.entries(session.tabGroups ?? {})) {
     groups.forEach((group) => add(`group:${group.id}`, owner))
   }
-  return owners
 }

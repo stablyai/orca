@@ -10,7 +10,6 @@ const { sendRemoteRuntimeRequest, sendRemoteRuntimeRequestWithStatusPreflight } 
 )
 
 vi.mock('../../shared/remote-runtime-client', () => ({
-  RemoteRuntimeClientError,
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight
 }))

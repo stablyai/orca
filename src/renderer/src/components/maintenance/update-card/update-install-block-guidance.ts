@@ -32,6 +32,20 @@ export function getUpdateInstallBlockGuidance(block: UpdateInstallBlock): {
       )
     }
   }
+  if (block.instances.length > 0 && block.instances.every(({ kind }) => kind === 'browser')) {
+    // A helper an older orcad runs never pauses for installs; ending it leaves orcad and terminals up.
+    return {
+      title: translate('updates.installBlock.readyTitle', 'Your update is ready'),
+      summary: translate(
+        'updates.installBlock.browserSummary',
+        "A background Orca server's browser is still using this app."
+      ),
+      explainer: translate(
+        'updates.installBlock.browserGuidance',
+        'End the process below, then retry: its server keeps running without a browser. If another computer uses this Mac as an SSH host, updating Orca there lets the browser pause for updates on its own.'
+      )
+    }
+  }
   const hasServers = block.instances.some(({ kind }) => kind === 'server' || kind === 'browser')
   const onlyServers =
     block.instances.length > 0 &&

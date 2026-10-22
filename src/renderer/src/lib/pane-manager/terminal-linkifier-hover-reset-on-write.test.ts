@@ -138,6 +138,25 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
     expect(fake.linkifier._lastBufferCell).toBeUndefined()
   })
 
+  it('refreshes a changed wrapped link while leaving an unchanged hovered link intact', () => {
+    const fake = createFakeTerminal()
+    const isBufferValid = vi.fn(() => true)
+    fake.linkifier._currentLink = { link: { isBufferValid } }
+    installTerminalLinkifierHoverResetOnWrite(fake.terminal)
+    fake.emitWriteParsed()
+    vi.advanceTimersByTime(150)
+    expect(fake.linkifier._currentLink).toBeDefined()
+    expect(resetSpy).not.toHaveBeenCalled()
+
+    isBufferValid.mockReturnValue(false)
+    vi.advanceTimersByTime(150)
+    expect(fake.linkifier._currentLink).toBeUndefined()
+    expect(fake.linkifier._lastBufferCell).toBeUndefined()
+    expect(resetSpy).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(600)
+    expect(isBufferValid).toHaveBeenCalledTimes(2)
+  })
+
   it('cancels the pending reset and detaches the listener on dispose', () => {
     const fake = createFakeTerminal()
     const disposable = installTerminalLinkifierHoverResetOnWrite(fake.terminal)

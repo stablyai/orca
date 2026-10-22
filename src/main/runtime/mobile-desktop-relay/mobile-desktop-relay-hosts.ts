@@ -62,12 +62,13 @@ export type MobileDesktopRelayHosts = {
   /**
    * The server's own workspace change events as the desktop itself, needing no window. `onChange`
    * fires once the stream is ready, on `worktreesChanged`/`reposChanged`, and on a replay after a
-   * reconnect, which may have missed events; `onClose` when the stream ends.
+   * reconnect, which may have missed events; `onClose` when the stream ends. `catalog` is false
+   * only for `worktreesChanged`, which no repo or project-group write sends alone.
    */
   watchChanges: (
     host: Pick<MobileDesktopRelayHost, 'environmentId'>,
     expected: NonNullable<MobileDesktopRelayCallOptions['expected']>,
-    callbacks: { onChange: () => void; onClose: () => void }
+    callbacks: { onChange: (change: { catalog: boolean }) => void; onClose: () => void }
   ) => MobileDesktopRelayHostWatch
 }
 

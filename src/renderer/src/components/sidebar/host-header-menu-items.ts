@@ -34,6 +34,8 @@ export type HostHeaderMenuInput = {
   sshConnected?: boolean
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
+  /** False for a server Orca pairs itself (over SSH), whose repair is Connect, not an access link. */
+  repairableWithAccessLink?: boolean
 }
 
 function sshActions(connected: boolean): HostHeaderMenuAction[] {
@@ -48,7 +50,8 @@ export function buildHostHeaderMenuModel(input: HostHeaderMenuInput): HostHeader
   if (
     input.kind === 'runtime' &&
     input.health === 'blocked' &&
-    input.blockedReason === 'access-revoked'
+    input.blockedReason === 'access-revoked' &&
+    input.repairableWithAccessLink !== false
   ) {
     actions.push('runtime-repair')
   }

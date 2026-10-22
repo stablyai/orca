@@ -10,8 +10,8 @@
  * and agent-send reveal; its imported-worktrees and new-external-worktrees cards; its create
  * preflight; host-header health and detail.
  * Known gaps the phone shows differently, so the fixture leaves them out: a creation a paired
- * server runs; a paired server's activity under "Hide sleeping" (the window reads its own tabs);
- * a PR unlinked on a server workspace; an SSH workspace reached through a paired server.
+ * server runs; a PR unlinked on a server workspace; an SSH workspace reached through a paired
+ * server; a server terminal only another client opened (the server counts it, the window does not).
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
@@ -42,6 +42,8 @@ import {
 import {
   feedDomainsFromWindowState,
   parityActiveState,
+  parityServerBrowserTabState,
+  parityServerTerminalState,
   parityWorldOverrides,
   phoneInputsFromWindowState,
   projectParityRows
@@ -132,12 +134,10 @@ async function installFeed(state: Partial<AppState>) {
 
 async function phoneList(state: Partial<AppState>): Promise<string[]> {
   const { installed, full } = await installFeed(state)
-  const { catalog, view } = phoneInputsFromWindowState(full)
-  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(
-    phoneAdapter.readSidebarFeedDomains(installed),
-    catalog,
-    view
-  )
+  const domains = phoneAdapter.readSidebarFeedDomains(installed)
+  expect(domains.projectCatalog?.repos.length).toBeGreaterThan(0)
+  const { catalog, view } = phoneInputsFromWindowState(full, domains)
+  const { sectionRows, activeRowKeys } = phoneAdapter.buildSidebarFeedRows(domains, catalog, view)
   return projectParityRows(sectionRows, activeRowKeys)
 }
 
@@ -243,6 +243,15 @@ describe('sidebar list parity: desktop window and feed reader', () => {
       { showSleepingWorkspaces: false, ...goldenLiveTerminalState() },
       /^ITEM .*\|orca::\/w\/feat-a /
     ],
+    // The server reports the desktop's terminal; only the desktop knows its browser tab.
+    'hide sleeping with a paired server terminal': [
+      { showSleepingWorkspaces: false, ...parityServerTerminalState() },
+      /^ITEM .*runtime:env-1\|api::\/w\/api-y /
+    ],
+    'hide sleeping with a browser tab in a paired server workspace': [
+      { showSleepingWorkspaces: false, ...parityServerBrowserTabState() },
+      /^ITEM .*runtime:env-1\|api::\/w\/api-y /
+    ],
     'hide default branch': [{ hideDefaultBranchWorkspace: true }, /^ITEM .*api-y /],
     // The same id on two hosts: only the SSH copy is open.
     'open on one of two hosts': [
@@ -251,11 +260,11 @@ describe('sidebar list parity: desktop window and feed reader', () => {
     ],
     'open folder workspace': [
       parityActiveState('folder:fw-remote', 'ssh:gpu-vm'),
-      /^FOLDER folder-workspace:fw-remote .* ACTIVE$/
+      /^FOLDER folder-workspace:ssh:gpu-vm\|folder:fw-remote .* ACTIVE$/
     ],
     'open server folder workspace': [
       parityActiveState('folder:fw-server', 'runtime:env-1'),
-      /^FOLDER folder-workspace:fw-server group=pg-server-folders .* ACTIVE$/
+      /^FOLDER folder-workspace:runtime:env-1\|folder:fw-server group=pg-server-folders .* ACTIVE$/
     ],
     'hide CLI-created': [
       { hideCliCreatedWorkspaces: true },

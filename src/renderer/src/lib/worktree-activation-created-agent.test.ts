@@ -13,6 +13,13 @@ import {
 } from '@/lib/worktree-activation-created-agent.test-fixture'
 import { stubRuntimeEnvironmentBridge } from '../runtime/runtime-environment-bridge-fixture'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 
 function makeWebRuntimeWorktree() {
@@ -115,9 +122,8 @@ describe('activateAndRevealWorktree', () => {
     const target = { ...makeWorktree(), id: 'wt-handoff', displayName: 'handoff' }
     seedEmptyActivatableWorktree(target, { extraWorktrees: [sibling] })
 
-    // The shape post-delete focus handoff produces. That caller passes no opts at all —
-    // asserted directly in active-worktree-focus-after-delete.test.ts.
-    activateAndExpectNoRelaunch(target.id)
+    // The shape the removal successor produces: no startup payload.
+    activateAndExpectNoRelaunch(target.id, { revealInSidebar: false })
   })
 
   it('does not relaunch when activation opts carry no startup payload', () => {

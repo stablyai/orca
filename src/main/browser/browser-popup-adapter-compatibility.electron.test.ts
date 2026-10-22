@@ -12,6 +12,7 @@ import {
   snapshots,
   status
 } from './browser-popup-compatibility-cdp-fixture'
+import { waitForHiddenFrameInput } from './hidden-frame-input-readiness-fixture'
 
 enablePopupAdapterProbe()
 setPopupFixtureEvidenceName('adapter-electron-evidence.json')
@@ -334,10 +335,9 @@ async function exerciseSandboxControls(
     const offset = status().adapterProbe?.length ?? 0
     await installSandboxFrame(page, sandbox, destination, kind)
     const initialReceipt = receipts.length
-    await page
-      .frameLocator('#sandbox-probe')
-      .locator('#open')
-      .click(kind === 'link' ? { modifiers: ['Shift'] } : {})
+    const open = page.frameLocator('#sandbox-probe').locator('#open')
+    await waitForHiddenFrameInput(open)
+    await open.click(kind === 'link' ? { modifiers: ['Shift'] } : {})
     if (path === 'adopted' && kind === 'link') {
       await expect
         .poll(() => eventsSince(offset).some((event) => event.event === 'createWindow-missing'))

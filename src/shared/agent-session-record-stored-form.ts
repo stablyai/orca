@@ -26,9 +26,17 @@ export function decodePersistedAgentSessionRecord(record: PersistedAgentSessionR
   if (!providerHandleChain) {
     throw new Error('agent_session_provider_handle_invalid')
   }
+  const { sleptAt, ...rest } = record
+  const validSleep = typeof sleptAt === 'number' && Number.isFinite(sleptAt) && sleptAt > 0
   return {
-    record: { ...record, providerHandleChain, lease: normalizeLegacyHandoffLease(record.lease) },
-    normalized: leaseCarriesLegacyHandoffValues(record.lease)
+    record: {
+      ...rest,
+      ...(validSleep ? { sleptAt } : {}),
+      providerHandleChain,
+      lease: normalizeLegacyHandoffLease(record.lease)
+    },
+    normalized:
+      leaseCarriesLegacyHandoffValues(record.lease) || (sleptAt !== undefined && !validSleep)
   }
 }
 

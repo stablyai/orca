@@ -2,7 +2,16 @@ import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '..
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
 import { branchSelectorMatches, runtimePathsEqual } from '../runtime-worktree-path-identity'
-import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
+  getWorktreeExecutionHostId
+} from '../../../shared/execution-host'
+import {
+  runtimeRepoSelectorHostId,
+  runtimeRepoSelectorText,
+  type RuntimeRepoSelector
+} from '../runtime-repo-selector'
 import type {
   WorktreeLineageInput,
   WorktreeLineageResolution
@@ -64,7 +73,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
         const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
         const fallback =
-          repo?.connectionId && this.store?.getWorktreeMeta(worktreeId)
+          repo && getRepoRoutingConnectionId(repo) && this.store?.getWorktreeMeta(worktreeId)
             ? this.buildResolvedWorktreeFromId(worktreeId)
             : null
         if (fallback !== null) {
@@ -172,11 +181,15 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
     )
   }
 
-  protected async resolveRepoSelector(selector: string): Promise<Repo> {
+  protected async resolveRepoSelector(selector: RuntimeRepoSelector): Promise<Repo> {
     if (!this.store) {
       throw new Error('repo_not_found')
     }
-    const candidates = this.selectReposBySelector(selector)
+    const matches = this.selectReposBySelector(runtimeRepoSelectorText(selector))
+    const hostId = runtimeRepoSelectorHostId(selector)
+    const candidates = hostId
+      ? matches.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+      : matches
 
     if (candidates.length === 1) {
       return candidates[0]

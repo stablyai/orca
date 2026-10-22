@@ -77,19 +77,7 @@ export {
 } from '../linear/linear-issue-listing'
 export type { LinearIssueListOptions } from '../linear/linear-issue-query-documents'
 export { LinearWriteFailure } from '../linear/linear-issue-write-support'
-export {
-  LinearAgentAccessError,
-  getLinearCurrentIssueFromWorktree,
-  readLinearIssueContext,
-  resolveLegacyLinearLinkWorkspace,
-  searchLinearIssuesForAgents
-} from '../linear/issue-context'
-export {
-  classifyLinearError,
-  linearError,
-  linearMessage,
-  sanitizeLinearErrorMessage
-} from '../linear/issue-context-errors'
+
 export { listMcpIssues } from '../linear/mcp-issue-list'
 export { writeIssueRelation } from '../linear/issue-relation-write'
 export {

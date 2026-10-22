@@ -21,8 +21,10 @@ export type PaneSpawnReservationResult = {
 export const paneSpawnReservationsByOwnerKey = new Map<string, PaneSpawnReservation>()
 export type PendingRuntimePaneCreate = {
   count: number
-  promise: Promise<void>
+  promise: Promise<PaneSpawnReservationResult | undefined>
   resolve: () => void
+  /** The terminal the create started, for a view that waited on it (layout-owner build). */
+  result?: PaneSpawnReservationResult
 }
 export const pendingRuntimePaneCreatesByOwnerKey = new Map<string, PendingRuntimePaneCreate>()
 
@@ -49,7 +51,10 @@ export async function joinPaneSpawn(
   try {
     return await reservation.promise
   } catch (error) {
-    if (isWorktreeTerminalsSleepingError(error)) {
+    if (
+      isWorktreeTerminalsSleepingError(error) ||
+      (error instanceof Error && error.message === 'terminal_pane_unbound')
+    ) {
       return null
     }
     throw error
@@ -96,13 +101,13 @@ export function claimRuntimePaneCreate(ownerKey: string): () => void {
     existing.count += 1
     return () => releaseRuntimePaneCreate(ownerKey, existing)
   }
-  let resolve!: () => void
-  const claim = {
+  let resolve!: (result: PaneSpawnReservationResult | undefined) => void
+  const claim: PendingRuntimePaneCreate = {
     count: 1,
-    promise: new Promise<void>((done) => {
+    promise: new Promise((done) => {
       resolve = done
     }),
-    resolve: () => resolve()
+    resolve: () => resolve(claim.result)
   }
   pendingRuntimePaneCreatesByOwnerKey.set(ownerKey, claim)
   return () => releaseRuntimePaneCreate(ownerKey, claim)
@@ -147,4 +152,15 @@ export function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult
     clearPaneSpawnReservation(paneKey, reservation)
   }
   return response
+}
+
+/** Records the terminal a runtime create started in the pane, for a view waiting on that create. */
+export function noteRuntimePaneCreateResult(
+  ownerKey: string | null | undefined,
+  result: PaneSpawnReservationResult
+): void {
+  const claim = ownerKey ? pendingRuntimePaneCreatesByOwnerKey.get(ownerKey) : undefined
+  if (claim) {
+    claim.result = result
+  }
 }

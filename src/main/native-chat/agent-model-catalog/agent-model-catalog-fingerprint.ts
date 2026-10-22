@@ -87,3 +87,13 @@ export function agentModelCatalogSessionAccess(
     accountHomePath
   }
 }
+
+export function agentModelCatalogScopeFingerprint(
+  account: string,
+  cwd: string,
+  invocation: unknown = null
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify([account, cwd, invocation]))
+    .digest('hex')
+}

@@ -9,6 +9,13 @@ import type { AppState } from '@/store/types'
 import { wakeSleepingAgentsForWorktreeInBackground } from './wake-sleeping-agents-in-background'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 const initialAppStoreState = useAppStore.getState()
 const WT = 'repo-1::/repo'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

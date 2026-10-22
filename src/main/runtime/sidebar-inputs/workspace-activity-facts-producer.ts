@@ -28,7 +28,9 @@ export type AgentStatusStoreView = Pick<
   | 'getStatusSnapshotForPane'
   | 'subscribeStatusRowMutations'
   | 'subscribeStatusFreshness'
->
+> &
+  /** The hook server's enriched rows, which main's generated titles follow. */
+  Partial<Pick<AgentHookServer, 'subscribeEnrichedStatus'>>
 
 const AGENT_FRESHNESS_DEADLINE = 'agent-freshness'
 
@@ -46,6 +48,7 @@ export class WorkspaceActivityFactsProducer {
   private agentStore: AgentStatusStoreView | null = null
   readonly revision = new ProducerRevision()
   private expiryAt = Infinity
+  private readonly refreshListeners = new Set<(worktreeId: string) => void>()
 
   constructor(
     private readonly deps: {
@@ -62,6 +65,17 @@ export class WorkspaceActivityFactsProducer {
   /** Re-reads the workspace's surfaces; the runtime calls this per publication. */
   refreshWorkspace(worktreeId: string): void {
     this.publish(worktreeId, this.deps.readSurfaces(worktreeId))
+    for (const listener of this.refreshListeners) {
+      listener(worktreeId)
+    }
+  }
+
+  /** Hears every per-workspace re-read, so another per-workspace reader shares the funnel. */
+  onWorkspaceRefreshed(listener: (worktreeId: string) => void): () => void {
+    this.refreshListeners.add(listener)
+    return () => {
+      this.refreshListeners.delete(listener)
+    }
   }
 
   attachAgentStatusStore(store: AgentStatusStoreView): () => void {

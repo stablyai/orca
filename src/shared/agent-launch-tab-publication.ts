@@ -37,6 +37,12 @@ export type AgentLaunchTabPublishRequest = {
   prompt?: string
   /** Which launch this is: a retry of the same one never resets what the tab keeps about it. */
   operationId?: string
+  /**
+   * Layout-owner builds: main already wrote the tab, which the window draws from main's frame at
+   * `frameSeq`. The window makes no tab; it keeps the launch's pane, prompt and presentation, as it
+   * does for a tab it made. `created`: this launch made the tab, so its viewer rule applies.
+   */
+  shownByMain?: { frameSeq?: number; created: boolean }
 }
 
 export type AgentLaunchTabPublishReply =

@@ -86,13 +86,14 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     cursor: host.cursor,
     adopt: host.adopt
   })
-  const claimAttachments: JournalAttachmentClaim = (db, body, required) =>
+  const claimAttachments: JournalAttachmentClaim = (db, body, required, previous) =>
     claimAgentSessionAttachmentsInTransaction(db, {
       // Uploaded attachments are stored beside the journal database.
       stateDirectory: host.database().stateDirectory,
       sessionId: host.identity.sessionId,
       body,
       required,
+      ...(previous ? { previous } : {}),
       now: host.now()
     })
   const queuedMessages = new JournalQueuedMessages({

@@ -1,4 +1,4 @@
-import { applyClaudeTerminalImageViewerEnv } from '../../terminal-image-viewer-env'
+import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
 import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobile-terminal-startup'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
@@ -119,7 +119,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
       }
     }
-    const startupCommand = applyClaudeTerminalImageViewerEnv(
+    const startupCommand = applyRemoteViewerLaunchEnv(
       await this.resolveMobileSessionTerminalCommand(workspace, opts),
       opts.terminalImageViewerSupported
     )

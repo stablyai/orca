@@ -1,3 +1,4 @@
+import { claudeBackgroundArgs } from './claude-background-run-isolation'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 // Why: the Claude CLI has no model-listing subcommand (`claude models` starts a
@@ -12,14 +13,22 @@ export const CLAUDE_MODEL_LIST_STDIN = `${JSON.stringify({
 })}\n`
 
 // Why: --print rejects stream-json output unless --verbose is also set.
-export const CLAUDE_MODEL_LIST_ARGS = [
-  '-p',
-  '--input-format',
-  'stream-json',
-  '--output-format',
-  'stream-json',
-  '--verbose'
-]
+export function buildClaudeModelListArgs(
+  strictMcp = true,
+  userArgs: readonly string[] = []
+): string[] {
+  return [
+    '-p',
+    '--input-format',
+    'stream-json',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    ...claudeBackgroundArgs(strictMcp, userArgs)
+  ]
+}
+
+export const CLAUDE_MODEL_LIST_ARGS = buildClaudeModelListArgs()
 
 export type ClaudeListedModel = {
   /** Value the CLI accepts for `--model` and `/model` (e.g. `opus[1m]`). */

@@ -240,6 +240,16 @@ export default function RootLayout() {
             <Stack.Screen name="connection-log" options={{ headerShown: false }} />
             <Stack.Screen name="about" options={{ headerShown: false }} />
             <Stack.Screen name="h" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="new-workspace"
+              options={{
+                headerShown: false,
+                // Draws nothing of its own: the drawer is the page's, over Home.
+                presentation: 'transparentModal',
+                animation: 'none',
+                contentStyle: { backgroundColor: 'transparent' }
+              }}
+            />
           </Stack>
         </SideSafeArea>
       </View>

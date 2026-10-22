@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
 import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
@@ -158,8 +159,12 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(command).toMatch(/--permission-mode'? '?plan/)
     expect(command).not.toContain('--dangerously-skip-permissions')
     // Why: a later window wake relaunches a running record (a second writer), never a pane-owned one.
-    expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject(
-      PANE_OWNED
+    // Layout-owner build: the resumed agent runs, so main marks its record a running agent's (L254).
+    await vi.waitFor(() =>
+      expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject({
+        ...PANE_OWNED,
+        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { origin: 'live' } : {})
+      })
     )
   })
 
@@ -248,14 +253,19 @@ describe('opening a workspace-slept running agent on a host with no window', () 
     expect(spawnedCommand(retried.spawn)).toContain('provider-session-1')
   })
 
-  it('opens a plain shell, not a fresh agent, when a window will wake the record', async () => {
+  it('with a window, opens a plain shell for the window to wake, or resumes it itself under main', async () => {
     const fixture = makeWorkingSleepStore()
     withClaudeLaunchedTab(fixture)
     const { opened, spawn } = openPane(fixture.runtimeStore, 'openable', { withWindow: true })
 
     await opened
     expect(spawn).toHaveBeenCalledOnce()
-    expect(spawnedCommand(spawn)).toBe('')
+    // Layout-owner build: main owns every wake, so the window never resumes it a second time.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(spawnedCommand(spawn)).toContain('provider-session-1')
+    } else {
+      expect(spawnedCommand(spawn)).toBe('')
+    }
     expect(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
   })
 })

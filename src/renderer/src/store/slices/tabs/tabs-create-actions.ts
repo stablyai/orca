@@ -21,6 +21,7 @@ import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
+import { selectFolderWorkspaces } from '../../workspace-record-selectors'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -55,7 +56,7 @@ export function createTabsCreateActions(
           lookupWorktrees: () =>
             [
               ...(state.allWorktrees?.() ?? []),
-              ...(state.folderWorkspaces ?? []).map(folderWorkspaceToWorktree)
+              ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
             ].filter((worktree) => worktree.id === worktreeId)
         })
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(

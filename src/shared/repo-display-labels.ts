@@ -40,17 +40,19 @@ export function getRepoDisplayLabelsByPath(
   items: readonly RepoDisplayLabelItem[]
 ): Map<string, string> {
   const labels = new Map<string, string>()
-  const itemsByName = new Map<string, RepoDisplayLabelItem[]>()
+  const itemsByHostAndName = new Map<string, RepoDisplayLabelItem[]>()
 
   for (const item of items) {
     const displayName = item.displayName || item.path
     labels.set(getRepoDisplayLabelKey(item), displayName)
-    const colliding = itemsByName.get(displayName) ?? []
+    // Host labels already distinguish projects on different machines.
+    const collisionKey = JSON.stringify([getRepoExecutionHostId(item), displayName])
+    const colliding = itemsByHostAndName.get(collisionKey) ?? []
     colliding.push({ ...item, displayName })
-    itemsByName.set(displayName, colliding)
+    itemsByHostAndName.set(collisionKey, colliding)
   }
 
-  for (const collidingItems of itemsByName.values()) {
+  for (const collidingItems of itemsByHostAndName.values()) {
     if (collidingItems.length < 2) {
       continue
     }

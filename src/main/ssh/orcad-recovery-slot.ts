@@ -130,7 +130,7 @@ export async function stopOrcadSlot(
   )
 }
 
-export type OrcadSlotQuiescence = 'exited' | 'other-slot-serving'
+type OrcadSlotQuiescence = 'exited' | 'other-slot-serving'
 
 /**
  * Before an interrupted run's state is replaced: the slot it started must be proven exited and

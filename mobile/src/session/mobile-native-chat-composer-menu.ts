@@ -5,11 +5,8 @@ import {
   buildNativeChatPickerItems,
   type NativeChatPickerItem
 } from '../../../src/shared/native-chat-picker-items'
-import {
-  sessionReportedSkills,
-  sessionSlashCommandSuggestions
-} from '../../../src/shared/native-chat-slash-commands'
-import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
+import { sessionReportedSkills } from '../../../src/shared/native-chat-slash-commands'
+import { structuredSessionSlashCommands } from '../../../src/shared/structured-agent-session-composer'
 import { getMobileNativeChatCommands } from './mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
@@ -29,9 +26,9 @@ type SlashMenuInput = {
 }
 
 /**
- * The `/` menu, built by the same rules as desktop's. A structured chat offers the session's own
- * commands and skills when it reported them, else the host's commands; a terminal-backed chat keeps
- * its curated commands and no skills.
+ * The `/` menu, built by the same rules as desktop's. A structured chat offers the host's commands,
+ * then the session's own commands and skills once it reported them; a terminal-backed chat keeps its
+ * curated commands and no skills.
  */
 function slashItems(
   { agent, structured, query }: SlashMenuInput,
@@ -41,11 +38,9 @@ function slashItems(
     return []
   }
   const reported = structured?.reported
-  const commands = !structured
-    ? getMobileNativeChatCommands(agent)
-    : reported === undefined
-      ? structuredSlashCommands(structured.conversationCommands, agent)
-      : sessionSlashCommandSuggestions(agent, reported)
+  const commands = structured
+    ? structuredSessionSlashCommands(agent, structured.conversationCommands, reported)
+    : getMobileNativeChatCommands(agent)
   return buildNativeChatPickerItems(
     commands,
     [],

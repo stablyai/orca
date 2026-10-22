@@ -15,6 +15,10 @@ import { isWslUncPath } from '../../../shared/wsl-paths'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { onWslMoveJournalChange } from './wsl-move-cutover-journal'
 import { resolveWslMoveFence, type WslMoveFenceState } from './wsl-move-fence'
+import {
+  findProjectHostSetup,
+  type ProjectHostSetupTarget
+} from '../../../shared/project-host-setup-target'
 
 export type WslMoveProjectRef = { repoId: string } | { folderWorkspaceId: string }
 
@@ -221,12 +225,12 @@ export function assertWslMoveHostSetupWritable(
   assertWslMoveReposWritable(store, project?.sourceRepoIds ?? [])
 }
 
-/** By id, for update and delete; an unknown id is left to the store's own not-found. */
+/** For update and delete; an unknown setup is left to the store's own not-found. */
 export function assertWslMoveHostSetupIdWritable(
   store: HostSetupStore | undefined,
-  setupId: string
+  target: ProjectHostSetupTarget
 ): void {
-  const setup = store?.getProjectHostSetups?.().find((entry) => entry.id === setupId)
+  const setup = findProjectHostSetup(store?.getProjectHostSetups?.() ?? [], target)
   if (setup) {
     assertWslMoveHostSetupWritable(store, setup)
   }

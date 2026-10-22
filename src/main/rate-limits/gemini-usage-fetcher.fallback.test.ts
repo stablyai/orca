@@ -24,12 +24,12 @@ vi.mock('./gemini-cli-oauth-extractor', () => ({
 }))
 
 vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock,
-  // Why: saveGeminiCredentials is exercised on the refresh path. The atomic
-  // tmp+rename write has no observable side effect in these tests, so the
-  // stubs just resolve.
-  writeFile: vi.fn().mockResolvedValue(undefined),
-  rename: vi.fn().mockResolvedValue(undefined)
+  readFile: readFileMock
+}))
+
+// Why: the refresh path saves credentials; it must never write the real ~/.gemini.
+vi.mock('../integration-credential-file', () => ({
+  writeCredentialFileAtomic: vi.fn().mockReturnValue(true)
 }))
 
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'

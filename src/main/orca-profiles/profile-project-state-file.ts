@@ -124,6 +124,8 @@ export function normalizeProfileProjectState(
   parsed: Partial<PersistedState>
 ): TransferProfileState {
   const defaults = getDefaultPersistedState(homedir())
+  const { uiLanguagePortugueseMigrationApplied: _migrationApplied, ...settingsDefaults } =
+    defaults.settings
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
@@ -147,8 +149,8 @@ export function normalizeProfileProjectState(
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),
     settings: isRecord(parsed.settings)
-      ? { ...defaults.settings, ...parsed.settings }
-      : defaults.settings,
+      ? { ...settingsDefaults, ...parsed.settings }
+      : settingsDefaults,
     ui: isRecord(parsed.ui) ? { ...defaults.ui, ...parsed.ui } : defaults.ui,
     githubCache: isRecord(parsed.githubCache)
       ? {

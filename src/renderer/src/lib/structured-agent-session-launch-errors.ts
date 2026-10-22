@@ -17,7 +17,9 @@ export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSes
   constructor(
     message: string,
     code: string = 'structured_agent_session_unsupported',
-    refusal?: AgentSessionRefusalReference
+    refusal?: AgentSessionRefusalReference,
+    /** The host's own word for why it can't run the chat here (`wsl`, `remote`), when it gave one. */
+    readonly hostReason?: string
   ) {
     super(message, code, refusal)
     this.name = 'StructuredAgentSessionCreateRefusalError'

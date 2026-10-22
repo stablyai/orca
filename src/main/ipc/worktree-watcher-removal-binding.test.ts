@@ -3,14 +3,7 @@ import { getWorktreeWatcherRemoval, setWorktreeWatcherRemoval } from './worktree
 
 /** The renderer-less default stays inert; installed ports route method calls. */
 describe('WorktreeWatcherRemoval port', () => {
-  const METHODS = [
-    'closeLocal',
-    'restoreLocal',
-    'forgetLocal',
-    'closeRemote',
-    'restoreRemote',
-    'forgetRemote'
-  ] as const
+  const METHODS = ['closeLocal', 'restoreLocal', 'forgetLocal'] as const
 
   it('defaults to inert so a renderer-less host is honest, not broken', async () => {
     setWorktreeWatcherRemoval(null)
@@ -27,10 +20,7 @@ describe('WorktreeWatcherRemoval port', () => {
     setWorktreeWatcherRemoval({
       closeLocal: async () => void calls.push('closeLocal'),
       restoreLocal: async () => void calls.push('restoreLocal'),
-      forgetLocal: () => void calls.push('forgetLocal'),
-      closeRemote: async () => void calls.push('closeRemote'),
-      restoreRemote: async () => void calls.push('restoreRemote'),
-      forgetRemote: () => void calls.push('forgetRemote')
+      forgetLocal: () => void calls.push('forgetLocal')
     })
     for (const method of METHODS) {
       await getWorktreeWatcherRemoval()[method]('conn', '/tmp/w' as never)

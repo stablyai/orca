@@ -19,6 +19,10 @@ import {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { dropInvalidWorkspaceLayoutsAtLoad } from '../restoring-sessions/invalid-workspace-layout-purge'
+import {
+  bindPersistedTabTerminalPanes,
+  sweepPersistedUnattachedTerminalRows
+} from '../restoring-sessions/tab-terminal-pane-binding-repair'
 import { scheduleSave } from './write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
@@ -128,6 +132,8 @@ export class Store {
     const sweptRepoIds = this.domains.repos.sweepDeregisteredRepoResidue()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       dropInvalidWorkspaceLayoutsAtLoad(this, this.state)
+      this.state = bindPersistedTabTerminalPanes(sweepPersistedUnattachedTerminalRows(this.state))
+      this.runtime.state = this.state
     }
     // Imported snapshots cannot own the live hook server or write their source file.
     if (!imported) {

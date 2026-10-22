@@ -123,11 +123,11 @@ describe('the phone’s own option changes', () => {
     expect(screen.current().status.pending).toHaveLength(1)
     const sentByOpId = screen.current().controls.lastOpId()
     act(() => {
-      screen.current().controls.reconcile({ sortBy: 'recent' }, { reconnected: true, sentByOpId })
+      screen.current().controls.reconcile({ sortBy: 'recent' }, { resend: true, sentByOpId })
     })
     expect(screen.client.sendRequest).toHaveBeenCalledTimes(2)
     act(() => {
-      screen.current().controls.reconcile({ sortBy: 'name' }, { reconnected: false, sentByOpId })
+      screen.current().controls.reconcile({ sortBy: 'name' }, { resend: false, sentByOpId })
     })
     expect(screen.current().status.pending).toEqual([])
   })

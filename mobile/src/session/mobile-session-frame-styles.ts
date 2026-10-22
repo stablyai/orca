@@ -57,8 +57,9 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   },
   // Landscape phone: the tab strip takes the row's spare width instead of the title.
   sessionTitleBlockBesideTabs: {
-    flex: 0,
-    flexShrink: 1,
+    // -1, not 0: web reads flex 0 as a zero basis and collapses the title; -1 is natural width,
+    // shrinking only when the row overflows, on both web and native.
+    flex: -1,
     maxWidth: 160
   },
   sessionTitle: {
@@ -94,6 +95,33 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     // Room between the title's last letter and the strip's edge.
     marginLeft: spacing.md,
     // Fixed edge so tabs scrolled past it read as clipped, not as part of the title.
+    borderLeftWidth: 1,
+    borderLeftColor: colors.borderSubtle
+  },
+  // Hosts the edge hints over the strip's ends; stretches so the strip keeps its old sizing.
+  tabScrollFrame: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch'
+  },
+  // Marks a working or blocked tab scrolled out of view on that side.
+  tabEdgeHint: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+    backgroundColor: colors.bgPanel
+  },
+  tabEdgeHintLeft: {
+    left: 0,
+    borderRightWidth: 1,
+    borderRightColor: colors.borderSubtle
+  },
+  tabEdgeHintRight: {
+    right: 0,
     borderLeftWidth: 1,
     borderLeftColor: colors.borderSubtle
   },
@@ -142,6 +170,10 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs
+  },
+  // The page shrinks a bare svg in a row before the title's ellipsis kicks in.
+  tabIcon: {
+    flexShrink: 0
   },
   tabText: {
     flexShrink: 1,

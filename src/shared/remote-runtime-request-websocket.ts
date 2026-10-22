@@ -2,7 +2,7 @@ import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from './paired-runtime-connection'
 import type { PairedE2EEClientHandshake } from './paired-e2ee-client-handshake'
 import { createRemoteRuntimeClientHandshake } from './remote-runtime-client-handshake'
-import { RemoteRuntimeClientError } from './remote-runtime-client'
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,
   remoteRuntimeConnectOptions

@@ -7,6 +7,7 @@ import type {
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { WorkspaceRunContext } from '../../../shared/task-source-context'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
 import {
   assertAutomationExtraAgentArgs,
@@ -260,6 +261,27 @@ export function updateAutomation(
   )
   operations.flush()
   return updated
+}
+
+/**
+ * Writes the run target a legacy record resolved to, once: a record that already has one keeps it,
+ * so a stamp can never retarget an automation the user or a migration placed.
+ */
+export function stampLegacyAutomationRunContext(
+  operations: AutomationDefinitionOperations,
+  id: string,
+  runContext: WorkspaceRunContext
+): boolean {
+  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (!current || current.runContext) {
+    return false
+  }
+  // Replaced, not patched in place: the list projection caches on array identity.
+  operations.state.automations = operations.state.automations.map((entry) =>
+    entry.id === id ? { ...entry, runContext } : entry
+  )
+  operations.flush()
+  return true
 }
 
 export function deleteAutomation(

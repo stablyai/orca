@@ -8,7 +8,6 @@ import {
   pickParsedAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
@@ -22,6 +21,7 @@ import {
   ORCA_DISPATCH_PROMPT_LEAD_LINE,
   ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
 } from './orca-dispatch-status-prompt'
+import { parseAskFromStatus } from './native-chat-ask'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -309,6 +309,25 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
   })
 
+  it('shortens an oversized question prompt into a card that still parses with every option', () => {
+    const interactivePrompt = JSON.stringify({
+      questions: [
+        {
+          question: 'q'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH + 4000),
+          header: 'Plan',
+          options: [{ label: 'Ship it', description: 'd'.repeat(3000) }, { label: 'Wait' }]
+        }
+      ]
+    })
+    const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
+    expect(result!.interactivePrompt!.length).toBeLessThanOrEqual(
+      AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH
+    )
+    const ask = parseAskFromStatus(result!.interactivePrompt, 'ask_user_question')
+    expect(ask!.questions[0].question.startsWith('qqq')).toBe(true)
+    expect(ask!.questions[0].options.map((option) => option.label)).toEqual(['Ship it', 'Wait'])
+  })
+
   it('leaves interactivePrompt undefined when absent or non-string', () => {
     expect(parseAgentStatusPayload('{"state":"working"}')!.interactivePrompt).toBeUndefined()
     expect(
@@ -572,7 +591,7 @@ Fix dispatch fallback preview for normalized status prompts`
     }
   })
 
-  it('normalizes the subagents field, dropping invalid entries and bounding count', () => {
+  it('normalizes the subagents field, dropping invalid entries and keeping every valid one', () => {
     const result = parseAgentStatusPayload(
       JSON.stringify({
         state: 'working',
@@ -583,7 +602,7 @@ Fix dispatch fallback preview for normalized status prompts`
           { id: '', state: 'working', startedAt: 1 },
           { id: 'bad-state', state: 'running', startedAt: 1 },
           'garbage',
-          ...Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 5 }, (_, i) => ({
+          ...Array.from({ length: 37 }, (_, i) => ({
             id: `extra-${i}`,
             state: 'idle',
             startedAt: i
@@ -591,7 +610,7 @@ Fix dispatch fallback preview for normalized status prompts`
         ]
       })
     )
-    expect(result?.subagents?.length).toBe(AGENT_STATUS_MAX_SUBAGENTS)
+    expect(result?.subagents?.length).toBe(40)
     expect(result?.subagents?.[0]).toEqual({
       id: 'a1',
       state: 'working',

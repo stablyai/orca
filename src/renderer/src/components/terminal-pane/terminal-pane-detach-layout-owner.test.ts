@@ -14,6 +14,7 @@ import {
   TARGET_GROUP_ID,
   WORKTREE_ID
 } from './terminal-pane-tab-detach-fixture'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn<typeof sendLayoutCommandToOwner>(),
@@ -61,7 +62,7 @@ describe('moveLeafThroughLayoutOwner', () => {
       },
       expect.anything()
     )
-    lastHandlers().apply({ tabId: 'tab-main', ptyId: 'pty-right' })
+    lastHandlers().apply({ tabId: 'tab-main', ptyId: 'pty-right' }, LOCAL_LAYOUT_APPLY_ORIGIN)
     await expect(moving).resolves.toEqual({
       status: 'moved',
       ptyId: 'pty-right',
@@ -114,7 +115,7 @@ describe('detachTerminalPaneToTab in a layout-owner build', () => {
   it('opens the new tab under main’s id', async () => {
     const store = createStore()
     mocks.send.mockImplementation((_worktreeId, _command, handlers) => {
-      handlers.apply({ tabId: 'tab-main', ptyId: 'pty-right' })
+      handlers.apply({ tabId: 'tab-main', ptyId: 'pty-right' }, LOCAL_LAYOUT_APPLY_ORIGIN)
       return true
     })
 

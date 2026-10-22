@@ -11,8 +11,12 @@ import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-sessi
 import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {
+  scopeCwdStampOf,
+  sessionParseCacheTranscriptPath,
   setSessionParseCacheColdTier,
-  type PersistedSessionParseCacheEntry
+  type PersistedSessionParseCacheEntry,
+  type SessionScopeCwdRead,
+  type SessionScopeCwdStamp
 } from './session-parse-cache-store'
 
 const WRITE_DEBOUNCE_MS = 1_500
@@ -41,6 +45,7 @@ let owner = false
 // undefined: not opened yet; null: unavailable for this process's life.
 let database: SessionParseCacheDatabase | null | undefined
 const pendingWrites = new Map<string, PersistedSessionParseCacheEntry>()
+const pendingScopeCwds = new Map<string, SessionScopeCwdStamp>()
 let writeTimer: NodeJS.Timeout | null = null
 let pendingSince: number | null = null
 
@@ -55,7 +60,13 @@ export function configureSessionParseCachePersistence(
 export function initSessionParseCachePersistence(next: SessionParseCachePersistenceOptions): void {
   configureSessionParseCachePersistence(next)
   owner = true
-  setSessionParseCacheColdTier({ read: readRow, stored: queueWrite, deleted: deleteRow })
+  setSessionParseCacheColdTier({
+    read: readRow,
+    stored: queueWrite,
+    deleted: deleteRow,
+    readScopeCwds,
+    storedScopeCwd: queueScopeCwdWrite
+  })
 }
 
 export function getSessionParseCachePersistenceOptions(): SessionParseCachePersistenceOptions | null {
@@ -65,6 +76,7 @@ export function getSessionParseCachePersistenceOptions(): SessionParseCachePersi
 export function resetSessionParseCachePersistenceForTests(): void {
   clearWriteTimer()
   pendingWrites.clear()
+  pendingScopeCwds.clear()
   database?.close()
   database = undefined
   options = null
@@ -86,6 +98,16 @@ export async function flushSessionParseCachePersist(): Promise<void> {
     }
     openedDatabase()?.write(chunk, Date.now())
     if (pendingWrites.size > 0) {
+      await yieldToEventLoop()
+    }
+  }
+  while (pendingScopeCwds.size > 0) {
+    const chunk = [...pendingScopeCwds].slice(0, WRITE_CHUNK_ROWS)
+    for (const [path] of chunk) {
+      pendingScopeCwds.delete(path)
+    }
+    openedDatabase()?.writeScopeCwds(chunk, Date.now())
+    if (pendingScopeCwds.size > 0) {
       await yieldToEventLoop()
     }
   }
@@ -115,7 +137,7 @@ async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Pro
   let dropped = db.deleteSeenBefore(Date.now() - WSL_EXPIRE_AFTER_MS, WSL_PATH_GLOB)
   const stale = db.pathsSeenBefore(Date.now() - RECHECK_AFTER_MS, RECHECK_BATCH_ROWS, WSL_PATH_GLOB)
   for (const path of stale) {
-    if (await transcriptMissing(path)) {
+    if (await transcriptMissing(sessionParseCacheTranscriptPath(path))) {
       db.delete(path)
       dropped = true
     } else {
@@ -151,9 +173,40 @@ function readRow(path: string): PersistedSessionParseCacheEntry | undefined {
   return pendingWrites.get(path) ?? openedDatabase()?.read(path)
 }
 
+function readScopeCwds(paths: readonly string[]): SessionScopeCwdRead {
+  const result: SessionScopeCwdRead = openedDatabase()?.readScopeCwds(paths) ?? {
+    found: new Map(),
+    parsed: false,
+    read: false
+  }
+  const found = result.found
+  for (const path of paths) {
+    const row = pendingWrites.get(path)
+    const read = pendingScopeCwds.get(path)
+    if (row !== undefined || read !== undefined) {
+      found.set(path, {
+        ...found.get(path),
+        ...(row === undefined ? {} : { parsed: scopeCwdStampOf(row) }),
+        ...(read === undefined ? {} : { read })
+      })
+    }
+  }
+  return result
+}
+
+function queueScopeCwdWrite(path: string, stamp: SessionScopeCwdStamp): void {
+  pendingScopeCwds.delete(path)
+  pendingScopeCwds.set(path, stamp)
+  scheduleFlush()
+}
+
 function queueWrite(path: string, entry: PersistedSessionParseCacheEntry): void {
   pendingWrites.delete(path)
   pendingWrites.set(path, entry)
+  scheduleFlush()
+}
+
+function scheduleFlush(): void {
   const now = Date.now()
   pendingSince ??= now
   if (writeTimer) {
@@ -169,6 +222,7 @@ function queueWrite(path: string, entry: PersistedSessionParseCacheEntry): void 
 // Immediate, so a queued write or a later lookup can't bring the row back.
 function deleteRow(path: string): void {
   pendingWrites.delete(path)
+  pendingScopeCwds.delete(path)
   openedDatabase()?.delete(path)
 }
 

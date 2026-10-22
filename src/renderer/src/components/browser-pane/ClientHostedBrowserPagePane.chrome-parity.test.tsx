@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserCertificateFailure,
@@ -14,7 +14,11 @@ import type {
   BrowserHistoryNavigateCommand,
   BrowserPageCommandTarget
 } from '../../../../shared/browser-page-command-target'
-import type { BrowserPageZoomCommand } from '../../../../shared/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser-site-display'
+import {
+  normalizeBrowserPageZoomLevel,
+  type BrowserPageZoomCommand
+} from '../../../../shared/browser-page-zoom'
 
 const toastMocks = vi.hoisted(() => ({
   loading: vi.fn(),
@@ -54,6 +58,7 @@ let reloadRequests = paneChannel<BrowserPageCommandTarget>()
 let hardReloadRequests = paneChannel<BrowserPageCommandTarget>()
 let zoomRequests = paneChannel<BrowserPageZoomCommand>()
 let openDevTools = vi.fn(async () => true)
+let zoomPage = vi.fn(async (): Promise<BrowserPageSiteDisplay | null> => null)
 let proceedCertificate = vi.fn(async () => ({ ok: true as const }))
 let openUrl = vi.fn(async () => {})
 let writeClipboardText = vi.fn(async () => {})
@@ -69,6 +74,12 @@ beforeEach(() => {
   hardReloadRequests = paneChannel()
   zoomRequests = paneChannel()
   openDevTools = vi.fn(async () => true)
+  zoomPage = vi.fn(async () => ({
+    site: 'example.com',
+    zoomLevel: normalizeBrowserPageZoomLevel(1),
+    siteHasZoom: true,
+    colorScheme: null
+  }))
   proceedCertificate = vi.fn(async () => ({ ok: true as const }))
   openUrl = vi.fn(async () => {})
   writeClipboardText = vi.fn(async () => {})
@@ -78,7 +89,8 @@ beforeEach(() => {
       onContextMenuDismissed: contextMenuDismissed.subscribe,
       onPermissionDenied: permissionDenied.subscribe,
       openDevTools,
-      proceedCertificate
+      proceedCertificate,
+      zoomPage
     },
     ui: {
       onFindInBrowserPage: (_source: unknown, callback: () => void) =>
@@ -169,21 +181,18 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     expect(webview.goForward).toHaveBeenCalledTimes(1)
   })
 
-  it('zooms the retained guest and shows the level while the chord lands', () => {
-    const { webview } = renderPane()
+  it('zooms its own page and shows the level main settled on', async () => {
+    renderPane()
     // The HUD is aria-hidden until a zoom lands, so it has to be queried past that gate.
     const indicator = screen.getByRole('status', { hidden: true })
     expect(indicator.getAttribute('aria-hidden')).toBe('true')
 
     act(() => zoomRequests.emit({ browserPageId: 'page-b', direction: 'in' }))
-    expect(webview.setZoomLevel).not.toHaveBeenCalled()
-
     act(() => zoomRequests.emit({ browserPageId: 'page-a', direction: 'in' }))
 
-    expect(webview.setZoomLevel).toHaveBeenCalledTimes(1)
-    expect(webview.setZoomLevel.mock.calls[0]![0]).toBeGreaterThan(0)
-    expect(indicator.getAttribute('aria-hidden')).toBe('false')
-    expect(indicator.textContent).not.toBe('100%')
+    expect(zoomPage.mock.calls).toEqual([[{ browserPageId: 'page-a', direction: 'in' }]])
+    await waitFor(() => expect(indicator.getAttribute('aria-hidden')).toBe('false'))
+    expect(indicator.textContent).toBe('125%')
   })
 
   it('offers Proceed Anyway on a certificate failure and sends it to the local session', () => {

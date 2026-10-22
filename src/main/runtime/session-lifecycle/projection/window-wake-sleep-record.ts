@@ -1,5 +1,6 @@
 import {
   agentProviderSessionsEqual,
+  isPaneSleepRecord,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -66,4 +67,29 @@ export async function claimWindowWakeRecordForPane(
     return false
   }
   return owned
+}
+
+/**
+ * Layout-owner build: once a pane's start resumed its slept agent from `resumed`, that record is a
+ * running agent's resume record ('live'), so the pane reads awake while a host crash still resumes
+ * it. A record captured since (a new sleep of the pane) is left as it is.
+ */
+export async function markResumedRecordLive(
+  commit: SessionEdit,
+  paneKey: string,
+  resumed: SleepingAgentSessionRecord
+): Promise<void> {
+  await commit((session) => {
+    const stored = session.sleepingAgentSessionsByPaneKey?.[paneKey]
+    if (!stored || !isPaneSleepRecord(stored) || !sameRecord(stored, resumed)) {
+      return null
+    }
+    return {
+      ...session,
+      sleepingAgentSessionsByPaneKey: {
+        ...session.sleepingAgentSessionsByPaneKey,
+        [paneKey]: { ...stored, origin: 'live' }
+      }
+    }
+  })
 }

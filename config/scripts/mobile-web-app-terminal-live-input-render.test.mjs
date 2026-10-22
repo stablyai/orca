@@ -10,7 +10,7 @@ import {
   BUFFERED_FIELD_ID,
   LIVE_INPUT_FIELD_ID,
   liveInputProbeRouteSource
-} from './mobile-web-app-live-input-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-live-input-probe-route.mjs'
 import { MOBILE_WEB_APP_ROUTE_ROOT } from './mobile-web-app-route-manifest.mjs'
 import {
   createBundleServer,
@@ -18,8 +18,8 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
-import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
+import { LAYOUT_SOURCE } from './mobile-web-app/preview/mobile-web-app-terminal-probe-route.mjs'
 
 /**
  * The terminal's live input, in a real browser, on the bundle the shell would serve.

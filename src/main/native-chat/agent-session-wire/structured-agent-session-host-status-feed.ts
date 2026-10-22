@@ -13,6 +13,7 @@ import {
   type StructuredAgentSessionSubagentRowsDeps
 } from './structured-agent-session-subagent-rows'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type { StructuredAgentSessionConversationNaming } from './structured-agent-session-host-types'
 
 /** Wire the host's own deps into a feed, and each subagent's saved row onto its child records;
  *  keeps the host at one call site.
@@ -27,6 +28,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     logger: StructuredAgentSessionLogger
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
+    conversationNaming?: StructuredAgentSessionConversationNaming
   }
   onAgentStarted?: (sessionId: string) => void
   onChildWorkChanged?: (sessionId: string) => void
@@ -66,6 +68,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     // Resolved per call for the same reason the other deps are: the host builds this feed in a
     // field initializer, before its constructor parameters are assigned.
     statusSink: () => args.deps().statusSink,
+    namingActiveSessionIds: () => args.deps().conversationNaming?.activeSessionIds() ?? [],
+    namingFailure: (sessionId) => args.deps().conversationNaming?.failure(sessionId),
     ...(args.onAgentStarted ? { onAgentStarted: args.onAgentStarted } : {}),
     onChildWorkChanged: (sessionId, producer) => {
       subagentRows.changed(sessionId, producer)

@@ -15,7 +15,7 @@ import {
 } from './node-pty-precondition'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 
-export type NativePreflightHooks = {
+type NativePreflightHooks = {
   check?: () => NodePtyPreconditionVerdict
   toolchainHints?: (platform: NodeJS.Platform) => string[]
   warn?: (message: string) => void

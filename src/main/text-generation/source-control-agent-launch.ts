@@ -2,6 +2,8 @@ import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { resolveCliCommand } from '../codex-cli/command'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
+import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
+import { SOURCE_CONTROL_KILL_SITE } from './source-control-local-process'
 import { wslAwareSpawn } from '../git/runner'
 import type {
   SourceControlAgentSpawnInput,
@@ -107,7 +109,11 @@ function spawnSupervisedAgent(
     env: spec.env,
     cwd: spec.cwd,
     detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
+  })
+  guardSupervisedProviderGroup(child, {
+    site: SOURCE_CONTROL_KILL_SITE,
+    supervised: spec.supervised
   })
   return Object.assign(child, { supervised: spec.supervised })
 }

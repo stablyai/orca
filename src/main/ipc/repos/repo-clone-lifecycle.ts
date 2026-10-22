@@ -264,7 +264,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               isFolderRepo(current) &&
               getRepoExecutionHostId(current) === getRepoExecutionHostId(existing)
             ) {
-              const updated = store.updateRepo(current.id, {
+              const updated = store.updateRepo(current, {
                 kind: 'git',
                 ...conversion,
                 projectHostSetupMethod: 'cloned'

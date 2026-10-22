@@ -8,9 +8,11 @@ function harness(workspace: AgentPaneWorkspace | null, fenced = false) {
   const producer = new TerminalUseProducer({
     store: () => ({
       getWorktreeMeta: (id) => (records.has(id) ? {} : undefined),
-      setWorktreeMeta: (id, u) => writes.push(`local ${id} ${u.lastTerminalUseAt}`),
+      setWorktreeMeta: ({ id, hostId }, u) => writes.push(`${hostId} ${id} ${u.lastTerminalUseAt}`),
+      getRepos: () => [
+        { id: 'repo', path: '/', displayName: 'repo', badgeColor: '#000', addedAt: 0 }
+      ],
       getWorktreeMetaForHost: (id, host) => (records.has(`${host}|${id}`) ? {} : undefined),
-      setWorktreeMetaForHost: (id, host, u) => writes.push(`${host} ${id} ${u.lastTerminalUseAt}`),
       getFolderWorkspace: (id) => (records.has(id) ? {} : undefined),
       updateFolderWorkspace: (id, u) => writes.push(`folder ${id} ${u.lastTerminalUseAt}`)
     }),

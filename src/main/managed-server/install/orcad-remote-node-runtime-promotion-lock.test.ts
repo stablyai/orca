@@ -20,7 +20,9 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('./remote-install-transfers', () => ({ uploadRelayDirectory: vi.fn(async () => {}) }))
+vi.mock('./remote-install-transfers', () => ({
+  uploadRemoteInstallDirectory: vi.fn(async () => {})
+}))
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every remote call goes through the mocked execCommand.
 const conn = {} as OrcadHostTransport

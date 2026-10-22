@@ -1,7 +1,6 @@
 // The one queue gate: admission, the drain step and Send-now consume a single
-// typed hold decision, so the lists cannot drift — pinned here with a clear in
-// doubt, Send-now's override set, and the replay-preference rule for a refused
-// draft.
+// typed hold decision, so the lists cannot drift — pinned here with Send-now's
+// override set and the replay-preference rule for a refused draft.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -43,26 +42,6 @@ const settleRejected: QueuedMessageTestRig['settleRejected'] = (...args) =>
   rig.settleRejected(...args)
 
 describe('the one queue gate', () => {
-  it('a clear an older build left prepared holds nothing: Send-now sends the draft', async () => {
-    await workingSend()
-    const queued = await send('queued behind the clear', 'queue-if-active').result
-    if (!queued.ok || !('queued' in queued.value)) {
-      throw new Error('expected a queued receipt')
-    }
-    const draftId = queued.value.queued.messageId
-    // An unfinished /clear changed nothing the chat reads, so it refuses no send.
-    await store.setConversationCommand(SESSION, 1, {
-      command: 'clear',
-      runtimeFence: 1,
-      operationId: hostTestOperationId(),
-      callerKey: CALLER.callerKey,
-      phase: 'prepared',
-      state: 'unknown'
-    })
-    expect(await sendNow(draftId)).toMatchObject({ ok: true })
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
-  })
-
   it('Send-now refuses on a pending prompt and overrides a running turn', async () => {
     const working = await workingSend()
     const queued = await send('queued mid-turn', 'queue-if-active').result

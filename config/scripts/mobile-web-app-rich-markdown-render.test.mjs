@@ -26,14 +26,14 @@ import {
   lucideBarrelPlugin
 } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-import { textInputFontSizeFloor } from './mobile-web-app-text-input-font-size-seam.mjs'
+import { textInputFontSizeFloor } from './mobile-web-app/platform-seams/mobile-web-app-text-input-font-size-seam.mjs'
 import {
   createBundleServer,
   installCspViolationRecorder,
   installListenerRecorder,
   installSchedulerRecorder,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 const componentDir = join(mobileDir, 'src/components')

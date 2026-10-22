@@ -78,6 +78,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.consumeHibernatedAgentWake()
       consumeRestartReplacement(session)
       session.resumeDeferredSpawnOnReveal()
+      session.mainPaneStartOnReveal?.()
       session.requestKnownWindowsShiftEnterReconfirmation()
       session.sampleVisiblePaneForegroundAgent()
     },
@@ -187,8 +188,6 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // Why: cancel the post-spawn reconcile's pending rAF so a torn-down pane can't keep fitting/resizing after disposal.
       session.ptySizeReconcileHandle?.cancel()
       session.ptySizeReconcileHandle = null
-      session.startupGridSettleHandle?.cancel()
-      session.startupGridSettleHandle = null
       session.ptySizeReassertion.dispose()
       session.terminalSelectionFitGuard?.dispose()
       session.terminalSelectionFitGuard = null
@@ -234,6 +233,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.cleanupHiddenOutputRestoreDeferredRetry()
       session.cleanupHiddenOutputRestoreForegroundDeadline()
       session.cleanupHiddenOutputRestoreFloodRepaint()
+      session.flushRemoteProgramRedraw()
       session.unregisterBacklogRecovery?.()
       session.unregisterBacklogRecovery = null
       session.unregisterDocumentVisibilityRecovery?.()

@@ -19,9 +19,18 @@ export const AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY =
 // older host refuses `accountEnv`. A client sends it only to a host advertising this.
 export const AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY = 'agent-session.account-env.v1' as const
 
+// Why: the send body is a strict object, so an older host refuses `skills`. A host advertising this
+// hands each skill the user picked to the agent by its path; elsewhere the `$name` text stands alone.
+export const AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY = 'agent-session.send-skills.v1' as const
+
+export const AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY =
+  'agent-session.send-usage-limit-continuation.v1' as const
+
 export const AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES = [
+  AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY
+  AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
 ] as const

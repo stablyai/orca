@@ -13,11 +13,39 @@ import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileS
 import type { OrcaRuntimeWithSyncMobileSessionTabs as SyncMobileSessionTabsMethods } from '../session-tabs/mobile-session-reconciliation'
 import { OrcaRuntimeWithNotifySshStateChanged } from '../workspaces/workspace-host-notifications'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
+  /** The group each workspace shows, as the attached window last reported it (syncWindowGraph). */
+  protected readonly activeGroupViewFacts = new ActiveGroupViewFacts()
+
+  /** A paired desktop's `layout.reportView`: its reports count until its connection closes. */
+  reportClientView(
+    connectionId: string,
+    activeGroupByWorkspace: Readonly<Record<string, string | null>>,
+    refresh = false
+  ): void {
+    if (this.activeGroupViewFacts.mergeFromClient(connectionId, activeGroupByWorkspace, refresh)) {
+      this.registerSubscriptionCleanup(
+        `layout-view:${connectionId}`,
+        () => this.activeGroupViewFacts.dropClient(connectionId),
+        connectionId
+      )
+    }
+  }
+
+  protected editorOpenGroupFor(worktreeId: string): string | undefined {
+    return this.activeGroupViewFacts.groupFor(worktreeId, () => {
+      const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+      return hostId
+        ? this.store?.getWorkspaceSession?.(hostId)?.activeGroupIdByWorktree?.[worktreeId]
+        : undefined
+    })
+  }
+
   protected abstract beginGraphReload(
     ...args: Parameters<HasTerminalsForWorktreeMethods['beginGraphReload']>
   ): ReturnType<HasTerminalsForWorktreeMethods['beginGraphReload']>

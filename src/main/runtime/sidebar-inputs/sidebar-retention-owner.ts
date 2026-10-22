@@ -1,6 +1,8 @@
 import { ProducerRevision } from './producer-revision'
-import type { Worktree } from '../../../shared/worktree/types'
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeIdFromHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../shared/worktree/host-qualified-identity'
 import {
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
@@ -11,10 +13,8 @@ import type {
 } from '../../../shared/sidebar-list/sidebar-temporal-snapshot'
 import type { SidebarClock } from './sidebar-clock'
 
-/** The sweep's view of one workspace, by bare id. */
+/** This host's activity by bare id, read for each listed row: its session names no host. */
 export type SidebarRetentionCandidates = {
-  /** Active ids; the last listing's rows are added to them. */
-  ids: Iterable<string>
   isActive: (worktreeId: string) => boolean
   /** False when the inactivity is definitive: a sleep this host started, or no terminal tab left. */
   isUnverifiableGap: (worktreeId: string) => boolean
@@ -22,8 +22,8 @@ export type SidebarRetentionCandidates = {
 
 export type SidebarRetentionInputs = {
   showSleepingWorkspaces: () => boolean
-  /** Every row this host lists; it host-qualifies the retained ids. */
-  listRows: () => Promise<Worktree[]>
+  /** The keys the workspaces domain lists this host's rows under; readers match retention on them. */
+  listRowKeys: () => Promise<readonly HostScopedWorktreeKey[]>
   retentionCandidates: () => SidebarRetentionCandidates
 }
 
@@ -39,7 +39,8 @@ export class SidebarRetentionOwner {
   private disposed = false
   // A listing started before a reset or a later one must not land.
   private listingSeq = 0
-  private identityById = new Map<string, string>()
+  // The last listing's rows; the sweep keeps a grace window per row, not per bare id.
+  private listedKeys: readonly HostScopedWorktreeKey[] = []
   private retentionState = createSleepingSweepRetentionState()
   private retention: SidebarRetention | null = null
   // Until a listing lands no retained id can be host-qualified, so nothing is published.
@@ -99,24 +100,22 @@ export class SidebarRetentionOwner {
 
   private relist(): void {
     const seq = ++this.listingSeq
-    void this.inputs.listRows().then(
-      (worktrees) => {
+    void this.inputs.listRowKeys().then(
+      (keys) => {
         if (seq === this.listingSeq && this.running) {
-          this.applyListing(worktrees)
+          this.applyListing(keys)
         }
       },
       (error: unknown) => console.warn('[sidebar-retention] could not list rows', error)
     )
   }
 
-  private applyListing(worktrees: readonly Worktree[]): void {
+  private applyListing(keys: readonly HostScopedWorktreeKey[]): void {
     if (!this.listed) {
       this.listed = true
       this.revision.bump()
     }
-    this.identityById = new Map(
-      worktrees.map((worktree) => [worktree.id, getWorktreeHostIdentity(worktree)])
-    )
+    this.listedKeys = keys
     this.retentionPass()
   }
 
@@ -135,12 +134,12 @@ export class SidebarRetentionOwner {
     }
     const candidates = this.inputs.retentionCandidates()
     const now = Date.now()
+    // Every listed row is a candidate, so one that just went idle is not pruned out of its grace.
     const { retainedIds, nextExpiryInMs } = updateSleepingSweepRetention({
       state: this.retentionState,
-      // The last listing's rows too, so an id that just went idle is not pruned out of its grace.
-      candidateWorktreeIds: [...new Set([...candidates.ids, ...this.identityById.keys()])],
-      isActive: candidates.isActive,
-      isUnverifiableGap: candidates.isUnverifiableGap,
+      candidateWorktreeIds: this.listedKeys,
+      isActive: (key) => candidates.isActive(getWorktreeIdFromHostIdentity(key)),
+      isUnverifiableGap: (key) => candidates.isUnverifiableGap(getWorktreeIdFromHostIdentity(key)),
       nowMs: now
     })
     if (nextExpiryInMs === null) {
@@ -148,8 +147,7 @@ export class SidebarRetentionOwner {
     } else {
       this.clock.schedule(RETENTION_DEADLINE, now + nextExpiryInMs, () => this.retentionPass())
     }
-    // An id no listing has carried yet has no host to qualify it with, so it waits for one.
-    const ids = [...retainedIds].flatMap((id) => this.identityById.get(id) ?? []).sort()
+    const ids = [...retainedIds].sort()
     const previous = this.retention?.retainedIds
     if (!previous || previous.length !== ids.length || previous.some((id, i) => id !== ids[i])) {
       this.retention = { retainedIds: ids, retentionDecidedAt: now }

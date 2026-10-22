@@ -1,4 +1,5 @@
 import type { ClassifiedError } from '../classified-error'
+import type { ExecutionHostId } from '../execution-host'
 import type { PRCheckDetail } from './check-types'
 import type { GitHubIssueTimelineItem, PRComment } from './comment-types'
 import type {
@@ -58,6 +59,9 @@ export type GitHubWorkItem = {
    *  to know which repo an item came from. Stamped by the renderer fetcher
    *  (`fetchWorkItems`) and by optimistic stubs on the new-issue path. */
   repoId: string
+  /** Why: one repo id can name a row on two hosts. The renderer fetcher stamps the host whose row
+   *  returned the item, so its actions run there, not on whichever twin a by-id lookup finds. */
+  repoHostId?: ExecutionHostId
 }
 
 export type GitHubWorkItemDetails = {

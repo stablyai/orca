@@ -12,7 +12,7 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 /**
  * The two C4 page routes in a real browser, in the shape of the tasks and files checks.

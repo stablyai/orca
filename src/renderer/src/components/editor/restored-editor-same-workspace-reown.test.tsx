@@ -12,19 +12,29 @@ import {
   useEditorPanelFileContentLoader,
   type EditorPanelFileContentLoader
 } from './useEditorPanelFileContentLoader'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-const mocks = vi.hoisted(() => ({
-  readRuntimeFileContent: vi.fn(),
-  callRuntimeRpc: vi.fn(
-    async (_target: unknown, _method: string, _params: { command?: unknown }) => ({})
-  )
-}))
+const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
 vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileReadClient>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+// Main draws the tabs and answers each move (T1 transport, apply mode).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -81,10 +91,21 @@ function openAbsoluteTabInFolder(): string {
   )
 }
 
+let main: TabsDrawnFromMain | null = null
+let sentBefore = 0
+
+/** Main takes the seeded layout; the tab the test opens is drawn from its frame. */
+async function drawFromMain<T>(open: () => T): Promise<T> {
+  main = await drawTabsFromMain(useAppStore)
+  const opened = open()
+  await main.settle()
+  sentBefore = layoutApplyTestTransport.sent.length
+  return opened
+}
+
+/** Commands sent after the tab was drawn. */
 function layoutCommands(): unknown[] {
-  return mocks.callRuntimeRpc.mock.calls.flatMap(([, method, params]) =>
-    method === 'layout.apply' ? [params.command] : []
-  )
+  return layoutApplyTestTransport.sent.slice(sentBefore)
 }
 
 /** The workspace now lives on its managed server; the tab was saved by the relay era, unstamped. */
@@ -132,7 +153,6 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
   let fileContents: Record<string, FileContent>
 
   beforeEach(() => {
-    mocks.callRuntimeRpc.mockClear()
     mocks.readRuntimeFileContent.mockReset()
     mocks.readRuntimeFileContent.mockResolvedValue({ content: '# a', isBinary: false })
     fileContents = {}
@@ -161,15 +181,16 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
   })
 
   afterEach(() => {
+    main?.close()
+    main = null
     act(() => root.unmount())
     container.remove()
   })
 
   it('keeps a local tab where it is when loaded for its own workspace', async () => {
     seedNestedLocalWorkspaces()
-    const id = openAbsoluteTabInFolder()
+    const id = await drawFromMain(openAbsoluteTabInFolder)
     const before = fileIdentities()
-    mocks.callRuntimeRpc.mockClear()
 
     await act(async () => load!(FILE_PATH, id, FOLDER, FILE_PATH))
 
@@ -180,16 +201,23 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
 
   it("tells main when a parent workspace's conflict review re-owns a local tab in place", async () => {
     seedNestedLocalWorkspaces()
-    const id = openAbsoluteTabInFolder()
+    const id = await drawFromMain(openAbsoluteTabInFolder)
     expect(id).toBe(FILE_PATH)
-    mocks.callRuntimeRpc.mockClear()
+    expect(useAppStore.getState().unifiedTabsByWorktree[FOLDER]).toEqual([
+      expect.objectContaining({ entityId: id })
+    ])
 
     // The conflict review's read: its id is the bare path, its workspace the review's.
     await act(async () => load!(FILE_PATH, FILE_PATH, REPO, 'pkg/a.md'))
+    await main!.settle()
 
     const [file] = useAppStore.getState().openFiles
     expect(file).toMatchObject({ worktreeId: FOLDER, relativePath: 'a.md' })
     expect(file!.id).not.toBe(id)
+    // Main's frame shows the tab under the re-owned file.
+    expect(useAppStore.getState().unifiedTabsByWorktree[FOLDER]).toEqual([
+      expect.objectContaining({ entityId: file!.id })
+    ])
     expect(layoutCommands()).toEqual([
       {
         type: 'renameEditorFiles',
@@ -208,20 +236,57 @@ describe('a restored tab re-owned inside its own workspace, layout-owner build',
     ])
   })
 
+  it("tells main of a re-own that reaches a tab before main's frame draws it", async () => {
+    seedNestedLocalWorkspaces()
+    main = await drawTabsFromMain(useAppStore)
+    // Main holds the open's answer: its frame has yet to draw the tab.
+    layoutApplyTestTransport.answerWith('pending')
+    const id = openAbsoluteTabInFolder()
+    expect(useAppStore.getState().unifiedTabsByWorktree[FOLDER] ?? []).toEqual([])
+
+    let loading: Promise<void> | null = null
+    await act(async () => {
+      loading = load!(FILE_PATH, FILE_PATH, REPO, 'pkg/a.md')
+      await Promise.resolve()
+    })
+    layoutApplyTestTransport.answerWith('apply')
+    layoutApplyTestTransport.answerPending()
+    await act(async () => {
+      await main!.settle()
+      await loading
+      await main!.settle()
+    })
+
+    const [file] = useAppStore.getState().openFiles
+    expect(file).toMatchObject({ worktreeId: FOLDER, relativePath: 'a.md' })
+    expect(file!.id).not.toBe(id)
+    expect(layoutApplyTestTransport.sentOfType('renameEditorFiles')).toEqual([
+      expect.objectContaining({
+        workspace: FOLDER,
+        renames: [expect.objectContaining({ fileId: id, newFileId: file!.id })]
+      })
+    ])
+    // Main's tab shows the file the window holds, not its old id.
+    expect(useAppStore.getState().unifiedTabsByWorktree[FOLDER]).toEqual([
+      expect.objectContaining({ entityId: file!.id })
+    ])
+  })
+
   it("sends nothing for a paired server's tab, whose layout main does not own", async () => {
     seedServerWorkspace()
-    const id = useAppStore.getState().openFile(
-      {
-        filePath: '/root/repo/README.md',
-        relativePath: 'README.md',
-        worktreeId: SERVER_REPO,
-        runtimeEnvironmentId: null,
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { suppressActiveRuntimeFallback: true }
+    const id = await drawFromMain(() =>
+      useAppStore.getState().openFile(
+        {
+          filePath: '/root/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: SERVER_REPO,
+          runtimeEnvironmentId: null,
+          language: 'markdown',
+          mode: 'edit'
+        },
+        { suppressActiveRuntimeFallback: true }
+      )
     )
-    mocks.callRuntimeRpc.mockClear()
 
     await act(async () => load!('/root/repo/README.md', id, SERVER_REPO, 'README.md'))
 

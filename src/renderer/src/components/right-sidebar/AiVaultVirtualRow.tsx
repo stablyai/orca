@@ -65,6 +65,7 @@ export function AiVaultVirtualRow({
   onOpenCwd,
   onRequestDelete,
   searchHits,
+  searchHitHostLabels,
   selected,
   onSelect,
   onPickSession
@@ -101,6 +102,7 @@ export function AiVaultVirtualRow({
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
+  searchHitHostLabels?: ReadonlyMap<string, string> | null
   /** Set only where rows are keyboard-selectable. */
   selected?: boolean
   onSelect?: () => void
@@ -208,6 +210,7 @@ export function AiVaultVirtualRow({
         <VaultSessionRow
           session={row.session}
           searchHit={searchHit}
+          sourceHostLabel={searchHitHostLabels?.get(row.session.executionHostId)}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={

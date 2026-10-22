@@ -28,6 +28,7 @@ import { userNamedFileAccess } from '@/lib/local-file-access'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import type { CapturedNativeChatDrop } from './native-chat-pane-file-drop'
 
 export type UseNativeChatExternalAttachmentsArgs = {
   terminalTabId: string
@@ -82,7 +83,7 @@ export function useNativeChatExternalAttachments({
   captureExternalDrop: (
     destinationIsCurrent?: () => boolean,
     options?: NativeChatAttachmentFocusOptions
-  ) => (paths: string[]) => Promise<void>
+  ) => CapturedNativeChatDrop
   captureReservedAttachments: (
     destinationIsCurrent?: () => boolean,
     options?: NativeChatAttachmentFocusOptions
@@ -97,36 +98,40 @@ export function useNativeChatExternalAttachments({
   // The post-await gate asks which workspace this composer serves now, so it
   // reads the pane through a ref. Resolving through the render closure would
   // re-ask the workspace the upload started in — a comparison with itself.
-  const sessionId = structuredSession?.sessionId
-  const runtimeEnvironmentId = structuredSession?.runtimeEnvironmentId ?? null
   const workspaceRef = useRef<ComposerWorkspace>({
     structuredWorktreeId,
     terminalTabId,
     structuredSession
   })
   useLayoutEffect(() => {
-    workspaceRef.current = {
-      structuredWorktreeId,
-      terminalTabId,
-      structuredSession: sessionId ? { sessionId, runtimeEnvironmentId } : undefined
-    }
-  }, [runtimeEnvironmentId, sessionId, structuredWorktreeId, terminalTabId])
+    workspaceRef.current = { structuredWorktreeId, terminalTabId, structuredSession }
+  }, [structuredSession, structuredWorktreeId, terminalTabId])
   const pendingChipsRef = useRef(pendingChips)
   useLayoutEffect(() => {
     pendingChipsRef.current = pendingChips
   }, [pendingChips])
 
-  const resolveAttachmentOwner = useCallback(() => {
+  const resolveAttachmentOwner = useCallback((): NativeChatAttachmentOwner => {
     const { structuredWorktreeId, structuredSession, terminalTabId } = workspaceRef.current
     if (structuredWorktreeId && structuredSession?.runtimeEnvironmentId) {
+      if (structuredSession.sessionPending) {
+        return { kind: 'not-ready', notice: structuredSession.sessionPendingNotice }
+      }
       return resolveNativeChatRuntimeSessionAttachmentOwner({
         sessionId: structuredSession.sessionId,
         runtimeEnvironmentId: structuredSession.runtimeEnvironmentId
       })
     }
-    return structuredWorktreeId
-      ? resolveNativeChatAttachmentOwnerForWorktree(useAppStore.getState(), structuredWorktreeId)
-      : resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId)
+    if (!structuredWorktreeId) {
+      return resolveNativeChatAttachmentOwner(useAppStore.getState(), terminalTabId)
+    }
+    const owner = resolveNativeChatAttachmentOwnerForWorktree(
+      useAppStore.getState(),
+      structuredWorktreeId
+    )
+    return owner.kind === 'local' && structuredSession
+      ? { kind: 'local', structuredSessionId: structuredSession.sessionId }
+      : owner
   }, [])
 
   // Captures one intake's owner, destination and chips; its checks and work run against them later.
@@ -152,7 +157,7 @@ export function useNativeChatExternalAttachments({
           return nativeChatAttachmentOwnerChangedNotice()
         }
         if (owner.kind === 'not-ready') {
-          return nativeChatWorktreeNotReadyNotice()
+          return owner.notice ?? nativeChatWorktreeNotReadyNotice()
         }
         if (owner.kind === 'remote') {
           return nativeChatLocalAttachmentUnsupportedNotice()
@@ -240,7 +245,15 @@ export function useNativeChatExternalAttachments({
           }
         }
       }
-      return { chips, refusal, run }
+      return {
+        chips,
+        refusal,
+        run,
+        preparationConsumer:
+          owner.kind === 'local' && owner.structuredSessionId
+            ? ('local-chat' as const)
+            : ('agent' as const)
+      }
     },
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]
   )
@@ -251,7 +264,7 @@ export function useNativeChatExternalAttachments({
       options?: NativeChatAttachmentFocusOptions
     ) => {
       const intake = captureIntake(destinationIsCurrent, options)
-      return async (paths: string[]): Promise<void> => {
+      const deliver: CapturedNativeChatDrop = async (paths: string[]): Promise<void> => {
         if (paths.length === 0 || disabledRef.current || !mountedRef.current) {
           return
         }
@@ -262,6 +275,8 @@ export function useNativeChatExternalAttachments({
         }
         await intake.run(reserveNativeChatAttachmentChips(intake.chips, paths))
       }
+      deliver.preparationConsumer = intake.preparationConsumer
+      return deliver
     },
     [captureIntake, mountedRef, setNotice]
   )

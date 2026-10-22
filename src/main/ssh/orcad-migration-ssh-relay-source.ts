@@ -15,7 +15,6 @@ import {
   releaseOrcadMigrationFence,
   resolveOrcadMigrationFence
 } from './orcad-migration-source-fence'
-import { retainOrcadMigrationSource } from './orcad-migration-source-retention'
 import {
   assessOrcadMigrationTerminals,
   retireProvenExitedLeases,
@@ -43,9 +42,7 @@ export function sshRelayMigrationCutoverPort(
         { userDataPath: deps.userDataPath, store: deps.freshSource?.() ?? deps.store },
         cutover
       ),
-    releaseFence: (cutover) => releaseOrcadMigrationFence(deps, cutover),
-    retireAfterCommit: (migrationId, now) =>
-      retainOrcadMigrationSource(deps.userDataPath, migrationId, now)
+    releaseFence: (cutover) => releaseOrcadMigrationFence(deps, cutover)
   }
 }
 

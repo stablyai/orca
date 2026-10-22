@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionModelCatalogResult } from './agent-session-wire'
+import { independentAgentModelCatalog } from './agent-model-catalog-ownership'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -66,7 +67,7 @@ describe('the first frame of every agent’s picker', () => {
           expect(canSetStructuredAgentSessionOption(state, 'model', 'anything')).toBe(false)
         } else {
           // A built-in list is presentation only: no value is tracked from it.
-          expect(state.record.model).toBeUndefined()
+          expect(state.record.values.model).toBeUndefined()
         }
       }
     }
@@ -85,7 +86,7 @@ describe('the first frame of every agent’s picker', () => {
         model?.kind.type === 'select' && model.kind.choices.map((choice) => choice.value)
       ).toEqual(['model-listed'])
       // Listed, not picked: nothing reads as a value the chat confirmed or will launch with.
-      expect(state.record.model).toBeUndefined()
+      expect(state.record.values.model).toBeUndefined()
     }
   )
 
@@ -105,7 +106,7 @@ describe('the first frame of every agent’s picker', () => {
       expect(currentValue(snapshot, 'effort')).toBe('high')
       // Shown as the default it runs, never as a pick the next launch would replay.
       expect(snapshot.find((descriptor) => descriptor.id === 'model')?.valueSource).toBe('default')
-      expect(state.record.model).toBeUndefined()
+      expect(state.record.values.model).toBeUndefined()
       // A reopened chat may run a model picked in it, so it names none.
       const reopened = firstFrame(
         agent,
@@ -124,9 +125,22 @@ describe('the first frame of every agent’s picker', () => {
     })
     expect(live.catalogSource).toBe('live')
     expect(live.catalog?.models.map((model) => model.id)).toEqual(['model-live'])
-    // A later host answer never downgrades what the session reported.
+    // A later host answer never downgrades what the session reported on older hosts.
     expect(
       applyStructuredAgentSessionModelCatalog(live, seed, HOST_CATALOG, { newLaunch: true })
     ).toBe(live)
+    const refreshed = applyStructuredAgentSessionModelCatalog(live, seed, HOST_CATALOG, {
+      newLaunch: true,
+      coherentCatalog: true
+    })
+    if (independentAgentModelCatalog(agent)) {
+      expect(refreshed.catalog?.models.map((model) => model.id)).toContain('model-listed')
+      expect(refreshed.record).toBe(live.record)
+      expect(currentValue(structuredAgentSessionOptionSnapshot(refreshed), 'model')).toBe(
+        'model-live'
+      )
+    } else {
+      expect(refreshed).toBe(live)
+    }
   })
 })

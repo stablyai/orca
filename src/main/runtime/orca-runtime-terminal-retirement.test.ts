@@ -152,7 +152,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
   it('releases each early-exit fence after its matching registration is rejected', async () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
+      pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
 
     for (let index = 0; index < 1_000; index += 1) {
@@ -166,13 +166,12 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       runtime.releaseRejectedPtyRegistrationFence(ptyId, incarnationId)
     }
 
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
+    expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
   it('does not retain fences for completed surface-less lifecycles', async () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
 
@@ -183,7 +182,6 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       await runtime.onPtyExit(`pty-headless-${index}`, 0, `incarnation-${index}`)
     }
 
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 
@@ -205,10 +203,8 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     ).toThrow('agent_session_exited_during_start')
     runtime.releaseRejectedPtyRegistrationFence('pty-left', 'incarnation-replacement')
     const internals = runtime as unknown as {
-      earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
-    expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
 

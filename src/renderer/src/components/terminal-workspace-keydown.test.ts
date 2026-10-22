@@ -62,7 +62,6 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRunti
 vi.mock('@/lib/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => `id:${id}`
 }))
@@ -170,6 +169,8 @@ describe('tab.close uses the unified active tab', () => {
       getActiveTab: () => tab,
       unifiedTabsByWorktree: { [worktreeId]: [tab] },
       openFiles: [],
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       browserPagesByWorkspace: {},
       closeUnifiedTab,
       closeFile,
@@ -305,18 +306,24 @@ describe('shared tab navigation routing', () => {
     mocks.state = { activeWorktreeId: controller.activeWorktreeId }
   })
 
-  function nextTab(): void {
-    handleTerminalWorkspaceKeyDown(
-      new KeyboardEvent('keydown', {
-        key: ']',
-        metaKey: true,
-        shiftKey: true,
-        cancelable: true
-      }),
-      controller,
-      'darwin'
-    )
+  function nextTab(repeat = false): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: ']',
+      metaKey: true,
+      shiftKey: true,
+      cancelable: true,
+      repeat
+    })
+    handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
+    return event
   }
+
+  it('claims a held tab chord on every repeat but switches once', () => {
+    nextTab()
+    const repeat = nextTab(true)
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(handleSwitchTabAcrossAllTypes).toHaveBeenCalledTimes(1)
+  })
 
   it('sends the keyboard and IPC navigation intent to the same workspace operation', () => {
     nextTab()
@@ -350,6 +357,8 @@ describe('tab.closeAll confirmation', () => {
       activeView: 'terminal',
       activeTabType: 'editor',
       openFiles: [makeOpenFile({ id: 'file-1', worktreeId })],
+      editorBufferIdOf: {},
+      editorBufferViews: {},
       unifiedTabsByWorktree: { [worktreeId]: [] },
       getActiveTab: () => null
     }

@@ -90,6 +90,14 @@ describe('the permission mode picker', () => {
       kind: { currentValue: 'auto' }
     })
     expect(offered(false, 'auto')).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
+    const changing = { ...live('claude', { permissionMode: 'ask' }, true), pendingId: 'model' }
+    expect(permission(changing)?.kind).toMatchObject({
+      choices: expect.not.arrayContaining([expect.objectContaining({ value: 'auto' })])
+    })
+    expect(permission({ ...changing, permissionMode: 'auto' })?.kind).toMatchObject({
+      currentValue: 'auto',
+      choices: expect.arrayContaining([expect.objectContaining({ value: 'auto' })])
+    })
   })
 
   // A new chat names no model: the host's catalog row for the CLI default decides, as the host's does.

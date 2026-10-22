@@ -81,17 +81,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // because the engine gains `useFocusEffect` on its own track.
   { file: 'src/accounts/MobileAccountsScreen.tsx', references: 2 },
 
-  // app/ — Expo route screens
-  // Holdout: not the screen. It renders to completion under inert reanimated and gesture-handler
-  // substitutes, and then sends nothing: its host list comes from `loadHosts()`, which joins a
-  // device token held in the keychain through expo-secure-store. A scenario can declare the async
-  // store and the notification tray, not a credential, so `loadHosts()` answers with an empty list
-  // and the screen has no client. `notifications.testPush` migrated because its screen reads
-  // `loadHostCatalog()`, which keeps a credential-less entry. Line ~193 also reads `ms` off the
-  // reply envelope instead of off its result, so the value is always undefined; that is a product
-  // defect with its own fix and re-record, not something this migration may quietly repair.
-  { file: 'app/terminal-settings.tsx', references: 3 },
-
   // src/components/ — shared widgets that fetch their own data. Nothing is left here: the New
   // Workspace drawer's execution target, setup hook, runtime context and Codex capability probe
   // migrated in step 4, and the last two followed once a scenario could declare the device store

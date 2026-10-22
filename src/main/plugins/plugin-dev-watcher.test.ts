@@ -37,6 +37,14 @@ type PluginWatchSubscription = {
 }
 
 const devPath = resolve('plugins', 'demo')
+
+/** The catch-up refresh a live subscription schedules; later counts start after it. */
+async function flushCatchUpRefresh(refresh: ReturnType<typeof vi.fn>): Promise<void> {
+  await vi.advanceTimersByTimeAsync(300)
+  expect(refresh).toHaveBeenCalledOnce()
+  refresh.mockClear()
+}
+
 const originalPlatform = process.platform
 const subscribeMock = vi.mocked(subscribeViaWatcherProcess)
 let subscriptions: PluginWatchSubscription[] = []
@@ -228,6 +236,27 @@ describe('PluginDevWatcher', () => {
     root.callback(null, [{ type: 'create', path: resolve(devPath, 'stale.html') }])
     vi.advanceTimersByTime(300)
     expect(refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('catches up once when a dev root goes live after an edit it could not report', async () => {
+    vi.useFakeTimers()
+    const pending: (() => void)[] = []
+    subscribeMock.mockImplementation((path, callback, options, hooks = {}) => {
+      const unsubscribe = vi.fn().mockResolvedValue(undefined)
+      subscriptions.push({ path, callback, options, hooks, unsubscribe })
+      return new Promise((resolve) => pending.push(() => resolve({ unsubscribe })))
+    })
+    const { refresh } = startDevWatcher(vi.fn(), vi.fn(), [devPath])
+    // The edit lands while the native subscription is still being set up, so no event reports it.
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(refresh).not.toHaveBeenCalled()
+    for (const goLive of pending) {
+      goLive()
+    }
+    await vi.advanceTimersByTimeAsync(300)
+    expect(refresh).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(refresh).toHaveBeenCalledOnce()
   })
 
   it('refreshes the whole plugin projection after an overflow', () => {
@@ -504,6 +533,7 @@ describe('PluginDevWatcher', () => {
       const options = { enabled: true, devPaths: [path], refresh, reapIdle: vi.fn() }
       lifecycle.sync(options)
       await Promise.resolve()
+      await flushCatchUpRefresh(refresh)
       for (let tick = 0; tick < 3; tick += 1) {
         await vi.advanceTimersByTimeAsync(60_000)
         expect(checkBindings).toHaveBeenCalledTimes(tick + 1)
@@ -567,6 +597,7 @@ describe('PluginDevWatcher', () => {
     const options = { enabled: true, devPaths: [path], refresh, reapIdle: vi.fn() }
     lifecycle.sync(options)
     await Promise.resolve()
+    await flushCatchUpRefresh(refresh)
     const root = pluginRootSubscription()
 
     for (const type of ['create', 'delete'] as const) {
@@ -601,12 +632,16 @@ describe('PluginDevWatcher', () => {
     const options = { enabled: true, devPaths: [path], refresh, reapIdle: vi.fn() }
     lifecycle.sync(options)
     await Promise.resolve()
+    await flushCatchUpRefresh(refresh)
     const root = pluginRootSubscription()
     await rename(path, join(aliasedRoot.base, 'old'))
     await mkdir(path)
 
     await vi.advanceTimersByTimeAsync(60_000)
-    await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(subscribeMock).toHaveBeenCalledTimes(2))
+    await vi.advanceTimersByTimeAsync(300)
+    // The rebind refresh, then the replacement root's one catch-up.
+    expect(refresh).toHaveBeenCalledTimes(2)
     expect(root.unsubscribe).toHaveBeenCalledOnce()
     expect(subscriptions.map((item) => ({ path: item.path, options: item.options }))).toEqual([
       { path, options: { backend: 'windows' } },
@@ -614,9 +649,9 @@ describe('PluginDevWatcher', () => {
     ])
     subscriptions.at(-1)?.callback(null, [{ type: 'create', path: join(path, 'manifest.json') }])
     await vi.advanceTimersByTimeAsync(300)
-    expect(refresh).toHaveBeenCalledTimes(2)
+    expect(refresh).toHaveBeenCalledTimes(3)
     await vi.advanceTimersByTimeAsync(60_000)
-    expect(refresh).toHaveBeenCalledTimes(2)
+    expect(refresh).toHaveBeenCalledTimes(3)
     expect(subscribeMock).toHaveBeenCalledTimes(2)
     lifecycle.dispose()
     expect(vi.getTimerCount()).toBe(0)

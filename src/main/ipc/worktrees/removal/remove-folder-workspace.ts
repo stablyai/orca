@@ -12,6 +12,7 @@ import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'
 import { removeWorktreeMetadataAndTransientState } from './worktree-removal-ownership'
+import { teardownStops } from '../../../runtime/owned-session-teardown-policy'
 
 export async function removeFolderWorkspace(
   context: WorktreeIpcContext,
@@ -43,7 +44,7 @@ export async function removeFolderWorkspace(
       onPtyStopped: clearProviderPtyState,
       // A structured session is on no PTY surface, so the sweeps above leave it attached to a
       // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
-      closeStructuredSessions: true,
+      closeStructuredSessions: teardownStops('folder-removal', 'structured-chat'),
       ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
     }).catch((err) => {
       console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
@@ -51,7 +52,7 @@ export async function removeFolderWorkspace(
   })
   await withWorktreeRemoveStageSpan('metadata_purge', 'folder', async () => {
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime, entryPoint: 'folder-removal' },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId

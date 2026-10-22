@@ -81,13 +81,17 @@ describe('ACP process-owning connection', () => {
       expect.objectContaining({
         cwd: start.cwd,
         env: expect.objectContaining({ ACP_ACCOUNT_HOME: '/host/account' }),
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
       })
     )
     expect(spawn.mock.calls[0][0].env).not.toHaveProperty('STRIPPED')
-    expect(await connection.start(start)).toMatchObject({ sessionId: 'session-1' })
+    expect(await connection.start(start)).toMatchObject({
+      sessionId: 'session-1'
+    })
     agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
-    expect(await connection.prompt([...prompt])).toEqual({ stopReason: 'end_turn' })
+    expect(await connection.prompt([...prompt])).toEqual({
+      stopReason: 'end_turn'
+    })
     connection.pauseReading()
     expect(child.stdout.isPaused()).toBe(true)
     connection.resumeReading()
@@ -161,7 +165,9 @@ describe('ACP process-owning connection', () => {
 
   it('drops an overlong stderr line it could not classify instead of keeping its prefix', async () => {
     const { connection, child } = fixture({
-      signIn: { read: (line) => (line.endsWith('authenticate') ? 'link' : undefined) }
+      signIn: {
+        read: (line) => (line.endsWith('authenticate') ? 'link' : undefined)
+      }
     })
     await connection.start(start)
     const link = `https://accounts.example/auth?state=${'x'.repeat(33_000)}`
@@ -282,7 +288,11 @@ describe('ACP process-owning connection', () => {
     connection.onExit(failing)
     connection.onExit(early)
     expect(() => child.emit('exit', 0, null)).not.toThrow()
-    expect(early).toHaveBeenCalledExactlyOnceWith({ code: 0, signal: null, processless: false })
+    expect(early).toHaveBeenCalledExactlyOnceWith({
+      code: 0,
+      signal: null,
+      processless: false
+    })
     expect(() => connection.onExit(failing)).not.toThrow()
     const late = vi.fn()
     connection.onExit(late)

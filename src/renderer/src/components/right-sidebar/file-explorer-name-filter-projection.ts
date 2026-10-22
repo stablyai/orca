@@ -141,10 +141,10 @@ export function createNameFilteredFileExplorerProjection({
   const rootChildren = new Map<string, SyntheticTreeEntry>()
   for (const rawRelativePath of nameFilter.relativePaths) {
     const relativePath = normalizeRelativePath(rawRelativePath, worktreePath)
-    if (
-      !relativePath ||
-      getRelativePathInsideRoot(joinPath(worktreePath, relativePath), displayRootPath) === null
-    ) {
+    if (!relativePath || !pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
+      continue
+    }
+    if (getRelativePathInsideRoot(joinPath(worktreePath, relativePath), displayRootPath) === null) {
       continue
     }
     if (!showDotfiles && isDotfileRelativePath(relativePath, worktreePath)) {
@@ -153,10 +153,6 @@ export function createNameFilteredFileExplorerProjection({
     if (!showGitIgnoredFiles && isPathIgnored(ignoredSet, relativePath)) {
       continue
     }
-    if (!pathMatchesFileNameFilterTokens(relativePath, nameFilterTokens)) {
-      continue
-    }
-
     const segments = splitPathSegments(relativePath, worktreePath)
     let currentChildren = rootChildren
     let currentRelativePath = ''

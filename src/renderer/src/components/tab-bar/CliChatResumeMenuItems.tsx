@@ -24,6 +24,7 @@ export function CliChatResumeMenuItems({
     <>
       {leadingSeparator ? <DropdownMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
+        action="switch"
         menuKind="dropdown"
         tooltipSide="right"
         chatPending={pending}

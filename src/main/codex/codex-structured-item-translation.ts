@@ -1,11 +1,8 @@
 import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
-import {
-  boundInlineText,
-  boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
+import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
 import { commandActionFacts } from './codex-command-action-class'
@@ -43,7 +40,7 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
       ? (readString(item, 'text') ?? readTextContent(item, 'content'))
       : readString(item, 'text')
   if (text !== null) {
-    return [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    return [{ type: 'text', text }]
   }
   const content = item.content
   if (!Array.isArray(content)) {
@@ -56,10 +53,7 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
     }
     const partText = readString(part as Record<string, unknown>, 'text')
     if (partText !== null) {
-      blocks.push({
-        type: 'text',
-        text: boundInlineText(partText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-      })
+      blocks.push({ type: 'text', text: partText })
       continue
     }
     const record = part as Record<string, unknown>
@@ -72,6 +66,20 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   return blocks
 }
 
+/** An async question is an agentMessage whose text already reads it out; the call block is what
+ *  lets clients answer it, through the same pending rule a terminal transcript's call takes. */
+function codexAsyncQuestionBlock(item: CodexThreadItem): NativeChatBlock | null {
+  if (item.type !== 'agentMessage' || item.delivery !== 'async' || !Array.isArray(item.questions)) {
+    return null
+  }
+  return {
+    type: 'tool-call',
+    name: CODEX_ASYNC_QUESTION_TOOL,
+    callId: item.id,
+    input: { questions: item.questions }
+  }
+}
+
 export type CodexJournalItem = {
   body: AgentJournalItemBody | null
   handled: boolean
@@ -79,7 +87,6 @@ export type CodexJournalItem = {
 
 function commandItem(item: CodexThreadItem): CodexJournalItem {
   const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
-  const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   const parsed = commandActionFacts(item)
   return {
     body: {
@@ -87,13 +94,10 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
       name: parsed?.name ?? 'shell',
       callId: item.id,
       // Raw command and cwd stay so the expanded view still shows what ran.
-      input: boundToolInput(
-        { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
-        DEFAULT_JOURNAL_PAYLOAD_LIMITS
-      ),
+      input: { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
       state: codexItemRunState(item),
       ...toolExecutionMetadata(item),
-      ...(bounded === null ? {} : { output: bounded.bounded })
+      ...(output === null ? {} : { output: journalPayload(output) })
     },
     handled: true
   }
@@ -114,19 +118,18 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         kind: 'tool-call',
         name: 'apply_patch',
         callId: item.id,
-        input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+        input: { changes: item.changes ?? null },
         state: codexItemRunState(item)
       },
       handled: true
     }
   }
   const patch = changes.map((change) => change.diff).join('\n')
-  const bounded = boundInlineText(patch, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
   return {
     body: {
       kind: 'diff',
       path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
-      patch: bounded
+      patch: journalPayload(patch)
     },
     handled: true
   }
@@ -160,16 +163,15 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
   const tool = readString(item, 'tool')
   const failure = readString(readRecord(item.error), 'message')
   const text = failure ?? readTextContent(readRecord(item.result), 'content')
-  const bounded = text === null ? null : boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
     body: {
       kind: 'tool-call',
       name: mcpToolCallName(item),
       callId: item.id,
       ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
-      input: boundToolInput(mcpToolArguments(item.arguments), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+      input: mcpToolArguments(item.arguments),
       state: failure === null ? codexItemRunState(item) : 'failed',
-      ...(bounded === null ? {} : { output: bounded.bounded })
+      ...(text === null ? {} : { output: journalPayload(text) })
     },
     handled: true
   }
@@ -203,16 +205,15 @@ function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
 function webSearchItem(item: CodexThreadItem): CodexJournalItem {
   const results = toolWebSearchResults(item.results)
   const hits = Array.isArray(item.results) && item.results.length > 0 ? item.results : null
-  const bounded = hits && boundInlineText(JSON.stringify(hits), DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
     body: {
       kind: 'tool-call',
       name: 'web_search',
       callId: item.id,
       ...(results.length > 0 ? { webSearchResults: results } : {}),
-      input: boundToolInput(webSearchInput(item), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+      input: webSearchInput(item),
       state: item.action === null || item.action === undefined ? 'running' : 'completed',
-      ...(bounded === null ? {} : { output: bounded.bounded })
+      ...(hits === null ? {} : { output: journalPayload(JSON.stringify(hits)) })
     },
     handled: true
   }
@@ -231,7 +232,8 @@ export function codexJournalItem(
   started?: CodexThreadItem
 ): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
-    const blocks = codexMessageBlocks(item)
+    const question = codexAsyncQuestionBlock(item)
+    const blocks = question ? [...codexMessageBlocks(item), question] : codexMessageBlocks(item)
     return {
       body:
         blocks.length === 0
@@ -267,7 +269,7 @@ export function codexJournalItem(
           ? null
           : {
               kind: 'status',
-              text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+              text,
               presentation: 'plan-document'
             },
       handled: true
@@ -293,7 +295,7 @@ export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    blocks: [{ type: 'text', text }]
   }
 }
 
@@ -312,9 +314,8 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     const path = Array.isArray(item.changes)
       ? readString(readRecord(item.changes[0]), 'path')
       : null
-    const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
     return {
-      body: { kind: 'diff', path: path ?? 'pending patch', patch: bounded },
+      body: { kind: 'diff', path: path ?? 'pending patch', patch: journalPayload(text) },
       handled: true
     }
   }
@@ -322,14 +323,14 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     return {
       body: {
         kind: 'status',
-        text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+        text,
         presentation: 'plan-document'
       },
       handled: true
     }
   }
   return {
-    body: { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+    body: { kind: 'status', text },
     handled: true
   }
 }

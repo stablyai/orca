@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
@@ -17,6 +18,8 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
+import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
 import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
@@ -40,7 +43,15 @@ export function buildWorktreePurgeState(
   const fullTargets = targets.filter((target) => !target.hostId || !twinIds.has(target.id))
   let patch = fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets) : {}
   for (const [hostId, twinHostIds] of twinScopes) {
-    patch = { ...patch, ...buildHostTwinPurgeState({ ...s, ...patch }, hostId, twinHostIds) }
+    const twinPatch = buildHostTwinPurgeState({ ...s, ...patch }, hostId, twinHostIds)
+    patch = {
+      ...patch,
+      ...twinPatch,
+      editorBufferKeepRequest: mergeEditorBufferKeepRequests(
+        patch.editorBufferKeepRequest,
+        twinPatch.editorBufferKeepRequest
+      )
+    }
   }
   // Why both hosts: a paired runtime's copy writes recency and delete state under either identity.
   const hostKeys = [
@@ -69,6 +80,7 @@ export function buildFullWorktreePurgeState(
   normalizedTargets: readonly WorktreePurgeTarget[]
 ): Partial<AppState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
+  forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
   const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(worktreeIdSet)
   for (const worktreeId of worktreeIdSet) {
@@ -90,6 +102,7 @@ export function buildFullWorktreePurgeState(
   forgetAmbiguousOwnerWarnings(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
+  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, worktreeIdSet, doomed)
   const {
     omitByWorktree,
@@ -129,6 +142,7 @@ export function buildFullWorktreePurgeState(
   }
 
   return {
+    editorBufferKeepRequest,
     ...removeWorktreeLayout(s, {
       worktreeIds: worktreeIdSet,
       tabIds: doomed.doomedTabIds,

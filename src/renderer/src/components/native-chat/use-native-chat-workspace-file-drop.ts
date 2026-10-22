@@ -20,17 +20,23 @@ import {
   type NativeChatResolvedPathOptions
 } from './native-chat-resolved-path-ownership'
 
+export type NativeChatResolvedPathSink = (
+  paths: string[],
+  connectionId?: string | null,
+  options?: NativeChatResolvedPathOptions
+) => void
+
 type WorkspaceFileDropHandlers = {
   onDragOverCapture: DragEventHandler<HTMLDivElement>
-  onDropCapture: DragEventHandler<HTMLDivElement>
+  /** `attachTo`: a destination inside the pane that takes this drop instead of the composer. */
+  onDropCapture: (
+    event: React.DragEvent<HTMLDivElement>,
+    attachTo?: NativeChatResolvedPathSink
+  ) => void
 }
 
 type Args = {
-  attachResolvedPaths: (
-    paths: string[],
-    connectionId?: string | null,
-    options?: NativeChatResolvedPathOptions
-  ) => void
+  attachResolvedPaths: NativeChatResolvedPathSink
   disabled: boolean
   setNotice: (notice: string | null) => void
   structuredWorktreeId?: string
@@ -89,8 +95,8 @@ export function useNativeChatWorkspaceFileDrop({
     [disabled]
   )
 
-  const onDropCapture = useCallback<DragEventHandler<HTMLDivElement>>(
-    (event) => {
+  const onDropCapture = useCallback<WorkspaceFileDropHandlers['onDropCapture']>(
+    (event, attachTo) => {
       if (!hasWorkspaceFileDragType(event.dataTransfer)) {
         return
       }
@@ -155,11 +161,10 @@ export function useNativeChatWorkspaceFileDrop({
       }
 
       const targetHost = parseExecutionHostId(targetExecutionHostId)
-      attachResolvedPaths(
-        dragPaths.paths,
-        targetHost?.kind === 'ssh' ? targetHost.targetId : undefined,
-        { targetOwnerIsCurrent }
-      )
+      const attach = attachTo ?? attachResolvedPaths
+      attach(dragPaths.paths, targetHost?.kind === 'ssh' ? targetHost.targetId : undefined, {
+        targetOwnerIsCurrent
+      })
     },
     [attachResolvedPaths, disabled, setNotice, structuredWorktreeId, terminalTabId]
   )

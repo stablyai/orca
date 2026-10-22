@@ -14,6 +14,7 @@ import {
 } from './rich-markdown-search'
 import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
 import { useRichMarkdownSearchHighlights } from './useRichMarkdownSearchHighlights'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useRichMarkdownSearch({
   editor,
@@ -318,8 +319,8 @@ export function useRichMarkdownSearch({
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [closeSearch, isSearchOpen, keybindings, openReplace, openSearch, rootRef])
 
   return {

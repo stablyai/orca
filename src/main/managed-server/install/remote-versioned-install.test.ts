@@ -134,8 +134,9 @@ describe('isRemoteInstallComplete', () => {
     await isRemoteInstallComplete(conn, ORCAD_INSTALL_MODEL, '/r', host)
     const cmd = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(ORCAD_INSTALL_MODEL.requiredArtifacts(host).length).toBeGreaterThan(0)
+    expect(cmd).toContain("cd '/r'")
     for (const artifact of ORCAD_INSTALL_MODEL.requiredArtifacts(host)) {
-      expect(cmd).toContain(`/r/${artifact}`)
+      expect(cmd).toContain(`test -f '${artifact}'`)
     }
     expect(cmd).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
   })

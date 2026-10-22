@@ -234,7 +234,7 @@ describe('orcad migration terminal restore hints through the store', () => {
     stageBlob(store, input, encodedHints())
     expect(await commitDurably(store, input)).toBe('committed')
 
-    store.removeProjectForHost(REPOSITORY.id, 'local')
+    store.removeProjectForHost({ id: REPOSITORY.id, executionHostId: 'local' })
     expect(peek(store, PANE, DORMANT_WORKTREE_ID)).toBeNull()
     expect(peek(store, OTHER_PANE, FOLDER_KEY)).toBe('/srv/app')
 

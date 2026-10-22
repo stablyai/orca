@@ -137,7 +137,6 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
   return {
     ...PANE_GRID,
     cwd,
-    cwdFallback: 'worktree',
     env: {
       ...request.agentEnv,
       ORCA_WORKSPACE_ID: worktreeId,

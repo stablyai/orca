@@ -24,7 +24,8 @@ vi.mock('child_process', () => ({
   spawnSync: spawnSyncMock
 }))
 
-import { getExecutableAppArgs, launchOrcaApp, serveOrcaApp, stripElectronRunAsNode } from './launch'
+import { launchOrcaApp, serveOrcaApp } from './launch'
+import { getExecutableAppArgs, stripElectronRunAsNode } from './orca-app-executable'
 
 class FakeChildProcess extends EventEmitter {
   stdout = new EventEmitter()

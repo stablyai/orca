@@ -59,6 +59,7 @@ describe('a cwd scope is the sidebar key, or anything below it', () => {
     ['/work/app-other', '/work/app', false],
     ['/work/a_b/src', '/work/a_b', true],
     ['/work/axb/src', '/work/a_b', false],
+    ['/work/lone\ud800/src', '/work/lone\ud800', true],
     // Roots: `/` is the one key that is already a separator, which is where a
     // range bound is easiest to get wrong. A Windows key is not under POSIX `/`.
     ['/', '/', true],
@@ -143,5 +144,13 @@ it('plans a cwd scope as a seek on sessions_cwd_key, never a scan', async () => 
 
   expect(plan.join(' | ')).toContain('sessions_cwd_key')
   expect(plan.some((detail) => detail.startsWith('SEARCH'))).toBe(true)
-  expect(plan.some((detail) => detail.startsWith('SCAN sessions'))).toBe(false)
+  expect(plan.some((detail) => /^SCAN (sessions|scoped)\b/.test(detail))).toBe(false)
+})
+
+it('matches under a thousand-plus scopes, past where an OR chain exceeds SQLite expression depth', async () => {
+  const db = await openIndex()
+  addSession(db, 1, '/lanes/lane-1199/src')
+  addSession(db, 2, '/elsewhere')
+  const scopePaths = Array.from({ length: 1_200 }, (_, index) => `/lanes/lane-${index}`)
+  expect(selected(db, { scopePaths })).toEqual([1])
 })

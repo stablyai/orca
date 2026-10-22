@@ -10,7 +10,6 @@ import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
 export type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
@@ -68,8 +67,7 @@ export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
   onActivePaneChange?: (pane: ManagedPane) => void
-  // Why: 'gesture' lets persistence tell a user's layout edit apart from automatic updates.
-  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
+  onLayoutChanged?: () => void
   /** Why: Electron webviews can steal pointer streams from renderer-owned
    *  pane drags unless callers temporarily put them in pointer passthrough. */
   onPaneDragActiveChange?: (active: boolean) => void

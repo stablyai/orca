@@ -24,6 +24,13 @@ export function agentSessionVisibleFailureFacts(
   return facts
 }
 
+function sameInstallation(
+  a: { installedVersion: string | null; minimumVersion: string } | undefined,
+  b: { installedVersion: string | null; minimumVersion: string } | undefined
+): boolean {
+  return a?.installedVersion === b?.installedVersion && a?.minimumVersion === b?.minimumVersion
+}
+
 /** Whether two facts are one failure: a start's row and the messages it rejected share one. */
 export function sameAgentSessionFailureFact(
   a: AgentSessionFailureFact,
@@ -38,10 +45,14 @@ export function sameAgentSessionFailureFact(
     a.refusal?.details?.reason === b.refusal?.details?.reason &&
     (a.refusal?.code !== 'agent_session_operation_invalid' ||
       b.refusal?.code !== 'agent_session_operation_invalid' ||
-      (a.refusal.details?.codexInstallation?.installedVersion ===
-        b.refusal.details?.codexInstallation?.installedVersion &&
-        a.refusal.details?.codexInstallation?.minimumVersion ===
-          b.refusal.details?.codexInstallation?.minimumVersion)) &&
+      (sameInstallation(
+        a.refusal.details?.agentInstallation,
+        b.refusal.details?.agentInstallation
+      ) &&
+        sameInstallation(
+          a.refusal.details?.codexInstallation,
+          b.refusal.details?.codexInstallation
+        ))) &&
     a.attachment?.reason === b.attachment?.reason &&
     a.attachment?.limit === b.attachment?.limit &&
     a.retry?.error === b.retry?.error &&

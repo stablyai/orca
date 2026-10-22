@@ -1,5 +1,4 @@
-// Resolves a tab to its Agent Session History row, so the tab menu offers the same "Resume in New
-// Native Chat" / "Resume in New CLI" move the row menu does, under the row menu's gating.
+// Resolves a tab to its Agent Session History row so both menus offer the same surface switches.
 
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
@@ -43,6 +42,7 @@ import { resolveAiVaultHostScopeDefaults } from '../right-sidebar/ai-vault-host-
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault-session-refresh'
 import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch-plan'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 
 /** What a tab's history row is found by: a native chat tab by the chat it shows, a terminal tab by
@@ -194,8 +194,8 @@ export function resolveTabSessionSwitch(
   subject: TabSessionHistorySubject
 ): TabSessionSwitch | null {
   const worktrees = aiVaultSessionOwnerWorkspaces(
-    getIndexedAllWorktrees(state.worktreesByRepo),
-    state.folderWorkspaces
+    getIndexedAllWorktrees(selectWorktreesByRepo(state)),
+    selectFolderWorkspaces(state)
   )
   const { resumeState, resumeInChat } = resolveAiVaultHistoryRowResume({
     session,
