@@ -8,5 +8,6 @@ export const WSL_HOSTS_INTERNAL_GATE_ENV = 'ORCA_INTERNAL_WSL_HOSTS'
 export function isWslHostsInternalGateOpen(
   env: Readonly<Record<string, string | undefined>>
 ): boolean {
-  return env[WSL_HOSTS_INTERNAL_GATE_ENV] === '1'
+  // Internal build only (never merge): gate defaults open; '0' still closes it.
+  return env[WSL_HOSTS_INTERNAL_GATE_ENV] !== '0'
 }
