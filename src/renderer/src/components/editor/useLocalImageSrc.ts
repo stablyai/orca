@@ -39,6 +39,8 @@ export function getLocalImageCacheKey(
     runtimeContext?.expectedExternalSshTargetId ?? '',
     runtimeContext?.worktreeId ?? 'unknown-worktree',
     runtimeContext?.worktreePath ?? '',
+    runtimeContext?.nativeChatContext?.tabId ?? '',
+    runtimeContext?.nativeChatContext?.sessionId ?? '',
     // Why: an image read under one access kind must never answer a request made under another.
     access?.kind ?? 'roots',
     access?.kind === 'document-resource' ? access.documentPath : '',

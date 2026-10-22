@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../shared/runtime-file-contracts'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 
@@ -28,6 +29,7 @@ export type RuntimeFileReadArgs = {
 }
 
 export type RuntimeFileOperationArgs = {
+  nativeChatContext?: RuntimeNativeChatFileContext
   /** The worktree owner's transport; never the focused server. */
   target: RuntimeClientTarget
   worktreeId: string | null | undefined

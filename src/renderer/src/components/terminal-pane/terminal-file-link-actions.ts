@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-file-contracts'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import {
@@ -23,6 +24,7 @@ import { canOpenLinkInSourceGroup } from '@/store/slices/editor/tabs/editor-open
 export type TerminalFileLinkActionDeps = {
   worktreeId: string
   worktreePath: string
+  nativeChatContext?: RuntimeNativeChatFileContext
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */

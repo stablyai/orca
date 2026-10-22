@@ -24,7 +24,13 @@ export function NativeChatMarkdownImageOwnerProvider({
   const fileLinkContext = useNativeChatFileLinkContext(tabId)
   const runtimeContext = useNativeChatImageRuntimeContext(tabId)
   const value = useMemo(
-    () => ({ fileLinkContext, runtimeContext, isVisible }),
+    () => ({
+      fileLinkContext,
+      runtimeContext: runtimeContext
+        ? { ...runtimeContext, nativeChatContext: fileLinkContext?.nativeChatContext }
+        : null,
+      isVisible
+    }),
     [fileLinkContext, runtimeContext, isVisible]
   )
   return (

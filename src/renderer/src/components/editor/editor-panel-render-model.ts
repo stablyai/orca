@@ -212,7 +212,7 @@ export function getEditorPanelRenderModel({
       viewerLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
     canShowMarkdownPreview: canOpenMarkdownPreview({
-      language: viewerLanguage,
+      language: activeFile.terminalArtifactGrantId ? resolvedLanguage : viewerLanguage,
       mode: activeFile.mode,
       diffSource: activeFile.diffSource
     })

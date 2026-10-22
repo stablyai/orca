@@ -1,3 +1,5 @@
+import { openDetectedFilePath } from './terminal-file-open-routing'
+import { readLocalImagePreview } from '../editor/local-image-src-reader'
 import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -117,5 +119,110 @@ describe('a paired-server terminal path outside its workspace', () => {
 
     expect(await provideLinks()).toEqual([])
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+  })
+})
+
+describe('remote Chat artifacts outside the workspace', () => {
+  const nativeChatContext = { tabId: 'tab-1', sessionId: 'session-1' }
+
+  it('opens an assistant-linked file with the host grant and Chat provenance', async () => {
+    hostGrants()
+    openDetectedFilePath(IMAGE, null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/srv/repo',
+      runtimeEnvironmentId: 'env-1',
+      nativeChatContext
+    })
+    await flushDoubleRaf()
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.resolveTerminalPath',
+        params: { worktree: 'id:wt-1', pathText: IMAGE, crossWorkspace: true, nativeChatContext }
+      })
+    )
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: IMAGE,
+        readOnly: true,
+        terminalArtifactGrantId: 'g-1',
+        runtimeEnvironmentId: 'env-1'
+      }),
+      { forceContentReload: true }
+    )
+    expect(statMock).not.toHaveBeenCalled()
+  })
+
+  it('reads an SVG through its host-issued preview grant', async () => {
+    const path = '/outside/flow.svg'
+    runtimeEnvironmentCallMock.mockImplementation(async (request) => ({
+      id: 'rpc-1',
+      ok: true,
+      _meta: { runtimeId: 'remote-runtime' },
+      result:
+        request.method === 'files.resolveTerminalPath'
+          ? {
+              worktree: 'wt-1',
+              relativePath: null,
+              absolutePath: path,
+              exists: true,
+              isDirectory: false,
+              openTarget: {
+                kind: 'absolute-file',
+                provider: 'local',
+                absolutePath: path,
+                grantId: 'svg-grant'
+              }
+            }
+          : { content: 'PHN2Zy8+', isBinary: true, isImage: true, mimeType: 'image/svg+xml' }
+    }))
+    const result = await readLocalImagePreview(
+      path,
+      undefined,
+      {
+        target: { kind: 'environment', environmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/srv/repo',
+        nativeChatContext
+      },
+      { kind: 'chat-image' }
+    )
+    expect(result).toMatchObject({ content: 'PHN2Zy8+', mimeType: 'image/svg+xml', isBinary: true })
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.readTerminalArtifactPreview',
+        params: { worktree: 'id:wt-1', absolutePath: path, grantId: 'svg-grant' }
+      })
+    )
+    expect(statMock).not.toHaveBeenCalled()
+  })
+
+  it('never reads a client-local image when the host refuses the Chat provenance', async () => {
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      _meta: { runtimeId: 'remote-runtime' },
+      result: {
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: IMAGE,
+        exists: false,
+        isDirectory: false
+      }
+    })
+    await expect(
+      readLocalImagePreview(
+        IMAGE,
+        undefined,
+        {
+          target: { kind: 'environment', environmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/srv/repo',
+          nativeChatContext
+        },
+        { kind: 'chat-image' }
+      )
+    ).rejects.toThrow('outside every workspace')
+    expect(statMock).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledTimes(1)
   })
 })

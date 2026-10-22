@@ -53,6 +53,7 @@ export function nativeChatFileOpenDeps(
     worktreePath: context.worktreePath,
     runtimeEnvironmentId: context.runtimeEnvironmentId,
     sourceTabId: context.sourceTabId,
+    nativeChatContext: context.nativeChatContext,
     onOpenFailure: (failure) =>
       failure.verdict === 'unverifiable'
         ? showFileLinkUnverifiableToast(target.absolutePath, failure.error)

@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-file-contracts'
 import { openWorkspaceFile } from '@/lib/workspace-file-open'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
@@ -48,6 +49,7 @@ export type FileOpenFailure = {
 type TerminalFileOpenDeps = {
   worktreeId: string
   worktreePath: string
+  nativeChatContext?: RuntimeNativeChatFileContext
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
   openWithSystemDefault?: boolean
@@ -144,7 +146,8 @@ export function openDetectedFilePath(
       const linkOwner = await resolveHostWorkspaceFile(
         fileContext,
         mappedFilePath,
-        deps.terminalHandle
+        deps.terminalHandle,
+        deps.nativeChatContext
       )
       if (linkOwner?.kind === 'grant') {
         hostGrantId = linkOwner.grantId

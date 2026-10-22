@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../../shared/runtime-file-contracts'
 import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
 import {
   parseExplicitFileLinkTarget,
@@ -11,6 +12,7 @@ import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
 export type NativeChatFileLinkContext = {
   worktreeId: string
   worktreePath: string
+  nativeChatContext?: RuntimeNativeChatFileContext
   runtimeEnvironmentId: string | null
   /** The chat's own tab (terminal or agent-session); editor opens place beside its group. */
   sourceTabId?: string

@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { NativeChatFileSessionContext } from './native-chat-file-session-context'
 import { useAppStore } from '../../store'
 import { createNativeChatFileLinkContextSelector } from './native-chat-file-link'
 
@@ -8,5 +9,10 @@ export function useNativeChatFileLinkContext(terminalTabId: string) {
     () => createNativeChatFileLinkContextSelector(terminalTabId),
     [terminalTabId]
   )
-  return useAppStore(useShallow(selectContext))
+  const context = useAppStore(useShallow(selectContext))
+  const nativeChatContext = useContext(NativeChatFileSessionContext)
+  return useMemo(
+    () => (context ? { ...context, ...(nativeChatContext ? { nativeChatContext } : {}) } : null),
+    [context, nativeChatContext]
+  )
 }

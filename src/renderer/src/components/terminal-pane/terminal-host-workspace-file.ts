@@ -11,6 +11,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY,
+  type RuntimeNativeChatFileContext,
   type RuntimeTerminalPathResolution
 } from '../../../../shared/runtime-file-contracts'
 
@@ -89,7 +90,8 @@ async function statClientLocalFile(
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  terminalHandle?: string | null
+  terminalHandle?: string | null,
+  nativeChatContext?: RuntimeNativeChatFileContext
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
@@ -106,6 +108,7 @@ export async function resolveHostWorkspaceFile(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       pathText: absolutePath,
       crossWorkspace: true,
+      ...(nativeChatContext ? { nativeChatContext } : {}),
       // Why: the host grants a file outside its workspaces only to the terminal that printed it.
       ...(terminalHandle ? { terminal: terminalHandle } : {})
     },
@@ -125,7 +128,7 @@ export async function resolveHostWorkspaceFile(
         isDirectory: false
       }
     }
-    if (resolved.exists) {
+    if (resolved.exists || nativeChatContext) {
       // Why: an ungranted host path (a directory, or one no terminal printed) is still the host's.
       throw refusal
     }

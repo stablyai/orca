@@ -271,3 +271,16 @@ describe('virtual Markdown preview PDF export', () => {
     }
   })
 })
+
+it('offers a Markdown preview for a granted artifact without enabling rich editing', () => {
+  const model = renderModel({
+    activeFile: markdownFile({ readOnly: true, terminalArtifactGrantId: 'grant-1' })
+  })
+  expect(model.canShowMarkdownPreview).toBe(true)
+  expect(model.inlineMarkdownRenderState).toBeNull()
+  expect(model.mdViewMode).toBe('source')
+  expect(
+    renderModel({ activeFile: markdownFile({ readOnly: true, liveTail: true }) })
+      .canShowMarkdownPreview
+  ).toBe(false)
+})
