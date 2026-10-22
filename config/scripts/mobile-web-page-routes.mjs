@@ -73,6 +73,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.stop'
     ],
     // Optional media.name preserves attachment on older shells by falling back to filename derived from type.
-    optionalGrants: ['externalNavigation', 'native.media.name']
+    // Optional font.read: an older shell lacks it and the terminal keeps its default stack.
+    optionalGrants: ['externalNavigation', 'native.media.name', 'native.font.read']
   }
 ]

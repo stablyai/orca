@@ -1,25 +1,24 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as DocumentPicker from 'expo-document-picker'
 import { Directory, File, Paths } from 'expo-file-system'
+import { encodeBase64 } from '../mobile-web-shell/bridge/bridge-screencast-encoder'
 import type { TerminalCustomFont } from '../terminal/document/terminal-font'
+import { persistMirrored } from './mirrored-storage-keys'
+import {
+  TERMINAL_FONT_FILE_NAME_PATTERN,
+  TERMINAL_FONT_KEY,
+  TERMINAL_FONT_MIME_BY_EXTENSION,
+  terminalFontExtension,
+  type TerminalFontPreference
+} from './terminal-font-preference'
+
+export { loadTerminalFont, type TerminalFontPreference } from './terminal-font-preference'
 
 export const TERMINAL_FONT_IMPORT_SUPPORTED = true
 
-const TERMINAL_FONT_KEY = 'orca:terminalFont'
 const FONT_DIRECTORY_NAME = 'terminal-fonts'
 
-// Why a ceiling: every terminal pane receives the whole file over the WebView bridge.
+// Why a ceiling: the page pulls the whole file across the bridge, and every pane renders it.
 export const MAX_TERMINAL_FONT_BYTES = 10 * 1024 * 1024
-
-const FONT_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
-  ttf: 'font/ttf',
-  otf: 'font/otf',
-  woff: 'font/woff',
-  woff2: 'font/woff2'
-}
-
-/** The imported font as stored: the name the user picked and the copy this app owns. */
-export type TerminalFontPreference = { name: string; fileName: string }
 
 export type TerminalFontImportResult =
   | { status: 'imported'; font: TerminalFontPreference }
@@ -27,44 +26,15 @@ export type TerminalFontImportResult =
   | { status: 'unsupported' }
   | { status: 'too-large' }
 
-function fontExtension(name: string): string | null {
-  const extension = name.split('.').pop()?.toLowerCase() ?? ''
-  return extension in FONT_MIME_BY_EXTENSION ? extension : null
-}
-
 function fontDirectory(): Directory {
   return new Directory(Paths.document, FONT_DIRECTORY_NAME)
-}
-
-export async function loadTerminalFont(): Promise<TerminalFontPreference | null> {
-  try {
-    const raw = await AsyncStorage.getItem(TERMINAL_FONT_KEY)
-    if (raw === null) {
-      return null
-    }
-    const parsed: unknown = JSON.parse(raw)
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'name' in parsed &&
-      'fileName' in parsed &&
-      typeof parsed.name === 'string' &&
-      typeof parsed.fileName === 'string' &&
-      fontExtension(parsed.fileName)
-    ) {
-      return { name: parsed.name, fileName: parsed.fileName }
-    }
-    return null
-  } catch {
-    return null
-  }
 }
 
 /** The stored font as the terminal document takes it; null when the file is gone or unreadable. */
 export async function readTerminalFontSource(
   font: TerminalFontPreference
 ): Promise<TerminalCustomFont> {
-  const extension = fontExtension(font.fileName)
+  const extension = terminalFontExtension(font.fileName)
   if (!extension) {
     return null
   }
@@ -74,9 +44,30 @@ export async function readTerminalFontSource(
       return null
     }
     const base64 = await file.base64()
-    return { source: `data:${FONT_MIME_BY_EXTENSION[extension]};base64,${base64}` }
+    return { source: `data:${TERMINAL_FONT_MIME_BY_EXTENSION[extension]};base64,${base64}` }
   } catch {
     return null
+  }
+}
+
+/** One range of a stored font for `native.font.read`, base64 for the wire. */
+export function readTerminalFontChunk(
+  fileName: string,
+  offset: number,
+  length: number
+): { size: number; base64: string } {
+  if (!TERMINAL_FONT_FILE_NAME_PATTERN.test(fileName)) {
+    throw new Error('not a terminal font this app stored')
+  }
+  const handle = new File(fontDirectory(), fileName).open()
+  try {
+    const size = handle.size ?? 0
+    handle.offset = Math.min(offset, size)
+    const bytes =
+      offset < size ? handle.readBytes(Math.min(length, size - offset)) : new Uint8Array()
+    return { size, base64: encodeBase64(bytes) }
+  } finally {
+    handle.close()
   }
 }
 
@@ -92,7 +83,7 @@ export async function importTerminalFont(): Promise<TerminalFontImportResult> {
   }
   const staged = new File(asset.uri)
   try {
-    const extension = fontExtension(asset.name)
+    const extension = terminalFontExtension(asset.name)
     if (!extension) {
       return { status: 'unsupported' }
     }
@@ -105,7 +96,8 @@ export async function importTerminalFont(): Promise<TerminalFontImportResult> {
     const fileName = `font-${Date.now()}.${extension}`
     staged.copy(new File(directory, fileName))
     const font = { name: asset.name.replace(/\.[^.]+$/, ''), fileName }
-    await AsyncStorage.setItem(TERMINAL_FONT_KEY, JSON.stringify(font))
+    // Mirrored: the page's next `init` carries the choice synchronously.
+    await persistMirrored(TERMINAL_FONT_KEY, JSON.stringify(font))
     deleteFontFilesExcept(fileName)
     return { status: 'imported', font }
   } finally {
@@ -116,7 +108,7 @@ export async function importTerminalFont(): Promise<TerminalFontImportResult> {
 }
 
 export async function clearTerminalFont(): Promise<void> {
-  await AsyncStorage.removeItem(TERMINAL_FONT_KEY)
+  await persistMirrored(TERMINAL_FONT_KEY, null)
   deleteFontFilesExcept(null)
 }
 

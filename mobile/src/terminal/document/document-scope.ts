@@ -63,8 +63,8 @@ export type TerminalDocumentState = {
   handledMessageIds: number[]
   currentTextScale: number
   terminalFontFamily: string
-  // The imported face this document added; a bumped request drops a slower, older load.
-  customFontFace: FontFace | null
+  // The imported font this document renders with; a bumped request drops a slower, older load.
+  customFontSource: string | null
   customFontRequest: number
   firstDataPending: boolean
   reportedCellBox: TerminalLaidOutCellBox | null
@@ -182,7 +182,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
-    customFontFace: null,
+    customFontSource: null,
     customFontRequest: 0,
     firstDataPending: false,
     reportedCellBox: null,
