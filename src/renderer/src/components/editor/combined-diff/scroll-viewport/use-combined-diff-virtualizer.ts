@@ -2,6 +2,7 @@ import { useLayoutEffect } from 'react'
 import type React from 'react'
 import { elementScroll, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import type { DiffSection } from '../../diff-section-types'
 import { getDiffSectionRowEstimatedHeight } from '../../diff-section-layout'
 import { getCombinedDiffRenderRange } from './combined-diff-render-range'
@@ -37,6 +38,8 @@ export function useCombinedDiffVirtualizer({
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize,
+    // Why: a hidden worktree reports every mounted row as 0px; keep the visible sizes so the anchor survives re-show.
+    measureElement: measureVirtualRowRetainingHiddenSize,
     // Offscreen Monaco sections render their full height; bound that work by pixels, too.
     rangeExtractor: (range) =>
       getCombinedDiffRenderRange(

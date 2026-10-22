@@ -40,7 +40,7 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   const firstNewline = text.indexOf('\n')
   if (firstNewline !== -1) {
     const firstLine = text.slice(0, firstNewline)
-    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.…]+$/.test(firstLine.trim())) {
+    if (/^(generating|thinking)\b/i.test(firstLine) || /^[.\u2026]+$/.test(firstLine.trim())) {
       text = text.slice(firstNewline + 1).trim()
     }
   }
@@ -54,7 +54,7 @@ export function cleanGeneratedCommitMessage(raw: string): string {
 
   // Why: some CLIs format a one-shot answer as a list item even when the
   // prompt asks for raw text; a Git subject should not carry that marker.
-  text = text.replace(/^(\s*)(?:[-*•●]\s+|\d+[.)]\s+)/, '$1').trim()
+  text = text.replace(/^(\s*)(?:[-*\u2022\u25CF]\s+|\d+[.)]\s+)/, '$1').trim()
 
   return text
 }

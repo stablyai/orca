@@ -31,7 +31,7 @@ import {
   readBridgeWindowCaps,
   readBrowserFrameQuality,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 

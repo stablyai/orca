@@ -26,6 +26,7 @@ import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat
 import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
+import { runAsAutomaticDeselection } from '../active-worktree-deselection-intent'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -271,10 +272,17 @@ export function createTerminalTabCloseActions(
           (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
         )
         if (workspaceItem) {
-          get().closeUnifiedTab(workspaceItem.id, {
-            recordInteraction: opts?.recordInteraction,
-            terminalRetirementHandled: true
-          })
+          const closeUnifiedTab = (): void => {
+            get().closeUnifiedTab(workspaceItem.id, {
+              recordInteraction: opts?.recordInteraction,
+              terminalRetirementHandled: true
+            })
+          }
+          if (closeReason === 'pty-exit') {
+            runAsAutomaticDeselection(closeUnifiedTab)
+          } else {
+            closeUnifiedTab()
+          }
         }
       }
     }

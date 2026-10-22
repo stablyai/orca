@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { makeRepo } from '../../persistence-test-harness'
 import type { Store } from '../loading-store/store'
 import {
@@ -45,7 +46,8 @@ afterEach(closeMoveTestStores)
 function detach(
   store: Store,
   ptyId: string | null,
-  hostIds: ExecutionHostId[] = ['local']
+  hostIds: ExecutionHostId[] = ['local'],
+  startupCwd?: string
 ): ReturnType<Store['applyLayoutCommand']> {
   return store.applyLayoutCommand(
     {
@@ -53,7 +55,7 @@ function detach(
       workspace: WT,
       tabId: SOURCE,
       leafId: MOVED,
-      windowDetach: { ptyId, tabId: TARGET }
+      windowDetach: { ptyId, tabId: TARGET, ...(startupCwd ? { startupCwd } : {}) }
     },
     hostIds
   )
@@ -147,6 +149,12 @@ describe('a window drag-out through layout.apply', () => {
       incarnationId: 'inc-1'
     })
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main holds every pane the window shows, so a one-pane copy is the tab's last pane (L127).
+      await expect(detach(store, 'pty-agent')).resolves.toEqual({ ok: false, code: 'last_pane' })
+      expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([SOURCE])
+      return
+    }
     await expect(detach(store, 'pty-agent')).resolves.toMatchObject({ ok: true })
 
     const session = store.getWorkspaceSession()
@@ -165,10 +173,43 @@ describe('a window drag-out through layout.apply', () => {
     expect(tabsHoldingLeaf(store.getWorkspaceSession(), LEFT)).toEqual([SOURCE])
   })
 
+  it('starts an unbound pane’s new tab in the folder the window sent', async () => {
+    const store = openStore(newDataFile())
+    await seedSplitSource(store)
+    const seeded = store.getWorkspaceSession()
+    store.setWorkspaceSession({
+      ...seeded,
+      terminalLayoutsByTabId: {
+        [SOURCE]: {
+          ...seeded.terminalLayoutsByTabId[SOURCE]!,
+          ptyIdsByLeafId: { [LEFT]: 'pty-left' }
+        }
+      }
+    })
+
+    await expect(detach(store, null, ['local'], '/wt/app')).resolves.toMatchObject({
+      ok: true,
+      result: { tabId: TARGET, ptyId: null }
+    })
+
+    const target = store.getWorkspaceSession().tabsByWorktree[WT]?.find((tab) => tab.id === TARGET)
+    expect(target?.startupCwd).toBe('/wt/app')
+  })
+
   it('refuses a terminal no copy names, and a leaf another tab holds', async () => {
     const store = openStore(newDataFile())
     await seedSplitSource(store)
-    await expect(detach(store, 'pty-other')).resolves.toEqual({ ok: false, code: 'pty_mismatch' })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main's binding names the moved terminal; the window's claim is not consulted (L127).
+      const claimed = openStore(newDataFile())
+      await seedSplitSource(claimed)
+      await expect(detach(claimed, 'pty-other')).resolves.toEqual({
+        ok: true,
+        result: { tabId: TARGET, ptyId: 'pty-agent' }
+      })
+    } else {
+      await expect(detach(store, 'pty-other')).resolves.toEqual({ ok: false, code: 'pty_mismatch' })
+    }
     const session = store.getWorkspaceSession()
     store.setWorkspaceSession({
       ...session,

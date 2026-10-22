@@ -6,7 +6,7 @@ import {
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
 import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
-import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
+import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import {
   clearSelfWrite,
   getRecentSelfWrite,
@@ -162,7 +162,7 @@ export function scheduleEditorChangedOnDiskMark(
     })
 }
 
-// Per-file generation so a newer echo-verify read supersedes an older one — overlapping reads can't clear each other's autosave gate or apply a stale verdict.
+// Per-file generation so a newer echo-verify read supersedes an older one — an overlapping read can't apply a stale verdict.
 const liveMoveVerifyGeneration = new Map<string, number>()
 let liveMoveVerifyCounter = 0
 
@@ -174,10 +174,10 @@ type LiveMoveVerifyCandidate = {
   operationId?: string
 }
 
-// Fails closed: anything but a proven baseline match surfaces the conflict, so a real external write is never swallowed.
+// Fails closed: `false` (anything but a proven match) surfaces the conflict; `null` (unread, on a resync) proves nothing.
 function resolveLiveMoveVerification(
   candidate: LiveMoveVerifyCandidate,
-  diskSignature: string | null,
+  matchesDisk: boolean | null,
   connectionId: string | undefined,
   consumeProvenance: boolean
 ): void {
@@ -187,7 +187,6 @@ function resolveLiveMoveVerification(
   }
   liveMoveVerifyGeneration.delete(fileId)
   const state = useAppStore.getState()
-  state.setPendingLiveDiskVerification(fileId, false)
   const file = state.openFiles.find((candidateFile) => candidateFile.id === fileId)
   if (
     !file ||
@@ -202,8 +201,7 @@ function resolveLiveMoveVerification(
   if (consumeProvenance) {
     state.clearSelfMoveEcho(fileId)
   }
-  const isMoveEcho = baseline !== undefined && diskSignature === baseline
-  if (!isMoveEcho) {
+  if (matchesDisk === false) {
     markFileChangedOnDisk(state, file, { connectionId, origin: 'live' })
   }
 }
@@ -228,11 +226,12 @@ export function verifyLatchedEditorMoveDestinations(
   )
 }
 
-// Autosave is suspended synchronously first so a write landing mid-read can't be overwritten before verification settles.
+/** `resync`: a watch reconnect check, where a failed read leaves the tab to its guarded save. */
 export function scheduleEditorSelfMoveEchoVerification(
   target: EditorExternalWatchTarget,
   fileIds: string[],
-  consumeProvenance: boolean
+  consumeProvenance: boolean,
+  resync = false
 ): void {
   if (fileIds.length === 0) {
     return
@@ -245,7 +244,6 @@ export function scheduleEditorSelfMoveEchoVerification(
     }
     const generation = ++liveMoveVerifyCounter
     liveMoveVerifyGeneration.set(fileId, generation)
-    state.setPendingLiveDiskVerification(fileId, true)
     const candidate: LiveMoveVerifyCandidate = {
       fileId,
       baseline: file.lastKnownDiskSignature,
@@ -262,16 +260,22 @@ export function scheduleEditorSelfMoveEchoVerification(
       expectedExternalSshTargetId: file.externalSshTargetId
     })
       .then((result) => {
-        const diskSignature = result.isBinary ? null : getDiskBaselineSignature(result.content)
+        const matchesDisk =
+          !result.isBinary &&
+          ((candidate.baseline !== undefined &&
+            getDiskBaselineSignature(result.content) === candidate.baseline) ||
+            // Why: the tab's own save can land before it rebaselines; that is not an external change.
+            getRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)?.content ===
+              result.content)
+        resolveLiveMoveVerification(candidate, matchesDisk, target.connectionId, consumeProvenance)
+      })
+      .catch(() =>
         resolveLiveMoveVerification(
           candidate,
-          diskSignature,
+          resync ? null : false,
           target.connectionId,
           consumeProvenance
         )
-      })
-      .catch(() =>
-        resolveLiveMoveVerification(candidate, null, target.connectionId, consumeProvenance)
       )
   }
 }

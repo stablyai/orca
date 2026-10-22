@@ -17,6 +17,7 @@ import {
 import { gitExecFileAsync } from '../git/runner'
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export type RuntimeProvisionedRootRequest = ProvisionedRootRequest & { expectedPath: string }
 
@@ -58,7 +59,7 @@ export async function adoptRuntimeProvisionedRoot(
   })
   const worktreeId = `${repo.id}::${gitWorktree.path}`
   ports.store.setWorktreeMeta(
-    worktreeId,
+    hostWorktreeTargetForRepo(worktreeId, repo),
     buildProvisionedRootMeta(ports.store, repo, request, {
       branchName: gitWorktree.branch.replace(/^refs\/heads\//, ''),
       now: Date.now(),

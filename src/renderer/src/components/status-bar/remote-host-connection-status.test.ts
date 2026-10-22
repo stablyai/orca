@@ -21,6 +21,11 @@ describe('blocked runtime hosts', () => {
 
   it('words each refusal for what the user must do', () => {
     expect(runtimeHostBlockedCopy('access-revoked').label).toBe('Access revoked')
+    expect(runtimeHostBlockedCopy('access-revoked').explanation).toMatch(/new pairing link/)
+    expect(runtimeHostBlockedCopy('access-revoked', undefined, 'ssh').explanation).toMatch(/SSH/)
+    // WSL and cloud VMs never re-pair over SSH, so they are not told they tried.
+    const onConnect = runtimeHostBlockedCopy('access-revoked', undefined, 'connect').explanation
+    expect(onConnect).toBe('Connect to try again.')
     const update = runtimeHostBlockedCopy('incompatible', {
       kind: 'blocked',
       reason: 'server-too-old',

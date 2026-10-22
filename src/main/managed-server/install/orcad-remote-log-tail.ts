@@ -46,7 +46,7 @@ export function parseOrcadLogTail(host: RemoteHostPlatform, output: string): str
   return tail.trim() ? tail : null
 }
 
-export async function readOrcadLogTail(
+async function readOrcadLogTail(
   target: OrcadRemoteExecTarget,
   slotDir: string
 ): Promise<string | null> {

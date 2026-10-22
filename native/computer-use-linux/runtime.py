@@ -18,9 +18,14 @@ import time
 import uuid
 from dataclasses import dataclass
 
-import gi
+try:
+    import gi
 
-gi.require_version("Atspi", "2.0")
+    gi.require_version("Atspi", "2.0")
+except (ImportError, ValueError) as error:
+    # Why name it: PATH often puts a pyenv/Nix python3 without gi ahead of the system one.
+    sys.stderr.write(f"PyGObject unavailable in interpreter: {sys.executable}\n{error}\n")
+    sys.exit(1)
 try:
     gi.require_version("Gdk", "3.0")
     gi.require_version("GdkPixbuf", "2.0")

@@ -11,7 +11,7 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 // The page lays out edge-to-edge under the shell's system bars and pads through its own
 // SafeAreaViews, and its root for the sides, by the insets `init` carries. Measured in a real browser because what is under

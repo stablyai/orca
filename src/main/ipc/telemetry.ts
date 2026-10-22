@@ -36,7 +36,8 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'ssh_host_server_conversion',
   'ssh_host_server_deploy_failed',
   'ssh_host_server_move',
-  'ssh_host_server_legacy_relay_bridge'
+  'ssh_host_server_legacy_relay_bridge',
+  'wsl_usage_snapshot'
 ])
 
 /**

@@ -203,11 +203,13 @@ export function PastedAddressForm(props: {
 }
 
 /** One host's chat sign-in as both Settings layouts show it. `signedOut` is the line for a host
- *  that answered it is not signed in. */
+ *  that answered it is not signed in; `unanswered` stands in while it has nothing else to say, as a
+ *  host learns its sign-in only when a chat starts or asks to sign in. */
 export function useAntigravityChatSignInControls(props: {
   owner: RuntimeClientTarget
   label: string
   signedOut: string
+  unanswered?: string
   disabled: boolean
 }) {
   const { owner, label } = props
@@ -235,7 +237,11 @@ export function useAntigravityChatSignInControls(props: {
     /** The browser's link, while this client's sign-in waits on it. */
     url: ownFlow && flow?.phase === 'waiting' ? (flow.url ?? null) : null,
     line:
-      status === 'known' ? chatSignInLine(flow, auth, openFailed, label, props.signedOut) : null,
+      status === 'known'
+        ? (chatSignInLine(flow, auth, openFailed, label, props.signedOut) ??
+          props.unanswered ??
+          null)
+        : null,
     alert:
       error ??
       (status === 'readFailed' ? readFailed : null) ??

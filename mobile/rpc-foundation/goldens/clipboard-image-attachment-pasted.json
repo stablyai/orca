@@ -4,7 +4,14 @@
   "family": "clipboard.image-attachment",
   "namedDeltas": [],
   "values": {
-    "080f28c67e30": {
+    "08a3a6323626": {
+      "name": "before-terminal-send",
+      "ordinal": 8,
+      "value": {
+        "terminal": "terminal-1"
+      }
+    },
+    "349431e2edcd": {
       "name": "terminal.send#1",
       "ordinal": 9,
       "args": [
@@ -21,7 +28,7 @@
             },
             "enter": false,
             "terminal": "terminal-1",
-            "text": "\u001b[200~@/tmp/img.png\u001b[201~ "
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ "
           }
         },
         {
@@ -46,12 +53,10 @@
         }
       }
     },
-    "08a3a6323626": {
-      "name": "before-terminal-send",
-      "ordinal": 8,
-      "value": {
-        "terminal": "terminal-1"
-      }
+    "5af5db426de7": {
+      "name": "terminal.send#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/img.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "6696a47819e1": {
       "name": "clipboard.startImageUpload#1",
@@ -152,11 +157,6 @@
         "$rpc": "null"
       }
     },
-    "e61d3d3476df": {
-      "name": "terminal.send#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/img.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
     "f05e4695ffa3": {
       "name": "clipboard.appendImageUploadChunk#1",
       "ordinal": 4,
@@ -200,8 +200,8 @@
       {
         "id": "attached",
         "observation": {
-          "sender": ["7c2e3ea286aa", "f05e4695ffa3", "b50d2ec23283", "080f28c67e30"],
-          "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a", "e61d3d3476df"],
+          "sender": ["7c2e3ea286aa", "f05e4695ffa3", "b50d2ec23283", "349431e2edcd"],
+          "payloads": ["6696a47819e1", "814ccd56a769", "8452698ac11a", "5af5db426de7"],
           "settlements": {
             "normal": "84e5ca07cb7a"
           },

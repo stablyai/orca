@@ -150,7 +150,9 @@ export async function resolveHostFlagEnvironmentId(
     )
   }
   if (selection.environmentSelector) {
-    const selected = resolveEnvironment(userDataPath, selection.environmentSelector.value)
+    const { value } = selection.environmentSelector
+    const selected =
+      findEnvironmentByName(environments, value) ?? resolveEnvironment(userDataPath, value)
     if (selected.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -314,11 +316,12 @@ function assertEnvironmentNameUnambiguous(
 // Why: the inverse of the --host case. `--environment openclaw` failed with a bare "Unknown
 // environment", when openclaw is very often an SSH target — a different axis, not a typo. The
 // store's own error cannot carry the hint (translateStoreError forwards code and message only,
-// dropping data), so resolve the selector here where the payload survives.
-export async function assertEnvironmentSelectorResolvable(
+// dropping data), so resolve the selector here where the payload survives. Returns what the store
+// resolves to the same server: the store matches names exactly, so a loose match leaves as the id.
+export async function resolveEnvironmentSelectorForStore(
   selector: string,
   listSshTargetsForSuggestion: () => Promise<SshTargetSummary[]>
-): Promise<void> {
+): Promise<string> {
   const [{ listEnvironments }, { getDefaultUserDataPath }] = await Promise.all([
     import('./runtime/environments.js'),
     import('./runtime-client.js')
@@ -327,8 +330,9 @@ export async function assertEnvironmentSelectorResolvable(
     id: candidate.id,
     name: candidate.name
   }))
-  if (findEnvironmentByName(environments, selector)) {
-    return
+  const found = findEnvironmentByName(environments, selector)
+  if (found) {
+    return found.id === selector || found.name === selector ? selector : found.id
   }
   assertEnvironmentNameUnambiguous(environments, selector, `--environment ${selector}`)
   const sshTargets = await listSshTargetsForSuggestion()

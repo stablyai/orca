@@ -11,6 +11,8 @@ import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-chi
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { prepareAcpStructuredLaunch } from '../acp/acp-structured-launch-preparation'
 import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import { AcpScriptedAgent, deferred } from '../acp/acp-scripted-agent.test-support'
@@ -84,6 +86,7 @@ async function signInAgainst(
     configure?: (connection: AcpAgentConnection) => void
     stream?: 'stdout' | 'stderr'
     metaCwd?: string
+    sessionResult?: Record<string, unknown>
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
@@ -105,7 +108,7 @@ async function signInAgainst(
       await mkdir(join(folder, 'antigravity-acp', 'conversations'), { recursive: true })
       await writeFile(sessionFile(folder, '.db'), '')
       await writeFile(sessionFile(folder, '.meta'), JSON.stringify({ cwd: options.metaCwd ?? cwd }))
-      agent.reply(frame, { sessionId: SESSION })
+      agent.reply(frame, { ...options.sessionResult, sessionId: SESSION })
     })
   })
   const child = fakeServer(agent, stderr)
@@ -225,6 +228,44 @@ it("shows the helper's link, reads signed in only once a session starts, then re
     error: 'Google sign-in for Antigravity failed. Start sign-in again.'
   })
   expect(frames).toHaveLength(seen)
+})
+
+it("saves the checking session's models as the chats' catalog, for the first chat's picker", async () => {
+  // The model option from a recorded Antigravity 1.3.0 `session/new`.
+  const { folder, flowId, finishBrowser, openSession } = await signInAgainst(
+    () => helperOutput(GOOGLE_LINK),
+    {
+      sessionResult: {
+        configOptions: [
+          {
+            id: 'model',
+            name: 'Model',
+            category: 'model',
+            type: 'select',
+            currentValue: 'gemini-3.8-flash-high',
+            options: [
+              { value: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)' },
+              { value: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)' }
+            ]
+          }
+        ]
+      }
+    }
+  )
+  expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
+  finishBrowser()
+  expect(await stateAfter(flowId, 'waiting')).toEqual({ flowId, phase: 'verifying' })
+  openSession()
+  expect(await stateAfter(flowId, 'verifying')).toEqual({ flowId, phase: 'signedIn' })
+  const fingerprint = agentModelCatalogFingerprint({
+    agent: 'antigravity',
+    accountHome: { variable: 'GEMINI_HOME', path: folder },
+    wslDistro: null
+  })
+  expect(agentModelCatalogStore.get(fingerprint)?.live?.models.map((model) => model.id)).toEqual([
+    'gemini-3.8-flash-high',
+    'gemini-3.8-flash-low'
+  ])
 })
 
 it('shows another client the sign-in without its link, and refuses it every action', async () => {

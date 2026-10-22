@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
 import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
-import { queuedMessageWithEditedText } from '../../../src/shared/queued-message-text-edit'
+import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -18,6 +18,14 @@ import {
   queuedDraft,
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
+
+function withText(body: AgentSessionQueuedMessage['body'], text: string) {
+  const edited = queuedMessageWithEdit(body, { text })
+  if (!edited.ok) {
+    throw new Error(edited.reason)
+  }
+  return edited.body
+}
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
@@ -158,7 +166,7 @@ describe('mobile in-place queued Edit', () => {
       expectedBodyFingerprint: acquire.expectedBodyFingerprint
     })
     expect(fieldsOf(update?.[1])).not.toHaveProperty('body')
-    const body = queuedMessageWithEditedText(message.body, 'edited')!
+    const body = withText(message.body, 'edited')
     act(() => listener?.(batchEvent([{ ...message, body }])))
     expect(hook!.queued.cards).toMatchObject([{ messageId: 'image-card', text: 'edited' }])
     expect(body.blocks).toContainEqual({ type: 'image-ref', path: '/images/snapshot.png' })
@@ -182,7 +190,7 @@ describe('mobile in-place queued Edit', () => {
   it('hands a stale Save to the composer and reopens on the newer text; keeps an unconfirmed one', async () => {
     const message = queuedDraft({ messageId: 'draft-1' })
     await mount(message)
-    const newer = queuedMessageWithEditedText(message.body, 'edited elsewhere')!
+    const newer = withText(message.body, 'edited elsewhere')
     sendRequest.mockImplementation(async (method) => {
       if (method !== 'agentSession.queuedMessageUpdate') {
         return ok({ status: 'held' })
@@ -200,7 +208,7 @@ describe('mobile in-place queued Edit', () => {
     )
     expect(hook!.queued.editor).toMatchObject({ messageId: 'draft-1', text: 'edited elsewhere' })
     act(() => hook!.queued.editor!.change('saved text'))
-    const body = queuedMessageWithEditedText(message.body, 'saved text')!
+    const body = withText(message.body, 'saved text')
     sendRequest.mockImplementation(async (method) => {
       if (method === 'agentSession.queuedMessageUpdate') {
         listener?.(batchEvent([{ ...message, body }]))

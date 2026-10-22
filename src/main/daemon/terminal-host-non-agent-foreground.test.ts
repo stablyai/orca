@@ -42,10 +42,12 @@ async function inspect(rawName: string, command: string | null) {
   readSnapshot.mockResolvedValue({ rows: table(command), capturedAgeMs: 0 })
   return inspectTerminalHostProcess({
     sessionId: 'busy-tab',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This unmarked-foreground fixture supplies the members inspection exercises; daemon lifecycle is outside this test.
     session: {
       pid: 100,
       incarnationId: 'incarnation-1',
       isAlive: true,
+      inspectChildProcesses: () => 'unverifiable' as const,
       getForegroundProcess: () => rawName
     } as unknown as Session,
     authorityGeneration: 'generation-1',

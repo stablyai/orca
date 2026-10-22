@@ -1,4 +1,5 @@
 import { DESKTOP_AWAY_SECONDS } from '../../../shared/desktop-away-threshold'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 // The one record of user presence, from trusted renderer input only: the on-screen scan's gate
 // and the marking guard both read it. Main's "not away" only answers the scan that asked — it
@@ -74,13 +75,13 @@ export function subscribeAutoAckPresenceSignals(
   window.addEventListener('pointermove', input)
   window.addEventListener('wheel', input, { passive: true })
   // Why capture: xterm stops the keydowns it handles before they bubble to the window.
-  window.addEventListener('keydown', input, { capture: true })
+  addAppKeyListener('keydown', input)
   return () => {
     document.removeEventListener('visibilitychange', onRescan)
     window.removeEventListener('focus', onRescan)
     window.removeEventListener('pointerdown', input)
     window.removeEventListener('pointermove', input)
     window.removeEventListener('wheel', input)
-    window.removeEventListener('keydown', input, { capture: true })
+    removeAppKeyListener('keydown', input)
   }
 }

@@ -1,9 +1,5 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
-import type {
-  RuntimeMobileMarkdownRequest,
-  RuntimeMobileMarkdownResponse
-} from '../../shared/mobile-markdown-document'
 import {
   richMarkdownContextMenuCommandChannel,
   richMarkdownContextMenuTargetChannel,
@@ -40,17 +36,6 @@ export const uiClipboardAndWindowControlsApi = {
     ) => callback(data)
     ipcRenderer.on('ui:openDiffFromMobile', listener)
     return () => ipcRenderer.removeListener('ui:openDiffFromMobile', listener)
-  },
-  onMobileMarkdownRequest: (
-    callback: (request: RuntimeMobileMarkdownRequest) => void
-  ): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, request: RuntimeMobileMarkdownRequest) =>
-      callback(request)
-    ipcRenderer.on('ui:mobileMarkdownRequest', listener)
-    return () => ipcRenderer.removeListener('ui:mobileMarkdownRequest', listener)
-  },
-  respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse): void => {
-    ipcRenderer.send('ui:mobileMarkdownResponse', response)
   },
   onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, target: TerminalSurfaceCloseTarget) =>
@@ -104,6 +89,8 @@ export const uiClipboardAndWindowControlsApi = {
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
     /** A native-chat composer paste, kept where its draft can bring it back. */
     forNativeChatDraft?: boolean
+    /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
+    forStructuredChat?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
@@ -111,6 +98,12 @@ export const uiClipboardAndWindowControlsApi = {
     paths: string[]
   ): Promise<{ path: string; kept: boolean; exists: boolean }[]> =>
     ipcRenderer.invoke('clipboard:restoreNativeChatPastes', paths),
+  onAgentSessionUploadRemoved: (callback: (uploadDir: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, uploadDir: string): void =>
+      callback(uploadDir)
+    ipcRenderer.on('app:agentSessionUploadRemoved', listener)
+    return () => ipcRenderer.removeListener('app:agentSessionUploadRemoved', listener)
+  },
   readClipboardImageThumbnail: (): Promise<ClipboardImageThumbnail | null> =>
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
   writeClipboardText: (text: string): Promise<void> =>

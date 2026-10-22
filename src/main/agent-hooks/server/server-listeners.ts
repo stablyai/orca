@@ -1,3 +1,4 @@
+import { cliWriterExecutionMatcher, type CliWriterExecutionMatches } from './cli-writer-observation'
 import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
@@ -28,6 +29,11 @@ import { ProgramStatusFacetStore } from './program-status/facet-store'
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
+
+  setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
+    this.cliWriterExecutionMatches = cliWriterExecutionMatcher(...args)
+  }
   // Why here: every publish below stitches from it, and all later layers manage its lifecycle.
   protected readonly programStatusFacets = new ProgramStatusFacetStore()
   /** Yielded OSC 7501 reports, re-offered when hook precedence lapses: programs never resend a state. */

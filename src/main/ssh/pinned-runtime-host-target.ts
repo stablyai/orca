@@ -10,7 +10,7 @@ import {
   type NodeRuntimeTarget,
   type ServerTarget
 } from '../../shared/node-runtime-pin'
-import type { GlibcVersion } from './orcad-deployment-target'
+import type { GlibcVersion } from '../node-runtime/linux-libc-probe'
 
 /** Official linux builds of the pinned Node need glibc 2.28. */
 export const PINNED_NODE_GLIBC_FLOOR: GlibcVersion = { major: 2, minor: 28 }

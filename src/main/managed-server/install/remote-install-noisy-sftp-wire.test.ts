@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { spawnProcess } from '@orca/process-host'
 import { SshConnection } from '../../ssh/connection/ssh-connection'
-import { uploadRelayDirectory, writeRelayFile } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
 type NoisyHost = { port: number; subsystems: number; execs: number; close: () => Promise<void> }
@@ -121,8 +121,8 @@ describe.skipIf(process.platform === 'win32')(
           const conn = connectionWithClient(client)
           const linux = getRemoteHostPlatform('linux-x64')
           const remoteDir = join(remoteRoot, 'relay')
-          await uploadRelayDirectory(conn, localDir, remoteDir, linux)
-          await writeRelayFile(conn, linux, join(remoteDir, '.version'), '0.1.0+noisy')
+          await uploadRemoteInstallDirectory(conn, localDir, remoteDir, linux)
+          await writeRemoteInstallFile(conn, linux, join(remoteDir, '.version'), '0.1.0+noisy')
 
           expect(await readFile(join(remoteDir, 'nested', 'payload.bin'))).toEqual(
             Buffer.from([0, 1, 2, 255])

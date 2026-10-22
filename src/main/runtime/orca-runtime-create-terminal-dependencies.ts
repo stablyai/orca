@@ -14,6 +14,7 @@ export { makePaneKey } from '../../shared/stable-pane-id'
 export { randomUUID } from 'node:crypto'
 export {
   admitStablePaneAdoption,
+  materializedStablePaneReply,
   allocateTerminalPaneIdentity
 } from './runtime-terminal-pane-identity'
 export {
@@ -32,7 +33,10 @@ export { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-que
 export type { RuntimePtyController } from './runtime-pty-controller-contract'
 export { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export { newTabIn } from './runtime-terminal-spawn-placement'
+import type { PaneStartArgs } from './runtime-pane-admission'
 export { spawnInAdmittedPane } from './runtime-pane-admission'
+/** Layout-owner build: what a create's spawn reports its start status to. */
+export type PaneStartArgsOf = (opts: TerminalCreateOptions) => PaneStartArgs
 export type { IpcMainEvent } from 'electron'
 
 // Why initiallyHidden: no renderer pane exists yet, so main must answer startup queries — Muse

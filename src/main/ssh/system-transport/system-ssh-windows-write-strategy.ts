@@ -37,9 +37,7 @@ export const WINDOWS_STDIN_WRITE_TIMEOUT_MS = 60_000
  */
 export const WINDOWS_STDIN_WRITE_CHUNK_BYTES = 32 * 1024
 
-export type WindowsWriteOptions = Parameters<
-  typeof getSystemSshBuildArgsFromOperationOptions
->[0] & {
+type WindowsWriteOptions = Parameters<typeof getSystemSshBuildArgsFromOperationOptions>[0] & {
   signal?: AbortSignal
   append?: boolean
   exclusive?: boolean

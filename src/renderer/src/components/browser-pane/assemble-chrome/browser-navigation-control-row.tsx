@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -15,7 +15,6 @@ import {
 export type BrowserNavigationControls = {
   canGoBack: boolean
   canGoForward: boolean
-  loading: boolean
   goBack: () => void
   goForward: () => void
   reload: () => void
@@ -35,6 +34,7 @@ export function BrowserNavigationControlRow({
   addressSlot,
   reloadControl,
   reloadLabel,
+  reloadShowsStop = false,
   showTourAnchors = true,
   rowRef,
   children
@@ -45,6 +45,8 @@ export function BrowserNavigationControlRow({
   reloadControl?: React.ReactNode
   /** Accessible name for the default reload button, which doubles as Stop and Retry. */
   reloadLabel?: string
+  /** Only when the default button's click stops the load, matching its Stop label. */
+  reloadShowsStop?: boolean
   /** Off for surfaces the browsing tour does not cover — a second anchor would steal its steps. */
   showTourAnchors?: boolean
   rowRef?: React.Ref<HTMLDivElement>
@@ -84,11 +86,7 @@ export function BrowserNavigationControlRow({
           onClick={controls.reload}
           aria-label={reloadLabel ?? translate('browser.navigation.reload', 'Reload')}
         >
-          {controls.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
+          {reloadShowsStop ? <X className="size-4" /> : <RefreshCw className="size-4" />}
         </Button>
       )}
 

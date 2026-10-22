@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { Store } from '../persistence'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -120,7 +121,7 @@ function createWorktree(
       refreshLocalBaseRefOnWorktreeCreate: false,
       branchPrefix: ''
     }),
-    setWorktreeMeta: (_id: string, updates: Partial<WorktreeMeta>) => {
+    setWorktreeMeta: (_target: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
       writtenMeta.push(updates)
       return updates
     },

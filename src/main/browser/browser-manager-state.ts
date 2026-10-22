@@ -1,5 +1,6 @@
 import { BrowserGrabSessionController } from './browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
+import type { BrowserSiteDisplayController } from './browser-site-display-controller'
 import {
   createPageInitiatedTabBudget,
   type PageInitiatedTabBudget
@@ -7,6 +8,7 @@ import {
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { BrowserLoadError } from '../../shared/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
+import type { BrowserPagePromptTarget } from './browser-page-prompts'
 import type {
   ActiveDownload,
   CdpUserAgentOverrideState,
@@ -152,6 +154,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
+  protected siteDisplayController: BrowserSiteDisplayController | null = null
   protected shouldForwardDictationShortcut: (() => boolean) | null = null
   protected readonly pendingLoadFailuresByGuestId = new Map<
     number,
@@ -173,6 +176,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   setCertificateTrustController(controller: BrowserCertificateTrustController): void {
     this.certificateTrustController = controller
+  }
+
+  setSiteDisplayController(controller: BrowserSiteDisplayController): void {
+    this.siteDisplayController = controller
   }
 
   installCertificateRequestGuard(session: Electron.Session): void {
@@ -214,6 +221,33 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
         /* guest may already be destroyed */
       }
     }
+  }
+
+  getRendererContextForGuest(
+    guestWebContentsId: number
+  ): { browserPageId: string; renderer: Electron.WebContents } | null {
+    const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (!browserPageId) {
+      return null
+    }
+    const renderer = this.resolveRendererForBrowserTab(browserPageId)
+    return renderer ? { browserPageId, renderer } : null
+  }
+
+  /** Where a prompt from this page or popup shows; null when it has no window on this machine. */
+  resolvePagePromptTarget(guest: Electron.WebContents): BrowserPagePromptTarget | null {
+    const context = this.getRendererContextForGuest(guest.id)
+    if (context) {
+      return context
+    }
+    // Why: a new tab's webview starts loading before its window registers it.
+    const awaitingRegistration =
+      this.policyAttachedGuestIds.has(guest.id) &&
+      !this.tabIdByWebContentsId.has(guest.id) &&
+      !this.popupOwnerContextByGuestId.has(guest.id) &&
+      !this.offscreenGuestIds.has(guest.id) &&
+      guest.getType() === 'webview'
+    return awaitingRegistration ? 'awaiting-registration' : null
   }
 
   protected resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {

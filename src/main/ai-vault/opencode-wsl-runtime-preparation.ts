@@ -9,7 +9,7 @@ import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { NODE_SQLITE_READER_API_SOURCE } from '../sqlite/node-sqlite-reader-api'
 import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
 import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
-import { parseOrcadLinuxLibc } from '../ssh/orcad-deployment-target'
+import { probeLinuxLibc } from '../node-runtime/linux-libc-probe'
 import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,
@@ -142,14 +142,7 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     if (arch !== 'x86_64' && arch !== 'aarch64' && arch !== 'arm64') {
       throw new Error(`Unsupported WSL SQLite reader architecture: ${arch}`)
     }
-    const libc = parseOrcadLinuxLibc(
-      await run({
-        script:
-          'getconf GNU_LIBC_VERSION 2>/dev/null || ldd --version 2>&1 || ' +
-          'for loader in /lib/ld-musl-*.so.1; do [ ! -e "$loader" ] || { echo musl; break; }; done',
-        loginPath: 'none'
-      })
-    )
+    const { libc } = await probeLinuxLibc((script) => run({ script, loginPath: 'none' }))
     const target = `linux-${arch === 'x86_64' ? 'x64' : 'arm64'}-${libc}` as const
     const home = await run({ script: 'printf %s "$HOME"', loginPath: 'none' })
     if (!home.startsWith('/')) {

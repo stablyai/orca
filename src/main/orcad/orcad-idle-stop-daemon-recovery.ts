@@ -11,7 +11,7 @@ import { ORCAD_DAEMON_RETIREMENT_TIMEOUT_MS } from './orcad-stop-deadlines'
 
 type RetirementOutcome = Pick<OrcadDaemonRetirement, 'retirement' | 'lateRetirement'>
 
-export type OrcadIdleStopDaemonRecoveryPorts = {
+type OrcadIdleStopDaemonRecoveryPorts = {
   admissionClosed: () => boolean
   /** Asks the daemon to retire again; its own census and fence make the verdict atomic. */
   retireAgain: () => Promise<RetirementOutcome>

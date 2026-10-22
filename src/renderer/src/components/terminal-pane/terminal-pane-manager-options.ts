@@ -85,7 +85,7 @@ export function createTerminalPaneManagerOptions(
         context.deps.updateTabTitle(tabId, paneTitle)
       }
     },
-    onLayoutChanged: (intent) => {
+    onLayoutChanged: () => {
       scheduleRuntimeGraphSync()
       context.deps.syncExpandedLayout()
       context.syncCanExpandState()
@@ -93,7 +93,7 @@ export function createTerminalPaneManagerOptions(
       context.syncPaneLayoutRevision()
       context.queueResizeAll(false)
       if (context.shouldPersistLayout()) {
-        context.deps.persistLayoutSnapshot(intent)
+        context.deps.persistLayoutSnapshot()
       }
     },
     onPaneDragActiveChange: (active) => {

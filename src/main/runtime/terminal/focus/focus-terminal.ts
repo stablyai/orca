@@ -7,8 +7,13 @@ import type {
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
 import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
+import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 
 export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {
+  protected abstract getPtyManualTitle(
+    ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
+  ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
+
   async focusTerminal(
     handle: string,
     options: { navigateHost?: boolean } = {}
@@ -80,7 +85,9 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
           const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
           const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
             ptyId: live.pty.ptyId,
-            title: getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
+            title:
+              this.getPtyManualTitle(live.pty, false) ??
+              getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
             ...(live.pty.launchConfig
               ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
               : {}),

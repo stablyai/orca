@@ -29,6 +29,7 @@ import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { disposeParkedTerminalWatchersForPtyIds } from './terminal-parked-watcher-registry'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
+import { restartPaneOwner } from './codex-restart-main-pane'
 
 const inFlightPtyIds = new Set<string>()
 
@@ -195,6 +196,12 @@ async function executeDetachedCodexPaneRestart(
     currentState.queuePaneAccountRestarts([ptyId], agent)
     return
   }
+  const paneOwner = restartPaneOwner(currentState, worktreeId, tab.id, leafId)
+  if (paneOwner === 'missing') {
+    // A pane main's layout lacks has no tab to start into; a graft would invent one (L197).
+    reopenCurrentCodexRestartPrompt(located, ptyId)
+    return
+  }
 
   // Hidden replacements converge on mount; provider sizing must not delay ownership transfer.
   // Main stops `ptyId` first and labels its exit as a replacement, so parked watchers and the
@@ -203,14 +210,14 @@ async function executeDetachedCodexPaneRestart(
     cols: 80,
     rows: 24,
     ...(cwd ? { cwd } : {}),
-    cwdFallback: 'worktree',
     ...startup,
     env: { ...startup.env, ...buildPaneIdentityEnv(state, worktreeId, tab.id, leafId) },
     worktreeId,
     tabId: tab.id,
     leafId,
     replacesPtyId: ptyId,
-    ...(restartReplacesLayoutRoot(currentState.terminalLayoutsByTabId[tab.id], leafId)
+    ...(paneOwner === 'window' &&
+    restartReplacesLayoutRoot(currentState.terminalLayoutsByTabId[tab.id], leafId)
       ? { placement: { kind: 'root' as const } }
       : {}),
     ...(tab.shellOverride ? { shellOverride: tab.shellOverride } : {}),
@@ -234,7 +241,9 @@ async function executeDetachedCodexPaneRestart(
     reapUnboundCodexPty(spawned.id, 'retired-tab spawn')
     return
   }
-  rebindCodexPaneLayoutLeaf(tab.id, leafId, spawned.id)
+  if (paneOwner === 'window') {
+    rebindCodexPaneLayoutLeaf(tab.id, leafId, spawned.id)
+  }
   // Why both ids: updateTabPtyId migrates the replaced pane's notice onto the
   // new PTY; the restart it recorded is now done, so the block must lift.
   store.clearCodexRestartNotice(spawned.id)

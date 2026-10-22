@@ -5,6 +5,7 @@
 // queued. None ran. After `started`, 2.1.280 sends only `cancelled`, when an interrupt or a hard
 // failure ends the turn (measured), so the send may be in the conversation: any end is doubt.
 // An unstarted send's `cancelled` lands before the Stop's answer, so it settles if that is lost.
+// `completed` with no `started` names a send its transcript already holds: doubt, never a verdict.
 
 import {
   agentSessionFailureFact,
@@ -63,6 +64,13 @@ export function observeClaudeCommandLifecycle(
       agentSessionFailureFact(UNSTARTED_VERDICT[state]),
       onSettledLate
     )
+  } else if (state === 'completed' && waiter.commandLifecycle !== 'started' && !waiter.retired) {
+    releaseClaudeDispatchWaitersInDoubt(
+      session,
+      [waiter],
+      DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
+      onSettledLate
+    )
   }
 }
 
@@ -80,9 +88,18 @@ export function claudeStartedUnechoedSend(session: ClaudeSession): ClaudeStarted
     : null
 }
 
+/** The sends the CLI holds: every waiter its echo, a lifecycle frame, idle or exit has not ended,
+ *  and each one a frame ended until the host is told, so no reader sees it held by neither. */
+export function claudeHeldSends(session: ClaudeSession): ReadonlySet<string> {
+  return new Set([
+    ...session.dispatchWaiters.flatMap((waiter) => waiter.clientMessageId ?? []),
+    ...(session.unreportedSettlements ?? [])
+  ])
+}
+
 /** A send the CLI took, until its echo, a terminal state or exit: the sweep must not rest its child. */
-export function claudeHoldsDispatch(session: ClaudeSession): boolean {
-  return session.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined)
+export function claudeHoldsDispatch(session: ClaudeSession | undefined): boolean {
+  return session?.dispatchWaiters.some((waiter) => waiter.commandLifecycle !== undefined) ?? false
 }
 
 /**

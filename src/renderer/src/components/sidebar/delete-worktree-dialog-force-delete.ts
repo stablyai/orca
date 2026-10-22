@@ -7,8 +7,8 @@ import {
 } from '../../../../shared/worktree/removal'
 import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-options'
 import type { RendererRemoveWorktreeResult } from '@/store/slices/renderer-remove-worktree-result'
-import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
+import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 
 /**
  * The dialog's explicit "Force Delete" retry.
@@ -27,6 +27,7 @@ export function runDialogForceDelete(args: {
   ) => Promise<({ ok: true } & RendererRemoveWorktreeResult) | { ok: false; error: string }>
   closeModal: () => void
   onDeleted: ((deleted: WorktreeRemovalTarget[]) => void) | null | undefined
+  confirmedDiscards: ConfirmedUnsavedDiscards
 }): void {
   const { worktreeId, currentWorktrees, removeWorktree, closeModal, onDeleted } = args
   // Why: this branch preserves the legacy "Force Delete" button behavior
@@ -44,11 +45,11 @@ export function runDialogForceDelete(args: {
     closeModal()
     return
   }
-  const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
   // Why (#11960): this IS the explicit Force Delete, so it may also waive
   // the PTY-stop proof — unlike the confirmed delete in the branch below.
   const deletePromise = removeWorktree(toWorktreeRemovalTarget(forceTarget), true, {
-    allowUnverifiedPtyStop: true
+    allowUnverifiedPtyStop: true,
+    confirmedDiscards: args.confirmedDiscards
   })
   closeModal()
   deletePromise
@@ -65,7 +66,6 @@ export function runDialogForceDelete(args: {
         )
         return
       }
-      commitFocus()
       onDeleted?.([toWorktreeRemovalTarget(forceTarget)])
     })
     .catch((err: unknown) => {

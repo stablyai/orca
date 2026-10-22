@@ -84,11 +84,6 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
-/** @internal - tests need a fresh mount read. */
-export function _resetGuestWindowsDriveMountsForTests(): void {
-  cachedGuestMounts = null
-}
-
 /** `pathEnv` (default: this process's PATH) without Windows drive dirs on a WSL guest; as given
  *  elsewhere. For launch-time CLI resolution, which must pick the Linux CLI as detection did. */
 export function guestNativePathEnv(

@@ -24,6 +24,7 @@ import {
   mockKnownFeatureWorktree,
   mockSelectedWslProjectRuntime
 } from './worktrees-test-fixtures'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -47,9 +48,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -260,7 +258,7 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => meta)
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -277,7 +275,7 @@ describe('registerWorktreeHandlers', () => {
     expect(calls.some((args) => args[0] === 'remote' && args[1] === 'add')).toBe(false)
     expect(calls.some((args) => args[0] === 'fetch')).toBe(false)
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      expect.any(String),
+      expect.objectContaining({ id: expect.any(String) }),
       expect.objectContaining({
         pushTarget: {
           remoteName: 'pr-contributor-orca',

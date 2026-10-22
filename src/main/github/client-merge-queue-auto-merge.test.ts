@@ -564,6 +564,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
         })
       })
     gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '/repo-root/.git\n' })
       .mockResolvedValueOnce({ stdout: '' })
       .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })

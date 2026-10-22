@@ -51,7 +51,7 @@ export function hostServerFailure(code: string | null): FailureCode {
     : 'other'
 }
 
-export type SshHostServerMoveOutcome = EventProps<'ssh_host_server_move'>['outcome']
+type SshHostServerMoveOutcome = EventProps<'ssh_host_server_move'>['outcome']
 
 export function trackSshHostServerMove(
   outcome: SshHostServerMoveOutcome,

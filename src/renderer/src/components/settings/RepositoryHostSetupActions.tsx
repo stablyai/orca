@@ -9,7 +9,7 @@ import type {
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { HostCombobox } from '../host-picker/HostCombobox'
 import type { SetupHostOption } from './repository-host-setup-options'
 import {
   HostSetupCloneStep,
@@ -217,28 +217,22 @@ export function RepositoryHostSetupActions({
         <Label className="text-xs font-medium text-muted-foreground">
           {translate('auto.components.settings.RepositoryPane.setupHostLabel', 'Host')}
         </Label>
-        <Select
-          value={setupTargetHostId ?? undefined}
-          onValueChange={(value) => setSelectedSetupHostId(value as ExecutionHostId)}
-        >
-          <SelectTrigger className="h-9 min-w-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {setupHostOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id} disabled={!option.isAvailable}>
-                <span className="min-w-0">
-                  <span className="block truncate">{option.label}</span>
-                  {!option.isAvailable || !option.canUsePathActions ? (
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {option.detail}
-                    </span>
-                  ) : null}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <HostCombobox
+          value={setupTargetHostId ?? ''}
+          onChange={(value) => {
+            const option = setupHostOptions.find((candidate) => candidate.id === value)
+            if (option) {
+              setSelectedSetupHostId(option.id)
+            }
+          }}
+          options={setupHostOptions.map((option) => ({
+            id: option.id,
+            label: option.label,
+            disabled: !option.isAvailable,
+            detail: !option.isAvailable || !option.canUsePathActions ? option.detail : undefined
+          }))}
+          className="min-w-0"
+        />
         {(!canUseSetupTargetHost || !canUsePathActions) && setupTargetHostOption ? (
           <p className="text-xs text-muted-foreground">{setupTargetHostOption.detail}</p>
         ) : null}

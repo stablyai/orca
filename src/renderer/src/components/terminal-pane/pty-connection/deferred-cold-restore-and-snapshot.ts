@@ -21,6 +21,7 @@ import { bindStartFreshSpawn } from './fresh-spawn-start'
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
 import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
 import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
+import { startPaneThroughMainThenAttach } from './main-pane-start-request'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -73,15 +74,16 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   session.spawnColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
     options: FreshSpawnOptions = {}
-  ): Promise<string | null> => {
-    session.applyColdRestoreAgentResumeStartup(startup)
-    const spawned = session.startFreshSpawn(startup, options)
-    // Switch point: main's layout shows this pane unbound while the start runs.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
-    }
-    return spawned
-  }
+  ): Promise<string | null> =>
+    startPaneThroughMainThenAttach(session, () => {
+      session.applyColdRestoreAgentResumeStartup(startup)
+      const spawned = session.startFreshSpawn(startup, options)
+      // Switch point: main's layout shows this pane unbound while the start runs.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
+      }
+      return spawned
+    })
   session.startFreshColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
     options: FreshSpawnOptions = {}

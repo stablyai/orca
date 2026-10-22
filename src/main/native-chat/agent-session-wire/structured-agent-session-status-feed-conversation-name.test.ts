@@ -10,6 +10,7 @@ import { agentSessionRecordFixture } from '../../../shared/agent-session-record.
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import type { StructuredChatNamingFailure } from './structured-agent-session-host-types'
 
 const journals = createTrackedJournalOpener()
 let directory: string
@@ -34,10 +35,12 @@ async function namedFeed() {
     now: () => 100
   })
   let record: AgentSessionRecord = agentSessionRecordFixture()
+  let failure: StructuredChatNamingFailure | undefined
   const sessions = new Map([['session', indexedStatusFeedSession({ journal })]])
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
     getRecord: () => record,
+    namingFailure: () => failure,
     now: () => 100,
     logger: createStructuredAgentSessionLogger()
   })
@@ -48,7 +51,15 @@ async function namedFeed() {
     record = { ...record, conversationName }
     feed.publishConversationName('session')
   }
-  return { feed, events, sessions, name }
+  const fail = (next: StructuredChatNamingFailure) => {
+    failure = next
+    feed.publishConversationName('session')
+  }
+  const sleep = (sleptAt: number | undefined) => {
+    record = { ...record, sleptAt }
+    feed.publishRecordNotes('session')
+  }
+  return { feed, events, sessions, name, fail, sleep }
 }
 
 function lastName(events: readonly AgentSessionStatusEvent[]): string | undefined {
@@ -64,7 +75,7 @@ it('publishes a held chat its saved name once, and not again for an unchanged re
   const count = events.length
   feed.publish('session')
   feed.publishConversationName('session')
-  expect(events).toHaveLength(count)
+  expect(events).toHaveLength(count + 1)
 })
 
 it('names a chat whose tab closed before naming finished, and keeps it for later subscribers', async () => {
@@ -88,9 +99,35 @@ it('keeps the name on the summary a closing chat retains', async () => {
   expect(lastName(events)).toBe('Explain the parser')
 })
 
-it('publishes nothing for a chat this host never projected', async () => {
+it('publishes naming activity without needing a chat summary', async () => {
   const { feed, events } = await namedFeed()
   const count = events.length
   feed.publishConversationName('unknown-session')
-  expect(events).toHaveLength(count)
+  expect(events).toHaveLength(count + 1)
+  expect(events.at(-1)).toEqual({ type: 'snapshot', sessions: [], namingActiveSessionIds: [] })
+})
+
+it('shows a closed chat its naming failure only while it keeps the name that failed', async () => {
+  const { feed, events, sessions, name, fail, sleep } = await namedFeed()
+  name('Explain the parser')
+  feed.revokeLive('session')
+  sessions.clear()
+  sleep(5)
+  expect(events.at(-1)).toMatchObject({ session: { sleptAt: 5 } })
+  fail({ message: 'Agent failed', failedAt: 5, forName: 'Explain the parser' })
+  expect(events.at(-1)).toMatchObject({
+    type: 'status',
+    session: {
+      conversationName: 'Explain the parser',
+      namingError: { message: 'Agent failed' },
+      sleptAt: 5
+    }
+  })
+  name('parser/explain')
+  expect(events.at(-1)).toMatchObject({ session: { conversationName: 'parser/explain' } })
+  expect(events.at(-1)).not.toHaveProperty('session.namingError')
+  expect(events.at(-1)).toMatchObject({ session: { sleptAt: 5 } })
+  sleep(undefined)
+  expect(events.at(-1)).not.toHaveProperty('session.sleptAt')
+  expect(lastName(events)).toBe('parser/explain')
 })

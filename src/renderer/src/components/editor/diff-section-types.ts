@@ -17,6 +17,8 @@ export type DiffSection = {
   loadOnDemand?: boolean
   error?: string
   dirty: boolean
+  /** A save was refused because disk changed since this section loaded. */
+  saveConflict?: true
   diffResult: GitDiffResult | null
   largeDiffRenderLimit: LargeDiffRenderLimit | null
   // Why: combined sections keep Monaco models by path; bump on reload so

@@ -133,10 +133,6 @@ export class CodexBackgroundTaskTracker {
     return this.publishedState
   }
 
-  canObserve(event: CodexBackgroundTaskEvent): boolean {
-    return this.commands.canObserve(event)
-  }
-
   /** `unapproved`: commands whose approval the journal dropped with this frame's turn ending. */
   observe(
     event: CodexBackgroundTaskEvent,

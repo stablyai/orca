@@ -15,6 +15,7 @@ import { hasUpstreamCandidateDivergence, hasDivergentSources } from '../../task-
 import IssueSourceIndicator from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 export function TaskPageGitHubFilters({
   model
 }: {
@@ -53,12 +54,16 @@ export function TaskPageGitHubFilters({
     githubTasksBusy
   } = model
   // Why: filter metadata for the primary slug is read from the host that owns the repo it came from.
-  const primaryGithubFilterRepoId =
-    perRepoSourceState.find((state) =>
-      activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
-    )?.repoId ?? null
+  const primaryGithubFilterSource = perRepoSourceState.find((state) =>
+    activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
+  )
+  const primaryGithubFilterRepoId = primaryGithubFilterSource?.repoId ?? null
+  // Why the host: a twin's two rows share the id, so only the source's row host names one.
+  const primaryGithubFilterHostId = primaryGithubFilterSource?.hostId ?? null
   const primaryGithubFilterTarget = useAppStore(
-    useShallow((s) => getGitHubRepoRoutingTarget(s, primaryGithubFilterRepoId, null))
+    useShallow((s) =>
+      getGitHubRepoRoutingTarget(s, primaryGithubFilterRepoId, null, primaryGithubFilterHostId)
+    )
   )
   return (
     // Why: top of the joined GitHub list card — pairs with the
@@ -211,14 +216,15 @@ export function TaskPageGitHubFilters({
         return (
           <div className="flex flex-wrap items-center gap-2">
             {rows.map((s) => {
-              const repo = selectedRepos.find((r) => r.id === s.repoId)
+              // Why the host: a twin's rows share the id (and maybe the path); each row has its own preference.
+              const repo = selectedRepos.find((r) => repoMatchesHostIdentity(r, s.repoId, s.hostId))
               const showRepoBadgeLabel = selectedRepos.length > 1 && repo
               const selectorRenderable = hasUpstreamCandidateDivergence(s)
               // Why: render the indicator standalone — it has its own chip styles, so nesting it in our chip would double-border it.
               if (!selectorRenderable && hasDivergentSources(s)) {
                 return (
                   <IssueSourceIndicator
-                    key={s.repoId}
+                    key={s.sourceKey}
                     issues={s.sources.issues}
                     prs={s.sources.prs}
                     localRepo={
@@ -237,7 +243,7 @@ export function TaskPageGitHubFilters({
               }
               // Why: <div> not <span> — the child selector renders a block <div> (div-in-span is invalid HTML); inline-flex class looks identical.
               return (
-                <div key={s.repoId} className={issueSourceChipClass}>
+                <div key={s.sourceKey} className={issueSourceChipClass}>
                   {showRepoBadgeLabel ? (
                     <RepoBadgeLabel
                       name={repo.displayName}
@@ -251,7 +257,7 @@ export function TaskPageGitHubFilters({
                     origin={s.sources.originCandidate}
                     upstream={s.sources.upstreamCandidate}
                     onChange={(next) => {
-                      void setIssueSourcePreference(repo.id, repo.path, next)
+                      void setIssueSourcePreference(repo.id, repo.path, next, s.hostId)
                     }}
                   />
                 </div>

@@ -10,6 +10,3 @@ export const RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS = 'w-[10.5rem] min-w-0 
 export const RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS = 'w-[11.5rem] min-w-0 max-w-full shrink'
 
 export const RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS = 'block min-w-0 truncate'
-
-// PR full-page and item-dialog asides share the same merge/state labels.
-export const REVIEW_ACTION_MERGE_BUTTON_CLASS = RIGHT_SIDEBAR_MERGE_PRIMARY_BUTTON_CLASS

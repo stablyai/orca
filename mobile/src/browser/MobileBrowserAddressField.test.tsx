@@ -7,6 +7,8 @@ import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 // Hoisted with the mock factory, which runs before every module-level const in this file.
 const platform = vi.hoisted(() => ({ OS: 'ios' }))
 
+vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
+
 vi.mock('react-native', () => ({
   Platform: platform,
   StyleSheet: {
@@ -26,6 +28,8 @@ function addressInput(os: string): Record<string, unknown> {
       createElement(MobileBrowserAddressField, {
         disabled: false,
         focused: false,
+        loading: false,
+        loadFailed: false,
         onBlur: () => {},
         onChangeText: () => {},
         onFocus: () => {},

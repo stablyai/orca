@@ -181,8 +181,13 @@ describe('a saved browser tab on a host with no window', () => {
       page: 'page-new'
     })
 
-    const saved = getSession().browserTabsByWorktree?.[TEST_WORKTREE_ID] ?? []
-    expect(saved.map((tab) => [tab.id, tab.url])).toEqual([['page-new', 'https://example.com/new']])
+    // A switch-on build saves the page once main's layout write lands.
+    await vi.waitFor(() => {
+      const saved = getSession().browserTabsByWorktree?.[TEST_WORKTREE_ID] ?? []
+      expect(saved.map((tab) => [tab.id, tab.url])).toEqual([
+        ['page-new', 'https://example.com/new']
+      ])
+    })
     // Which tab shows is a view's choice; opening one records none.
     expect(getSession().activeBrowserTabIdByWorktree?.[TEST_WORKTREE_ID]).toBeUndefined()
   })
@@ -328,6 +333,20 @@ describe('a saved browser tab on a host with no window', () => {
 
     expect(switched.browserPageId).toBe('page-2')
     expect(createTab).toHaveBeenCalledWith(expect.objectContaining({ browserPageId: 'page-2' }))
+  })
+
+  // A paired desktop probes a handle-less tab with tabShow; that must wake this page, not a new one.
+  it('starts the named saved page once for a tab show after a restart', async () => {
+    const { runtime, createTab } = restartedServe()
+
+    const shown = await runtime.browserTabShow({
+      worktree: `id:${TEST_WORKTREE_ID}`,
+      page: 'page-1'
+    })
+
+    expect(shown.tab.browserPageId).toBe('page-1')
+    expect(createTab).toHaveBeenCalledTimes(1)
+    expect(createTab).toHaveBeenCalledWith(expect.objectContaining({ browserPageId: 'page-1' }))
   })
 
   it('is found by page alone in a workspace that holds only browser tabs', async () => {

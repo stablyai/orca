@@ -11,7 +11,7 @@ import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
 // OpenSSH internally converts `ProxyJump bastion` to
 // `ProxyCommand ssh -W %h:%p bastion`. We do the same so that ssh2
 // gets a single proxy spawn path regardless of how the tunnel was configured.
-export type EffectiveProxy =
+type EffectiveProxy =
   | { kind: 'proxy-command'; command: string }
   | { kind: 'jump-host'; jumpHost: string }
 

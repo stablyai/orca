@@ -25,11 +25,19 @@ vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/store', () => ({
-  useAppStore: (
-    selector: (state: { settings: undefined; editorFontZoomLevel: number }) => unknown
-  ) => selector({ settings: undefined, editorFontZoomLevel: 0 })
-}))
+vi.mock('@/store', () => {
+  const state = {
+    settings: undefined,
+    editorFontZoomLevel: 0,
+    editorBufferIdOf: {},
+    editorBufferViews: {}
+  }
+  return {
+    useAppStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+      getState: () => state
+    })
+  }
+})
 vi.mock('@/hooks/use-document-dark-theme', () => ({ useDocumentDarkTheme: () => true }))
 vi.mock('./MonacoCodeExcerpt', () => ({ useMonacoColorizedLines: () => [] }))
 vi.mock('./editor-shortcuts', () => ({ installMonacoEditorFindShortcut: () => () => {} }))

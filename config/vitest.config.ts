@@ -1,22 +1,41 @@
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { defaultExclude, defineConfig } from 'vitest/config'
 import { UNIT_INCLUDE, UNIT_EXCLUDE } from './scripts/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
 import RuntimeSequencer from './scripts/vitest-runtime-sequencer.mjs'
-import { NODE_RUNTIME_INCLUDE } from './scripts/vitest-node-runtime-files.mjs'
+import { getNodeRuntimeInclude } from './scripts/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
 
+const nodeRuntimeInclude = process.versions.bun ? getNodeRuntimeInclude() : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
 const paletteMeasurementFile =
   'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
 const measurementFiles = [measurementFile, paletteMeasurementFile]
 const transforms = {
+  plugins: [
+    {
+      // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
+      name: 'locale-catalog-test-assets',
+      enforce: 'pre' as const,
+      load(id: string) {
+        if (/\/i18n\/locales\/[a-z]+\.json\?url$/.test(id)) {
+          const catalog = readFileSync(id.slice(0, -4)).toString('base64')
+          return `export default ${JSON.stringify(`data:application/json;base64,${catalog}`)}`
+        }
+        return null
+      }
+    }
+  ],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true',
     // Why: tests only interpolate it; they must not depend on the checkout's HEAD.
-    ORCA_BUILD_COMMIT: JSON.stringify('0'.repeat(40))
+    ORCA_BUILD_COMMIT: JSON.stringify('0'.repeat(40)),
+    // A dark switch set to 'main' in the env (`ORCA_LAYOUT_OWNER=main pnpm vitest`) is on in tests.
+    ...createRequire(import.meta.url)('./dark-build-switches.cjs').turnedOnDarkBuildDefines()
   },
   resolve: {
     alias: [
@@ -61,7 +80,7 @@ const nodeProject = {
     ...testOptions,
     name: process.versions.bun ? 'node-runtime' : 'node',
     env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
-    include: process.versions.bun ? NODE_RUNTIME_INCLUDE : UNIT_INCLUDE,
+    include: process.versions.bun ? nodeRuntimeInclude : UNIT_INCLUDE,
     exclude: [...testOptions.exclude, ...measurementFiles],
     sequence: { groupOrder: 1 },
     ...(process.versions.bun
@@ -77,7 +96,7 @@ const bunProject = {
     name: 'bun',
     env: { ORCA_VITEST_RUNTIME: 'bun' },
     pool: 'forks',
-    exclude: [...testOptions.exclude, ...NODE_RUNTIME_INCLUDE, ...measurementFiles],
+    exclude: [...testOptions.exclude, ...nodeRuntimeInclude, ...measurementFiles],
     sequence: { groupOrder: 1 }
   }
 }

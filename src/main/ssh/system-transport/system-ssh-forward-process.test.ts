@@ -1,18 +1,28 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-const { existsSyncMock, spawnMock, connectMock, createServerMock, stopOrphanMock } = vi.hoisted(
-  () => ({
-    existsSyncMock: vi.fn(),
-    spawnMock: vi.fn(),
-    connectMock: vi.fn(),
-    createServerMock: vi.fn(),
-    stopOrphanMock: vi.fn()
-  })
-)
+const {
+  existsSyncMock,
+  spawnMock,
+  connectMock,
+  createServerMock,
+  stopOrphanMock,
+  cancelMuxedMock
+} = vi.hoisted(() => ({
+  existsSyncMock: vi.fn(),
+  spawnMock: vi.fn(),
+  connectMock: vi.fn(),
+  createServerMock: vi.fn(),
+  stopOrphanMock: vi.fn(),
+  cancelMuxedMock: vi.fn()
+}))
 
 vi.mock('./system-ssh-orphaned-forward', () => ({
   stopOrphanedOrcaSshForward: stopOrphanMock
+}))
+
+vi.mock('./system-ssh-muxed-forward-cancel', () => ({
+  cancelMuxedLocalForward: cancelMuxedMock
 }))
 
 vi.mock('fs', async (importOriginal) => {
@@ -122,6 +132,7 @@ describe('system SSH forward process', () => {
     connectMock.mockReset()
     createServerMock.mockReset().mockImplementation(createFakeServer)
     stopOrphanMock.mockReset().mockResolvedValue(false)
+    cancelMuxedMock.mockReset().mockResolvedValue(false)
     mockSystemSshExists()
   })
 
@@ -139,7 +150,7 @@ describe('system SSH forward process', () => {
     const forwardFlagIdx = args.indexOf('-N')
     const localForwardIdx = args.indexOf('-L')
     const exitOnForwardFailureIdx = args.indexOf('ExitOnForwardFailure=no')
-    const standaloneControlIdx = args.indexOf('-S')
+    const controlPathIdx = args.indexOf('-S')
 
     expect(terminatorIdx).toBeGreaterThan(-1)
     expect(forwardFlagIdx).toBeGreaterThan(-1)
@@ -151,7 +162,8 @@ describe('system SSH forward process', () => {
     expect(args[exitOnForwardFailureIdx - 1]).toBe('-o')
     expect(exitOnForwardFailureIdx).toBeLessThan(terminatorIdx)
     expect(args).not.toContain('ExitOnForwardFailure=yes')
-    expect(standaloneControlIdx).toBe(-1)
+    expect(args[controlPathIdx + 1]).toBe('none')
+    expect(controlPathIdx).toBeLessThan(terminatorIdx)
     expectNoOrcaControlMasterArgs(args)
     expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
     expect(args[terminatorIdx + 1]).toBe('fdpass-host')
@@ -172,7 +184,7 @@ describe('system SSH forward process', () => {
     expect(built).toContain('LogLevel=INFO')
   })
 
-  it('suppresses Orca mux flags for port forwards without disabling ssh_config muxing', () => {
+  it('runs port forwards unmultiplexed even when ssh_config disables muxing', () => {
     spawnMock.mockReturnValue(createFakeProcess())
 
     spawnSystemSshPortForward(createTarget(), 5173, '127.0.0.1', 3000, {
@@ -189,11 +201,13 @@ describe('system SSH forward process', () => {
     })
 
     const args = spawnMock.mock.calls[0][1] as string[]
-    expect(args.indexOf('-S')).toBe(-1)
+    expect(args[args.indexOf('-S') + 1]).toBe('none')
     expectNoOrcaControlMasterArgs(args)
   })
 
-  it('preserves user-configured muxing for port forwards', () => {
+  // Why: through the user's master, the master owns the listener (it outlives the child's kill)
+  // and logs sshd's refusals on its own stderr, where the managed tunnel never sees them.
+  it("never rides the user's ssh_config ControlMaster", () => {
     spawnMock.mockReturnValue(createFakeProcess())
 
     spawnSystemSshPortForward(
@@ -217,7 +231,9 @@ describe('system SSH forward process', () => {
     )
 
     const args = spawnMock.mock.calls[0][1] as string[]
-    expect(args.indexOf('-S')).toBe(-1)
+    const controlPathIdx = args.indexOf('-S')
+    expect(args[controlPathIdx + 1]).toBe('none')
+    expect(controlPathIdx).toBeLessThan(args.indexOf('--'))
     expectNoOrcaControlMasterArgs(args)
     expect(args).toContain('workbox')
   })
@@ -285,6 +301,8 @@ describe('system SSH forward process', () => {
       startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
     ).rejects.toThrow('Local port 127.0.0.1:5173 is not available')
     expect(stopOrphanMock).toHaveBeenCalledWith(5173, expect.any(Array))
+    // Why: any fixed-port forward reaches here, and the master's forward may be the user's own.
+    expect(cancelMuxedMock).not.toHaveBeenCalled()
     expect(spawnMock).not.toHaveBeenCalled()
   })
 

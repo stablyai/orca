@@ -2,7 +2,7 @@
  * Recovers a host an earlier build stranded: a conversion fenced it and registered its managed
  * server, but the host's sshd refuses the forward that server is reached by, so nothing was ever
  * staged there. The source still holds every row, so the server is unregistered and the fence
- * released through the undeployed-fence path, and the relay serves the host again. An orcad the
+ * released through the undeployed-fence path, leaving the host as it was. An orcad the
  * setup did activate is stopped first, so a later conversion starts fresh rather than deferring.
  */
 import { listEnvironments } from '../../shared/runtime-environment-store'

@@ -1,3 +1,4 @@
+import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
@@ -41,6 +42,7 @@ export type RuntimeConstructionDependencies = {
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
   retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+  readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
   checkHookAgentPresence?: (
     paneKey: string,

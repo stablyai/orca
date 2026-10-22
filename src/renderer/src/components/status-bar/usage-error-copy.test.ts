@@ -1,7 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const i18nState = vi.hoisted(() => ({ language: 'en' }))
+
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (key: string, fallback: string, values?: Record<string, string>) => {
+    let result =
+      i18nState.language === 'ja' && key.endsWith('remoteOwnerNotConfigured')
+        ? '{{server}} では未構成'
+        : fallback
+    for (const [name, value] of Object.entries(values ?? {})) {
+      result = result.replace(`{{${name}}}`, value)
+    }
+    return result
+  }
 }))
 
 import {
@@ -138,5 +149,28 @@ describe('structured failure kinds over message wording', () => {
         usageMetadata: { failureKind: 'rate-limited' }
       })
     ).toBe('Limited')
+  })
+})
+
+describe('owner placeholder tooltip', () => {
+  it('follows the current language, not the one the placeholder was built in', () => {
+    const placeholder = {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: 'Not configured on devbox',
+      status: 'error',
+      usageMetadata: {
+        ownerNotSetUp: { kind: 'not-configured', ownerLabel: 'devbox', signInSavedHereOnly: false }
+      }
+    } as const
+    i18nState.language = 'ja'
+    try {
+      expect(getProviderUsageErrorMessage(placeholder)).toBe('devbox では未構成')
+    } finally {
+      i18nState.language = 'en'
+    }
+    expect(getProviderUsageErrorMessage(placeholder)).toBe('Not configured on devbox')
   })
 })

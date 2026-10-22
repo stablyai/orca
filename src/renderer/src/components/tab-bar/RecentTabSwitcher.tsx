@@ -15,6 +15,7 @@ import {
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
 import { translate } from '@/i18n/i18n'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type SwitcherState = {
   items: RecentTabSwitcherItem[]
@@ -136,12 +137,12 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
       consumeKeyboardEvent(event)
       commit()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    addAppKeyListener('keyup', onKeyUp)
     window.addEventListener('blur', cancel)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
+      removeAppKeyListener('keydown', onKeyDown)
+      removeAppKeyListener('keyup', onKeyUp)
       window.removeEventListener('blur', cancel)
     }
   }, [cancel, commit, openOrAdvance])

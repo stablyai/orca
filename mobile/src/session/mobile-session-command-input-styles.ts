@@ -66,7 +66,8 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     fontWeight: '600'
   },
   commandDock: {
-    zIndex: 20
+    zIndex: 20,
+    backgroundColor: colors.bgPanel
   },
   accessoryBar: {
     flexDirection: 'row',
@@ -161,14 +162,14 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   keyboardDismissKey: {
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'stretch',
     marginLeft: spacing.sm,
     marginVertical: 1,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 0,
     borderRadius: radii.button,
-    minWidth: 36,
-    height: 26
+    minWidth: 36
   },
   keyboardDismissGlyph: {
     alignItems: 'center',

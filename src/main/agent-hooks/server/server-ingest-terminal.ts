@@ -148,10 +148,11 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       worktreeId,
       connectionId
     })
+    const newRun = event.origin === 'process' && event.payload.state === 'working'
     // Why: a verified process-lifetime Working proves a new agent run, as a hook new-turn event does.
     const disposition = this.getAgentStatusDisposition(
       paneKey,
-      event.origin === 'process' && event.payload.state === 'working'
+      newRun
         ? { processNewTurn: true }
         : this.restartedStatusLaunchTokenHashByPaneKey.get(paneKey)?.allowRetainedOwner
           ? { retainedLaunchTokenHash }
@@ -276,7 +277,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       this.refreshTerminalStatusEvidence(
         previous,
         mutationBefore,
-        mutationBefore !== undefined || event.renewsProgramStatusLease === true
+        mutationBefore !== undefined || event.renewsProgramStatusLease === true,
+        newRun
       )
       return
     }
@@ -326,7 +328,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       undefined,
       event.origin ?? 'osc',
       undefined,
-      mutationBefore
+      mutationBefore,
+      newRun
     )
   }
 }

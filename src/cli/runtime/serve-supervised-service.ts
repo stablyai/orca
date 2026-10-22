@@ -20,7 +20,7 @@ import {
   requestSupervisedServeStop,
   resetSupervisedServeStop
 } from './serve-supervised-stop'
-import type { ServeBundlePark } from './serve-bundle-park'
+import type { ServeBundlePark } from '../../shared/serve-bundle-park'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
 import type { AppImageBuildState } from './serve-appimage-update'
 

@@ -12,7 +12,7 @@ vi.mock('../../../../../shared/sidebar-inputs-switch', () => ({
 
 const WT = 'repo-1::/tmp/a'
 
-function makeHost(created: { isReattach?: true } = {}) {
+function makeHost(created: { isReattach?: true; savedStartupCwd?: string } = {}) {
   const noteTerminalStarted = vi.fn()
   const fake = {
     getRuntimeId: () => 'test-runtime',
@@ -42,8 +42,10 @@ function makeHost(created: { isReattach?: true } = {}) {
 
 describe('terminal.create sort stamp', () => {
   it('stamps a terminal the CLI starts', async () => {
-    const host = makeHost()
-    await expect(host.create({})).resolves.toMatchObject({ ok: true })
+    const host = makeHost({ savedStartupCwd: '/private/original' })
+    const reply = await host.create({})
+    expect(reply).toMatchObject({ ok: true })
+    expect(JSON.stringify(reply)).not.toContain('savedStartupCwd')
     expect(host.noteTerminalStarted).toHaveBeenCalledWith(WT, undefined)
   })
 

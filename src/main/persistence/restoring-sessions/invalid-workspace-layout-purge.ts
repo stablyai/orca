@@ -12,6 +12,10 @@ import {
   collectPersistedWorktreeIdsForSessionHydration
 } from '../../../shared/worktree/degraded-repo-worktree-validity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
 import { getLocalWorktreeCatalogVersion } from '../../local-worktree-scan-generation'
 
@@ -21,7 +25,7 @@ type PurgeStore = {
   getRepos(): readonly { id: string }[]
   getWorkspaceSession(hostId?: string | null): WorkspaceSessionState
   getWorkspaceSessionHostIds(): ExecutionHostId[]
-  removeWorkspaceSessionStateForWorktree(worktreeId: string, hostId?: ExecutionHostId | null): void
+  removeWorkspaceSessionStateForWorktree(target: HostWorktreeTarget): void
 }
 
 const ownedByPairedHost = (hostId: string | null | undefined): boolean =>
@@ -54,7 +58,7 @@ function dropInvalidWorkspaces(
       continue
     }
     for (const key of invalidWorkspaceKeys(store.getWorkspaceSession(hostId), catalog, inScope)) {
-      store.removeWorkspaceSessionStateForWorktree(key, hostId)
+      store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: key, hostId }))
     }
   }
 }

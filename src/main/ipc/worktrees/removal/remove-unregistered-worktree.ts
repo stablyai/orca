@@ -90,7 +90,7 @@ export async function removeUnregisteredWorktree(
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId
@@ -120,7 +120,7 @@ export async function removeUnregisteredWorktree(
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId

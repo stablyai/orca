@@ -30,6 +30,7 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Why: these fixtures register an SSH provider, which models a connected relay session — and a
 // connected session has always read the host's `$HOME`. The removal guards refuse without it.
@@ -226,7 +227,9 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
@@ -252,7 +255,9 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
@@ -313,7 +318,9 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
@@ -386,7 +393,9 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)

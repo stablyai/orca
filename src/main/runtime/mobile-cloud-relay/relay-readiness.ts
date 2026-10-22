@@ -1,4 +1,5 @@
 import { RelayHttpError } from './relay-http-client'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 
 // Why the last reconcile could not produce a live broker. Every value is a
 // lowercase token so `relay_<reason>` stays a valid mint failure code.
@@ -98,14 +99,19 @@ export class RelayReadinessWaiters {
 
   // Resolves true when `work` settles first, false at the deadline or on release.
   async until(work: Promise<unknown>, deadline: number): Promise<boolean> {
-    let release = (): void => {}
-    const released = new Promise<false>((resolve) => {
-      release = () => resolve(false)
-    })
+    const controller = new AbortController()
+    const released = new Error('Relay readiness wait released')
+    const release = (): void => controller.abort(released)
     const timer = setTimeout(release, Math.max(0, deadline - Date.now()))
     this.releases.add(release)
     try {
-      return await Promise.race([work.then(() => true), released])
+      await waitForPromiseWithSignal(work, controller.signal)
+      return true
+    } catch (error) {
+      if (error === released) {
+        return false
+      }
+      throw error
     } finally {
       clearTimeout(timer)
       this.releases.delete(release)

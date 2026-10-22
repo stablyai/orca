@@ -53,8 +53,7 @@ it.each([
     const { result } = renderHook(() =>
       useNativeChatTypedInsertion({
         textareaRef: inputRef,
-        caret: draft.length,
-        draft: input.value,
+        isComposing: () => false,
         setDraft: (value) => {
           input.value = value
         },

@@ -16,20 +16,20 @@ import { boundedQueuePublication } from './agent-session-bounded-queue'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {
   BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
-  STORED_HISTORY_READER,
   type HistoryReader
 } from './agent-session-history-page-bounds'
+import { agentJournalItemForWire, CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import { jsonBytes, shortenJsonStringsToFit } from './json-string-shortening'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
 
 const BOUNDED_FRAME_READER: HistoryReader = {
-  form: boundedFrameItem,
+  form: (item) => boundedFrameItem(agentJournalItemForWire(item)),
   budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
 }
 
 /** How a subscriber's rows are read, and so how its pages are sized. */
 export function subscriberHistoryReader(subscriber: { boundedFrames: boolean }): HistoryReader {
-  return subscriber.boundedFrames ? BOUNDED_FRAME_READER : STORED_HISTORY_READER
+  return subscriber.boundedFrames ? BOUNDED_FRAME_READER : CLIENT_HISTORY_READER
 }
 
 /** The latest turn and the activity line are each a few hundred bytes, their ids and text bounded

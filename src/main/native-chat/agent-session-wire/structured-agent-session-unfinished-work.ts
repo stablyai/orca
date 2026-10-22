@@ -9,6 +9,7 @@ import {
   type StructuredAgentSessionWatchedExit
 } from './structured-agent-session-stale-turn-verdict'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 
 export type DeadGenerationJournal = UnopenedSendJournal & {
   appendPlannedLifecycleBatch: AgentSessionJournal['appendPlannedLifecycleBatch']
@@ -47,11 +48,20 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   before: StructuredAgentSessionUnfinishedWork,
   journal: DeadGenerationJournal,
   observedExitAt: number,
-  exit?: StructuredAgentSessionWatchedExit
+  exit?: StructuredAgentSessionWatchedExit,
+  heldSends?: ReadonlySet<string>
 ): boolean {
   const currentSnapshot = journal.snapshot()
   if (
-    hasUnsettledSubmission(journal) ||
+    journal
+      .submissions?.()
+      .some(
+        (send) =>
+          heldSends?.has(send.clientMessageId) &&
+          send.fence === exit?.ownerFence &&
+          !isQueuedAgentJournalSubmission(send) &&
+          (send.dispatchState === 'pending' || send.dispatchState === 'unknown')
+      ) ||
     currentSnapshot.items.some(isInProgressStructuredAgentSessionItem)
   ) {
     return true

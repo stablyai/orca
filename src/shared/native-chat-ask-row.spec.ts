@@ -67,6 +67,14 @@ describe('native chat ask row', () => {
     ).toEqual({ kind: 'question', text: 'Which branch?' })
   })
 
+  it('draws a Codex async question as the ask row, named by its titles', () => {
+    expect(
+      nativeChatAskRunSubject([
+        askCall({ questions: [{ title: 'Which color?' }] }, 'request_user_input_async')
+      ])
+    ).toEqual({ kind: 'question', text: 'Which color?' })
+  })
+
   it('still reports an ask whose payload names no question', () => {
     // Decided by the tool name alone: an unreadable payload must not put the raw
     // call back on screen as the row it was meant to replace.

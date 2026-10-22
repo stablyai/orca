@@ -22,6 +22,7 @@ import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-in
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { isRemoteRuntimeConnectionReady } from './runtime-environments/runtime-environment-request-connections'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
@@ -57,6 +58,11 @@ function publish(status: WslHostStatus): void {
 /** Removal reaches orcad the way every other call to the host does: by environment id. */
 function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
   return {
+    isReady: (environmentId) =>
+      isRemoteRuntimeConnectionReady(
+        environmentId,
+        getPreferredPairedRuntimeConnection(resolveEnvironment(getUserDataPath(), environmentId))
+      ),
     call: async (environmentId, method, params) => {
       const response = await callRuntimeEnvironment(
         getUserDataPath(),
@@ -187,15 +193,18 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   ipcMain.handle('wslHosts:remove', async (_event, request: { environmentId: string }) => {
     if (args.store.getSettings().activeRuntimeEnvironmentId === request.environmentId) {
       throw new Error(
-        'This server is the default host for new projects. Choose another one in Advanced before removing it.'
+        'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
       )
     }
     return wsl.remove(request.environmentId)
   })
   ipcMain.handle(
     'wslHosts:connect',
-    (_event, request: { environmentId: string; force?: boolean }) =>
-      wsl.connect(request.environmentId, { force: request.force === true })
+    (_event, request: { environmentId: string; intent?: unknown }) =>
+      wsl.connect(
+        request.environmentId,
+        request.intent === 'update' || request.intent === 'force' ? { intent: request.intent } : {}
+      )
   )
   ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
     serverFiles: wsl.hasServerFiles()

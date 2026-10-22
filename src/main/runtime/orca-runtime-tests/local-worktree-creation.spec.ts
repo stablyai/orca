@@ -20,6 +20,7 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
@@ -47,11 +48,11 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
-      removeWorktreeMeta: (worktreeId: string) => {
+      removeWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget) => {
         delete metaById[worktreeId]
       }
     }

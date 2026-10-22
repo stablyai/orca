@@ -75,5 +75,12 @@
     "text": "sidebar",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/onboarding/OnboardingLanguageSwitcher.tsx",
+    "kind": "jsx-text",
+    "text": "Switch language",
+    "dynamic": false,
+    "count": 1
   }
 ]

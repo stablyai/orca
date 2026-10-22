@@ -14,6 +14,7 @@ import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contra
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
 import type { TerminalCommandPaint } from './terminal-command-paint'
+import type { CliWriterConversation } from './structured-agent-cli-writers'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
@@ -30,6 +31,11 @@ type RuntimeTerminalTailState = {
   preview: string
   waitBlockedAt: number | null
   tailWaitState?: TerminalTailWaitState
+}
+
+export type PtyRegistrationClaim = {
+  incarnationId: PtyIncarnationId | null
+  exitedIncarnations: Set<PtyIncarnationId | null>
 }
 
 export type RuntimeLeafRecord = RuntimeSyncedLeaf &
@@ -68,6 +74,11 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
+  /** Conversations the `incarnationId` execution reported; a later row can't hide them. In memory only. */
+  cliConversations?: {
+    incarnationId: PtyIncarnationId | null
+    byKey: Map<string, CliWriterConversation>
+  }
   foregroundAgent: TerminalAgent | null
   connected: boolean
   disconnectedAt: number | null
@@ -101,6 +112,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   controllerTitle: string | null
   title: string | null
   titleUpdatedAt: number | null
+  /** The name a rename gave this terminal: display only, never title evidence (#20626). */
+  manualTitle?: string | null
   lastOutputAt: number | null
   /** See terminal-command-paint.ts; absent until the pane's first output, and again after a gap or a new process. */
   commandPaint?: TerminalCommandPaint

@@ -24,6 +24,8 @@ export type VerifyAndAddRuntimeEnvironmentResult =
       ok: true
       environment: PublicKnownRuntimeEnvironment
       runtimeStatus: RuntimeStatus
+      /** The link was for a saved server, which kept its name and took the new connection. */
+      updatedExisting?: true
     }
   | RemotePairingFailure
 

@@ -43,7 +43,7 @@ export type RuntimeFileCommandHost = {
     runtimeEnvironmentId?: string | null,
     navigation?: RuntimeNavigationTarget,
     position?: RuntimeFileOpenPosition
-  ): void
+  ): void | Promise<void>
   openDiff(
     worktreeId: string,
     filePath: string,

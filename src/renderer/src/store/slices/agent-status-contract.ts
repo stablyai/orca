@@ -5,7 +5,8 @@ import type {
   AgentStatusOrchestrationContext,
   AgentType,
   MigrationUnsupportedPtyEntry,
-  ParsedAgentStatusPayload
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
 } from '../../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
@@ -95,6 +96,9 @@ export type AgentStatusTiming = {
   stateStartedAt?: number
   /** The host's turn start; see `AgentStatusEntry.turnStartedAt`. */
   turnStartedAt?: number
+  /** The host's turn end; see `AgentStatusEntry.turnEndedAt`. */
+  turnEndedAt?: number
+  turnEndDisposition?: TurnEndDisposition
 }
 
 export type AgentStatusRouting = {

@@ -117,7 +117,7 @@ async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<U
   if (!updates) {
     return 'rejected'
   }
-  const upgraded = watch.store.updateRepo(repoId, { kind: 'git', ...updates })
+  const upgraded = watch.store.updateRepo(latest, { kind: 'git', ...updates })
   if (!upgraded) {
     return 'upgraded'
   }

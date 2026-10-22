@@ -149,6 +149,18 @@ export type OrcadMigrationCatalogAbortResult = OrcadMigrationCatalogState & {
   durableAbsent?: true
 }
 
+export type OrcadMigrationCatalogReference = Pick<
+  OrcadMigrationManifest,
+  'migrationId' | 'manifestSha256'
+>
+
+/** An abort by reference: no receipt, since an evicted one is rebuilt only from the manifest. */
+export type OrcadMigrationCatalogReferenceAbortResult = OrcadMigrationCatalogReference & {
+  state: 'absent' | 'committed'
+  aborted: boolean
+  durableAbsent?: true
+}
+
 export function orcadMigrationManifestHashInput(
   manifest: Omit<OrcadMigrationManifest, 'manifestSha256'>
 ): string {

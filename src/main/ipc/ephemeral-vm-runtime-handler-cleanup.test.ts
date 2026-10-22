@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
 
-vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+vi.mock('../ephemeral-vm/runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: vi.fn(),
   disconnectRuntimeOwnedSshTarget: vi.fn(),
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock

@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type * as RunProcessModule from '@orca/process-host'
 import type * as FsPromisesModule from 'node:fs/promises'
 import type { RuntimeBrowserCommandHost } from '../runtime/browser/browser-command-contracts'
+import { RuntimeBrowserPageRegistry } from '../runtime/runtime-browser-page-registry'
 
 const { spawnProcessMock, lockedRemovalPaths } = vi.hoisted(() => ({
   spawnProcessMock:
@@ -496,7 +497,11 @@ it('forwards tab commands through startup to the Electron sidecar', async () => 
   const startup = startOrcadBrowserProvider({ userDataPath: harnessRoot })
   await startup.ready
   try {
-    const commands = createRuntimeBrowserCommands(host)
+    // The runtime that composes the provider owns a page registry, which startup consults.
+    const commands = createRuntimeBrowserCommands({
+      ...host,
+      getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry()
+    })
     await commands.browserTabCreate({ worktree: 'wt-a' })
     await commands.browserTabList({ worktree: 'wt-a' })
     expect((await browserRequests()).map((request) => request.method)).toEqual([

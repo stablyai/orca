@@ -56,6 +56,8 @@ export function createTestStore() {
         browserDefaultUrl: 'about:blank',
         unifiedTabsByWorktree: {},
         groupsByWorktree: {},
+        layoutByWorktree: {},
+        activeGroupIdByWorktree: {},
         tabBarOrderByWorktree: {},
         tabsByWorktree: {},
         openFiles: [],

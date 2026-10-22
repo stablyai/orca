@@ -11,7 +11,8 @@ function isENOENT(error: unknown): boolean {
   )
 }
 
-async function destinationParentKey(filePath: string): Promise<string> {
+/** Canonical parent directory, the lock scope for local mutations that must not interleave. */
+export async function serializedParentDirectoryKey(filePath: string): Promise<string> {
   const parentPath = dirname(filePath)
   try {
     return normalize(await realpath(parentPath))
@@ -29,7 +30,7 @@ export async function renameLocalPathSerializedByDestination(
   oldPath: string,
   newPath: string
 ): Promise<void> {
-  const key = await destinationParentKey(newPath)
+  const key = await serializedParentDirectoryKey(newPath)
   const previous = pendingRenamesByParent.get(key) ?? Promise.resolve()
   let release!: () => void
   const current = new Promise<void>((resolve) => {

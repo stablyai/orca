@@ -61,8 +61,22 @@ export const AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY = 'agent.launch.tab-close
 
 export const AGENT_LAUNCH_SETTINGS_CAPABILITY = 'settings.agent-launch.v1' as const
 
+// Host accepts scoped terminal permission mutations, including Auto.
+export const AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY =
+  'settings.agent-launch.auto-permissions.v1' as const
+
+// Host accepts explicit native-chat synchronization without changing older terminal-only mutations.
+export const AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY =
+  'settings.agent-launch.native-chat-permissions.v1' as const
+
+// Host-advertised: reads `surface`, the user's chat or terminal pick for one launch, and refuses an
+// explicit chat it cannot open before creating anything. Older hosts strip the field.
+export const AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY = 'agent.launch.surface.v1' as const
+
 export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
+  AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
+  AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
@@ -70,5 +84,6 @@ export const AGENT_LAUNCH_RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_CREATE_FOLDER_WORKSPACE_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
 ] as const

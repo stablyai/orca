@@ -10,11 +10,22 @@ import { RpcDispatcher } from '../rpc/dispatcher'
 import type { RpcDispatchStreamingOptions } from '../rpc/dispatcher-stream-options'
 import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs'
 import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs'
+import { requireSwitchedOn } from './require-switched-on'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime-client-capabilities'
+import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../shared/workspace-unread-raise-capability'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
 const WT = 'repo-1::/tmp/worktree-a'
 const SSH_WT = 'repo-ssh::/home/me/worktree-b'
+const HUB_WT = 'repo-hub::/srv/worktree-c'
 const FOLDER_ID = '11111111-1111-4111-8111-111111111111'
 const FOLDER = folderWorkspaceKey(FOLDER_ID)
 const LEAF = '22222222-2222-4222-8222-222222222222'
@@ -23,15 +34,37 @@ const PHONE: RpcDispatchStreamingOptions = { clientKind: 'mobile', connectionId:
 
 type Flag = { lastActivityAt: number; isUnread: boolean }
 
+/** What each kind of desktop socket sends: the request and subscription sockets, the browser host
+ *  lease and network tunnel (which add only browser capabilities to the shared base), and the CLI. */
+function currentDesktopSockets() {
+  return {
+    request: remoteRuntimeClientCapabilities(ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES),
+    lease: remoteRuntimeClientCapabilities([
+      BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+      BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+    ]),
+    tunnel: remoteRuntimeClientCapabilities([
+      BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+      BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+    ]),
+    cli: remoteRuntimeClientCapabilities()
+  }
+}
+
 function createHeadlessHost() {
   const meta: Record<string, Flag> = { [WT]: { lastActivityAt: 0, isUnread: false } }
   const sshMeta: Record<string, Flag> = { [SSH_WT]: { lastActivityAt: 0, isUnread: false } }
+  // A same-id project this host registered under a server's id and locally.
+  const hubMeta: Record<string, Flag> = { [HUB_WT]: { lastActivityAt: 0, isUnread: false } }
+  meta[HUB_WT] = { lastActivityAt: 0, isUnread: false }
   const folders: Record<string, Flag & { projectGroupId: string }> = {
     [FOLDER_ID]: { lastActivityAt: 0, isUnread: false, projectGroupId: 'group-1' }
   }
   const repos = [
     { id: 'repo-1', connectionId: null },
-    { id: 'repo-ssh', connectionId: 'build-box' }
+    { id: 'repo-ssh', connectionId: 'build-box' },
+    { id: 'repo-hub', connectionId: null, executionHostId: 'runtime:hub' },
+    { id: 'repo-hub', connectionId: null }
   ]
   const store = {
     getRepos: () => repos,
@@ -40,11 +73,17 @@ function createHeadlessHost() {
     getSettings: () => ({}),
     getWorktreeMeta: (id: string) => meta[id],
     getAllWorktreeMeta: () => meta,
-    setWorktreeMeta: (id: string, updates: Partial<Flag>) => Object.assign(meta[id], updates),
+    setWorktreeMeta: ({ id, hostId }: HostWorktreeTarget, updates: Partial<Flag>) =>
+      Object.assign(
+        hostId === 'ssh:build-box'
+          ? sshMeta[id]
+          : hostId === 'runtime:hub'
+            ? hubMeta[id]
+            : meta[id],
+        updates
+      ),
     getWorktreeMetaForHost: (id: string, hostId: string) =>
-      hostId === 'ssh:build-box' ? sshMeta[id] : undefined,
-    setWorktreeMetaForHost: (id: string, _hostId: string, updates: Partial<Flag>) =>
-      Object.assign(sshMeta[id], updates),
+      hostId === 'ssh:build-box' ? sshMeta[id] : hostId === 'runtime:hub' ? hubMeta[id] : meta[id],
     getFolderWorkspace: (id: string) => folders[id],
     updateFolderWorkspace: (id: string, updates: Partial<Flag>) =>
       Object.assign(folders[id], updates)
@@ -86,6 +125,7 @@ function createHeadlessHost() {
     runtime,
     meta,
     sshMeta,
+    hubMeta,
     folders,
     finishTurn,
     // The phone's session screen holds this stream while the workspace is open on it.
@@ -148,6 +188,16 @@ describe('workspace unread flag on a headless host', () => {
     expect(host.sshMeta[SSH_WT].isUnread).toBe(true)
   })
 
+  // The phone names only an id, so it cannot say which of two same-id copies it shows.
+  it('clears neither copy of a workspace two hosts register', async () => {
+    const host = createHeadlessHost()
+    host.hubMeta[HUB_WT].isUnread = true
+    host.meta[HUB_WT].isUnread = true
+    await host.openOnPhone(HUB_WT)
+    expect(host.hubMeta[HUB_WT].isUnread).toBe(true)
+    expect(host.meta[HUB_WT].isUnread).toBe(true)
+  })
+
   it('spares the tab a client window shows while its user is present', async () => {
     vi.useFakeTimers({ now: 10_000, toFake: ['Date'] })
     try {
@@ -180,5 +230,41 @@ describe('workspace unread flag on a headless host', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('advertises that it raises the flag, so no socket of a current desktop silences it', () => {
+    const host = createHeadlessHost()
+    expect(host.runtime.getStatus().capabilities).toContain(WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY)
+    const facts = requireSwitchedOn(host.runtime.sidebarFacts)
+    for (const [connectionId, capabilities] of Object.entries(currentDesktopSockets())) {
+      facts.noteRuntimeClient(connectionId, capabilities)
+    }
+    host.finishTurn()
+    expect(host.meta[WT].isUnread).toBe(true)
+  })
+
+  it('leaves raising to an older desktop while it is connected, and still clears on the phone', async () => {
+    const host = createHeadlessHost()
+    // Either its request socket or its browser host lease hosts client pages without the capability.
+    const older = (capabilities: readonly string[]) =>
+      capabilities.filter((capability) => capability !== WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY)
+    const facts = requireSwitchedOn(host.runtime.sidebarFacts)
+    facts.noteRuntimeClient('desktop-old', older(currentDesktopSockets().request))
+    facts.noteRuntimeClient('desktop-old-lease', older(currentDesktopSockets().lease))
+    host.finishTurn()
+    expect(host.meta[WT].isUnread).toBe(false)
+
+    // The older desktop raised it by its own rule; the phone opening it still clears it here.
+    host.meta[WT].isUnread = true
+    await host.openOnPhone(WT)
+    expect(host.meta[WT].isUnread).toBe(false)
+    host.runtime.cleanupSubscriptionsForConnection('phone-1')
+
+    host.runtime.cleanupSubscriptionsForConnection('desktop-old')
+    host.finishTurn()
+    expect(host.meta[WT].isUnread).toBe(false)
+    host.runtime.cleanupSubscriptionsForConnection('desktop-old-lease')
+    host.finishTurn()
+    expect(host.meta[WT].isUnread).toBe(true)
   })
 })

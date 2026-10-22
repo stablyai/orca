@@ -12,7 +12,7 @@ import { parseWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
 import type { RemoteInstallTransport } from '../managed-server/install/remote-install-transport'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
-import { RELAY_DEPLOY_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
+import { REMOTE_INSTALL_TIMEOUT_MS } from '../managed-server/install/remote-deploy-timing'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
   collectLocalUploadPlan,
@@ -182,7 +182,7 @@ export async function uploadDirectoryIntoWsl(
   const manifest = await digestManifest(plan, signal)
   const stage = `${remoteDir.replace(/\/+$/, '')}/.orca-upload-${randomBytes(8).toString('hex')}`
   // Why the deploy bound: a runtime tree over a cold distro outlasts the 30 s probe default.
-  const execOptions = { signal, timeoutMs: RELAY_DEPLOY_TIMEOUT_MS }
+  const execOptions = { signal, timeoutMs: REMOTE_INSTALL_TIMEOUT_MS }
   const stagedFromGuest =
     guestSource !== null &&
     (await execCommand(conn, stageFromGuestPathCommand(guestSource, stage), execOptions)).trim() !==

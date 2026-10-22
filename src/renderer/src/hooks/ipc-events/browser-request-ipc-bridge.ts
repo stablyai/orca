@@ -81,7 +81,9 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
         })
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
-        const browserPageId = pages[0]?.id ?? workspace.id
+        // A layout-owner build draws the page once main's frame lands: answer the id it was opened under.
+        const browserPageId =
+          data.browserPageId ?? pages[0]?.id ?? workspace.activePageId ?? workspace.id
         acquireBrowserAutomationBootstrapLease(worktreeId, browserPageId)
         window.api.ui.replyTabCreate({ requestId: data.requestId, browserPageId })
       } catch (err) {
