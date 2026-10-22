@@ -114,7 +114,7 @@ export default function EditHostScreen() {
   const nameChanged = host != null && nameTrimmed !== (host.personalName ?? '')
   const endpointChanged = endpointEdit?.kind === 'changed'
   const authEndpointCheck = checkEdgeAuthEndpoint(
-    authNormalized.ok ? authNormalized.headers : null,
+    authNormalized.ok && authChanged ? authNormalized.headers : null,
     endpointEdit?.kind !== 'invalid' ? endpointEdit?.endpoint : undefined
   )
   const canSave =

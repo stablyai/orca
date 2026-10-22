@@ -242,6 +242,30 @@ describe('edit host handleSave', () => {
     act(() => renderer.unmount())
   })
 
+  it.each(['ws://192.168.1.20:6768', 'wss://other.example.com:443', 'wss://orca.example.com:8443'])(
+    'preserves unchanged credentials when switching the endpoint to %s',
+    async (endpoint) => {
+      dependencies.loadHosts.mockResolvedValue([
+        { ...HOST_FIXTURE, endpoint: 'wss://orca.example.com' }
+      ])
+      dependencies.readEndpointAuthHeaders.mockResolvedValue({
+        'CF-Access-Client-Id': 'secret-value'
+      })
+      const renderer = await renderEditHostRoute()
+      setFieldValue(renderer, 'Address', endpoint)
+
+      expect(findSaveButton(renderer).props.disabled).toBe(false)
+      await pressSave(renderer)
+
+      expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', { endpoint })
+      expect(dependencies.writeEndpointAuthHeaders).not.toHaveBeenCalled()
+      expect(dependencies.deleteEndpointAuthHeaders).not.toHaveBeenCalled()
+      expect(dependencies.refreshHostClient).toHaveBeenCalledWith('host-1')
+      expect(dependencies.back).toHaveBeenCalledTimes(1)
+      act(() => renderer.unmount())
+    }
+  )
+
   it('re-primes the committed endpoint after an edge-auth save failure without exposing secrets', async () => {
     const updated = { ...HOST_FIXTURE, endpoint: 'wss://orca.example.com:443' }
     dependencies.loadHosts.mockResolvedValueOnce([HOST_FIXTURE]).mockResolvedValue([updated])
