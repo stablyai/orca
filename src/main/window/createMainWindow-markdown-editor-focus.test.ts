@@ -556,19 +556,19 @@ describe('createMainWindow', () => {
     windowHandlers['context-menu']({}, params)
     windowHandlers['context-menu']({}, params)
 
-    const labels = buildFromTemplateMock.mock.calls.map(([template]) =>
-      template.map((item: Electron.MenuItemConstructorOptions) => item.label ?? item.role)
-    )
-    expect(labels[0]).toEqual([
-      'reference',
-      undefined,
-      'Add to dictionary',
-      undefined,
-      'cut',
-      'copy',
-      'Paste',
-      'selectAll'
+    expect(buildFromTemplateMock).toHaveBeenNthCalledWith(1, [
+      expect.objectContaining({ label: 'reference' }),
+      { type: 'separator' },
+      expect.objectContaining({ label: 'Add to dictionary' }),
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      expect.objectContaining({ label: 'Paste' }),
+      { role: 'selectAll' }
     ])
-    expect(labels[1]).toContain('Format')
+    expect(buildFromTemplateMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining([expect.objectContaining({ label: 'Format' })])
+    )
   })
 })
