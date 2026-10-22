@@ -9,10 +9,7 @@ import {
   inspectRuntimeTerminalProcess,
   type RuntimeTerminalProcessInspection
 } from '@/runtime/runtime-terminal-inspection'
-import {
-  isAgentForegroundWrapperProcess,
-  recognizeAgentProcess
-} from '../../../shared/agent-process-recognition'
+import { recognizeAgentProcess } from '../../../shared/agent-process-recognition'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
@@ -38,12 +35,10 @@ export type ClaudeSessionMoveCandidate = {
   leafId: string
 }
 
+// Why not a bare node or python: after Claude exits, the pane can run the user's own program; the
+// fresh read names an npm Claude `claude` from its command line.
 function isClaudeProcess(processName: string | null): boolean {
-  return (
-    processName !== null &&
-    (recognizeAgentProcess(processName)?.agent === 'claude' ||
-      isAgentForegroundWrapperProcess(processName))
-  )
+  return recognizeAgentProcess(processName)?.agent === 'claude'
 }
 
 /**

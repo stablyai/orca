@@ -14,6 +14,13 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
     agent: 'cursor',
     processName: 'cursor-agent'
   },
+  // Why: Claude Code's npm package ran a generic cli.js before it shipped a native binary, and a
+  // pnpm or yarn shim or npx still launches it by that path.
+  {
+    pattern: /(?:^|\/)node_modules\/@anthropic-ai\/claude-code\/cli\.js$/,
+    agent: 'claude',
+    processName: 'claude'
+  },
   // Why: Pi's npm shim launches a generic cli.js; only the exact package path is authoritative.
   {
     pattern:

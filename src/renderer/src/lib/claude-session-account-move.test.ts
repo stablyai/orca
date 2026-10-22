@@ -219,6 +219,34 @@ describe('findMovableClaudeSessions', () => {
 
     expect(await movable()).toEqual([])
   })
+
+  it('leaves a node or python program the user started in a pane Claude has left', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude' },
+      { n: 2, agentType: 'claude' }
+    ])
+    const program = (id: string): string => (id === ptyId(1) ? 'node' : 'python3')
+    vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async (id) => ({
+      foregroundProcess: program(id),
+      hasChildProcesses: true
+    }))
+    // A fresh read of `npm run dev` or `python manage.py runserver` places it as no agent.
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockImplementation(async (id) => program(id))
+
+    expect(await movable()).toEqual([])
+  })
+
+  it('still finds a Claude installed with npm, which the fresh read names from its command line', async () => {
+    seedPanes([{ n: 1, agentType: 'claude' }])
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'node',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockClear().mockResolvedValue('claude')
+
+    expect(await movable()).toEqual([ptyId(1)])
+    expect(confirmRuntimeTerminalForegroundProcess).toHaveBeenCalledWith(ptyId(1))
+  })
 })
 
 describe('resolveClaudeSessionAccountId', () => {
