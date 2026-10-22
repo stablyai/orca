@@ -119,6 +119,27 @@ describe('Pi host launch resolution', () => {
     })
   })
 
+  it('resolves Pi again after one environment refresh when the snapshot has no Pi', async () => {
+    const h = await setup()
+    let path = '/before-install'
+    const refresh = vi.fn(async () => {
+      path = '/host/bin'
+    })
+    const resolver = createPiRpcLaunchResolver({
+      store: h.store,
+      resolveWorkspacePath: async () => h.workspace,
+      resolveEnvironment: async () => ({ PATH: path, HOME: '/host/home' }),
+      refreshAfterMissingProgram: refresh,
+      resolveCommand: (name, options) => (options?.pathEnv === '/host/bin' ? '/host/bin/pi' : name),
+      probeVersion
+    })
+    await expect(resolver(identity)).resolves.toMatchObject({
+      command: '/host/bin/pi',
+      env: { PATH: '/host/bin' }
+    })
+    expect(refresh).toHaveBeenCalledOnce()
+  })
+
   it('starts a fresh session after clear without reading the previous file', async () => {
     const h = await setup()
     const old = join(root, 'old-malformed.jsonl')

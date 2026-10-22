@@ -136,6 +136,8 @@ export type WorktreeSlice = {
   sortEpoch: number
   /** sortEpoch after the settle window; the sidebar sort reads this (see store/settled-sort-epoch.ts). */
   settledSortEpoch: number
+  /** Bumped by sortOrder-only changes, which skip sortEpoch so live Smart can't loop on its own saves. */
+  sortOrderEpoch: number
   /**
    * Worktree IDs that have been activated at least once during this app
    * session. The first activation of a worktree is special: its
@@ -233,6 +235,7 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
+      checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
     }
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this
@@ -277,17 +280,16 @@ export type WorktreeSlice = {
    * the shortcut action visible even though pinned worktrees also remain in
    * their normal sidebar groups.
    */
-  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
-  markWorktreeUnread: (worktreeId: string) => void
+  /** Each target names its copy; a host-less id two hosts publish is skipped, not guessed. */
+  setWorktreesPinnedAndReveal: (
+    targets: readonly Pick<Worktree, 'id' | 'hostId'>[],
+    isPinned: boolean
+  ) => void
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
     link: TerminalGitHubPRLink,
     context?: WorkspaceReferenceTerminalContext
   ) => void
-  /** Clear the worktree's unread dot. Called on user interaction with any
-   *  terminal pane inside the worktree (keystroke, click) — matches
-   *  ghostty's "show until interact" model. Persists isUnread=false. */
-  clearWorktreeUnread: (worktreeId: string) => void
   bumpWorktreeActivity: (worktreeId: string) => void
   /**
    * Monotonic stamp of the focus-recency timestamp for a worktree. No-op if

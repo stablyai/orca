@@ -3,7 +3,7 @@
 // normally but never ahead of them, a withdrawn card comes back under it, a crash keeps it, any
 // turn sent after it ends it, and no stored pause is ever written.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import Database from '../../sqlite/sync-database'
@@ -25,10 +25,17 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
+  vi.useFakeTimers()
   rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
-afterEach(() => rig.dispose())
+afterEach(async () => {
+  try {
+    await rig.dispose()
+  } finally {
+    vi.useRealTimers()
+  }
+})
 
 async function queuedDraft(text: string): Promise<string> {
   const queued = await rig.send(text, 'queue-if-active').result
@@ -48,7 +55,7 @@ function journal(sessionId = HOST_TEST_SESSION) {
 
 /** No drain step converts the cards, and the published pause names `reason` (null: none shown). */
 async function expectHeld(reason: string | null, ...draftIds: string[]): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 250))
+  await vi.advanceTimersByTimeAsync(250)
   for (const draftId of draftIds) {
     expect(await rig.handoff(draftId)).toBeUndefined()
   }
@@ -158,7 +165,7 @@ describe("Stop's event", () => {
     await withdraw(handoffId)
     await rig.settleAccepted(working, 'stopped')
     await openRigTurnFor(rig, working, 'interrupted')
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await vi.advanceTimersByTimeAsync(250)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     expect(await rig.drafts()).toEqual([{ messageId: sentId, state: 'waiting' }])
     const sends = (await rig.host.journalSnapshot(HOST_TEST_SESSION)).submissions.filter(

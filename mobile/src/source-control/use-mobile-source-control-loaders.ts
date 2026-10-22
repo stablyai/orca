@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useRef, useState, type MutableRefObject } from 'react'
+import { useFocusEffect } from 'expo-router'
 import { View } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -252,9 +253,11 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     ]
   )
 
-  useEffect(() => {
-    void loadStatus()
-  }, [loadStatus])
+  useFocusEffect(
+    useCallback(() => {
+      void loadStatus({ force: true, preserveReadyOnFailure: true })
+    }, [loadStatus])
+  )
 
   return {
     screenState,

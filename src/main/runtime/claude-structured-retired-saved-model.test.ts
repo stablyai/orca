@@ -1,6 +1,5 @@
-// A chat's saved model rides the launch unchecked. When the CLI answers a turn by saying that model
-// does not exist, the record drops it, so the next start runs the CLI's own default; the user's
-// message and the CLI's own answer stay as they are. Against the production runtime, adapter,
+// A chat's saved model rides the launch unchecked. A missing-model reply retires the live child's
+// choice; provider reports leave the saved pick alone. Against the production runtime, adapter,
 // record store and host, with only the CLI process scripted.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +7,12 @@ import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-sessio
 import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState
+} from '../../shared/structured-agent-session-options'
+import { structuredAgentSessionSendSelection } from '../../shared/structured-agent-session-option-view'
 
 const SESSION = 'claude-retired-saved-model'
 const CALLER = { callerKey: 'client-1' }
@@ -55,17 +60,32 @@ async function startedWith(options: Record<string, string>): Promise<StructuredA
 }
 
 describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
-  it('drops the model from the record, keeping the rest, so the next start runs the default', async () => {
+  it('keeps the saved pick while the live child retires its missing model', async () => {
     const host = await startedWith({ model: RETIRED, effort: 'high' })
     expect(claude.child(SESSION).launch.options.model).toBe(RETIRED)
     expect(host.deps.store.getRecord(SESSION)?.options?.model).toBe(RETIRED)
 
     claude.child(SESSION).handlers.onMessage?.(modelNotFoundReply('reply-1'))
-
-    await vi.waitFor(() =>
-      expect(host.deps.store.getRecord(SESSION)?.options).not.toHaveProperty('model')
+    await host.flushStreamedEvents(SESSION)
+    expect(host.deps.store.getRecord(SESSION)?.options).toMatchObject({
+      model: RETIRED,
+      effort: 'high'
+    })
+    // The picker shows what the child runs now, so the next send moves the chat off the model.
+    const answer = await vi.waitFor(async () => {
+      const read = await host.readOptions(SESSION, { readsWithoutModel: true })
+      expect(read.current.model).not.toBe(RETIRED)
+      return read
+    })
+    const seed = structuredAgentSessionSeedCatalog('claude')
+    const reopened = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('claude', seed),
+      seed,
+      answer
     )
-    expect(host.deps.store.getRecord(SESSION)?.options).toMatchObject({ effort: 'high' })
+    expect(structuredAgentSessionSendSelection(reopened)).toMatchObject({
+      model: answer.current.model
+    })
   })
 
   it("keeps a model the reply did not come from: a subagent's own error", async () => {
@@ -97,21 +117,13 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
     })
     expect(changed, JSON.stringify(changed)).toMatchObject({ ok: true })
     expect(record()?.options?.model).toBe('opus')
-
-    await host.handleAdapterEvent({
-      type: 'options-skipped',
-      sessionId: SESSION,
-      fence: record()?.lease.runtimeFence ?? 0,
-      acquisitionGeneration: 'generation-heal',
-      options: { model: RETIRED }
-    })
-
+    claude.child(SESSION).handlers.onMessage?.(modelNotFoundReply('reply-1'))
+    await host.flushStreamedEvents(SESSION)
     expect(record()?.options?.model).toBe('opus')
   })
 
-  // A slow settings readback lets the turn's error land first; the report that follows it still
-  // names the CLI's own model, which is the retired one, and must not write it back.
-  it('does not let a settings report that lands after the heal write the retired model back', async () => {
+  // A slow settings readback can report the retired live model after the error.
+  it('leaves the saved pick alone when that settings report arrives late', async () => {
     claude.behave(SESSION, {
       sendsNoStartFrame: true,
       startupSettingsReadHangs: true,
@@ -132,9 +144,8 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
       model: RETIRED
     })
     claude.child(SESSION).handlers.onMessage?.(modelNotFoundReply('reply-1'))
-    await vi.waitFor(() =>
-      expect(host.deps.store.getRecord(SESSION)?.options).not.toHaveProperty('model')
-    )
+    await host.flushStreamedEvents(SESSION)
+    expect(host.deps.store.getRecord(SESSION)?.options?.model).toBe(RETIRED)
 
     // The settings read gives up at its deadline and reports what the child showed.
     await vi.waitFor(
@@ -142,6 +153,6 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
       { timeout: 5_000 }
     )
     await host.flushStreamedEvents(SESSION)
-    expect(host.deps.store.getRecord(SESSION)?.options).not.toHaveProperty('model')
+    expect(host.deps.store.getRecord(SESSION)?.options?.model).toBe(RETIRED)
   })
 })

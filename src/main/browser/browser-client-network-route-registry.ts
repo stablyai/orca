@@ -1,7 +1,5 @@
-import type {
-  BrowserHostLeaseAuthority,
-  BrowserNetworkExecutionHost
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-execution-host'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
 import {
   assertBrowserClientNetworkRouteAddress,

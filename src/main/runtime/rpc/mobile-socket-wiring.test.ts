@@ -9,7 +9,7 @@ import {
 } from '../../../shared/mobile-e2ee-v2-contract'
 import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
 import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
+import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
 import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,

@@ -1,8 +1,8 @@
 /** The incumbent slot across a journaled activation or rollback: stop it, then put it back. */
-import type { OrcadActivationLockControl } from './orcad-activation-lock'
-import type { OrcadSnapshotVerdict } from './orcad-activation-transaction'
-import { orcadStopFreedTheHost } from './orcad-remote-process-control'
-import { withoutAbortSignal } from './orcad-remote-runtime-control'
+import type { OrcadActivationLockControl } from '../managed-server/activation/orcad-activation-lock'
+import type { OrcadSnapshotVerdict } from '../managed-server/activation/orcad-activation-transaction'
+import { orcadStopFreedTheHost } from '../managed-server/install/orcad-remote-process-control'
+import { withoutAbortSignal } from '../managed-server/install/orcad-remote-runtime-control'
 import {
   launchOrcadSlot,
   stopOrcadSlot,
@@ -13,24 +13,30 @@ import {
 import { recoverOrcadIncumbent } from './orcad-incumbent-recovery'
 import { errorMessage } from '../../shared/error-message'
 
-/** Null once the incumbent provably exited; otherwise why not, with the fence kept if it may still change. */
+/**
+ * Null once the incumbent provably exited; otherwise why not, and whether a stop may be underway,
+ * with the fence kept if so.
+ */
 export async function stopTransactionIncumbent(
   options: OrcadSlotOptions,
   incumbent: OrcadSlotIdentity,
   lock: OrcadActivationLockControl
-): Promise<string | null> {
+): Promise<{ reason: string; stopMayBeUnderway: boolean } | null> {
   const stopped = await stopOrcadSlot(options, incumbent.remoteDir, false)
   if (orcadStopFreedTheHost(stopped)) {
     return null
   }
   // Only a stop that may have been delivered can still change the host; otherwise nothing happened.
-  if (stopped === 'still-running' || stopped === 'unconfirmed') {
+  const stopMayBeUnderway = stopped === 'still-running' || stopped === 'unconfirmed'
+  if (stopMayBeUnderway) {
     lock.retain()
   }
-  return (
-    `Could not verify that orcad ${incumbent.version} exited within ` +
-    `${ORCAD_SLOT_STOP_WAIT_SECONDS}s (${stopped}).`
-  )
+  return {
+    reason:
+      `Could not verify that orcad ${incumbent.version} exited within ` +
+      `${ORCAD_SLOT_STOP_WAIT_SECONDS}s (${stopped}).`,
+    stopMayBeUnderway
+  }
 }
 
 export async function restartAfterSnapshotFailure(

@@ -1,5 +1,5 @@
 // Test fixture: a packaged Node slot whose runtime is the real pinned Node, laid out as shipped.
-import { copyFileSync, existsSync, linkSync, mkdirSync, readdirSync } from 'node:fs'
+import { copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { copyFile, link, mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import type * as NodePty from 'node-pty'
@@ -41,15 +41,17 @@ export function locatePinnedNodeForTests(): string | null {
   )
 }
 
-/** The Bun the last Bun orcad shipped on; only the design D7 cross-runtime gates still run it. */
-export const LAST_BUN_ORCAD_VERSION = '1.4.2'
+const crossRuntimeBunVersion = readFileSync(
+  new URL('../../../config/.bun-version', import.meta.url),
+  'utf8'
+).trim()
 
-/** Bun 1.4.2 (BUN_EXECUTABLE, else `bun` on PATH), the last runtime orcad shipped on, if any. */
+/** The shared Bun pin (BUN_EXECUTABLE, else `bun` on PATH), if available. */
 export function locateBunForTests(): string | null {
   const candidate = process.env.BUN_EXECUTABLE ?? 'bun'
   try {
     const result = runProcessSync({ program: candidate, args: ['--version'], timeoutMs: 10_000 })
-    return result.code === 0 && result.stdout.trim() === LAST_BUN_ORCAD_VERSION ? candidate : null
+    return result.code === 0 && result.stdout.trim() === crossRuntimeBunVersion ? candidate : null
   } catch {
     return null
   }

@@ -1,6 +1,6 @@
+import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
-import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
@@ -12,14 +12,18 @@ import type { AgentHookSource } from '../shared/agent-hook-relay'
 import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
+import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
   res: ServerResponse,
   options: {
+    isCurrent: () => boolean
     token: string
     env: string
     state: HookListenerState
+    checkAgentPresence: (paneKey: string) => Promise<void>
+    providerNormalization: RelayProviderHookNormalization
     isPaneSurfaceRetired: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
     applyEvent: (
@@ -58,21 +62,44 @@ export async function handleRelayHookRequest(
       return
     }
     const body = await readRequestBody(req)
+    if (!options.isCurrent()) {
+      res.writeHead(204)
+      res.end()
+      return
+    }
     const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
     if (await options.ingestTmuxHook?.(source, hookBody)) {
       res.writeHead(204)
       res.end()
       return
     }
+    await checkHookOwnerPresence(
+      options.state,
+      source,
+      hookBody,
+      options.env,
+      options.checkAgentPresence
+    )
+    if (!options.isCurrent()) {
+      res.writeHead(204)
+      res.end()
+      return
+    }
     let admittedOpenCodeTuiOwner = false
-    const event = normalizeHookPayload(options.state, source, hookBody, options.env, {
-      deferCompactOwnershipToClient: true,
-      admitOpenCodeTui: (identity) => {
-        const admission = admitRelayOpenCodeTui(options, identity)
-        admittedOpenCodeTuiOwner = admission === true
-        return admission
+    const event = options.providerNormalization.normalize(
+      options.state,
+      source,
+      hookBody,
+      options.env,
+      {
+        deferCompactOwnershipToClient: true,
+        admitOpenCodeTui: (identity) => {
+          const admission = admitRelayOpenCodeTui(options, identity)
+          admittedOpenCodeTuiOwner = admission === true
+          return admission
+        }
       }
-    })
+    )
     if (event) {
       // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
       const env = hookBodyEnv(hookBody)

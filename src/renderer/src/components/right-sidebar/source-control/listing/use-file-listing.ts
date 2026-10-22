@@ -115,7 +115,7 @@ export function useSourceControlFileListing({
   })
 
   // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
-  const { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff } =
+  const { resolveSplitTargetGroupId, activeOpenRowKeys, openUncommittedFile, openBranchFile } =
     useSourceControlRowOpening({
       isMac,
       activeWorktreeId,
@@ -131,7 +131,7 @@ export function useSourceControlFileListing({
   const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =
     useSourceControlSelection({
       flatEntries: visibleSelectionEntries,
-      onOpenDiff: handleOpenDiff,
+      onOpenFile: openUncommittedFile,
       shouldOpenAsSplit,
       containerRef: sourceControlRef
     })
@@ -212,7 +212,7 @@ export function useSourceControlFileListing({
     handleBulkStage,
     handleBulkUnstage,
     handleContextMenu,
-    handleOpenDiff,
+    openUncommittedFile,
     handleSelect,
     handleStageAllPaths,
     handleStageAllPrimary,
@@ -222,7 +222,7 @@ export function useSourceControlFileListing({
     isExecutingBulk,
     isGitHistoryVisible,
     normalizedFilter,
-    openCommittedDiff,
+    openBranchFile,
     pushRecovery,
     refreshGitHistory,
     refreshGitHistoryRef,

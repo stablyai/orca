@@ -332,6 +332,7 @@ describe('the worktree factory', () => {
 
     expect(createArgs(runtime)).toMatchObject({
       startupAgent: 'claude',
+      terminalImageViewerSupported: false,
       startupAgentArgs: '--model opus',
       startupCwd: '/repo/packages/api',
       startupLaunchSource: 'source_control_recovery'
@@ -518,7 +519,7 @@ describe('a create that succeeded but is incomplete', () => {
     // settings: {} leaves the structured preference off, so the launch is agent-first and returns
     // on the cached startup handle - the early path that also had to learn to carry a warning.
     // Wording matters: the producer cannot emit "startup terminal failed" ALONGSIDE a handle —
-    // `orca-runtime-create-managed-worktree.ts:283` gates startupTerminal on the spawn having
+    // `workspaces/workspace-creation.ts` gates startupTerminal on the spawn having
     // succeeded. An untracked-copy warning is the one that genuinely co-occurs with a handle.
     const runtime = runtimeStub({
       settings: {},
@@ -566,6 +567,7 @@ describe('the terminal factory', () => {
 
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-new', {
       startupAgent: 'claude',
+      terminalImageViewerSupported: false,
       // A refused structured session opens its fallback tab as a terminal.
       viewMode: 'terminal',
       // A paired device's launch never moves the desktop window.
@@ -593,6 +595,7 @@ describe('the terminal factory', () => {
     // runtime as `id:id:wt-7`.
     expect(runtime.createTerminal).toHaveBeenCalledWith('id:wt-7', {
       startupAgent: 'gemini',
+      terminalImageViewerSupported: false,
       // No native chat renderer for this agent, so its tab opens as the terminal.
       viewMode: 'terminal',
       surfaceOwner: false,

@@ -5,6 +5,7 @@ import {
   resetBrowserRuntimeMocks,
   settingsWithRuntime
 } from './browser-slice-test-harness'
+import { makeWorktree } from './worktrees-slice-test-fixtures'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const runtimeEnvironmentCall = vi.fn()
@@ -36,6 +37,10 @@ describe('createBrowserSlice runtime guard', () => {
     const store = createTestStore()
     store.setState({
       settings: settingsWithRuntime('env-1'),
+      // The client stamps a server's rows on arrival; focus alone never names the owner.
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', hostId: 'runtime:env-1' })]
+      },
       unifiedTabsByWorktree: {},
       browserTabsByWorktree: {
         'wt-1': [

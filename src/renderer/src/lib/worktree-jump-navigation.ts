@@ -7,11 +7,12 @@ import { worktreePassesSidebarFilters } from '@/components/sidebar/worktree-filt
 import { sidebarHasActiveFilters } from '@/components/sidebar/sidebar-filter-actions'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: ExecutionHostId): boolean {
   const state = useAppStore.getState()
   // Some lightweight callers/tests provide only the activation slice of state.
-  if (!state.worktreesByRepo || !sidebarHasActiveFilters(state)) {
+  if (!selectWorktreesByRepo(state) || !sidebarHasActiveFilters(state)) {
     return false
   }
 

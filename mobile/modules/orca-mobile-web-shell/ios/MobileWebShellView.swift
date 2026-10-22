@@ -479,7 +479,6 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     let verdict = MobileWebShellNavigationPolicy.verdict(
       url: navigationAction.request.url?.absoluteString,
       isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
-      isFromSubframe: !navigationAction.sourceFrame.isMainFrame,
       isDocumentUrl: isDocumentUrl(navigationAction.request.url),
       isShellLoad: loadState.isShellLoad,
       hasGesture: navigationAction.navigationType == .linkActivated,

@@ -12,6 +12,7 @@ import type {
   ProjectUpdateArgs
 } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { ProjectGroupPersistenceOperations } from '../tracking-repos/project-group-operations'
 import { FolderWorkspacePersistenceOperations } from '../restoring-sessions/folder-workspace-operations'
 import { ProjectHostPersistenceOperations } from '../tracking-repos/project-host-operations'
@@ -29,6 +30,8 @@ import {
 import { scheduleSave } from './write-scheduling'
 import { removeWorkspaceLineageForFolderParent } from './metadata-lineage-operations'
 import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 type ProjectCollectionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -37,6 +40,7 @@ type ProjectCollectionOperationsRuntime = Pick<
   | 'projectGroupOperations'
   | 'projectHostOperations'
   | 'state'
+  | 'orcadTerminalRestoreHints'
 >
 
 const projectCollectionOperationsContext = Symbol('ProjectCollectionOperations')
@@ -56,7 +60,12 @@ export class ProjectCollectionOperations {
     scheduling: WriteSchedulingOperations,
     metadata: MetadataLineageOperations
   ) {
-    this[projectCollectionOperationsContext] = { runtime, repos, scheduling, metadata }
+    this[projectCollectionOperationsContext] = {
+      runtime,
+      repos,
+      scheduling,
+      metadata
+    }
   }
 
   getRepos(): Repo[] {
@@ -145,11 +154,19 @@ export class ProjectCollectionOperations {
   }
 
   removeFolderWorkspace(id: string): boolean {
-    return getFolderWorkspaceOperations(this).removeFolderWorkspace(id)
+    const removed = getFolderWorkspaceOperations(this).removeFolderWorkspace(id)
+    if (removed) {
+      const workspaceKey = folderWorkspaceKey(id)
+      dropOrcadTerminalRestoreHintsForWorktrees(
+        this[projectCollectionOperationsContext].runtime.orcadTerminalRestoreHints,
+        (worktreeId) => worktreeId === workspaceKey
+      )
+    }
+    return removed
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    return getFolderWorkspaceOperations(this).moveProjectToGroup(repoId, groupId, order)
+  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
+    return getFolderWorkspaceOperations(this).moveProjectToGroup(target, groupId, order)
   }
 }
 
@@ -175,8 +192,8 @@ export function getProjectHostOperations(
           setup,
           updates
         ),
-      removeProjectForHost: (id, hostId) =>
-        owner[projectCollectionOperationsContext].repos.removeProjectForHost(id, hostId),
+      removeProjectForHost: (target) =>
+        owner[projectCollectionOperationsContext].repos.removeProjectForHost(target),
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling)
     })
   return owner[projectCollectionOperationsContext].runtime.projectHostOperations

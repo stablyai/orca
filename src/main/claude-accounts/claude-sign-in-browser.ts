@@ -21,7 +21,7 @@ export type ClaudeSignInBrowser = {
   /** BROWSER as the Claude process sees it. */
   path: string
   /** The localhost-callback link Claude handed BROWSER; null if stopped, late, or not one. */
-  nextLink: (signal: AbortSignal) => Promise<string | null>
+  nextLink: (signal: AbortSignal, waitMs?: number) => Promise<string | null>
   dispose: () => Promise<void>
 }
 
@@ -67,13 +67,17 @@ export async function prepareClaudeSignInBrowser(
   }
   return {
     path: isWsl && folder.linuxPath ? posix.join(folder.linuxPath, HELPER_NAME) : helperPath,
-    nextLink: (signal) => pollForLink(linkPath, signal),
+    nextLink: (signal, waitMs = LINK_WAIT_MS) => pollForLink(linkPath, signal, waitMs),
     dispose
   }
 }
 
-async function pollForLink(linkPath: string, signal: AbortSignal): Promise<string | null> {
-  const deadline = Date.now() + LINK_WAIT_MS
+async function pollForLink(
+  linkPath: string,
+  signal: AbortSignal,
+  waitMs: number
+): Promise<string | null> {
+  const deadline = Date.now() + waitMs
   while (!signal.aborted && Date.now() < deadline) {
     const signInLink = await readFile(linkPath, 'utf8').then(
       (text) => text.trim(),

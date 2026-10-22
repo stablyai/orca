@@ -106,28 +106,6 @@ async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
   })
 }
 
-async function getUnreadTerminalPaneKeys(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      return []
-    }
-    return Object.keys(store.getState().unreadTerminalPanes)
-  })
-}
-
-async function getActivePaneKey(page: Page, tabId: string): Promise<string> {
-  return page.evaluate((targetTabId) => {
-    const manager = window.__paneManagers?.get(targetTabId)
-    const pane = manager?.getActivePane?.()
-    const leafId = pane?.leafId ?? null
-    if (!leafId) {
-      throw new Error(`No active pane leaf for terminal tab ${targetTabId}`)
-    }
-    return `${targetTabId}:${leafId}`
-  }, tabId)
-}
-
 async function focusActiveXterm(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const manager = window.__paneManagers?.get(targetTabId)
@@ -190,11 +168,11 @@ test.describe('Terminal attention', () => {
       if (!ownerWorktreeId) {
         throw new Error(`No owner worktree found for terminal tab ${tabId}`)
       }
-      state.markWorktreeUnread(ownerWorktreeId)
-      // Why: the attention contract reads the marker value, not key presence
-      // (#20525). Production always marks with 'terminal-bell'; a bare call
-      // stores undefined, which the DOM correctly ignores.
-      state.markTerminalTabUnread(tabId, 'terminal-bell')
+      const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+      if (!leafId) {
+        throw new Error(`No active leaf found for terminal tab ${tabId}`)
+      }
+      state.markTerminalBell({ worktreeId: ownerWorktreeId, tabId, paneKey: `${tabId}:${leafId}` })
     }, secondTabId)
 
     await expect
@@ -223,11 +201,9 @@ test.describe('Terminal attention', () => {
     await expect(secondTabBell).toBeHidden()
   })
 
-  // Why (show-until-interact): ghostty's model fires the bell even on the
-  // currently-focused tab — the user only dismisses it by actually engaging
-  // with the pane. This test proves the BEL on a focused tab is visible
-  // until a pointerdown on the terminal container clears it.
-  test('a BEL on the focused tab raises, then clears on click', async ({ orcaPage }) => {
+  // Why (on screen means read, #28637): a BEL on the tab the present user is
+  // looking at is already read, so it must leave no unread marker or bell.
+  test('a BEL on the focused tab leaves no unread marker', async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -239,6 +215,10 @@ test.describe('Terminal attention', () => {
     }
     const activePtyId = await waitForActivePanePtyId(orcaPage)
     await installRendererTitleLog(orcaPage)
+
+    // Why: presence comes only from trusted input; a bare Shift keydown sends nothing to the shell.
+    await focusActiveXterm(orcaPage, activeTabId)
+    await orcaPage.keyboard.press('Shift')
 
     await emitBellAndWaitForTitleFlush(
       orcaPage,
@@ -246,107 +226,17 @@ test.describe('Terminal attention', () => {
       `focused-tab-bell-marker-${Date.now()}`
     )
 
-    // The focused tab is now unread — the bell persists until the user
-    // actually interacts with the pane.
-    expect((await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId)).toBe(true)
-    const activeTabBell = orcaPage
-      .locator(
+    await expect
+      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
+        timeout: 5_000,
+        message: 'A BEL on the focused tab left it unread'
+      })
+      .toBe(false)
+    await expect(
+      orcaPage.locator(
         `[data-testid="sortable-tab"][data-tab-id="${activeTabId}"] [data-testid="tab-activity-bell"]`
       )
-      .first()
-    await expect(activeTabBell).toBeVisible()
-
-    // A pointerdown inside the terminal container counts as interaction
-    // (matches the pointerdown handler added in TerminalPane.tsx). Drive it
-    // via the DOM so we exercise the real listener path rather than bypassing
-    // to the store action.
-    await orcaPage.evaluate((tabId) => {
-      const managers = window.__paneManagers
-      const manager = managers?.get(tabId)
-      const pane = manager?.getActivePane()
-      const container = pane?.container
-      if (!container) {
-        throw new Error('No active pane container to click')
-      }
-      container.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
-    }, activeTabId)
-
-    await expect
-      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
-        timeout: 5_000,
-        message: 'Unread state did not clear after interacting with the pane'
-      })
-      .toBe(false)
-    await expect(activeTabBell).toBeHidden()
-  })
-
-  // Why (plain Escape regression): Escape also emits real terminal input, but
-  // the interrupt-intent branch returns early. It must still dismiss focused
-  // terminal attention just like other user key input.
-  test('a BEL on the focused tab raises, then clears on plain Escape', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-
-    const activeTabId = await getActiveTabId(orcaPage)
-    if (!activeTabId) {
-      throw new Error('Expected an active terminal tab')
-    }
-    const activePaneKey = await getActivePaneKey(orcaPage, activeTabId)
-    const activePtyId = await waitForActivePanePtyId(orcaPage)
-    await installRendererTitleLog(orcaPage)
-
-    await emitBellAndWaitForTitleFlush(
-      orcaPage,
-      activePtyId,
-      `focused-tab-escape-marker-${Date.now()}`
-    )
-
-    await expect
-      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
-        timeout: 10_000,
-        message: 'Focused tab did not become unread after BEL'
-      })
-      .toBe(true)
-
-    // Focused BEL owns the tab indicator; seed pane attention separately so the
-    // Escape path proves it clears both store surfaces that pty-connection owns.
-    await orcaPage.evaluate((paneKey) => {
-      // Why: consumers read the marker value, not key presence (#20525); a bare
-      // call seeds `undefined`, which the pane attention DOM correctly ignores.
-      window.__store?.getState().markTerminalPaneUnread(paneKey, 'terminal-bell')
-    }, activePaneKey)
-    await expect
-      .poll(async () => (await getUnreadTerminalPaneKeys(orcaPage)).includes(activePaneKey), {
-        timeout: 5_000,
-        message: 'Seeded focused pane attention did not land'
-      })
-      .toBe(true)
-
-    const activeTabBell = orcaPage
-      .locator(
-        `[data-testid="sortable-tab"][data-tab-id="${activeTabId}"] [data-testid="tab-activity-bell"]`
-      )
-      .first()
-    await expect(activeTabBell).toBeVisible()
-
-    await focusActiveXterm(orcaPage, activeTabId)
-    await orcaPage.keyboard.press('Escape')
-
-    await expect
-      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
-        timeout: 5_000,
-        message: 'Unread tab state did not clear after pressing Escape in xterm'
-      })
-      .toBe(false)
-    await expect
-      .poll(async () => (await getUnreadTerminalPaneKeys(orcaPage)).includes(activePaneKey), {
-        timeout: 5_000,
-        message: 'Unread pane state did not clear after pressing Escape in xterm'
-      })
-      .toBe(false)
-    await expect(activeTabBell).toBeHidden()
+    ).toHaveCount(0)
   })
 
   // Why (restart regression guard): the original user-reported bug was that

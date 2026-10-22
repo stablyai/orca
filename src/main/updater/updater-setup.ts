@@ -20,6 +20,7 @@ import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
+import { configureMacShipItScheduling } from './macos-shipit-scheduling'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 
 export type UpdaterSetupOptions = {
@@ -144,6 +145,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     }
 
     const autoUpdater = this.getAutoUpdater()
+    configureMacShipItScheduling()
     autoUpdater.autoDownload = false
     if (this.activeUpdateSource === 'release') {
       autoUpdater.allowDowngrade = false

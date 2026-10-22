@@ -9,6 +9,12 @@ import {
 } from './GeneralPane'
 import { matchesSettingsSearch } from './settings-search'
 
+vi.mock('@/store', () => ({
+  useAppStore: () => {
+    throw new Error('Pure settings helpers must not access the app store')
+  }
+}))
+
 vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   default: () => {
     throw new Error('This suite must not render a terminal pane')

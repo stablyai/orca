@@ -1,3 +1,4 @@
+import { quotePosixShellDoubleQuotedApostrophe } from '../shared/shell-argument-quoting'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   recoverableOrchestrationArgs,
@@ -208,7 +209,7 @@ function shellQuote(value: string): string {
   if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) {
     return value
   }
-  return `'${value.replaceAll("'", `'"'"'`)}'`
+  return quotePosixShellDoubleQuotedApostrophe(value)
 }
 
 function stripUnsafeRetryAdvice(message: string, requestId: string): string {

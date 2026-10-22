@@ -3,9 +3,9 @@ import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
   buildWslExecArgs,
-  buildWslInteractiveLoginShellCommand,
-  quotePosixShell
+  buildWslInteractiveLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {
@@ -100,9 +100,9 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
  * large payloads return the bootstrap alone so stdin delivery remains available.
  */
 function getPowerShellRestoreCwdCommand(cwd: string): string {
+  // Why: profiles can change location, so restore the PTY cwd after profile loading.
   return [
     '',
-    '# Profiles can change location; restore the PTY cwd after profile loading.',
     `try { Set-Location -LiteralPath ${quoteStartupArg(cwd, 'powershell')} -ErrorAction Stop } catch { Write-Warning "Failed to restore working directory: $_" }`
   ].join('\n')
 }

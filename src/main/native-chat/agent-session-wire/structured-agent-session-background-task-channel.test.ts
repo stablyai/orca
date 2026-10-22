@@ -28,7 +28,8 @@ type Stops = { supportsTaskStop: boolean; supportsStopAll: boolean } | undefined
 
 function channelOver(
   children: () => AgentChildWorkView[] = () => [child],
-  stops: () => Stops = () => ({ supportsTaskStop: true, supportsStopAll: true })
+  stops: () => Stops = () => ({ supportsTaskStop: true, supportsStopAll: true }),
+  incomplete: () => boolean = () => false
 ) {
   const sessions = new StructuredAgentSessionConversations({
     deliver: () => {},
@@ -48,7 +49,8 @@ function channelOver(
     async () => {
       throw new Error('not opened here')
     },
-    children
+    children,
+    incomplete
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the map reads only the journal's commit observer and the session's provider.
   const session = {
@@ -72,6 +74,24 @@ describe('the background-task channel', () => {
 
   // A task that finished while no pane listened, then an idle sweep that stopped the provider:
   // a pane resuming must read "none", not silence it would take as "unchanged" (#24227).
+  // An idle parent whose live background child the store refused: no row lists it, so
+  // the strip must stay and say so rather than read as nothing running.
+  it('keeps the strip, with its Stop, for work the host could not record', () => {
+    const { sessions, channel, session } = channelOver(
+      () => [],
+      () => ({ supportsTaskStop: true, supportsStopAll: true }),
+      () => true
+    )
+    sessions.set('session-1', session)
+
+    expect(channel.read('session-1')).toEqual({
+      state: 'monitoring',
+      supportsTaskStop: true,
+      children: [],
+      incomplete: true
+    })
+  })
+
   it('answers "none" for a conversation no provider holds, not "unknown"', () => {
     const { sessions, channel, session } = channelOver(
       () => [],

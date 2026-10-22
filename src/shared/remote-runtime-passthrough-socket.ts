@@ -80,9 +80,11 @@ export function openRemoteRuntimePassthroughSocket(
     )
     const liveness = startRemoteRuntimeSocketLiveness({
       ping: () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.ping()
+        if (ws.readyState !== WebSocket.OPEN) {
+          return false
         }
+        ws.ping()
+        return true
       },
       onDead: () =>
         end(

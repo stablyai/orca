@@ -5,7 +5,7 @@ const CODEX_HEADER_LOADING_RE = /(?:model|directory):\s+loading|^\s*loading\s*$/
 // Why a line cap: 0.158 draws no box, so nothing else ends its header before the chat.
 const CODEX_HEADER_LINES = 6
 // Why the whole line: a pager, a `cat`ed transcript, or chat can quote the placeholder mid-line.
-const CODEX_EMPTY_COMPOSER_RE = /^› ask codex to do anything\s*$/
+const CODEX_EMPTY_COMPOSER_RE = /^\u203A ask codex to do anything\s*$/
 // Why not "working": reasoning summaries replace it, and a remapped key still ends this way.
 const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
 // Why only a tip: it is the one line Codex draws between its status row and the composer (120x40 corpus).

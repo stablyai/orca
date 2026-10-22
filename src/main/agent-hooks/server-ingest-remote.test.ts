@@ -194,7 +194,7 @@ describe('AgentHookServer ingestRemote', () => {
     )
   })
 
-  it('preserves active pane identity when a nested remote hook reports another agent', () => {
+  it('preserves active pane status when a nested remote hook reports another agent', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     try {
@@ -234,17 +234,15 @@ describe('AgentHookServer ingestRemote', () => {
         expect.objectContaining({
           paneKey: PANE,
           state: 'working',
-          prompt: 'nested claude',
+          prompt: 'parent codex',
           agentType: 'codex',
-          toolName: 'Read',
-          toolInput: '00-review-context.md',
-          receivedAt: 1_100
+          receivedAt: 1_000
         })
       ])
       expect(listener).toHaveBeenLastCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
-            prompt: 'nested claude',
+            prompt: 'parent codex',
             agentType: 'codex'
           })
         })

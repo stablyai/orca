@@ -9,6 +9,10 @@ import {
   type AppImageDaemonLaunch
 } from './daemon-appimage-launch'
 import { buildDurableDaemonScopeCommand } from './daemon-cgroup-scope'
+import {
+  buildAppImageGenerationDaemonCommand,
+  type AppImageGenerationDaemonLaunch
+} from './daemon-appimage-generation-launch'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { TERMINAL_SPAWN_ADMISSION_ARG } from './terminal-spawn-gate'
 
@@ -18,6 +22,8 @@ export type DaemonChildSpawnOptions = {
   relocatedExecPath?: string
   /** Linux AppImage: exec the AppImage file so the daemon owns its mount. */
   appImage?: AppImageDaemonLaunch
+  /** Linux AppImage: run the bundled Node inside the extracted copy, off every mount. */
+  extractedGeneration?: AppImageGenerationDaemonLaunch
   userDataPath: string
   socketPath: string
   tokenPath: string
@@ -40,6 +46,7 @@ export function buildDaemonScriptArgs(
     launchNonce,
     entryPath,
     appImage,
+    extractedGeneration,
     macosLoginSessionWatch
   } = options
   return [
@@ -52,7 +59,8 @@ export function buildDaemonScriptArgs(
     '--launch-nonce',
     launchNonce,
     '--entry-path',
-    appImage ? appImageDaemonIdentityPath(appImage) : entryPath,
+    extractedGeneration?.identityPath ??
+      (appImage ? appImageDaemonIdentityPath(appImage) : entryPath),
     '--app-version',
     getAppEnvironment().getVersion(),
     '--spawner-exec-path',
@@ -80,7 +88,14 @@ export function spawnDaemonChildProcess(
   options: DaemonChildSpawnOptions,
   useDurableScope: boolean
 ): SpawnedProcess {
-  const { forkEntryPath, relocatedExecPath, appImage, userDataPath, launchNonce } = options
+  const {
+    forkEntryPath,
+    relocatedExecPath,
+    appImage,
+    extractedGeneration,
+    userDataPath,
+    launchNonce
+  } = options
   const scriptArgs = buildDaemonScriptArgs(options)
   // Why: run as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
   const daemonEnv: NodeJS.ProcessEnv = {
@@ -98,7 +113,7 @@ export function spawnDaemonChildProcess(
     detached: true,
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   }
-  if (!useDurableScope && !appImage) {
+  if (!useDurableScope && !appImage && !extractedGeneration) {
     return forkProcess({
       ...childOptions,
       modulePath: forkEntryPath,
@@ -109,13 +124,19 @@ export function spawnDaemonChildProcess(
     })
   }
   const scopeArgs = useDurableScope ? ['--fresh-daemon-scope'] : []
-  const direct = appImage
-    ? buildAppImageDaemonCommand(appImage, [...scriptArgs, ...scopeArgs], daemonEnv)
-    : {
-        command: relocatedExecPath ?? process.execPath,
-        args: [forkEntryPath, ...scriptArgs, ...scopeArgs],
-        env: daemonEnv
-      }
+  const direct = extractedGeneration
+    ? buildAppImageGenerationDaemonCommand(
+        extractedGeneration,
+        [...scriptArgs, ...scopeArgs],
+        daemonEnv
+      )
+    : appImage
+      ? buildAppImageDaemonCommand(appImage, [...scriptArgs, ...scopeArgs], daemonEnv)
+      : {
+          command: relocatedExecPath ?? process.execPath,
+          args: [forkEntryPath, ...scriptArgs, ...scopeArgs],
+          env: daemonEnv
+        }
   const scoped = useDurableScope
     ? buildDurableDaemonScopeCommand(direct.command, direct.args, launchNonce, direct.env)
     : direct

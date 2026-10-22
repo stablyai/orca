@@ -9,8 +9,9 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, X } from 'lucide-react-native'
-import { useRouteHandoff } from '../navigation/route-handoff'
-import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useForceReconnect } from '../transport/host-client-hooks'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
@@ -34,6 +35,7 @@ import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-op
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
+import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -43,8 +45,8 @@ export function MobileFileExplorerPanel(props: {
   onRequestClose?: () => void
 }) {
   const { hostId, worktreeId, name, embedded, onRequestClose } = props
-  const router = useRouteHandoff()
-  const { client, state: connState } = useHostClient(hostId)
+  const router = useWorkspaceRouteHandoff()
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const scopeRef = useRef('')
   const scope = `${hostId}:${worktreeId}`
@@ -337,14 +339,7 @@ export function MobileFileExplorerPanel(props: {
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : error ? (
-    <View style={styles.state}>
-      <Text style={styles.errorText}>{error}</Text>
-      {rootRetry ? (
-        <Pressable style={styles.retryButton} onPress={rootRetry}>
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <MobileLoadErrorState message={error} onRetry={rootRetry} />
   ) : rows.length === 0 ? (
     <View style={styles.state}>
       <Text style={styles.emptyText}>No files found</Text>

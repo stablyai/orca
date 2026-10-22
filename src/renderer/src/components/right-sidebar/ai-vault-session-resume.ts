@@ -20,6 +20,7 @@ import {
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
@@ -171,13 +172,13 @@ export function isKnownAiVaultResumeWorkspaceTarget(
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
   if (workspaceKey?.type === 'folder') {
-    return state.folderWorkspaces.some(
+    return selectFolderWorkspaces(state).some(
       (workspace) => workspace.id === workspaceKey.folderWorkspaceId
     )
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  return getIndexedWorktreeMap(state.worktreesByRepo).has(worktreeId)
+  return getIndexedWorktreeMap(selectWorktreesByRepo(state)).has(worktreeId)
 }
 
 function resolveSupportedResumeWorktreeId(args: {

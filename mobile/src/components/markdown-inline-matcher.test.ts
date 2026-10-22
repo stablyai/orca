@@ -1,19 +1,14 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { createMarkdownInlineMatcher } from './markdown-inline-matcher'
-import { isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { parseInline } from './pr-sidebar/markdown-blocks'
 
-const ORIGINAL_CHAT =
-  /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
-const CHAT_OTHER =
-  /(`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g
 const ORIGINAL_REVIEW =
   /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(\[[^\]]+\]\([^)]+\))/g
 const REVIEW_OTHER = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
 
-function tokens(text: string, chat: boolean, original: boolean) {
-  const pattern = new RegExp(chat ? ORIGINAL_CHAT : ORIGINAL_REVIEW)
+function tokens(text: string, original: boolean) {
+  const pattern = new RegExp(ORIGINAL_REVIEW)
   const matcher = original
     ? {
         get lastIndex() {
@@ -24,21 +19,17 @@ function tokens(text: string, chat: boolean, original: boolean) {
         },
         exec: () => pattern.exec(text)
       }
-    : createMarkdownInlineMatcher(text, new RegExp(chat ? CHAT_OTHER : REVIEW_OTHER), chat)
+    : createMarkdownInlineMatcher(text, new RegExp(REVIEW_OTHER))
   const result: Array<{ text: string; index: number; end: number }> = []
   let match
   while ((match = matcher.exec())) {
-    if (chat && isIntrawordUnderscoreToken(text, match.index, match[0])) {
-      matcher.lastIndex = match.index + 1
-      continue
-    }
     result.push({ text: match[0], index: match.index, end: matcher.lastIndex })
   }
   return result
 }
 
 describe('mobile inline link scanning', () => {
-  it.each([false, true])('preserves original token order (chat=%s)', (chat) => {
+  it('preserves original token order', () => {
     const fragments = [
       '[',
       ']',
@@ -71,7 +62,7 @@ describe('mobile inline link scanning', () => {
         { length: 1 + (random() % 40) },
         () => fragments[random() % fragments.length]
       ).join('')
-      expect(tokens(text, chat, false), text).toEqual(tokens(text, chat, true))
+      expect(tokens(text, false), text).toEqual(tokens(text, true))
     }
   })
 

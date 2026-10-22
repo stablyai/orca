@@ -4,7 +4,8 @@ import type {
 } from '../../../../shared/terminal-tab-types'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
-import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 const EMPTY_TERMINAL_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -77,16 +78,6 @@ function hasLeafPtyBinding(
   leafId: string
 ): boolean {
   return ptyIdsByLeafId ? Object.hasOwn(ptyIdsByLeafId, leafId) : false
-}
-
-export function resolveRootlessTerminalLayoutLeafId(
-  snapshot: Pick<TerminalLayoutSnapshot, 'activeLeafId' | 'ptyIdsByLeafId'>
-): string | null {
-  if (snapshot.activeLeafId && isTerminalLeafId(snapshot.activeLeafId)) {
-    return snapshot.activeLeafId
-  }
-  const boundLeafIds = Object.keys(snapshot.ptyIdsByLeafId ?? {}).filter(isTerminalLeafId)
-  return boundLeafIds.length === 1 ? boundLeafIds[0] : null
 }
 
 export function resolveTerminalLayoutActiveLeafId(opts: {

@@ -9,11 +9,11 @@ import type { AutomationWorkspaceProvenance, GitWorktreeInfo } from '../shared/w
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { getProjectHostSetupWorktreeMeta } from '../shared/project-host-setup-lookup'
 import { isTuiAgent } from '../shared/tui-agent-config'
+import { getWorktreeCreationLayout } from './ipc/worktree-logic'
 import {
-  getWorktreeCreationLayout,
   resolveWorktreeCreateDisplayNameMeta,
   resolveWorktreeCreateDisplayNameRequest
-} from './ipc/worktree-logic'
+} from './ipc/worktree-display-name'
 
 export type ProvisionedRootRequest = Pick<
   CreateWorktreeArgs,

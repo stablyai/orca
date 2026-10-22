@@ -415,6 +415,9 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
     join(processTreeDir, 'index.js'),
     'exports.supportedProcessDataFlags = 4; exports.getProcessCreationTime = () => 1\n'
   )
+  const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
+  mkdirSync(securityDir, { recursive: true })
+  writeFileSync(join(securityDir, 'index.js'), "exports.currentUserSid = () => 'S-1-5-18'\n")
 }
 
 function writeNodePtyPatchFile(projectDir) {

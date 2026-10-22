@@ -922,18 +922,14 @@ test('the workflows offer exactly the closed set and scale the drain wait with i
   assert.match(job, /\n      DRAIN_PACE_WINDOW_MS: \$\{\{ inputs\.drain-pace-window-ms \}\}\n/)
   assert.doesNotMatch(job, /DRAIN_PACE_WINDOW_MS: '/)
   assert.match(job, /cell-class \\\n\s+--cell-id "\$\{TARGET_CELL_ID\}" --drain-pace-window-ms "\$\{DRAIN_PACE_WINDOW_MS\}"/)
-  // The 15-min migration lease plus the window, plus its excess over the default: restart-safe
-  // waits a whole window of quiet after the last send, so a slow drain needs about twice it.
+  // The 15-min migration lease plus the window: restart-safe passes once the window has ended.
   const timeout = /--timeout-ms "\$\(\((.+)\)\)"\n/.exec(job)[1]
   const timeoutMs = (pace) => Number(execFileSync(
     'bash', ['-c', `DRAIN_PACE_WINDOW_MS=${pace}; echo $((${timeout}))`], { encoding: 'utf8' }
   ))
-  // Exactly the timeouts every pace had before the slower ones existed.
-  for (const pace of [300_000, 60_000, 30_000]) assert.equal(timeoutMs(pace), 900_000 + pace)
   for (const pace of SAME_CAP_DRAIN_PACE_WINDOWS_MS) {
-    assert.ok(timeoutMs(pace) >= 2 * pace + 600_000, String(pace))
+    assert.equal(timeoutMs(pace), 900_000 + pace, String(pace))
   }
-  assert.equal(timeoutMs(1_200_000), 3_000_000)
   const slowest = timeoutMs(Math.max(...SAME_CAP_DRAIN_PACE_WINDOWS_MS))
   // The rest of the job keeps the 70 min it had beside the old 20-min drain step in 90.
   const jobMinutes = Number(/\n  rollout:\n(?:    [^\n]*\n)*?    timeout-minutes: (\d+)\n/.exec(job)[1])

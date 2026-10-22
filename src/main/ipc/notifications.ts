@@ -15,6 +15,7 @@ import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
+import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
@@ -116,12 +117,14 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           const read = Array.isArray(reads)
             ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
             : undefined
-          for (const entry of announced.take(paneKey, read)) {
+          const retired = announced.take(paneKey, read)
+          for (const entry of retired) {
             uniqueIds.add(entry.id)
             if (!entry.origin) {
               genericMobileIds.add(entry.id)
             }
           }
+          removeReadMacosNotifications(paneKey, retired)
           if (read) {
             runtime?.retireStructuredAttention(read)
           }

@@ -14,6 +14,7 @@ export type ReposIpcMocks = {
   handleMock: ReposIpcSpy
   mockStore: Record<
     | 'getRepos'
+    | 'getAllWorktreeMeta'
     | 'addRepo'
     | 'removeProjectForHost'
     | 'getRepo'
@@ -29,7 +30,7 @@ export type ReposIpcMocks = {
     | 'getSshTargets',
     ReposIpcSpy
   > & {
-    updateRepo: Mock<(repoId: string, updates: Record<string, unknown>) => unknown>
+    updateRepo: Mock<(target: { id: string }, updates: Record<string, unknown>) => unknown>
   }
   gitSpawnMock: ReposIpcSpy
   gitSpawnAfterWindowsEnvironmentReadyMock: ReposIpcSpy
@@ -44,6 +45,7 @@ export function createReposIpcMocks(): ReposIpcMocks {
     handleMock: vi.fn(),
     mockStore: {
       getRepos: vi.fn().mockReturnValue([]),
+      getAllWorktreeMeta: vi.fn().mockReturnValue({}),
       addRepo: vi.fn(),
       removeProjectForHost: vi.fn(),
       getRepo: vi.fn(),

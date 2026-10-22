@@ -22,6 +22,7 @@ import type {
   ProjectUpdateArgs
 } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -43,6 +44,7 @@ export type RepoUpdate = Partial<
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
+    | 'defaultJiraProject'
     | 'forkSyncMode'
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'externalWorktreeInboxBaselinePaths'
@@ -256,17 +258,21 @@ export type RepoSlice = {
     groupId: string,
     options: DeleteProjectGroupWithContainedProjectsOptions
   ) => Promise<DeleteProjectGroupWithContainedProjectsResult>
+  // The row itself, not its id: twins share an id, and a paired server's twins share a host too.
   moveProjectToGroup: (
-    projectId: string,
+    project: RepoHostTarget,
     groupId: string | null,
-    order?: number,
-    hostId?: ExecutionHostId
+    order?: number
   ) => Promise<boolean>
   // options.hostId is required: a bare id can resolve to another host's row (#13071). Removes nothing when that host has no row.
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.
   removeProject: (
     projectId: string,
-    options: { hostId: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
+    options: {
+      hostId: ExecutionHostId
+      errorFeedback?: 'toast' | 'silent'
+      automaticCleanup?: boolean
+    }
   ) => Promise<void>
   updateProject: (
     projectId: string,

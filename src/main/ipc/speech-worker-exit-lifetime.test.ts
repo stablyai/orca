@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { ModelManager } from '../speech/model-manager'
@@ -33,6 +34,14 @@ const environment = vi.hoisted(
   })
 )
 
+const fileAccess = vi.hoisted(() => ({ write: vi.fn(), unlink: vi.fn() }))
+
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof FsPromises>()),
+  writeFile: fileAccess.write,
+  unlink: fileAccess.unlink
+}))
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: (name: string, callback: SpeechHandler) => environment.handlers.set(name, callback)
@@ -44,7 +53,10 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('../speech/speech-runtime-service', () => ({
-  getSpeechModelManager: () => ({ getModelState: async () => ({ status: 'ready' }) }),
+  getSpeechModelManager: () => ({
+    getModelState: async () => ({ status: 'ready' }),
+    getModelsDir: () => 'unused-models'
+  }),
   getSpeechSttService: () => environment.service
 }))
 vi.mock('../speech/openai-api-key-store', () => ({
@@ -62,11 +74,14 @@ vi.mock('../speech/model-catalog', () => ({
     streaming: true,
     sampleRate: 16000,
     files: []
-  })
+  }),
+  isLocalSpeechModel: () => true
 }))
 vi.mock('../speech/stt-worker-paths', () => ({
+  LOCAL_SPEECH_UNAVAILABLE_ERROR: 'voice_model_not_ready:unavailable',
   getSttWorkerPath: () => 'unused-worker',
-  getSherpaModulePath: () => 'unused-module'
+  getSherpaModulePath: () => 'unused-module',
+  hasLocalSpeechRecognizer: () => true
 }))
 vi.mock('node:worker_threads', async () => {
   const { EventEmitter: WorkerEvents } = await import('node:events')
@@ -95,6 +110,7 @@ vi.mock('node:worker_threads', async () => {
 
 import { registerSpeechHandlers } from './speech'
 import { SttService as SpeechService } from '../speech/stt-service'
+import { handleSttWorkerFailure } from '../speech/stt-session-stop'
 import { RuntimeMobileDictationController } from '../runtime/runtime-mobile-dictation-controller'
 
 class TestWindow extends EventEmitter {
@@ -139,6 +155,8 @@ describe('speech worker exit ownership', () => {
     environment.handlers.clear()
     environment.workers = []
     environment.readyOnInit = true
+    fileAccess.write.mockReset().mockResolvedValue(undefined)
+    fileAccess.unlink.mockReset().mockResolvedValue(undefined)
     window = new TestWindow()
     environment.window = window
     const modelManager: Pick<ModelManager, 'getModelState' | 'getModelDir'> = {
@@ -158,6 +176,108 @@ describe('speech worker exit ownership', () => {
     await Promise.resolve()
     await Promise.resolve()
     await service().prepareModelForDeletion('test-model')
+  })
+
+  it('bounds close listeners through repeated starts and stops with no remaining worker', async () => {
+    const unrelated = vi.fn()
+    window.on('closed', unrelated)
+    const counts: number[] = []
+    for (let cycle = 0; cycle < 12; cycle += 1) {
+      const session = String(cycle)
+      await start(session)
+      await start(session)
+      await stop(session)
+      worker().emit('exit', 0)
+      expect(service().isActive()).toBe(false)
+      await stop(session)
+      counts.push(window.listenerCount('closed'))
+    }
+    expect(counts).toEqual(Array.from({ length: 12 }, () => 1))
+    expect(window.listeners('closed')).toEqual([unrelated])
+  })
+
+  it('cleans a completed stop when the service has no worker and sends no report', async () => {
+    await start()
+    handleSttWorkerFailure(service()['state'])
+    expect(service().isActive()).toBe(false)
+    expect(window.listenerCount('closed')).toBe(1)
+    await stop()
+    expect(window.listenerCount('closed')).toBe(0)
+    expect(
+      window.webContents.send.mock.calls.filter(([name]) => name === 'speech:stopped')
+    ).toHaveLength(0)
+  })
+
+  it('keeps the accepted startup hook when a same-owner start is coalesced', async () => {
+    environment.readyOnInit = false
+    const pendingStart = start()
+    await Promise.resolve()
+    await start()
+    expect(window.listenerCount('closed')).toBe(1)
+    worker().emit('message', { type: 'ready' })
+    await pendingStart
+    worker().emit('exit', 0)
+    expect(window.listenerCount('closed')).toBe(0)
+    expect(
+      window.webContents.send.mock.calls.filter(([name]) => name === 'speech:stopped')
+    ).toHaveLength(1)
+  })
+
+  it('keeps the live hook after a rejected owner and lets window close stop it', async () => {
+    await start('live')
+    await expect(start('rejected')).rejects.toThrow('dictation_already_active')
+    expect(window.listenerCount('closed')).toBe(1)
+    window.destroyed = true
+    window.emit('closed')
+    await vi.waitFor(() => expect(service()['state'].activeOwner).toBeNull())
+    expect(window.listenerCount('closed')).toBe(0)
+    expect(service()['state'].eventSink).toBeNull()
+  })
+
+  it('preserves the active hook when another owner cannot stop it', async () => {
+    await start('live')
+    await expect(stop('other')).rejects.toThrow('dictation_owner_mismatch')
+    expect(window.listenerCount('closed')).toBe(1)
+    await stop('live')
+    expect(window.listenerCount('closed')).toBe(0)
+  })
+
+  it('does not let a delayed old stop remove the replacement hook', async () => {
+    await start('old')
+    const { promise, resolve } = Promise.withResolvers<void>()
+    const originalStop = service().stopDictation.bind(service())
+    vi.spyOn(service(), 'stopDictation').mockImplementation(async (owner, options) => {
+      await originalStop(owner, options)
+      await promise
+    })
+    const pendingStop = stop('old')
+    await vi.waitFor(() => expect(window.listenerCount('closed')).toBe(0))
+    await start('replacement')
+    expect(window.listenerCount('closed')).toBe(1)
+    resolve()
+    await pendingStop
+    expect(window.listenerCount('closed')).toBe(1)
+    await stop('replacement')
+    expect(window.listenerCount('closed')).toBe(0)
+  })
+
+  it('retains hotwords until startup finishes and preserves the live hook on write failure', async () => {
+    environment.readyOnInit = false
+    const pendingStart = handler('speech:startDictation')(sender, 'test-model', ['orca'], 'one')
+    await vi.waitFor(() => expect(environment.workers).toHaveLength(1))
+    expect(fileAccess.write).toHaveBeenCalledTimes(1)
+    expect(fileAccess.unlink).not.toHaveBeenCalled()
+    worker().emit('message', { type: 'ready' })
+    await pendingStart
+    expect(fileAccess.unlink).toHaveBeenCalledTimes(1)
+    fileAccess.write.mockRejectedValueOnce(new Error('write failed'))
+    await expect(
+      handler('speech:startDictation')(sender, 'test-model', ['different'], 'two')
+    ).rejects.toThrow('write failed')
+    expect(window.listenerCount('closed')).toBe(1)
+    expect(fileAccess.unlink).toHaveBeenCalledTimes(1)
+    await stop()
+    expect(window.listenerCount('closed')).toBe(0)
   })
 
   it.each([0, 1])('releases the window listener after unexpected exit code %i', async (code) => {

@@ -55,7 +55,10 @@ function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmis
     if (
       (submission.dispatchState !== 'pending' && submission.dispatchState !== 'unknown') ||
       // Never handed over, so provider history cannot hold it.
-      isQueuedAgentJournalSubmission(submission)
+      isQueuedAgentJournalSubmission(submission) ||
+      // The provider's copy leads with the stopped history it carried, so its fingerprint cannot
+      // match; like an attachment's, its absence is no evidence and it stays `unknown`.
+      journal.stoppedHistoryCarried().has(submission.clientMessageId)
     ) {
       return false
     }

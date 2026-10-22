@@ -1,4 +1,8 @@
 import type { CommandHandler } from '../dispatch'
+import {
+  describePtyProcessCeiling,
+  type PtyProcessCeilingState
+} from '../../shared/pty-process-ceiling-state'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 
@@ -9,7 +13,15 @@ type SeveredDaemonStatus = {
   liveSessionCount: number | null
 }
 
-type SeveredStatusResult = { severed: SeveredDaemonStatus | null }
+type DaemonLiveness = {
+  verdict: 'live' | 'unverifiable' | 'exited'
+  pid: number | null
+  detail: string
+  processCeiling: PtyProcessCeilingState | null
+}
+
+/** `daemon` is absent from hosts that predate the liveness report. */
+type SeveredStatusResult = { severed: SeveredDaemonStatus | null; daemon?: DaemonLiveness }
 
 type RestartResult =
   | { status: 'restarted'; killedCount: number }
@@ -27,16 +39,34 @@ function describeSessions(count: number | null): string {
     : `${count} running terminal${count === 1 ? '' : 's'}`
 }
 
+function formatDaemonLiveness(daemon: DaemonLiveness | undefined): string[] {
+  if (!daemon) {
+    return [
+      'Terminal daemon: unverifiable — this Orca server does not report whether it is running.'
+    ]
+  }
+  const lines = [
+    `Terminal daemon: ${daemon.verdict}${daemon.pid === null ? '' : ` (pid ${daemon.pid})`} — ${daemon.detail}.`
+  ]
+  if (daemon.verdict === 'live') {
+    lines.push(`Terminal process ceiling: ${describePtyProcessCeiling(daemon.processCeiling)}`)
+  }
+  return lines
+}
+
 export function formatSeveredDaemonStatus(result: SeveredStatusResult): string {
   const severed = result.severed
-  if (!severed) {
-    return 'Terminal daemon: OK.'
+  const liveness = formatDaemonLiveness(result.daemon)
+  // Why: a severed daemon that has since died hosts nothing; the liveness line says so.
+  if (!severed || result.daemon?.verdict === 'exited') {
+    return liveness.join('\n')
   }
   return [
     `Terminal daemon PID ${severed.pid} is running without its program files (the AppImage it started from is gone).`,
     `It still hosts ${describeSessions(severed.liveSessionCount)}. New terminals are not kept across restarts until it is restarted.`,
     'Restarting ENDS those processes. Agents that support resume can be resumed afterwards; shells and other jobs cannot.',
-    'Run `orca terminal-daemon restart --yes` when your agents are idle.'
+    'Run `orca terminal-daemon restart --yes` when your agents are idle.',
+    ...liveness
   ].join('\n')
 }
 

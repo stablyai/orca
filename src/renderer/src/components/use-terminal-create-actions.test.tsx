@@ -132,12 +132,16 @@ describe('useTerminalCreateActions creation gates', () => {
       tabBarOrderByWorktree: { [WORKTREE_ID]: ['browser-1', 'term-a', 'browser-1'] },
       setTabBarOrder
     }
-    mocks.createTab.mockImplementation(() => {
-      terminals.push({ id: 'term-new' })
-      return { id: 'term-new' }
-    })
+    mocks.createTab.mockImplementation(
+      (_worktreeId: string, _groupId: undefined, _shell: string, options: { id: string }) => {
+        terminals.push({ id: options.id })
+      }
+    )
     renderActions().handleNewTab('/bin/zsh')
-    expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, '/bin/zsh')
-    expect(setTabBarOrder).toHaveBeenCalledWith(WORKTREE_ID, ['browser-1', 'term-a', 'term-new'])
+    expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, '/bin/zsh', {
+      id: expect.any(String)
+    })
+    const tabId = mocks.createTab.mock.calls[0][3].id
+    expect(setTabBarOrder).toHaveBeenCalledWith(WORKTREE_ID, ['browser-1', 'term-a', tabId])
   })
 })

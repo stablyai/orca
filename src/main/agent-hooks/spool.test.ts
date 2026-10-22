@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   AGENT_HOOK_SPOOL_MAX_FILES,
-  drainAgentHookSpool,
+  drainAgentHookSpoolAsync,
   launchTokenHash,
   type SpoolRecord
 } from '../../shared/agent-hook-spool'
@@ -36,7 +36,7 @@ describe('agent hook spool', () => {
     )
   })
 
-  it('waits for a newline before replaying a complete-looking final record', () => {
+  it('waits for a newline before replaying a complete-looking final record', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-spool-unterminated-'))
     const spool = join(dir, 'spool')
     mkdirSync(spool)
@@ -52,18 +52,20 @@ describe('agent hook spool', () => {
     const options = {
       endpointDir: dir,
       getPersistedLaunchTokenHash: () => undefined,
-      ingest: (value: SpoolRecord) => ingested.push(value)
+      ingest: (value: SpoolRecord) => {
+        ingested.push(value)
+      }
     }
-    expect(drainAgentHookSpool(options)).toBe(0)
+    expect(await drainAgentHookSpoolAsync(options)).toBe(0)
     expect(readFileSync(file, 'utf8')).toBe(record)
 
     appendFileSync(file, '\n')
-    expect(drainAgentHookSpool(options)).toBe(1)
+    expect(await drainAgentHookSpoolAsync(options)).toBe(1)
     expect(ingested).toHaveLength(1)
     expect(readFileSync(file)).toHaveLength(0)
   })
 
-  it('does not let historical empty pane files starve newer records', () => {
+  it('does not let historical empty pane files starve newer records', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-spool-empty-files-'))
     const spool = join(dir, 'spool')
     mkdirSync(spool)
@@ -76,16 +78,18 @@ describe('agent hook spool', () => {
       `\n${JSON.stringify({ paneKey: 'tab:live', source: 'codex', receivedAt: Date.now(), payload: { state: 'done' } })}\n`
     )
     const ingested: SpoolRecord[] = []
-    drainAgentHookSpool({
+    await drainAgentHookSpoolAsync({
       endpointDir: dir,
       getPersistedLaunchTokenHash: () => undefined,
-      ingest: (record) => ingested.push(record)
+      ingest: (record) => {
+        ingested.push(record)
+      }
     })
     expect(ingested).toHaveLength(1)
     expect(ingested[0]?.paneKey).toBe('tab:live')
   })
 
-  it('rejects stale launch tokens before ingest and truncates in place', () => {
+  it('rejects stale launch tokens before ingest and truncates in place', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-spool-'))
     const spool = join(dir, 'spool')
     mkdirSync(spool)
@@ -96,17 +100,19 @@ describe('agent hook spool', () => {
     )
     const inode = statSync(file).ino
     const ingested: unknown[] = []
-    drainAgentHookSpool({
+    await drainAgentHookSpoolAsync({
       endpointDir: dir,
       getPersistedLaunchTokenHash: () => launchTokenHash('new')!,
-      ingest: (record) => ingested.push(record)
+      ingest: (record) => {
+        ingested.push(record)
+      }
     })
     expect(ingested).toHaveLength(0)
     expect(readFileSync(file)).toHaveLength(0)
     expect(statSync(file).ino).toBe(inode)
   })
 
-  it('ingests a record with the matching launch token', () => {
+  it('ingests a record with the matching launch token', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-spool-'))
     const spool = join(dir, 'spool')
     mkdirSync(spool)
@@ -116,10 +122,12 @@ describe('agent hook spool', () => {
       `\n${JSON.stringify({ paneKey: 'tab:1', source: 'codex', launchToken: 'same', receivedAt: Date.now(), payload: { state: 'done' } })}\n`
     )
     const ingested: unknown[] = []
-    drainAgentHookSpool({
+    await drainAgentHookSpoolAsync({
       endpointDir: dir,
       getPersistedLaunchTokenHash: () => launchTokenHash('same')!,
-      ingest: (record) => ingested.push(record)
+      ingest: (record) => {
+        ingested.push(record)
+      }
     })
     expect(ingested).toHaveLength(1)
     expect(ingested[0]).toMatchObject({ paneKey: 'tab:1', isReplay: true })

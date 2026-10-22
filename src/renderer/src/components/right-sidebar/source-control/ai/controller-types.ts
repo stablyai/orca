@@ -19,7 +19,7 @@ export type SourceControlAiControllerParams = {
   activeWorktreeId: string | null | undefined
   activeConnectionId: string | null | undefined
   activeGroupId: string | null | undefined
-  activeSourceControlLaunchPlatform: NodeJS.Platform
+  activeSourceControlLaunchPlatform: NodeJS.Platform | undefined
   conflictOperation: GitConflictOperation
   unresolvedConflicts: Pick<GitStatusEntry, 'path' | 'conflictKind'>[]
   stagedEntries: Pick<GitStatusEntry, 'path' | 'status' | 'area'>[]

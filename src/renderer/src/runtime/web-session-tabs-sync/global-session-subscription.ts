@@ -4,6 +4,7 @@ import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent
 import { clearWebSessionReorderIntentsForOwner } from '../web-session-reorder-intent'
 import {
   installWindowVisibilitySubscriptionParking,
+  type WindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionSpec
 } from '../window-visibility-subscription-parking'
 import { shouldSyncAllRuntimeSessionTabs } from './tracking-decisions'
@@ -62,7 +63,7 @@ export function installGlobalSessionTabsSubscriptions({
   runtimeSessionMirrorEnvironmentKey,
   workspaceSessionReady,
   refs
-}: GlobalSubscriptionInstallArgs): (() => void) | undefined {
+}: GlobalSubscriptionInstallArgs): WindowVisibilitySubscriptionParking | undefined {
   const environments = parseEnvironments(runtimeSessionMirrorEnvironmentKey)
   const ownerRevisions = new Map(
     (workspaceSessionReady ? environments : []).map(
@@ -203,16 +204,19 @@ export function installGlobalSessionTabsSubscriptions({
     onVisibilityResume: ({ visibilityGeneration, restartingSpecIndexes }) =>
       coordinator.beginVisibilityResume(visibilityGeneration, restartingSpecIndexes)
   })
-  return () => {
-    refs.snapshotReceipt.current = () => {}
-    refs.snapshotApply.current = () => true
-    refs.snapshotAccepted.current = () => {}
-    dispose()
-    for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
-      const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
-      clearWebSessionCloseIntentsForOwner(owner)
-      clearWebSessionFocusIntentsForOwner(owner)
-      clearWebSessionReorderIntentsForOwner(owner)
-    }
-  }
+  return Object.assign(
+    () => {
+      refs.snapshotReceipt.current = () => {}
+      refs.snapshotApply.current = () => true
+      refs.snapshotAccepted.current = () => {}
+      dispose()
+      for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
+        const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
+        clearWebSessionCloseIntentsForOwner(owner)
+        clearWebSessionFocusIntentsForOwner(owner)
+        clearWebSessionReorderIntentsForOwner(owner)
+      }
+    },
+    { restartEnded: dispose.restartEnded }
+  )
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import {
+  SHADOW_SEAT_OUTRANK_SKEW_MS,
   SHADOW_SEAT_RECENTLY_LEFT_MAX_HOSTS,
   ShadowSeatDirectory,
   startShadowSeatPoller,
@@ -575,5 +576,78 @@ describe('ShadowSeatDirectory.placementModeOf', () => {
     expect(directory.admitModeOf('cell-a')).toBe('reserve')
     directory.apply('cell-a', response({ admitModeEffective: 'reserve' }), 2_000, 2_000)
     expect(directory.placementModeOf('cell-a')).toBe('reserve')
+  })
+})
+
+describe('ShadowSeatDirectory.onOutranked', () => {
+  const reserve = { generation: 3, flags: { admitMode: 'reserve' } }
+  const db = { generation: 3, flags: { admitMode: 'db' } }
+  const full = (cellId: string, epoch: number, joinedAt: number, flags = reserve, state = 'active') =>
+    feed({
+      cellId,
+      seq: 1,
+      flagsApplied: flags,
+      full: [{ userId: 'user-a', relayHostId: 'host-1', epoch, generation: 1, state, joinedAt }]
+    })
+  const directory = () => {
+    const map = new ShadowSeatDirectory()
+    map.setCells(['cell-a', 'cell-b'])
+    const outranked: unknown[] = []
+    map.onOutranked = (seat) => outranked.push(seat)
+    return { map, outranked }
+  }
+  const halfOpen = {
+    cellId: 'cell-a',
+    userId: 'user-a',
+    relayHostId: 'host-1',
+    epoch: 3,
+    joinedAt: 10,
+    byCellId: 'cell-b'
+  }
+
+  it('reports a reserve seat a later, newer join elsewhere outranks, in either feed order', () => {
+    const first = directory()
+    first.map.apply('cell-a', full('cell-a', 3, 10), 100)
+    first.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    expect(first.outranked).toEqual([halfOpen])
+    const reversed = directory()
+    reversed.map.apply('cell-b', full('cell-b', 4, 2_000), 100)
+    reversed.map.apply('cell-a', full('cell-a', 3, 10), 101)
+    expect(reversed.outranked).toEqual([halfOpen])
+    const justPastSkew = directory()
+    justPastSkew.map.apply('cell-a', full('cell-a', 3, 10), 100)
+    justPastSkew.map.apply('cell-b', full('cell-b', 4, 11 + SHADOW_SEAT_OUTRANK_SKEW_MS), 101)
+    expect(justPastSkew.outranked).toEqual([halfOpen])
+  })
+
+  it('reports a seat once, even when a full resync re-judges its host', () => {
+    const { map, outranked } = directory()
+    map.apply('cell-a', full('cell-a', 3, 10), 100)
+    map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    map.apply('cell-b', { ...full('cell-b', 4, 2_000), incarnation: '22222222-2222-4222-8222-222222222222' }, 102)
+    map.apply('cell-a', { ...full('cell-a', 3, 10), incarnation: '22222222-2222-4222-8222-222222222222' }, 103)
+    expect(outranked).toEqual([halfOpen])
+  })
+
+  it('leaves a database-cell seat, a drain-only seat, a later lower epoch, and a join within the skew', () => {
+    const onDatabaseCell = directory()
+    onDatabaseCell.map.apply('cell-a', full('cell-a', 3, 10, db), 100)
+    onDatabaseCell.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    const drainOnly = directory()
+    drainOnly.map.apply('cell-a', full('cell-a', 3, 10, reserve, 'drain-only'), 100)
+    drainOnly.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    // Answered the old seat from a stale map after the newer join: the row decides that one.
+    const staleSticky = directory()
+    staleSticky.map.apply('cell-a', full('cell-a', 3, 3_000), 100)
+    staleSticky.map.apply('cell-b', full('cell-b', 4, 2_000), 101)
+    const withinSkew = directory()
+    withinSkew.map.apply('cell-a', full('cell-a', 3, 10), 100)
+    withinSkew.map.apply('cell-b', full('cell-b', 4, 10 + SHADOW_SEAT_OUTRANK_SKEW_MS), 101)
+    expect([onDatabaseCell, drainOnly, staleSticky, withinSkew].map(({ outranked }) => outranked)).toEqual([
+      [],
+      [],
+      [],
+      []
+    ])
   })
 })

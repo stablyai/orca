@@ -81,6 +81,18 @@ describe('SkillUpdateRunner', () => {
     expect(spawnCalls[0].options.stdio).toEqual(['ignore', 'pipe', 'pipe'])
   })
 
+  it('forces git messages to English so the skills CLI can fall back to fetching the commit', () => {
+    vi.stubEnv('LC_ALL', 'ko_KR.UTF-8')
+    try {
+      const { runner, spawnCalls } = makeRunner()
+      runner.start(['orca-cli'])
+
+      expect(spawnCalls[0].options.env).toMatchObject({ LC_ALL: 'C' })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('rejects names that could carry shell syntax', () => {
     const { runner, spawnCalls } = makeRunner()
 

@@ -603,6 +603,23 @@ describe('createUISlice page navigation history', () => {
 })
 
 describe('createUISlice space navigation', () => {
+  it('opens desktop Space without replacing the current view', () => {
+    const openWindow = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: { set: vi.fn(() => Promise.resolve()) },
+        workspaceSpace: { openWindow }
+      }
+    })
+    const store = createUIStore()
+    store.getState().openTaskPage()
+
+    store.getState().openSpacePage()
+
+    expect(openWindow).toHaveBeenCalledOnce()
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
   it('records Space page opens as workspace cleanup interactions', () => {
     const setMock = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', {

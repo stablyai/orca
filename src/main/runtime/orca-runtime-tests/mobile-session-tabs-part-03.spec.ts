@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   MOCK_GIT_WORKTREES,
@@ -564,7 +565,8 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ source: 'runtime-session', viewMode: 'chat' })
     )
     expect(spawn).not.toHaveBeenCalled()
-    expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
+    // The final release restores throttling on the next task, after any native destruction.
+    await vi.waitFor(() => expect(setBackgroundThrottling.mock.calls).toEqual([[false], [true]]))
     expect(result.tab).toMatchObject({
       type: 'terminal',
       status: 'ready',
@@ -646,6 +648,17 @@ describe('OrcaRuntimeService', () => {
         runtime.markRendererReloading(1)
       } else {
         runtime.markGraphUnavailable(1)
+      }
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && graphStatus === 'unavailable') {
+        // Layout-owner build: the window closed, so main takes the graph back and starts the
+        // terminal itself; nothing reaches the closed window. (The fixture store has no
+        // agent-session API, so only where the start runs is under test.)
+        electronMocks.BrowserWindow.fromId.mockReturnValue(null)
+        await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {}).catch(() => null)
+        expect(runtime.getStatus().graphStatus).toBe('ready')
+        expect(spawn).toHaveBeenCalledTimes(1)
+        expect(send).not.toHaveBeenCalled()
+        return
       }
 
       await expect(

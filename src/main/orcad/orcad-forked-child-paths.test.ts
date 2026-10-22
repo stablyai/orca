@@ -13,7 +13,7 @@ import {
   resolveForeignSqliteReaderEntryPath
 } from '../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
 import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
-import { installOrcadHostAdapters } from './orcad-entry'
+import { installOrcadHostAdapters } from './orcad-host-adapters'
 
 /**
  * The composition, not the pieces: orcad's real host adapters against the real resolver

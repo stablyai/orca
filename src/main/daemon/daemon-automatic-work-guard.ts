@@ -86,6 +86,11 @@ export class DaemonAutomaticWorkGuard {
     this.marker.markCleanExit()
   }
 
+  /** A stop requested from outside (SIGTERM/SIGINT), recorded before the teardown starts. */
+  recordStopRequested(): void {
+    this.marker.recordStopRequested()
+  }
+
   status(): AutomaticWorkStatus {
     return {
       admission: this.options.mode,

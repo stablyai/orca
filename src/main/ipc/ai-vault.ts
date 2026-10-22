@@ -2,6 +2,7 @@ import { app, ipcMain } from 'electron'
 import {
   configureAiVaultSessionSources,
   listAiVaultSessions as listCachedLocalAiVaultSessions,
+  AiVaultLocalScanError,
   resetAiVaultSessionListCacheForTests,
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
@@ -54,8 +55,12 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
-import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
-import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
+import {
+  OPENS_EVERY_STRUCTURED_CHAT,
+  projectStructuredAiVaultSessions
+} from '../ai-vault/structured-session-ownership'
+import { allHostsRuntimeScanTimeoutMs } from './ai-vault-all-host-timeouts'
+import { registerAiVaultScanProgressBroadcast } from './ai-vault-scan-progress-broadcast'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
@@ -149,7 +154,10 @@ async function scanAiVaultSessionsByHostScope(
               hostInfo,
               scanner: handlerOptions.scanRuntimeAiVaultSessions,
               listArgs: args ? { ...args, afterFingerprint: undefined } : undefined,
-              options: { signal, timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.runtimeScan }
+              options: {
+                signal,
+                timeoutMs: allHostsRuntimeScanTimeoutMs(hostInfo)
+              }
             })
         })
       )
@@ -157,7 +165,8 @@ async function scanAiVaultSessionsByHostScope(
     return mergeAiVaultListResults(
       [...scannedResults, ...runtimeResults],
       args?.limit,
-      args?.unlimited
+      args?.unlimited,
+      scopePaths
     )
   }
 
@@ -207,11 +216,12 @@ async function scanLocalAiVaultSessionsAsIssue(
     // so the row carries actionable copy and the log keeps the original.
     const raw = error instanceof Error ? error.message : 'Local session scan failed.'
     console.error('[ai-vault] local session scan failed:', raw)
-    return aiVaultScanIssueResult({
+    const result = aiVaultScanIssueResult({
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       path: 'this computer',
       message: describeAiVaultScanError(raw)
     })
+    return error instanceof AiVaultLocalScanError ? { ...result, scanId: error.scanId } : result
   }
 }
 
@@ -240,8 +250,10 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     const controller = listCancellations.begin(event, requestToken)
     try {
       await handlerOptions.ensureStructuredSessionOwnership?.()
-      const result = await listAiVaultSessions(args, { signal: controller?.signal })
-      return projectStructuredAiVaultSessions(result, true)
+      const result = await listAiVaultSessions(args, {
+        signal: controller?.signal
+      })
+      return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.
@@ -276,6 +288,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
+  registerAiVaultScanProgressBroadcast()
   // macOS app activation skips DOM focus events, so emit the refresh signal here.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {

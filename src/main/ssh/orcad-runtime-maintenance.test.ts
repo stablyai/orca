@@ -1,6 +1,7 @@
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listEnvironments } from '../../shared/runtime-environment-store'
+import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../shared/orcad-terminal-census'
 import { recordManagedOrcadMigration } from '../../shared/runtime-environment-managed-orcad-store'
 import { orcadMigrationCutoverFixture } from './orcad-migration-cutover-fixture'
 import { writeOrcadMigrationSourceCutover } from './orcad-migration-cutover-journal'
@@ -9,7 +10,7 @@ import {
   MANAGED_PREVIOUS_VERSION,
   MANAGED_VERSION,
   managedReadiness
-} from './orcad-managed-lifecycle-test-fixture'
+} from '../managed-server/lifecycle/orcad-managed-lifecycle-test-fixture'
 
 const mocks = vi.hoisted(() => {
   const state: { store: unknown } = { store: null }
@@ -23,39 +24,56 @@ const mocks = vi.hoisted(() => {
     probe: vi.fn(),
     buildHash: vi.fn(),
     ensureTunnel: vi.fn(),
+    rebuildTunnel: vi.fn(),
+    wake: vi.fn(),
     pendingMigration: vi.fn()
   }
 })
 
-vi.mock('./ssh-target-registry', () => ({
+vi.mock('./targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({ connect: async () => ({}) }),
   getSshTargetRegistryStore: () => mocks.state.store
 }))
-vi.mock('./orcad-remote-context', () => ({ resolveOrcadRemoteContext: mocks.resolveContext }))
+vi.mock('../managed-server/install/orcad-remote-context', () => ({
+  resolveOrcadRemoteContext: mocks.resolveContext
+}))
 vi.mock('./orcad-terminal-census-client', () => ({ collectManagedTerminalCensus: mocks.census }))
 vi.mock('./orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
-vi.mock('./orcad-remote-rollback', () => ({ rollbackOrcad: mocks.rollback }))
-vi.mock('./orcad-activation-recovery', () => ({ recoverInterruptedOrcadActivation: mocks.recover }))
+vi.mock('../managed-server/install/orcad-remote-rollback', () => ({
+  rollbackOrcad: mocks.rollback
+}))
+vi.mock('../managed-server/activation/orcad-activation-recovery', () => ({
+  recoverInterruptedOrcadActivation: mocks.recover
+}))
 vi.mock('./orcad-active-readiness', () => ({ probeActiveOrcadReadiness: mocks.probe }))
-vi.mock('./orcad-remote-build-hash', () => ({ readRemoteOrcadBuildHash: mocks.buildHash }))
+vi.mock('../managed-server/install/orcad-remote-build-hash', () => ({
+  readRemoteOrcadBuildHash: mocks.buildHash
+}))
 vi.mock('../orcad/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('./orcad-local-build-hash', () => ({ computeLocalOrcadBuildHash: () => 'local-hash' }))
-vi.mock('./orcad-managed-tunnel', () => ({ ensureOrcadManagedTunnel: mocks.ensureTunnel }))
-vi.mock('./orcad-managed-migration-status', () => ({
+vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  ensureOrcadManagedTunnel: mocks.ensureTunnel,
+  rebuildOrcadManagedTunnel: mocks.rebuildTunnel
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-wake', () => ({
+  wakeStoppedManagedOrcad: mocks.wake
+}))
+vi.mock('../managed-server/lifecycle/orcad-managed-migration-status', () => ({
   findIncompleteManagedOrcadMigration: mocks.pendingMigration
 }))
-vi.mock('./orcad-activation-transaction-store', () => ({
+vi.mock('../managed-server/activation/orcad-activation-transaction-store', () => ({
   readOrcadActivationTransaction: async () => null
 }))
 
+const { getManagedOrcadRuntimeStatus } =
+  await import('../managed-server/lifecycle/orcad-runtime-status')
 const {
-  getManagedOrcadRuntimeStatus,
   recoverManagedOrcadEnvironment,
   rollbackManagedOrcadEnvironment,
   updateManagedOrcadEnvironment
-} = await import('./orcad-runtime-lifecycle')
+} = await import('./orcad-runtime-maintenance')
 
 const idle = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 7 }
 let harness: ReturnType<typeof createManagedLifecycleHarness>
@@ -69,6 +87,7 @@ beforeEach(() => {
   mocks.probe.mockResolvedValue(managedReadiness())
   mocks.buildHash.mockResolvedValue('previous-hash')
   mocks.recover.mockResolvedValue({ outcome: 'none' })
+  mocks.wake.mockResolvedValue({ outcome: 'serving' })
 })
 
 afterEach(() => rmSync(harness.userDataPath, { recursive: true, force: true }))
@@ -127,6 +146,41 @@ describe('updateManagedOrcadEnvironment', () => {
     expect(status.deferredUpdate).toBeNull()
   })
 
+  it('hands the deploy a recount that counts again, so a terminal opened during the upload counts', async () => {
+    const opened = { ...idle, liveSessions: 1, inProcessSessions: 1 }
+    mocks.census.mockResolvedValueOnce(idle).mockResolvedValue(opened)
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    const deployed = mocks.deploy.mock.calls[0]?.[0]
+    expect(deployed?.recountCensus).toBeTypeOf('function')
+    await expect(deployed!.recountCensus()).resolves.toEqual(opened)
+    // Only the last count closes the server's terminal admission; the first precedes the upload.
+    expect(mocks.census.mock.calls.map((call) => call[4])).toEqual([
+      { releaseFinishedAutomationTerminals: true },
+      {
+        releaseFinishedAutomationTerminals: true,
+        closeAdmissionForMs: ORCAD_UPDATE_ADMISSION_FENCE_MS
+      }
+    ])
+    await deployed!.releaseIncumbentAdmission()
+    expect(mocks.census.mock.calls[2]?.[4]).toEqual({ closeAdmissionForMs: 0 })
+  })
+
+  it('forwards anew after an activation, since the new slot may bind another port', async () => {
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
+  })
+
+  it('still reports the activation when the new forward cannot be built yet', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    mocks.rebuildTunnel.mockRejectedValueOnce(new Error('ssh connect failed'))
+    await expect(
+      updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    ).resolves.toMatchObject({ outcome: 'updated', activeVersion: 'v3' })
+  })
+
   it('re-pairs through the same tunnel, keeping the deployment link, when the offer changed', async () => {
     mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
     mocks.probe.mockResolvedValueOnce(managedReadiness('rotated-token'))
@@ -134,6 +188,36 @@ describe('updateManagedOrcadEnvironment', () => {
     const [environment] = listEnvironments(harness.userDataPath)
     expect(environment?.endpoints[0]?.deviceToken).toBe('rotated-token')
     expect(environment?.orcadDeployment).toEqual(harness.environment.orcadDeployment)
+  })
+})
+
+describe('updateManagedOrcadEnvironment on a host already running this build', () => {
+  beforeEach(() => {
+    mocks.deploy.mockResolvedValue({ outcome: 'already-active', fullVersion: MANAGED_VERSION })
+  })
+
+  it('starts a slot proven stopped and forwards to the port it bound', async () => {
+    mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: managedReadiness() })
+    await expect(
+      updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    ).resolves.toMatchObject({ outcome: 'already-current', activeVersion: MANAGED_VERSION })
+    expect(mocks.wake.mock.calls[0]?.[0]).toMatchObject({ port: 6_768 })
+    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
+  })
+
+  it.each(['serving', 'unverifiable', 'fenced'] as const)(
+    'leaves a %s slot alone and keeps the tunnel',
+    async (outcome) => {
+      mocks.wake.mockResolvedValueOnce({ outcome })
+      await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+      expect(mocks.rebuildTunnel).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not wake after an activation, which launched the new slot itself', async () => {
+    mocks.deploy.mockResolvedValueOnce({ outcome: 'installed-and-activated', fullVersion: 'v3' })
+    await updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    expect(mocks.wake).not.toHaveBeenCalled()
   })
 })
 
@@ -209,6 +293,25 @@ describe('rollbackManagedOrcadEnvironment', () => {
       buildHash: 'previous-hash',
       fullVersion: MANAGED_PREVIOUS_VERSION
     })
+    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
+  })
+
+  it('hands the rollback a recount that closes admission, and a reopen that only reopens it', async () => {
+    mocks.rollback.mockResolvedValueOnce({ outcome: 'refused', code: 'x', reason: 'y' })
+    await rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
+    const options = mocks.rollback.mock.calls[0]?.[0]
+    // The count here is unfenced; rollbackOrcad recounts under the host lock.
+    expect(mocks.census.mock.calls.map((call) => call[4]?.closeAdmissionForMs)).toEqual([undefined])
+    await options.recountCensus()
+    await options.releaseIncumbentAdmission()
+    expect(mocks.census.mock.calls.map((call) => call[4])).toEqual([
+      { releaseFinishedAutomationTerminals: true },
+      {
+        releaseFinishedAutomationTerminals: true,
+        closeAdmissionForMs: ORCAD_UPDATE_ADMISSION_FENCE_MS
+      },
+      { closeAdmissionForMs: 0 }
+    ])
   })
 })
 
@@ -226,7 +329,7 @@ describe('recoverManagedOrcadEnvironment', () => {
     expect(listEnvironments(harness.userDataPath)).toHaveLength(1)
   })
 
-  it('re-ensures the tunnel once a serving slot is restored', async () => {
+  it('forwards anew once a serving slot is restored, which may have bound another port', async () => {
     mocks.recover.mockResolvedValueOnce({
       outcome: 'recovered',
       resolution: 'restored-incumbent',
@@ -236,6 +339,6 @@ describe('recoverManagedOrcadEnvironment', () => {
     await expect(
       recoverManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     ).resolves.toMatchObject({ outcome: 'recovered', activeVersion: MANAGED_VERSION })
-    expect(mocks.ensureTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
+    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
   })
 })

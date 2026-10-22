@@ -89,7 +89,11 @@ export async function resolveClaudeAcquisitionLaunch(args: {
         }
       : input.identity
     const launch = await deps
-      .resolveLaunch({ identity: launchIdentity, spawnToken: input.spawnToken })
+      .resolveLaunch({
+        identity: launchIdentity,
+        spawnToken: input.spawnToken,
+        ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
+      })
       .catch((error: unknown) => {
         throw error instanceof AgentSessionPreSpawnError
           ? error
@@ -102,7 +106,6 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       options: spawn.sdkOptions,
       savedOptions: {
         options: spawn.options,
-        skipped: spawn.skipped,
         fastModeAtStart: spawn.fastModeAtStart
       }
     }

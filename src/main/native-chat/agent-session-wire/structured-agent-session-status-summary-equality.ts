@@ -31,11 +31,15 @@ export function structuredStatusSummariesEqual(
       (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
+    a.permissionMode === b.permissionMode &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.launchDirectory === b.launchDirectory &&
     a.conversationName === b.conversationName &&
+    a.sleptAt === b.sleptAt &&
+    a.namingError?.message === b.namingError?.message &&
+    a.namingError?.failedAt === b.namingError?.failedAt &&
     a.turnOutcome === b.turnOutcome &&
     a.stopping === b.stopping &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&

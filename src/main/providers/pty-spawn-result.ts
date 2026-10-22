@@ -60,6 +60,9 @@ export type PtySpawnResult = {
   snapshotSeq?: number
   /** Ordered ownership evidence proven by the provider snapshot. */
   snapshotTerminalOwner?: TerminalOwner
+  /** Set only when this call started a process: whether it started in the request's cwd or the
+   *  folder recovered from crash history. In-process only; never crosses a wire. */
+  startupCwdSource?: 'request' | 'recovered-history'
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
   /** Grid the PTY is proven to be at once this spawn settled. Only providers whose attach

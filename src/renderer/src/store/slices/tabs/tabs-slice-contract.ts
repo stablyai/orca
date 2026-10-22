@@ -11,6 +11,19 @@ import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-h
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
+/** A new group beside `sourceGroupId`, created in the same update as the tab that fills it. */
+export type TabSplitTarget = {
+  sourceGroupId: string
+  splitDirection: TabSplitDirection
+  /** false leaves the worktree's active group where it was. */
+  activate?: boolean
+}
+
+export type TabDragActivationSnapshot = {
+  activeGroupId: string | null
+  activeTabIdByGroup: Record<string, string | null>
+}
+
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
@@ -35,6 +48,8 @@ export type TabsSlice = {
         | 'isPinned'
       > & {
         targetGroupId: string
+        /** Creates the tab in a new split group instead; wins over targetGroupId. */
+        split: TabSplitTarget
         /** Client-local unified tab id to insert after; an explicit targetGroupId still wins. */
         afterTabId: string
         activate: boolean
@@ -47,10 +62,7 @@ export type TabsSlice = {
   createUnifiedTabInSplit: (
     worktreeId: string,
     contentType: TabContentType,
-    target: {
-      sourceGroupId: string
-      splitDirection: TabSplitDirection
-    },
+    target: Omit<TabSplitTarget, 'activate'>,
     init?: Partial<
       Pick<
         Tab,
@@ -96,7 +108,12 @@ export type TabsSlice = {
   reorderUnifiedTabs: (
     groupId: string,
     tabIds: string[],
-    opts?: { recordInteraction?: boolean }
+    /** `layoutOwnerHandled`: the caller already asked main for this order, or main cannot take it. */
+    opts?: {
+      recordInteraction?: boolean
+      projectedMoveTabId?: string
+      layoutOwnerHandled?: boolean
+    }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
   /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
@@ -108,13 +125,24 @@ export type TabsSlice = {
     label: string | null,
     opts?: { recordInteraction?: boolean }
   ) => void
-  setUnifiedTabColor: (tabId: string, color: string | null) => void
-  pinTab: (tabId: string) => void
-  unpinTab: (tabId: string) => void
+  setUnifiedTabColor: (
+    tabId: string,
+    color: string | null,
+    opts?: { recordInteraction?: boolean }
+  ) => void
+  pinTab: (tabId: string, opts?: { recordInteraction?: boolean }) => void
+  unpinTab: (tabId: string, opts?: { recordInteraction?: boolean }) => void
   closeOtherTabs: (tabId: string) => string[]
   closeTabsToRight: (tabId: string) => string[]
   closeTabsToLeft: (tabId: string) => string[]
-  ensureWorktreeRootGroup: (worktreeId: string) => string
+  ensureWorktreeRootGroup: (
+    worktreeId: string,
+    orderSlot?: {
+      tabId: string
+      targetGroupId?: string
+      precedingTabIds: readonly string[]
+    }
+  ) => string
   focusGroup: (worktreeId: string, groupId: string) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
   createEmptySplitGroup: (
@@ -136,25 +164,21 @@ export type TabsSlice = {
       splitDirection?: TabSplitDirection
     }
   ) => boolean
-  copyUnifiedTabToGroup: (
-    tabId: string,
-    targetGroupId: string,
-    init?: Partial<
-      Pick<
-        Tab,
-        | 'id'
-        | 'entityId'
-        | 'label'
-        | 'generatedLabel'
-        | 'quickCommandLabel'
-        | 'customLabel'
-        | 'color'
-        | 'isPinned'
-      >
-    >
-  ) => Tab | null
-  mergeGroupIntoSibling: (worktreeId: string, groupId: string) => string | null
   setTabGroupSplitRatio: (worktreeId: string, nodePath: string, ratio: number) => void
+  /** Selects the hovered tab while a drag is in flight; restored from the drag-start snapshot. */
+  previewDragActiveTab: (args: {
+    worktreeId: string
+    groupId: string
+    tabId: string | null
+    activeGroupId: string
+  }) => void
+  restoreDragActivationSnapshot: (worktreeId: string, snapshot: TabDragActivationSnapshot) => void
+  restoreSourceGroupActiveTabAfterDrop: (args: {
+    worktreeId: string
+    snapshot: TabDragActivationSnapshot
+    sourceGroupId: string
+    movedTabId: string
+  }) => void
   reconcileWorktreeTabModel: (worktreeId: string) => {
     renderableTabCount: number
     activeRenderableTabId: string | null

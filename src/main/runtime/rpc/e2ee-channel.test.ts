@@ -2,7 +2,13 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+  encryptBytes
+} from '../../../shared/e2ee-crypto'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES

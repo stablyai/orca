@@ -1,6 +1,9 @@
+// The window's own move, as a paired server's workspace keeps it. A local workspace's move goes
+// through main and its frame draws it: tab-moves-drawn-from-frames.test.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/tab-types'
+import { makeRuntimeOwnedWorktree } from '../../store/slices/store-test-helpers'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 
 const WT = 'wt-1'
@@ -18,6 +21,7 @@ describe('tab-move-to-pane-column', () => {
     mocks.mirrorWebRuntimeTabMove.mockReset()
     useAppStore.setState({
       activeWorktreeId: WT,
+      worktreesByRepo: { repo1: [makeRuntimeOwnedWorktree({ id: WT, repoId: 'repo1' })] },
       groupsByWorktree: {
         [WT]: [
           {

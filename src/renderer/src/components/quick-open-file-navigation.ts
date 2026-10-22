@@ -1,6 +1,7 @@
 import { prepareQuickOpenFiles, rankQuickOpenFiles } from '../../../shared/quick-open-path-search'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { detectLanguage } from '@/lib/language-detect'
+import { openWorkspaceFile } from '@/lib/workspace-file-open'
 import { joinPath, getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
@@ -120,28 +121,27 @@ export async function openQuickOpenFile(
     }
   }
   assertCurrent()
-  const store = useAppStore.getState()
-  const fileId = store.openFile({
-    filePath,
-    relativePath,
-    worktreeId,
-    runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
-    ...(route.connectionId && getRelativePathInsideRoot(filePath, root) === null
-      ? { externalSshTargetId: route.connectionId }
-      : {}),
-    language: detectLanguage(filePath),
-    mode: 'edit'
+  const revealLine = literalSelected ? undefined : navigation.line
+  const opened = openWorkspaceFile({
+    kind: 'file',
+    intent: revealLine === undefined ? 'default' : 'source',
+    file: {
+      filePath,
+      relativePath,
+      worktreeId,
+      runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null,
+      ...(route.connectionId && getRelativePathInsideRoot(filePath, root) === null
+        ? { externalSshTargetId: route.connectionId }
+        : {}),
+      language: detectLanguage(filePath),
+      mode: 'edit'
+    }
   })
-  if (!literalSelected && navigation.line !== undefined) {
+  if (revealLine !== undefined && opened.surface === 'editor') {
+    const fileId = opened.fileId
     if (detectLanguage(filePath) === 'markdown') {
       useAppStore.getState().setMarkdownViewMode(fileId, 'source')
     }
-    scheduleEditorLineReveal(
-      useAppStore.getState,
-      filePath,
-      navigation.line,
-      navigation.column,
-      fileId
-    )
+    scheduleEditorLineReveal(useAppStore.getState, filePath, revealLine, navigation.column, fileId)
   }
 }

@@ -9,7 +9,7 @@ import { applyStructuredSessionTabSnapshots } from './snapshot-apply'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
-} from '../../lib/structured-agent-session-launch-cancellation'
+} from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../runtime-rpc-client'

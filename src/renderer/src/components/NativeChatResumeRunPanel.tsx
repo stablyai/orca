@@ -19,6 +19,7 @@ export type ResumeRunPanel = {
   description: string
   summary: React.ReactNode
   rows: ResumeCandidate[]
+  finishedRowsVisible: boolean
   renderStatus: (sessionId: string, title: string) => React.ReactNode
   /** Whether any listed chat still shows a checkbox; when none does, the dialog is a result. */
   choosing: boolean
@@ -91,15 +92,20 @@ export function useResumeRunPanel({
   selectableIds: ReadonlySet<string>
   open: boolean
 }): ResumeRunPanel | null {
-  // Each opening starts on All, as the dialog's own ticks start from their defaults.
-  const [filter, setFilter] = useState<{ value: ResumeRunFilter; open: boolean }>({
-    value: 'all',
-    open
-  })
-  if (filter.open !== open) {
-    setFilter({ value: 'all', open })
-  }
+  // Each opening and completed run starts on All so its finished rows can be seen.
   const inFlight = run !== null && resumeRunInFlight(run)
+  const [filter, setFilter] = useState<{
+    value: ResumeRunFilter
+    open: boolean
+    inFlight: boolean
+  }>({
+    value: 'all',
+    open,
+    inFlight
+  })
+  if (filter.open !== open || filter.inFlight !== inFlight) {
+    setFilter({ value: 'all', open, inFlight })
+  }
   // Ticks only while a visible run is moving: the row timers and the running clock read it.
   const now = useNow(1000, open && inFlight)
   const view = run ? resumeRunView(run, rows, failureFor, filter.value) : null
@@ -115,6 +121,7 @@ export function useResumeRunPanel({
   if (!run || !view) {
     return null
   }
+  const visibleIds = new Set(view.rows.map((row) => row.sessionId))
   return {
     title: runTitle(run, view.counts.total, view.counts.resumed),
     description: inFlight
@@ -133,10 +140,11 @@ export function useResumeRunPanel({
         startedAt={run.startedAt}
         now={now}
         filter={filter.value}
-        onFilterChange={(value) => setFilter({ value, open })}
+        onFilterChange={(value) => setFilter({ value, open, inFlight })}
       />
     ),
     rows: view.rows,
+    finishedRowsVisible: run.entries.every((entry) => visibleIds.has(entry.candidate.sessionId)),
     // Current selection ignores the filter, so changing tabs never moves the layout.
     choosing: [...selectableIds].some((sessionId) => !view.statusBySession.has(sessionId)),
     startedBy: run.startedBy,

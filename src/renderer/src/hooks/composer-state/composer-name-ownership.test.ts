@@ -10,10 +10,16 @@ import { useGitHubSourceApplication } from './github-source-application'
 import { useSourceIdentityActions } from './source-identity-actions'
 import { useQuickSubmitSourcePreparation } from './quick-submit-source-preparation'
 import * as decisions from './composer-decisions'
+import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
 import type {
   PendingSmartGitHubSubmitResolution,
   SmartSourceSelection
 } from './source-selection-decisions'
+
+let jiraIssueKeyCasing: JiraIssueKeyCasing = 'lowercase'
+vi.mock('@/lib/jira-issue-key-casing', () => ({
+  getJiraIssueKeyCasingSeedOptions: () => ({ jiraIssueKeyCasing })
+}))
 
 function issue(number: number): GitHubWorkItem {
   return {
@@ -39,7 +45,8 @@ function useNameOwnership(draft?: { name: string; linkedWorkItem: LinkedWorkItem
     decisions.getInitialAutoManagedWorkspaceName({
       initialName: '',
       draftName: draft?.name,
-      draftLinkedWorkItem: draft?.linkedWorkItem
+      draftLinkedWorkItem: draft?.linkedWorkItem,
+      jiraIssueKeyCasing
     })
   )
   const common = {
@@ -120,6 +127,57 @@ describe('workspace name ownership after linking a source', () => {
       nameIsAutoManaged: false,
       submitLinkedWorkItem: { number }
     })
+  })
+
+  it('submits an auto-managed Jira name with the uppercase key policy intact', () => {
+    jiraIssueKeyCasing = 'preserve'
+    try {
+      const { result } = renderHook(() =>
+        useNameOwnership({
+          name: 'PROJ-7-fix-flaky-import',
+          linkedWorkItem: {
+            type: 'issue',
+            provider: 'jira',
+            number: 0,
+            title: 'PROJ-7 Fix flaky import',
+            url: 'https://example.atlassian.net/browse/PROJ-7',
+            jiraIdentifier: 'PROJ-7'
+          }
+        })
+      )
+
+      expect(result.current.prepare()).toMatchObject({
+        workspaceName: 'PROJ-7-fix-flaky-import',
+        nameIsAutoManaged: true
+      })
+    } finally {
+      jiraIssueKeyCasing = 'lowercase'
+    }
+  })
+
+  it('keeps an explicit Jira-linked name when the uppercase policy is selected', () => {
+    jiraIssueKeyCasing = 'preserve'
+    try {
+      const { result } = renderHook(() =>
+        useNameOwnership({
+          name: 'my-exact-name',
+          linkedWorkItem: {
+            type: 'issue',
+            provider: 'jira',
+            number: 0,
+            title: 'PROJ-7 Fix flaky import',
+            url: 'https://example.atlassian.net/browse/PROJ-7',
+            jiraIdentifier: 'PROJ-7'
+          }
+        })
+      )
+      expect(result.current.prepare()).toMatchObject({
+        workspaceName: 'my-exact-name',
+        nameIsAutoManaged: false
+      })
+    } finally {
+      jiraIssueKeyCasing = 'lowercase'
+    }
   })
 
   it('restores manual ownership from an existing draft without a new persisted flag', () => {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, Siren } from 'lucide-react'
+import { BellRing, Bot, EyeOff, Siren } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   MacNotificationPermissionCard,
@@ -179,6 +179,24 @@ export function NotificationsPane({
               : notificationSettingsRef.current.mutedNotificationSourceIds.filter(
                   (id) => !hostIds.includes(id)
                 )
+          })
+        }
+      />
+
+      <NotificationSettingToggle
+        icon={<EyeOff className="size-4" />}
+        label={translate(
+          'auto.components.settings.NotificationsPane.ba07e60f38',
+          'Notify About Hidden Workspaces'
+        )}
+        description={translate(
+          'auto.components.settings.NotificationsPane.e4b5e909ff',
+          "When off, workspaces hidden by a Hide switch in the sidebar's Filters menu show no unread dot and send no notifications to this computer or your phone."
+        )}
+        checked={notificationSettings.notifyHiddenWorkspaces}
+        onToggle={() =>
+          void updateNotificationSettings({
+            notifyHiddenWorkspaces: !notificationSettings.notifyHiddenWorkspaces
           })
         }
       />

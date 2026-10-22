@@ -33,7 +33,7 @@ export const PROJECT_RUNTIME_METHODS = [
     params: null,
     handler: (_params, { runtime }) => {
       runtime.enrichMissingRepoGitRemoteIdentities?.()
-      return { setups: runtime.listProjectHostSetups() }
+      return { setups: runtime.listVisibleProjectHostSetups() }
     }
   }),
   defineMethod({
@@ -70,9 +70,9 @@ export const PROJECT_RUNTIME_METHODS = [
     name: 'projectHostSetup.update',
     permission: 'workspace',
     params: ProjectHostSetupUpdate,
-    handler: (params, context) => ({
+    handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
-        context.runtime.updateProjectHostSetup(params),
+        await context.runtime.updateProjectHostSetup(params),
         context
       )
     })

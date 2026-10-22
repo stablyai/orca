@@ -230,7 +230,6 @@ export const RECONCILIATION_WRITABLE_KEYS = [
   'terminalLayoutsByTabId',
   'pendingStartupByTabId',
   'pendingInitialCwdByTabId',
-  'pendingSetupSplitByTabId',
   'pendingIssueCommandSplitByTabId',
   'automaticAgentResumeClaimsByTabId',
   'nativeChatLaunchPromptByTabId',

@@ -25,13 +25,15 @@ import {
 } from './structured-agent-session-host-test-data'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { AgentSessionOptionRejectedError } from './structured-agent-session-option-error'
 
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
+let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 
 beforeEach(() => {
-  ;({ store, host, dispatch } = hostTestState())
+  ;({ store, host, dispatch, setOption } = hostTestState())
 })
 
 function hostJournal(): AgentSessionJournal {
@@ -57,6 +59,65 @@ async function delivered(clientMessageId: string, options: { handedOver?: true }
 }
 
 describe('send', () => {
+  it('passes each accepted message choice to its provider dispatch and keeps replay immutable', async () => {
+    await attach()
+    const first = hostTestMessage('first')
+    const second = hostTestMessage('second')
+    const aOptions = { model: 'model-a', effort: 'high' }
+    const bOptions = { model: 'model-b', effort: 'low' }
+    const a = {
+      envelope: envelope('agentSession.send', { body: first, options: aOptions }),
+      body: first,
+      options: aOptions
+    }
+    const b = {
+      envelope: envelope('agentSession.send', { body: second, options: bOptions }),
+      body: second,
+      options: bOptions
+    }
+    await host.send(CALLER, a)
+    await delivered(a.envelope.clientOperationId)
+    await host.send(CALLER, b)
+    await delivered(b.envelope.clientOperationId)
+
+    expect(dispatch.mock.calls.map(([input]) => input.executionOptions)).toEqual([
+      aOptions,
+      bOptions
+    ])
+    expect(dispatch).toHaveBeenCalledTimes(2)
+    expect(
+      hostJournal()
+        .submissions()
+        .map((submission) => submission.options)
+    ).toEqual([aOptions, bOptions])
+    await expect(host.send(CALLER, a)).resolves.toMatchObject({ ok: true, replayed: true })
+    expect(dispatch).toHaveBeenCalledTimes(2)
+    expect(setOption).not.toHaveBeenCalled()
+  })
+
+  it('settles a refused message choice without dispatching its prompt', async () => {
+    await attach()
+    dispatch.mockRejectedValueOnce(new AgentSessionOptionRejectedError('model unavailable'))
+    const body = hostTestMessage('do not send')
+    const options = { model: 'model-unavailable' }
+    const params = {
+      envelope: envelope('agentSession.send', { body, options }),
+      body,
+      options
+    }
+    const result = await host.send(CALLER, params)
+    expect(result).toMatchObject({ ok: true })
+    await vi.waitFor(() => {
+      expect(
+        hostJournal()
+          .submissions()
+          .find((submission) => submission.clientMessageId === params.envelope.clientOperationId)
+      ).toMatchObject({ dispatchState: 'rejected' })
+    })
+    expect(dispatch).toHaveBeenCalledOnce()
+    expect(setOption).not.toHaveBeenCalled()
+  })
+
   it('writes the submission before dispatching and resolves it accepted', async () => {
     await attach()
     const body = hostTestMessage('add a retry')

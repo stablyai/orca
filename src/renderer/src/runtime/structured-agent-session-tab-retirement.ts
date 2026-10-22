@@ -1,3 +1,4 @@
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -8,7 +9,6 @@ import {
   markStructuredAgentSessionLaunchCancelled
 } from '@/lib/structured-agent-session-launch-registry'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { discardStructuredAgentSessionChatSends } from '@/lib/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
@@ -111,13 +111,15 @@ export function beginStructuredAgentSessionTabClose(args: {
   worktreeId: string
   sessionId: string
   provisional: boolean
+  layoutOwner: StructuredLaunchSlotOwner
   onError?: (error: unknown) => void
 }): void {
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(
       args.worktreeId,
       args.sessionId,
-      executionHostIdForStructuredTarget(args.target)
+      executionHostIdForStructuredTarget(args.target),
+      args.layoutOwner
     )
     discardStructuredAgentSessionChatSends(args.sessionId)
   } else {
@@ -131,12 +133,7 @@ export function beginStructuredAgentSessionTabClose(args: {
   )
   const hostTabId = `agent-session:${args.sessionId}`
   // Why: a host frame sent before the host handles the close still lists the chat and would re-add
-  // it at the end of the strip; the intent lifts once a host frame stops listing it. Floating-panel
-  // frames are never applied, so nothing there could re-add the chat or ever end its intent.
-  if (args.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    void retireStructuredAgentSessionTab(args)
-    return
-  }
+  // it at the end of the strip; the intent lifts once a host frame stops listing it.
   recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {
     if (!hostTabClosed) {

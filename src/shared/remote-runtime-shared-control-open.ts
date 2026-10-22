@@ -19,6 +19,8 @@ export function openSharedControlSocket(
     onClose: (close: { code: number; reason: string }, error: RemoteRuntimeClientError) => void
     onError: (error: RemoteRuntimeClientError) => void
     onTextFrame: (frame: string) => void
+    /** Any inbound frame, ping or pong on the current socket. */
+    onActivity?: () => void
     // Why: reconnect is edge-triggered on `close`, but a half-open tunnel
     // never delivers one. Liveness pings and declares the socket dead when
     // the server goes silent, so the close/reconnect path can run (#7718).
@@ -28,7 +30,11 @@ export function openSharedControlSocket(
     }
   }
 ): { ok: true; socket: RemoteRuntimeWebSocket } | { ok: false; error: RemoteRuntimeClientError } {
-  let noteActivity: () => void = () => {}
+  let noteLiveness: () => void = () => {}
+  const noteActivity = (): void => {
+    noteLiveness()
+    callbacks.onActivity?.()
+  }
   const opened = openRemoteRuntimeWebSocket(connection, {
     onClose: (ws, code, reason) => {
       if (callbacks.getCurrentSocket() === ws) {
@@ -68,9 +74,11 @@ export function openSharedControlSocket(
   const liveness = callbacks.liveness
   const monitor = startRemoteRuntimeSocketLiveness({
     ping: () => {
-      if (ws.readyState === 1) {
-        ws.ping()
+      if (ws.readyState !== 1) {
+        return false
       }
+      ws.ping()
+      return true
     },
     onDead: () => {
       if (callbacks.getCurrentSocket() !== ws) {
@@ -90,7 +98,7 @@ export function openSharedControlSocket(
     },
     options: liveness.options
   })
-  noteActivity = monitor.noteActivity
+  noteLiveness = monitor.noteActivity
 
   return {
     ok: true,

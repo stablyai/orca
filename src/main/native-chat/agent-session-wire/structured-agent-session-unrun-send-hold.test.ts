@@ -35,8 +35,6 @@ beforeEach(async () => {
   rig = await createQueuedMessageTestRig({
     restartable: true,
     starting: true,
-    startUnanswered: true,
-    stopEndsSession: true,
     recoveryCapsule: true
   })
 })
@@ -83,7 +81,6 @@ describe('a message held behind a start that never answered, then the chat ends'
     rig = await createQueuedMessageTestRig({
       restartable: true,
       starting: true,
-      stopEndsSession: true,
       recoveryCapsule: true
     })
     await rig.host.close(SESSION, 'evict')

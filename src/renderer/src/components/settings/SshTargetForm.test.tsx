@@ -60,7 +60,7 @@ describe('SshTargetForm', () => {
     )
     expect(document.querySelector('#ssh-target-host')).not.toBeNull()
     expect(document.querySelector('#ssh-target-label')).not.toBeNull()
-    expect(document.body.textContent).toContain('Add Target')
+    expect(document.body.textContent).toContain('Add host')
     expect(document.body.textContent).not.toContain('Editing')
     act(() => root.unmount())
   })
@@ -110,7 +110,7 @@ describe('SshTargetForm', () => {
     const root = await renderForm({ onSave, onOpenChange })
 
     await act(async () => {
-      button('Add Target').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      button('Add host').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(onSave).toHaveBeenCalledOnce()
 
@@ -151,7 +151,7 @@ describe('SshTargetForm', () => {
     const onSave = vi.fn()
     const root = await renderForm({ saving: true, onSave })
 
-    expect(button('Add Target').disabled).toBe(true)
+    expect(button('Add host').disabled).toBe(true)
     // Why: Enter submits past a disabled button, so the form itself must gate too.
     await act(async () => {
       document

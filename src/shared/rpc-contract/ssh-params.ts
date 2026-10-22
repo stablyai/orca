@@ -10,6 +10,11 @@ export const SshTarget = z.object({
   targetId: z.string().min(1)
 })
 
+// Why `automatic`: a client's background connect must not lift the host's cancelled sign-in.
+export const SshConnect = SshTarget.extend({
+  automatic: z.boolean().optional()
+})
+
 const boundedText = (max: number) => z.string().trim().min(1).max(max)
 
 // Why strict: an unknown key (a password, a passphrase, or a main-owned field such as a

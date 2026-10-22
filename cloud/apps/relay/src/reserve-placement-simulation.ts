@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { RelayRegion } from '@orca-cloud/relay-contract'
+import { RELAY_PROTOCOL_LIMITS, type RelayRegion } from '@orca-cloud/relay-contract'
 import { CellReserveBook } from './cell-reserve-book.js'
 import { CELL_INTAKE_BURST, CELL_RESERVE_TTL_MS, type ReserveOutcome } from './cell-reserve-contract.js'
 import {
@@ -9,10 +9,11 @@ import {
   ReservePlacer,
   type PlacementCell
 } from './reserve-placement.js'
+import { seatOutranks } from './shadow-seat-directory.js'
 
 // A seeded discrete-event model of step 5 that drives the real CellReserveBook and
 // ReservePlacer. Everything else (sockets, the database, desktops) is modelled. The checks
-// are the design's invariants 1-8; a violation is recorded, never thrown, so one run reports
+// are the design's invariants 1-9; a violation is recorded, never thrown, so one run reports
 // every class it hit.
 
 export function seededRandom(seed: number): () => number {
@@ -98,8 +99,8 @@ const CONTROL_RENEWAL_MS = 25_000
 const RECONCILE_SETTLE_MS = 30_000
 // A drained seat lingers this long (its splices finishing) unless superseded first.
 const DRAIN_GRACE_MS = 30_000
-// A cell closes a control silent for 75 s, checked once per 25 s ping.
-const CONTROL_SILENCE_CLOSE_MS = 100_000
+// A cell closes a control silent for 75 s, checked once per ping (host-session-registry.ts heartbeat).
+const CONTROL_SILENCE_CLOSE_MS = 75_000 + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
 // Longer than the slowest duplicate: a half-open seat's silence close.
 const QUIESCE_MS = 150_000
 
@@ -111,8 +112,10 @@ export type SimulationFaults = {
   intakeBurst?: number
   // Each director assumes this share of every cell's intake, instead of a fifth.
   directorShare?: number
-  // Placement does not supersede the old seat: a duplicate then outlives its bound.
+  // Nothing supersedes the old seat, at placement or from the feed: a duplicate outlives its bound.
   skipSupersede?: boolean
+  // Only placement supersedes: a half-open seat the booking map had not seen lasts to its silence close.
+  skipFeedSupersede?: boolean
   // A restarted director forgets its ledger queue and never reconciles.
   noBootReconcile?: boolean
   // The reconcile leaves a seat whose row is ahead of it alone.
@@ -127,6 +130,8 @@ export type SimulationFaults = {
   noRawFeedMode?: boolean
   unguardedLedger?: boolean
   noEpochFloor?: boolean
+  // On a level divergence each director keeps the seat its own cell order prefers, not the row's.
+  localTieBreak?: boolean
 }
 
 // relay_cell_admit_effective: each cell writes its raw mode every 15 s (cell-admit-effective-writer.ts),
@@ -423,6 +428,11 @@ export type SimulationReport = {
   supersedes: number
   directorRestarts: number
   rowAheadDemotions: number
+  // Demotions whose winner is level with the loser (same epoch, another cell): the tie-break's cases.
+  levelDemotions: number
+  // Level divergences (same epoch, two cells) two or more directors judged: the only cases where
+  // invariant 4 can break, since a higher epoch wins for every director.
+  contestedDivergences: number
   // Row-ahead demotions per demoted host: a repair that converges needs one.
   rowAheadDemotionsPerHost: { max: number; p99: number }
   deadManTrips: number
@@ -503,8 +513,12 @@ export async function runReservePlacementSimulation(
   const random = seededRandom(config.seed)
   const clock = new Clock()
   const violations: SimulationViolation[] = []
+  // Capped per invariant, so a flood of one class cannot hide another.
+  const violationCounts = new Map<number, number>()
   const violate = (invariant: number, detail: string): void => {
-    if (violations.length < 50) violations.push({ invariant, at: clock.now, detail })
+    const count = violationCounts.get(invariant) ?? 0
+    violationCounts.set(invariant, count + 1)
+    if (count < 50) violations.push({ invariant, at: clock.now, detail })
   }
   const faults = config.faults ?? {}
   const database = new SimDatabase(violate, faults)
@@ -550,6 +564,8 @@ export async function runReservePlacementSimulation(
     supersedes: 0,
     directorRestarts: 0,
     rowAheadDemotions: 0,
+    levelDemotions: 0,
+    contestedDivergences: 0,
     rowAheadDemotionsPerHost: { max: 0, p99: 0 },
     deadManTrips: 0,
     reserveCallsOnTrippedCells: 0,
@@ -653,10 +669,15 @@ export async function runReservePlacementSimulation(
           placement: placementCell(cell, snapshot, requestedAt)
         }
         director.views.set(cell.cellId, current)
+        supersedeOutranked(director, seats!.keys())
       } else if (current && current.incarnation === snapshot.incarnation) {
         for (const change of changes) applyChange(director, cell, current, change)
         current.cursor = snapshot.cursor
         current.placement = placementCell(cell, snapshot, requestedAt)
+        supersedeOutranked(
+          director,
+          changes.filter((change) => change.kind === 'join').map((change) => change.host)
+        )
       } else {
         // A restarted director's (or a stale) delta: the next poll asks for a full snapshot.
         return
@@ -729,17 +750,93 @@ export async function runReservePlacementSimulation(
   // Supersede at placement: the director that books a host on `cellId` tells the old seats its
   // map holds on reserve cells to go. Each cell checks epoch and join itself.
   function supersede(director: SimDirector, host: string, cellId: string, epoch: number): void {
+    const held = new Set<string>()
+    for (const [seatCellId, view] of director.views) {
+      const seat = view.seats.get(host)
+      if (seat) held.add(`${seatCellId}\u0000${seat.joinedAt}`)
+    }
+    heldAtBooking.set(`${host}\u0000${cellId}\u0000${epoch}`, held)
     if (faults.skipSupersede) return
     for (const [seatCellId, view] of director.views) {
       const seat = view.seats.get(host)
       if (!seat || seat.demoted || seatCellId === cellId || seat.epoch >= epoch) continue
       if (!view.placement.reserve) continue
-      const loser = cellById.get(seatCellId)!
       report.supersedes += 1
-      clock.schedule(config.rttMs(loser.region), () =>
-        loser.demote(host, seat.epoch, seat.joinedAt, () => onSeatClosed(host, seatCellId, seat.epoch))
-      )
+      demoteFor(director, host, seatCellId, seat, { cellId, epoch })
     }
+  }
+
+  // As shadow-seat-directory.ts onOutranked: once both joins are in this map, a reserve seat behind
+  // a later join at a newer epoch is told to go. A lower epoch that joined later is the row's.
+  function supersedeOutranked(director: SimDirector, hosts: Iterable<string>): void {
+    if (faults.skipSupersede || faults.skipFeedSupersede) return
+    for (const host of new Set(hosts)) {
+      const seats = [...director.views].flatMap(([cellId, view]) => {
+        const seat = view.seats.get(host)
+        return seat ? [{ cellId, view, seat }] : []
+      })
+      if (seats.length < 2) continue
+      for (const { cellId, view, seat } of seats) {
+        if (seat.demoted || !view.placement.reserve) continue
+        const by = seats.find((other) => seatOutranks(other.seat, seat))
+        if (!by) continue
+        report.supersedes += 1
+        demoteFor(director, host, cellId, seat, { cellId: by.cellId, epoch: by.seat.epoch })
+      }
+    }
+  }
+
+  // The seats the booking director's map held when it placed each booking: only those it supersedes.
+  const heldAtBooking = new Map<string, Set<string>>()
+
+  // Invariant 4: each demotion names its winner (the newer booking, or the row). Every director
+  // names the same one per divergence, so no two seats of a host are each demoted for the other.
+  const namedWinners = new Map<string, { won: string; by: string }>()
+  const contested = new Set<string>()
+  const demotedFor = new Map<string, string>()
+  type JudgedSeat = { cellId: string; epoch: number }
+  function judge(director: SimDirector, host: string, loserSeat: JudgedSeat, wonSeat: JudgedSeat): void {
+    const loser = `${loserSeat.cellId}@${loserSeat.epoch}`
+    const won = `${wonSeat.cellId}@${wonSeat.epoch}`
+    const divergence = `${host}\u0000${[loser, won].sort().join('\u0000')}`
+    const named = namedWinners.get(divergence)
+    if (named === undefined) {
+      namedWinners.set(divergence, { won, by: director.id })
+      return
+    }
+    // A second director judged it, agreeing or not: the tie-break was exercised.
+    if (named.by !== director.id && loserSeat.epoch === wonSeat.epoch && !contested.has(divergence)) {
+      contested.add(divergence)
+      report.contestedDivergences += 1
+    }
+    if (named.won !== won) {
+      violate(4, `${director.id} names ${won} over ${loser} for ${host}; ${named.by} named ${named.won}`)
+    }
+  }
+  function demoteFor(
+    director: SimDirector,
+    host: string,
+    cellId: string,
+    seat: { epoch: number; joinedAt: number },
+    winner: { cellId: string; epoch: number }
+  ): void {
+    const loser = `${cellId}@${seat.epoch}`
+    const won = `${winner.cellId}@${winner.epoch}`
+    judge(director, host, { cellId, epoch: seat.epoch }, winner)
+    const cell = cellById.get(cellId)!
+    clock.schedule(config.rttMs(cell.region), () => {
+      const live = cell.seats.get(host)
+      const wasLive = live !== undefined && !live.demoted
+      cell.demote(host, seat.epoch, seat.joinedAt, () => onSeatClosed(host, cellId, seat.epoch))
+      if (!wasLive || !live.demoted) return
+      // Only a live seat demoted for a live level winner is a same-epoch duplicate resolved.
+      const winnerSeat = cellById.get(winner.cellId)?.seats.get(host)
+      if (winner.epoch === seat.epoch && winnerSeat?.epoch === winner.epoch && !winnerSeat.demoted) {
+        report.levelDemotions += 1
+      }
+      demotedFor.set(`${host}\u0000${loser}`, won)
+      if (demotedFor.get(`${host}\u0000${won}`) === loser) violate(4, `${host}: ${loser} and ${won} each demoted for the other`)
+    })
   }
 
   function onSeatClosed(hostId: string, cellId: string, epoch: number): void {
@@ -766,6 +863,18 @@ export async function runReservePlacementSimulation(
   const demotedBehindRow = new Map<string, number>()
   // A host demoted behind its row: its next answer, from any director, is that row or above it.
   const reassignAbove = new Map<string, { cellId: string; epoch: number }>()
+  // Only under localTieBreak: even directors keep the lower cell id of a level divergence, odd ones the higher.
+  function faultKeepsThisSeat(
+    director: SimDirector,
+    cellId: string,
+    epoch: number,
+    row: { cellId: string; epoch: number }
+  ): boolean {
+    return !!faults.localTieBreak && row.epoch === epoch && (cellId < row.cellId) === (director.index % 2 === 0)
+  }
+  function raiseRowFloor(director: SimDirector, host: string, epoch: number): void {
+    director.rowFloors.set(host, Math.max(epoch, director.rowFloors.get(host) ?? 0))
+  }
   function reconcileLedger(director: SimDirector): void {
     if (!database.up || director.old) return
     for (const [cellId, view] of director.views) {
@@ -775,13 +884,32 @@ export async function runReservePlacementSimulation(
         const row = database.rows.get(host)
         const live = cellById.get(cellId)!.seats.get(host)
         const diverged = row && (row.epoch > seat.epoch || (row.epoch === seat.epoch && row.cellId !== cellId))
+        // A map that has not yet seen another director's demotion still judges the seat; the
+        // cell drops the demote, but the winner it names must be the same.
+        // relay-server.ts raises the floor on every demote, so a dropped one raises it too.
+        if (row && diverged && live && live.joinedAt === seat.joinedAt && live.demoted && !faults.noRowAheadDemote) {
+          const thisSeat = { cellId, epoch: seat.epoch }
+          const rowSeat = { cellId: row.cellId, epoch: row.epoch }
+          if (faultKeepsThisSeat(director, cellId, seat.epoch, row)) judge(director, host, rowSeat, thisSeat)
+          else {
+            judge(director, host, thisSeat, rowSeat)
+            raiseRowFloor(director, host, row.epoch)
+          }
+        }
         if (row && diverged && live && live.joinedAt === seat.joinedAt && !live.demoted) {
           const key = `${director.id}\u0000${host}\u0000${cellId}\u0000${seat.joinedAt}`
           if (behindRow.has(key)) violate(8, `${host}@${seat.epoch} on ${cellId} still behind row @${row.epoch}`)
           behindRow.set(key, clock.now)
           if (faults.noRowAheadDemote) continue
+          if (faultKeepsThisSeat(director, cellId, seat.epoch, row)) {
+            const rowSeat = director.views.get(row.cellId)?.seats.get(host)
+            if (rowSeat && rowSeat.epoch === row.epoch && !rowSeat.demoted) {
+              demoteFor(director, host, row.cellId, rowSeat, { cellId, epoch: seat.epoch })
+            }
+            continue
+          }
           report.rowAheadDemotions += 1
-          director.rowFloors.set(host, Math.max(row.epoch, director.rowFloors.get(host) ?? 0))
+          raiseRowFloor(director, host, row.epoch)
           rowAheadDemotionsByHost.set(host, (rowAheadDemotionsByHost.get(host) ?? 0) + 1)
           // A director that had not seen the leave may re-place level with the row once; a later
           // divergence (a newer row) may demote the host again. One row never takes a third.
@@ -790,10 +918,7 @@ export async function runReservePlacementSimulation(
           demotedBehindRow.set(sameRow, behindThisRow)
           if (behindThisRow > 2) violate(8, `${host} demoted ${behindThisRow} times behind its row ${row.cellId}@${row.epoch}`)
           reassignAbove.set(host, { ...row })
-          const cell = cellById.get(cellId)!
-          clock.schedule(config.rttMs(cell.region), () =>
-            cell.demote(host, seat.epoch, seat.joinedAt, () => onSeatClosed(host, cellId, seat.epoch))
-          )
+          demoteFor(director, host, cellId, seat, row)
           continue
         }
         database.upsert(host, cellId, seat.epoch)
@@ -1161,8 +1286,9 @@ export async function runReservePlacementSimulation(
       report.maxOccupancyShare[cell.cellId] = Math.max(report.maxOccupancyShare[cell.cellId] ?? 0, share)
     }
   }
-  // A booking supersedes the old seat within a round trip; a duplicate nobody books past (a
-  // half-open seat while today's path places the host) lasts until that seat's silence close.
+  // A booking supersedes the old seats its director's map held within a round trip, and the feed
+  // any seat a later join outranks. Any other duplicate (a half-open seat today's path placed past
+  // at a lower epoch than it) has no lease to re-check and lasts until that seat's silence close.
   const supersedeBound =
     Math.max(...directors.map((director) => config.pollLagMs(director.index))) +
     2 * Math.max(...cells.map((cell) => config.rttMs(cell.region))) +
@@ -1186,19 +1312,29 @@ export async function runReservePlacementSimulation(
     for (const [host, seats] of seatsByHost) {
       if (seats.length < 2) continue
       const newest = Math.max(...seats.map((entry) => entry.seat.epoch))
-      // A seat outranked by a booking is superseded within the booking director's poll lag and
-      // a round trip; anything else (today's path placed the host) waits for the silence close.
-      const booked = seats.some((entry) => entry.seat.epoch === newest && entry.seat.reservedBy !== undefined)
+      // By the newest seats' placement records, whatever their join says: no record, no supersede.
+      const bookings = seats
+        .filter((entry) => entry.seat.epoch === newest)
+        .flatMap((entry) => heldAtBooking.get(`${host}\u0000${entry.cell.cellId}\u0000${newest}`) ?? [])
+      const supersededBy = (cellId: string, joinedAt: number): boolean =>
+        bookings.some((held) => held.has(`${cellId}\u0000${joinedAt}`))
       for (const { cell, seat } of seats) {
         if (cell.mode !== 'reserve' || seat.epoch === newest) continue
         // A leased seat goes by its renewal, as today.
-        const bound = booked && !seat.leased ? supersedeBound : duplicateBound
+        const tight =
+          !seat.leased &&
+          (supersededBy(cell.cellId, seat.joinedAt) || seats.some((other) => seatOutranks(other.seat, seat)))
+        // The loose clock runs from the first outranking; the tight one from when supersede applies.
         const key = `${host}\u0000${cell.cellId}\u0000${seat.joinedAt}`
-        live.add(key)
-        const since = outrankedSince.get(key) ?? clock.now
-        outrankedSince.set(key, since)
-        if (clock.now - since > bound) {
-          violate(3, `${host}@${seat.epoch} on ${cell.cellId} outranked for ${clock.now - since} ms`)
+        const clocks: Array<[string, number]> = [[key, duplicateBound]]
+        if (tight) clocks.push([`${key}\u0000tight`, supersedeBound])
+        for (const [clockKey, bound] of clocks) {
+          live.add(clockKey)
+          const since = outrankedSince.get(clockKey) ?? clock.now
+          outrankedSince.set(clockKey, since)
+          if (clock.now - since > bound) {
+            violate(3, `${host}@${seat.epoch} on ${cell.cellId} outranked for ${clock.now - since} ms`)
+          }
         }
       }
     }

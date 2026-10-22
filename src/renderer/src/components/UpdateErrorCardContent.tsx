@@ -2,12 +2,14 @@ import { useId, useState } from 'react'
 import {
   AlertCircle,
   ChevronRight,
+  Clock3,
   Loader2,
   Minus,
   Network,
   RotateCw,
   ShieldAlert
 } from 'lucide-react'
+import type { UpdateInstallBlocker } from '../../../shared/update-status-types'
 import { Button } from './ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -20,7 +22,9 @@ export type UpdateErrorCardAction = {
 }
 
 export type UpdateErrorCardModel = {
-  variant?: 'default' | 'http1Compatibility' | 'security'
+  variant?: 'default' | 'http1Compatibility' | 'security' | 'waiting'
+  blockers?: UpdateInstallBlocker[]
+  deferLabel?: string
   title: string
   summary: string
   /** Optional guidance box between the summary and the raw error output. */
@@ -68,6 +72,8 @@ function ActionButton({
 
 export function UpdateErrorCardContent({
   variant = 'default',
+  blockers,
+  deferLabel,
   title,
   summary,
   explainer,
@@ -85,7 +91,13 @@ export function UpdateErrorCardContent({
   const detailId = useId()
   const isCompatibility = variant === 'http1Compatibility'
   const isSecurity = variant === 'security'
-  const Icon = isCompatibility ? Network : isSecurity ? ShieldAlert : AlertCircle
+  const Icon = isCompatibility
+    ? Network
+    : isSecurity
+      ? ShieldAlert
+      : variant === 'waiting'
+        ? Clock3
+        : AlertCircle
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
@@ -118,6 +130,30 @@ export function UpdateErrorCardContent({
           <p className="text-xs leading-relaxed text-muted-foreground">{explainer}</p>
         </div>
       ) : null}
+
+      {blockers && blockers.length > 0 && (
+        <ul
+          aria-label={translate('updates.installBlock.instancesLabel', 'Instances using Orca')}
+          className="space-y-2"
+        >
+          {blockers.map(({ pid, kind }) => (
+            <li key={pid} className="flex items-center justify-between gap-3 text-xs">
+              <span>
+                {kind === 'browser'
+                  ? translate('updates.installBlock.browserLabel', 'Background browser')
+                  : kind === 'server'
+                    ? translate('updates.installBlock.serverLabel', 'Background server')
+                    : kind === 'window'
+                      ? translate('updates.installBlock.windowLabel', 'Other Orca window')
+                      : translate('updates.installBlock.instanceLabel', 'Other Orca instance')}
+              </span>
+              <span className="font-mono text-muted-foreground">
+                {translate('updates.installBlock.processId', 'PID {{pid}}', { pid })}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* Caret disclosure that reveals the raw error while the plain summary stays the lead. */}
       {detail ? (
@@ -159,6 +195,11 @@ export function UpdateErrorCardContent({
               variant="default"
               leadingIcon={isCompatibility ? <RotateCw className="size-3.5" /> : undefined}
             />
+          )}
+          {deferLabel && (
+            <Button variant="outline" size="sm" onClick={onClose} className="flex-1">
+              {deferLabel}
+            </Button>
           )}
           {secondaryAction && <ActionButton action={secondaryAction} variant="outline" />}
           {releaseUrl && (

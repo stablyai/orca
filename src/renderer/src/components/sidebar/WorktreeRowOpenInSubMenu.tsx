@@ -23,6 +23,7 @@ export function WorktreeRowOpenInSubMenu({
       connectionId={owner.connectionId ?? connectionId}
       runtimeEnvironmentId={owner.runtimeEnvironmentId}
       ownerUnresolved={owner.ownerUnresolved}
+      workspace={{ workspaceId: worktree.id, hostId: worktree.hostId }}
       disabled={disabled}
     />
   )

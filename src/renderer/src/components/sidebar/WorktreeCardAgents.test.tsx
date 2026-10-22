@@ -66,6 +66,8 @@ function mockAgent({
 }
 
 let mockAgents: unknown[] = [mockAgent()]
+// The hook records behind mockAgents; the unread (bold) rule reads them.
+let mockAgentStatusByPaneKey: Record<string, { stateStartedAt: number }> = {}
 let mockFocusedAgentPaneKey: string | null = null
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockPromptCacheTimerEnabled = true
@@ -86,12 +88,13 @@ vi.mock('@/store', () => ({
     selector({
       agentActivityDisplayMode: mockAgentActivityDisplayMode,
       acknowledgedAgentsByPaneKey: {},
+      retainedAgentsByPaneKey: {},
       cacheTimerByKey: mockCacheTimerByKey,
       dropAgentStatus: vi.fn(),
       dismissRetainedAgent: vi.fn(),
       acknowledgeAgents: vi.fn(),
       agentSendPopoverTargetMode: null,
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: mockAgentStatusByPaneKey,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       sendPromptToSidebarAgentTarget: vi.fn(),
@@ -186,6 +189,7 @@ describe('WorktreeCardAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAgents = [mockAgent()]
+    mockAgentStatusByPaneKey = {}
     mockFocusedAgentPaneKey = null
     mockAgentActivityDisplayMode = undefined
     mockPromptCacheTimerEnabled = true
@@ -221,6 +225,7 @@ describe('WorktreeCardAgents', () => {
 
   it('emphasizes unvisited non-focused compact agent row text', async () => {
     mockAgentActivityDisplayMode = 'compact'
+    mockAgentStatusByPaneKey = { 'tab-1:1': { stateStartedAt: 1000 } }
     mockAgents = [
       mockAgent({
         agentType: 'codex',
@@ -241,6 +246,7 @@ describe('WorktreeCardAgents', () => {
 
   it('keeps focused compact agent row text legible', async () => {
     mockAgentActivityDisplayMode = 'compact'
+    mockAgentStatusByPaneKey = { 'tab-1:1': { stateStartedAt: 1000 } }
     mockFocusedAgentPaneKey = 'tab-1:1'
     mockAgents = [
       mockAgent({

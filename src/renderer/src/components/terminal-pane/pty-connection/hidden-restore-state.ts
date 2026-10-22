@@ -61,6 +61,7 @@ export function bindHiddenRestoreState(session: ConnectPanePtySession): void {
     session.hiddenOutputRestoreNeeded = false
     session.hiddenOutputRestorePtyId = null
     session.hiddenOutputRestoreReplayingSnapshot = null
+    session.hiddenOutputRestoreUnhideSeq = null
     session.hiddenOutputRestoreGeneration += 1
   }
 

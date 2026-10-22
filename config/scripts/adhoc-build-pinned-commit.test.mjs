@@ -66,7 +66,7 @@ describe('adhoc build pins one commit for the whole run', () => {
       step.uses?.startsWith('actions/checkout@')
     )
     expect(support.with.ref).toBe(PINNED)
-    const vet = jobs['build-adhoc-mac'].steps.find((step) => step.id === 'vetted')
+    const vet = jobs['build-adhoc-mac-arch'].steps.find((step) => step.id === 'vetted')
     expect(vet.env.REQUESTED_REF).toBe(PINNED)
     for (const name of ['orcad-template-support', 'orcad-template', 'build-adhoc-mac']) {
       expect([jobs[name].needs].flat(), name).toContain('resolve-ref')

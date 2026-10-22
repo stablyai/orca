@@ -1,33 +1,12 @@
 import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
+const FLOATING_CONTROLS_BOTTOM = spacing.md
+
 export const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.bgBase
-  },
-  chromeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 28,
-    paddingHorizontal: spacing.md
-  },
-  chromeLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  stopButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  stopLabel: {
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    fontWeight: '700'
   },
   sendError: {
     alignItems: 'center',
@@ -39,20 +18,13 @@ export const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
-  chromeToggle: {
+  floatingControls: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: FLOATING_CONTROLS_BOTTOM,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: spacing.xs
-  },
-  chromeToggleLabel: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  pressed: {
-    opacity: 0.6
+    gap: spacing.sm
   },
   listWrap: {
     flex: 1,
@@ -81,8 +53,6 @@ export const styles = StyleSheet.create({
     textAlign: 'center'
   },
   fab: {
-    position: 'absolute',
-    right: spacing.md,
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -91,9 +61,6 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
-  },
-  fabBottom: {
-    bottom: spacing.md
   },
   loadEarlier: {
     alignItems: 'center',
@@ -105,5 +72,11 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     fontWeight: '600'
+  },
+  loadEarlierFailedText: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    textAlign: 'center',
+    marginTop: spacing.xs
   }
 })

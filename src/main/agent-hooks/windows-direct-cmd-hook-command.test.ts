@@ -65,7 +65,7 @@ describe('wrapWindowsBatchHookCommand', () => {
   it('keeps the encoded launcher for a path the shells cannot carry bare', () => {
     const spaced = 'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\gemini-hook.cmd'
     expect(wrapWindowsBatchHookCommand(spaced)).toBe(wrapWindowsHookCommand(spaced))
-    // Guarded Unicode .cmd paths take the cheaper policy switch, as wrapWindowsCmdHookCommand does.
+    // Guarded Unicode .cmd paths take the cheaper policy switch.
     const unicode = 'C:\\Users\\rené\\.orca\\agent-hooks\\gemini-hook.cmd'
     expect(wrapWindowsBatchHookCommand(unicode)).toBe(
       wrapWindowsHookCommand(unicode, {}, { useProcessPolicyEnvironment: true })

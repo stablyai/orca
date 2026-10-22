@@ -1,9 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkAliasInput } from './agent-status-child-work-alias'
 import type { AgentChildWorkInput } from './agent-status-child-work'
 import { serializeAgentStatusRunAliasIndex } from './agent-status-run-alias-index'
 import { createAgentStatusStore } from './agent-status-store'
-import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
 import { commitAgentStatusStoreMutation } from './agent-status-store-commit'
 import { indexAgentStatusStoreState } from './agent-status-store-indexes'
 import { agentStatusStoreStateFromSnapshot } from './agent-status-store-state'
@@ -24,7 +23,7 @@ const scope: AgentStatusExecutionScope = {
 function child(
   parent: ReturnType<typeof makeStructuredAgentStatusSubject>,
   childIndex: number,
-  description = 'x'.repeat(8_000)
+  description: string
 ) {
   return {
     childWorkId: `child-${childIndex}`,
@@ -42,23 +41,7 @@ function child(
   } satisfies AgentChildWorkInput
 }
 
-function children(parent: ReturnType<typeof makeStructuredAgentStatusSubject>, offset: number) {
-  return Array.from({ length: AGENT_STATUS_STORE_LIMITS.mutationEntries / 2 }, (_, index) =>
-    child(parent, offset + index)
-  )
-}
-
 describe('AgentStatusStore bounds', () => {
-  it('rejects a mutation that would make the aggregate snapshot exceed its byte budget', () => {
-    const parent = makeStructuredAgentStatusSubject(scope, 'session-1')
-    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    expect(store.applyMutation({ parent: { subject: parent } })).not.toBeNull()
-    expect(store.applyMutation({ children: children(parent, 0) })).not.toBeNull()
-
-    expect(store.applyMutation({ children: children(parent, 1_024) })).toBeNull()
-    expect(store.getSnapshot().children).toHaveLength(1_024)
-  })
-
   it('serializes a derived provider-alias Set above the former 256-run ceiling', () => {
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
     for (let index = 0; index < 257; index += 1) {
@@ -88,29 +71,6 @@ describe('AgentStatusStore bounds', () => {
     }
 
     expect(() => serializeAgentStatusRunAliasIndex(store.getRunAliasIndex())).not.toThrow()
-  })
-
-  it('reuses immutable record byte measurements when one child changes', () => {
-    const parent = makeStructuredAgentStatusSubject(scope, 'session-1')
-    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const first = child(parent, 0, 'first-description')
-    const unchanged = child(parent, 1, 'unchanged-description')
-    expect(
-      store.applyMutation({ parent: { subject: parent }, children: [first, unchanged] })
-    ).not.toBeNull()
-    const stringify = vi.spyOn(JSON, 'stringify')
-
-    try {
-      expect(
-        store.applyMutation({ children: [{ ...first, observedAt: first.observedAt + 1 }] })
-      ).not.toBeNull()
-      const serializedValues = stringify.mock.results
-        .map((result) => result.value)
-        .filter((value): value is string => typeof value === 'string')
-      expect(serializedValues.some((value) => value.includes('unchanged-description'))).toBe(false)
-    } finally {
-      stringify.mockRestore()
-    }
   })
 
   it("removes a child batch's aliases without reading any other child's aliases", () => {

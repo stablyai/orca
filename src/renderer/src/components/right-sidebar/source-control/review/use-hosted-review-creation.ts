@@ -38,9 +38,11 @@ export function useSourceControlHostedReviewCreation({
   prBase,
   prBody,
   prDraft,
+  prFieldRevisions,
   prFieldsAreSeedPlaceholders,
   prGenerating,
   prTitle,
+  pullRequestFieldsInitialized,
   resolvedPrCreationDefaults,
   setCreatePrInFlightByWorktree,
   setCreatePrIntentNoticeForWorktree,
@@ -63,9 +65,11 @@ export function useSourceControlHostedReviewCreation({
   prBase: SourceControlCreateReviewComposer['prBase']
   prBody: SourceControlCreateReviewComposer['prBody']
   prDraft: SourceControlCreateReviewComposer['prDraft']
+  prFieldRevisions: SourceControlCreateReviewComposer['prFieldRevisions']
   prFieldsAreSeedPlaceholders: SourceControlCreateReviewComposer['prFieldsAreSeedPlaceholders']
   prGenerating: boolean
   prTitle: SourceControlCreateReviewComposer['prTitle']
+  pullRequestFieldsInitialized: SourceControlCreateReviewComposer['pullRequestFieldsInitialized']
   resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
   setCreatePrInFlightByWorktree: SourceControlWorktreeOperationState['setCreatePrInFlightByWorktree']
   setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
@@ -268,6 +272,9 @@ export function useSourceControlHostedReviewCreation({
       aiGenerationEnabled: prAiGenerationEnabled,
       canCreate: hostedReviewCreation?.canCreate === true,
       createPullRequest,
+      fields: { base: prBase, title: prTitle, body: prBody, draft: prDraft },
+      fieldRevisions: prFieldRevisions,
+      fieldsInitialized: pullRequestFieldsInitialized,
       fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
       generatePullRequestFields: handleGeneratePullRequestFields,
       generationKey: activePullRequestGenerationKey,

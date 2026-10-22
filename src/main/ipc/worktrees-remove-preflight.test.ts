@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as filesystemAuth from './filesystem-auth'
+import * as scopedRootsInvalidation from './registered-worktree-roots-scoped-invalidation'
 import * as authorizedRootsCache from './registered-worktree-roots-cache'
 import {
   removeWorktreeLinkedPathsMock,
@@ -101,7 +101,7 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
-    vi.spyOn(filesystemAuth, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
+    vi.spyOn(scopedRootsInvalidation, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
     vi.spyOn(authorizedRootsCache, 'invalidateAuthorizedRootsCache').mockClear()
   })
 
@@ -138,7 +138,7 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
     expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
   })
 
@@ -201,7 +201,7 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
-    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
+    expect(scopedRootsInvalidation.invalidateAuthorizedRootsCacheForRepo).not.toHaveBeenCalled()
     expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
   })
 

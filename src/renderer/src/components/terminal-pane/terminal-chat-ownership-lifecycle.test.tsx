@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
     unifiedTabsByWorktree: { wt: [tab] },
     tabsByWorktree: {},
     settings: { experimentalNativeChat: true },
-    pendingCodexPaneRestartIds: [],
+    pendingPaneAccountRestarts: [],
     runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } },
     agentStatusByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
@@ -41,7 +41,7 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
-  const { terminalLayoutEqual } = await import('@/lib/terminal-layout-equality')
+  const { terminalLayoutEqual } = await import('../../../../shared/terminal-layout-equality')
   mocks.state.setTabLayout = (id, layout) => {
     if (terminalLayoutEqual(mocks.state.terminalLayoutsByTabId[id], layout)) {
       return

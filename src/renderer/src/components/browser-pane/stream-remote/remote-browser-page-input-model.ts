@@ -189,6 +189,31 @@ export function resolveRemoteBrowserCssViewport(input: {
   }
 }
 
+// Why the image's own box and not the pane's: the frame is letterboxed inside the pane, so only
+// the rect it is drawn in says which page pixel sits under the pointer.
+export function mapRemoteBrowserClientPoint(input: {
+  clientX: number
+  clientY: number
+  frameRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
+  cssViewport: RemoteBrowserViewportSize
+}): RemoteBrowserImagePoint | null {
+  const { frameRect, cssViewport } = input
+  if (
+    frameRect.width <= 0 ||
+    frameRect.height <= 0 ||
+    cssViewport.width <= 0 ||
+    cssViewport.height <= 0
+  ) {
+    return null
+  }
+  const x = ((input.clientX - frameRect.left) / frameRect.width) * cssViewport.width
+  const y = ((input.clientY - frameRect.top) / frameRect.height) * cssViewport.height
+  return {
+    x: Math.round(Math.min(cssViewport.width, Math.max(0, x))),
+    y: Math.round(Math.min(cssViewport.height, Math.max(0, y)))
+  }
+}
+
 export function getPositiveFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }

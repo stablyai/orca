@@ -168,6 +168,17 @@ describe('extractPendingAsk', () => {
 })
 
 describe('parseAskFromStatus', () => {
+  it('preserves OMP checkbox questions from live status and transcript history', () => {
+    const input = {
+      questions: [
+        { id: 'q1', question: 'Pick', multi: true, options: [{ label: 'A' }, { label: 'B' }] }
+      ]
+    }
+    const prompt = parseAskFromStatus(JSON.stringify(input), 'ask')
+    expect(prompt?.questions[0]?.multiSelect).toBe(true)
+    expect(extractPendingAsk([message('m1', [call('ask', input)])])).toEqual(prompt)
+  })
+
   it('preserves OpenCode question envelope multiple selection on live status and replay', () => {
     const input = {
       id: 'question',

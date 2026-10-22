@@ -6,7 +6,7 @@
  * disambiguation off.
  */
 import { describe, expect, it } from 'vitest'
-import { buildRows } from './worktree-list/grouping/build-rows'
+import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { project, projectHostSetups, repo, worktree } from './worktree-list-groups-test-fixtures'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'

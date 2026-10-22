@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {
   diffNativeChatTaskLists,
+  nativeChatTaskChangeWords,
   nativeChatTaskLabel,
   type NativeChatTask,
   type NativeChatTaskChange,
@@ -21,22 +22,22 @@ function statusLabel(task: NativeChatTask): string {
 }
 
 function changeLabel(change: NativeChatTaskChange): string {
-  const values = { task: change.task.content }
-  switch (change.kind) {
+  const { key, task } = nativeChatTaskChangeWords(change)
+  switch (key) {
     case 'added':
-      return translate('components.native-chat.taskList.added', 'Added {{task}}', values)
+      return translate('components.native-chat.taskList.added', 'Added {{task}}', { task })
     case 'removed':
-      return translate('components.native-chat.taskList.removed', 'Removed {{task}}', values)
+      return translate('components.native-chat.taskList.removed', 'Removed {{task}}', { task })
     case 'started':
-      return translate('components.native-chat.taskList.started', 'Started {{task}}', values)
-    case 'completed':
-      return translate('components.native-chat.taskList.finished', 'Completed {{task}}', values)
-    case 'pending':
-      return translate('components.native-chat.taskList.reset', 'Marked pending: {{task}}', values)
-    case 'updated':
-      return translate('components.native-chat.taskList.updated', 'Updated {{task}}', {
-        task: nativeChatTaskLabel(change.task)
+      return translate('components.native-chat.taskList.started', 'Started {{task}}', { task })
+    case 'finished':
+      return translate('components.native-chat.taskList.finished', 'Completed {{task}}', { task })
+    case 'reset':
+      return translate('components.native-chat.taskList.reset', 'Marked pending: {{task}}', {
+        task
       })
+    case 'updated':
+      return translate('components.native-chat.taskList.updated', 'Updated {{task}}', { task })
   }
 }
 

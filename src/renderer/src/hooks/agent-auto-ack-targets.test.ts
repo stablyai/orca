@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { notePresence, setPresenceGated } from './agent-auto-ack-presence'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import {
   createTestStore,
@@ -6,7 +7,11 @@ import {
   makeTabGroup,
   makeUnifiedTab
 } from '@/store/slices/store-test-helpers'
-import { isTabOnVisibleSurface, resolveAutoAckTabTargets } from './agent-auto-ack-targets'
+import { isTabOnScreen, resolveAutoAckTabTargets } from './agent-auto-ack-targets'
+
+// The user is present unless a test says otherwise.
+beforeEach(() => setPresenceGated(false))
+afterEach(() => setPresenceGated(true))
 
 const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
 const TERMINAL = 'terminal-tab'
@@ -52,7 +57,7 @@ describe('visible agent acknowledgement target', () => {
       })
 
       expect(store.getState().getActiveTab(FLOATING)?.id).toBe(content.id)
-      expect(isTabOnVisibleSurface(store.getState(), FLOATING, TERMINAL, 'terminal')).toBe(false)
+      expect(isTabOnScreen(store.getState(), FLOATING, TERMINAL, 'terminal')).toBe(false)
       expect(resolveAutoAckTabTargets(store.getState())).toEqual([])
     }
   )
@@ -70,13 +75,21 @@ describe('visible agent acknowledgement target', () => {
     })
 
     expect(store.getState().getActiveTab(FLOATING)).toBeNull()
-    expect(isTabOnVisibleSurface(store.getState(), FLOATING, TERMINAL, 'terminal')).toBe(false)
+    expect(isTabOnScreen(store.getState(), FLOATING, TERMINAL, 'terminal')).toBe(false)
     expect(resolveAutoAckTabTargets(store.getState())).toEqual([])
+  })
+
+  it('counts a tab on screen only once the user is confirmed present', () => {
+    const state = floatingStore().getState()
+    setPresenceGated(true)
+    expect(isTabOnScreen(state, FLOATING, TERMINAL, 'terminal')).toBe(false)
+    notePresence()
+    expect(isTabOnScreen(state, FLOATING, TERMINAL, 'terminal')).toBe(true)
   })
 
   it('acknowledges the active terminal in the focused group', () => {
     const state = floatingStore().getState()
 
-    expect(isTabOnVisibleSurface(state, FLOATING, TERMINAL, 'terminal')).toBe(true)
+    expect(isTabOnScreen(state, FLOATING, TERMINAL, 'terminal')).toBe(true)
   })
 })

@@ -11,7 +11,7 @@ import {
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
 } from '../../../../orchestration/worker-output-cursor'
-import { redactWorkerTerminalLines } from '../../../../orchestration/worker-transcript-payload'
+import { redactWorkerTerminalView } from '../../../../orchestration/worker-terminal-redaction'
 import { readWorkerTranscript } from '../../../../orchestration/worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../../../../shared/wsl-hook-relay-contract'
 
@@ -158,12 +158,7 @@ async function readTerminalOutput(
     cursor: cursor?.source === 'terminal' ? cursor.position : undefined,
     limit: args.limit
   })
-  const redactedTerminal = redactWorkerTerminalLines([
-    ...terminal.tail,
-    ...(terminal.draft ? [terminal.draft] : [])
-  ])
-  const redactedTail = redactedTerminal.lines.slice(0, terminal.tail.length)
-  const redactedDraft = terminal.draft ? redactedTerminal.lines.at(-1) : undefined
+  const redactedTerminal = redactWorkerTerminalView(terminal)
   const position =
     terminal.nextCursor !== null && /^\d+$/.test(terminal.nextCursor)
       ? Number.parseInt(terminal.nextCursor, 10)
@@ -178,8 +173,8 @@ async function readTerminalOutput(
     sourceIdentity,
     terminal: {
       ...terminal,
-      tail: redactedTail,
-      ...(redactedDraft ? { draft: redactedDraft } : {})
+      tail: redactedTerminal.tail,
+      ...(redactedTerminal.draft ? { draft: redactedTerminal.draft } : {})
     },
     cursor: nextCursor,
     status: {

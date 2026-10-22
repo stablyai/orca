@@ -7,6 +7,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { AppState } from '../types'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 /**
  * Destroys the recipe VM behind a project before the project is removed, so it never leaks.
@@ -20,7 +21,7 @@ export function destroyRecipeVmBeforeProjectRemoval(
   workspaceIds: string[]
 ): Promise<boolean> | false {
   const knownServerTarget = getRecipeVmSshTargetForHost(state.runtimeEnvironments, ownerHostId)
-  const hasProvisionedRoot = (state.worktreesByRepo[ownerRepo.id] ?? []).some(
+  const hasProvisionedRoot = (selectWorktreesByRepo(state)[ownerRepo.id] ?? []).some(
     (worktree) =>
       (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === ownerHostId &&
       worktree.ephemeralVmCheckoutMode === 'provisioned-root'

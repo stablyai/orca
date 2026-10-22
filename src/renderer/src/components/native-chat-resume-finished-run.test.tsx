@@ -5,6 +5,8 @@ import { NativeChatResumeOnRestartModal } from './NativeChatResumeOnRestartModal
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import {
   createResumeModalFixture,
+  failure,
+  offered,
   type RestartRpc,
   type ResumeStatusStream
 } from './native-chat-resume-modal.test-support'
@@ -38,7 +40,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     return { unsubscribe: () => {} }
   }
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const { mount, button, fakeHost, runStatus, toasts } = createResumeModalFixture(rpc, statusStream)
 const dialog = () => document.querySelector('[role="dialog"]')?.textContent
@@ -107,20 +111,118 @@ it('keeps the unseen summary when a view was opened and closed only during the r
   expect(runStatus('Prompt b')).toBe('Prompt b: Couldn’t confirm the chat was resumed')
 })
 
-it('shows the all-success summary from its toast without a status entry', async () => {
+it.each(['status entry', 'toast Show'] as const)(
+  'keeps a resumed entry until the all-success summary is seen from %s',
+  async (source) => {
+    fakeHost()
+    await mountSurfaces()
+    await act(async () => button('Resume 2 chats').click())
+    expect(dialog()).toBeUndefined()
+    expect(button('2 chats resumed. Click to see them.').textContent).toBe('2 chats resumed')
+    await act(async () =>
+      source === 'status entry' ? button('2 chats resumed').click() : lastToastShow()?.()
+    )
+    expect(dialog()).toContain('Resumed 2 of 2 chats')
+    expect(runStatus('Prompt a')).toBe('Prompt a: Resumed')
+    expect(runStatus('Prompt b')).toBe('Prompt b: Resumed')
+    await act(async () => button('Done').click())
+    expect(document.body.textContent).not.toContain('chat')
+    await act(async () => lastToastShow()?.())
+    expect(dialog()).toBeUndefined()
+  }
+)
+
+it('shows the resumed entry after a launch that resumed without asking', async () => {
+  useAppStore.setState((state) => ({
+    settings: { ...state.settings!, nativeChatResumeWorkOnRestart: true }
+  }))
   fakeHost()
   await mountSurfaces()
-  await act(async () => button('Resume 2 chats').click())
   expect(dialog()).toBeUndefined()
+  await act(async () => button('2 chats resumed').click())
+  expect(dialog()).toContain('Resumed 2 of 2 chats')
+})
+
+it('adds no resumed entry for a run watched to the end in the dialog', async () => {
+  const host = fakeHost()
+  host.hold('a', 'b')
+  await mountSurfaces()
+  await act(async () => button('Resume 2 chats').click())
+  await act(async () => button('Resuming chats 0/2').click())
+  await host.release('a', 'b')
+  expect(dialog()).toContain('Resumed 2 of 2 chats')
+  await act(async () => button('Done').click())
   expect(document.body.textContent).not.toContain('chat')
-  expect(lastToastShow()).toBeDefined()
+})
+
+it('keeps a new successful run visible beside an older host failure', async () => {
+  fakeHost({ sessions: [offered[0]!], failed: [failure('b')] })
+  await mountSurfaces()
+  await act(async () => button('Resume 1 chat').click())
+  expect(button('1 chat failed to resume')).toBeTruthy()
+  expect(button('1 chat resumed')).toBeTruthy()
+  await act(async () => button('1 chat resumed').click())
+  expect(dialog()).toContain('Resumed 1 of 1 chat')
+  expect(runStatus('Prompt a')).toBe('Prompt a: Resumed')
+})
+
+it('does not claim a mixed run succeeded when a host reread fails', async () => {
+  fakeHost({}, (sessionId) => (sessionId === 'a' ? 'continued' : 'refused'))
+  await mountSurfaces()
+  await act(async () => button('Resume 2 chats').click())
+  rpc.mockImplementationOnce(async () => {
+    throw new Error('host unavailable')
+  })
+  await act(async () => refreshNativeChatRestartOffer())
+  expect(getNativeChatRestartRun()?.entries).toHaveLength(2)
+  expect(document.body.textContent).not.toContain('chat resumed')
   await act(async () => lastToastShow()?.())
+  expect(dialog()).toContain('Resumed 1 of 2 chats')
+})
+
+it('shows finished rows after resetting an in-flight filter and keeps later filter actions', async () => {
+  const host = fakeHost()
+  host.hold('a', 'b')
+  await mountSurfaces()
+  await act(async () => button('Resume 2 chats').click())
+  await act(async () => button('Resuming chats 0/2').click())
+  await act(async () => button('In progress2').click())
+  await host.release('a', 'b')
+  expect(dialog()).toContain('Resumed 2 of 2 chats')
+  expect(runStatus('Prompt a')).toBe('Prompt a: Resumed')
+  expect(runStatus('Prompt b')).toBe('Prompt b: Resumed')
+  await act(async () => button('In progress0').click())
+  expect(runStatus('Prompt a')).toBeNull()
+  await act(async () => button('All2').click())
+  expect(runStatus('Prompt a')).toBe('Prompt a: Resumed')
+  await act(async () => button('Done').click())
+  expect(getNativeChatRestartRun()).toBeNull()
+})
+
+it('expands a group collapsed during a run before retiring the finished result', async () => {
+  const host = fakeHost()
+  host.hold('a', 'b')
+  await mountSurfaces()
+  await act(async () => button('Resume 2 chats').click())
+  await act(async () => button('Resuming chats 0/2').click())
+  await act(async () => button('Collapse workspace').click())
+  expect(runStatus('Prompt a')).toBeNull()
+  expect(runStatus('Prompt b')).toBeNull()
+  await host.release('a', 'b')
   expect(dialog()).toContain('Resumed 2 of 2 chats')
   expect(runStatus('Prompt a')).toBe('Prompt a: Resumed')
   expect(runStatus('Prompt b')).toBe('Prompt b: Resumed')
   await act(async () => button('Done').click())
-  await act(async () => lastToastShow()?.())
-  expect(dialog()).toBeUndefined()
+  expect(getNativeChatRestartRun()).toBeNull()
+  expect(document.body.textContent).not.toContain('chat resumed')
+})
+
+it('leaves the resumed chats to the failure entry when one could not resume', async () => {
+  fakeHost({}, (sessionId) => (sessionId === 'a' ? 'continued' : 'refused'))
+  await mountSurfaces()
+  await act(async () => button('Resume 2 chats').click())
+  expect(button('1 chat failed to resume')).toBeTruthy()
+  expect(document.body.textContent).not.toContain('resumed')
 })
 
 it('replaces the finished summary when Retry starts a new run', async () => {

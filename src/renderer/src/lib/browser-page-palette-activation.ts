@@ -5,7 +5,7 @@ import {
 } from '@/lib/browser-workspace-tab-activation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorkspace } from './worktree-activation'
 
 export type BrowserPagePaletteActivationFailure =
   | 'missing-page'
@@ -16,6 +16,7 @@ export type BrowserPageFocusTarget = 'address-bar' | 'webview'
 
 export type BrowserPagePaletteActivationResult =
   | { status: 'activated'; pageId: string; focusTarget: BrowserPageFocusTarget }
+  | { status: 'blocked' }
   | { status: 'failed'; reason: BrowserPagePaletteActivationFailure }
 
 export type BrowserPagePaletteActivationTarget = {
@@ -51,7 +52,7 @@ export function activateBrowserPagePaletteResult({
     return { status: 'failed', reason: 'missing-page' }
   }
 
-  // Why: activateAndRevealWorktree mutates store state, so a later page lookup
+  // Why: activateAndRevealWorkspace mutates store state, so a later page lookup
   // is unreliable — resolve the focus target from the URL captured here.
   const focusTarget: BrowserPageFocusTarget = isBlankBrowserUrl(page.url)
     ? 'address-bar'
@@ -63,12 +64,12 @@ export function activateBrowserPagePaletteResult({
   ) {
     return { status: 'failed', reason: 'missing-tab' }
   }
-  const activated = activateAndRevealWorktree(
+  const activated = activateAndRevealWorkspace(
     worktree.id,
     targetHostId ? { executionHostId: targetHostId } : {}
   )
   if (!activated) {
-    return { status: 'failed', reason: 'missing-worktree' }
+    return { status: 'blocked' }
   }
 
   // Why the failure and not a bare activation: without a unified tab the browser state would go

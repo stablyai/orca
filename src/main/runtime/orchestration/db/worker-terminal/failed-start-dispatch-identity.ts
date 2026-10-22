@@ -22,7 +22,7 @@ export function recordFailedStartDispatchIdentity(
       `UPDATE dispatch_contexts
          SET assignee_handle = ?, assignee_pane_key = ?, assignee_orca_session_id = ?,
              process_incarnation = ?, host_scope = ?
-       WHERE id = ? AND status = 'failed' AND process_incarnation IS NULL`
+       WHERE id = ? AND status IN ('failed', 'circuit_broken') AND process_incarnation IS NULL`
     )
     .run(
       resource.terminal_handle,

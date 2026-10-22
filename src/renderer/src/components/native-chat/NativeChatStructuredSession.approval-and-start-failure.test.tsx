@@ -197,7 +197,10 @@ afterEach(() => {
   }
 
   // The notices are the host's rows'; a copy an earlier session left in the outbox gives way to them.
-  function renderPane(messages: ReturnType<typeof rejected>[]): void {
+  function renderPane(
+    messages: ReturnType<typeof rejected>[],
+    agent: 'claude' | 'codex' = 'claude'
+  ): void {
     mocks.submissions = messages.map((message) => message.submission)
     localStorage.setItem(
       `orca:desktopStructuredAgentSessionOutbox:v1:${encodeURIComponent(SESSION_ID)}`,
@@ -210,7 +213,7 @@ afterEach(() => {
         tabId="start-failure-tab"
         sessionId={SESSION_ID}
         target={{ kind: 'local' }}
-        agent="claude"
+        agent={agent}
       />
     )
   }
@@ -254,18 +257,12 @@ afterEach(() => {
 
     renderPane([
       rejected('stated', START_FAILED_REASON, START_FAILED),
-      rejected(
-        'other',
-        'The provider did not accept this message: Image type .bmp.',
-        providerRejected
-      )
+      rejected('other', "Claude didn't accept this message: Image type .bmp.", providerRejected)
     ])
 
     expect(within(await notice('stated')).getByText('Your message was not sent.')).toBeTruthy()
     expect(
-      within(await notice('other')).getByText(
-        'The provider did not accept this message: Image type .bmp.'
-      )
+      within(await notice('other')).getByText("Claude didn't accept this message: Image type .bmp.")
     ).toBeTruthy()
   })
 
@@ -274,4 +271,37 @@ afterEach(() => {
 
     expect(within(await notice('first')).getByText(START_FAILED_REASON)).toBeTruthy()
   })
+
+  it.each([null, '0.100.0', '0.135.0'])(
+    'states a missing or too-old Codex (installed version %s) in the existing failure notice',
+    async (installedVersion) => {
+      const failure: AgentSessionFailureFact = {
+        kind: installedVersion === null ? 'cliMissing' : 'startFailed',
+        ...(installedVersion === null
+          ? {}
+          : {
+              refusal: {
+                code: 'agent_session_operation_invalid',
+                details: {
+                  reason: 'attachFailed',
+                  codexInstallation: { installedVersion, minimumVersion: '0.136.0' }
+                }
+              }
+            })
+      }
+      const { text } = agentSessionFailureWords(failure, { agentName: 'Codex', surface: 'row' })
+      renderPane([rejected('codex-message', text, failure)], 'codex')
+      const row = await notice('codex-message')
+      expect(within(row).getByText(text)).toBeTruthy()
+      expect(text).toContain(
+        installedVersion === null
+          ? "Codex wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents."
+          : `Codex ${installedVersion} is too old for chats. Update to 0.136.0 or newer.`
+      )
+      if (installedVersion !== null) {
+        expect(text).not.toContain('Settings → Agents')
+      }
+      expect(text).not.toContain('codex update')
+    }
+  )
 }

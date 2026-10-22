@@ -11,6 +11,10 @@ import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { provisionWorktreeTerminals } from './runtime-worktree-terminal-provisioning'
+import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
+import { resolveHostId } from '../persistence/loading-store/session-host-partitions'
+import { withRuntimePaneAdmission } from './runtime-durable-store-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -32,7 +36,7 @@ class DefaultTabRuntime extends OrcaRuntimeService {
     super(store)
   }
 
-  protected override async resolveTerminalWorkspaceLaunchScope(): Promise<TerminalWorkspaceLaunchScope> {
+  override async resolveTerminalWorkspaceLaunchScope(): Promise<TerminalWorkspaceLaunchScope> {
     return {
       id: WORKTREE_ID,
       path: '/repo/app',
@@ -70,6 +74,12 @@ function sessionStore(initial: WorkspaceSessionState): {
     setWorkspaceSession: (next) => {
       session = next
     },
+    // Main's own layout writes, as the Store applies them (a layout-owner build sends these).
+    applyLayoutCommand: async (command, hostIds = []) => {
+      const change = applyCommandToSession(resolveHostId(hostIds[0]), session, command)
+      session = change.session ?? session
+      return change.value
+    },
     getSettings: () => ({
       workspaceDir: '/workspaces',
       nestWorkspaces: false,
@@ -78,7 +88,11 @@ function sessionStore(initial: WorkspaceSessionState): {
       branchPrefixCustom: ''
     })
   }
-  return { store, getSession: () => session }
+  // Switch-on, the default tab writes target main's copy, so main's pane write must be there.
+  return {
+    store: ORCA_LAYOUT_OWNER_IS_MAIN ? withRuntimePaneAdmission(store) : store,
+    getSession: () => session
+  }
 }
 
 function notifierWithRename(renameTerminal: RuntimeNotifier['renameTerminal']): RuntimeNotifier {
@@ -99,7 +113,8 @@ function notifierWithRename(renameTerminal: RuntimeNotifier['renameTerminal']): 
 
 async function createHeadlessRuntimeWithAgent(
   connectionId: string | null = null,
-  store: RuntimeStore | null = null
+  // Provisioning reads settings before default tabs since #28543 (setup-only skips them).
+  store: RuntimeStore = sessionStore(getDefaultWorkspaceSession()).store
 ): Promise<{ runtime: DefaultTabRuntime; handle: string }> {
   const runtime = new DefaultTabRuntime(store, connectionId)
   let spawned = 0
@@ -131,6 +146,19 @@ async function dressAgentTab(runtime: DefaultTabRuntime, handle: string): Promis
     hasStartupTerminal: true,
     setupCommandPlatform: 'posix'
   })
+}
+
+/** The window's title: from main's layout in a layout-owner build, else main's rename to it. */
+function expectWindowTitledDev(
+  renameTerminal: ReturnType<typeof vi.fn>,
+  session: WorkspaceSessionState
+): void {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    const row = session.tabsByWorktree[WORKTREE_ID]?.find((tab) => tab.id === AGENT_TAB_ID)
+    expect(row?.customTitle).toBe('Dev')
+    return
+  }
+  expect(renameTerminal).toHaveBeenCalledWith(AGENT_TAB_ID, 'Dev', { recordInteraction: false })
 }
 
 async function agentTab(runtime: OrcaRuntimeService) {
@@ -192,7 +220,7 @@ describe('the agent tab a host-side create dresses as the first default tab', ()
 
     await dressAgentTab(runtime, handle)
 
-    expect(renameTerminal).toHaveBeenCalledWith(AGENT_TAB_ID, 'Dev', { recordInteraction: false })
+    expectWindowTitledDev(renameTerminal, getSession())
     expect(runtime.ptyTitle(AGENT_PTY_ID)).toBeNull()
     // A restarted headless host rebuilds the phone's tabs from the saved session.
     const session = getSession()
@@ -208,7 +236,8 @@ describe('the agent tab a host-side create dresses as the first default tab', ()
   })
 
   it("still titles the tab once the window's graph has taken over the handle", async () => {
-    const { runtime, handle } = await createHeadlessRuntimeWithAgent()
+    const { store, getSession } = sessionStore(getDefaultWorkspaceSession())
+    const { runtime, handle } = await createHeadlessRuntimeWithAgent(null, store)
     const renameTerminal = vi.fn()
     runtime.setNotifier(notifierWithRename(renameTerminal))
     runtime.attachWindow(1)
@@ -235,6 +264,6 @@ describe('the agent tab a host-side create dresses as the first default tab', ()
 
     await runtime.provisioningHost().setTabTitle(handle, 'Dev')
 
-    expect(renameTerminal).toHaveBeenCalledWith(AGENT_TAB_ID, 'Dev', { recordInteraction: false })
+    expectWindowTitledDev(renameTerminal, getSession())
   })
 })

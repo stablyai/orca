@@ -108,50 +108,38 @@ describe('publishing a launch tab before its agent exists', () => {
     store.getState().setTabAgentLaunchPane(TAB_ID, {
       leafId: LEAF_ID,
       operationId: 'op-1',
-      outcome: { kind: 'unconfirmed' }
+      outcome: { kind: 'not-started', code: 'boom' }
     })
 
     publishAgentLaunchTab(request({ requestId: 'request-2', operationId: 'op-1' }))
     expect(launchPane()).toEqual({
       leafId: LEAF_ID,
       operationId: 'op-1',
-      outcome: { kind: 'unconfirmed' }
+      outcome: { kind: 'not-started', code: 'boom' }
     })
 
     publishAgentLaunchTab(request({ requestId: 'request-3', operationId: 'op-2' }))
     expect(launchPane()).toEqual({ leafId: LEAF_ID, operationId: 'op-2' })
   })
 
-  it('hands a tab this window made for the launch to the host, as the launch to take back', async () => {
-    const { holdAgentLaunchPaneSpawn, agentLaunchPaneSpawnHold } =
-      await import('./agent-launch-pane-spawn-hold')
-    holdAgentLaunchPaneSpawn(TAB_ID, LEAF_ID)
+  it('never claims a tab it found already shown as one to take back', () => {
     store.getState().createTab(WT, undefined, undefined, {
       id: TAB_ID,
       initialLeafId: LEAF_ID,
       agentLaunchPane: { leafId: LEAF_ID }
     })
-    const held = agentLaunchPaneSpawnHold(TAB_ID, LEAF_ID)
-
-    const published = publishAgentLaunchTab(request())
-
-    // The host now owns the pane, so a refused launch takes the tab back rather than leaving a shell.
-    expect(published).toMatchObject({ tabId: TAB_ID, created: true })
-    await expect(held).resolves.toBeUndefined()
-    expect(agentLaunchPaneSpawnHold(TAB_ID, LEAF_ID)).toBeNull()
-    // A retry finds no hold: the tab is no longer only this launch's.
-    expect(publishAgentLaunchTab(request({ requestId: 'request-2' })).created).toBe(false)
+    expect(publishAgentLaunchTab(request())).toMatchObject({ tabId: TAB_ID, created: false })
   })
 
   it("remounts a pane that showed an earlier launch's outcome, so it spawns for the new launch", () => {
     const generation = () =>
       store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === TAB_ID)?.generation ?? 0
     publishAgentLaunchTab(request({ operationId: 'op-1' }))
-    // Its spawn was refused ("couldn't confirm"): the pane is idle until it remounts.
+    // Its spawn was refused: the pane is idle until it remounts.
     store.getState().setTabAgentLaunchPane(TAB_ID, {
       leafId: LEAF_ID,
       operationId: 'op-1',
-      outcome: { kind: 'unconfirmed' }
+      outcome: { kind: 'not-started', code: 'boom' }
     })
     const before = generation()
 

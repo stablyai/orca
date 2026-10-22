@@ -207,15 +207,11 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
     const arranged = await desktopStrip(desktop.page, desktopWorktree.id)
     await expect.poll(phoneStrip, { timeout: 30_000 }).toEqual(arranged)
     expect(await serverStrip()).toEqual(arranged)
-    // BASELINE (main): the headless server's published layout leaves out its own browser page;
-    // the rework publishes it (one layout), so this then compares with `arranged` as is.
-    const browserTabIds = new Set(
+    // The server saves its own browser page's tab, so its published layout holds the same strip.
+    expect(
       (await phoneTabs()).tabs.filter((tab) => tab.type === 'browser').map((tab) => tab.id)
-    )
-    expect(browserTabIds.size).toBe(1)
-    expect(await publishedStrip()).toEqual(
-      arranged.map((group) => group.filter((id) => !browserTabIds.has(id)))
-    )
+    ).toHaveLength(1)
+    expect(await publishedStrip()).toEqual(arranged)
     // Only the server holds this workspace's tabs; the desktop's own answer has none of them.
     const untargeted = await call(socket, 'session.tabs.list', { worktree }, SessionTabsSchema)
     expect(untargeted.tabs).toEqual([])

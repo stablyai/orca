@@ -10,7 +10,8 @@ import {
   getGitRepoRootAsync,
   getRepoName
 } from '../../git/repo'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 
@@ -49,6 +50,13 @@ export async function addLocalRepoFromPath(
     if (existingAfterRootResolve) {
       return { repo: existingAfterRootResolve, alreadyExisted: true }
     }
+  }
+  const existingAtRealPath = await findProjectAtSameRealPath(
+    store.getRepos().filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID),
+    resolvedPath
+  )
+  if (existingAtRealPath) {
+    return { repo: existingAtRealPath, alreadyExisted: true }
   }
 
   // Why: a linked worktree reports itself as its own toplevel, so the path checks above can't see that

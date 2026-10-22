@@ -193,8 +193,55 @@ describe('countFocusSettingReads', () => {
     expect(readers.namesFor('src/renderer/src/hook.ts').has('sideEffectOnly')).toBe(false)
   })
 
+  it('stops an arrow result before the next argument without losing nested reader results', () => {
+    const readers = discoverFocusReaders(
+      new Map([
+        [
+          'src/renderer/src/focus.ts',
+          'export function focusedId(s) {\n  return s.activeRuntimeEnvironmentId\n}\n'
+        ],
+        [
+          'src/renderer/src/hook.ts',
+          [
+            "import { focusedId } from './focus'",
+            'export function useCloseActions(s) {',
+            '  const closeTabs = () => { focusedId(s) }',
+            '  const closeOthers = () => {',
+            '    confirmClose(() => selectIds(s), closeTabs)',
+            '  }',
+            '  return { closeOthers }',
+            '}',
+            'export const wrappedReader = (s) => forward(null, focusedId(s))',
+            'export const commaReader = (s) => (null, focusedId(s))'
+          ].join('\n')
+        ]
+      ])
+    )
+    const names = readers.namesFor('src/renderer/src/hook.ts')
+    expect(names.has('useCloseActions')).toBe(false)
+    expect(names.has('wrappedReader')).toBe(true)
+    expect(names.has('commaReader')).toBe(true)
+  })
+
   it('counts the default scope source as a read', () => {
     expect(countFocusSettingReads('linearConnect(defaultScopeSource(get().settings), key)')).toBe(1)
+  })
+
+  it("counts a wrapper that returns a seed reader's result", () => {
+    const readers = discoverFocusReaders(
+      new Map([
+        [
+          'src/renderer/src/owner.ts',
+          [
+            'export function hostOrNull(state) {',
+            '  const host = defaultScopeHost(state.settings)',
+            '  return host ? host.id : null',
+            '}'
+          ].join('\n')
+        ]
+      ])
+    )
+    expect(readers.has('hostOrNull')).toBe(true)
   })
 
   it('counts destructuring reads', () => {
@@ -241,5 +288,6 @@ describe('isScannedPath', () => {
     expect(isScannedPath('src/renderer/src/a.tsx')).toBe(true)
     expect(isScannedPath('src/renderer/src/a.test.ts')).toBe(false)
     expect(isScannedPath('src/renderer/src/a.spec.tsx')).toBe(false)
+    expect(isScannedPath('src/renderer/src/a.test-fixture.ts')).toBe(false)
   })
 })

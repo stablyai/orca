@@ -6,7 +6,7 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../../../shared/worktree/types'
 import { getWorkspaceStatus } from '../../workspace-status'
-import type { WorktreeGroupBy } from '../grouping/row-types'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getVirtualRowTransform,
   getWorktreeVirtualRowTransform,

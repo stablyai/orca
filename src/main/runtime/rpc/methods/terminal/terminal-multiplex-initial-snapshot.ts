@@ -1,4 +1,5 @@
 import {
+  isTerminalSnapshotForcedUnavailable,
   sendSnapshotFrames,
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
@@ -65,6 +66,7 @@ export async function publishMultiplexInitialSnapshot(
     ...((stream.supportsOutputPause || stream.inputSessionId !== null) && {
       capabilities: {
         ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
+        ...(stream.supportsOutputPauseDropNotice ? { outputPauseDropNotice: 1 as const } : {}),
         ...(stream.inputSessionId !== null ? { inputAck: 1 as const } : {})
       }
     }),
@@ -90,7 +92,12 @@ export async function publishMultiplexInitialSnapshot(
     terminalOwner: serialized?.terminalOwner,
     oscLinks: serialized?.oscLinks,
     pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-    data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
+    // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.
+    data:
+      serialized?.data ??
+      (read.tail.length > 0 && !isTerminalSnapshotForcedUnavailable()
+        ? `${read.tail.join('\r\n')}\r\n`
+        : '')
   })
   // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
   stream.lastResizeCols = serialized?.cols ?? size?.cols

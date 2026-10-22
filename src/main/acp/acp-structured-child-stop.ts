@@ -1,23 +1,33 @@
+import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
 import type { AcpStructuredSession } from './acp-structured-session'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpChildStops, AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpAgentError } from './acp-errors'
-import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-work-stop-targets'
+import type {
+  AgentChildWorkStopAcknowledgement,
+  AgentSessionBackgroundTaskStops
+} from '../../shared/agent-child-work-stop-targets'
 import { acpBackgroundTaskStopId } from './acp-background-task-child-work'
+import { acpSubagentOutcome } from './acp-subagents'
 
-type ChildStopResult = { cancelled: boolean; stillRunning?: true }
+type ChildStopResult = {
+  cancelled: boolean
+  stillRunning?: true
+  acknowledged?: AgentChildWorkStopAcknowledgement
+}
 type SubagentStop = NonNullable<AcpDialect['subagentStop']>
 type BackgroundTaskStop = NonNullable<AcpDialect['backgroundTaskStop']>
 
 export const NO_ACP_CHILD_STOPS: AcpChildStops = { subagents: false, backgroundTasks: false }
 
 export function acpChildStopCapabilities(
-  session?: AcpStructuredSession
+  session?: AcpStructuredChild
 ): AgentSessionBackgroundTaskStops | undefined {
   return session?.journalClosed === null
     ? {
         supportsTaskStop:
-          session.childStops?.subagents === true || session.childStops?.backgroundTasks === true,
+          isAcpReadySession(session) &&
+          (session.childStops?.subagents === true || session.childStops?.backgroundTasks === true),
         supportsStopAll: false
       }
     : undefined
@@ -72,8 +82,7 @@ export async function probeAcpChildStops(
 async function stopAcpSubagent(
   session: AcpStructuredSession,
   control: SubagentStop,
-  id: string,
-  at: () => number
+  id: string
 ): Promise<ChildStopResult> {
   const request = control.request(session.lane.translator.providerSessionId, id)
   let value: unknown
@@ -87,10 +96,17 @@ async function stopAcpSubagent(
     throw error
   }
   const result = control.response(value, id)
-  if (result.state && result.state !== 'working') {
-    session.lane.apply(session.lane.translator.reconcileSubagent(id, result.state, at()))
+  if (result.state === 'working') {
+    return { cancelled: result.cancelled }
   }
-  return { cancelled: result.cancelled }
+  // Not found is no acceptance; an answer that names how the subagent finished is its own ending.
+  const outcome = result.state === undefined ? undefined : acpSubagentOutcome(result.state)
+  return result.cancelled || outcome !== undefined
+    ? {
+        cancelled: result.cancelled,
+        acknowledged: { taskId: id, ...(outcome !== undefined ? { outcome } : {}) }
+      }
+    : { cancelled: false }
 }
 
 async function stopAcpBackgroundTask(
@@ -126,8 +142,8 @@ export async function stopAcpChildren(
   session: AcpStructuredSession,
   fence: number,
   taskIds: readonly string[],
-  at: () => number
-): Promise<ChildStopResult> {
+  acknowledge: (acknowledgement: AgentChildWorkStopAcknowledgement) => void = () => {}
+): Promise<{ cancelled: boolean; stillRunning?: true }> {
   const subagentStop = session.childStops?.subagents ? session.spec.dialect.subagentStop : undefined
   const taskStop = session.childStops?.backgroundTasks
     ? session.spec.dialect.backgroundTaskStop
@@ -141,14 +157,17 @@ export async function stopAcpChildren(
   let stillRunning = false
   for (const id of taskIds) {
     const taskId = acpBackgroundTaskStopId(id)
-    const result =
+    const result: ChildStopResult =
       taskId !== undefined && taskStop
         ? await stopAcpBackgroundTask(session, taskStop, taskId)
         : subagentStop
-          ? await stopAcpSubagent(session, subagentStop, id, at)
+          ? await stopAcpSubagent(session, subagentStop, id)
           : { cancelled: false }
     cancelled ||= result.cancelled
     stillRunning ||= result.stillRunning === true
+    if (result.acknowledged) {
+      acknowledge(result.acknowledged)
+    }
   }
   return { cancelled, ...(stillRunning ? { stillRunning: true as const } : {}) }
 }

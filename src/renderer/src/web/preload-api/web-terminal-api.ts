@@ -21,6 +21,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     resetInputModes: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
+    // Web panes never transit main's hidden-delivery gate, so there is no drop latch.
+    ackHiddenOutputRestoreApplied: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,
     respondDeliveryResync: () => {},
@@ -45,6 +47,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     disableCodexSharedServerAutoStart: () => Promise.resolve(false),
     stopCodexSharedServer: () => Promise.resolve(false),
     openedBeforeClaudeAccounts: () => Promise.resolve(false),
+    claudeDiffPanelMayAutoOpen: () => Promise.resolve(false),
     // Why: the paired host owns its daemons; this client has none to stop.
     readNewerDaemonHeldScreen: () => Promise.resolve(null),
     reopenNewerDaemonTerminals: () => Promise.resolve({ reopened: false }),
@@ -103,6 +106,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     clearPendingPaneSerializer: () => Promise.resolve(),
     reportRendererSerializerReady: () => Promise.resolve(),
     management: {
+      asyncIoHealth: () => Promise.resolve({ state: 'unsupported' as const }),
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
@@ -159,7 +163,7 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     connect: async (args) => {
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',
-        { targetId: args.targetId }
+        { targetId: args.targetId, automatic: args.automatic }
       )
       return state
     },

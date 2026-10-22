@@ -397,14 +397,7 @@ describe('registerPtyHandlers', () => {
       }
     })
     expect(providerSpawn).toHaveBeenCalledTimes(1)
-    expect(store.persistPtyBinding).toHaveBeenCalledWith({
-      worktreeId: 'repo-1::/tmp',
-      tabId: 'tab-race',
-      leafId,
-      ptyId: 'pty-renderer',
-      startupCwd: '/tmp',
-      origin: 'spawn'
-    })
+    expect(store.persistPtyBinding).toHaveBeenCalledWith(expect.any(Function), undefined)
   })
   it.each([
     {
@@ -448,6 +441,7 @@ describe('registerPtyHandlers', () => {
       const leafId = '66666666-6666-4666-8666-666666666666'
       const paneKey = makePaneKey(tabId, leafId)
       let ownerPublished = false
+      const ownerId = 'pty-live-owner'
       let releaseAttach!: () => void
       let attachBarrier: Promise<void>
       const resetAttachBarrier = (): void => {
@@ -463,7 +457,7 @@ describe('registerPtyHandlers', () => {
           if (options.attachOnly) {
             await attachBarrier
             return {
-              id: 'pty-live-owner',
+              id: options.sessionId ?? ownerId,
               incarnationId: 'inc-live-owner',
               isReattach: true,
               snapshot: 'original-live-output',
@@ -527,7 +521,7 @@ describe('registerPtyHandlers', () => {
             handle: 'term-live-owner',
             tabId,
             leafId,
-            ptyId: 'pty-live-owner',
+            ptyId: ownerId,
             worktreeId
           }
         }),
@@ -580,7 +574,6 @@ describe('registerPtyHandlers', () => {
         cols: 120,
         rows: 40,
         cwd: '/a',
-        cwdFallback: 'worktree',
         command: 'claude --resume provider-session',
         launchAgent: 'claude',
         worktreeId,

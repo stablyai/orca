@@ -5,7 +5,15 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { RuntimeFileListState } from './quick-open-file-list'
+import {
+  getRuntimeFileListTarget,
+  getNestedWorktreeExcludeRequest,
+  getNestedWorktreeExcludePaths,
+  isNestedWorktreePath,
+  type RuntimeFileListState
+} from './quick-open-file-list'
+import * as fileListTarget from './quick-open-file-list-target'
+import * as nestedWorktrees from './quick-open-nested-worktrees'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from './quick-open-search'
 import {
   listRuntimeFilesMock,
@@ -28,6 +36,13 @@ vi.mock('@/runtime/runtime-file-search-client', async () => {
     cancelRuntimeFileList: mocks.cancelRuntimeFileListMock,
     searchRuntimeFilePaths: mocks.searchRuntimeFilePathsMock
   }
+})
+
+it('keeps the pure file list functions available through the hook module', () => {
+  expect(getRuntimeFileListTarget).toBe(fileListTarget.getRuntimeFileListTarget)
+  expect(getNestedWorktreeExcludeRequest).toBe(fileListTarget.getNestedWorktreeExcludeRequest)
+  expect(getNestedWorktreeExcludePaths).toBe(nestedWorktrees.getNestedWorktreeExcludePaths)
+  expect(isNestedWorktreePath).toBe(nestedWorktrees.isNestedWorktreePath)
 })
 
 describe('useRuntimeFileListForWorktree', () => {

@@ -1,16 +1,12 @@
-// Local native-chat pastes live in an Orca-owned folder, so a restored draft can show and send them:
-// a restore keeps only files that really are inside it, and old files expire.
+// Orca's folder for local native-chat pastes no send claims: a terminal-backed chat's, and every
+// paste from before structured chats used their attachment store. Never swept, since nothing tells
+// which of them a sent message names; a restore keeps only files that really are inside it.
 
-import { lstat, readdir, realpath, stat, unlink } from 'node:fs/promises'
+import { lstat, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { NATIVE_CHAT_PASTE_FOLDER } from '../../shared/native-chat-paste-folder'
 
-// Why 30 days: no age bounds what can still name a paste (a queued send is retried with a new id
-// after the host's 24 h id window), so this is a judgment. A draft or outbox entry kept longer meets
-// its image as a placeholder or a failed send, and a sent paste's file lingers until then.
-export const NATIVE_CHAT_PASTE_TTL_MS = 30 * 24 * 60 * 60 * 1000
-const PASTE_FILE_NAME = /^orca-paste-.+\.png$/i
 const MAX_RESTORED_PASTES = 256
 
 type PathApi = typeof path.posix
@@ -104,35 +100,5 @@ async function restoreNativeChatPaste(
   } catch {
     // Missing or unreadable: not kept, and nothing about an outside path is reported.
     return refused
-  }
-}
-
-/** Deletes pastes older than the TTL: only Orca's paste files, never a link, a folder, or anything
- *  in a paste folder that is itself a link. Failures are logged and never block startup. */
-export async function sweepExpiredNativeChatPastes(now = Date.now()): Promise<void> {
-  const folders = await realPasteFolder()
-  if (!folders) {
-    return
-  }
-  const folder = folders.named
-  let entries
-  try {
-    entries = await readdir(folder, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    if (!entry.isFile() || !PASTE_FILE_NAME.test(entry.name)) {
-      continue
-    }
-    const file = path.join(folder, entry.name)
-    try {
-      const info = await lstat(file)
-      if (info.isFile() && now - info.mtimeMs > NATIVE_CHAT_PASTE_TTL_MS) {
-        await unlink(file)
-      }
-    } catch (error) {
-      console.warn('[native-chat-pastes] could not expire a paste:', error)
-    }
   }
 }

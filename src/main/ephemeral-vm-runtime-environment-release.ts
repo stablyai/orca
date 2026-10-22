@@ -1,6 +1,7 @@
 import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
 import { removeManagedOrcadEnvironment } from '../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments, removeEnvironment } from '../shared/runtime-environment-store'
+import { getOrcadSshDeployment } from '../shared/runtime-environments'
 
 /** Forgets the servers a destroyed VM ran; a managed one's tunnel would otherwise keep redialing. */
 export async function releaseEphemeralVmRuntimeEnvironments(
@@ -12,14 +13,15 @@ export async function releaseEphemeralVmRuntimeEnvironments(
     (entry) =>
       entry.id === runtime.runtimeEnvironmentId ||
       (runtime.sshTargetId !== undefined &&
-        entry.orcadDeployment?.sshTargetId === runtime.sshTargetId)
+        getOrcadSshDeployment(entry)?.sshTargetId === runtime.sshTargetId)
   )
   for (const environment of environments) {
     if (!environment.orcadDeployment) {
       removeEnvironment(userDataPath, environment.id)
       continue
     }
-    const { closeOrcadManagedTunnel } = await import('./ssh/orcad-managed-tunnel')
+    const { closeOrcadManagedTunnel } =
+      await import('./managed-server/lifecycle/orcad-managed-tunnel')
     await closeOrcadManagedTunnel(environment.id).catch(() => undefined)
     removeManagedOrcadEnvironment(userDataPath, environment.id)
   }

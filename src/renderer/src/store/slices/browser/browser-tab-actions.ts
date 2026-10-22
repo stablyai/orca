@@ -16,7 +16,7 @@ import {
   findWorkspace
 } from '../browser-page-records'
 import { getBrowserSessionProfileHostId } from './browser-host-state'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { ownsGlobalSelection } from '../../global-selection-owner'
 import {
@@ -24,6 +24,8 @@ import {
   loadPairedBrowserTabCreator
 } from './paired-browser-tab-creator'
 import { findGroupAndWorktree } from '../tab-group-state'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { recordBrowserTabOpen } from './browser-layout-owner-commands'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -162,6 +164,7 @@ export function createBrowserTabActions(
           entityId: workspaceId,
           label: browserTab.title,
           targetGroupId: options?.targetGroupId,
+          ...(options?.split ? { split: options.split } : {}),
           ...(options?.afterTabId ? { afterTabId: options.afterTabId } : {}),
           // Why no routing-host default: a substituted host would disown the wrapper from its worktree.
           ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
@@ -171,6 +174,10 @@ export function createBrowserTabActions(
         if (shouldActivate && created) {
           get().focusGroup(worktreeId, created.groupId)
         }
+      }
+      // Switch point: main records the tab under these ids before any later command names it.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        recordBrowserTabOpen(get(), browserTab)
       }
       return browserTab
     },
@@ -190,7 +197,10 @@ export function createBrowserTabActions(
         throw new Error(browserAvailability.reason)
       }
       const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+        state,
+        worktreeId
+      )
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
           throw new Error('The paired runtime browser provider is unavailable.')
@@ -243,7 +253,10 @@ export function createBrowserTabActions(
       if (browserAvailability.state !== 'enabled') {
         return false
       }
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+        state,
+        worktreeId
+      )
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
           return false

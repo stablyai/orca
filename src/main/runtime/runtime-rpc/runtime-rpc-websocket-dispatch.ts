@@ -34,24 +34,29 @@ function injectDeviceScope(response: string, scope: DeviceScope): string {
 export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
   // Why: a phone names a server's workspace with `executionHost`; only configured servers are reached,
   // and a target the desktop cannot reach is an error, never a silent local run.
+  // Returns the request to dispatch locally, or null once it was relayed or answered.
   private relayMobileRequest(
     request: RpcRequest,
     rawMessage: string,
     reply: (response: string) => void,
     sendBinary: RpcBinarySender,
     socket: AuthenticatedMobileSocket | undefined
-  ): boolean {
+  ): RpcRequest | null {
     const { executionHost } = request
     if (executionHost === undefined) {
-      return false
+      return request
     }
     const target = parseExecutionHostId(typeof executionHost === 'string' ? executionHost : null)
     if (target?.kind === 'local' || target?.kind === 'ssh') {
-      return false
+      return request
     }
     // Why: the phone tags every call on a workspace screen; only this Mac's routing table decides.
     if (target && MOBILE_RPC_METHOD_ROUTES.get(request.method) !== 'execution-host') {
-      return false
+      return request
+    }
+    const local = target && this.mobileDesktopRelay?.localRequestFor(request, target.environmentId)
+    if (local) {
+      return local
     }
     if (!target) {
       reply(
@@ -94,7 +99,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         rawMessage
       )
     }
-    return true
+    return null
   }
 
   // Why: WebSocket dispatch is streaming (multiple responses) and auths via per-device tokens, not the shared token.
@@ -164,9 +169,17 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           rawMessage
         )
       }
-      if (this.relayMobileRequest(request, rawMessage, reply, sendBinary, authenticatedSocket)) {
+      const localRequest = this.relayMobileRequest(
+        request,
+        rawMessage,
+        reply,
+        sendBinary,
+        authenticatedSocket
+      )
+      if (!localRequest) {
         return
       }
+      request = localRequest
     }
 
     // Why: bind the device to this socket so ws.on('close') knows which client disconnected.
@@ -224,6 +237,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         connectionId,
         clientId: principal.clientId,
         pairedDeviceId: device.deviceId,
+        pairedDeviceParentId: device.parentDeviceId,
         // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
         clientKind: device.scope,
         callerScope,

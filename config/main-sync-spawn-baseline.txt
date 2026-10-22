@@ -1,12 +1,11 @@
 # Synchronous child-process launches in production src/main and src/shared, per file: uses of
 # execFileSync/spawnSync/execSync, runProcessSync and the repo sync wrappers listed in
-# config/scripts/check-main-sync-spawn-ratchet.mjs (secure writers run icacls on Windows).
+# config/scripts/check-main-sync-spawn-ratchet.mjs (synchronous ACL rewrites and grants, which
+# can block on a whole directory subtree).
 # Some entries run in the daemon or orcad process, or are test harnesses outside the test-path
 # conventions. This is a RATCHET: counts may only go DOWN.
 # Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
 1 src/main/agent-hooks/installer-utils.ts
-1 src/main/artifacts/artifact-create-intent-store.ts
-5 src/main/artifacts/artifact-share-record-store.ts
 2 src/main/browser/browser-cookie-key.ts
 1 src/main/browser/browser-route-egress-electron-launch.ts
 1 src/main/browser/browser-route-partition-binding-store.ts
@@ -19,68 +18,35 @@
 1 src/main/codex-accounts/runtime-home-service-wsl.ts
 2 src/main/codex-accounts/service.ts
 1 src/main/computer/macos-computer-use-permissions.ts
-2 src/main/credentials/encrypted-api-key-file-store.ts
 2 src/main/daemon/daemon-cgroup-scope.ts
 1 src/main/daemon/daemon-process-identity-query.ts
 1 src/main/daemon/daemon-process-start-time.ts
 1 src/main/daemon/daemon-user-manager-lifetime.ts
 1 src/main/daemon/pty-subprocess/shell-launch-plan.ts
+1 src/main/daemon/terminal-scopes.ts
 1 src/main/emulator/serve-sim-runtime-materializer.ts
 1 src/main/git/command-runner/git-exec-file.ts
 1 src/main/git/repo-detection-command.ts
 1 src/main/git/runner.ts
 1 src/main/ipc/worktree-logic.ts
 2 src/main/macos-press-and-hold-default.ts
-2 src/main/managed-data-accounts/credential-capture.ts
-1 src/main/managed-data-accounts/profile-removal.ts
-1 src/main/managed-data-accounts/service.ts
-2 src/main/minimax/minimax-cookie-store.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 1 src/main/opencode/legacy-plugin-acl-retry.ts
-2 src/main/orca-profiles/profile-artifact-cloud-cleanup.ts
-1 src/main/orca-profiles/profile-cloud-session-mutation.ts
-2 src/main/orca-profiles/profile-cloud-session-store.ts
 2 src/main/orcad/node-pty-precondition.ts
-1 src/main/orcad/orcad-completed-stop-receipt.ts
 1 src/main/orcad/orcad-data-root-privacy.ts
-1 src/main/orcad/orcad-idle-stop-record.ts
-1 src/main/orcad/orcad-managed-stop-completion.ts
-1 src/main/orcad/orcad-managed-stop-decision.ts
 2 src/main/persistence/profile-state/profile-state-access-identity.ts
 1 src/main/persistence/profile-state/profile-state-recovery-copy.ts
 1 src/main/plugins/plugin-private-marketplace-ssh-shim.cjs
-2 src/main/plugins/plugin-secrets-store.ts
-2 src/main/plugins/plugin-storage-store.ts
-1 src/main/providers/working-directory-validation.ts
 1 src/main/pty/posix-pty-foreground-group.ts
 1 src/main/pty/posix-pty-process-groups.ts
 1 src/main/pwsh.ts
-3 src/main/runtime/device-registry.ts
-1 src/main/runtime/e2ee-keypair.ts
-1 src/main/runtime/mobile-notification-dismissal-store.ts
-1 src/main/runtime/push/push-unregister-outbox.ts
-1 src/main/runtime/relay/relay-region-preference.ts
-1 src/main/runtime/relay/relay-revoke-outbox.ts
-1 src/main/runtime/runtime-metadata.ts
 1 src/main/runtime/runtime-skill-install-authority.ts
-1 src/main/runtime/tls-certificate.ts
 1 src/main/skills/skill-discovery-target.ts
-1 src/main/ssh/orcad-held-fence-tokens.ts
-1 src/main/ssh/orcad-migration-cutover-journal.ts
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts
-2 src/main/win32-utils.ts
 1 src/main/worktree-runner-script.ts
-2 src/main/wsl-availability.ts
-5 src/main/wsl.ts
-3 src/main/zcode/zcode-plan-api-key-store.ts
+3 src/main/wsl.ts
 2 src/main/zsh-startup-hook-pty-harness.ts
-1 src/shared/bounded-secure-json-file.ts
-1 src/shared/ephemeral-vm-runtime-feature-store.ts
-2 src/shared/ephemeral-vm-runtime-store.ts
 1 src/shared/fish-binary-requirement.ts
 1 src/shared/openssh-default-shell.ts
-1 src/shared/runtime-environment-sidecar.ts
-1 src/shared/runtime-environment-store-file.ts
-3 src/shared/secure-file.ts
-3 src/shared/secure-path-windows-acl.ts
+1 src/shared/secure-file.ts

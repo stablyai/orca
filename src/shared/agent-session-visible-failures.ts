@@ -36,6 +36,12 @@ export function sameAgentSessionFailureFact(
     a.detail?.audience === b.detail?.audience &&
     a.refusal?.code === b.refusal?.code &&
     a.refusal?.details?.reason === b.refusal?.details?.reason &&
+    (a.refusal?.code !== 'agent_session_operation_invalid' ||
+      b.refusal?.code !== 'agent_session_operation_invalid' ||
+      (a.refusal.details?.codexInstallation?.installedVersion ===
+        b.refusal.details?.codexInstallation?.installedVersion &&
+        a.refusal.details?.codexInstallation?.minimumVersion ===
+          b.refusal.details?.codexInstallation?.minimumVersion)) &&
     a.attachment?.reason === b.attachment?.reason &&
     a.attachment?.limit === b.attachment?.limit &&
     a.retry?.error === b.retry?.error &&

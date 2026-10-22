@@ -8,7 +8,6 @@ import {
   pickParsedAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
@@ -572,7 +571,7 @@ Fix dispatch fallback preview for normalized status prompts`
     }
   })
 
-  it('normalizes the subagents field, dropping invalid entries and bounding count', () => {
+  it('normalizes the subagents field, dropping invalid entries and keeping every valid one', () => {
     const result = parseAgentStatusPayload(
       JSON.stringify({
         state: 'working',
@@ -583,7 +582,7 @@ Fix dispatch fallback preview for normalized status prompts`
           { id: '', state: 'working', startedAt: 1 },
           { id: 'bad-state', state: 'running', startedAt: 1 },
           'garbage',
-          ...Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 5 }, (_, i) => ({
+          ...Array.from({ length: 37 }, (_, i) => ({
             id: `extra-${i}`,
             state: 'idle',
             startedAt: i
@@ -591,7 +590,7 @@ Fix dispatch fallback preview for normalized status prompts`
         ]
       })
     )
-    expect(result?.subagents?.length).toBe(AGENT_STATUS_MAX_SUBAGENTS)
+    expect(result?.subagents?.length).toBe(40)
     expect(result?.subagents?.[0]).toEqual({
       id: 'a1',
       state: 'working',

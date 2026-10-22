@@ -56,6 +56,8 @@ vi.mock('@/lib/feedback-image-attachments', async (importOriginal) => {
   }
 })
 
+vi.mock('@/store', async () => import('./sidebar-feedback-draft.test-fixture'))
+
 import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
 import { useAppStore } from '@/store'
 

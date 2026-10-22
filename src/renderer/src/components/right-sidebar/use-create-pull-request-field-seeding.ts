@@ -21,6 +21,7 @@ type CreatePullRequestFieldSeedingOptions = {
   worktreePath: string
   branch: string
   eligibility: HostedReviewCreationEligibility | null
+  jiraIssueKey: string | null
   hasExternalGeneration: boolean
   retainDraftWhenClosed: boolean
   currentEligibilityKey: string | null
@@ -56,6 +57,7 @@ export function useCreatePullRequestFieldSeeding({
   worktreePath,
   branch,
   eligibility,
+  jiraIssueKey,
   hasExternalGeneration,
   retainDraftWhenClosed,
   currentEligibilityKey,
@@ -146,7 +148,7 @@ export function useCreatePullRequestFieldSeeding({
     baseEditedByUserRef.current = false
     syncedDefaultBaseRef.current = resolvedDefaultBaseRef || null
     setBase(resolvedDefaultBaseRef)
-    const seedText = resolveCreateReviewSeedText({ branch, eligibility })
+    const seedText = resolveCreateReviewSeedText({ branch, eligibility, jiraIssueKey })
     setTitle(seedText.title)
     setBody(seedText.body)
     setDraft(resolvedPrDefaults.draft)
@@ -166,6 +168,7 @@ export function useCreatePullRequestFieldSeeding({
     generationSeedRef,
     hasExternalGeneration,
     initializedFromEligibilityRef,
+    jiraIssueKey,
     open,
     repoId,
     resolvedDefaultBaseRef,

@@ -12,7 +12,7 @@ import type { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-thr
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../mobile-desktop-relay/mobile-relay-host-catalog'
-import { RelayRevokeOutbox } from '../relay/relay-revoke-outbox'
+import { RelayRevokeOutbox } from '../mobile-cloud-relay/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from '../runtime-binary-message-router'
 import type { RuntimeMetadataOwnershipWatch } from '../runtime-metadata-ownership-watch'
@@ -41,6 +41,7 @@ export class RuntimeRpcState {
   protected readonly enableWebSocket: boolean
   protected readonly wsPort: number
   protected readonly preferPinnedWsPort: boolean
+  protected readonly requirePinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
   protected readonly webClientRoot: string | undefined
@@ -65,7 +66,6 @@ export class RuntimeRpcState {
   protected e2eeKeypair: E2EEKeypair | null = null
   protected hostDescriptor: RuntimeHostDescriptor | null = null
   protected pairingInitializationFailure: PairingOfferUnavailable | null = null
-  protected tlsFingerprint: string | null = null
   protected activeTransports: RpcTransport[] = []
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
@@ -77,6 +77,7 @@ export class RuntimeRpcState {
   // Why nullable: launch sets both for every runtime process; in-process test servers may not.
   protected mobileDesktopRelay: MobileDesktopRelay | null = null
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
+  protected detachPairedServerRows: (() => void) | null = null
   // Why: lets an automatic mint install a provider whose launch-time construction failed.
   protected mobileRelayPairingProviderInstaller: (() => Promise<unknown>) | null = null
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
@@ -111,6 +112,7 @@ export class RuntimeRpcState {
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
     preferPinnedWsPort = false,
+    requirePinnedWsPort = false,
     exposeNetworkByDefault = false,
     pinnedBindHost,
     webClientRoot,
@@ -127,6 +129,7 @@ export class RuntimeRpcState {
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
     this.preferPinnedWsPort = preferPinnedWsPort
+    this.requirePinnedWsPort = requirePinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot

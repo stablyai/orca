@@ -4,6 +4,7 @@ import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
+  nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../../shared/native-chat-agent-support'
@@ -98,6 +99,11 @@ export function useNativeChatInteractiveSend(
       selections: AskAnswerSelection[],
       onDeliverySettled?: (delivered: boolean) => void
     ): { settleAfterMs: number } => {
+      if (nativeChatAskRequiresTerminal(agent)) {
+        cancelInFlight()
+        onDeliverySettled?.(false)
+        return { settleAfterMs: 0 }
+      }
       if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
         return { settleAfterMs: 0 }
       }
@@ -160,8 +166,11 @@ export function useNativeChatInteractiveSend(
 
   const cancelAsk = useCallback(() => {
     cancelInFlight()
+    if (nativeChatAskRequiresTerminal(agent)) {
+      return Promise.resolve(false)
+    }
     return sendRawVerified(ESC)
-  }, [cancelInFlight, sendRawVerified])
+  }, [agent, cancelInFlight, sendRawVerified])
 
   const cancel = useCallback(() => {
     cancelInFlight()

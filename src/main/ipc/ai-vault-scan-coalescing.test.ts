@@ -9,7 +9,11 @@ const mocks = vi.hoisted(() => ({
   ipcHandle: vi.fn()
 }))
 
-vi.mock('electron', () => ({ app: { on: vi.fn() }, ipcMain: { handle: mocks.ipcHandle } }))
+vi.mock('electron', () => ({
+  app: { on: vi.fn() },
+  ipcMain: { handle: mocks.ipcHandle },
+  BrowserWindow: { getAllWindows: () => [] }
+}))
 vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService: mocks.scanAiVaultSessionsInService,
@@ -96,7 +100,7 @@ describe('Agent Session History scan coalescing', () => {
     await expect(first).rejects.toMatchObject({ name: 'AbortError' })
     expect(scan).toHaveBeenCalledTimes(1)
     resolveScan?.(EMPTY_RESULT)
-    await expect(second).resolves.toEqual(EMPTY_RESULT)
+    await expect(second).resolves.toMatchObject(EMPTY_RESULT)
   })
 
   it('reports a failed local scan as a host issue rather than rejecting', async () => {
@@ -112,6 +116,7 @@ describe('Agent Session History scan coalescing', () => {
     )
     expect(result).toMatchObject({
       sessions: [],
+      scanId: expect.any(String),
       issues: [expect.objectContaining({ message: 'transcript root is unreadable', kind: 'host' })]
     })
     expect(result).not.toHaveProperty('cancelled')

@@ -18,6 +18,8 @@ export type ClaudeUsageLocationBreakdown = {
   cacheReadTokens: number
   cacheWriteTokens: number
   cacheWrite1hTokens: number
+  /** Subset of the totals from requests over the model's long-context threshold; see ClaudeBillableTokens. */
+  longContext?: ClaudeUsageTokenTotals
 }
 
 export type ClaudeUsageSession = {
@@ -52,6 +54,8 @@ export type ClaudeUsageDailyAggregate = {
   cacheReadTokens: number
   cacheWriteTokens: number
   cacheWrite1hTokens: number
+  /** Subset of the totals from requests over the model's long-context threshold; see ClaudeBillableTokens. */
+  longContext?: ClaudeUsageTokenTotals
 }
 
 export type ClaudeUsagePersistedState = {
@@ -81,6 +85,8 @@ export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
    *  entire transcript corpus. */
   hasDeferredClaims: boolean
   parseResumeState?: ClaudeUsageParseResumeState | null
+  /** CLAUDE_USAGE_PROJECTION_VERSION that built `sessions` and `dailyAggregates`; any other value reparses the file. */
+  projectionVersion?: number
 }
 
 export type ClaudeUsageParsedTurn = {

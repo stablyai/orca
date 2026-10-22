@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { WorktreeSortOrderUpdate } from '../../../shared/worktree/sort-order-update'
 
 type WorktreeRename = {
   oldWorktreeId: string
@@ -9,6 +10,9 @@ type WorktreeChangeOwner = {
   forceLocalOwner?: boolean
   executionHostId?: ExecutionHostId
   sortOrderOnly?: boolean
+  sortOrders?: WorktreeSortOrderUpdate[]
+  // Connection the values were published on; a patch from another connection refetches instead.
+  sortOrderFence?: string
 }
 
 type WorktreeChangeEvent = {
@@ -19,6 +23,8 @@ type WorktreeChangeEvent = {
   forceLocalOwner?: boolean
   executionHostId?: ExecutionHostId
   sortOrderOnly?: boolean
+  sortOrders?: WorktreeSortOrderUpdate[]
+  sortOrderFence?: string
 }
 
 type WorktreeChangeRefreshHandler = (
@@ -39,6 +45,17 @@ export type WorktreeChangeRefreshQueue = {
   enqueue: (event: WorktreeChangeEvent) => void
 }
 
+function mergeSortOrders(
+  earlier: readonly WorktreeSortOrderUpdate[],
+  later: readonly WorktreeSortOrderUpdate[]
+): WorktreeSortOrderUpdate[] {
+  const byId = new Map(earlier.map((entry) => [entry.worktreeId, entry]))
+  for (const entry of later) {
+    byId.set(entry.worktreeId, entry)
+  }
+  return [...byId.values()]
+}
+
 export function createWorktreeChangeRefreshQueue(
   handler: WorktreeChangeRefreshHandler
 ): WorktreeChangeRefreshQueue {
@@ -54,7 +71,10 @@ export function createWorktreeChangeRefreshQueue(
           await handler(repoId, next?.renamed, {
             forceLocalOwner: next?.forceLocalOwner,
             ...(next?.executionHostId ? { executionHostId: next.executionHostId } : {}),
-            ...(next?.sortOrderOnly === true ? { sortOrderOnly: true } : {})
+            ...(next?.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
+            ...(next?.sortOrderOnly === true && next.sortOrders
+              ? { sortOrders: next.sortOrders, sortOrderFence: next.sortOrderFence }
+              : {})
           })
         } catch (error) {
           console.error('Failed to refresh changed worktrees:', error)
@@ -107,11 +127,24 @@ export function createWorktreeChangeRefreshQueue(
           state.queue.push({
             forceLocalOwner: event.forceLocalOwner,
             executionHostId: event.executionHostId,
-            ...(event.sortOrderOnly === true ? { sortOrderOnly: true } : {})
+            ...(event.sortOrderOnly === true ? { sortOrderOnly: true } : {}),
+            ...(event.sortOrderOnly === true && event.sortOrders
+              ? { sortOrders: event.sortOrders, sortOrderFence: event.sortOrderFence }
+              : {})
           })
         } else if (event.sortOrderOnly !== true) {
           // An order save cannot erase an adjacent structural refresh.
           delete lastQueued.sortOrderOnly
+          delete lastQueued.sortOrders
+          delete lastQueued.sortOrderFence
+        } else if (lastQueued.sortOrders) {
+          if (event.sortOrders && event.sortOrderFence === lastQueued.sortOrderFence) {
+            lastQueued.sortOrders = mergeSortOrders(lastQueued.sortOrders, event.sortOrders)
+          } else {
+            // Values missing or from another connection: the refetch reads current ones.
+            delete lastQueued.sortOrders
+            delete lastQueued.sortOrderFence
+          }
         }
       }
 

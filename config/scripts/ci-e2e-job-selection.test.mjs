@@ -15,7 +15,8 @@ import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
 it.each([
   'src/main/runtime/runtime-browser-commands-factory.ts',
   'src/main/runtime/orca-runtime-get-status.ts',
-  'src/main/orcad/orcad-browser-startup.ts'
+  'src/main/orcad/orcad-browser-startup.ts',
+  'src/main/runtime/browser/browser-client-page-opening.ts'
 ])('routes the managed browser capability oracle from %s', (path) => {
   expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-browser-capabilities.spec.ts')
 })
@@ -42,6 +43,24 @@ it.each([
   expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-browser-routing.spec.ts')
 })
 
+it.each([
+  'src/renderer/src/lib/workspace-browser-tab-open.ts',
+  'src/renderer/src/lib/http-link-destinations.ts',
+  'src/renderer/src/components/terminal-pane/terminal-http-link-source-owner.ts'
+])('routes the managed terminal link oracle from %s', (path) => {
+  expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-terminal-browser-link.spec.ts')
+})
+
+it.each([
+  'src/shared/desktop-browser-bridge-protocol.ts',
+  'src/main/runtime/desktop-browser-bridge/desktop-browser-bridge-route.ts',
+  'src/main/browser/desktop-browser-bridge/desktop-browser-bridge-executor.ts',
+  'src/main/ipc/desktop-browser-bridge-wiring.ts',
+  'src/main/runtime/rpc/methods/desktop-browser-bridge.ts'
+])('routes the managed desktop browser bridge oracle from %s', (path) => {
+  expect(selectPrE2eSpecs([path])).toContain('tests/e2e/ssh-orcad-desktop-browser-bridge.spec.ts')
+})
+
 const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
 const prWorkflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const classify = (specs) => classifyE2eJobs(JSON.stringify(specs))
@@ -54,7 +73,7 @@ function expectManagedSshLane(spec) {
   expect(
     lane.steps.some(
       (step) =>
-        step.run?.includes(` ${MANAGED_SSH_E2E_SPEC_PREFIX} `) &&
+        step.run?.includes('selection.selectManagedSshE2eSpecs') &&
         step.env?.ORCA_E2E_SSH_DOCKER === '1'
     )
   ).toBe(true)
@@ -97,7 +116,7 @@ it('keeps Electron build and native prerequisites for every consumer requiring t
   }
   expect(workflow.jobs['ssh-browser-network-route'].needs).toBeUndefined()
   for (const name of ['e2e', 'changed-e2e']) {
-    expect(workflow.jobs[name].needs, name).toEqual(['build', 'prepare-native-cache'])
+    expect(workflow.jobs[name].needs, name).toEqual(['build'])
   }
 })
 
@@ -132,11 +151,9 @@ it('applies allocation hints only to PRs and retains other callers and full refe
       default: true
     })
   }
-  for (const name of ['build', 'prepare-native-cache']) {
-    expect(workflow.jobs[name].if).toBe(
-      "inputs.test_files == '' || github.event_name != 'pull_request' || inputs.needs_build"
-    )
-  }
+  expect(workflow.jobs.build.if).toBe(
+    "inputs.test_files == '' || github.event_name != 'pull_request' || inputs.needs_build"
+  )
   expect(workflow.jobs.e2e.if).toBe("inputs.test_files == ''")
   const changed = workflow.jobs['changed-e2e']
   expect(changed.if).toContain("github.event_name != 'pull_request' || inputs.run_changed_e2e")
@@ -164,7 +181,9 @@ it('publishes conservative hints for malformed evidence and refuses a malformed 
     timeoutMs: 10000
   })
   expect(hints.code, hints.stderr).toBe(0)
-  expect(hints.stdout).toBe('e2e_run_changed=true\ne2e_needs_build=true\n')
+  expect(hints.stdout).toBe(
+    'e2e_run_changed=true\ne2e_needs_build=true\ne2e_ssh_shards=["1/2","2/2"]\n'
+  )
 })
 
 it('classifies PR consumers in the existing detector and passes conservative allocation hints', () => {

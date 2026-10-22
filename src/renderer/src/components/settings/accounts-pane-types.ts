@@ -1,4 +1,3 @@
-import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
@@ -24,6 +23,8 @@ export type AccountsPaneProps = {
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
   accountOwnerPlatform?: NodeJS.Platform | null
+  /** Set when the chosen host is a WSL host: this desktop owns that distro's accounts. */
+  wslHostDistro?: string | null
 }
 
 export type LocalAccountRuntime = {
@@ -110,18 +111,4 @@ export type AccountsPaneSectionModel = {
   setRemoveCodexTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runCodexAccountAction: CodexAccountActionRunner
   recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void
-  miniMaxRateLimits: ProviderRateLimits | null
-  miniMaxApiKeyDraft: string
-  setMiniMaxApiKeyDraft: Dispatch<SetStateAction<string>>
-  miniMaxApiKeyConfigured: boolean
-  miniMaxApiKeyProtection: SecretAtRestProtection | null
-  saveMiniMaxApiKey: () => Promise<void>
-  clearMiniMaxApiKey: () => Promise<void>
-  miniMaxCookieDraft: string
-  setMiniMaxCookieDraft: Dispatch<SetStateAction<string>>
-  miniMaxConfigured: boolean
-  miniMaxCookieProtection: SecretAtRestProtection | null
-  miniMaxCredentialBusy: boolean
-  saveMiniMaxCookie: () => Promise<void>
-  clearMiniMaxCookie: () => Promise<void>
 }

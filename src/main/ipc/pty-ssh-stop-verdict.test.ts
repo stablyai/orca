@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './pty/register-handlers'
-import { deletePtyOwnership, setPtyOwnership } from './pty/provider/ownership-state'
+import {
+  deletePtyOwnership,
+  ptyIncarnationById,
+  ptyOwnership,
+  setPtyOwnership
+} from './pty/provider/ownership-state'
 import { getLocalPtyProvider } from './pty/provider/registry'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -58,7 +63,11 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     controller: {
       kill: (ptyId: string) => boolean
       listProcesses: (hostId?: string) => Promise<{ id: string }[]>
-      retireRejectedPty: (ptyId: string, stopConfirmed: boolean) => void
+      retireRejectedPty: (
+        ptyId: string,
+        stopConfirmed: boolean,
+        incarnationId: string | undefined
+      ) => void
       stopAndWait: (ptyId: string, opts?: { deadlineMs?: number }) => Promise<boolean>
     }
     runtime: {
@@ -131,7 +140,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     setPtyOwnership(ptyId, 'ssh:ssh-dropped')
     const { controller, runtime } = installController()
     try {
-      controller.retireRejectedPty(ptyId, false)
+      controller.retireRejectedPty(ptyId, false, undefined)
 
       expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
         ptyId,
@@ -140,6 +149,26 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
       expect(runtime.onPtyExit).not.toHaveBeenCalledWith(ptyId, 0, expect.anything())
     } finally {
+      deletePtyOwnership(ptyId)
+    }
+  })
+
+  it('leaves a same-id respawn alone when the rejected incarnation is retired', () => {
+    const ptyId = 'ssh-respawned-split'
+    // The rejected spawn's stop already retired its incarnation; a respawn took the id since.
+    setPtyOwnership(ptyId, 'ssh:ssh-live')
+    ptyIncarnationById.set(ptyId, 'inc-respawn')
+    const { controller, runtime } = installController()
+    try {
+      controller.retireRejectedPty(ptyId, true, 'inc-rejected')
+      controller.retireRejectedPty(ptyId, false, 'inc-rejected')
+
+      expect(ptyOwnership.get(ptyId)).toBe('ssh:ssh-live')
+      expect(ptyIncarnationById.get(ptyId)).toBe('inc-respawn')
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
+    } finally {
+      ptyIncarnationById.delete(ptyId)
       deletePtyOwnership(ptyId)
     }
   })

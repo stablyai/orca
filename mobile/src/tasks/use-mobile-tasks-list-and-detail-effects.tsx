@@ -28,6 +28,8 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     hostedRepos,
     linearConnected,
     linearFilter,
+    jiraFilter,
+    refreshJiraConnection,
     linearMetadataItem,
     loadGitHubProjectTable,
     loadGitHubProjects,
@@ -118,6 +120,32 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       linearQuery: appliedQuery.trim()
     })
   }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskUiReady])
+
+  useEffect(() => {
+    if (!taskUiReady || provider !== 'jira') {
+      return
+    }
+    persistTaskResumeState({
+      jiraPreset: jiraFilter,
+      jiraQuery: appliedQuery.trim()
+    })
+  }, [appliedQuery, jiraFilter, persistTaskResumeState, provider, taskUiReady])
+
+  // Pick up desktop connection changes when entering the Jira tab.
+  useEffect(() => {
+    if (!taskStateHydrated || provider !== 'jira') {
+      return
+    }
+    let stale = false
+    void refreshJiraConnection().catch((err) => {
+      if (!stale) {
+        setError(err instanceof Error ? err.message : 'Failed to read Jira status')
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [provider, refreshJiraConnection, taskStateHydrated])
 
   useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {

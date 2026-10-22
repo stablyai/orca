@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { activateStructuredAgentSessionById } from './structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from './worktree-runtime-owner'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
@@ -105,7 +105,10 @@ export async function activateAiVaultStructuredSession(
   const hostKey = executionHostIdForStructuredTarget(
     target ??
       runtimeTargetForOwnerEnvironment(
-        getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), structured.workspaceId)
+        runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+          useAppStore.getState(),
+          structured.workspaceId
+        )
       )
   )
   const key = `${hostKey}\0${structured.workspaceId}\0${structured.sessionId}`
@@ -196,7 +199,7 @@ export async function revealStructuredSession(target: {
   const host =
     target.target ??
     runtimeTargetForOwnerEnvironment(
-      getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), target.worktreeId)
+      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(useAppStore.getState(), target.worktreeId)
     )
   // Negotiated against the host that will answer this call, not the local one: a paired host runs
   // its own build, and its method-not-found is indistinguishable from a refusal we should surface.
@@ -256,7 +259,9 @@ async function refreshStructuredSessionTabs(
   const state = useAppStore.getState()
   const host =
     target ??
-    runtimeTargetForOwnerEnvironment(getRuntimeEnvironmentIdForWorktree(state, worktreeId))
+    runtimeTargetForOwnerEnvironment(
+      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+    )
   if (host.kind === 'local') {
     await withStructuredSessionRestoreTimeout(refreshLocalStructuredSessionWorktreeTabs(worktreeId))
     return

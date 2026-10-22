@@ -4,7 +4,10 @@ import {
   type SkillUpdateRun,
   type SkillUpdateStartResult
 } from '../../shared/skill-freshness'
-import { buildAgentFeatureSkillInstallArgs } from '../../shared/agent-feature-install-commands'
+import {
+  buildAgentFeatureSkillInstallArgs,
+  SKILLS_CLI_ENV_OVERRIDES
+} from '../../shared/agent-feature-install-commands'
 import { detectSkillsCliUpdateAgentKeys } from '../../shared/skills-cli-agent-detection'
 import { resolveCliCommand } from '../codex-cli/command'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
@@ -146,7 +149,7 @@ export class SkillUpdateRunner {
       windowsHide: true,
       // Why: npx is an `#!/usr/bin/env node` script — without its own node ahead of
       // PATH it loads under whatever version leads, and a native dep dies on ABI.
-      env: withCliRuntimeOnPath(npxCommand, { ...process.env })
+      env: withCliRuntimeOnPath(npxCommand, { ...process.env, ...SKILLS_CLI_ENV_OVERRIDES })
     })
     this.child = child
 

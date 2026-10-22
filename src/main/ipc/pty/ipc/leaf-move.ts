@@ -1,12 +1,9 @@
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { Store } from '../../../persistence'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { agentHookServer } from '../../../agent-hooks/server'
-import { rekeyMigrationUnsupportedPtyPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
-import { rememberPaneKeyForPty } from '../pane/key-state'
+import { rekeyMovedPaneOwners } from '../../../runtime/moved-pane-owner-rekey'
 import {
   isTerminalLeafMoveRequest,
-  terminalLeafMovePaneKeys,
   type TerminalLeafMoveRequest,
   type TerminalLeafMoveResult
 } from '../../../../shared/terminal-leaf-move'
@@ -23,42 +20,7 @@ export async function commitLeafMoveAndRekey(
   if (result.status !== 'moved') {
     return result
   }
-  const { from: fromPaneKey, to: toPaneKey } = terminalLeafMovePaneKeys(request)
-  try {
-    // The process keeps the pane key baked into its env, so status must alias old to new.
-    agentHookServer.transferPaneAuthority(
-      fromPaneKey,
-      toPaneKey,
-      result.ptyId ?? undefined,
-      Date.now(),
-      { authorityVerified: true }
-    )
-  } catch (error) {
-    console.warn('[pty] moved pane kept its old agent-status key:', error)
-  }
-  if (result.ptyId) {
-    try {
-      // Why: the PTY keeps its spawn-time key in its env; every main-side pane-key lookup must see the new owner.
-      rememberPaneKeyForPty(result.ptyId, toPaneKey)
-      rekeyMigrationUnsupportedPtyPaneKey(result.ptyId, toPaneKey)
-    } catch (error) {
-      console.warn('[pty] moved pane kept its old PTY identity records:', error)
-    }
-    try {
-      // Why: separate from the lookups above, whose renderer notification can throw on a destroyed window.
-      deps.runtime?.restampMovedPtySurface(result.ptyId, request.targetTabId, toPaneKey)
-    } catch (error) {
-      console.warn('[pty] moved pane kept its old runtime PTY record:', error)
-    }
-  }
-  try {
-    deps.runtime?.getExistingOrchestrationDb()?.rekeyWorkerTerminalResourcePaneKey({
-      fromPaneKey,
-      toPaneKey
-    })
-  } catch (error) {
-    console.warn('[pty] moved pane kept its old orchestration resource key:', error)
-  }
+  rekeyMovedPaneOwners(deps.runtime, { ...request, ptyId: result.ptyId })
   return result
 }
 

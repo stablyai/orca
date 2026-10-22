@@ -63,6 +63,24 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
 })
+it('leaves the detached primary review to its visible target while retaining sibling reviews', () => {
+  useAppStore.setState({
+    worktreesByRepo: {
+      repo: [
+        {
+          ...workspace,
+          branch: '',
+          linkedPR: 7,
+          linkedItems: [referenceAttachment(7), referenceAttachment(8)]
+        }
+      ]
+    }
+  })
+  const targets = update()
+  expect(targets).toHaveLength(1)
+  expect(targets[0]?.key).toContain('8')
+})
+
 it('pauses disconnected SSH owners and only admits the owning reconnect', () => {
   useAppStore.setState({ repos: [{ ...referenceRepo, connectionId: 'ssh-a' }] })
   expect(update()).toEqual([])

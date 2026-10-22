@@ -1,5 +1,3 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   callRuntimeRpc,
@@ -129,12 +127,20 @@ function withoutKeys<T>(record: Record<string, T>, drop: (key: string) => boolea
   return changed ? next : record
 }
 
-export const createRuntimeDetectedAgentsSlice: StateCreator<
-  AppState,
-  [],
-  [],
-  RuntimeDetectedAgentsSlice
-> = (set, get) => {
+export type RuntimeDetectedAgentsStoreState = RuntimeDetectedAgentsSlice &
+  Parameters<typeof getConnectionIdFromState>[0]
+
+export type RuntimeDetectedAgentsStoreSetState = (
+  partial:
+    | Partial<RuntimeDetectedAgentsStoreState>
+    | ((state: RuntimeDetectedAgentsStoreState) => Partial<RuntimeDetectedAgentsStoreState>)
+) => void
+
+export const createRuntimeDetectedAgentsSlice: (
+  set: RuntimeDetectedAgentsStoreSetState,
+  get: () => RuntimeDetectedAgentsStoreState,
+  store?: unknown
+) => RuntimeDetectedAgentsSlice = (set, get) => {
   // Drops every workspace's inventory for the environments `drop` selects.
   const dropEnvironments = (drop: (environmentId: string) => boolean): void => {
     const dropKey = (key: string) => drop(getRuntimeAgentInventoryEnvironmentId(key))

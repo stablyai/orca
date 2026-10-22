@@ -1,41 +1,35 @@
 import { translate } from '@/i18n/i18n'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
-import type { NativeChatAskRowSubject } from '../../../../shared/native-chat-ask-row'
 import {
+  NATIVE_CHAT_RECEIPT_COPY,
+  nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,
+  nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from './native-chat-resolution-receipt'
+} from '../../../../shared/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
   body,
-  disclosureId
+  disclosureId,
+  awaiting = true
 }: {
   body: NativeChatResolvedPrompt
   /** Message this receipt stands in for; keys the question row's disclosure. */
   disclosureId?: string
+  /** False when the host says nobody waits on this pending prompt: the agent that raised it ended,
+   *  so its row reports what was asked instead of breathing. */
+  awaiting?: boolean
 }): React.JSX.Element | null {
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
-  const subject: NativeChatAskRowSubject | null =
-    body.kind !== 'question'
-      ? null
-      : body.questions && body.questions.length > 1
-        ? { kind: 'questions', questions: body.questions.map((entry) => entry.question) }
-        : {
-            kind: 'question',
-            // Claude keeps a generic grouped label for a single multi-select
-            // question. Use it after resolution so the answer's question line
-            // is not repeated in the heading.
-            text:
-              body.resolution.state !== 'pending' &&
-              body.questions?.length === 1 &&
-              body.questions[0]?.question !== body.question
-                ? body.question
-                : (body.questions?.[0]?.question ?? body.question)
-          }
+  const subject = nativeChatReceiptSubject(body)
   if (body.resolution.state === 'pending') {
     return body.kind === 'question' ? (
-      <NativeChatAwaitingInputRow subject={subject} pending disclosureKey={askDisclosureKey} />
+      <NativeChatAwaitingInputRow
+        subject={subject}
+        pending={awaiting}
+        disclosureKey={askDisclosureKey}
+      />
     ) : null
   }
   const { resolution } = body
@@ -60,43 +54,53 @@ export function NativeChatResolutionReceipt({
       {body.kind === 'approval' && body.detail ? (
         <p className="line-clamp-3 whitespace-pre-wrap break-words">{body.detail}</p>
       ) : null}
-      {answers.map((answer, index) => (
-        <div key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}>
-          {answer.question &&
-          !(
-            body.kind === 'question' &&
-            body.questions?.length === 1 &&
-            subject?.kind === 'question' &&
-            answer.question === subject.text
-          ) ? (
-            <p>{answer.question}</p>
-          ) : null}
-          <p className="line-clamp-3 whitespace-pre-wrap break-words">
-            {answer.answer === ''
-              ? translate('components.native-chat.receipt.emptyAnswer', 'Empty answer')
-              : (answer.answer ??
-                translate(
-                  'components.native-chat.receipt.unavailable',
-                  'Selected answer unavailable'
-                ))}
-          </p>
-        </div>
-      ))}
+      {answers.map((answer, index) => {
+        const heading = nativeChatReceiptAnswerHeading(subject, answer)
+        return (
+          <div
+            key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
+          >
+            {heading ? <p>{heading}</p> : null}
+            <p className="line-clamp-3 whitespace-pre-wrap break-words">
+              {answer.answer === ''
+                ? translate(
+                    'components.native-chat.receipt.emptyAnswer',
+                    NATIVE_CHAT_RECEIPT_COPY.emptyAnswer
+                  )
+                : (answer.answer ??
+                  translate(
+                    'components.native-chat.receipt.unavailable',
+                    NATIVE_CHAT_RECEIPT_COPY.unavailable
+                  ))}
+            </p>
+          </div>
+        )
+      })}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span>
           {resolution.state === 'cancelled'
-            ? translate('components.native-chat.receipt.cancelled', 'Cancelled')
-            : translate('components.native-chat.receipt.resolved', 'Resolved')}
+            ? translate(
+                'components.native-chat.receipt.cancelled',
+                NATIVE_CHAT_RECEIPT_COPY.cancelled
+              )
+            : translate(
+                'components.native-chat.receipt.resolved',
+                NATIVE_CHAT_RECEIPT_COPY.resolved
+              )}
         </span>
         {resolution.resolvedBy ? (
           <span>
             {resolution.state === 'cancelled'
-              ? translate('components.native-chat.receipt.cancelledBy', 'Cancelled on {{device}}', {
-                  device: resolution.resolvedBy
-                })
-              : translate('components.native-chat.receipt.resolver', 'Answered on {{device}}', {
-                  device: resolution.resolvedBy
-                })}
+              ? translate(
+                  'components.native-chat.receipt.cancelledBy',
+                  NATIVE_CHAT_RECEIPT_COPY.cancelledBy,
+                  { device: resolution.resolvedBy }
+                )
+              : translate(
+                  'components.native-chat.receipt.resolver',
+                  NATIVE_CHAT_RECEIPT_COPY.resolver,
+                  { device: resolution.resolvedBy }
+                )}
           </span>
         ) : null}
         <NativeChatMessageTimestamp timestamp={resolution.resolvedAt} />

@@ -1,3 +1,6 @@
+import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
+import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
 import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
 import type {
   IPtyProvider,
@@ -21,6 +24,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../../../shared/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
+import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -30,6 +34,10 @@ export type RuntimePtySpawnState = {
   preAdoptedStablePane: AdoptStablePaneResult | null
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
+  requestedCwd: string | undefined
+  prevalidatedCwd: string | undefined
+  startupCwdFallback: StartupCwdFallback | undefined
+  correctStartupCwd?: string
   provider: IPtyProvider
   isClaudeLaunch: boolean
   terminalRuntimeOptions: { shellOverride?: string; terminalWindowsWslDistro?: string | null }
@@ -59,6 +67,7 @@ export type RuntimePtySpawnState = {
   requestedAgentTeamsPath: string | undefined
   selectedCodexHomePath: string | null
   codexResumeHomeSelected: boolean
+  codexResumeArgvDropped: boolean
   skipCodexHomeEnv: boolean
   stripInheritedOrcaCodexHome: boolean
   spawnOptions: PtySpawnOptions
@@ -79,6 +88,7 @@ export type RuntimePtySpawnState = {
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
+  pendingRegistrationClaim?: PtyRegistrationClaim
   reconciledSnapshotSeq: number | null
   snapshotKittyFlagsCoverReconciledSeq: boolean
   preparedProvisionalExecutionContext: boolean
@@ -110,6 +120,8 @@ export type RuntimePtySpawnArgs = {
   leafId?: string
   sessionId?: string
   shellOverride?: string
+  /** The agent launch's runtime fact; when present the PTY shell comes only from it. */
+  launchRuntime?: AgentLaunchRuntime
   isNewSession?: boolean
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean
@@ -127,6 +139,7 @@ export type RuntimePtySpawnArgs = {
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   onPtySpawnCommitted?: () => void
+  paneSpawnOperation?: PaneSpawnOperation
   adoptedStablePane?: {
     result: PtySpawnResult
     owner: {
@@ -152,6 +165,9 @@ export function createRuntimePtySpawnState(
     preAdoptedStablePane: null,
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,
+    requestedCwd: undefined,
+    prevalidatedCwd: undefined,
+    startupCwdFallback: undefined,
     provider: localProvider,
     isClaudeLaunch: false,
     terminalRuntimeOptions: {},
@@ -172,6 +188,7 @@ export function createRuntimePtySpawnState(
     requestedAgentTeamsPath: undefined,
     selectedCodexHomePath: null,
     codexResumeHomeSelected: false,
+    codexResumeArgvDropped: false,
     skipCodexHomeEnv: false,
     stripInheritedOrcaCodexHome: false,
     spawnOptions: { cols: args.cols, rows: args.rows },

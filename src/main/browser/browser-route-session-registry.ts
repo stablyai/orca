@@ -1,3 +1,4 @@
+import { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
 import {
   deriveBrowserRoutePartition,
   type DerivedBrowserRoutePartition
@@ -130,7 +131,13 @@ export class BrowserRouteSessionRegistry {
     input: BrowserRoutePreparePageInput,
     rendererFence: BrowserRouteRendererPrepareFence
   ): Promise<BrowserRouteSessionHandle> {
-    this.dependencies.validateProfile(input.identity.browserProfileId)
+    const metadata = input.profileMetadata
+      ? BrowserClientProfileMetadata.parse(input.profileMetadata)
+      : undefined
+    if (metadata && metadata.id !== input.identity.browserProfileId) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    this.dependencies.validateProfile(input.identity.browserProfileId, metadata)
     const derived = resolveBrowserRouteSessionPartition(
       this.dependencies,
       input,
@@ -161,7 +168,8 @@ export class BrowserRouteSessionRegistry {
     const promise = this.preparePartition(
       derived,
       input.identity.browserProfileId,
-      input.proxyEndpoint
+      input.proxyEndpoint,
+      metadata
     )
     const pendingState = {
       partition: derived.partition,
@@ -228,7 +236,12 @@ export class BrowserRouteSessionRegistry {
     proxyEndpoint: ProxyEndpoint
   ): void {
     if (state.bindingFingerprint !== derived.bindingFingerprint) {
-      throw new Error('browser_route_partition_binding_conflict')
+      // Why: a re-paired server's binding follows its new pairing while its jar is still open;
+      // the persisted binding, not the fingerprint seen at open, decides who owns the jar.
+      if (this.dependencies.bindingStore.get(derived.partition) !== derived.bindingFingerprint) {
+        throw new Error('browser_route_partition_binding_conflict')
+      }
+      state.bindingFingerprint = derived.bindingFingerprint
     }
     if (!sameBrowserRouteProxyEndpoint(state.proxyEndpoint, proxyEndpoint)) {
       throw new Error('browser_route_partition_proxy_retarget')
@@ -238,9 +251,11 @@ export class BrowserRouteSessionRegistry {
   private async preparePartition(
     derived: DerivedBrowserRoutePartition,
     browserProfileId: string,
-    proxyEndpoint: ProxyEndpoint
+    proxyEndpoint: ProxyEndpoint,
+    profileMetadata?: BrowserClientProfileMetadata
   ): Promise<PreparedPartition> {
     const session = await prepareBrowserRouteSessionPolicy({
+      ...(profileMetadata ? { profileMetadata } : {}),
       partition: derived.partition,
       browserProfileId,
       proxyEndpoint,

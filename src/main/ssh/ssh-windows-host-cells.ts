@@ -44,7 +44,7 @@ function field(record: Record<string, unknown>, key: string): string {
 }
 
 export function parseWindowsHostCellDescriptor(text: string): WindowsHostCellDescriptor {
-  const parsed: unknown = JSON.parse(text.replace(/^﻿/u, ''))
+  const parsed: unknown = JSON.parse(text.replace(/^\uFEFF/u, ''))
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Windows host cell descriptor must be a JSON object')
   }

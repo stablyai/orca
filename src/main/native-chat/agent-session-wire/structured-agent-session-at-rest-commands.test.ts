@@ -1,11 +1,10 @@
-// A Claude chat whose Claude is not running offers the `/` commands and skills Claude would read
-// from its folders on the host that runs it: after a /clear, after a relaunch, as files change.
+// A Claude chat whose Claude is not running offers the `/` commands Claude itself lists in the
+// chat's folder, falling back to what its folders hold until Claude can answer.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
@@ -14,22 +13,24 @@ import {
   CLAUDE_AT_REST_COMMANDS_TTL_MS,
   ClaudeAtRestCommandCatalog
 } from '../../claude/claude-at-rest-commands'
+import { createClaudeCommandCatalogProbe } from '../../claude/claude-command-catalog-probe'
+import type { runAgentModelCatalogListing } from '../agent-model-catalog/agent-model-catalog-probe-runner'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import {
-  HOST_TEST_LOCATION,
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
-  hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+
+type ListingCall = Parameters<typeof runAgentModelCatalogListing>
 
 const caller = { callerKey: 'desktop' }
 const CLAUDE_SESSION = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
@@ -46,7 +47,9 @@ function adapter(catalog: ClaudeAtRestCommandCatalog): StructuredAgentSessionAda
   return {
     supportsLocation: () => true,
     supportsCreate: () => true,
+    open: async () => ({ reportedOptions: {} }),
     acquire: vi.fn(async (input) => ({
+      acquisitionGeneration: `generation-${input.fence}`,
       process: {
         hostId: 'local',
         pid: 4001,
@@ -151,175 +154,161 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-describe("a Claude chat whose Claude isn't running shows the `/` surface from its folders", () => {
-  it('after /clear, before the fresh agent context starts', async () => {
-    const cleared = await host.conversationCommand(caller, {
-      command: 'clear',
-      envelope: {
-        sessionId: SESSION,
-        clientOperationId: hostTestOperationId(),
-        expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.conversationCommand',
-          sessionId: SESSION,
-          fields: { command: 'clear' }
-        })
-      }
-    })
-    expect(cleared).toMatchObject({ ok: true })
-    const replacement = SESSION
-    const menu = await menuOf(replacement)
-    expect(namesOf(menu, 'skill')).toEqual(['review-pr'])
-    // Everything the menu offered before a list existed, then what the folders add.
-    expect(namesOf(menu, 'command')).toEqual(['model', 'effort', 'clear', 'compact', 'deploy'])
-  })
-
-  it('keeps a slow scan once it answers, never a staler one after a newer, and runs at most two', async () => {
-    const pending: ((skills: string[]) => void)[] = []
-    const catalog = new ClaudeAtRestCommandCatalog({
-      resolveWorkspacePath: async () => workspace,
-      now: () => clock,
-      discover: () =>
-        new Promise((resolve) => {
-          pending.push((names) =>
-            resolve({
-              skills: names.map((name) => ({
-                id: name,
-                name,
-                description: null,
-                providers: ['claude'],
-                sourceKind: 'repo',
-                sourceLabel: 'repo',
-                rootPath: workspace,
-                directoryPath: workspace,
-                skillFilePath: workspace,
-                installed: true,
-                updatedAt: null
-              })),
-              sources: [],
-              scannedAt: clock
-            })
-          )
-        })
-    })
-    const record = store.getRecord(SESSION)!
-    const skills = () => namesOf(catalog.read(record) ?? null, 'skill')
-    const changed = vi.fn()
-    catalog.onChange(changed)
-    catalog.read(record)
-    await vi.waitFor(() => expect(pending).toHaveLength(1))
-    // Overdue: a second scan starts beside the first; a third never does while both run.
-    clock += 30_000
-    catalog.read(record)
-    await vi.waitFor(() => expect(pending).toHaveLength(2))
-    clock += 30_000
-    catalog.read(record)
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(pending).toHaveLength(2)
-    // The second answers first; the first, older one landing after it changes nothing.
-    pending[1](['newer'])
-    await vi.waitFor(() => expect(skills()).toEqual(['newer']))
-    pending[0](['older'])
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(skills()).toEqual(['newer'])
-    expect(changed).toHaveBeenCalledTimes(1)
-    // A slow scan is not thrown away: the next one, however long it takes, is kept.
-    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
-    catalog.read(record)
-    await vi.waitFor(() => expect(pending).toHaveLength(3))
-    clock += 35_000
-    pending[2](['slow'])
-    await vi.waitFor(() => expect(skills()).toEqual(['slow']))
-  })
-
-  it('waits out the window from when a scan lands, even one that failed', async () => {
-    let calls = 0
-    let failNext = true
-    const catalog = new ClaudeAtRestCommandCatalog({
-      resolveWorkspacePath: async () => workspace,
-      now: () => clock,
-      discover: async (args) => {
-        calls += 1
-        // Each scan takes 15 s of the clock, longer than the window.
-        clock += 15_000
-        if (failNext) {
-          failNext = false
-          throw new Error('unreadable')
+describe("a Claude chat whose Claude isn't running lists Claude's own `/` commands", () => {
+  it('as Claude itself lists it in the chat’s folder, from the folders until it can, and keeps its list through a failed refresh', async () => {
+    const asked: ListingCall[] = []
+    const failed = '{"type":"control_response","response":{"subtype":"error"}}\n'
+    const listed = `${JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'orca-command-discovery',
+        response: {
+          commands: [
+            { name: 'goal', description: 'Set a goal', argumentHint: '', builtin: true },
+            { name: 'review-pr', description: 'A skill (project)', argumentHint: '' }
+          ]
         }
-        const { discoverSkills } = await import('../../skills/discovery')
-        return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
+      }
+    })}\n`
+    let answer: string | Promise<string> = failed
+    const probe = createClaudeCommandCatalogProbe({
+      resolveCommand: () => 'claude',
+      resolveInheritedEnv: async () => ({ PATH: '/bin' }),
+      resolveAuthPolicy: () => ({ account: 'system' }),
+      runListing: async (...call) => {
+        asked.push(call)
+        return answer
       }
     })
-    const record = store.getRecord(SESSION)!
+    const catalog = new ClaudeAtRestCommandCatalog({
+      resolveWorkspacePath: async () => workspace,
+      now: () => clock,
+      probe
+    })
+    const record = () => store.getRecord(SESSION)!
+    const commandNames = () => namesOf(catalog.read(record()) ?? null, 'command')
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
-      catalog.read(record)
-      await vi.waitFor(() => expect(warned).toHaveBeenCalledOnce())
-      catalog.read(record)
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(calls).toBe(1)
+      await host.flushAllStreamedEvents()
+      await openHost(catalog)
+      // A CLI that answers no list, with none from it before: the menu is what the folders hold.
+      expect(namesOf(await menuOf(SESSION), 'command')).toEqual([
+        'model',
+        'effort',
+        'clear',
+        'compact',
+        'deploy'
+      ])
+      const success = Promise.withResolvers<string>()
+      const failure = Promise.withResolvers<string>()
+      answer = success.promise
       clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
-      catalog.read(record)
-      await vi.waitFor(() =>
-        expect(namesOf(catalog.read(record) ?? null, 'skill')).toEqual(['review-pr'])
-      )
-      clock += CLAUDE_AT_REST_COMMANDS_TTL_MS - 1
-      catalog.read(record)
+      host.readCommands(SESSION)
+      await vi.waitFor(() => expect(asked).toHaveLength(2))
+      // Both scans start before Claude answers; the newer one will fall back after it does.
+      answer = failure.promise
+      clock += 30_000
+      host.readCommands(SESSION)
+      await vi.waitFor(() => expect(asked).toHaveLength(3))
+      success.resolve(listed)
+      await vi.waitFor(() => expect(commandNames()).toContain('goal'))
+      const claudeList = catalog.read(record())
+      expect(claudeList?.find((entry) => entry.name === 'goal')).toMatchObject({
+        kind: 'command',
+        description: 'Set a goal'
+      })
+      expect(asked[0]?.[0]).toMatchObject({ cwd: workspace })
+      expect(asked[0]?.[1].inheritedEnv?.CLAUDE_CONFIG_DIR).toBe(account)
+      failure.resolve(failed)
+      await vi.waitFor(() => expect(warned).toHaveBeenCalledTimes(2))
       await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(calls).toBe(2)
+      expect(catalog.read(record())).toEqual(claudeList)
+      // A failed refresh keeps Claude's list rather than the shorter one from the folders.
+      answer = failed
+      clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
+      host.readCommands(SESSION)
+      await vi.waitFor(() => expect(asked).toHaveLength(4))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(catalog.read(record())).toEqual(claudeList)
     } finally {
       warned.mockRestore()
     }
   })
 
-  it('after a relaunch, with nothing remembered from before it', async () => {
-    await host.flushAllStreamedEvents()
-    await openHost()
-    const menu = await menuOf(SESSION)
-    expect(namesOf(menu, 'skill')).toEqual(['review-pr'])
-    expect(namesOf(menu, 'command')).toContain('deploy')
-  })
-
-  it('with a command added on disk, pushed to a pane already showing the chat', async () => {
-    let commands: AgentSessionSlashCommand[] | null | undefined
-    await host.subscribe({
-      id: 'pane',
-      sessionId: SESSION,
-      emit: (event) => {
-        if ('commands' in event) {
-          commands = event.commands
+  it('does not let a rejected fallback discard an overlapping Claude refresh', async () => {
+    const listed = (name: string) =>
+      `${JSON.stringify({
+        type: 'control_response',
+        response: {
+          subtype: 'success',
+          request_id: 'orca-command-discovery',
+          response: { commands: [{ name, description: name, argumentHint: '', builtin: true }] }
         }
+      })}\n`
+    const pending = Promise.withResolvers<string>()
+    const fallback = Promise.withResolvers<void>()
+    const fallbackDone = Promise.withResolvers<void>()
+    let fallbackStarted = false
+    let answers: (string | Promise<string>)[] = [listed('first'), pending.promise, 'bad']
+    const asked: ListingCall[] = []
+    const probe = createClaudeCommandCatalogProbe({
+      resolveCommand: () => 'claude',
+      resolveInheritedEnv: async () => ({ PATH: '/bin' }),
+      resolveAuthPolicy: () => ({ account: 'system' }),
+      runListing: async (...call) => {
+        asked.push(call)
+        return answers.shift() ?? 'bad'
       }
     })
-    await vi.waitFor(() => expect(namesOf(commands ?? null, 'command')).toContain('deploy'))
-    await writeCommand(join(workspace, '.claude', 'commands'), 'frontend/test.md')
-    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
-    // Anything that reads the surface after the window scans again; the pane is told the answer.
-    host.readCommands(SESSION)
-    await vi.waitFor(() =>
-      expect(namesOf(commands ?? null, 'command')).toEqual(
-        expect.arrayContaining(['deploy', 'frontend:test'])
-      )
-    )
-  })
-
-  it('from the folders of the host that runs it, never another host’s', async () => {
-    const remoteWorkspace = join(directory, 'remote-workspace')
-    await writeSkill(join(remoteWorkspace, '.claude', 'skills'), 'remote-only')
-    const remote = catalogFor(remoteWorkspace)
+    const catalog = new ClaudeAtRestCommandCatalog({
+      resolveWorkspacePath: async () => workspace,
+      now: () => clock,
+      probe,
+      discover: async (args) => {
+        if (answers.length === 0) {
+          fallbackStarted = true
+          await fallback.promise
+        }
+        const { discoverSkills } = await import('../../skills/discovery')
+        const result = await discoverSkills({
+          ...args,
+          homeDir: join(directory, 'home'),
+          refresh: true
+        })
+        if (fallbackStarted) {
+          fallbackDone.resolve()
+        }
+        return result
+      }
+    })
     const record = store.getRecord(SESSION)!
-    remote.read(record)
-    await vi.waitFor(() =>
-      expect(namesOf(remote.read(record) ?? null, 'skill')).toEqual(['remote-only'])
-    )
-    // A chat this host does not run is answered by nothing here, not by this host's folders.
-    const local = catalogFor(workspace)
-    const elsewhere = {
-      ...record,
-      location: { ...HOST_TEST_LOCATION, executionHostId: 'ssh:box' as const }
-    }
-    local.read(elsewhere)
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(local.read(elsewhere)).toBeUndefined()
+    const commandNames = () => namesOf(catalog.read(record) ?? null, 'command')
+    catalog.read(record)
+    await vi.waitFor(() => expect(commandNames()).toContain('first'))
+    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
+    catalog.read(record)
+    await vi.waitFor(() => expect(asked).toHaveLength(2))
+    clock += 30_000
+    catalog.read(record)
+    await vi.waitFor(() => expect(asked).toHaveLength(3))
+    await vi.waitFor(() => expect(fallbackStarted).toBe(true))
+    clock -= 30_000
+    fallback.resolve()
+    await fallbackDone.promise
+    expect(commandNames()).toContain('first')
+    pending.resolve(listed('second'))
+    await vi.waitFor(() => expect(commandNames()).toContain('second'))
+
+    const settledCalls = asked.length
+    answers = ['bad']
+    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS
+    catalog.read(record)
+    await vi.waitFor(() => expect(asked).toHaveLength(settledCalls + 1))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    clock += CLAUDE_AT_REST_COMMANDS_TTL_MS - 1
+    catalog.read(record)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(asked).toHaveLength(settledCalls + 1)
   })
 })

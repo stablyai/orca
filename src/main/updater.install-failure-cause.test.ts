@@ -163,12 +163,13 @@ async function reachDownloaded(): Promise<typeof UpdaterModule> {
   const updater = await loadUpdaterModule()
 
   updater.setupAutoUpdater(mainWindow as never)
+  await vi.advanceTimersByTimeAsync(0)
   await vi.waitFor(() => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
   })
   autoUpdaterMock.emit('checking-for-update')
   autoUpdaterMock.emit('update-available', { version: '1.4.163' })
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await vi.advanceTimersByTimeAsync(0)
   autoUpdaterMock.downloadUpdate.mockResolvedValue([])
   updater.downloadUpdate()
   autoUpdaterMock.emit('update-downloaded', { version: '1.4.163' })
@@ -202,11 +203,13 @@ describe('quitAndInstall failure carries the updater cause', () => {
       value: 'linux',
       configurable: true
     })
-    vi.useRealTimers()
+    vi.useFakeTimers()
     spans = []
   })
 
   afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
     Object.defineProperty(process, 'platform', {
       value: originalPlatform,
       configurable: true
@@ -223,6 +226,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
     await vi.waitFor(() => {
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     })
@@ -244,6 +248,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
     await vi.waitFor(() => {
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     })
@@ -263,6 +268,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
     await vi.waitFor(() => {
       expect(installSpan()).toBeDefined()
     })
@@ -279,6 +285,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
     await vi.waitFor(() => {
       expect(installSpan()).toBeDefined()
     })
@@ -298,6 +305,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
     await vi.waitFor(() => {
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     })
@@ -320,6 +328,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
     await vi.waitFor(() => {
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     })
@@ -340,6 +349,7 @@ describe('quitAndInstall failure carries the updater cause', () => {
     })
 
     quitAndInstall()
+    await vi.advanceTimersByTimeAsync(100)
     await vi.waitFor(() => {
       expect(getUpdateStatus().state).toBe('error')
     })

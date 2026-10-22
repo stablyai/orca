@@ -38,6 +38,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     defaultTerminalTabsAppliedByWorktreeId: true,
     sleepingAgentSessionsByPaneKey: true,
     clientHostedBrowserCloseIntentsByEnvironment: true,
+    pairedTerminalTabCloseIntentsByEnvironment: true,
     pendingReconnectPtyIdByTabId: true,
     deferredSshSessionIdsByTabId: true
   }

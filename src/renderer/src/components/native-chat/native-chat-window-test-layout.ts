@@ -18,6 +18,18 @@ export function transcriptWindowHeight(root: ParentNode): number {
   )
 }
 
+export function transcriptWindowTop(
+  spacer: Element | null,
+  topGutterPx: number,
+  chromePitchPx: number
+): number {
+  let above = topGutterPx
+  for (let node = spacer?.previousElementSibling; node; node = node.previousElementSibling) {
+    above += chromePitchPx
+  }
+  return above
+}
+
 export function transcriptRowOffset(row: HTMLElement): number {
   if (row.style.position === 'absolute') {
     return Number.parseFloat(row.style.top) || 0

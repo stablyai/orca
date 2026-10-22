@@ -170,3 +170,13 @@ resource "google_project_iam_member" "github_staging_relay_deploy_compute_viewer
   role    = "roles/compute.viewer"
   member  = google_service_account.github_staging_relay_deploy[0].member
 }
+
+# Deploy Relay Staging step "Deploy director blue/green" with a director floor above one reads
+# the candidate's Cloud Run request log to confirm every floor instance serves before the full move.
+resource "google_project_iam_member" "github_staging_relay_deploy_logging_viewer" {
+  count = local.create_staging_relay_deploy_identity ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/logging.viewer"
+  member  = google_service_account.github_staging_relay_deploy[0].member
+}

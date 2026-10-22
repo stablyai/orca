@@ -45,7 +45,7 @@ vi.mock('../../telemetry/client', () => ({ track: () => {} }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -211,20 +211,6 @@ describe('profile state Store authority factory', () => {
   })
 
   it('reuses the candidate authority after the legacy export is removed', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    createProfileStateStore({ ...options })
-    rmSync(options.dataFile)
-
-    const result = createProfileStateStore({ ...options })
-
-    expect(result.backend).toBe('sqlite')
-    expect(result.classification).toBe('sqlite-only')
-    expect(result.migrated).toBe(false)
-    expect(result.store.getSettings().theme).toBe('dark')
-  })
-
-  it('reopens an established SQLite profile without the migration switch', () => {
     const options = createOptions()
     writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
     createProfileStateStore({ ...options })

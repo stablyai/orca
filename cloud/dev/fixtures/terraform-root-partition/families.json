@@ -146,6 +146,7 @@
     "google_logging_metric.relay_event_loop_stall",
     "google_logging_metric.relay_long_cell_inventory_hold",
     "google_logging_metric.relay_reserve_placement_off_with_reserve_cells",
+    "google_logging_metric.relay_reserve_watch_alarm",
     "google_logging_metric.relay_snapshot",
     "google_monitoring_alert_policy.relay_assignment_5xx",
     "google_monitoring_alert_policy.relay_assignment_edge_429",
@@ -176,6 +177,7 @@
     "google_monitoring_alert_policy.relay_process_fatal",
     "google_monitoring_alert_policy.relay_region_hint_skew",
     "google_monitoring_alert_policy.relay_reserve_placement_off_with_reserve_cells",
+    "google_monitoring_alert_policy.relay_reserve_watch_alarm",
     "google_monitoring_dashboard.relay_incident",
     "google_project_iam_custom_role.github_production_relay_capacity_mutation",
     "google_project_iam_custom_role.github_relay_asia_topology_mutation",
@@ -204,6 +206,7 @@
     "google_project_iam_member.github_staging_relay_capacity_mutation",
     "google_project_iam_member.github_staging_relay_capacity_viewer",
     "google_project_iam_member.github_staging_relay_deploy_compute_viewer",
+    "google_project_iam_member.github_staging_relay_deploy_logging_viewer",
     "google_project_iam_member.github_staging_relay_power",
     "google_project_iam_member.push_runtime_cloudsql_client",
     "google_project_iam_member.push_runtime_fcm_admin",
@@ -301,6 +304,10 @@
       "staging": "apps"
     },
     "google_project_iam_member.github_compute_viewer": {
+      "production": "relay",
+      "staging": "apps"
+    },
+    "google_project_iam_member.github_log_writer": {
       "production": "relay",
       "staging": "apps"
     },

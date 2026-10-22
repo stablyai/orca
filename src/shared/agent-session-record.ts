@@ -81,8 +81,6 @@ export type AgentSessionProcessIdentity = {
   runtime?: string
 }
 
-export type AgentSessionJournalCheckpoint = { epoch: number; sequence: number }
-
 /**
  * `released` means no owner: a durable record that outlives its owner needs a name for that.
  * `conflicted` is how a terminal owner an older build recorded loads: recovery waits it out and
@@ -125,7 +123,6 @@ export type AgentSessionLease = {
    *  `recovering` proves nothing, so it leaves this alone. */
   lastRenewedAt: number
   handoffOperationId: string | null
-  journalCheckpoint: AgentSessionJournalCheckpoint | null
   /** Key id that minted the HMAC claim this lease was granted under. */
   claimKeyId: string
   claimStatus: AgentSessionClaimStatus
@@ -157,22 +154,27 @@ export type AgentSessionRecord = {
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
+  /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
+  permissionMode?: string
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
+  /** When the user's Sleep stopped this chat; the next admitted send clears it. */
+  sleptAt?: number
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
 }
 
+/** Replaces the provider options or sets the permission mode, never both, so neither write
+ *  touches the other. */
 export type AgentSessionOptionsReplacement = {
   sessionId: string
   fence: number
-  options: Readonly<Record<string, string>>
   now: number
-}
+} & ({ options: Readonly<Record<string, string>> } | { permissionMode: string })
 
 const MAX_ID_LENGTH = 512
 /** A death evidence's `detail` past this fails a load, so whoever writes one cuts it here. */
@@ -276,19 +278,6 @@ export function isAgentSessionLaunchEnv(value: unknown): value is AgentSessionLa
   )
 }
 
-function isAgentSessionJournalCheckpoint(value: unknown): value is AgentSessionJournalCheckpoint {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const checkpoint = value as Partial<AgentSessionJournalCheckpoint>
-  return (
-    Number.isSafeInteger(checkpoint.epoch) &&
-    (checkpoint.epoch as number) >= 0 &&
-    Number.isSafeInteger(checkpoint.sequence) &&
-    (checkpoint.sequence as number) >= 0
-  )
-}
-
 function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeathEvidence {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -331,8 +320,6 @@ function isPersistedAgentSessionLease(value: unknown): value is PersistedAgentSe
     Number.isSafeInteger(lease.lastRenewedAt) &&
     (lease.handoffOperationId === null ||
       isBoundedString(lease.handoffOperationId, MAX_ID_LENGTH)) &&
-    (lease.journalCheckpoint === null ||
-      isAgentSessionJournalCheckpoint(lease.journalCheckpoint)) &&
     isBoundedString(lease.claimKeyId, MAX_ID_LENGTH) &&
     (lease.claimStatus === 'reserved' ||
       lease.claimStatus === 'live' ||
@@ -360,6 +347,8 @@ export function isPersistedAgentSessionRecord(
     (record.launchDirectory === undefined ||
       isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
+    (record.permissionMode === undefined ||
+      isBoundedString(record.permissionMode, MAX_ID_LENGTH)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.providerContextBoundary === undefined ||
       isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&
@@ -388,7 +377,9 @@ export function isPersistedAgentSessionRecord(
       validated.providerContextBoundary.afterFence <= validated.lease.runtimeFence) &&
     (validated.lease.claimStatus !== 'live' ||
       (validated.lease.ownerProcess !== null &&
-        head?.linkId === validated.lease.provenHandleLinkId &&
-        head.mintedAtFence === validated.lease.runtimeFence))
+        // Null: the owner's process is live and its provider has not answered with a handle yet.
+        (validated.lease.provenHandleLinkId === null ||
+          (head?.linkId === validated.lease.provenHandleLinkId &&
+            head.mintedAtFence === validated.lease.runtimeFence))))
   )
 }

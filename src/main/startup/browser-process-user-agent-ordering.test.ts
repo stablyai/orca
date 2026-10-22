@@ -187,7 +187,7 @@ vi.mock('../crash-reporting/main-process-lifecycle-identity')
 vi.mock('./ensure-virtual-display', () => ({
   ensureVirtualDisplayForHeadlessServe: vi.fn(),
   hasUsableLinuxDisplay: () => true,
-  MISSING_LINUX_DISPLAY_MESSAGE: 'missing display'
+  missingLinuxDisplayMessage: () => 'missing display'
 }))
 vi.mock('./gpu-lifecycle')
 vi.mock('./main-process-state', () => ({ mainProcessState: {} }))
