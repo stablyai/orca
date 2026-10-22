@@ -53,7 +53,15 @@ function processEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.Proces
 }
 
 function shellProbe(shell: string): string[] | null {
-  if (process.platform !== 'win32' || resolveWindowsShellStartupFamily(shell) === 'posix') {
+  if (process.platform === 'win32' && resolveWindowsShellStartupFamily(shell) === 'posix') {
+    // Why: native children and win32 PATH lookup cannot resolve Git Bash's /c/... PATH entries.
+    const command =
+      `printf '\\0${START_MARKER}\\0'; ` +
+      `PATH="$(cygpath -wp "$PATH" 2>/dev/null || printf '%s' "$PATH")" /usr/bin/env -0; ` +
+      `printf '\\0${END_MARKER}\\0'`
+    return ['-ilc', command]
+  }
+  if (process.platform !== 'win32') {
     const command =
       `printf '\\0${START_MARKER}\\0'; /usr/bin/env -0; ` + `printf '\\0${END_MARKER}\\0'`
     return ['-ilc', command]
