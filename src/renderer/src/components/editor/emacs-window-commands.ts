@@ -61,21 +61,31 @@ let focusHoldGeneration = 0
 
 // Why: inserting a split re-parents the source group, so its editor remounts a few frames later and
 // its mount focus would win; keep the new view focused until the layout has settled.
-function holdFocusOnEditorView(
-  viewStateId: string,
-  generation = ++focusHoldGeneration,
-  framesLeft = FOCUS_SETTLE_FRAMES
-): void {
-  if (generation !== focusHoldGeneration) {
-    return
+function holdFocusOnEditorView(viewStateId: string): void {
+  const generation = ++focusHoldGeneration
+  // A click elsewhere is the user's choice of focus, not a remount stealing it.
+  const cancelOnPointer = (): void => {
+    if (generation === focusHoldGeneration) {
+      focusHoldGeneration += 1
+    }
   }
-  const input = editorViewInput(viewStateId)
-  if (input && document.activeElement !== input) {
-    input.focus()
+  document.addEventListener('pointerdown', cancelOnPointer, { capture: true })
+  const hold = (framesLeft: number): void => {
+    if (generation !== focusHoldGeneration) {
+      document.removeEventListener('pointerdown', cancelOnPointer, { capture: true })
+      return
+    }
+    const input = editorViewInput(viewStateId)
+    if (input && document.activeElement !== input) {
+      input.focus()
+    }
+    if (framesLeft > 0) {
+      requestAnimationFrame(() => hold(framesLeft - 1))
+    } else {
+      document.removeEventListener('pointerdown', cancelOnPointer, { capture: true })
+    }
   }
-  if (framesLeft > 0) {
-    requestAnimationFrame(() => holdFocusOnEditorView(viewStateId, generation, framesLeft - 1))
-  }
+  hold(FOCUS_SETTLE_FRAMES)
 }
 
 export function splitEmacsWindow(

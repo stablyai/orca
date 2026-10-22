@@ -214,4 +214,22 @@ describe('createEmacsEditorHooks', () => {
     runFrames()
     expect(document.activeElement).toBe(firstInput)
   })
+
+  it('stops holding focus on a new split once the user clicks elsewhere', () => {
+    const view = openFile(store)
+    mountEditorView(view.viewStateId)
+    createEmacsEditorHooks(() => view, vi.fn()).onSplitWindow('right')
+    const created = tabs(store).find(
+      (tab) => tab.entityId === view.fileId && tab.id !== view.viewStateId
+    )!
+    mountEditorView(created.id)
+    frames.shift()?.(0)
+
+    const elsewhere = document.createElement('button')
+    document.body.append(elsewhere)
+    elsewhere.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    elsewhere.focus()
+    runFrames()
+    expect(document.activeElement).toBe(elsewhere)
+  })
 })
