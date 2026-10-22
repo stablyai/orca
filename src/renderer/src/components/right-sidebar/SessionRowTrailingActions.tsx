@@ -101,7 +101,12 @@ export function SessionRowTrailingActions({
     <div
       className="flex shrink-0 items-center gap-1"
       data-ai-vault-session-actions="true"
-      onPointerDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => {
+        // Why: a mouse pointerdown must reach the document so an open sibling row menu dismisses.
+        if (event.pointerType !== 'mouse') {
+          event.stopPropagation()
+        }
+      }}
       onDoubleClick={(event) => event.stopPropagation()}
     >
       {actionsHidden ? null : (
