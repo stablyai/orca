@@ -190,4 +190,22 @@ describe('worktree card menu items', () => {
     expect(container?.textContent).toContain('Branch / folder path')
     expect(container?.textContent).not.toContain('Branch name')
   })
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true]
+  ])('toggles project names with newStyle=%s hidden=%s', (newStyle, hidden) => {
+    settings.experimentalNewWorktreeCardStyle = newStyle
+    worktreeCardProperties = hidden ? ['status', 'hide-project-name'] : ['status']
+    renderMenu()
+    const option = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Project name'
+    )
+    expect(option?.getAttribute('data-checked')).toBe(String(!hidden))
+    act(() => option?.click())
+    expect(setWorktreeCardProperties).toHaveBeenLastCalledWith(
+      hidden ? ['status'] : ['status', 'hide-project-name']
+    )
+  })
 })

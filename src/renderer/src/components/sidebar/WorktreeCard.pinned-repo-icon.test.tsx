@@ -205,4 +205,27 @@ describe('WorktreeCard pinned repo icon', () => {
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
+  it.each([
+    { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: false },
+    { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+  ])(
+    'hides the project label while preserving its icon and tooltip with %j',
+    async (layout) => {
+      settings = layout
+      worktreeCardProperties = ['hide-project-name']
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree({ isPinned: false })}
+          repo={makeRepo()}
+          isActive={false}
+        />
+      )
+      expect(markup).toContain('🦊')
+      expect(markup).toContain('Project orca')
+      expect(markup).toContain('orca')
+      expect(markup).not.toContain('>orca</span>')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
 })

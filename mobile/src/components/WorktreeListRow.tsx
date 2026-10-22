@@ -176,9 +176,11 @@ function WorktreeListRowComponent({
             {showRepoInMetaRow && (
               <>
                 <MobileRepoIcon repoIcon={repoIcon} size={11} color={repoColor} />
-                <Text style={styles.repoName} numberOfLines={1}>
-                  {item.repo}
-                </Text>
+                {cardDetails.projectName && (
+                  <Text style={styles.repoName} numberOfLines={1}>
+                    {item.repo}
+                  </Text>
+                )}
               </>
             )}
             <Text style={styles.branchName} numberOfLines={1}>

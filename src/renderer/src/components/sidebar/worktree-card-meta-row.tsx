@@ -4,6 +4,7 @@ import { GitMerge } from 'lucide-react'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CacheTimer from './CacheTimer'
 import { WorktreeHostContextBadge } from './WorktreeHostContextBadge'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
@@ -22,6 +23,7 @@ export function WorktreeCardMetaRow({
   const {
     worktree,
     repo,
+    cardDetails,
     identityDisplay,
     isFolder,
     newCardStyle,
@@ -48,12 +50,24 @@ export function WorktreeCardMetaRow({
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
         {showRepoBadgeInMetaRow && repo && (
-          <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-            <RepoBadgeMark color={repo.badgeColor} />
-            <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                aria-label={repo.displayName}
+                className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60"
+              >
+                <RepoBadgeMark color={repo.badgeColor} />
+                {cardDetails.projectName && (
+                  <span className="text-3xs font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+                    {repo.displayName}
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
               {repo.displayName}
-            </span>
-          </div>
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {showHostContextBadge && <WorktreeHostContextBadge label={contextLabel ?? ''} />}

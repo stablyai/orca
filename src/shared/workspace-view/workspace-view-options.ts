@@ -1,3 +1,4 @@
+import { isWorktreeCardPropertyVisible } from '../worktree/card-properties'
 import type { PersistedUIState } from '../persisted-ui-state-types'
 import type {
   AgentActivityDisplayMode,
@@ -67,6 +68,7 @@ export const WORKSPACE_CARD_PROPERTY_CHOICES = [
   { id: 'comment', label: 'Notes' },
   { id: 'ports', label: 'Ports' },
   { id: 'inline-agents', label: 'Agent activity' },
+  { id: 'hide-project-name', label: 'Project name' },
   { id: 'host', label: 'Host' }
 ] as const satisfies readonly WorkspaceViewChoice<WorktreeCardProperty>[]
 
@@ -80,6 +82,7 @@ export const WORKSPACE_CARD_DISPLAY_CHOICES = [
   { id: 'cli', label: 'Orca CLI' },
   { id: 'ports', label: 'Ports' },
   { id: 'inline-agents', label: 'Agent statuses' },
+  { id: 'hide-project-name', label: 'Project name' },
   { id: 'host', label: 'Host' },
   { id: 'branch', label: 'Branch name' }
 ] as const satisfies readonly WorkspaceViewChoice<WorktreeCardProperty>[]
@@ -96,7 +99,7 @@ export function getWorkspaceCardPropertiesValue(
     return 'hover'
   }
   const count = WORKSPACE_CARD_PROPERTY_CHOICES.filter((choice) =>
-    shownProperties.includes(choice.id)
+    isWorktreeCardPropertyVisible(shownProperties, choice.id)
   ).length
   return count > 0 ? count : null
 }
