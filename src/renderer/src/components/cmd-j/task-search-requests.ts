@@ -4,6 +4,7 @@ import { jiraSearchIssuesForTarget, jiraStatusForTarget } from '@/runtime/runtim
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
+import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -257,7 +258,7 @@ async function searchJira(
       normalizeTaskSourceContext({
         ...source,
         providerIdentity: { provider: 'jira', siteId: issue.siteId ?? null, siteUrl: null },
-        accountLabel: status.viewer?.email ?? null
+        accountLabel: getJiraAccountLabel(status.viewer)
       })
     return itemSource
       ? [

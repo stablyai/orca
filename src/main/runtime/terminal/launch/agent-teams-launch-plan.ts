@@ -1,3 +1,4 @@
+import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,
@@ -13,7 +14,10 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   claudeAgentTeamsSourceCommand?: string
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
-  adoptedBeforeLaunch: boolean
+  adoptedBeforeLaunch:
+    | boolean
+    | Awaited<ReturnType<NonNullable<RuntimePtyController['adoptStablePane']>>>
+    | undefined
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<{
   plan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined

@@ -61,6 +61,7 @@ export function createWebJiraApi(): PreloadApi['jira'] {
     addIssueComment: (args) => jiraCall('addIssueComment', args),
     issueComments: (args) => readJiraPayload('issueCommentsStream', 'issueComments', args),
     listProjects: (args) => jiraCall('listProjects', args),
+    listFavouriteFilters: (args) => jiraCall('listFavouriteFilters', args),
     listIssueTypes: (args) => jiraCall('listIssueTypes', args),
     listCreateFields: (args) => jiraCall('listCreateFields', args),
     listPriorities: (args) => jiraCall('listPriorities', args),

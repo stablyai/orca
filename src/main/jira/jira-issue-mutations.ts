@@ -129,9 +129,18 @@ export async function updateIssue(
       })
     }
     if (updates.transitionId) {
+      const transitionBody: JiraRecord = { transition: { id: updates.transitionId } }
+      if (updates.transitionFields && Object.keys(updates.transitionFields).length > 0) {
+        transitionBody.fields = updates.transitionFields
+      }
+      if (updates.transitionComment?.trim()) {
+        transitionBody.update = {
+          comment: [{ add: { body: toBodyText(entry.site, updates.transitionComment.trim()) } }]
+        }
+      }
       await jiraRequest(entry, `${issueBase}/transitions`, {
         method: 'POST',
-        body: JSON.stringify({ transition: { id: updates.transitionId } })
+        body: JSON.stringify(transitionBody)
       })
     }
     return { ok: true }

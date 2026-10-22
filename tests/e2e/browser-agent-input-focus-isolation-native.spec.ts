@@ -13,6 +13,7 @@ import {
   evalInPage,
   readHost,
   runAgentClicksScenario,
+  runAgentCrossSiteFrameScenario,
   runAgentKeysScenario,
   runAgentShortcutsScenario,
   type AfterAgentInput
@@ -46,7 +47,8 @@ function realKeystrokeReachesTerminal(
 const scenarios = [
   ['agent keys and text', runAgentKeysScenario],
   ['agent clicks and presses', runAgentClicksScenario],
-  ['agent shortcut keys', runAgentShortcutsScenario]
+  ['agent shortcut keys', runAgentShortcutsScenario],
+  ['agent keys in a cross-site frame', runAgentCrossSiteFrameScenario]
 ] as const
 
 for (const [name, run] of scenarios) {

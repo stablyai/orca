@@ -1,16 +1,25 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import {
   scheduleNativeChatVisualsSweep,
   sweepNativeChatVisualsFolders,
-  type NativeChatVisualsSweepDeps,
-  type NativeChatVisualsWorkspaceVerdict
+  type NativeChatVisualsSweepDeps
 } from './native-chat-visuals-sweep'
 
 const scratch: string[] = []
@@ -34,25 +43,28 @@ function visualsFor(state: string, sessionId: string): string {
   return folder
 }
 
-const location = (workspaceId: string): AgentSessionExecutionLocation => ({
-  executionHostId: LOCAL_EXECUTION_HOST_ID,
-  wslDistro: null,
-  workspaceId,
-  workspaceKind: 'git-worktree'
-})
+const DAY_MS = 24 * 60 * 60_000
+
+/** Sets the mtime of `path` and everything under it to `daysAgo`, children before parents. */
+function age(path: string, daysAgo: number): void {
+  if (statSync(path).isDirectory()) {
+    for (const name of readdirSync(path)) {
+      age(join(path, name), daysAgo)
+    }
+  }
+  const at = new Date(Date.now() - daysAgo * DAY_MS)
+  utimesSync(path, at, at)
+}
 
 function deps(
   state: string,
-  held: readonly string[] | null,
-  verdicts: Record<string, NativeChatVisualsWorkspaceVerdict> = {}
+  held: readonly string[] | null
 ): NativeChatVisualsSweepDeps & {
   logger: { warn: ReturnType<typeof vi.fn<StructuredAgentSessionLogger['warn']>> }
 } {
   return {
     stateDirectory: state,
     listHeldSessionIds: () => held,
-    locationOf: (sessionId) => (held?.includes(sessionId) ? location(`ws-${sessionId}`) : null),
-    workspaceVerdicts: () => async (where) => verdicts[where.workspaceId] ?? 'present',
     logger: { warn: vi.fn<StructuredAgentSessionLogger['warn']>(), error: vi.fn() }
   }
 }
@@ -72,42 +84,35 @@ describe('the visuals folder sweep', () => {
     expect(existsSync(orphan)).toBe(false)
   })
 
-  it('removes a chat folder only when its local workspace is proven removed', async () => {
+  it('keeps a held chat folder however long it went unused, and retains one set aside for startup recovery', async () => {
     const state = stateDirectory()
-    const removed = visualsFor(state, 'chat-a')
-    const unverifiable = visualsFor(state, 'chat-b')
-    const present = visualsFor(state, 'chat-c')
-    await sweepNativeChatVisualsFolders(
-      deps(state, ['chat-a', 'chat-b', 'chat-c'], {
-        'ws-chat-a': 'removed',
-        'ws-chat-b': 'unverifiable'
-      })
-    )
-    expect(existsSync(removed)).toBe(false)
-    expect(existsSync(unverifiable)).toBe(true)
-    expect(existsSync(present)).toBe(true)
-  })
+    const idle = visualsFor(state, 'chat-idle')
+    const setAside = visualsFor(state, 'chat-set-aside')
+    renameSync(setAside, `${setAside}.expired`)
+    const orphan = visualsFor(state, 'chat-gone')
+    renameSync(orphan, `${orphan}.expired`)
+    age(nativeChatScratchRootFor(state), 400)
 
-  it('keeps a held chat whose workspace verdict throws', async () => {
-    const state = stateDirectory()
-    const folder = visualsFor(state, 'chat-a')
-    await sweepNativeChatVisualsFolders({
-      ...deps(state, ['chat-a']),
-      workspaceVerdicts: () => async () => {
-        throw new Error('catalog unavailable')
-      }
-    })
-    expect(existsSync(folder)).toBe(true)
+    const result = await sweepNativeChatVisualsFolders(deps(state, ['chat-idle', 'chat-set-aside']))
+
+    expect(result).toEqual({ removed: 1, failed: 0 })
+    expect(readFileSync(join(idle, 'chart.html'), 'utf8')).toBe('<p>chart</p>')
+    expect(readFileSync(join(`${setAside}.expired`, 'chart.html'), 'utf8')).toBe('<p>chart</p>')
+    expect(existsSync(`${orphan}.expired`)).toBe(false)
   })
 
   it('removes nothing when the held chats cannot be read', async () => {
     const state = stateDirectory()
     const folder = visualsFor(state, 'chat-a')
+    const legacy = join(state, 'native-chat-visuals', basename(folder))
+    mkdirSync(legacy, { recursive: true })
+    writeFileSync(join(legacy, 'chart.html'), '<p>awaiting migration retry</p>')
     await expect(sweepNativeChatVisualsFolders(deps(state, null))).resolves.toEqual({
       removed: 0,
       failed: 0
     })
     expect(existsSync(folder)).toBe(true)
+    expect(readFileSync(join(legacy, 'chart.html'), 'utf8')).toBe('<p>awaiting migration retry</p>')
   })
 
   it('never touches entries it did not mint, symlinks included', async () => {
@@ -176,14 +181,5 @@ describe('the visuals folder sweep', () => {
     symlinkSync(elsewhere, nativeChatScratchRootFor(state))
     await sweepNativeChatVisualsFolders(deps(state, []))
     expect(existsSync(join(elsewhere, 'a'.repeat(32)))).toBe(true)
-  })
-
-  it('takes one verdict snapshot per run', async () => {
-    const state = stateDirectory()
-    visualsFor(state, 'chat-a')
-    visualsFor(state, 'chat-b')
-    const workspaceVerdicts = vi.fn(() => async () => 'present' as const)
-    await sweepNativeChatVisualsFolders({ ...deps(state, ['chat-a', 'chat-b']), workspaceVerdicts })
-    expect(workspaceVerdicts).toHaveBeenCalledOnce()
   })
 })

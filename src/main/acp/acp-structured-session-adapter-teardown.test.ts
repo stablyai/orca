@@ -62,7 +62,7 @@ describe('ACP teardown of a running turn', () => {
     const atClose = watchClose(rig.child(), turn)
     await expect(rig.adapter.closeSession(SESSION)).resolves.toBe(true)
     expect(atClose).toEqual({ cancels: 1, turnEnded: true })
-    expect(rig.lifecycle).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
+    expect(rig.ended).toMatchObject([{ type: 'ended', cause: 'requested-close' }])
   })
 
   it('a dispose ends the child at the grace when the agent never ends its turn', async () => {

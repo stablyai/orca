@@ -14,6 +14,8 @@ import { journalStopEventRowBuilder } from './journal-stop-and-resume-rows'
 export type JournalStopAcceptanceInput = {
   event: Omit<JournalStopEvent, 'at'>
   fence: number
+  /** The turn live as the event is written, by the host's read of what runs. */
+  liveTurnId: () => string | null
 }
 
 // Only host-held sends are withdrawn, so each carries proof it never reached the agent.
@@ -36,7 +38,6 @@ export class JournalStopAcceptor {
     private readonly deps: {
       writer: Pick<JournalRowWriter, 'enqueueRows'>
       state: () => JournalReducerState
-      liveTurnId: () => string | null
     }
   ) {}
 
@@ -56,7 +57,7 @@ export class JournalStopAcceptor {
       // The same rows the chat's queued withdrawal always wrote, then the event, naming the turn
       // live as it is written unless the Stop named one.
       () => {
-        turnId = input.event.turnId ?? this.deps.liveTurnId()
+        turnId = input.event.turnId ?? input.liveTurnId()
         const event = { ...input.event, ...(turnId !== null ? { turnId } : {}) }
         return [
           ...journalQueuedRejectionRowBuilders(state, input.fence, STOP_WITHDRAWAL),

@@ -12,6 +12,7 @@ import {
   createdTabOptions,
   createLaunchFunnelStore,
   hostLaunchRequest,
+  queuedStartupCommand,
   queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
@@ -30,7 +31,7 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local',
-  getRuntimeEnvironmentIdForWorktree: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
@@ -143,10 +144,6 @@ describe('agent launch caller placement and telemetry', () => {
           'tab-1',
           profile.args.initialCwd
         )
-        // Ordering matters: the pane snapshots the queued cwd on first render.
-        expect(store.queueTabInitialCwd.mock.invocationCallOrder[0]).toBeLessThan(
-          store.queueTabStartupCommand.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER
-        )
         return
       }
       expect(store.queueTabInitialCwd).not.toHaveBeenCalled()
@@ -173,16 +170,15 @@ describe('agent launch caller placement and telemetry', () => {
     })
   })
 
-  it('creates the tab before queueing its startup command', async () => {
+  it('publishes the tab together with its startup command', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-2', agent: 'codex', worktreeId: 'wt-1' })
 
-    // Why: the terminal pane snapshots pending startup in useState on first render, so a startup
-    // queued after mount is never seen.
-    expect(store.createTab.mock.invocationCallOrder[0]).toBeLessThan(
-      store.queueTabStartupCommand.mock.invocationCallOrder[0] ?? 0
-    )
+    // Why: the terminal pane snapshots pending startup in useState on first render, so the tab
+    // must never exist without its startup command.
+    expect(store.createTab).toHaveBeenCalledTimes(1)
+    expect(queuedStartupCommand(store)).toEqual(expect.any(String))
   })
 
   it('seeds working status for a Command Code prompt that rides argv', async () => {

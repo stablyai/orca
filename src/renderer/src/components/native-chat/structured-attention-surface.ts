@@ -8,7 +8,6 @@
  */
 import type { useAppStore } from '@/store'
 import type {
-  AgentAttentionRemainder,
   AgentAttentionSubject,
   AgentAttentionSurface,
   AgentAttentionSurfaceAdmission,
@@ -16,9 +15,10 @@ import type {
 } from '@/attention/agent-attention-contract'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { isOrcaWindowForegroundFocused } from '../terminal-pane/terminal-notification-pane-visibility'
-import { isTabOnVisibleSurface } from '@/hooks/agent-auto-ack-targets'
-import { isStructuredTab, type StructuredTab } from './structured-agent-session-tabs'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import type { StructuredTab } from './structured-agent-session-tabs'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -72,34 +72,7 @@ function isViewedStructuredTab(
   workspaceId: string,
   tab: StructuredTab
 ): boolean {
-  return (
-    isOrcaWindowForegroundFocused() &&
-    isTabOnVisibleSurface(state, workspaceId, tab.id, 'structured')
-  )
-}
-
-function collectStructuredAttentionRemainder(
-  state: StoreSnapshot,
-  workspaceId: string
-): AgentAttentionRemainder {
-  const tabs = structuredTabsIn(state, workspaceId)
-  if (tabs.length === 0) {
-    return { hasSurfaces: false, unreadSubjectKeys: [], unreadGroupIds: [] }
-  }
-  const unreadSubjectKeys: string[] = []
-  const unreadGroupIds: string[] = []
-  // Why read per live tab instead of scanning the marker maps: a marker left behind by a closed
-  // tab or a superseded session would otherwise hold workspace unread lit with nothing to clear it.
-  for (const tab of tabs) {
-    const subjectKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    if (state.unreadAgentCompletionPanes[subjectKey]) {
-      unreadSubjectKeys.push(subjectKey)
-    }
-    if (state.unreadTerminalTabs[tab.id]) {
-      unreadGroupIds.push(tab.id)
-    }
-  }
-  return { hasSurfaces: true, unreadSubjectKeys, unreadGroupIds }
+  return isTabOnScreen(state, workspaceId, tab.id, 'structured')
 }
 
 /** Binds the neutral surface contract to one store snapshot. */
@@ -116,10 +89,11 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
       const tab = findSubjectTab(state, subject.workspaceId, subject.surfaceKey)
       return tab !== null && isViewedStructuredTab(state, subject.workspaceId, tab)
     },
-    // Why: activeWorktreeId is in-app selection only. A backgrounded Orca still needs unread.
-    isWorkspaceViewed: (workspaceId) =>
-      state.activeWorktreeId === workspaceId && isOrcaWindowForegroundFocused(),
+    // Why: in-app selection alone is not viewing — a backgrounded Orca, Settings or an away user still need unread.
+    isWorkspaceViewed: (workspaceId) => isWorkspaceOnScreen(state, workspaceId),
     isWorkspaceActive: (workspaceId) => state.activeWorktreeId === workspaceId,
+    isWorkspaceMuted: (workspaceId) =>
+      isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
     resolveViewedSubjectKey: (groupId) => {
       const tab = Object.values(state.unifiedTabsByWorktree)
         .flat()
@@ -127,8 +101,6 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
       return tab && isStructuredTab(tab)
         ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
         : null
-    },
-    collectWorkspaceAttentionRemainder: (workspaceId) =>
-      collectStructuredAttentionRemainder(state, workspaceId)
+    }
   }
 }

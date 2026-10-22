@@ -113,8 +113,8 @@ export class CdpPageInputCommands {
     )
   }
 
-  private readonly sendRoot: GuestCdpSender = (method, params) =>
-    this.debuggerChannel.sendDebuggerCommand(method, params)
+  private readonly sendRoot: GuestCdpSender = (method, params, sessionId) =>
+    this.debuggerChannel.sendDebuggerCommand(method, params, sessionId)
 
   // Why: delivery awaits focus probes and focus guards; one queue keeps a pipelined
   // keyDown/char/keyUp/insertText or press/move/release sequence in order.

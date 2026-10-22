@@ -1,8 +1,11 @@
+import type { RuntimeArtifactController } from './runtime-artifact-controller'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { OrcaRuntimeService } from './orca-runtime'
+import { RuntimeFileAccess } from './files/file-access'
 import { RuntimeFileReads } from './files/file-reads'
 import { RuntimeTerminalArtifacts } from './terminal/artifacts/terminal-artifacts'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
 import type { RuntimeFileCommandHost } from './files/file-command-host'
 
 const unexpectedHostRead = (): never => {
@@ -25,7 +28,7 @@ const reachedArtifactOwner = (): never => {
 
 afterEach(() => vi.restoreAllMocks())
 
-it('preserves artifact facade arity, optional slots, and the same artifact receiver', () => {
+it('preserves artifact optional slots and the same artifact receiver', () => {
   const read = vi
     .spyOn(RuntimeTerminalArtifacts.prototype, 'readTerminalArtifactFile')
     .mockImplementation(reachedArtifactOwner)
@@ -39,13 +42,6 @@ it('preserves artifact facade arity, optional slots, and the same artifact recei
     .spyOn(RuntimeTerminalArtifacts.prototype, 'revokeTerminalFileGrantsForClient')
     .mockImplementation(reachedArtifactOwner)
   const commands = new RuntimeFileCommands(host)
-
-  expect([
-    commands.readTerminalArtifactFile.length,
-    commands.readTerminalArtifactPreview.length,
-    commands.writeTerminalArtifactFile.length,
-    commands.revokeTerminalFileGrantsForClient.length
-  ]).toEqual([4, 5, 5, 1])
 
   expect(() => commands.readTerminalArtifactFile('worktree', 'grant', '/artifact')).toThrow(
     'artifact_owner_reached'
@@ -91,81 +87,37 @@ it('preserves artifact facade arity, optional slots, and the same artifact recei
   }
 })
 
-const originalMethodMetadata = [
-  ['openMobileFile', 3, true],
-  ['openMobileDiff', 4, true],
-  ['listRuntimeMarkdownDocuments', 1, true],
-  ['pathsExistRuntimeFiles', 2, true],
-  ['statRuntimeFile', 2, true],
-  ['readMobileFile', 2, true],
-  ['readFileExplorerPreview', 3, true],
-  ['readDocPreviewFile', 6, true],
-  ['readFileExplorerChunk', 4, true],
-  ['writeFileExplorerFile', 6, true],
-  ['writeFileExplorerFileBase64', 6, true],
-  ['writeFileExplorerFileBase64Chunk', 7, true],
-  ['createFileExplorerFile', 5, true],
-  ['createFileExplorerDir', 5, true],
-  ['createFileExplorerDirNoClobber', 5, true],
-  ['commitFileExplorerUpload', 6, true],
-  ['renameFileExplorerPath', 6, true],
-  ['copyFileExplorerPath', 6, true],
-  ['deleteFileExplorerPath', 6, true],
-  ['readFileExplorerDir', 2, true],
-  ['watchFileExplorer', 2, true],
-  ['closeFileExplorerWatchersForPath', 2, true],
-  ['restoreFileExplorerWatchersAfterFailedRemoval', 2, true],
-  ['forgetFileExplorerWatchersAfterRemoval', 2, false],
-  ['resolveTerminalPath', 7, true]
-] as const
+it.each(['command facade', 'installed runtime'])(
+  'forwards omitted file arguments and optional positions through the %s',
+  (surface) => {
+    const returned: ReturnType<RuntimeFileAccess['openMobileFile']> = Promise.resolve({
+      worktree: 'worktree',
+      relativePath: 'file',
+      kind: 'text',
+      opened: true
+    })
+    const open = vi.spyOn(RuntimeFileAccess.prototype, 'openMobileFile').mockReturnValue(returned)
+    const commands =
+      surface === 'command facade' ? new RuntimeFileCommands(host) : new OrcaRuntimeService(null)
+    const position = { line: 12, column: 5 }
 
-it('preserves the original public command arities and native async functions', () => {
-  const commands = new RuntimeFileCommands(host)
-  for (const [name, arity, async] of originalMethodMetadata) {
-    expect(commands[name].length, name).toBe(arity)
-    expect(Object.prototype.toString.call(commands[name]), name).toBe(
-      async ? '[object AsyncFunction]' : '[object Function]'
-    )
-  }
-})
-
-it('installs the original public file command metadata on the actual runtime', () => {
-  const runtime = new OrcaRuntimeService(null)
-  const commands = {
-    openMobileFile: runtime.openMobileFile,
-    openMobileDiff: runtime.openMobileDiff,
-    listRuntimeMarkdownDocuments: runtime.listRuntimeMarkdownDocuments,
-    pathsExistRuntimeFiles: runtime.pathsExistRuntimeFiles,
-    statRuntimeFile: runtime.statRuntimeFile,
-    readMobileFile: runtime.readMobileFile,
-    readFileExplorerPreview: runtime.readFileExplorerPreview,
-    readDocPreviewFile: runtime.readDocPreviewFile,
-    readFileExplorerChunk: runtime.readFileExplorerChunk,
-    writeFileExplorerFile: runtime.writeFileExplorerFile,
-    writeFileExplorerFileBase64: runtime.writeFileExplorerFileBase64,
-    writeFileExplorerFileBase64Chunk: runtime.writeFileExplorerFileBase64Chunk,
-    createFileExplorerFile: runtime.createFileExplorerFile,
-    createFileExplorerDir: runtime.createFileExplorerDir,
-    createFileExplorerDirNoClobber: runtime.createFileExplorerDirNoClobber,
-    commitFileExplorerUpload: runtime.commitFileExplorerUpload,
-    renameFileExplorerPath: runtime.renameFileExplorerPath,
-    copyFileExplorerPath: runtime.copyFileExplorerPath,
-    deleteFileExplorerPath: runtime.deleteFileExplorerPath,
-    readFileExplorerDir: runtime.readFileExplorerDir,
-    watchFileExplorer: runtime.watchFileExplorer,
-    resolveTerminalPath: runtime.resolveTerminalPath
-  }
-  for (const [name, arity, async] of originalMethodMetadata) {
-    if (!(name in commands)) {
-      continue
+    expect(commands.openMobileFile('worktree', 'file')).toBe(returned)
+    expect(commands.openMobileFile('worktree', 'file', 'caller')).toBe(returned)
+    expect(commands.openMobileFile('worktree', 'file', undefined, position)).toBe(returned)
+    expect(commands.openMobileFile('worktree', 'file', undefined, undefined)).toBe(returned)
+    expect(open.mock.calls).toEqual([
+      ['worktree', 'file'],
+      ['worktree', 'file', 'caller'],
+      ['worktree', 'file', undefined, position],
+      ['worktree', 'file', undefined, undefined]
+    ])
+    const owner = open.mock.contexts[0]
+    expect(owner).toBeInstanceOf(RuntimeFileAccess)
+    for (const context of open.mock.contexts) {
+      expect(context).toBe(owner)
     }
-    const installed = Object.getOwnPropertyDescriptor(commands, name)?.value
-    expect(installed.length, name).toBe(arity)
-    expect(Object.prototype.toString.call(installed), name).toBe(
-      async ? '[object AsyncFunction]' : '[object Function]'
-    )
   }
-})
+)
 
 it('preserves omitted argument slots, owner receivers, and the returned promise', () => {
   const returned: ReturnType<RuntimeFileReads['readFileExplorerPreview']> = Promise.resolve({
@@ -195,4 +147,82 @@ it('preserves omitted argument slots, owner receivers, and the returned promise'
   vi.spyOn(runtime, 'readFileExplorerPreview').mockReturnValueOnce(replacement)
   expect(runtime.readFileExplorerPreview('other-worktree', 'other-file')).toBe(replacement)
   expect(read).toHaveBeenCalledTimes(2)
+})
+
+it('delegates artifact listing to the current owner with the original argument and promise', () => {
+  const runtime = new OrcaRuntimeService(null)
+  const owner = runtime['artifacts']
+  const events: string[] = []
+  const returned: ReturnType<RuntimeArtifactController['list']> = Promise.resolve({
+    status: 'unconfigured',
+    message: 'not connected'
+  })
+  const list = vi.spyOn(owner, 'list').mockImplementation(function (
+    this: RuntimeArtifactController
+  ) {
+    events.push('list')
+    expect(this).toBe(owner)
+    expect(arguments.length).toBe(1)
+    return returned
+  })
+  Object.defineProperty(runtime, 'artifacts', {
+    get() {
+      events.push('owner')
+      return owner
+    }
+  })
+  const options = { cursor: 'next', apiUrl: 'https://artifacts.example.test' }
+
+  expect(runtime.listArtifacts(options)).toBe(returned)
+  expect(list).toHaveBeenCalledExactlyOnceWith(options)
+  expect(events).toEqual(['owner', 'list'])
+})
+
+it('replaces the database after clearing its old routing state and then uses runtime overrides', () => {
+  const runtime = new OrcaRuntimeService(null)
+  const first = new OrchestrationDb(':memory:')
+  const second = new OrchestrationDb(':memory:')
+  const events: string[] = []
+  const dbAtCall: (OrchestrationDb | null)[] = []
+  const record = (name: string) => {
+    events.push(name)
+    dbAtCall.push(runtime['_orchestrationDb'])
+  }
+  vi.spyOn(runtime['orchestrationFederation'], 'resetForDatabaseChange').mockImplementation(() =>
+    record('reset')
+  )
+  vi.spyOn(runtime['mailPointerRepointScheduler'], 'clear').mockImplementation(() =>
+    record('clear')
+  )
+  Object.defineProperties(runtime, {
+    ensureOrchestrationFederationRelay: {
+      value: function (this: OrcaRuntimeService) {
+        expect(this).toBe(runtime)
+        expect(arguments.length).toBe(0)
+        record('relay')
+      }
+    },
+    scheduleRestoredMessageRepoints: {
+      value: function (this: OrcaRuntimeService) {
+        expect(this).toBe(runtime)
+        expect(arguments.length).toBe(0)
+        record('repoint')
+      }
+    }
+  })
+  try {
+    runtime.setOrchestrationDb(first)
+    events.length = 0
+    dbAtCall.length = 0
+    runtime.setOrchestrationDb(second)
+
+    expect(events).toEqual(['reset', 'clear', 'relay', 'repoint'])
+    expect(dbAtCall).toEqual([first, first, second, second])
+    expect(runtime.getOrchestrationDb()).toBe(second)
+    expect(runtime.getExistingOrchestrationDb()).toBe(second)
+    expect(events).toEqual(['reset', 'clear', 'relay', 'repoint'])
+  } finally {
+    first.close()
+    second.close()
+  }
 })

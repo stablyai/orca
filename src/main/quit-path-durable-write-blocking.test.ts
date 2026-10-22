@@ -89,7 +89,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...patched, default: patched }
 })
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -167,7 +167,7 @@ function stallCommit(dir: string) {
 async function createStatsCollector(dir: string): Promise<TestStatsCollector> {
   testState.dir = dir
   const { StatsCollector, initStatsPath } = await import('./stats/collector')
-  initStatsPath()
+  initStatsPath(testState.dir)
   const stats = new StatsCollector()
   statsCollectors.push(stats)
   return stats

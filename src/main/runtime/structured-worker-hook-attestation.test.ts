@@ -9,7 +9,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 const { OrcaRuntimeWithGetOrchestrationDispatchAuthority } =
   await import('./terminal/output/terminal-orchestration-authority')
 const { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } =
-  await import('./orca-runtime-verify-orchestration-compatibility-caller')
+  await import('./orchestration/terminal-authority/verify-orchestration-compatibility-caller')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

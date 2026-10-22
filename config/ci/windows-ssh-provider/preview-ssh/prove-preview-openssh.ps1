@@ -168,7 +168,7 @@ try {
     $report.nativeInputs=$verified
     Write-Stage 'preview-native-input-verification-complete'
   } else {
-    Install-WindowsInboxSshCapability $Arch $report {param($stage) Write-Stage $stage}
+    Install-WindowsInboxSshCapability $Arch $report {param($stage) Write-Stage $stage} ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Receipt)))
     $verified=@()
     foreach($binary in @('sshd.exe','ssh.exe','ssh-keygen.exe','sftp.exe','sftp-server.exe')){
       $path=Join-Path $sshDir $binary

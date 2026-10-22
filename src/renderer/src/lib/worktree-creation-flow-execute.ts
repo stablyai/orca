@@ -170,10 +170,7 @@ export async function executeWorktreeCreation(
   // workspace) is handed it; anyone who moved on (another workspace or an app
   // view) keeps their place and gets a toast instead (#9944).
   const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
-  const setupIsOnlySurface =
-    preparedRequest.setupOnly === true &&
-    result.setup !== undefined &&
-    (useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab') === 'new-tab'
+  const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
   // Why: the worktree exists past this point and nothing awaits this caller, so

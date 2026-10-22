@@ -1,4 +1,16 @@
 import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraProjectReference } from '../../../shared/jira-project-reference'
+import { getJiraProjectSelectionKey } from './task-page-jira-project-selection'
+
+export function getJiraStatusCatalogScopeKey(
+  sourceScopeKey: string,
+  selectedSiteId: string | null | undefined,
+  preset: string,
+  project?: JiraProjectReference | null
+): string {
+  const scopeKey = `${sourceScopeKey}::${selectedSiteId}::${preset}`
+  return project ? `${scopeKey}::${getJiraProjectSelectionKey(project)}` : scopeKey
+}
 
 export type JiraStatusCatalogItem = { name: string; categoryKey: string }
 const STATUS_NAME_COLLATOR = new Intl.Collator('en', { sensitivity: 'base' })

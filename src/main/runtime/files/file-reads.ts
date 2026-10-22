@@ -1,6 +1,6 @@
 import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { Store } from '../../persistence'
+import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
   RuntimeFileReadResult,
@@ -24,7 +24,7 @@ import {
   previewableBinaryByteLimit
 } from './file-preview-budget'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
-import { resolveAuthorizedPath } from '../../ipc/filesystem-auth'
+import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
@@ -81,7 +81,7 @@ export class RuntimeFileReads {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
     requireLocalRuntimeFileRoute(target)
     // Why: sized by extension instead of a stat round trip.
-    const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+    const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
     const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
     let buffer: Buffer
@@ -167,21 +167,35 @@ export class RuntimeFileReads {
   ): Promise<RuntimeFileReadChunkResult> {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
     requireLocalRuntimeFileRoute(target)
-    const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+    const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     return readLocalFileRange(filePath, offset, length)
   }
 }
 
-async function readLocalMobileFile(filePath: string, store: Store): Promise<string> {
-  const authorizedPath = await resolveAuthorizedPath(filePath, store)
-  const fileStat = await stat(authorizedPath)
+async function readLocalMobileFile(filePath: string, store: RuntimeStore): Promise<string> {
   // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
-  const readLimit = Math.min(fileStat.size, MOBILE_FILE_READ_MAX_BYTES + 1)
+  const { bytes } = await readLocalRuntimeFilePrefix(
+    filePath,
+    store,
+    MOBILE_FILE_READ_MAX_BYTES + 1
+  )
+  return bytes.toString('utf8')
+}
+
+/** Up to `maxBytes` from the start of an authorized local file, and the file's full size. */
+export async function readLocalRuntimeFilePrefix(
+  filePath: string,
+  store: RuntimeStore,
+  maxBytes: number
+): Promise<{ bytes: Buffer; size: number }> {
+  const authorizedPath = await resolveRuntimeAuthorizedPath(filePath, store)
+  const fileStat = await stat(authorizedPath)
+  const readLimit = Math.min(fileStat.size, maxBytes)
   const handle = await open(authorizedPath, 'r')
   try {
     const buffer = Buffer.alloc(readLimit)
     const { bytesRead } = await handle.read(buffer, 0, readLimit, 0)
-    return buffer.subarray(0, bytesRead).toString('utf8')
+    return { bytes: buffer.subarray(0, bytesRead), size: fileStat.size }
   } finally {
     await handle.close()
   }

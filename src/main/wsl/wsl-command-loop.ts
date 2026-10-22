@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto'
 import { Duplex, PassThrough, Writable } from 'node:stream'
 import type { PipedChildProcess } from '@orca/process-host/process-spec'
-import type { RemoteCommandChannel } from '../ssh/remote-install-transport'
+import type { RemoteCommandChannel } from '../managed-server/install/remote-install-transport'
 
 // Why setsid: a `wsl.exe --exec` command leads its own session; without it every command
 // would share the loop's process group. Why fresh files per command: a backgrounded writer

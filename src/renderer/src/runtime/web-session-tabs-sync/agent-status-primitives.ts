@@ -68,7 +68,11 @@ export function isMirroredAgentPaneKeyForTabs(
  *  interactive question cards reach the host over its HTTP agent hook, never
  *  through PTY bytes, so they must pierce the client-authority fence. */
 export function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): boolean {
-  return entry.state === 'blocked' || entry.interactivePrompt != null
+  // Why: a row restored across a host restart is unverifiable, so it never outranks live bytes.
+  return (
+    entry.restoredUnconfirmed !== true &&
+    (entry.state === 'blocked' || entry.interactivePrompt != null)
+  )
 }
 
 /** True while this renderer's own byte-derived status owns the pane: it claimed

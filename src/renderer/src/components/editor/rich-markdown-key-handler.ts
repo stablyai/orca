@@ -56,7 +56,8 @@ export type KeyHandlerContext = {
   handleLocalImagePickRef: MutableRefObject<() => void>
   handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
-  flushPendingSerialization: () => void
+  /** Returns true when the pending edit was rejected instead of committed. */
+  flushPendingSerialization: () => boolean
   openSearchRef: MutableRefObject<() => void>
   openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   setIsEditingLink: (editing: boolean) => void

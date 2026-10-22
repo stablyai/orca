@@ -25,6 +25,10 @@ const SESSION_ID_BYTES = 32
  */
 export const PAGE_READY_DEADLINE_MS = BRIDGE_READY_RETRY_MAX_MS * 5
 
+/** How long the view has to finish a document before the shell gives up on it. The assets are
+ *  local, so this only bounds a load the WebView refused or never committed. */
+export const DOCUMENT_LOAD_DEADLINE_MS = 20_000
+
 export type MobileWebShellRuntime = {
   createStore(): GenerationStore
   mintSessionId(): string

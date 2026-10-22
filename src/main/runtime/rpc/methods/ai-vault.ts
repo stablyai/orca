@@ -1,3 +1,4 @@
+import { prepareStructuredChatCliFork } from '../../../ai-vault/structured-chat-cli-fork'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -10,6 +11,7 @@ import {
 import { defineMethod } from '../core'
 import { conditionalAiVaultListResult } from '../../../ai-vault/session-list-fingerprint'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
+import { copyStructuredChatConversation } from '../../../ai-vault/structured-chat-conversation-copy'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -88,19 +90,22 @@ export const AI_VAULT_METHODS = [
     name: 'aiVault.listSessions',
     permission: 'workspace',
     params: AiVaultListSessionsParams,
-    handler: async (params, { runtime, clientKind, clientCapabilities }) => {
+    handler: async (params, { runtime, clientKind, clientCapabilities, signal }) => {
       await ensureStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
       let result
       try {
-        result = await runtime.listAiVaultSessions({
-          limit: params.unlimited ? undefined : params.limit,
-          unlimited: params.unlimited,
-          force: params.force,
-          scopePaths: params.scopePaths,
-          includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
-        })
+        result = await runtime.listAiVaultSessions(
+          {
+            limit: params.unlimited ? undefined : params.limit,
+            unlimited: params.unlimited,
+            force: params.force,
+            scopePaths: params.scopePaths,
+            includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
+          },
+          signal
+        )
       } catch (error) {
         if (error instanceof Error) {
           error.message = describeAiVaultScanError(error.message)
@@ -127,6 +132,12 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultPrepareSessionResumeParams,
     handler: async (params, { runtime }) => {
+      if ('sourceChat' in params) {
+        await runtime.ensureStructuredAgentSessionHost()
+        return prepareStructuredChatCliFork(params, (args) =>
+          runtime.prepareAiVaultSessionResume(args)
+        )
+      }
       const args: AiVaultPrepareSessionResumeArgs = {
         agent: params.agent,
         ...(params.sessionId ? { sessionId: params.sessionId } : {}),
@@ -144,7 +155,9 @@ export const AI_VAULT_METHODS = [
           : ensureStructuredAgentSessionHostUnlessRefused(ensureHost))
         assertLegacyAiVaultResumeAllowed(args)
       }
-      return runtime.prepareAiVaultSessionResume(args)
+      return (
+        (await copyStructuredChatConversation(args)) ?? runtime.prepareAiVaultSessionResume(args)
+      )
     }
   })
 ]

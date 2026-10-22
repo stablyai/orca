@@ -4,20 +4,17 @@ import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
-import type {
-  RuntimeMarkdownReadTabResult,
-  RuntimeMarkdownSaveTabResult
-} from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
+import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -53,14 +50,16 @@ export function registerRuntimeWindowLifecycle(
       worktreeId,
       setup?: CreateWorktreeResult['setup'],
       startup?: WorktreeStartupLaunch,
-      defaultTabs?: CreateWorktreeResult['defaultTabs']
+      defaultTabs?: CreateWorktreeResult['defaultTabs'],
+      providesInitialSurface?: boolean
     ) => {
       send('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
         ...(startup ? { startup } : {}),
-        ...(defaultTabs ? { defaultTabs } : {})
+        ...(defaultTabs ? { defaultTabs } : {}),
+        ...(providesInitialSurface ? { providesInitialSurface } : {})
       })
     },
     createTerminal: (worktreeId, opts) =>
@@ -127,6 +126,9 @@ export function registerRuntimeWindowLifecycle(
           ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
           ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+          ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
+          ...(opts.afterTabId ? { afterTabId: opts.afterTabId } : {}),
+          ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
           ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
@@ -170,8 +172,10 @@ export function registerRuntimeWindowLifecycle(
     },
     renameTerminal: (tabId, title, options) =>
       send('ui:renameTerminal', { tabId, title, ...options }),
+    setPaneTitle: (tabId, leafId, title) => send('ui:setPaneTitle', { tabId, leafId, title }),
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
+    revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
     closeSessionTab: (tabId, worktreeId) =>
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
@@ -186,6 +190,7 @@ export function registerRuntimeWindowLifecycle(
         ...(navigation ? { navigation } : {}),
         ...(position ? { position } : {})
       }),
+    revealEditorTab: (reveal) => send('ui:revealEditorTabFromRuntime', reveal),
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?, navigation?) =>
       send('ui:openDiffFromMobile', {
         worktreeId,
@@ -195,20 +200,6 @@ export function registerRuntimeWindowLifecycle(
         runtimeEnvironmentId,
         ...(navigation ? { navigation } : {})
       }),
-    readMobileMarkdownTab: (worktreeId, tabId) =>
-      requestMobileMarkdownFromRenderer(mainWindow, {
-        operation: 'read',
-        worktreeId,
-        tabId
-      }) as Promise<RuntimeMarkdownReadTabResult>,
-    saveMobileMarkdownTab: (worktreeId, tabId, baseVersion, content) =>
-      requestMobileMarkdownFromRenderer(mainWindow, {
-        operation: 'save',
-        worktreeId,
-        tabId,
-        baseVersion,
-        content
-      }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
     closeTerminalTab: (tabId, options) =>
@@ -227,6 +218,17 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
     clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
   })
+  // Switch point: the window reads its sidebar from main's feed and re-reads on each notice.
+  const detachSidebarInputsNotices = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? runtime.onClientEvent(
+        (event) => {
+          if (event.type === 'sidebarInputsChanged') {
+            send('runtime:sidebarInputsChanged', event)
+          }
+        },
+        { consumesTerminalSideEffects: false }
+      )
+    : null
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
@@ -243,6 +245,7 @@ export function registerRuntimeWindowLifecycle(
     rendererNotifications.onRendererProcessGone()
   })
   mainWindow.on('closed', () => {
+    detachSidebarInputsNotices?.()
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

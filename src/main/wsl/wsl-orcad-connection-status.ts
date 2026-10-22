@@ -1,4 +1,5 @@
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import type { WslHostConnectIntent, WslHostDeferredUpdate } from '../../shared/wsl-host-types'
 import type { WslLivenessUnverifiableReason } from './wsl-orcad-liveness-verdict'
 
 /**
@@ -30,5 +31,27 @@ export type WslOrcadConnectionStatus =
     }
   /** orcad stopped (crash or managed idle exit) with nothing user-visible on it; not relaunched. */
   | { state: 'idle'; terminals: 'unverifiable' }
-  | { state: 'failed'; reason: string; terminals: 'exited' | 'unverifiable' }
+  | {
+      state: 'failed'
+      reason: string
+      terminals: 'exited' | 'unverifiable'
+      /** A connect the host deferred: what Update or Force would retry, since nothing serves. */
+      deferredUpdate?: WslHostDeferredUpdate
+    }
   | { state: 'closed' }
+
+/** What a user-initiated connect asks of the host's update. */
+export type WslOrcadConnectIntent = { intent?: WslHostConnectIntent }
+
+/** A connect that failed; one the host deferred keeps its deferral, the retry nothing else offers. */
+export function wslConnectFailedStatus(
+  reason: string,
+  deferral: WslHostDeferredUpdate | null
+): WslOrcadConnectionStatus {
+  if (!deferral) {
+    return { state: 'failed', reason, terminals: 'unverifiable' }
+  }
+  const { candidateVersion, code, reason: why, forceable } = deferral
+  const deferredUpdate = { candidateVersion, code, reason: why, forceable }
+  return { state: 'failed', reason, terminals: 'unverifiable', deferredUpdate }
+}

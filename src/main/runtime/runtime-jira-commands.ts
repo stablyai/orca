@@ -15,7 +15,9 @@ import type {
   JiraIssueUpdate,
   JiraSiteSelection
 } from '../../shared/jira-types'
+import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
+import { listFavouriteFilters } from '../jira/favourite-filters'
 import {
   addIssueComment,
   createIssue,
@@ -103,8 +105,13 @@ export class RuntimeJiraCommands {
     return createIssue(args)
   }
 
-  jiraGetIssue(key: string, siteId?: string, strict = false): ReturnType<typeof getIssue> {
-    return getIssue(key, siteId, strict)
+  jiraGetIssue(
+    key: string,
+    siteId?: string,
+    strict = false,
+    mediaFormat?: JiraMediaFormat
+  ): ReturnType<typeof getIssue> {
+    return getIssue(key, siteId, strict, mediaFormat)
   }
 
   jiraLookupIssueSummary(
@@ -134,13 +141,21 @@ export class RuntimeJiraCommands {
   jiraIssueComments(
     key: string,
     siteId?: string,
-    strict = false
+    strict = false,
+    mediaFormat?: JiraMediaFormat
   ): ReturnType<typeof getIssueComments> {
-    return getIssueComments(key, siteId, strict)
+    return getIssueComments(key, siteId, strict, mediaFormat)
   }
 
   jiraListProjects(siteId?: JiraSiteSelection, strict = false): ReturnType<typeof listProjects> {
     return listProjects(siteId, strict)
+  }
+
+  jiraListFavouriteFilters(
+    siteId: string,
+    signal?: AbortSignal
+  ): ReturnType<typeof listFavouriteFilters> {
+    return listFavouriteFilters(siteId, signal)
   }
 
   jiraListIssueTypes(

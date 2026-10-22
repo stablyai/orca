@@ -3,8 +3,12 @@ import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
 import { reuseAiVaultListResult } from './ai-vault-session-identity'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
-// One object so a session count is never paired with a depth its scan never ran at.
-export type AiVaultAppliedScan = { result: AiVaultListResult; limit: AiVaultSessionLimit }
+// Keep the result paired with the request that produced it through deferred publication.
+export type AiVaultAppliedScan = {
+  result: AiVaultListResult
+  limit: AiVaultSessionLimit
+  scopeKey: string
+}
 
 /** The scan the panel is showing, together with the History depth it ran at. */
 export function useAppliedAiVaultScan(): {
@@ -12,6 +16,7 @@ export function useAppliedAiVaultScan(): {
   applyScan: (
     published: AiVaultListResult,
     limit: AiVaultSessionLimit,
+    scopeKey: string,
     onApplied?: (result: AiVaultListResult) => void
   ) => void
 } {
@@ -22,14 +27,18 @@ export function useAppliedAiVaultScan(): {
     (
       published: AiVaultListResult,
       limit: AiVaultSessionLimit,
+      scopeKey: string,
       onApplied?: (result: AiVaultListResult) => void
     ) => {
       const previous = acceptedScanRef.current
       const result = reuseAiVaultListResult(previous?.result ?? null, published)
       const next =
-        previous !== null && previous.result === result && previous.limit === limit
+        previous !== null &&
+        previous.result === result &&
+        previous.limit === limit &&
+        previous.scopeKey === scopeKey
           ? previous
-          : { result, limit }
+          : { result, limit, scopeKey }
       acceptedScanRef.current = next
       setScan(next)
       onApplied?.(result)

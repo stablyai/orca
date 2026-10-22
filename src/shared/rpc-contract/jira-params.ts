@@ -48,7 +48,13 @@ export const ListIssues = z
 export const IssueKey = z.object({
   key: requiredString('Issue key is required'),
   siteId: OptionalString,
-  strict: z.boolean().optional()
+  strict: z.boolean().optional(),
+  mediaFormat: z.literal('reference').optional()
+})
+
+export const AttachmentImage = z.object({
+  reference: z.string().uuid(),
+  transferId: z.string().uuid()
 })
 
 export const CreateIssue = z.object({
@@ -77,7 +83,9 @@ export const IssueUpdate = z.object({
         .optional(),
       assigneeAccountId: z.union([z.string(), z.null()]).optional(),
       priorityId: z.union([z.string(), z.null()]).optional(),
-      transitionId: OptionalString
+      transitionId: OptionalString,
+      transitionFields: z.record(z.string(), z.unknown()).optional(),
+      transitionComment: z.string().optional()
     })
     .refine((updates) => !(updates.labels && updates.labelOperations), {
       message: 'Pass labels or labelOperations, not both'

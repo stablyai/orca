@@ -3,7 +3,7 @@ import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { isLocalExecutionHost } from '../../../../../shared/execution-host'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
@@ -118,7 +118,7 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   session.hostAgnosticTerminalWorktree =
     session.deps.worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     isEphemeralSetupTerminalWorktreeId(session.deps.worktreeId)
-  session.worktreeProvesLocalHost = parseExecutionHostId(session.worktree?.hostId)?.kind === 'local'
+  session.worktreeProvesLocalHost = isLocalExecutionHost(session.worktree?.hostId)
   session.connectionOwnerHydrating =
     !session.terminalOwnerUnresolved &&
     !session.hostAgnosticTerminalWorktree &&

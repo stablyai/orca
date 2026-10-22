@@ -22,9 +22,8 @@ export type {
 } from '../../shared/codex-selection-lane'
 
 export function normalizeCodexRuntimeSelection(
-  settings: Pick<
-    GlobalSettings,
-    'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+  settings: Partial<
+    Pick<GlobalSettings, 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'>
   >
 ): CodexManagedAccountRuntimeSelection {
   return {

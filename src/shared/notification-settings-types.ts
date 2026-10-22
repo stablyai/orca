@@ -24,6 +24,8 @@ export type NotificationSettings = {
   customSoundVolume: number
   /** Desktop opt-outs stored only on this client, per configured source and work reached through it; new sources notify. */
   mutedNotificationSourceIds: NotificationSourceId[]
+  /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
+  notifyHiddenWorkspaces: boolean
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

@@ -56,6 +56,7 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -408,6 +409,27 @@ describe('registerHostedReviewHandlers', () => {
       })
     )
     expect(resolveRegisteredWorktreePathMock).not.toHaveBeenCalled()
+  })
+
+  it('reports an unreachable SSH host as unavailable, not as a foreign worktree', async () => {
+    listRepoWorktreeGraphMock.mockRejectedValueOnce(
+      new WorktreeCatalogUnavailableError(
+        `Worktree catalog unavailable for ${repoPath}: SSH connection "ssh-1" is not connected.`
+      )
+    )
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    const result = handlers['hostedReview:getCreationEligibility'](null, {
+      repoPath,
+      repoId: repo.id,
+      worktreePath,
+      branch: 'feature/pr',
+      base: 'main'
+    })
+
+    await expect(result).rejects.toBeInstanceOf(WorktreeCatalogUnavailableError)
+    await expect(result).rejects.not.toThrow('does not belong')
+    expect(getHostedReviewCreationEligibilityMock).not.toHaveBeenCalled()
   })
 
   it('passes SSH connectionId through pull request creation and records successful creates', async () => {

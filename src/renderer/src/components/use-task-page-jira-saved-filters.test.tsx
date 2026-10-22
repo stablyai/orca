@@ -332,3 +332,19 @@ it('reports false for skipped, stale, or unapplied selections and true only afte
   expect(setQuery).not.toHaveBeenCalled()
   expect(mutate).toHaveBeenCalledTimes(2)
 })
+it('validates a stale clear callback against the latest confirmed selection', async () => {
+  read.mockResolvedValue({ filters: [filter], activeFilterId: null })
+  const setQuery = vi.fn()
+  const { result } = renderHook(() => useTaskPageJiraSavedFilters(model('host-a'), setQuery))
+  await waitFor(() => expect(result.current.jiraSavedFiltersReady).toBe(true))
+  const clear = result.current.clearJiraSavedFilterSelection
+  mutate
+    .mockResolvedValueOnce(initial)
+    .mockResolvedValueOnce({ filters: [filter], activeFilterId: null })
+  await act(async () => expect(await result.current.applyJiraSavedFilter(filter)).toBe(true))
+  await act(async () => expect(await clear()).toBe(true))
+  expect(mutate).toHaveBeenLastCalledWith(
+    { kind: 'environment', environmentId: 'host-a' },
+    { kind: 'select', id: null }
+  )
+})

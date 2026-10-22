@@ -3,8 +3,10 @@ import { useMemo, useCallback } from 'react'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import {
   getSingleJiraProjectScope,
-  getTaskPageJiraStatusOrderScopeKey
+  getTaskPageJiraStatusOrderScopeKey,
+  getTaskPageJiraStatusOrderRuntimeScopeKey
 } from '@/components/task-page-jira-status-order'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import {
   buildJiraIssueWorkspaceAttachmentIndex,
   collectLinkedJiraIssueRefs,
@@ -14,6 +16,7 @@ import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
 import { sortJiraIssues } from './jira-issue-sorter'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {
+    accountBackedTaskSourceHostId,
     jiraTaskSourceContext,
     jiraHasWorkspace,
     appliedJiraSearch,
@@ -79,8 +82,12 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     () => getSingleJiraProjectScope(displayedJiraIssues),
     [displayedJiraIssues]
   )
+  const statusOrderRuntimeScopeKey = getTaskPageJiraStatusOrderRuntimeScopeKey(
+    jiraTaskSourceScopeKey,
+    ipcOrRuntimeTargetForHostId(jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId)
+  )
   const displayedJiraStatusOrderScopeKey = displayedJiraProjectScope
-    ? getTaskPageJiraStatusOrderScopeKey(jiraTaskSourceScopeKey, displayedJiraProjectScope)
+    ? getTaskPageJiraStatusOrderScopeKey(statusOrderRuntimeScopeKey, displayedJiraProjectScope)
     : null
   const displayedJiraStatusOrder =
     jiraProjectStatusOrder && displayedJiraStatusOrderScopeKey === jiraProjectStatusOrder.scopeKey

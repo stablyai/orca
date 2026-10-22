@@ -25,6 +25,7 @@ import {
   _settlePendingWorktreeRemovalsForTests
 } from '../../worktree-background-removal'
 import { RuntimeWorktreeRemovalInFlight } from '../runtime-worktree-removal-in-flight'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const REMOTE_REPO_PATH = '/remote/repo'
 
@@ -42,8 +43,8 @@ function makeRemoteRepoStore(
   const metaById: Record<string, WorktreeMeta> = {
     [TEST_WORKTREE_ID]: makeWorktreeMeta({ hostId: executionHostId, ...metaOverrides })
   }
-  const removeWorktreeMeta = vi.fn((worktreeId: string, hostId?: string) => {
-    if (!hostId || metaById[worktreeId]?.hostId === hostId) {
+  const removeWorktreeMeta = vi.fn(({ id: worktreeId, hostId }: HostWorktreeTarget) => {
+    if (metaById[worktreeId]?.hostId === hostId) {
       delete metaById[worktreeId]
     }
   })
@@ -57,7 +58,7 @@ function makeRemoteRepoStore(
       getRepo: (id: string) => (id === repo.id ? repo : undefined),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       },
@@ -149,7 +150,7 @@ class RemovalRuntime extends OrcaRuntimeService {
     return super.localRemovalJobHost(runtimeStore)
   }
 
-  protected override requireStore(): RuntimeStore {
+  override requireStore(): RuntimeStore {
     if (this.stopAtStore) {
       throw this.helperFailure
     }
@@ -174,7 +175,7 @@ class RemovalRuntime extends OrcaRuntimeService {
   }
 
   retryRemoval(record: WorktreeRemovalRecord) {
-    return this.retryFailedLocalRemoval(
+    return this.retryFailedRemoval(
       { kind: 'local' },
       { id: record.worktreeId, path: record.worktreePath },
       [],
@@ -223,10 +224,10 @@ describe('workspace removal runtime dispatch', () => {
     expect(() => runtime.finishInterruptedWorktreeRemovals()).toThrow(runtime.helperFailure)
   })
 
-  it('uses the runtime helper override before retrying a failed removal', () => {
+  it('uses the runtime helper override before retrying a failed removal', async () => {
     runtime.stopAtHelper = true
     failedWorktreeRemovals.set(record.worktreeId, record)
-    expect(() => runtime.retryRemoval(record)).toThrow(runtime.helperFailure)
+    await expect(runtime.retryRemoval(record)).rejects.toThrow(runtime.helperFailure)
   })
 
   it('captures the watcher callback and retains its job-host receiver', async () => {

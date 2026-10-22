@@ -32,6 +32,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { structuredAgentSessionHeldStarts } from './structured-agent-session-held-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -44,6 +45,7 @@ const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
 let root: string
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
+const starts = structuredAgentSessionHeldStarts(() => host)
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let generation = 0
@@ -78,9 +80,7 @@ async function send(
     value: { submission: { dispatchState: 'pending', handoverRecorded: true } }
   })
   const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
-  await eventually(() =>
-    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
-  )
+  expect(await submission(clientMessageId)).toMatchObject({ dispatchState: 'pending' })
   return clientMessageId
 }
 
@@ -100,13 +100,7 @@ function currentChild() {
 }
 
 function proveStarted(): Promise<void> {
-  return host.handleAdapterEvent({
-    type: 'started',
-    ...currentChild(),
-    reportedOptions: { model: 'sonnet' },
-    restoreSkippedOptions: [],
-    optionRevision: host.collaboratorsForTests().runtimeState.optionRevisions.current(SESSION)
-  })
+  return starts.prove(currentChild())
 }
 
 function exitBeforeProof(): Promise<void> {
@@ -115,8 +109,7 @@ function exitBeforeProof(): Promise<void> {
     ...currentChild(),
     reason: EXIT_REASON,
     failure: { kind: 'providerExited', detail: { text: EXIT_REASON, audience: 'log' } },
-    cause: 'unexpected-exit',
-    startupUnproven: true
+    cause: 'unexpected-exit'
   })
 }
 
@@ -151,8 +144,7 @@ beforeEach(async () => {
       mintedAtFence: fence,
       observedAt: NOW
     },
-    acquisitionGeneration: `generation-${++generation}`,
-    providerChildPhase: 'starting' as const
+    acquisitionGeneration: `generation-${++generation}`
   }))
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   store = await openTestAgentSessionRecordStore(root)
@@ -160,15 +152,18 @@ beforeEach(async () => {
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
-    adapter: {
-      acquire,
+    adapter: starts.wrap({
+      acquire: starts.held(acquire),
       releaseAcquisition: vi.fn(async () => true),
       closeSession: vi.fn(async () => true),
       dispatch,
       cancelTurn: vi.fn(async () => ({ cancelled: true })),
       answerPrompt: vi.fn(async () => undefined),
-      setOption: vi.fn(async () => undefined)
-    },
+      setOption: vi.fn(async () => undefined),
+      open: async () => ({
+        reportedOptions: { model: '' }
+      })
+    }),
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,
@@ -180,6 +175,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  starts.clear()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
 })
@@ -198,7 +194,7 @@ describe('a send into a published session whose child ended before startup', () 
     const first = await send('hello again', releasedFence)
 
     // Accepted at the lost owner's fence, held for the child delivery started.
-    expect(acquire).toHaveBeenCalledTimes(2)
+    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     expect(dispatch).not.toHaveBeenCalled()
     const current = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -226,6 +222,7 @@ describe('a send into a published session whose child ended before startup', () 
     const rowsBefore = (await journalStatuses()).length
 
     const held = await send('still not signed in', releasedFence)
+    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
     await exitBeforeProof()
 
     // The child never proved its start, so it was handed nothing: the message is rejected, so
@@ -261,7 +258,7 @@ describe('a send into a published session whose child ended before startup', () 
 
     // Retry is a fresh action: it restarts once and is handed to the new child once it proves itself.
     const retry = await send('signed in now')
-    expect(acquire).toHaveBeenCalledTimes(3)
+    await eventually(() => expect(acquire).toHaveBeenCalledTimes(3))
     await proveStarted()
     await handedOver(retry)
     expect(dispatch).toHaveBeenCalledOnce()

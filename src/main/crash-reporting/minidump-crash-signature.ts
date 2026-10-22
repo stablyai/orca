@@ -14,9 +14,14 @@
 import { findStream, isMinidump, MinidumpView, type MinidumpSource } from './minidump-stream-reader'
 import { readCrashpadAnnotations } from './minidump-crashpad-annotations'
 import { findEmbeddedCheckMessage } from './minidump-embedded-check'
+import { readMinidumpFaultContext, type MinidumpFaultContext } from './minidump-fault-context'
 
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
+const STREAM_TYPE_SYSTEM_INFO = 7
+// MINIDUMP_SYSTEM_INFO.PlatformId; Crashpad writes its own ids for macOS and Linux.
+const SYSTEM_INFO_PLATFORM_ID_OFFSET = 20
+const VER_PLATFORM_WIN32_NT = 2
 
 const MODULE_RECORD_SIZE = 108
 // 8x headroom over a measured 1042-image macOS renderer, whose whole list a
@@ -45,6 +50,7 @@ export type MinidumpCrashSignature = {
   /** Module whose image range contains `exceptionAddress`. */
   readonly faultingModule?: string
   readonly faultingModuleOffset?: string
+  readonly fault?: MinidumpFaultContext
   /** Allowlisted Crashpad annotations, verbatim. */
   readonly annotations: Readonly<Record<string, string>>
 }
@@ -77,6 +83,14 @@ async function readModules(view: MinidumpView): Promise<ModuleRecord[]> {
     modules.push({ base, size, name: name ?? 'unknown' })
   }
   return modules
+}
+
+async function isWindowsDump(view: MinidumpView): Promise<boolean> {
+  const stream = await findStream(view, STREAM_TYPE_SYSTEM_INFO)
+  return (
+    stream !== null &&
+    (await view.u32(stream.rva + SYSTEM_INFO_PLATFORM_ID_OFFSET)) === VER_PLATFORM_WIN32_NT
+  )
 }
 
 function moduleBasename(modulePath: string): string {
@@ -187,6 +201,12 @@ export async function parseMinidumpCrashSignature(
         signature.faultingModule = faulting.name
         signature.faultingModuleOffset = faulting.offset
       }
+      // Code bytes only from a loaded module in a Windows dump: they exist to diff against the
+      // shipped binary. JIT memory adds nothing, and on macOS/Linux Crashpad records the touched
+      // data address here, not the instruction pointer.
+      signature.fault = await readMinidumpFaultContext(view, exception.rva, code, address, {
+        captureCodeBytes: faulting !== undefined && (await isWindowsDump(view))
+      })
     }
   }
 
@@ -221,6 +241,19 @@ export function minidumpSignatureDetails(
   }
   if (signature.faultingModuleOffset) {
     details.minidumpFaultingModuleOffset = signature.faultingModuleOffset
+  }
+  const fault = signature.fault
+  if (fault?.access) {
+    details.minidumpExceptionAccess = fault.access
+  }
+  if (fault?.faultAddress) {
+    details.minidumpFaultAddress = fault.faultAddress
+  }
+  if (fault?.faultStackPointerDelta !== undefined) {
+    details.minidumpFaultStackPointerDelta = fault.faultStackPointerDelta
+  }
+  if (fault?.codeBytes) {
+    details.minidumpCodeBytes = fault.codeBytes
   }
   for (const [key, value] of Object.entries(signature.annotations)) {
     if (key === 'LOG_FATAL' || key === 'abort-message' || key === 'ptype') {

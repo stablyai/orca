@@ -1,8 +1,7 @@
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
-import { publicKeyFromBase64 } from './e2ee-crypto'
+import { publicKeyFromBase64 } from '../../../shared/e2ee-crypto'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
 import { isDeviceProofB64, verifyDeviceProof } from '../../../shared/device-key-proof'
-import { INSECURE_WEB_ORIGIN_AUTH_CODE } from '../../../shared/web-origin-security'
 
 export type ClassifiedE2EEAuth =
   | { kind: 'token'; deviceToken: string; clientCapabilities?: unknown }
@@ -81,10 +80,6 @@ export type MobileE2EEAuthFailureCode =
   | 'device_revoked'
   | 'registry_unavailable'
   | 'bad_proof'
-  | typeof INSECURE_WEB_ORIGIN_AUTH_CODE
-
-// The token matched, but this transport may not claim it (e.g. a first pairing from an insecure page).
-export type DeviceTokenRefusal = { refused: typeof INSECURE_WEB_ORIGIN_AUTH_CODE }
 
 export type DeviceKeyResolution<TDevice> =
   | { kind: 'found'; device: TDevice; devicePublicKeyB64: string }
@@ -97,7 +92,7 @@ export type DeviceKeyResolution<TDevice> =
 export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>(args: {
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
-  resolveDevice: (token: string) => TDevice | DeviceTokenRefusal | null
+  resolveDevice: (token: string) => TDevice | null
   // Absent on a host that does not accept device keys: key auth is then bad_auth, as before.
   resolveDeviceKey?: (deviceId: string) => DeviceKeyResolution<TDevice>
 }):
@@ -106,9 +101,6 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
   const auth = classifyE2EEAuth(args.plaintext, args.v2Session)
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
-    if (device && 'refused' in device) {
-      return { ok: false, code: device.refused }
-    }
     // Why: a keyed row has no token, so presenting one can never match it.
     return device?.deviceToken === auth.deviceToken
       ? { ok: true, device, clientCapabilities: auth.clientCapabilities }
@@ -152,9 +144,7 @@ export function describeMobileE2EEAuthFailure(failure: {
       ? 'Unauthorized'
       : failure.code === 'registry_unavailable'
         ? 'Device registry unavailable'
-        : failure.code === INSECURE_WEB_ORIGIN_AUTH_CODE
-          ? 'Insecure web origin'
-          : 'Invalid e2ee_auth'
+        : 'Invalid e2ee_auth'
   return {
     sealedError: {
       type: 'e2ee_error',

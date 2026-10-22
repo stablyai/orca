@@ -20,7 +20,7 @@ import { queueWorkspaceActivationTerminalFocus } from './workspace-activation-te
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent-test-state'
+} from './worktree-activation-created-agent.test-fixture'
 
 const initialAppStoreState = useAppStore.getState()
 const AGENT_TAB_ID = 'b1a1c0de-0000-4000-8000-000000000001'

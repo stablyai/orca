@@ -96,6 +96,33 @@ describe('useMobileSessionViewMode', () => {
     expect(controller?.isTabChatView('t1')).toBe(true)
   })
 
+  it('withholds the initial surface until both the default and this workspace overrides settle', async () => {
+    const defaultRead = deferred<MobileSessionView>()
+    const overridesRead = deferred<{ overrides: Map<string, MobileSessionView>; loaded: boolean }>()
+    vi.mocked(loadDefaultSessionView).mockReturnValue(defaultRead.promise)
+    vi.mocked(readSessionViewOverridesPreference).mockReturnValue(overridesRead.promise)
+    function Harness(): null {
+      controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    expect(controller?.ready).toBe(false)
+    await act(async () => {
+      defaultRead.resolve('chat')
+      await defaultRead.promise
+    })
+    expect(controller?.ready).toBe(false)
+    await act(async () => {
+      overridesRead.resolve({ overrides: new Map([['t1', 'terminal']]), loaded: true })
+      await overridesRead.promise
+    })
+    expect(controller?.ready).toBe(true)
+    expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(controller?.isTabChatView('t2')).toBe(true)
+  })
+
   it('lets a per-tab override win over the default', async () => {
     await mount({
       defaultView: 'chat',
@@ -108,6 +135,7 @@ describe('useMobileSessionViewMode', () => {
   it('reloads the default on refocus after Settings changes it', async () => {
     await mount({ defaultView: 'terminal' })
     expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(controller?.ready).toBe(true)
     vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
 
     await act(async () => {
@@ -116,6 +144,7 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(controller?.isTabChatView('t1')).toBe(true)
+    expect(controller?.ready).toBe(true)
   })
 
   it('toggles from the effective view and persists the override', async () => {
@@ -163,20 +192,53 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
     expect(controller?.isTabChatView('same-tab-id')).toBe(true)
+    expect(controller?.ready).toBe(true)
 
     await act(async () => {
       renderer?.update(createElement(Harness, { hostId: 'h2', worktreeId: 'w2' }))
       await Promise.resolve()
     })
     expect(controller?.isTabChatView('same-tab-id')).toBe(false)
+    // The next workspace's surface waits for its own overrides, not the last one's.
+    expect(controller?.ready).toBe(false)
 
     await act(async () => {
       nextScopeLoad.resolve(new Map())
       await Promise.resolve()
+      await Promise.resolve()
     })
+    expect(controller?.ready).toBe(true)
   })
 
-  it('merges a toggle made during load with the other persisted overrides', async () => {
+  it('waits for a fresh read when returning A to B to A before B settles', async () => {
+    const pendingB = deferred<{ overrides: Map<string, MobileSessionView>; loaded: boolean }>()
+    const returningA = deferred<{ overrides: Map<string, MobileSessionView>; loaded: boolean }>()
+    vi.mocked(readSessionViewOverridesPreference)
+      .mockResolvedValueOnce({ overrides: new Map([['t1', 'chat']]), loaded: true })
+      .mockReturnValueOnce(pendingB.promise)
+      .mockReturnValueOnce(returningA.promise)
+    function Harness(props: { hostId: string }) {
+      controller = useMobileSessionViewMode({ ...props, worktreeId: 'folder:/project' })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness, { hostId: 'A' }))
+    })
+    expect(controller?.ready).toBe(true)
+    act(() => renderer?.update(createElement(Harness, { hostId: 'B' })))
+    act(() => renderer?.update(createElement(Harness, { hostId: 'A' })))
+    expect(controller?.ready).toBe(false)
+    await act(async () => pendingB.resolve({ overrides: new Map([['t1', 'chat']]), loaded: true }))
+    expect(controller?.ready).toBe(false)
+    await act(async () =>
+      returningA.resolve({ overrides: new Map([['t1', 'terminal']]), loaded: true })
+    )
+    expect(controller?.ready).toBe(true)
+    expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
+  it('merges an explicit terminal choice made during load with the other persisted overrides', async () => {
+    vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
     const overridesLoad = deferred<Map<string, MobileSessionView>>()
     vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
       overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
@@ -190,9 +252,9 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
 
-    act(() => controller?.toggleTabChatView('new-tab'))
-    expect(controller?.isTabChatView('new-tab')).toBe(true)
-    expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'chat')
+    act(() => controller?.setTabView('new-tab', 'terminal'))
+    expect(controller?.isTabChatView('new-tab')).toBe(false)
+    expect(updateSessionViewOverride).toHaveBeenCalledWith('h', 'w', 'new-tab', 'terminal')
 
     await act(async () => {
       overridesLoad.resolve(new Map([['saved-tab', 'chat']]))
@@ -201,7 +263,7 @@ describe('useMobileSessionViewMode', () => {
     })
 
     expect(controller?.isTabChatView('saved-tab')).toBe(true)
-    expect(controller?.isTabChatView('new-tab')).toBe(true)
+    expect(controller?.isTabChatView('new-tab')).toBe(false)
   })
 
   it('toggles from the fail-closed view while overrides load under a chat default', async () => {

@@ -68,8 +68,10 @@ type PartSources = {
     | Prefixed<'file', keyof LayoutEditorFile>
     | Prefixed<'browserTab', keyof LayoutBrowserTab>
     // `$key`: the map key the entry is stored under.
-    | Prefixed<'leaf', Exclude<keyof LayoutLeaf, 'sleeping'> | '$key'>
+    // `ptyGeneration` is in memory only: a load starts every pane's count afresh.
+    | Prefixed<'leaf', Exclude<keyof LayoutLeaf, 'sleeping' | 'resume' | 'ptyGeneration'> | '$key'>
     | Prefixed<'leaf.sleeping', keyof LayoutSleepingRecord>
+    | Prefixed<'leaf.resume', keyof LayoutSleepingRecord>
     | Prefixed<'closedTab', keyof LayoutClosedTab>
   desktopView:
     | Prefixed<'view', Exclude<keyof DesktopLayoutView, 'groups' | 'panes' | 'editorDrafts'>>
@@ -92,9 +94,12 @@ export type LayoutSource = {
   [Part in keyof LoadedWorkspaceLayout]: PartSources[Part]
 }[keyof LoadedWorkspaceLayout]
 
-/** `from`: the one source. `via`: sources that only select or validate (a fallback, a filter). */
+/**
+ * `from`: the one source. `via`: sources that only select or validate (a fallback, a filter).
+ * `orFrom`: a second holder of the same fact; each record is held by exactly one of the two.
+ */
 export type DiskFieldWritten =
-  | { from: LayoutSource; via?: readonly LayoutSource[] }
+  | { from: LayoutSource; orFrom?: LayoutSource; via?: readonly LayoutSource[] }
   | 'unwritten'
   /** A map of per-workspace lists: only which keys it holds is compared. */
   | 'container'
@@ -184,7 +189,8 @@ const LAYOUT = {
   ptyIdsByLeafId: { from: 'leaf.ptyId', via: ['tab.panes.root'] },
   buffersByLeafId: { from: 'scrollback.buffer', via: ['tab.panes.root'] },
   scrollbackRefsByLeafId: { from: 'scrollback.scrollbackRef', via: ['tab.panes.root'] },
-  titlesByLeafId: { from: 'leaf.title', via: ['tab.panes.root'] }
+  titlesByLeafId: { from: 'leaf.title', via: ['tab.panes.root'] },
+  lastGridsByLeafId: { from: 'leaf.lastGrid', via: ['tab.panes.root'] }
 } as const satisfies Record<keyof TerminalLayoutSnapshot, DiskFieldWritten>
 
 const FILE = {
@@ -225,25 +231,28 @@ const BROWSER = {
 const PANE_KEY = { from: 'leaf.$key', via: ['tab.entityId', 'tab.panes.root'] } as const
 const paneRecord = <Source extends `leaf.${string}`>(from: Source) =>
   ({ from, via: ['tab.panes.root'] }) as const
+/** A resume record field: from a slept pane's record or a running agent's, never both. */
+const resumeRecord = <Field extends keyof LayoutSleepingRecord>(field: Field) =>
+  ({ ...paneRecord(`leaf.sleeping.${field}`), orFrom: `leaf.resume.${field}` }) as const
 
 const SLEEPING = {
   paneKey: PANE_KEY,
   tabId: PANE_KEY,
   worktreeId: { from: 'workspace.worktreeId', via: ['tab.panes.root'] },
-  agent: paneRecord('leaf.sleeping.agent'),
-  providerSession: paneRecord('leaf.sleeping.providerSession'),
-  prompt: paneRecord('leaf.sleeping.prompt'),
-  state: paneRecord('leaf.sleeping.state'),
-  capturedAt: paneRecord('leaf.sleeping.capturedAt'),
-  updatedAt: paneRecord('leaf.sleeping.updatedAt'),
-  terminalTitle: paneRecord('leaf.sleeping.terminalTitle'),
-  lastAssistantMessage: paneRecord('leaf.sleeping.lastAssistantMessage'),
-  interrupted: paneRecord('leaf.sleeping.interrupted'),
-  mainAgent: paneRecord('leaf.sleeping.mainAgent'),
-  connectionId: paneRecord('leaf.sleeping.connectionId'),
-  launchConfig: paneRecord('leaf.sleeping.launchConfig'),
-  origin: paneRecord('leaf.sleeping.origin'),
-  restoreOnTabOpenOnly: paneRecord('leaf.sleeping.restoreOnTabOpenOnly')
+  agent: resumeRecord('agent'),
+  providerSession: resumeRecord('providerSession'),
+  prompt: resumeRecord('prompt'),
+  state: resumeRecord('state'),
+  capturedAt: resumeRecord('capturedAt'),
+  updatedAt: resumeRecord('updatedAt'),
+  terminalTitle: resumeRecord('terminalTitle'),
+  lastAssistantMessage: resumeRecord('lastAssistantMessage'),
+  interrupted: resumeRecord('interrupted'),
+  mainAgent: resumeRecord('mainAgent'),
+  connectionId: resumeRecord('connectionId'),
+  launchConfig: resumeRecord('launchConfig'),
+  origin: resumeRecord('origin'),
+  restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly')
 } as const satisfies Record<keyof SleepingAgentSessionRecord, DiskFieldWritten>
 
 /** One entry of today's incarnation map, by pane key. */
@@ -320,7 +329,9 @@ type TableEntry = {
     Table in Exclude<DiskTable, 'session'>
   ]: (typeof DISK_TABLES)[Table][keyof (typeof DISK_TABLES)[Table]]
 }[Exclude<DiskTable, 'session'>]
-type FromOf<Entry> = Entry extends { from: infer From } ? From : never
+type FromOf<Entry> = Entry extends { from: infer From }
+  ? From | (Entry extends { orFrom: infer OrFrom } ? OrFrom : never)
+  : never
 
 /** Sources no disk field is written from; must stay `never`. */
 export type UnwrittenLayoutSource = Exclude<

@@ -24,7 +24,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -125,6 +125,25 @@ describe('Store', () => {
     expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
     reloaded.updateUI({ sidebarWidth: 400 })
     expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
+  })
+
+  it('moves the legacy host scope with a written host list, so "all hosts" sticks', async () => {
+    const store = await createStore()
+    store.updateUI({ workspaceHostScope: 'ssh:box', visibleWorkspaceHostIds: ['ssh:box'] })
+
+    // A paired phone writes only the list.
+    store.updateUI({ visibleWorkspaceHostIds: null })
+    expect(store.getUI()).toMatchObject({
+      visibleWorkspaceHostIds: null,
+      workspaceHostScope: 'all'
+    })
+    store.updateUI({ visibleWorkspaceHostIds: ['ssh:box'] })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
+    // A multi-host list keeps the default host for new workspaces.
+    store.updateUI({ visibleWorkspaceHostIds: ['local', 'ssh:box'] })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
+    store.updateUI({ sidebarWidth: 300 })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
   })
 
   it('updateUI merges partial updates', async () => {
@@ -753,9 +772,10 @@ describe('Store', () => {
   it('normalizes default browser zoom UI writes', async () => {
     const store = await createStore()
 
+    // 1.26 is about 130%, which snaps to Chrome's 125% preset.
     store.updateUI({ browserDefaultZoomLevel: 1.26 })
 
-    expect(store.getUI().browserDefaultZoomLevel).toBe(1.5)
+    expect(1.2 ** (store.getUI().browserDefaultZoomLevel ?? 0)).toBeCloseTo(1.25)
   })
 
   it('encrypts the Kagi session link on disk and decrypts it on load', async () => {

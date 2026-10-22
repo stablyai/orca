@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // The restart-offer methods act for the calling client: a paired client too old to show an agent
 // is never listed, resumed, dismissed, or answered that agent's offers. The host stub filters by the
 // audience it is handed, as the real host does (structured-agent-session-restart-audience.test.ts).

@@ -2,20 +2,21 @@
 // module, so it must not pull in the host or Node-only process code.
 
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionRecord,
+  AgentSessionExecutionLocation,
+  AgentSessionProcessIdentity
+} from '../../../shared/agent-session-record'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 
-/** A spawned child with no stdout frame or stderr line for this long has stopped starting. */
-export const STRUCTURED_AGENT_SESSION_STARTUP_SILENCE_MS = 60_000
-/** No start, however chatty, outlives this from its spawn. */
+/** No start outlives this from its registration; each protocol step has its own shorter bound. */
 export const STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS = 10 * 60_000
 
-export type StructuredAgentSessionStartupLimits = { silenceMs: number; ceilingMs: number }
+export type StructuredAgentSessionStartupLimits = { ceilingMs: number }
 
 export const STRUCTURED_AGENT_SESSION_STARTUP_LIMITS: StructuredAgentSessionStartupLimits = {
-  silenceMs: STRUCTURED_AGENT_SESSION_STARTUP_SILENCE_MS,
   ceilingMs: STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS
 }
 
@@ -31,16 +32,32 @@ export type StructuredAgentSessionStartupAttempt = {
   readonly options?: Readonly<Record<string, string>>
   /** The permission mode the start launches with; absent for an agent with none. */
   readonly permissionMode?: AgentChatPermissionMode
-  /** Provider events may begin before acquisition returns. */
+  /** Provider events may begin before spawn returns. */
   readonly events?: StructuredAgentSessionEventSink
   /** Background work this start's child reports, scoped to the attempt. Unset until the host routes
    *  child work by attempt; adapters report through their registration until then. */
   readonly childWork?: (evidence: AgentChildWorkEvidence[]) => void
   /** Aborted by a close, a Stop admitted now, quit, or the startup limit: the adapter stops what it
-   *  started and the acquire fails. */
+   *  started and spawn fails. */
   readonly signal?: AbortSignal
-  /** Any stdout frame or stderr line from the child: proof the start is still moving. */
-  readonly onOutput?: () => void
-  /** The conversation's option revision now; a report stamps it as its read begins. */
-  readonly optionRevision: () => number
+}
+
+/** The startup limit's own reason, so an expired start is told from a close, Stop or quit. */
+export class StructuredAgentSessionStartupExpiredError extends Error {
+  constructor() {
+    super('the agent stopped making progress before it finished starting')
+    this.name = 'StructuredAgentSessionStartupExpiredError'
+  }
+}
+
+export function isStructuredAgentSessionStartupExpired(reason: unknown): boolean {
+  return reason instanceof Error && reason.name === 'StructuredAgentSessionStartupExpiredError'
+}
+
+export type StructuredAgentSessionAcquisitionReceipt = Pick<
+  StructuredAgentSessionStartupAttempt,
+  'attemptId' | 'fence' | 'spawnToken'
+> & {
+  location: AgentSessionExecutionLocation
+  process?: AgentSessionProcessIdentity
 }

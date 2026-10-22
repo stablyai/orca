@@ -1,7 +1,5 @@
 import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
-import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
-import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
@@ -11,7 +9,7 @@ import type { DaemonSessionBackgroundRouting } from './daemon-session-background
 import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
-import { ptySpawnHealthPlatformCoverage } from './daemon-health-identity'
+import { DaemonHealthRequests } from './daemon-health-requests'
 import type { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import type { TerminalHost } from './terminal-host'
 import { SessionNotFoundError, type DaemonRequest } from './types'
@@ -31,7 +29,11 @@ type DaemonRequestRouterOptions = {
 }
 
 export class DaemonRequestRouter {
-  constructor(private readonly options: DaemonRequestRouterOptions) {}
+  private readonly health: DaemonHealthRequests
+
+  constructor(private readonly options: DaemonRequestRouterOptions) {
+    this.health = new DaemonHealthRequests(options.ptySpawnHealthCheck, options.log)
+  }
 
   async route(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.options.connections.get(clientId)
@@ -116,7 +118,8 @@ export class DaemonRequestRouter {
           ...(request.payload.expectedIncarnationId
             ? { expectedIncarnationId: request.payload.expectedIncarnationId }
             : {}),
-          ...(request.payload.steadyState === true ? { steadyState: true } : {})
+          ...(request.payload.steadyState === true ? { steadyState: true } : {}),
+          ...(request.payload.ignoreDetached === true ? { ignoreDetached: true } : {})
         }
         return Object.keys(options).length > 0
           ? this.options.host.inspectProcess(request.payload.sessionId, options)
@@ -153,14 +156,11 @@ export class DaemonRequestRouter {
           { teardownSnapshot: request.payload.teardownSnapshot === true }
         )
       case 'ping':
-        return { pong: true }
       case 'systemResolverHealth':
-        return { health: await readCurrentProcessMacSystemResolverHealth() }
       case 'fullDiskAccessStatus':
-        return { status: await getMacosFullDiskAccessStatus() }
       case 'ptySpawnHealth':
-        await this.options.ptySpawnHealthCheck()
-        return { healthy: true, coverage: ptySpawnHealthPlatformCoverage() }
+      case 'asyncIoHealth':
+        return this.health.handle(request)
       case 'shutdown':
         return this.shutdown(clientId, request.id, request.payload.killSessions)
     }

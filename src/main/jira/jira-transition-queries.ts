@@ -1,9 +1,9 @@
 import { requireStrictJiraSite } from './jira-read-failure'
 import type { JiraProjectStatusOrder, JiraTransition } from '../../shared/jira-types'
 import { acquire, release } from './request-queue'
-import { apiBasePath, jiraRequest } from './authenticated-request'
+import { apiBasePath, JiraApiError, jiraRequest } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
-import { mapStatus } from './jira-issue-mapping'
+import { mapCreateField, mapStatus } from './jira-issue-mapping'
 import {
   asFiniteNumber,
   asIdentifier,
@@ -26,14 +26,25 @@ export async function listTransitions(
   }
   await acquire()
   try {
-    const response = await jiraRequest<{ transitions?: JiraRecord[] }>(
-      entry,
-      `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/transitions`
-    )
+    const issuePath = `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/transitions`
+    let response: { transitions?: JiraRecord[] }
+    try {
+      response = await jiraRequest(entry, `${issuePath}?expand=transitions.fields`)
+    } catch (error) {
+      if (!(error instanceof JiraApiError) || ![400, 403, 404].includes(error.status ?? 0)) {
+        throw error
+      }
+      response = await jiraRequest(entry, issuePath)
+    }
     return (response.transitions ?? []).map((transition) => ({
       id: asString(transition.id),
       name: asString(transition.name),
-      to: mapStatus(transition.to)
+      to: mapStatus(transition.to),
+      fields: transition.fields
+        ? Object.entries(asRecord(transition.fields))
+            .map(([fieldKey, field]) => mapCreateField(field, fieldKey))
+            .filter((field) => field !== null)
+        : undefined
     }))
   } catch (error) {
     if (isAuthError(error)) {
@@ -94,6 +105,7 @@ export async function getProjectStatusOrder(
     // avoids a second metadata request and keeps duplicate names unambiguous.
     const seenStatusIds = new Set<string>()
     const statusIdsByColumn: string[][] = []
+    const boardColumns: NonNullable<JiraProjectStatusOrder['columns']> = []
     for (const column of columns) {
       const statuses = asRecord(column).statuses
       if (!Array.isArray(statuses)) {
@@ -110,8 +122,12 @@ export async function getProjectStatusOrder(
       if (columnStatusIds.length > 0) {
         statusIdsByColumn.push(columnStatusIds)
       }
+      const name = asString(asRecord(column).name).trim()
+      if (name) {
+        boardColumns.push({ name, statusIds: columnStatusIds })
+      }
     }
-    return { statusIdsByColumn }
+    return { statusIdsByColumn, ...(boardColumns.length ? { columns: boardColumns } : {}) }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)

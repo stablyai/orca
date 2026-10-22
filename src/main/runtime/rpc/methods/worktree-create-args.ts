@@ -1,6 +1,8 @@
+import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { hostQualifiedRepoSelector, type RuntimeRepoSelector } from '../../runtime-repo-selector'
 import type { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
@@ -10,15 +12,26 @@ type CreateProvenance = Pick<
   'automationProvenance' | 'cliProvenance' | 'creatorProvenance'
 >
 
+/** The create's repo, narrowed to `repoHostId` when the caller named one. */
+export function worktreeCreateRepoSelector(
+  params: Pick<WorktreeCreateParams, 'repo' | 'repoHostId'>
+): RuntimeRepoSelector {
+  return hostQualifiedRepoSelector(params.repo, params.repoHostId)
+}
+
 /** Wire params → runtime create args. Kept out of the method table so the mapping can grow with
  *  the schema without the table becoming unreadable. */
 export function buildManagedWorktreeCreateArgs(
   params: WorktreeCreateParams,
   provenance: CreateProvenance,
-  origin: { clientKind?: 'mobile' | 'runtime' } = {}
+  origin?: Parameters<typeof terminalImageViewerSupported>[0]
 ): ManagedWorktreeCreateArgs {
+  const viewerSupported = origin && terminalImageViewerSupported(origin)
   return {
-    repoSelector: params.repo,
+    repoSelector: worktreeCreateRepoSelector(params),
+    // A phone's retry key is the identity of its creation.
+    creationId: params.creationId ?? params.clientMutationId,
+    ...(viewerSupported !== undefined ? { terminalImageViewerSupported: viewerSupported } : {}),
     name: params.name ?? '',
     // Absent means the user typed the name, which must never be retired.
     ...(params.nameWasGenerated === true ? { nameWasGenerated: true } : {}),
@@ -44,6 +57,13 @@ export function buildManagedWorktreeCreateArgs(
     telemetrySource: params.telemetrySource,
     workspaceStatus: params.workspaceStatus,
     manualOrder: params.manualOrder,
+    ...(params.nestWorkspaces !== undefined ? { nestWorkspaces: params.nestWorkspaces } : {}),
+    ...(params.refreshLocalBaseRefOnWorktreeCreate !== undefined
+      ? { refreshLocalBaseRefOnWorktreeCreate: params.refreshLocalBaseRefOnWorktreeCreate }
+      : {}),
+    ...(params.localBaseRefSuggestionDismissed !== undefined
+      ? { localBaseRefSuggestionDismissed: params.localBaseRefSuggestionDismissed }
+      : {}),
     sparseCheckout: params.sparseCheckout,
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,
@@ -59,7 +79,7 @@ export function buildManagedWorktreeCreateArgs(
                 : params.navigation
           }
         : {}),
-      ...(origin.clientKind === 'runtime' && params.cliProvenanceRequest === undefined
+      ...(origin?.clientKind === 'runtime' && params.cliProvenanceRequest === undefined
         ? { clientKind: origin.clientKind }
         : {}),
       defaultTarget: 'host'

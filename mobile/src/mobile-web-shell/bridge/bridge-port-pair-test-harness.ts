@@ -189,6 +189,8 @@ function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
       return { base64: '', eof: true }
     case 'native.media.release':
       return { released: false }
+    case 'native.media.name':
+      return { name: null }
     case 'native.audio.start':
       return { started: true, sampleRate: 16_000, permission: 'granted' }
     case 'native.audio.read':

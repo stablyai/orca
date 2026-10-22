@@ -1,6 +1,6 @@
 // Editing a queued card in place: Save is a compare-and-set on the card's body fingerprint, and
 // an edit lease keeps automatic delivery from sending the card while someone types. The card keeps
-// its id, position, sender and attachments; only its text changes.
+// its id, position and sender; its text changes, and its images too when Save names them.
 
 import type {
   AgentSessionMutationEnvelope,
@@ -9,8 +9,13 @@ import type {
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
 } from '../../../shared/agent-session-wire'
-import { queuedMessageEditableText } from '../../../shared/queued-message-text-edit'
-import { queuedMessageTextUpdateDecision } from '../agent-session-journal/queued-message-text-update'
+import { queuedMessageEditableText } from '../../../shared/queued-message-edit'
+import {
+  queuedMessageUpdateDecision,
+  type QueuedMessageUpdate
+} from '../agent-session-journal/queued-message-update'
+import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
+import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
@@ -22,24 +27,24 @@ import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-
 export function updateQueuedStructuredAgentMessage(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: {
+  params: QueuedMessageUpdate & {
     envelope: AgentSessionMutationEnvelope
-    messageId: string
-    expectedBodyFingerprint: string
-    text: string
+    /** Host-local: whether the caller is shown queued cards holding images. */
+    queuedImageCards?: boolean
   }
 ): Promise<AgentSessionMutationResult<AgentSessionQueuedMessageUpdateResult>> {
-  const { envelope, ...fields } = params
+  const { envelope, queuedImageCards, ...fields } = params
   const plan: MutationPlan<AgentSessionQueuedMessageUpdateResult> = {
     method: 'agentSession.queuedMessageUpdate',
     fields,
     conversationWrite: true,
     run: async (ctx) => {
       const queued = ctx.journal.queuedMessages
-      const decision = queuedMessageTextUpdateDecision(
+      const decision = queuedMessageUpdateDecision(
         queued.get(fields.messageId),
         ctx.sessionId,
-        fields
+        fields,
+        queuedImageCards !== false
       )
       if (decision.status !== 'ready') {
         return { ok: true, value: decision }
@@ -51,7 +56,17 @@ export function updateQueuedStructuredAgentMessage(
         true,
         fields.messageId
       )
-      return refusal ? { ok: false, refusal } : { ok: true, value: await queued.update(fields) }
+      if (refusal) {
+        return { ok: false, refusal }
+      }
+      try {
+        return { ok: true, value: await queued.update(fields) }
+      } catch (error) {
+        if (isAgentSessionAttachmentExpiredError(error)) {
+          return agentSessionAttachmentExpiredRefusal()
+        }
+        throw error
+      }
     },
     replay: () => null,
     rerunWhenReplayMissing: () => true

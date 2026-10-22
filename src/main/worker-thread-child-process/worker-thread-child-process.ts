@@ -85,10 +85,14 @@ export class WorkerThreadChildProcess extends EventEmitter {
         return
       case 'stdout':
       case 'stderr':
-        this[event.type].emit(
-          'data',
-          Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
-        )
+        try {
+          this[event.type].emit(
+            'data',
+            Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
+          )
+        } finally {
+          this.send({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
+        }
         return
       case 'error':
         this.emitErrorIfObserved(event.error)

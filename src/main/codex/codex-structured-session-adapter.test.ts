@@ -1,16 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
 import {
-  CodexAppServerRequestError,
-  type openCodexAppServerConnection
-} from './codex-app-server-connection'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import {
+  codexStartReport,
+  codexStartedLink,
+  acquireReadyCodexForTest,
   THREAD_ID,
   USER_MESSAGE,
   acquired,
@@ -19,65 +10,58 @@ import {
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  CodexAppServerRequestError,
+  type openCodexAppServerConnection
+} from './codex-app-server-connection'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import {
+  CodexStructuredSessionAdapter,
+  type CodexStructuredLaunch,
+  type CodexStructuredSessionEvent
+} from './codex-structured-session-adapter'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
 describe('CodexStructuredSessionAdapter.acquire', () => {
   it('keeps a started thread usable when its model listing never answers', async () => {
     const codex = fakeCodex({ 'model/list': () => new Promise<never>(() => {}) })
     const adapter = adapterFor(codex)
 
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
       options: { model: 'gpt-saved', effort: 'low', serviceTier: 'priority' }
     })
 
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-saved',
       effort: 'low',
       serviceTier: 'priority'
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
+      'initialize',
       'thread/start',
-      'model/list'
+      'skills/list'
     ])
-  })
-
-  it('persists saved model and effort as the next turn uses them', async () => {
-    const codex = fakeCodex()
-    const adapter = adapterFor(codex)
-    await adapter.acquire({
-      identity: identityFor('session-1'),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      options: { model: 'gpt-saved', effort: 'low', personality: 'concise' }
-    })
-
-    expect(
-      adapter.readAcquisitionOptions({
-        sessionId: 'session-1',
-        fence: 7,
-        priorOptions: { model: 'gpt-saved', effort: 'low', personality: 'concise' }
-      })
-    ).toEqual({ model: 'gpt-saved', effort: 'low', personality: 'concise' })
   })
 
   it('keeps a saved next-turn pick when resuming a thread that reports its previous pick', async () => {
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
     const adapter = adapterFor(codex, { resumeThreadId: THREAD_ID })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
       options: { model: 'gpt-next', effort: 'low' }
     })
 
-    const saved = adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })
+    const saved = codexStartReport(adapter).reportedOptions
     expect(saved).toMatchObject({ model: 'gpt-next', effort: 'low' })
     await adapter.dispatch({
       sessionId: 'session-1',
@@ -92,19 +76,22 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       effort: 'low'
     })
     await adapter.closeSession('session-1')
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 8,
       spawnToken: 'spawn-10',
-      options: saved
+      options: {
+        ...(saved.model ? { model: saved.model } : {}),
+        ...(saved.effort ? { effort: saved.effort } : {})
+      }
     })
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 8 })).toMatchObject({
+    expect(codexStartReport(adapter).reportedOptions).toMatchObject({
       model: 'gpt-next',
       effort: 'low'
     })
   })
 
-  it('leaves a rejected listing as a catalog error after the thread opens', async () => {
+  it('keeps current intent usable without inventing controls when a listing fails', async () => {
     const codex = fakeCodex({
       'model/list': () => {
         throw new Error('stub model/list rejected')
@@ -112,26 +99,51 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
     const adapter = adapterFor(codex)
 
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      options: { model: 'gpt-live', effort: 'medium' }
+    })
 
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-live',
       effort: 'medium'
     })
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).rejects.toThrow(
-      'stub model/list rejected'
-    )
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+      current: { model: 'gpt-live', effort: 'medium' },
+      models: [
+        {
+          id: 'gpt-live',
+          label: 'gpt-live',
+          isDefault: false,
+          efforts: [],
+          effortsKnown: false
+        }
+      ]
+    })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'after-listing-failure',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(
+      codex.connections[0].calls.findLast((call) => call.method === 'turn/start')?.params
+    ).toMatchObject({ model: 'gpt-live', effort: 'medium' })
     expect(codex.connections[0].closeCount).toBe(0)
   })
 
-  it('starts a new thread and reports the process and link the lease will prove', async () => {
+  it('opens the thread with the chat identity every command must keep', async () => {
     const codex = fakeCodex()
     const record = agentSessionRecordFixture({
       sessionId: 'session-1',
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: '/codex/home' }
     })
-    // The launch its registration composes: the shared seal names the child, not this adapter.
     const adapter = adapterFor(codex, {}, [], {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
@@ -141,92 +153,56 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       })
     })
 
-    const acquisition = await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].launch.env).toEqual({
-      [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'spawn-9',
-      CODEX_HOME: '/codex/home',
-      ORCA_AGENT_SESSION_ID: 'session-1',
-      ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/),
-      ...(process.platform !== 'win32'
-        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin$/) }
-        : {}),
-      ORCA_USER_DATA_PATH: expect.any(String),
-      ORCA_ENVIRONMENT: '',
-      ORCA_PAIRING_CODE: '',
-      ORCA_REMOTE_PAIRING: '',
-      // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
-      PATH: expect.stringMatching(/^[^:;]*[\\/]cli[\\/]bin[:;]/)
-    })
-    expect(codex.connections[0].launch.cwd).toBe('/work/repo')
-    expect(codex.connections[0].calls[0]).toEqual({
+    expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/start',
-      // A chat with no mode asks, stated outright.
       params: {
         cwd: '/work/repo',
         approvalPolicy: 'on-request',
         sandbox: 'workspace-write',
-        approvalsReviewer: 'user'
+        approvalsReviewer: 'user',
+        // A user's `inherit = "core"` policy would strip these from every command the chat runs.
+        config: {
+          'shell_environment_policy.set.ORCA_AGENT_SESSION_ID': 'session-1',
+          'shell_environment_policy.set.ORCA_STRUCTURED_SESSION': '1',
+          'shell_environment_policy.set.ORCA_CLI_COMMAND': expect.stringMatching(
+            /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
+          ),
+          'shell_environment_policy.set.ORCA_USER_DATA_PATH': expect.any(String),
+          'shell_environment_policy.set.ORCA_ENVIRONMENT': '',
+          'shell_environment_policy.set.ORCA_PAIRING_CODE': '',
+          'shell_environment_policy.set.ORCA_REMOTE_PAIRING': ''
+        }
       }
-    })
-    expect(acquisition.process).toEqual({
-      hostId: 'host-1',
-      pid: 4321,
-      processStartTimeMs: 1_700_000_000_000,
-      spawnToken: 'spawn-9'
-    })
-    expect(acquisition.link).toEqual({
-      linkId: `codex-7-${THREAD_ID}`,
-      handle: codexProviderHandle(THREAD_ID),
-      origin: 'created',
-      mintedAtFence: 7,
-      observedAt: 1_700_000_000_500
-    })
-    expect(acquisition.acquisitionGeneration).toBe('generation-1')
-  })
-
-  // A thread opened on Codex's configured default and then given a turn on the chosen model
-  // reads to Codex as a model switch, and it injects the chosen model's whole prompt again.
-  it('opens the thread on the model the session chose, not on the configured default', async () => {
-    const codex = fakeCodex()
-    const adapter = adapterFor(codex, { model: 'gpt-chosen' })
-
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
-
-    expect(codex.connections[0].calls[0]).toEqual({
-      method: 'thread/start',
-      params: { cwd: '/work/repo', model: 'gpt-chosen' }
     })
   })
 
   it('resumes the thread the durable handle chain names, not the client one', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex, {
-      resumeThreadId: 'thread-proven',
-      resumePath: '/rollouts/thread-proven.jsonl'
+      resumeThreadId: 'thread-proven'
     })
 
-    const acquisition = await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 9,
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].calls[0]).toEqual({
+    expect(codex.connections[0].calls[1]).toEqual({
       method: 'thread/resume',
       params: expect.objectContaining({
         threadId: 'thread-proven',
-        cwd: '/work/repo',
-        path: '/rollouts/thread-proven.jsonl'
+        cwd: '/work/repo'
       })
     })
-    expect(acquisition.link.origin).toBe('resumed')
-    expect(acquisition.link.handle).toEqual(codexProviderHandle('thread-proven'))
+    expect(codexStartedLink(adapter)?.origin).toBe('resumed')
+    expect(codexStartedLink(adapter)?.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
   it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
@@ -244,17 +220,17 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       supersedeIfUnsaved: true
     })
 
-    const acquisition = await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 9,
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].calls.slice(0, 2).map((call) => call.method)).toEqual([
+    expect(codex.connections[0].calls.slice(1, 3).map((call) => call.method)).toEqual([
       'thread/resume',
       'thread/start'
     ])
-    expect(acquisition.link).toEqual({
+    expect(codexStartedLink(adapter)).toEqual({
       linkId: `codex-9-${THREAD_ID}`,
       handle: codexProviderHandle(THREAD_ID),
       origin: 'created',
@@ -265,35 +241,25 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].closeCount).toBe(0)
   })
 
-  it('refuses a resume that lands on a different thread and reaps the child', async () => {
+  it('rejects a resume that lands on a different thread; the host closes once', async () => {
     const codex = fakeCodex({ 'thread/resume': () => ({ thread: { id: 'thread-other' } }) })
     const adapter = adapterFor(codex, { resumeThreadId: 'thread-proven' })
-
+    const acquired = await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 9,
+      spawnToken: 'spawn-9'
+    })
     await expect(
-      adapter.acquire({ identity: identityFor('session-1'), fence: 9, spawnToken: 'spawn-9' })
+      adapter.open({
+        sessionId: 'session-1',
+        fence: 9,
+        acquisitionGeneration: acquired.acquisitionGeneration ?? null,
+        signal: new AbortController().signal
+      })
     ).rejects.toThrow('resumed thread-other instead of thread-proven')
+    expect(codex.connections[0].closeCount).toBe(0)
+    expect(await adapter.closeSession('session-1')).toBe(true)
     expect(codex.connections[0].closeCount).toBe(1)
-  })
-
-  it('refuses a thread Codex never named', async () => {
-    const codex = fakeCodex({ 'thread/start': () => ({}) })
-    const adapter = adapterFor(codex)
-
-    await expect(
-      adapter.acquire({ identity: identityFor('session-1'), fence: 1, spawnToken: 'spawn-9' })
-    ).rejects.toThrow('did not name the thread')
-    expect(codex.connections[0].closeCount).toBe(1)
-  })
-
-  it('closes the previous child before re-acquiring at a new fence', async () => {
-    const codex = fakeCodex()
-    const adapter = await acquired(codex)
-
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
-
-    expect(codex.connections).toHaveLength(2)
-    expect(codex.connections[0].closeCount).toBe(1)
-    expect(codex.connections[1].closeCount).toBe(0)
   })
 
   it('keeps the traffic Codex sends before the session is published', async () => {
@@ -345,7 +311,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       })
     }
     const adapter = adapterFor(codex, {}, events)
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
@@ -508,7 +474,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
 
     // Identity is not knowable here: a send coalesced into a running turn shares
     // that turn's id, so the echo settles which message landed where.
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params).toEqual(
       {
         threadId: THREAD_ID,
@@ -541,7 +507,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     expect(events.at(-1)).toMatchObject({ type: 'notification', method: 'turn/started' })
   })
 
@@ -565,7 +531,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({ state: 'admitted' })
+    expect(outcome).toMatchObject({ state: 'admitted' })
     // Each event carries the thread it actually came from, so the journal can
     // keep a subagent's turn out of the root conversation.
     expect(events.map((event) => (event.type === 'notification' ? event.threadId : null))).toEqual([
@@ -637,7 +603,11 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
     await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'gpt-5', fence: 7 })

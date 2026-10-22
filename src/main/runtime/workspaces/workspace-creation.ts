@@ -1,14 +1,13 @@
-import type { RuntimeRemoteFetchController } from '../runtime-remote-fetch-controller'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   WorktreeLineageInput,
   WorktreeLineageResolution
 } from '../runtime-worktree-lineage-resolution'
-import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../orca-runtime-get-worktree-terminal-provisioning-host'
+import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from './startup/workspace-terminal-provisioning'
 import type { RuntimeManagedWorktreeCreateArgs } from '../runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { notifyLineageRepos } from '../../worktree-lineage-change-notification'
 import { resolveWorktreeCreateRoute } from '../../worktree-create-execution-host-route'
 import { ExecutionHostNotDispatchableError } from '../../providers/execution-host-provider-dispatch'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
@@ -16,30 +15,28 @@ import { createRuntimeFolderWorktree } from '../runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from '../runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../../worktree-create-preparation'
 import { prepareRuntimeLocalWorktreeSetup } from '../runtime-local-worktree-setup'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/filesystem-auth'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/opencode-model-startup-plan'
-import { resolveWorktreeCreateAgentStartup } from '../runtime-worktree-agent-startup'
 import type { RuntimeWorkspaceCreateEvents } from '../../workspace-create-telemetry'
+import { createdWorkspaceActivationCallbacks } from './workspace-create-activation'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { resolveManagedWorktreeCreateStartup } from './managed-worktree-create-startup'
+import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
+import type { WorkspaceCreationHandle } from './workspace-lifecycle-creations'
+import { workspaceLifecycleKey } from './workspace-lifecycle-commands'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
   ): Promise<WorktreeLineageResolution>
-  abstract resolveRemoteTrackingBase(
-    ...args: Parameters<RuntimeRemoteFetchController['resolveRemoteTrackingBase']>
-  ): ReturnType<RuntimeRemoteFetchController['resolveRemoteTrackingBase']>
-  abstract hasRemoteTrackingRef(
-    ...args: Parameters<RuntimeRemoteFetchController['hasRemoteTrackingRef']>
-  ): ReturnType<RuntimeRemoteFetchController['hasRemoteTrackingRef']>
-  abstract getOrStartRemoteTrackingBaseRefresh(
-    ...args: Parameters<RuntimeRemoteFetchController['getOrStartRemoteTrackingBaseRefresh']>
-  ): ReturnType<RuntimeRemoteFetchController['getOrStartRemoteTrackingBaseRefresh']>
-  abstract fetchRemoteWithCache(
-    ...args: Parameters<RuntimeRemoteFetchController['fetchRemoteWithCache']>
-  ): ReturnType<RuntimeRemoteFetchController['fetchRemoteWithCache']>
+
+  // Switch point: only a build where main produces the sidebar's inputs queues lifecycle commands.
+  readonly workspaceLifecycle = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceLifecycleQueue() : null
 
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
@@ -70,45 +67,47 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
-    const createSettings = this.store.getSettings()
-    const requestedAgent = args.startupAgent ?? args.createdWithAgent
-    const requestedAgentEnabled =
-      requestedAgent !== undefined
-        ? isTuiAgentEnabled(requestedAgent, createSettings.disabledTuiAgents)
-        : false
-    if ((args.startup || args.startupAgent) && requestedAgent && !requestedAgentEnabled) {
-      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    // Listed from here: a create refused before its project resolved has nothing to show.
+    const creation = this.workspaceLifecycle?.openCreate({
+      creationId: args.creationId,
+      repoId: repo.id,
+      keyOf: (worktreeId) => workspaceLifecycleKey(getRepoExecutionHostId(repo), worktreeId)
+    })
+    try {
+      return await this.createInResolvedProject(args, repo, creation, rearm, events)
+    } finally {
+      creation?.close()
     }
-    if (
-      args.startup &&
-      args.startupDraftPaste &&
-      !isTuiAgentEnabled(args.startupDraftPaste.agent, createSettings.disabledTuiAgents)
-    ) {
-      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+  }
+
+  private async createInResolvedProject(
+    args: RuntimeManagedWorktreeCreateArgs,
+    repo: Repo,
+    creation: WorkspaceCreationHandle | undefined,
+    rearm: PreparationRearmHolder,
+    events: RuntimeWorkspaceCreateEvents
+  ): Promise<CreateWorktreeResult> {
+    const store = this.requireStore()
+    const onWorkspaceCreated = (worktreeId: string): void => {
+      creation?.named(worktreeId)
+      args.onWorkspaceCreated?.(worktreeId)
     }
-    const agentStartup = resolveWorktreeCreateAgentStartup(args, (...inputs) =>
-      this.buildStartupForAgent(repo, ...inputs)
+    assertWslMoveRepoWritable(store, repo)
+    const createSettings = store.getSettings()
+    const {
+      effectiveStartup,
+      effectiveStartupFollowup,
+      startupLaunchRuntime,
+      effectiveCreatedWithAgent,
+      effectiveDraftPaste
+    } = await resolveManagedWorktreeCreateStartup(args, createSettings.disabledTuiAgents, {
+      agent: (...inputs) => this.buildStartupForAgent(repo, ...inputs),
+      draft: (...inputs) => this.buildStartupForDraft(repo, ...inputs)
+    })
+    const activationCallbacks = createdWorkspaceActivationCallbacks(
+      this.notifyActivateWorktree.bind(this),
+      args.navigation
     )
-    const draftStartup =
-      !args.startup && !agentStartup && args.startupDraft
-        ? await this.buildStartupForDraft(
-            repo,
-            args.startupDraft,
-            args.startupDraftAgent ?? requestedAgent,
-            args.startupLaunchSource
-          )
-        : null
-    const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
-    const effectiveStartupFollowup = agentStartup?.followup
-    const startupLaunchRuntime = args.startup
-      ? undefined
-      : (agentStartup ?? draftStartup)?.launchRuntime
-    const effectiveCreatedWithAgent = args.startup
-      ? args.createdWithAgent
-      : (agentStartup?.agent ??
-        draftStartup?.agent ??
-        (requestedAgentEnabled ? requestedAgent : undefined))
-    const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
     // Match IPC routing: executionHostId-only SSH repos must not create locally.
     const createRoute = resolveWorktreeCreateRoute(repo)
     if (isFolderRepo(repo)) {
@@ -120,9 +119,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         startupFollowup: effectiveStartupFollowup,
         startupLaunchRuntime,
         createdWithAgent: effectiveCreatedWithAgent,
+        promisedAgentChat: args.promisedAgentChat,
+        onWorkspaceCreated,
         draftPaste: effectiveDraftPaste,
         deps: {
-          store: this.store,
+          store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
           provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
           createTerminal: (selector, options) => this.createTerminal(selector, options),
@@ -131,15 +132,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
           notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
           emitCreated: (event) => this.emitWorktreeLifecycle(event),
-          activate: (repoId, worktreeId, setup, startup) =>
-            this.notifyActivateWorktree(
-              repoId,
-              worktreeId,
-              setup,
-              startup,
-              undefined,
-              args.navigation
-            )
+          activate: activationCallbacks.folder
         }
       })
     }
@@ -169,8 +162,10 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
       fetchRemote: (path, remote, ...options) =>
         this.fetchRemoteWithCache(path, remote, ...options),
-      onWorktreeMetadataPersisted: (persistedWorktree) =>
-        this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution),
+      onWorktreeMetadataPersisted: (persistedWorktree) => {
+        onWorkspaceCreated(persistedWorktree.id)
+        return this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
+      },
       rearm,
       timing
     })
@@ -211,9 +206,9 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     // authorization-requiring IPC relists EVERY registered repo — ~58 `git worktree
     // list` spawns, ~10s of git wall-clock through an admission budget of 4, to
     // rediscover roots only this repo changed.
-    invalidateAuthorizedRootsCacheForRepo(this.store, repo)
+    invalidateAuthorizedRootsCacheForRepo(store, repo)
 
-    this.notifyWorktreesChanged(repo.id)
+    notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
     const {
       warning: terminalWarning,
       returnedSetup,
@@ -234,6 +229,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       startupFollowup: effectiveStartupFollowup,
       startupLaunchRuntime,
       createdWithAgent: effectiveCreatedWithAgent,
+      promisedAgentChat: args.promisedAgentChat,
       draftPaste: effectiveDraftPaste,
       warning,
       ports: {
@@ -243,15 +239,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
         provision: (options) => this.provisionManagedWorktreeTerminals(options, worktree),
-        activate: (repoId, worktreeId, startup, failedSetup, failedDefaultTabs) =>
-          this.notifyActivateWorktree(
-            repoId,
-            worktreeId,
-            failedSetup,
-            startup,
-            failedDefaultTabs,
-            args.navigation
-          )
+        activate: activationCallbacks.local
       }
     })
     warning = terminalWarning

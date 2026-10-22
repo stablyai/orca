@@ -1,3 +1,4 @@
+import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type {
   AgentProviderSessionMetadata,
@@ -33,7 +34,6 @@ export type PtyApi = {
     cols: number
     rows: number
     cwd?: string
-    cwdFallback?: 'worktree'
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
@@ -53,6 +53,8 @@ export type PtyApi = {
     terminalColorQueryReplies?: { foreground?: string; background?: string }
     // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
     initiallyHidden?: boolean
+    // Layout-owner build: attach to `sessionId` or start nothing; older mains ignore it.
+    attachOnlyView?: boolean
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
     tabId?: string
     leafId?: string
@@ -107,7 +109,10 @@ export type PtyApi = {
   clearBuffer: (id: string) => void
   resetInputModes: (id: string) => void
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
-  ackColdRestore: (id: string) => void
+  /** The view painted the restore; `pane` names the pane it painted (layout-owner build). */
+  ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
+  /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */
+  ackHiddenOutputRestoreApplied: (id: string, hiddenDropEpisode?: number) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
   onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void) => () => void
   respondDeliveryResync: (payload: {
@@ -155,6 +160,12 @@ export type PtyApi = {
   /** A local pane whose daemon lacks the claude function and whose claude runs another account
    *  than the one selected for the pane's runtime; false for any other pane. */
   openedBeforeClaudeAccounts: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ) => Promise<boolean>
+  /** A local host pane whose Claude may open its diff panel unasked, judged from Claude's saved
+   *  config; false for any other pane. */
+  claudeDiffPanelMayAutoOpen: (
     id: string,
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => Promise<boolean>

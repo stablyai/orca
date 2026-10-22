@@ -1,5 +1,5 @@
 import type { Prompt } from 'ssh2'
-import type { SshConnectionCallbacks } from './ssh-connection-utils'
+import type { SshConnectionCallbacks } from './connection/ssh-connection-callbacks'
 
 // Why: servers commonly reuse keyboard-interactive (RFC 4256) to collect the
 // login password itself before issuing MFA challenges. Password-looking

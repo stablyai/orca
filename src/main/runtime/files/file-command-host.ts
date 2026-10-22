@@ -1,4 +1,4 @@
-import type { Store } from '../../persistence'
+import type { RuntimeStore } from '../runtime-store-contract'
 import type { ResolvedRuntimeFileTarget, ResolvedRuntimeFileWorktree } from './file-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeNativeChatFileContext } from '../../../shared/runtime-types'
@@ -7,7 +7,7 @@ import type { RuntimeFileOpenPosition } from '../../../shared/runtime-file-contr
 
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string
-  requireStore(): Store
+  requireStore(): RuntimeStore
   resolveWorktreeSelector(selector: string): Promise<ResolvedRuntimeFileWorktree>
   resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
   resolveKnownWorkspaceFileTarget?(
@@ -43,7 +43,7 @@ export type RuntimeFileCommandHost = {
     runtimeEnvironmentId?: string | null,
     navigation?: RuntimeNavigationTarget,
     position?: RuntimeFileOpenPosition
-  ): void
+  ): void | Promise<void>
   openDiff(
     worktreeId: string,
     filePath: string,

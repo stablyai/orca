@@ -138,7 +138,8 @@ describe('prepareAiVaultSessionForFork', () => {
 
     const prepared = await prepareAiVaultSessionForFork(owned)
 
-    expect(prepared.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
+    expect(prepared.copied).toBe(false)
+    expect(prepared.session.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
     expect(prepareSessionResume).toHaveBeenCalledWith({
       agent: 'codex',
       sessionId: owned.sessionId,
@@ -158,8 +159,23 @@ describe('prepareAiVaultSessionForFork', () => {
       structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
     })
 
-    await expect(prepareAiVaultSessionForFork(owned)).resolves.toBe(owned)
+    await expect(prepareAiVaultSessionForFork(owned)).resolves.toEqual({
+      session: owned,
+      copied: false
+    })
     expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it("refuses a host that made no copy rather than resuming the chat's own conversation", async () => {
+    stubPreparation(vi.fn().mockResolvedValue({ useRealCodexHome: false }))
+    const owned = session({
+      agent: 'omp',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    })
+
+    await expect(prepareAiVaultSessionForFork(owned)).rejects.toThrow(
+      'Update Orca on the host that runs this chat to resume it in a new CLI.'
+    )
   })
 })
 

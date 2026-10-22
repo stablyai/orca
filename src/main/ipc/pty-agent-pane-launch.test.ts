@@ -1,6 +1,9 @@
+import { ptyIncarnationById, ptyOwnership } from './pty/provider/ownership-state'
+import { createLaunchRaceRuntime } from './pty-launch-race-test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentPaneLaunchRequest } from '../../shared/agent-pane-launch-request'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { statSyncMock } from './pty-ipc-mock-registry'
 import { registerPtyHandlers } from './pty/register-handlers'
 import {
   markAgentLaunchesClosedByUser,
@@ -10,6 +13,9 @@ import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../shared/agent-launch-pane-v
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node:fs/promises', async (importOriginal) =>
+  (await import('./pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
+)
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
@@ -66,6 +72,8 @@ describe('a pane that starts its own agent launch', () => {
 
   afterEach(() => {
     resetAgentLaunchPanesForTests()
+    ptyIncarnationById.delete('pty-agent')
+    ptyOwnership.delete('pty-agent')
   })
 
   function register(
@@ -74,10 +82,10 @@ describe('a pane that starts its own agent launch', () => {
   ) {
     installDaemonTestProvider({ spawn: providerSpawn })
     const runtime = {
+      ...createLaunchRaceRuntime(),
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_pane'),
       registerPreAllocatedHandleForPty: vi.fn(),
-      registerPty: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn(),
@@ -108,7 +116,6 @@ describe('a pane that starts its own agent launch', () => {
   ): Promise<unknown> {
     return Promise.resolve(
       handlers.get('pty:spawn')!(null, {
-        ...pane,
         cols: 132,
         rows: 40,
         cwd: '/tmp/pane-launch',
@@ -116,7 +123,8 @@ describe('a pane that starts its own agent launch', () => {
         tabId,
         leafId,
         command: '',
-        agentLaunch
+        agentLaunch,
+        ...pane
       })
     )
   }
@@ -179,6 +187,28 @@ describe('a pane that starts its own agent launch', () => {
     expect(JSON.stringify(runtime.registerPty.mock.calls)).toContain(
       JSON.stringify({ launchToken: env.ORCA_AGENT_LAUNCH_TOKEN, launchAgent: 'claude' })
     )
+  })
+
+  it('starts an agent in the workspace root when its folder is gone, and says so', async () => {
+    const missing = '/tmp/pane-launch/deleted'
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === missing) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+    const providerSpawn = vi.fn(async (_options: { cwd?: string }) => ({
+      id: 'pty-agent',
+      startupCwdSource: 'request' as const
+    }))
+    register(providerSpawn)
+
+    const result = await spawnPane(AI_BUTTON, { cwd: missing })
+
+    expect(providerSpawn.mock.calls[0]?.[0].cwd).toBe('/tmp/pane-launch')
+    expect(result).toMatchObject({
+      startupCwdFallback: { kind: 'worktree', cwd: '/tmp/pane-launch' }
+    })
   })
 
   it('starts one agent when the pane spawns twice at once', async () => {

@@ -70,6 +70,7 @@ export type JiraCreateField = {
     type?: string
     items?: string
     custom?: string
+    system?: string
   }
   allowedValues?: JiraCreateFieldAllowedValue[]
 }
@@ -97,12 +98,14 @@ export type JiraStatus = {
 
 export type JiraProjectStatusOrder = {
   statusIdsByColumn: string[][]
+  columns?: { name: string; statusIds: string[] }[]
 }
 
 export type JiraTransition = {
   id: string
   name: string
   to: JiraStatus
+  fields?: JiraCreateField[]
 }
 
 export type JiraIssue = {
@@ -145,11 +148,12 @@ export type JiraIssueUpdate = {
   assigneeAccountId?: string | null
   priorityId?: string | null
   transitionId?: string
+  transitionFields?: Record<string, unknown>
+  transitionComment?: string
 }
 
 export type JiraIssueFilter = 'assigned' | 'reported' | 'all' | 'done'
-
-export type JiraIssueListFilters = { statuses?: string[] }
+export type JiraIssueListFilters = { statuses?: string[]; currentSprint?: boolean }
 
 export type JiraConnectArgs = {
   siteUrl: string

@@ -1,6 +1,7 @@
 // A Claude background helper through the shipping adapter, host and child records: its saved row
 // stays working past its spawn result and its turn's end until its own end frame; and a helper the
-// store had no room for keeps the strip incomplete until the strip's Stop ends the agent.
+// store refused keeps the strip incomplete, and the agent past idle cleanup, until the strip's Stop
+// ends the agent.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,8 +9,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { AGENT_STATUS_STORE_LIMITS } from '../../../shared/agent-status-store-contract'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
 import { isSubagentBlock } from '../../../shared/native-chat-types'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { acpChildWorkStatusSink } from '../../acp/acp-structured-child-work.test-support'
@@ -27,6 +26,7 @@ import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-rec
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import {
@@ -63,8 +63,9 @@ beforeEach(async () => {
       claudeConfigDir: join(root, 'claude-home'),
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
-      resumesTranscript: false,
-      continuesChain: false
+      // A later child resumes the transcript the first one started.
+      resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
       const mapped = structuredClaudeLifecycleEvent(event)
@@ -75,8 +76,8 @@ beforeEach(async () => {
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     persistHandle: async () => undefined,
     logger: log.logger,
-    onChildWorkEvidence: (sessionId, evidence) =>
-      host.publishChildWorkEvidence(sessionId, evidence),
+    onChildWorkEvidence: (sessionId, evidence, producer) =>
+      host.publishChildWorkEvidence(sessionId, evidence, producer),
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => clock
@@ -181,38 +182,9 @@ it("keeps a background helper's row working past its spawn result and its turn's
   )
 })
 
-it("ends the agent from the strip's Stop when the store had no room for its helper, never under a running turn", async () => {
-  // Another session holds every child record the store has room for.
-  const busy = makeStructuredAgentStatusSubject(
-    { executionHostId: 'local', wslDistro: null, workspaceId: 'busy', workspaceKind: 'folder' },
-    'busy-session'
-  )
-  records.sink.publish(
-    {
-      sessionId: 'busy-session',
-      workspaceId: 'busy',
-      agent: 'claude',
-      status: 'working',
-      latestPrompt: 'Busy',
-      updatedAt: 1
-    },
-    busy
-  )
-  records.sink.publishChildWork?.(
-    busy,
-    Array.from({ length: AGENT_STATUS_STORE_LIMITS.children }, (_unused, index) => ({
-      type: 'live' as const,
-      observedAt: 1,
-      child: {
-        handle: { idKind: 'task_id' as const, id: `busy-${index}` },
-        kind: 'agent' as const,
-        residency: 'background' as const,
-        state: 'working' as const,
-        stoppable: true
-      }
-    })),
-    'claude'
-  )
+it("keeps an agent whose helper the store refused past idle cleanup, until the strip's Stop", async () => {
+  // The store refuses every child record this session reports.
+  records.sink.publishChildWork = () => undefined
   const connection = claude.connections[0]!
   await sendAndEcho(connection, 'Run it in the background.')
   for (const [index, captured] of RESUMED_BY_MESSAGE.filter(({ at }) => at <= 3_349).entries()) {
@@ -235,6 +207,9 @@ it("ends the agent from the strip's Stop when the store had no room for its help
     ...RESUMED_BY_MESSAGE.find(({ at }) => at === 4_765)!.frame
   })
   await host.flushStreamedEvents(SESSION)
+  clock += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
+  await host.collaboratorsForTests().lifetime.idleSweep.tick()
+  expect(connection.closed).toBe(false)
   await expect(stopStrip()).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
   expect(connection.closed).toBe(true)
   await eventually(() => expect(strip()?.incomplete).toBeUndefined())
@@ -297,4 +272,40 @@ it('settles a helper still running when its session closes as unverifiable, clai
     expect(await savedRows()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
   )
   expect((await savedRows())[0]).not.toHaveProperty('outcomeBasis')
+})
+
+it('keeps a helper the next child resumes while it is still starting working, past that start’s settlement', async () => {
+  const first = claude.connections[0]!
+  await sendAndEcho(first, 'Run it in the background.')
+  for (const [index, captured] of RESUMED_BY_MESSAGE.filter(({ at }) => at <= 4_765).entries()) {
+    frame(first, { uuid: `launch-${index}`, ...captured.frame })
+  }
+  await eventually(async () =>
+    expect(await savedRows()).toEqual([expect.objectContaining({ state: 'working' })])
+  )
+  await adapter.closeSession(SESSION)
+  await eventually(async () =>
+    expect(await savedRows()).toEqual([expect.objectContaining({ state: 'unverifiable' })])
+  )
+  // The next child reports the helper running again before its start returns, so before the host
+  // installs it and settles what the first child left.
+  const opened = claude.connections.push.bind(claude.connections)
+  vi.spyOn(claude.connections, 'push').mockImplementation((connection) => {
+    const initialize = connection.initializationResult
+    connection.initializationResult = async () => {
+      const initialized = await initialize()
+      for (const [index, captured] of RESUMED_BY_MESSAGE.filter(
+        ({ at }) => at >= 16_142 && at <= 16_143
+      ).entries()) {
+        frame(connection, { uuid: `resume-${index}`, ...captured.frame })
+      }
+      return initialized
+    }
+    return opened(connection)
+  })
+  const body = hostTestMessage('Carry on.')
+  await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(claude.connections).toHaveLength(2)
+  expect(await savedRows()).toEqual([expect.objectContaining({ id: 'agent-1', state: 'working' })])
 })

@@ -58,20 +58,23 @@ export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
   wiring: Omit<
     ConstructorParameters<typeof StructuredAgentSessionReadableRestorer>[0],
-    'openDeps' | 'reconcile' | 'resolveRecovery'
+    'openDeps' | 'reconcileAll' | 'reconcile' | 'resolveRecovery'
   > & {
     reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+    reconcileRestartLeases: () => Promise<AgentSessionWireRefusal | null>
     resolveRecovery: (sessionId: string) => Promise<unknown>
   }
 ): {
   reconcileRestartLeases: () => Promise<void>
   restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
 } {
-  const { reconcileLeases, resolveRecovery, ...rest } = wiring
+  const { reconcileLeases, reconcileRestartLeases, resolveRecovery, ...rest } = wiring
   const failures = reportEachFailureOnce(deps.logger)
   const reconcile = createReaderReconcile(reconcileLeases, failures)
+  const reconcileStartup = createReaderReconcile(reconcileRestartLeases, failures)
   const restorer = new StructuredAgentSessionReadableRestorer({
     openDeps: deps,
+    reconcileAll: reconcileStartup,
     reconcile,
     // The next attach or send resolves recovery again, strictly, before it acts.
     resolveRecovery: (sessionId) =>
@@ -87,7 +90,7 @@ export function createStructuredAgentSessionHostRestore(
   const gate = new StructuredAgentSessionRestartRestoreGate()
   return {
     reconcileRestartLeases: async () => {
-      await reconcile('startup')
+      await reconcileStartup()
     },
     restoreReadableSessions: (sessionIds) => gate.run(() => restorer.restore(sessionIds))
   }

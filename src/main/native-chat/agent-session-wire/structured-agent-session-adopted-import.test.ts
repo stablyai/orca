@@ -1,7 +1,7 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Source validation must finish before a new session claims the provider conversation.
 
-import { mkdtemp, rm, writeFile, truncate } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -25,8 +25,7 @@ import {
   NO_STRUCTURED_AGENTS,
   structuredAgentsDeclaringNothing
 } from './structured-agent-session-adapter-router-test-support'
-import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'
-import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
+import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
 import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
 
 // The OpenCode reader's worker, run in process.
@@ -120,9 +119,13 @@ function attachParams(
 
 function adapter(): StructuredAgentSessionAdapter {
   return {
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire: vi
       .fn<StructuredAgentSessionAdapter['acquire']>()
       .mockImplementation(async ({ fence, spawnToken }) => ({
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
         link: {
           linkId: 'resumed-link',
@@ -162,7 +165,6 @@ async function attach(
       probe: { outcome: 'reservation-unused' }
     },
     callerKey: 'client-1',
-    optionRevision: () => 0,
     params,
     now: () => NOW,
     onAttached
@@ -208,19 +210,38 @@ describe('adopting a provider conversation on create', () => {
         ])
         return path
       }
+    },
+    {
+      agent: 'pi',
+      accountHome: { variable: 'PI_CODING_AGENT_DIR', path: '/home/dev/.pi/agent' },
+      record: async (dir: string, text: string) => {
+        const path = join(dir, `2026-10-12T00-00-00-000Z_${THREAD}.jsonl`)
+        const records = [
+          { type: 'session', version: 3, id: THREAD, cwd: '/workspace' },
+          { type: 'message', id: 'rec-1', parentId: null, message: { role: 'user', content: text } }
+        ]
+        await writeFile(path, `${records.map((line) => JSON.stringify(line)).join('\n')}\n`)
+        return path
+      }
     }
   ] as const)(
     "seeds a $agent chat's chain with the session it adopts and imports that CLI's history",
     async ({ agent, accountHome, record }) => {
       root = await mkdtemp(join(tmpdir(), `orca-adopt-${agent}-`))
       const transcriptPath = await record(root, `ORCA-${agent}-ADOPT`)
-      const spec = acpLaunchSpecFor(agent)
-      if (!spec) {
+      const definition = structuredAgentRuntimeRegistration(agent)?.definition
+      if (!definition) {
         throw new Error(`this build registers no ${agent} chats`)
       }
-      const handle = { transport: 'acp', agent, nativeId: THREAD }
+      // A Pi chat's handle names its session file; the others name the conversation id.
+      const handle = {
+        transport: definition.handleTransport,
+        agent,
+        nativeId: agent === 'pi' ? transcriptPath : THREAD
+      }
       const sessionAdapter = adapter()
       vi.mocked(sessionAdapter.acquire).mockImplementation(async ({ fence, spawnToken }) => ({
+        acquisitionGeneration: `generation-${fence}`,
         process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
         link: {
           linkId: 'resumed-link',
@@ -241,7 +262,7 @@ describe('adopting a provider conversation on create', () => {
           accountHome,
           adopt: { providerHandle: handle, transcriptPath }
         }),
-        structuredAgentsDeclaringNothing([acpStructuredAgentDefinition(spec)])
+        structuredAgentsDeclaringNothing([definition])
       )
 
       expect(result.ok && JSON.stringify(result.value.page.items)).toContain(`ORCA-${agent}-ADOPT`)
@@ -286,7 +307,7 @@ describe('adopting a provider conversation on create', () => {
       const transcriptPath = join(root, 'rollout.jsonl')
       if (kind === 'oversized') {
         await writeCodexRollout(transcriptPath, 'original turn')
-        await truncate(transcriptPath, 16 * 1024 * 1024 + 1)
+        await appendFile(transcriptPath, 'x'.repeat(16 * 1024 * 1024 + 1))
       } else if (kind === 'empty' || kind === 'invalid') {
         await writeFile(transcriptPath, kind === 'empty' ? '' : 'not json\n')
       }
@@ -307,7 +328,7 @@ describe('adopting a provider conversation on create', () => {
       expect(store?.getRecord(SESSION)).toBeNull()
       expect(store?.listOperationRows()).toEqual([])
       if (kind === 'oversized') {
-        expect(JSON.stringify(result)).toContain('import bound')
+        expect(JSON.stringify(result)).toContain('byte limit')
       }
     }
   )

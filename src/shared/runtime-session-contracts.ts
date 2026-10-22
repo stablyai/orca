@@ -1,3 +1,4 @@
+import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from './agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
@@ -16,6 +17,7 @@ import type {
 } from './runtime-mobile-session-tab-contracts'
 import type { CliStatusCaller } from './orchestration-caller-status'
 import type { RuntimeHostDescriptor } from './runtime-host-descriptor'
+import type { TuiAgent } from './tui-agent'
 
 export type * from './runtime-mobile-session-tab-contracts'
 
@@ -156,9 +158,23 @@ export type RuntimeSyncedLeaf = {
   parked?: boolean
 }
 
+/** Layout-owner builds: a pane the window shows of a workspace main owns. */
+export type RuntimeMountedLeaf = {
+  tabId: string
+  leafId: string
+  paneRuntimeId: number
+  /** Retained by a parked PTY watcher, not mounted in the renderer. */
+  parked?: boolean
+  /** The pane's title as the window resolves it, a reset of a stuck agent title included. */
+  paneTitle?: string | null
+}
+
 export type RuntimeSyncWindowGraph = {
   tabs: RuntimeSyncedTab[]
   leaves: RuntimeSyncedLeaf[]
+  /** Layout-owner builds: what the window shows of main's panes; `tabs` and `leaves` then hold
+   *  only workspaces main does not own. Window-to-main only. */
+  mountedLeaves?: RuntimeMountedLeaf[]
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
   unchangedMobileSessionWorktrees?: string[]
   /** Terminal grid that fills each shown tab group, by group id, so main starts a new tab's
@@ -166,6 +182,11 @@ export type RuntimeSyncWindowGraph = {
   terminalGroupGridSizes?: Record<string, { cols: number; rows: number }>
   /** The grid a workspace with a single tab group gets, for one the window is not showing. */
   singleGroupWorkspaceGridSize?: { cols: number; rows: number }
+  /** Layout-owner builds: the tab group each workspace shows, sent only when it changes. Main merges
+   *  each entry and keeps the last; a send without the field changes nothing. null: none shown. */
+  activeGroupByWorkspace?: Record<string, string | null>
+  /** The sidebar's Project grouping inputs for paired phones; sent only when they changed. */
+  projectSectionCatalog?: MobileProjectSectionCatalog
 }
 
 export type RuntimeRendererSyncWindowGraph = RuntimeSyncWindowGraph & {
@@ -259,6 +280,8 @@ export type RuntimeMobileSessionRetiredTerminalSurface = {
 
 export type RuntimeMobileSessionTabsResult = {
   worktree: string
+  /** Query-only truth about an executing launch that owns this workspace's first surface. */
+  initialSurfaceLaunch?: { launchId: string; agent: TuiAgent }
   publicationEpoch: string
   snapshotVersion: number
   navigationIntent?: 'follow'
@@ -294,7 +317,14 @@ export type RuntimeMobileSessionCreateTerminalResult = {
   tab: RuntimeMobileSessionTerminalClientTab
   publicationEpoch: string
   snapshotVersion: number
+  warning?: 'desktop-tab-not-shown'
+  /** The saved folder was gone, so the terminal started at the workspace root. */
+  startupCwdFallback?: 'workspace-root'
 }
+
+/** Activation's reply: the fallback rides this one answer and is never stored on the snapshot. */
+export type RuntimeMobileSessionTabActivationResult = RuntimeMobileSessionTabsResult &
+  Pick<RuntimeMobileSessionCreateTerminalResult, 'startupCwdFallback'>
 
 export type RuntimeMobileSessionTabsRemovedResult = RuntimeMobileSessionTabsResult & {
   removed: true

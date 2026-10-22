@@ -2,16 +2,18 @@ import { randomBytes } from 'node:crypto'
 import { basename } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
-import { parseGlibcVersion, parseOrcadLinuxLibc } from '../ssh/orcad-deployment-target'
+import { probeLinuxLibc } from '../node-runtime/linux-libc-probe'
 import {
   installNodeRuntimeFromHostArchiveCommand,
   nodeRuntimeStoreDir,
   posixNodeRuntimeExecutable,
-  probeRemoteNodeRuntimeCommand,
-  REMOTE_NODE_RUNTIME_READY
-} from '../ssh/orcad-remote-node-runtime'
+  probeRemoteNodeRuntimeCommand
+} from '../managed-server/install/orcad-remote-node-runtime'
+import {
+  REMOTE_NODE_RUNTIME_READY,
+  assertRemoteNodeRuntimePromoted
+} from '../ssh/orcad-remote-node-runtime-report'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { assertRemoteNodeRuntimePromoted } from '../ssh/orcad-remote-node-runtime-report'
 import { isGlibcBelow, PINNED_NODE_GLIBC_FLOOR } from '../ssh/pinned-runtime-host-target'
 import type { WslSpec } from './wsl-runner'
 
@@ -33,14 +35,7 @@ export async function ensureWslPinnedRuntime(
   if (arch !== 'x86_64' && arch !== 'aarch64' && arch !== 'arm64') {
     throw new Error(`Unsupported WSL architecture: ${arch}`)
   }
-  const libcProbe = await run({
-    script:
-      'getconf GNU_LIBC_VERSION 2>/dev/null || ldd --version 2>&1 || ' +
-      'for loader in /lib/ld-musl-*.so.1; do [ ! -e "$loader" ] || { echo musl; break; }; done',
-    loginPath: 'none'
-  })
-  const libc = parseOrcadLinuxLibc(libcProbe)
-  const glibc = libc === 'glibc' ? parseGlibcVersion(libcProbe) : null
+  const { libc, glibc } = await probeLinuxLibc((script) => run({ script, loginPath: 'none' }))
   // Why before any download: the pinned Node cannot load on an older glibc, as SSH hosts refuse.
   if (glibc && isGlibcBelow(glibc, PINNED_NODE_GLIBC_FLOOR)) {
     throw new Error(

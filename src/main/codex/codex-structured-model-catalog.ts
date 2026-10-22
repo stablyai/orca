@@ -3,6 +3,7 @@ import type {
   AgentSessionOptionChoice,
   AgentSessionOptionsResult
 } from '../../shared/agent-session-wire'
+import { effectiveServiceTier } from '../../shared/structured-agent-session-effective-tier'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { structuredAgentSessionOptionModels } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import {
@@ -75,6 +76,10 @@ function modelOption(value: unknown): AgentSessionModelOption | null {
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
     efforts,
+    ...(!Array.isArray(row.supportedReasoningEfforts) ||
+    efforts.length !== row.supportedReasoningEfforts.length
+      ? { effortsKnown: false as const }
+      : {}),
     ...(serviceTiers
       ? { serviceTiers, supportsFastMode: codexFastServiceTier({ serviceTiers }) !== undefined }
       : {})
@@ -85,6 +90,10 @@ export type CodexSessionOptionCatalog = AgentSessionOptionsResult & { current: {
 
 export type CodexModelCatalogListing = {
   models: AgentSessionModelOption[]
+  complete?: boolean
+  configured?: { model?: string; effort?: string }
+  /** Installed tier universe retained while the current child's row overrides its controls. */
+  listedServiceTiers?: readonly string[]
 }
 
 /** One paginated `model/list` pass. The provider fetch and the shaping of a
@@ -93,6 +102,7 @@ export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   timeoutMs?: number
   deadlineMs?: number
+  cwd?: string
 }): Promise<CodexModelCatalogListing> {
   const deadline = input.deadlineMs === undefined ? null : Date.now() + input.deadlineMs
   const remainingTimeout = (): number | undefined => {
@@ -107,6 +117,7 @@ export async function fetchCodexModelCatalogListing(input: {
   }
   const parsedModels: AgentSessionModelOption[] = []
   let cursor: string | null = null
+  let complete = true
   for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
     const response = record(
       await input.connection.request(
@@ -115,21 +126,47 @@ export async function fetchCodexModelCatalogListing(input: {
         { timeoutMs: remainingTimeout() }
       )
     )
+    if (!Array.isArray(response?.data)) {
+      complete = false
+    }
     const rows = Array.isArray(response?.data) ? response.data : []
     for (const row of rows) {
       const parsed = modelOption(row)
+      if (!parsed && record(row)?.hidden !== true) {
+        complete = false
+      }
       if (parsed && !parsedModels.some((model) => model.id === parsed.id)) {
         parsedModels.push(parsed)
       }
+    }
+    if (
+      response?.nextCursor !== null &&
+      response?.nextCursor !== undefined &&
+      !text(response.nextCursor)
+    ) {
+      complete = false
     }
     cursor = text(response?.nextCursor)
     if (!cursor) {
       break
     }
   }
-  const configured = await readCodexConfiguredLaunchDefaults(input.connection, remainingTimeout())
+  const configured = await readCodexConfiguredLaunchDefaults(
+    input.connection,
+    remainingTimeout(),
+    input.cwd
+  )
   return {
-    models: applyCodexConfiguredLaunchDefaults(parsedModels, configured)
+    models: applyCodexConfiguredLaunchDefaults(parsedModels, configured),
+    complete: complete && cursor === null && configured !== null,
+    ...(configured
+      ? {
+          configured: {
+            ...(configured.model ? { model: configured.model } : {}),
+            ...(configured.effort ? { effort: configured.effort } : {})
+          }
+        }
+      : {})
   }
 }
 
@@ -143,7 +180,12 @@ export function composeCodexSessionOptionCatalog(
   }
 ): CodexSessionOptionCatalog {
   const models = structuredAgentSessionOptionModels(
-    listing.models.map((entry) => ({ ...entry })),
+    applyCodexConfiguredLaunchDefaults(
+      listing.models,
+      listing.configured
+        ? { model: listing.configured.model ?? null, effort: listing.configured.effort ?? null }
+        : null
+    ).map((entry) => ({ ...entry })),
     input.current.model,
     (row) => row
   )
@@ -154,7 +196,19 @@ export function composeCodexSessionOptionCatalog(
   const reportedTier = input.reportedServiceTierKnown
     ? (input.reportedServiceTier ?? CODEX_DEFAULT_SERVICE_TIER)
     : undefined
-  const serviceTier = input.current.serviceTier ?? reportedTier
+  const selectedTier = input.current.serviceTier ?? reportedTier
+  const modelTiers = models.find((row) => row.id === model)?.serviceTiers
+  const serviceTier =
+    selectedTier && modelTiers
+      ? effectiveServiceTier({
+          tier: selectedTier,
+          modelTiers: modelTiers.map((row) => row.value),
+          listedTiers:
+            listing.listedServiceTiers ??
+            models.flatMap((row) => row.serviceTiers?.map((tier) => tier.value) ?? []),
+          reported: selectedTier === reportedTier
+        })
+      : selectedTier
   // Older clients only read Fast; any other tier leaves their toggle unset.
   const fastMode = codexFastModeOfServiceTier(
     serviceTier,
@@ -171,7 +225,9 @@ export function composeCodexSessionOptionCatalog(
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(reportedTier !== undefined && input.current.serviceTier === undefined
         ? { confirmed: fastMode === undefined ? ['serviceTier'] : ['serviceTier', 'fastMode'] }
-        : {})
+        : {}),
+      // The listing's default stands in for a thread that reported no model of its own.
+      ...(input.current.model ? {} : { defaulted: ['model'] as const })
     }
   }
 }

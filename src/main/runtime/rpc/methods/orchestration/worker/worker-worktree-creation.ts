@@ -38,6 +38,8 @@ export async function createWorkerWorktree(args: {
    *  does not need, since the trust preset exists so a PTY agent's menu does not eat the first
    *  bracketed paste. The renderer's own structured worktree create skips both the same way. */
   withAgentTerminal: boolean
+  promisedAgentChat?: boolean
+  onWorkspaceCreated?: (worktreeId: string) => void
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<{
@@ -61,6 +63,8 @@ export async function createWorkerWorktree(args: {
     awaitTerminalProvisioning: true,
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
+    ...(args.promisedAgentChat ? { promisedAgentChat: true } : {}),
+    ...(args.onWorkspaceCreated ? { onWorkspaceCreated: args.onWorkspaceCreated } : {}),
     ...(args.withAgentTerminal
       ? {
           startupAgent: args.agent,

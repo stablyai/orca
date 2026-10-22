@@ -24,7 +24,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setGithubRepoSources,
     setGithubSourceErrors,
     setGithubSourceFallbacks,
-    setGithubTotalCount,
+    setGithubCountedTotalPages,
     setItems,
     setOrcaYamlTrustPrompt,
     setSetupPrompt,
@@ -68,7 +68,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setGithubRepoSources({})
     setGithubPages([])
     setGithubCurrentPage(0)
-    setGithubTotalCount(null)
+    setGithubCountedTotalPages(null)
     setGithubSourceErrors([])
     setGithubSourceFallbacks([])
   }, [])

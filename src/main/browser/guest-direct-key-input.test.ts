@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import {
   dispatchPageKeyEvent,
-  planCdpKeyEvent,
-  planInsertText,
   routePageTextInsertion,
   type GuestCdpSender
 } from './guest-direct-key-input'
+import { planCdpKeyEvent, planInsertText } from './guest-key-event-plan'
 
 function fakePage(type: string) {
   const page = {
@@ -27,11 +26,33 @@ function fakePage(type: string) {
   return { page, webContents: page as unknown as WebContents }
 }
 
-function fakeSender(focusInSubframe = false) {
-  const send = vi.fn<GuestCdpSender>(async (method) =>
-    method === 'Runtime.evaluate' ? { result: { value: focusInSubframe } } : {}
+function fakeSender() {
+  return vi.fn<GuestCdpSender>(async (method) =>
+    method === 'Runtime.evaluate' ? { result: { type: 'object', subtype: 'null' } } : {}
   )
-  return send
+}
+
+// Why: the root document's focus is on a cross-site frame (target F1); inside it, on a field.
+function crossSiteFrameSender(options: { attachable: boolean }) {
+  return vi.fn<GuestCdpSender>(async (method, _params, sessionId) => {
+    switch (method) {
+      case 'Runtime.evaluate':
+        return sessionId
+          ? { result: { type: 'object', subtype: 'null' } }
+          : { result: { objectId: 'frame-element' } }
+      case 'DOM.describeNode':
+        return { node: { frameId: 'F1' } }
+      case 'Target.getTargets':
+        return { targetInfos: [{ targetId: 'F1', type: 'iframe' }] }
+      case 'Target.attachToTarget':
+        if (!options.attachable) {
+          throw new Error('No target with given id')
+        }
+        return { sessionId: 'S1' }
+      default:
+        return {}
+    }
+  })
 }
 
 describe('planCdpKeyEvent', () => {
@@ -204,9 +225,22 @@ describe('dispatchPageKeyEvent', () => {
     expect(page.selectAll).toHaveBeenCalledTimes(1)
   })
 
-  it('borrows focus for CDP when focus sits in a child frame, then gives it back', async () => {
+  it('types into a focused cross-site frame on its own session, without focusing the guest', async () => {
     const { page, webContents } = fakePage('webview')
-    const send = fakeSender(true)
+    const send = crossSiteFrameSender({ attachable: true })
+    const params = { type: 'keyDown', key: 'z', text: 'z' }
+
+    await dispatchPageKeyEvent(webContents, params, send, async () => () => {})
+
+    expect(page.focus).not.toHaveBeenCalled()
+    expect(page.sendInputEvent).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith('Emulation.setFocusEmulationEnabled', { enabled: true }, 'S1')
+    expect(send).toHaveBeenLastCalledWith('Input.dispatchKeyEvent', params, 'S1')
+  })
+
+  it('borrows focus for CDP when the focused frame cannot be reached, then gives it back', async () => {
+    const { page, webContents } = fakePage('webview')
+    const send = crossSiteFrameSender({ attachable: false })
     const release = vi.fn()
     const params = { type: 'keyDown', key: 'z', text: 'z' }
 
@@ -260,9 +294,23 @@ describe('routePageTextInsertion', () => {
     // Why: the caller releases, so an insert abandoned before delivery still gives focus back.
     expect(route.release).toBe(release)
     expect(page.sendInputEvent).not.toHaveBeenCalled()
-    expect(send.mock.calls).toEqual([
-      ['Emulation.setFocusEmulationEnabled', { enabled: true }],
-      ['Input.insertText', { text: 'a\nb' }]
+    expect(send.mock.calls.map(([method]) => method)).toEqual([
+      'Runtime.evaluate',
+      'Emulation.setFocusEmulationEnabled',
+      'Input.insertText'
     ])
+  })
+})
+
+describe('routePageTextInsertion into a cross-site frame', () => {
+  it('delivers any text, newlines included, on the frame’s session', async () => {
+    const { page, webContents } = fakePage('webview')
+    const send = crossSiteFrameSender({ attachable: true })
+
+    const route = await routePageTextInsertion(webContents, { text: 'a\nb' }, send)
+    await route.deliver({ text: 'a\nb' })
+
+    expect(page.focus).not.toHaveBeenCalled()
+    expect(send).toHaveBeenLastCalledWith('Input.insertText', { text: 'a\nb' }, 'S1')
   })
 })

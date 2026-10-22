@@ -20,7 +20,8 @@ export function useJiraIssueMutationState({
   setFullIssue,
   setTitleDraft,
   setLabelsDraft,
-  onStatusSettled
+  onStatusSettled,
+  onCommentsChanged
 }: {
   scope: string | null
   issue: JiraIssue | null
@@ -30,12 +31,14 @@ export function useJiraIssueMutationState({
   setTitleDraft: Dispatch<SetStateAction<string>>
   setLabelsDraft: Dispatch<SetStateAction<string>>
   onStatusSettled: () => void
+  onCommentsChanged: () => void
 }): void {
   const applyPatch = useEffectEvent(
     (
       patch: Partial<JiraIssue>,
       _rollback: boolean,
       statusSettled: boolean,
+      commentsChanged: boolean,
       previous = displayed
     ) => {
       if (!previous) {
@@ -55,13 +58,16 @@ export function useJiraIssueMutationState({
           draft === previous.labels.join(', ') ? labels.join(', ') : draft
         )
       }
+      if (commentsChanged) {
+        onCommentsChanged()
+      }
       if (statusSettled) {
         onStatusSettled()
       }
     }
   )
   const replayPatch = useEffectEvent((patch: Partial<JiraIssue>) =>
-    applyPatch(patch, false, false, issue)
+    applyPatch(patch, false, false, false, issue)
   )
   useEffect(() => {
     if (!scope) {

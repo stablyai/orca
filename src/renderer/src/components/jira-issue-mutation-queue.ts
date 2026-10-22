@@ -11,7 +11,8 @@ import {
 type IssuePatchListener = (
   patch: Partial<JiraIssue>,
   rollback: boolean,
-  statusSettled: boolean
+  statusSettled: boolean,
+  commentsChanged: boolean
 ) => void
 type IssueWrite = {
   confirmed: JiraIssue
@@ -65,6 +66,7 @@ export function enqueueJiraIssueMutation({
   scope,
   previous,
   optimistic,
+  commentsChanged = false,
   update,
   refresh,
   patchIssue
@@ -72,6 +74,7 @@ export function enqueueJiraIssueMutation({
   scope: string
   previous: JiraIssue
   optimistic: Partial<JiraIssue>
+  commentsChanged?: boolean
   update: () => Promise<JiraMutationResult>
   refresh: () => Promise<JiraIssue | null>
   patchIssue: (patch: Partial<JiraIssue>) => void
@@ -86,13 +89,18 @@ export function enqueueJiraIssueMutation({
   write.pending.push(mutation)
   writes.set(scope, write)
 
-  const publish = (patch: Partial<JiraIssue>, rollback: boolean, statusSettled = false): void => {
+  const publish = (
+    patch: Partial<JiraIssue>,
+    rollback: boolean,
+    statusSettled = false,
+    changedComments = false
+  ): void => {
     if (Object.keys(patch).length === 0) {
       return
     }
     patchIssue(patch)
     for (const listener of listeners.get(scope) ?? []) {
-      listener(patch, rollback, statusSettled)
+      listener(patch, rollback, statusSettled, changedComments)
     }
   }
   publish(optimistic, false)
@@ -143,7 +151,8 @@ export function enqueueJiraIssueMutation({
       publish(
         patch,
         !saved,
-        'status' in optimistic && !write.pending.some((queued) => 'status' in queued.patch)
+        'status' in optimistic && !write.pending.some((queued) => 'status' in queued.patch),
+        saved && commentsChanged
       )
     }
   })()

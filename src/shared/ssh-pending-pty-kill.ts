@@ -1,6 +1,6 @@
 /** A `pty.shutdown` a relay-era client issued to an SSH host and could not confirm, carried on its
- *  `SshRemotePtyLease`. This build never records or replays one; it keeps the field through
- *  load and save so a downgraded build can still replay it. */
+ *  `SshRemotePtyLease`. This build records and replays one only through the legacy relay bridge,
+ *  for a closed tab whose older relay still runs its shell; a downgraded build replays it too. */
 export type SshPendingPtyKill = {
   requestedAt: number
   /** The host-minted PTY incarnation this kill was aimed at, and the fence.
@@ -18,7 +18,7 @@ export type SshPendingPtyKill = {
 
 /** Whether a relay PTY id names exactly one process: current relays mint `pty2:<epoch>:<n>` with a
  *  fresh epoch per start, so the id never recurs. Legacy `pty-N` ids restart at 1. */
-function isEpochScopedRelayPtyId(relayPtyId: string): boolean {
+export function isEpochScopedRelayPtyId(relayPtyId: string): boolean {
   return relayPtyId.startsWith('pty2:')
 }
 

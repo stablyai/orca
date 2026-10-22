@@ -6,6 +6,7 @@ import {
 } from '../../../shared/agent-child-work-stop-targets'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { CapturedChildWorkStops } from './structured-agent-session-status-ownership'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export type StructuredAgentSessionBackgroundStopInput = {
@@ -15,23 +16,33 @@ export type StructuredAgentSessionBackgroundStopInput = {
   /** Hands the host the stops the provider accepted, as evidence about the runs it sent them to.
    *  Never throws: recording it is bookkeeping, and cannot fail the Stop. */
   acknowledgeStops?: (evidence: AgentChildWorkEvidence[]) => void
-  /** Work the host could not list, read inside the Stop's step, and the provider child's end that
-   *  reaches it; for an untargeted Stop only. */
+  /** Capture runtime lifetimes alongside listed targets, before the Stop can await. */
+  captureStops?: (
+    targets: readonly (AgentChildWorkView & { providerId: string })[]
+  ) => CapturedChildWorkStops
+  /** Work the host could not list at the Stop's capture, and the provider child that holds it. */
   unlisted?: { present: () => boolean; stop: () => Promise<void> }
 }
 
-/** `atRest`: no turn runs, so ending the agent ends only the work no record lists. */
+/** `atRest`: no lead turn runs, so the user's Stop all may end an agent holding unlisted work. */
 export async function stopStructuredAgentSessionBackgroundWork(
   ctx: Pick<AgentSessionTurnContext, 'adapter' | 'sessionId' | 'fence'>,
-  input: Pick<StructuredAgentSessionBackgroundStopInput, 'acknowledgeStops' | 'unlisted'> & {
+  input: Pick<StructuredAgentSessionBackgroundStopInput, 'acknowledgeStops'> & {
     /** Captured before the stop goes out: its acknowledgement may end only these runs. */
     targets: readonly (AgentChildWorkView & { providerId: string })[]
+    /** A listed ID may be sent only while its captured runtime lifetime still stands. */
+    targetCurrent?: (handleId: string) => boolean
+    /** Unlisted work was already present when this Stop captured its targets. */
+    unlisted?: { stop: () => Promise<void> }
     /** The host could not read the task list the targets came from. */
     unreadable?: true
   },
   atRest: () => boolean
 ): Promise<{ cancelled: boolean; stillRunning?: true }> {
-  const { targets } = input
+  const { targetCurrent } = input
+  const targets = targetCurrent
+    ? input.targets.filter((target) => targetCurrent(target.providerId))
+    : input.targets
   const acknowledged: AgentChildWorkStopAcknowledgement[] = []
   // Nothing listed has a stop to send; an agent without a stop route would refuse even none.
   const background =
@@ -55,9 +66,8 @@ export async function stopStructuredAgentSessionBackgroundWork(
   if (background?.stillRunning) {
     return background
   }
-  // Work no record lists is reached only by ending the agent, never under a turn it runs. Read after
-  // the listed stops: one ending can wake the agent into a turn of its own.
-  if (input.unlisted?.present() && atRest()) {
+  // An initially unlisted helper needs the agent's end; later work cannot expand this Stop.
+  if (input.unlisted && atRest()) {
     await input.unlisted.stop()
     return { cancelled: true }
   }

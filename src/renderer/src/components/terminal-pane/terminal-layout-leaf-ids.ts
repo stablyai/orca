@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/terminal-tab-types'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
-import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
 import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 
 const EMPTY_TERMINAL_LAYOUT: TerminalLayoutSnapshot = {

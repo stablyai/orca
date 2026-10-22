@@ -8,8 +8,10 @@ import {
 } from '../../../src/shared/agent-session-question-answer'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
 import {
-  pendingStructuredApproval,
-  pendingStructuredQuestion,
+  actionableStructuredApproval,
+  actionableStructuredQuestion
+} from './mobile-structured-actionable-prompt'
+import {
   structuredApprovalResponseTarget,
   structuredQuestionResponseTarget
 } from './mobile-structured-agent-prompts'
@@ -54,7 +56,7 @@ export function useMobileStructuredPromptResponses(args: {
     async (optionId: string): Promise<boolean> => {
       const target = structuredApprovalResponseTarget(
         optionId,
-        stateRef.current.items.find(pendingStructuredApproval) ?? null
+        actionableStructuredApproval(stateRef.current)
       )
       if (!target) {
         return false
@@ -107,7 +109,7 @@ export function useMobileStructuredPromptResponses(args: {
 
   const respondQuestion = useCallback(
     async (answer: string): Promise<boolean> => {
-      const prompt = stateRef.current.items.find(pendingStructuredQuestion) ?? null
+      const prompt = actionableStructuredQuestion(stateRef.current)
       if (prompt?.body.questions) {
         const promptKey = groupedQuestionPromptKey(prompt.itemId, prompt.revision)
         const grouped = advanceGroupedQuestion({

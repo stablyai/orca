@@ -3,10 +3,9 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { buildExcludePathPrefixes } from '../../../shared/quick-open-filter'
 import {
   getRuntimeFileListTarget,
-  getNestedWorktreeExcludePaths,
-  getNestedWorktreeExcludeRequest,
-  isNestedWorktreePath
-} from './quick-open-file-list'
+  getNestedWorktreeExcludeRequest
+} from './quick-open-file-list-target'
+import { getNestedWorktreeExcludePaths, isNestedWorktreePath } from './quick-open-nested-worktrees'
 
 function makeWorktree(id: string, path: string): Worktree {
   return {

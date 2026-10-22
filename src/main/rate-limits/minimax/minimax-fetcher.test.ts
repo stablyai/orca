@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Session } from 'electron'
 import { setMainHttpClient } from '../../network/http-client'
 
 const { clearStorageDataMock, cookiesSetMock, fetchMock, sessionFromPartitionMock } = vi.hoisted(
@@ -15,13 +16,14 @@ const { clearStorageDataMock, cookiesSetMock, fetchMock, sessionFromPartitionMoc
   }
 )
 
-vi.mock('electron', () => ({
-  session: { fromPartition: sessionFromPartitionMock }
-}))
-
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 
-setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
+setMainHttpClient({
+  fetch: fetchMock,
+  proxySession: () => null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test only calls clearStorageData, cookies.set and fetch, which the fake provides.
+  partitionSession: sessionFromPartitionMock as unknown as (partition: string) => Session
+})
 
 const MINIMAX_URL = 'https://platform.minimax.io/v1/api/openplatform/coding_plan/remains'
 

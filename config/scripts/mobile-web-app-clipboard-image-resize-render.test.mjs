@@ -2,8 +2,7 @@
  * The clipboard image's downscale, run in a real browser under the shipped policy against a real
  * raster.
  *
- * The native path shrinks with `expo-image-manipulator` through two `expo-file-system` writes, and
- * the page has neither: its sibling draws into a `<canvas>` and reads the PNG back out. A fake
+ * The resize draws into a `<canvas>` and reads the PNG back out. A fake
  * canvas cannot answer the question the loop above it asks — how many bytes a raster weighs once
  * re-encoded — so this measures it rather than asserting about it.
  *
@@ -22,7 +21,7 @@ import {
   createBundleServer,
   readClipboardImageUploadChunkBase64Chars,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 

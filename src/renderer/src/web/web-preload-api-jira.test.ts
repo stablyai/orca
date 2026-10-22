@@ -83,6 +83,22 @@ describe('web Jira preload API', () => {
     ])
   })
 
+  it('routes site-bound favourite reads through the paired runtime', async () => {
+    const favourites = {
+      filters: [{ id: '10001', name: 'My work', jql: 'project = 10002', siteId: 'site-a' }],
+      truncated: false
+    }
+    const runtimeCalls = mockRuntimeClient(() => favourites)
+    const {
+      window: { api }
+    } = await installApi()
+
+    await expect(api.jira.listFavouriteFilters({ siteId: 'site-a' })).resolves.toEqual(favourites)
+    expect(runtimeCalls).toEqual([
+      { method: 'jira.listFavouriteFilters', params: { siteId: 'site-a' } }
+    ])
+  })
+
   it('maps desktop-only Jira methods onto the server methods that exist', async () => {
     const runtimeCalls = mockRuntimeClient(() => [])
     const {

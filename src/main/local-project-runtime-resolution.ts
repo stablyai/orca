@@ -21,6 +21,7 @@ import {
   hasCachedWslDistros
 } from './wsl'
 import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
+import { projectMatchesRepo } from '../shared/project-repo-match'
 import {
   resolveLocalWindowsTerminalRuntimeOptions,
   type LocalWindowsTerminalRuntimeOptions
@@ -111,8 +112,7 @@ export function resolveLocalWorkspaceRuntime(
   ) {
     return undefined
   }
-  // TEMPORARY parity: main finds the project by its source repos only; the window also by its id.
-  const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
+  const project = store.getProjects().find((entry) => projectMatchesRepo(entry, repo.id))
   const preference = getWorkspaceRuntimePreference(
     project?.localWindowsRuntimePreference,
     workspacePath

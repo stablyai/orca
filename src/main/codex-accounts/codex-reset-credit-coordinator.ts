@@ -63,45 +63,44 @@ export class CodexResetCreditCoordinator {
     if (this.ledger.error) {
       return Promise.reject(this.ledger.error)
     }
-    const scopeKey = resetScopeKey(expectedScope)
-    const accountScopeKey = resetAccountScopeKey(expectedScope)
-    const existing = this.ledger.get(idempotencyKey)
-    if (existing) {
-      if (existing.scopeKey !== scopeKey) {
-        return Promise.reject(new Error('That idempotency key belongs to a different reset scope.'))
-      }
-      if (existing.state === 'settled' && existing.settledOutcome) {
-        return this.dependencies.serializeMutation(async () => {
-          const { rateLimits } = this.validateScope(expectedScope, { kind: 'settledReplay' })
-          return {
-            outcome: existing.settledOutcome!,
-            scope: existing.expectedScope,
-            codex: this.dependencies.getSnapshot(),
-            rateLimits
-          }
-        })
-      }
-      if (existing.promise) {
-        return existing.promise as Promise<CodexResetCreditConsumeResult>
-      }
-      return this.startAttempt(idempotencyKey, expectedScope, existing)
-    }
-
-    const unresolvedKey = this.ledger.getUnresolvedKey(accountScopeKey)
-    if (unresolvedKey && unresolvedKey !== idempotencyKey) {
-      return Promise.reject(
-        new Error('A previous reset attempt for this account still has an unknown outcome.')
+    // Why: as on the desktop, the host's ledger owns retries. A request answers as its own key's
+    // attempt, else the attempt that claimed its offer, else the account's unresolved attempt (the
+    // provider refresh after an unknown outcome moves the offer, so a retry names a newer one).
+    const found = this.ledger.findAttemptFor(
+      idempotencyKey,
+      resetScopeKey(expectedScope),
+      resetAccountScopeKey(expectedScope)
+    )
+    if (!found) {
+      return this.startAttempt(
+        idempotencyKey,
+        expectedScope,
+        this.ledger.createFresh(idempotencyKey, expectedScope)
       )
     }
-    const claimedKey = this.ledger.getClaimedKey(scopeKey)
-    if (claimedKey && claimedKey !== idempotencyKey) {
-      return Promise.reject(new Error('That reset-credit offer was already attempted.'))
+    const { idempotencyKey: attemptKey, attempt: existing } = found
+    if (attemptKey === idempotencyKey && existing.scopeKey !== resetScopeKey(expectedScope)) {
+      return Promise.reject(new Error('That idempotency key belongs to a different reset scope.'))
     }
-    return this.startAttempt(
-      idempotencyKey,
-      expectedScope,
-      this.ledger.createFresh(idempotencyKey, expectedScope)
-    )
+    if (existing.state === 'settled' && existing.settledOutcome) {
+      const outcome = existing.settledOutcome
+      return this.dependencies.serializeMutation(async () => {
+        const { rateLimits } = this.validateScope(existing.expectedScope, {
+          kind: 'settledReplay'
+        })
+        return {
+          outcome,
+          scope: existing.expectedScope,
+          codex: this.dependencies.getSnapshot(),
+          rateLimits
+        }
+      })
+    }
+    if (existing.promise) {
+      return existing.promise as Promise<CodexResetCreditConsumeResult>
+    }
+    // Resumed under its own key and scope, so the provider sees one operation.
+    return this.startAttempt(attemptKey, existing.expectedScope, existing)
   }
 
   async consumeCurrent(): Promise<CodexRateLimitResetResult> {

@@ -10,7 +10,7 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: mocks.listEnvironments
 }))
 
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 
@@ -33,12 +33,16 @@ describe('runtime AI Vault session scanner', () => {
   it('lists saved runtime environments as runtime execution hosts', () => {
     mocks.listEnvironments.mockReturnValue([
       { id: 'env-1', name: 'Server 1' },
-      { id: 'env-2', name: 'Server 2' }
+      { id: 'env-2', name: 'Server 2', connectionDependency: 'ssh-tunnel' }
     ])
 
     expect(getSavedRuntimeAiVaultHostInfos('/user-data')).toEqual([
       { environmentId: 'env-1', executionHostId: 'runtime:env-1' },
-      { environmentId: 'env-2', executionHostId: 'runtime:env-2' }
+      {
+        environmentId: 'env-2',
+        executionHostId: 'runtime:env-2',
+        connectionDependency: 'ssh-tunnel'
+      }
     ])
   })
 
@@ -187,6 +191,29 @@ describe('runtime AI Vault session scanner', () => {
       substituteCodexHome: '/data/orca/codex-accounts/account-2/home'
     })
   })
+
+  it.each([
+    { agent: 'opencode' as const, sessionId: 'opencode-copy' },
+    { agent: 'omp' as const, sessionId: 'omp-copy', filePath: '/pinned-omp/sessions/copy.jsonl' }
+  ])(
+    'preserves the $agent copy identity and transcript across the paired-host response',
+    async (forkedSession) => {
+      mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+        ok: true,
+        result: { useRealCodexHome: false, forkedSession }
+      })
+      await expect(
+        prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', {
+          agent: forkedSession.agent === 'opencode' ? 'opencode2' : 'omp',
+          sessionId: 'source',
+          filePath: '/source',
+          codexHome: null,
+          executionHostId: 'runtime:env-1',
+          fork: true
+        })
+      ).resolves.toEqual({ useRealCodexHome: false, forkedSession })
+    }
+  )
 
   it('fails retryably when runtime preparation returns an invalid result', async () => {
     mocks.callRuntimeEnvironment.mockResolvedValueOnce({ ok: true, result: {} })

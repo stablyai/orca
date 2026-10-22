@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
+import { getCyclicProjectedWorktreeLineageIds } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import {
   getReorderedWorktreeIdsToUnnest,
   getWorktreeLineageDropTargetId,

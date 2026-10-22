@@ -1,4 +1,3 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { waitForTerminalReplayWritesParsed } from '../replay-guard'
 import {
   POST_REPLAY_MODE_RESET,
@@ -14,6 +13,8 @@ import {
 } from '../terminal-snapshot-replay-paint'
 
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
+import { ackPaintedColdRestore } from './painted-cold-restore-ack'
+import { mainStartsPane } from './main-starts-pane'
 import { fitReattachedPaneToGrid, noteReattachAltFrameSkip } from './reattach-grid-fit'
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
@@ -115,9 +116,7 @@ export function createReattachPayloadHandlers(
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
         // Snapshot superseded the cold-restore payload; ack so the daemon doesn't redeliver it.
-        if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-          window.api.pty.ackColdRestore(ctx.ptyId)
-        }
+        ackPaintedColdRestore(session, ctx.ptyId)
       }
     } else if (ctx.connectResult?.replay || ctx.prefetchedParkModelSnapshot) {
       // Why scoped to a park-reveal: an in-place reattach (network reconnect,
@@ -185,8 +184,8 @@ export function createReattachPayloadHandlers(
         )
         session.recordRendererOrderedSeq(modelSnapshot)
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
-        if (ctx.connectResult?.coldRestore && !isRemoteRuntimePtyId(ctx.ptyId)) {
-          window.api.pty.ackColdRestore(ctx.ptyId)
+        if (ctx.connectResult?.coldRestore) {
+          ackPaintedColdRestore(session, ctx.ptyId)
         }
       } else if (ctx.connectResult?.replay) {
         session.rememberReattachPayloadAgentSignal(ctx.connectResult.replay, {
@@ -215,9 +214,7 @@ export function createReattachPayloadHandlers(
         )
         session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
         if (ctx.connectResult.coldRestore) {
-          if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-            window.api.pty.ackColdRestore(ctx.ptyId)
-          }
+          ackPaintedColdRestore(session, ctx.ptyId)
         }
       }
     } else if (ctx.connectResult?.coldRestore) {
@@ -263,7 +260,10 @@ export function createReattachPayloadHandlers(
       session.writeReplayData(
         `${RESET_GRAPHIC_RENDITION}${ctx.connectResult.coldRestore.scrollback}`
       )
-      const preparedStartup = ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup()
+      // Why: main started the pane and its agent; the window only paints it.
+      const preparedStartup = mainStartsPane(session)
+        ? null
+        : (ctx.coldRestoreStartup ?? session.buildColdRestoreAgentResumeStartup())
       const didPrepareResume = session.applyColdRestoreAgentResumeStartup(preparedStartup)
       if (didPrepareResume) {
         if (ctx.connectResult.agentResumeUnavailable) {
@@ -280,9 +280,7 @@ export function createReattachPayloadHandlers(
       session.consumeRestoredViewportBlankingMarker()
       // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
       session.writeFreshShellViewportBlanking(Math.max(destinationRows, session.pane.terminal.rows))
-      if (!isRemoteRuntimePtyId(ctx.ptyId)) {
-        window.api.pty.ackColdRestore(ctx.ptyId)
-      }
+      ackPaintedColdRestore(session, ctx.ptyId)
       if (didPrepareResume && !ctx.coldRestoreStartup) {
         session.schedulePendingStartupCommandDelivery()
       }

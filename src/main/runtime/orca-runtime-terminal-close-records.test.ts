@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
@@ -20,6 +20,8 @@ import {
   makeSession
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { RuntimeMachineName } from './runtime-machine-name'
 
 const SSH_REPO_ID = 'ssh-repo'
 const SSH_HOST_ID = 'ssh:target-1'
@@ -297,5 +299,79 @@ describe('close records', () => {
     expect(
       store.getWorkspaceSession(SSH_HOST_ID).closedTerminalTabTombstonesByTabId?.['ssh-tab']
     ).toBeDefined()
+  })
+})
+
+describe('terminal resume cleanup characterization', () => {
+  class ResumeRecordsRuntime extends OrcaRuntimeService {
+    clearResumeRecords() {
+      return this['clearWorktreeTerminalResumeRecords']('folder-proof', LOCAL_EXECUTION_HOST_ID, [
+        'closed-tab'
+      ])
+    }
+  }
+
+  beforeEach(() => {
+    vi.spyOn(RuntimeMachineName.prototype, 'start').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function persistedRuntime() {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-stop-resume-'))
+    directories.push(directory)
+    const store = createSqliteTestStore(Store, { dataFile: join(directory, 'orca-data.json') })
+    store.setWorkspaceSession({
+      ...store.getWorkspaceSession(),
+      terminalPtyIncarnationsByPaneKey: { 'closed-tab:left': 'incarnation-proof' }
+    })
+    store.flushOrThrow()
+    return { store, runtime: new ResumeRecordsRuntime(store) }
+  }
+
+  function removeSessionReader(store: Store) {
+    const original = store.getWorkspaceSession
+    Object.defineProperty(store, 'getWorkspaceSession', { configurable: true, value: undefined })
+    return () => {
+      Object.defineProperty(store, 'getWorkspaceSession', { configurable: true, value: original })
+    }
+  }
+
+  describe('terminal resume cleanup guarded Store accesses', () => {
+    it('removes stale pane incarnations through the real durable Store callback', async () => {
+      const { store, runtime } = persistedRuntime()
+      expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({
+        'closed-tab:left': 'incarnation-proof'
+      })
+      await expect(runtime.clearResumeRecords()).resolves.toBeUndefined()
+      expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey).toEqual({})
+    })
+
+    it('refuses a missing capability before the durable callback', async () => {
+      const { store, runtime } = persistedRuntime()
+      const durable = vi.spyOn(store, 'runDurableMutation')
+      const restore = removeSessionReader(store)
+      try {
+        await expect(runtime.clearResumeRecords()).rejects.toThrow('workspace_session_unavailable')
+        expect(durable).not.toHaveBeenCalled()
+      } finally {
+        restore()
+      }
+    })
+  })
+  it('uses the session reader with its Store receiver and local host partition', async () => {
+    const { store, runtime } = persistedRuntime()
+    const original = store.getWorkspaceSession
+    const reader = vi.spyOn(store, 'getWorkspaceSession').mockImplementation(function (
+      this: Store,
+      ...args: Parameters<Store['getWorkspaceSession']>
+    ) {
+      expect(this).toBe(store)
+      expect(args).toEqual([LOCAL_EXECUTION_HOST_ID])
+      return original.apply(this, args)
+    })
+    await expect(runtime.clearResumeRecords()).resolves.toBeUndefined()
+    expect(reader).toHaveBeenCalled()
   })
 })

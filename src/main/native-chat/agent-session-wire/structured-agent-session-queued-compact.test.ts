@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
@@ -27,7 +28,8 @@ let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
   vi.useFakeTimers()
-  rig = await createQueuedMessageTestRig()
+  // A Stop ends the agent, so the card's run resumes the conversation in a new one.
+  rig = await createQueuedMessageTestRig({ restartable: true })
 })
 
 afterEach(async () => {
@@ -318,6 +320,7 @@ describe('a /compact that waits in line', () => {
       throw new Error('expected a queued receipt')
     }
     tasks = [BACKGROUND_TASK]
+    rig.host.publishChildWorkEvidence(SESSION, reportedChildWork(tasks, 1))
     await rig.settleAccepted(working, 'a')
     const laterId = later.value.queued.messageId
     await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
@@ -354,6 +357,7 @@ describe('a /compact that waits in line', () => {
     })
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     tasks = [BACKGROUND_TASK]
+    rig.host.publishChildWorkEvidence(SESSION, reportedChildWork(tasks, 1))
     await rig.settleAccepted(working, 'a')
     await eventually(() => expect(failed).toHaveBeenCalledOnce())
     // The refusal's row landed before the write that failed, so the card never left without it;

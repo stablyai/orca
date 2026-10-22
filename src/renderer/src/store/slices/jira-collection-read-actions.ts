@@ -151,7 +151,14 @@ export function createJiraCollectionReadActions(
       const scope = getJiraReadScope(get().settings, options?.sourceContext)
       const siteId = getSelectedJiraSiteId(get().jiraStatus)
       const statuses = normalizeJiraStatusSelection(options?.filters?.statuses).sort()
-      const filters = statuses.length ? { statuses } : undefined
+      const currentSprint = options?.filters?.currentSprint === true
+      const filters =
+        statuses.length || currentSprint
+          ? {
+              ...(statuses.length ? { statuses } : {}),
+              ...(currentSprint ? { currentSprint: true } : {})
+            }
+          : undefined
       const cacheKey = scopedJiraCacheKey(
         scope,
         `${siteId ?? 'default'}::list::${filter}::${limit}${filters ? `::${JSON.stringify(filters)}` : ''}`

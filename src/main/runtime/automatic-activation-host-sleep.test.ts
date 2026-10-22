@@ -1,5 +1,6 @@
 // #24399: a plain shell pane has no agent sleep record, so only the host's sleep state proves it was slept.
 import { describe, expect, it, vi } from 'vitest'
+import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
@@ -74,16 +75,21 @@ describe('automatic tab activation honors the host sleep state', () => {
     const sleeping = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     await vi.waitFor(() => expect(listProcesses).toHaveBeenCalled())
     // Queued behind the sleep's exclusive hold, so the pre-spawn check has already passed.
-    const automaticSpawn = runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID, {
-      refuseSleptWorktree: true
-    })
+    const automaticSpawn = runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null),
+      {
+        refuseSleptWorktree: true
+      }
+    )
     inventory.resolve([])
 
     await expect(sleeping).resolves.toBeDefined()
     await expect(automaticSpawn).rejects.toThrow('worktree_terminals_sleeping')
     expect(sleepPhases()).not.toContain('woken')
     // The refusal released the lock, so a user spawn still proceeds and wakes.
-    const release = await runtime.acquireWorktreeTerminalSpawn(TEST_WORKTREE_ID)
+    const release = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
     release()
     expect(sleepPhases()).toContain('woken')
   })

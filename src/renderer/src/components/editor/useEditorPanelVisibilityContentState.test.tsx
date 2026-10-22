@@ -38,10 +38,16 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (select: (state: ReturnType<typeof mocks.getState>) => unknown) => select(mocks.getState()),
+    { getState: mocks.getState }
+  )
+}))
 
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
+import { createTestStore } from '@/store/slices/store-test-helpers'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -161,6 +167,7 @@ describe('useEditorPanelContentState visibility', () => {
     mocks.readRuntimeFileContent.mockReset()
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
+      ...createTestStore().getState(),
       settings: null,
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()

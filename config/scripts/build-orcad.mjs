@@ -34,10 +34,13 @@ import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import { stageOrcadWindowsCliLauncher } from './orcad-windows-cli-launcher.mjs'
 import { stageOrcadWindowsSecurity } from './orcad-windows-security.mjs'
+import { stageOrcadLinearSdk } from './orcad-linear-sdk-package.mjs'
+import { stageOrcadMobileWebBundle } from './orcad-mobile-web-bundle.mjs'
 import {
   ORCAD_EMOJI_SHORTCODE_DATASET,
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_CLI_PACKAGE_FILENAME,
+  ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS,
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_NODE_PTY_DIR,
@@ -57,6 +60,8 @@ import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browse
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from './process-failure-message.mjs'
 import { resolveBuildSourceCommit } from './build-source-commit.mjs'
+
+const { darkBuildMarkers } = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = process.env.ORCAD_OUT_DIR
@@ -157,6 +162,10 @@ function stageNodePty(target) {
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(join(OUT_DIR, ORCAD_SERVER_TARGET_FILENAME), `${BUILD_TARGET}\n`)
+// Outside the artifact list, so the version hash and every deploy ignore it.
+for (const marker of darkBuildMarkers()) {
+  writeFileSync(join(OUT_DIR, marker.fileName), marker.text)
+}
 writeFileSync(
   join(OUT_DIR, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
   `${runtimeAsset.executableSha256}\n`
@@ -165,13 +174,17 @@ stageNodePty(BUILD_TARGET)
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
 stageOrcadWindowsCliLauncher(ROOT, OUT_DIR, BUILD_TARGET)
-stageOrcadWindowsSecurity(ROOT, OUT_DIR, BUILD_TARGET)
+stageOrcadWindowsSecurity(ROOT, OUT_DIR, BUILD_TARGET, undefined, undefined, {
+  enabled: process.env.ORCA_REUSE_PREPARED_WINDOWS_SECURITY === 'true',
+  runtimePath: nodeRuntimePath
+})
 const emojiDatasetOutput = join(OUT_DIR, ORCAD_EMOJI_SHORTCODE_DATASET)
 mkdirSync(dirname(emojiDatasetOutput), { recursive: true })
 copyFileSync(
   createRequire(import.meta.url).resolve('emojibase-data/en/shortcodes/emojibase.json'),
   emojiDatasetOutput
 )
+await stageOrcadLinearSdk(ROOT, OUT_DIR)
 // The desktop template omits it: ~10 MB per target, and orcad already treats it as optional.
 if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !== '1') {
   copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
@@ -198,6 +211,11 @@ cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 
 cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-chat-visuals'), {
   recursive: true
 })
+for (const artifact of ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS) {
+  mkdirSync(dirname(join(OUT_DIR, artifact)), { recursive: true })
+  copyFileSync(join(ROOT, 'native', ...artifact.split('/')), join(OUT_DIR, ...artifact.split('/')))
+}
+stageOrcadMobileWebBundle(OUT_DIR)
 
 /** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
  *  directory under `outdir`, and both children must land flat beside orcad.js — that is where

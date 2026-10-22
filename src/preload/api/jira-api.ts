@@ -1,3 +1,5 @@
+import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
+import type { JiraFavouriteFilterList } from '../../shared/jira-favourite-filters'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
@@ -49,7 +51,11 @@ export type JiraApi = {
     siteId?: JiraSiteSelection
     filters?: JiraIssueListFilters
   }) => Promise<JiraIssue[]>
-  getIssue: (args: { key: string; siteId?: string }) => Promise<JiraIssue | null>
+  getIssue: (args: {
+    key: string
+    siteId?: string
+    mediaFormat?: JiraMediaFormat
+  }) => Promise<JiraIssue | null>
   lookupIssueSummary: (args: {
     key: string
     siteId: string
@@ -73,8 +79,13 @@ export type JiraApi = {
     body: string
     siteId?: string
   }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
-  issueComments: (args: { key: string; siteId?: string }) => Promise<JiraComment[]>
+  issueComments: (args: {
+    key: string
+    siteId?: string
+    mediaFormat?: JiraMediaFormat
+  }) => Promise<JiraComment[]>
   listProjects: (args?: { siteId?: JiraSiteSelection }) => Promise<JiraProject[]>
+  listFavouriteFilters: (args: { siteId: string }) => Promise<JiraFavouriteFilterList>
   listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) => Promise<JiraIssueType[]>
   listCreateFields: (args: {
     projectIdOrKey: string
@@ -93,7 +104,11 @@ export type JiraApi = {
     siteId?: string
   }) => Promise<JiraUser[]>
   searchUsers: (args?: { query?: string; siteId?: string }) => Promise<JiraUser[]>
-  listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
+  listTransitions: (args: {
+    key: string
+    siteId?: string
+    strict?: boolean
+  }) => Promise<JiraTransition[]>
   getProjectStatusOrder: (args: {
     projectKey: string
     siteId?: string

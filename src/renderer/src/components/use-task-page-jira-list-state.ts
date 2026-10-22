@@ -1,8 +1,11 @@
 import { useTaskPageJiraQuickFilters } from './use-task-page-jira-quick-filters'
 import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
+import { useTaskPageJiraFavouriteFilters } from './use-task-page-jira-favourite-filters'
+import type { JiraFavouriteFilter } from '../../../shared/jira-favourite-filters'
+import type { JiraSavedFilter } from '../../../shared/jira-saved-filters'
 import type { TaskPageLinearViewStateModel } from './use-task-page-linear-view-state'
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, type SetStateAction } from 'react'
 import type { JiraIssue, JiraProjectStatusOrder, JiraPriority } from '../../../shared/jira-types'
 import type { TaskPageJiraLoadError } from '@/components/task-page-jira-load-state'
 import type { TaskPageJiraJqlRejection } from '@/components/task-page-jira-search'
@@ -27,6 +30,7 @@ import {
 } from '@/runtime/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
+import { useTaskPageJiraProjectScope } from './use-task-page-jira-project-scope'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()
 
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
@@ -42,30 +46,61 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
       ipcOrRuntimeTargetForHostId(jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId),
     [accountBackedTaskSourceHostId, jiraTaskSourceContext]
   )
+  const jiraProjectScope = useTaskPageJiraProjectScope(
+    model.repos,
+    model.selectedRepos,
+    model.pageData.preselectedRepoId,
+    model.accountBackedTaskSourceHostId,
+    selectedJiraSiteId
+  )
   // Jira tab state
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
   const [jiraError, setJiraError] = useState<TaskPageJiraLoadError | null>(null)
   const [jiraErrorDetailsOpen, setJiraErrorDetailsOpen] = useState(false)
   const [jiraJqlRejection, setJiraJqlRejection] = useState<TaskPageJiraJqlRejection | null>(null)
-  const [jiraSearchInput, setJiraSearchInput] = useState('')
+  const [jiraSearchInput, setRawJiraSearchInput] = useState('')
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [jiraHasWorkspace, setJiraLinkedView] = useState(loadJiraLinkedView)
   const setJiraHasWorkspace = useCallback((enabled: boolean) => {
     setJiraLinkedView(enabled)
     saveJiraLinkedView(enabled)
   }, [])
-  const setSavedFilterQuery = useCallback((jql: string) => {
-    setJiraSearchInput(jql)
-    setAppliedJiraSearch(jql)
-  }, [])
+  const favourites = useTaskPageJiraFavouriteFilters(model)
+  const { clearJiraFavouriteFilter } = favourites
+  const setJiraSearchInput = useCallback(
+    (value: SetStateAction<string>) => {
+      clearJiraFavouriteFilter()
+      setRawJiraSearchInput(value)
+    },
+    [clearJiraFavouriteFilter]
+  )
+  const setSavedFilterQuery = useCallback(
+    (jql: string) => {
+      setJiraSearchInput(jql)
+      setAppliedJiraSearch(jql)
+    },
+    [setJiraSearchInput]
+  )
   const savedFilters = useTaskPageJiraSavedFilters(model, setSavedFilterQuery)
+  const applyJiraSavedFilter = (filter: JiraSavedFilter) => {
+    clearJiraFavouriteFilter()
+    return savedFilters.applyJiraSavedFilter(filter)
+  }
+  const applyJiraFavouriteFilter = (filter: JiraFavouriteFilter) =>
+    favourites.applyJiraFavouriteFilter(filter, savedFilters.clearJiraSavedFilterSelection, () => {
+      setRawJiraSearchInput('')
+      setAppliedJiraSearch('')
+      setJiraHasWorkspace(false)
+    })
   const quickFilters = useTaskPageJiraQuickFilters(model)
   const [jiraStatusCatalog, setJiraStatusCatalog] = useState<{
     scopeKey: string
     items: JiraStatusCatalogItem[]
   } | null>(null)
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
+  const [jiraViewMode, setJiraViewMode] = useState<'list' | 'board'>('list')
+  const [jiraCurrentSprint, setJiraCurrentSprint] = useState(false)
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
   const [jiraProjectStatusOrder, setJiraProjectStatusOrder] = useState<{
     order: JiraProjectStatusOrder
@@ -164,9 +199,13 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     jiraHasWorkspace,
     setJiraHasWorkspace,
     ...savedFilters,
+    ...favourites,
+    applyJiraSavedFilter,
+    applyJiraFavouriteFilter,
     ...quickFilters,
     jiraStatusCatalog,
     setJiraStatusCatalog,
+    ...jiraProjectScope,
     jiraIssues,
     setJiraIssues,
     jiraLoading,
@@ -183,6 +222,10 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     setAppliedJiraSearch,
     activeJiraPreset,
     setActiveJiraPreset,
+    jiraViewMode,
+    setJiraViewMode,
+    jiraCurrentSprint,
+    setJiraCurrentSprint,
     jiraRefreshNonce,
     setJiraRefreshNonce,
     jiraProjectStatusOrder,

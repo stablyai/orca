@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 concurrency:
   group: windows-wsl-e2e-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -59,6 +62,29 @@ jobs:
       - name: Require all nine WSL executions
         if: always()
         run: node config/scripts/verify-wsl-e2e-participation.mjs test-results/wsl-results.json
+      - name: Verify native Windows and WSL file-backed terminal images
+        env:
+          SKIP_BUILD: '1'
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: >-
+          pnpm exec playwright test
+          tests/e2e/terminal-inline-images-windows.spec.ts
+          --config tests/playwright.config.ts
+          --project=electron-headful
+          --output=test-results/terminal-images
+          --repeat-each=3
+          --workers=1
+      - name: Upload terminal image proof
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-wsl-terminal-image-proof
+          path: |
+            test-results/**/windows-inline-*.png
+            test-results/**/windows-file-placeholders.png
+          retention-days: 7
+          if-no-files-found: error
       - name: Upload WSL participation report
         uses: actions/upload-artifact@v7
         if: always()

@@ -44,6 +44,7 @@ vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import { NewWorktreeModal } from './NewWorktreeModal'
 
 const repos = [
@@ -65,8 +66,11 @@ function pickerItems(
   return picker?.props.items ?? []
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the modal only sends requests.
-const requestsOnly = (sendRequest: unknown) => ({ sendRequest }) as unknown as RpcClient
+function requestsOnly(sendRequest: RpcClient['sendRequest']): RpcClient {
+  const client = new FakeSession('connected')
+  client.sendRequest.mockImplementation(sendRequest)
+  return client
+}
 
 const flushUpdates = async () =>
   act(async () => {
@@ -96,7 +100,7 @@ describe('NewWorktreeModal add project flow', () => {
     addedRepo?: unknown
   ) {
     return requestsOnly(
-      vi.fn(async (method: string) => {
+      vi.fn().mockImplementation(async (method: string) => {
         if (method === 'repo.list') {
           const res = await listedRepos
           return Array.isArray(res) ? { ok: true, result: { repos: res } } : res

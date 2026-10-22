@@ -1,11 +1,12 @@
 import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { BrowserNetworkExecutionHost } from '../../../shared/browser-client-host-protocol'
-import type { BrowserHostLeaseRegistry } from '../browser-host-lease-registry'
+import type { BrowserNetworkExecutionHost } from '../../../shared/browser-network-execution-host'
+import type { BrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import type { BrowserWindow } from 'electron'
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { BrowserSessionTabSelectionOptions } from '../browser-tab-create-publication'
+import type { ServeBrowserTabs } from '../serve-browser-tabs'
 
 export type BrowserCommandTargetParams = {
   worktree?: string
@@ -54,4 +55,6 @@ export type RuntimeBrowserCommandHost = {
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
   /** True when a runtime-owned session row for that page existed and was retired. */
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
+  /** Saved browser tabs on a host with no window; their writes and starts do nothing with one. */
+  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start'>
 }

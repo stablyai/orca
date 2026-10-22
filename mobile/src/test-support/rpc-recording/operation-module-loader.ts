@@ -72,7 +72,18 @@ export function operationModuleLoader(
     if (file === sharedModulePath) {
       return deliveryAmbiguity
     }
-    return new Proxy({}, { get: (_target, key) => load(file)[String(key)] })
+    return new Proxy(
+      {},
+      {
+        get: (_target, key) => load(file)[String(key)],
+        // CommonJS star reexports enumerate the imported module's own exports.
+        ownKeys: () => Reflect.ownKeys(load(file)),
+        getOwnPropertyDescriptor: (_target, key) => {
+          const descriptor = Reflect.getOwnPropertyDescriptor(load(file), key)
+          return descriptor && { ...descriptor, configurable: true }
+        }
+      }
+    )
   }
   function barrel(file: string, source: string): OperationModule {
     const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)

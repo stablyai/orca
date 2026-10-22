@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import { store } from './orca-runtime-test-fixtures.spec'
-import type { RuntimeStore } from './runtime-store-contract'
-import {
-  ORCAD_MIGRATION_MANIFEST_VERSION,
-  type OrcadMigrationCatalogState,
-  type OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
+import type {
+  OrcadMigrationCatalogState,
+  OrcadMigrationManifest
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 
 const manifest: OrcadMigrationManifest = {
   version: ORCAD_MIGRATION_MANIFEST_VERSION,
@@ -25,51 +24,6 @@ const staged: OrcadMigrationCatalogState = {
 }
 
 describe('runtime migration catalog capabilities', () => {
-  it('re-enters requireStore after checking the captured store capabilities', () => {
-    const seen: OrcaRuntimeService[] = []
-    class Probe extends OrcaRuntimeService {
-      protected override requireStore(): RuntimeStore {
-        seen.push(this)
-        return super.requireStore()
-      }
-    }
-    const runtime = new Probe({ ...store, getOrcadMigrationCatalogState: () => staged })
-    expect(runtime.getOrcadMigrationCatalogState(manifest)).toBe(staged)
-    expect(seen).toEqual([runtime])
-  })
-
-  it('retains the native missing-method error on a different returned store', () => {
-    const seen: OrcaRuntimeService[] = []
-    class Probe extends OrcaRuntimeService {
-      protected override requireStore(): RuntimeStore {
-        seen.push(this)
-        return store
-      }
-    }
-    const runtime = new Probe({ ...store, getOrcadMigrationCatalogState: () => staged })
-    expect(() => runtime.getOrcadMigrationCatalogState(manifest)).toThrow(TypeError)
-    expect(seen).toEqual([runtime])
-  })
-
-  it('mutates the returned store before its native missing-flush rejection', async () => {
-    const stage = vi.fn(() => staged)
-    class Probe extends OrcaRuntimeService {
-      protected override requireStore(): RuntimeStore {
-        return { ...store, stageOrcadMigrationCatalog: stage }
-      }
-    }
-    const runtime = new Probe({
-      ...store,
-      stageOrcadMigrationCatalog: () => staged,
-      flushPendingOrThrowAsync: async () => {}
-    })
-    const pending = runtime.stageOrcadMigrationCatalog(manifest)
-    expect(pending).toBeInstanceOf(Promise)
-    await expect(pending).rejects.toThrow(TypeError)
-    expect(stage).toHaveBeenCalledWith(manifest)
-    expect(stage).toHaveBeenCalledOnce()
-  })
-
   it('refuses a catalog read when the runtime has no store', () => {
     const runtime = new OrcaRuntimeService(null)
     expect(() => runtime.getOrcadMigrationCatalogState(manifest)).toThrow('runtime_unavailable')

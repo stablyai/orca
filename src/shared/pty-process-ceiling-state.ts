@@ -71,7 +71,7 @@ export function describePtyProcessCeiling(state: PtyProcessCeilingState | null):
     return 'not reported'
   }
   return state.state === 'on'
-    ? `on (${state.limit} processes, ${state.mechanism === 'systemd-slice' ? `all terminals, systemd ${state.unit ?? 'slice'}` : 'requested per terminal job'})`
+    ? `on (${state.limit} processes, ${state.mechanism === 'systemd-slice' ? `per terminal, systemd ${state.unit ?? 'slice'}` : 'requested per terminal job'})`
     : `off (${state.reason.replace(/_/g, ' ')})`
 }
 

@@ -5,13 +5,15 @@ import {
   mutateJiraSavedFilters,
   readJiraSavedFilterState
 } from '@/runtime/runtime-jira-saved-filter-state'
-import {
-  normalizeJiraSavedFilterState,
-  type JiraSavedFilterMutation,
-  type JiraSavedFilter
+import type {
+  JiraSavedFilterMutation,
+  JiraSavedFilter,
+  JiraSavedFilterState
 } from '../../../shared/jira-saved-filters'
 import type { TaskPageLinearViewStateModel } from './use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'
+
+const EMPTY_SAVED_FILTER_STATE: JiraSavedFilterState = { filters: [], activeFilterId: null }
 
 type JiraSavedFilterModel = Pick<
   TaskPageLinearViewStateModel,
@@ -19,7 +21,12 @@ type JiraSavedFilterModel = Pick<
 >
 
 type JiraSavedFilterOwner = { ownerKey: string; enabled: boolean }
-type JiraSavedFilterLifetime = { owner: JiraSavedFilterOwner; pending: boolean }
+type JiraSavedFilterLifetime = {
+  owner: JiraSavedFilterOwner
+  pending: boolean
+  reading: boolean
+  state: JiraSavedFilterState | null
+}
 
 export function useTaskPageJiraSavedFilters(
   model: JiraSavedFilterModel,
@@ -27,9 +34,12 @@ export function useTaskPageJiraSavedFilters(
 ) {
   const ownerKey = model.jiraTaskSourceContext?.hostId ?? model.accountBackedTaskSourceHostId
   const target = useMemo(() => ipcOrRuntimeTargetForHostId(ownerKey), [ownerKey])
-  const [snapshot, setSnapshot] = useState({
-    ownerKey: '',
-    state: normalizeJiraSavedFilterState(undefined)
+  const [snapshot, setSnapshot] = useState<{
+    owner: JiraSavedFilterOwner | null
+    state: JiraSavedFilterState
+  }>({
+    owner: null,
+    state: EMPTY_SAVED_FILTER_STATE
   })
   const [loading, setLoading] = useState(true)
   const [pendingLifetime, setPendingLifetime] = useState<JiraSavedFilterLifetime | null>(null)
@@ -44,7 +54,7 @@ export function useTaskPageJiraSavedFilters(
     if (!owner.enabled) {
       return
     }
-    const lifetime = { owner, pending: false }
+    const lifetime: JiraSavedFilterLifetime = { owner, pending: false, reading: true, state: null }
     lifetimeRef.current = lifetime
     return () => {
       if (lifetimeRef.current === lifetime) {
@@ -52,15 +62,15 @@ export function useTaskPageJiraSavedFilters(
       }
     }
   }, [owner])
-  const state =
-    snapshot.ownerKey === ownerKey ? snapshot.state : normalizeJiraSavedFilterState(undefined)
-  const ready = target !== null && snapshot.ownerKey === ownerKey
+  const state = snapshot.owner === owner ? snapshot.state : EMPTY_SAVED_FILTER_STATE
+  const ready = target !== null && snapshot.owner === owner
   useEffect(() => {
     const lifetime = lifetimeRef.current
     if (!lifetime || lifetime.owner !== owner) {
       return
     }
     let cancelled = false
+    lifetime.reading = true
     if (loadedOwnerRef.current !== null && loadedOwnerRef.current !== ownerKey) {
       setQuery('')
     }
@@ -75,7 +85,8 @@ export function useTaskPageJiraSavedFilters(
         if (cancelled || lifetimeRef.current !== lifetime) {
           return
         }
-        setSnapshot({ ownerKey, state: next })
+        lifetime.state = next
+        setSnapshot({ owner, state: next })
         const active = next.filters.find((filter) => filter.id === next.activeFilterId)
         if (active) {
           setQuery(active.jql)
@@ -93,6 +104,7 @@ export function useTaskPageJiraSavedFilters(
         }
       } finally {
         if (!cancelled && lifetimeRef.current === lifetime) {
+          lifetime.reading = false
           setLoading(false)
         }
       }
@@ -105,7 +117,15 @@ export function useTaskPageJiraSavedFilters(
 
   const mutate = async (mutation: JiraSavedFilterMutation): Promise<boolean> => {
     const lifetime = lifetimeRef.current
-    if (!ready || !target || !lifetime || lifetime.owner !== owner || lifetime.pending) {
+    if (
+      !ready ||
+      !target ||
+      !lifetime ||
+      lifetime.owner !== owner ||
+      !lifetime.state ||
+      lifetime.pending ||
+      lifetime.reading
+    ) {
       return false
     }
     lifetime.pending = true
@@ -116,14 +136,15 @@ export function useTaskPageJiraSavedFilters(
       if (lifetimeRef.current !== lifetime) {
         return false
       }
-      setSnapshot({ ownerKey, state: next })
+      lifetime.state = next
+      setSnapshot({ owner, state: next })
       if (mutation.kind === 'select') {
         const active = next.filters.find(
           (filter) => filter.id === mutation.id && filter.id === next.activeFilterId
         )
         if (active) {
           setQuery(active.jql)
-        } else if (mutation.id !== null) {
+        } else if (mutation.id !== null || next.activeFilterId !== null) {
           return false
         }
       } else if (mutation.kind === 'save' && next.activeFilterId === mutation.filter.id) {
@@ -155,7 +176,15 @@ export function useTaskPageJiraSavedFilters(
     jiraSavedFiltersLoading: loading,
     jiraSavedFiltersPending: pending,
     jiraSavedFiltersError: error,
-    retryJiraSavedFilters: () => setRefresh((value) => value + 1),
+    retryJiraSavedFilters: () => {
+      if (lifetimeRef.current?.pending) {
+        return
+      }
+      if (lifetimeRef.current) {
+        lifetimeRef.current.reading = true
+      }
+      setRefresh((value) => value + 1)
+    },
     applyJiraSavedFilter: (filter: JiraSavedFilter) => mutate({ kind: 'select', id: filter.id }),
     createJiraSavedFilter: async (filter: { name: string; jql: string }) => {
       await mutate({ kind: 'save', filter: { ...filter, id: createNonSecureContextUuid() } })
@@ -166,10 +195,23 @@ export function useTaskPageJiraSavedFilters(
     deleteJiraSavedFilter: async (id: string) => {
       await mutate({ kind: 'delete', id })
     },
-    clearJiraSavedFilterSelection: async () => {
-      if (state.activeFilterId) {
-        await mutate({ kind: 'select', id: null })
+    clearJiraSavedFilterSelection: async (): Promise<boolean> => {
+      const lifetime = lifetimeRef.current
+      if (
+        !ready ||
+        !target ||
+        !lifetime ||
+        lifetime.owner !== owner ||
+        !lifetime.state ||
+        lifetime.pending ||
+        lifetime.reading
+      ) {
+        return false
       }
+      if (lifetime.state?.activeFilterId) {
+        return mutate({ kind: 'select', id: null })
+      }
+      return true
     }
   }
 }

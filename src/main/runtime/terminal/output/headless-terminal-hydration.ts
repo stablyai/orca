@@ -12,6 +12,7 @@ import { shouldModelAnswerHiddenPtyQueries } from '../../terminal-model-query-au
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
+  protected abstract markPaneLiveTitlesDirty(): void
 
   // Why: hydrate the runtime headless emulator from the desktop renderer's
   // xterm buffer on the first onPtyData byte after a PTY is taken over by a
@@ -121,7 +122,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
   }
 
   // Why: seed-derived agent status reflects historical state. Orchestration
-  // waiters (resolveTuiIdleWaiters, deliverPendingMessages) must only react
+  // waiters (resolveTuiIdleWaiters, mailbox pointer delivery) must only react
   // to LIVE transitions, so this helper writes leaf.lastAgentStatus only,
   // leaves lastAgentStatusObservedLive untouched, and never resolves waiters.
   // detectAgentStatusFromTitle wrap mirrors the live path so seeded and live
@@ -160,6 +161,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         leaf.lastAgentStatus = status
       }
     }
+    this.markPaneLiveTitlesDirty()
   }
 
   /** Per-chunk reply-ownership capture (Phase 5). Evaluated synchronously at

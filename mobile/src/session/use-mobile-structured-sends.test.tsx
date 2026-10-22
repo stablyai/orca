@@ -168,6 +168,38 @@ describe('a structured send in the open chat', () => {
     expect(onSendError).not.toHaveBeenCalled()
   })
 
+  it.each([false, true])(
+    'forgets an acknowledged off-page echo after reconnect (snapshot beats reply: %s)',
+    async (snapshotFirst) => {
+      await mount()
+      const snapshot = journal([userRow('newest', 'newest reply', 401)], [])
+      if (snapshot.type !== 'snapshot') {
+        throw new Error('Expected snapshot')
+      }
+      snapshot.page.liveCursor = { epoch: 'epoch-1', sequence: 401 }
+      snapshot.page.window.nextCursor = snapshot.page.liveCursor
+      snapshot.page.hasOlder = true
+      if (snapshotFirst) {
+        answer = (id) => {
+          listener?.(snapshot)
+          return { clientMessageId: id, submission: recorded(id) }
+        }
+      }
+      const id = await send('sent before background streaming')
+      if (!snapshotFirst) {
+        expect(shown()).toEqual([
+          [agentJournalSubmissionKey(id), 'sent before background streaming']
+        ])
+        act(() => listener?.(snapshot))
+      }
+      expect(shown()).toEqual([[agentJournalSubmissionKey('newest'), 'newest reply']])
+      // A later page must not resurrect the echo that the authoritative read superseded.
+      act(() => listener?.(journal([], [])))
+      expect(shown()).toEqual([])
+      expect(onSendError).not.toHaveBeenCalled()
+    }
+  )
+
   // Same words as a not-sent row: once recorded, the resend is one bubble and hides the earlier copy.
   it('resends the words of a not-sent row as one bubble, with no stray copy', async () => {
     const failed = recorded('failed', 'rejected', { resolvedAt: 5, submittedAt: 4 })

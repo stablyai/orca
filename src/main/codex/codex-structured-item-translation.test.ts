@@ -515,14 +515,14 @@ describe('codex item bodies', () => {
       state: 'completed',
       output: {
         byteLength: 1_100_000,
-        truncated: true,
+        truncated: false,
         digest: expect.any(String)
       }
     })
     if (body?.kind !== 'tool-call' || !body.output) {
-      throw new Error('expected bounded command output')
+      throw new Error('expected command output')
     }
-    expect(body.output.head.length).toBeLessThan(20_000)
+    expect(body.output.head).toBe(output)
   })
 
   it('continues to accept camel-case command completion output', () => {
@@ -540,19 +540,19 @@ describe('codex item bodies', () => {
     })
   })
 
-  it('aggregates assistant content parts before bounding the message body', () => {
+  it('saves a long assistant reply whole, its content parts joined', () => {
+    const parts = Array.from({ length: 200 }, () => 'a'.repeat(10_000))
     const body = codexItemBody({
       type: 'agentMessage',
       id: 'assistant-parts',
-      content: Array.from({ length: 200 }, () => ({ type: 'text', text: 'a'.repeat(10_000) }))
+      content: parts.map((text) => ({ type: 'text', text }))
     })
     const text =
       body?.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : ''
 
     expect(body).toMatchObject({ kind: 'message', role: 'assistant' })
     expect(body?.kind === 'message' ? body.blocks : []).toHaveLength(1)
-    expect(text).toContain('output truncated')
-    expect(Buffer.byteLength(JSON.stringify(body), 'utf8')).toBeLessThan(20 * 1024)
+    expect(text).toBe(parts.join('\n'))
   })
 
   it('calls a nonzero exit a failure even though codex calls the status completed', () => {

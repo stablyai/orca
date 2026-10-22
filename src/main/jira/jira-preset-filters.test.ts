@@ -69,6 +69,22 @@ describe('Jira preset filters', () => {
     getClients.mockReturnValue([site('cloud')])
     jiraRequest.mockReset()
   })
+  it('keeps Cloud All project bounds when combining workflow statuses and current sprint', async () => {
+    jiraRequest.mockImplementation(async (_entry, path, init) => {
+      if (path.startsWith('/rest/api/3/project/search')) {
+        return { values: [{ id: '1', key: 'ABC', name: 'Example' }], isLast: true }
+      }
+      expect(requestJql(init)).toBe(
+        'project in ("1") AND statusCategory != Done AND status in ("Blocked") AND sprint in openSprints() ORDER BY updated DESC'
+      )
+      return { issues: [] }
+    })
+    const { listIssues } = await import('./jira-issue-search')
+    await expect(
+      listIssues('all', 20, 'cloud', false, { statuses: ['Blocked'], currentSprint: true })
+    ).resolves.toEqual([])
+    expect(jiraRequest).toHaveBeenCalledTimes(2)
+  })
 
   it.each<JiraIssueFilter>(['assigned', 'reported', 'done'])(
     '%s follows status when resolution is stale',

@@ -68,6 +68,7 @@ export type FirstPartyAgentStatus = {
   state: AgentStatusState
   updatedAt: number
   sessionBoundary?: boolean
+  programAtRest?: boolean
 } | null
 
 /** Tier 1: an idle marker the agent put in a title itself. */
@@ -83,13 +84,17 @@ export function hasExplicitIdleTitle(
 /**
  * Tier 1, first-party: a `sessionBoundary` row, which claims a NEW SESSION owns the pane and waits
  * for its first input. Producers set it only for a startup/resume/reset boundary, so it cannot
- * arrive mid-turn (#6011). An ordinary hook `done` decides only through the hook lane (tier 0).
+ * arrive mid-turn (#6011). An OSC 7501 `done` is the program's own at-rest claim and counts too.
+ * An ordinary hook `done` decides only through the hook lane (tier 0).
  */
 export function hasFreshDoneFirstPartyStatus(
   status: FirstPartyAgentStatus,
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  if (status?.state !== 'done' || status.sessionBoundary !== true) {
+  if (
+    status?.state !== 'done' ||
+    (status.sessionBoundary !== true && status.programAtRest !== true)
+  ) {
     return false
   }
   return Date.now() - status.updatedAt <= staleAfterMs

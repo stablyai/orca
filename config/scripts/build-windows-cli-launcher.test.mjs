@@ -11,7 +11,8 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { runProcessSync } from '@orca/process-host'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   shouldReuseCompiledWindowsRustExecutable,
   windowsRustExecutableFileVersion,
@@ -45,7 +46,135 @@ function itWindows(name, test) {
   runner(name, { timeout: 300_000 }, test)
 }
 
+let sharedLauncherRoot = null
+let sharedLauncherPath = null
+let sharedLauncherBuild = null
+
+// Compile once; each launch case gets a private copy so it can own its fixture tree.
+beforeAll(() => {
+  if (process.platform !== 'win32') {
+    return
+  }
+  sharedLauncherRoot = mkdtempSync(join(tmpdir(), 'orca cli launcher build '))
+  sharedLauncherPath = join(sharedLauncherRoot, 'orca.exe')
+  const result = runProcessSync({
+    program: process.execPath,
+    args: ['config/scripts/build-windows-cli-launcher.mjs'],
+    cwd: projectRoot,
+    timeoutMs: 300_000
+  })
+  sharedLauncherBuild = { status: result.code, stdout: result.stdout, stderr: result.stderr }
+  if (result.code !== 0) {
+    throw new Error(`${result.stdout}\n${result.stderr}`)
+  }
+  copyFileSync(
+    join(projectRoot, 'native', 'windows-cli-launcher', '.build', 'orca.exe'),
+    sharedLauncherPath
+  )
+}, 300_000)
+
+afterAll(() => {
+  if (sharedLauncherRoot) {
+    removeFixtureTree(sharedLauncherRoot)
+  }
+})
+
+function copySharedLauncher(target) {
+  if (!sharedLauncherPath) {
+    throw new Error('shared Windows CLI launcher was not built')
+  }
+  mkdirSync(dirname(target), { recursive: true })
+  copyFileSync(sharedLauncherPath, target)
+}
+
 describe('Windows CLI launcher', () => {
+  itWindows('reuses the hook host target while invalidating changed inputs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-hook-target-'))
+    try {
+      const hookScript = join('config', 'scripts', 'build-windows-agent-hook.mjs')
+      const crate = join('native', 'windows-agent-hook')
+      const outputFile = join(crate, '.build', 'orca-agent-hook.exe')
+      const outputPath = join(root, outputFile)
+      const fingerprintPath = `${outputPath}.sha256`
+      // Why the default output: it reuses a warm canonical prebuild; Cargo runs only when that is missing or stale.
+      const first = runProcessSync({
+        program: process.execPath,
+        args: [hookScript],
+        cwd: projectRoot,
+        timeoutMs: 300_000
+      })
+      expect(first.code, `${first.stdout}\n${first.stderr}`).toBe(0)
+      for (const file of [
+        outputFile,
+        `${outputFile}.sha256`,
+        'package.json',
+        hookScript,
+        join('config', 'scripts', 'windows-rust-executable-build.mjs'),
+        join('config', 'scripts', 'windows-pe-imports.mjs'),
+        join('resources', 'build', 'icon.ico'),
+        ...[
+          'src/main.rs',
+          'build.rs',
+          'Cargo.toml',
+          'Cargo.lock',
+          'app.manifest',
+          '.cargo/config.toml'
+        ].map((file) => join(crate, ...file.split('/')))
+      ]) {
+        mkdirSync(dirname(join(root, file)), { recursive: true })
+        copyFileSync(join(projectRoot, file), join(root, file))
+      }
+      const fingerprint = readFileSync(fingerprintPath, 'utf8')
+      const binary = readFileSync(outputPath)
+      // A reuse hit must succeed even when Cargo is unavailable.
+      const environment = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path')
+      )
+      environment.PATH = ''
+      const invoke = (args = []) =>
+        runProcessSync({
+          program: process.execPath,
+          args: [hookScript, ...args],
+          cwd: root,
+          env: environment,
+          timeoutMs: 10_000
+        })
+      for (const args of [[], ['--arch', process.arch]]) {
+        const reused = invoke(args)
+        expect(reused.code, `${reused.stdout}\n${reused.stderr}`).toBe(0)
+        expect(reused.stdout).toContain('reusing Windows agent hook')
+        expect(readFileSync(fingerprintPath, 'utf8')).toBe(fingerprint)
+        expect(readFileSync(outputPath)).toEqual(binary)
+      }
+      const otherArchitecture = process.arch === 'x64' ? 'arm64' : 'x64'
+      const crossTarget = invoke(['--arch', otherArchitecture])
+      expect(crossTarget.code).not.toBe(0)
+      expect(crossTarget.stderr).toContain('Unable to run cargo')
+      const unsupported = invoke(['--arch', 'ia32'])
+      expect(unsupported.code).not.toBe(0)
+      expect(unsupported.stderr).toContain('Unsupported Windows executable architecture: ia32')
+      for (const file of [join(crate, 'src', 'main.rs'), 'package.json']) {
+        const path = join(root, file)
+        const original = readFileSync(path, 'utf8')
+        writeFileSync(fingerprintPath, fingerprint)
+        writeFileSync(
+          path,
+          file === 'package.json'
+            ? JSON.stringify({ ...JSON.parse(original), version: '99.0.0' })
+            : `${original}\n// changed fixture source\n`
+        )
+        const changed = invoke()
+        expect(changed.code).not.toBe(0)
+        expect(changed.stderr).toContain('Unable to run cargo')
+        writeFileSync(path, original)
+      }
+      writeFileSync(fingerprintPath, fingerprint)
+      expect(invoke().code).toBe(0)
+    } finally {
+      removeFixtureTree(root)
+    }
+  })
+
   it('reuses restored builds only while all embedded inputs and the release version match', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-launcher-reuse-'))
     try {
@@ -107,12 +236,12 @@ describe('Windows CLI launcher', () => {
       const root = mkdtempSync(join(tmpdir(), 'orca launcher metadata '))
       try {
         const launcherPath = join(root, 'orca.exe')
-        const build = spawnSync(
-          process.execPath,
-          ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
-          { cwd: projectRoot, encoding: 'utf8' }
-        )
-        expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+        expect(sharedLauncherBuild).not.toBeNull()
+        expect(
+          sharedLauncherBuild.status,
+          `${sharedLauncherBuild.stdout}\n${sharedLauncherBuild.stderr}`
+        ).toBe(0)
+        copySharedLauncher(launcherPath)
         const inspect = spawnSync(
           'powershell.exe',
           [
@@ -183,12 +312,7 @@ describe('Windows CLI launcher', () => {
         'utf8'
       )
 
-      const build = spawnSync(
-        process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
-        { cwd: projectRoot, encoding: 'utf8' }
-      )
-      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+      copySharedLauncher(launcherPath)
 
       const body = 'paragraph one line one\nparagraph one line two\n\nparagraph two'
       const powershell = spawnSync(
@@ -247,12 +371,7 @@ describe('Windows CLI launcher', () => {
 }))\n`,
         'utf8'
       )
-      const build = spawnSync(
-        process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
-        { cwd: projectRoot, encoding: 'utf8' }
-      )
-      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+      copySharedLauncher(launcherPath)
       writeFileSync(
         join(dirname(launcherPath), 'orca-launcher.cfg'),
         `node=${process.execPath}\ncli=${cliPath}\nuser-data=${profile}\n`
@@ -326,12 +445,7 @@ describe('Windows CLI launcher', () => {
 }))\n`,
         'utf8'
       )
-      const build = spawnSync(
-        process.execPath,
-        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
-        { cwd: projectRoot, encoding: 'utf8' }
-      )
-      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+      copySharedLauncher(launcherPath)
 
       const compiler = findFrameworkCompiler()
       expect(compiler).not.toBeNull()

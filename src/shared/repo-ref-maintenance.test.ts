@@ -141,7 +141,8 @@ async function until(predicate: () => boolean, what: string): Promise<void> {
 async function untilWithTimers(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 10_000
   while (!predicate() && Date.now() < deadline) {
-    await vi.advanceTimersByTimeAsync(QUIET_MS)
+    // Leave real I/O time to settle before consuming the attempt deadline.
+    await vi.advanceTimersByTimeAsync(1)
     await yieldToIo()
   }
   if (!predicate()) {

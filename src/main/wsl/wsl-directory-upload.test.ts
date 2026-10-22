@@ -14,8 +14,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './wsl-directory-upload'
-import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
+import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 
 function hasSha256sum(): boolean {
   try {
@@ -56,22 +57,39 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
   let source: string
   let dest: string
   let commands: string[]
+  const transports: WslOrcadHostTransport[] = []
+  const children: PipedChildProcess[] = []
 
-  const transport = createWslOrcadHostTransport({
-    target: { kind: 'wsl', id: 'env-test', distro: 'test', label: 'test' },
-    spawn: (spec) => {
-      const args = spec.args ?? []
-      const command = args[args.indexOf('--exec') + 3] ?? ''
-      commands.push(command)
-      return spawnProcess({ program: 'sh', args: ['-c', command], stdio: 'pipe' })
+  const getTransport = (): WslOrcadHostTransport => {
+    const transport = transports.at(-1)
+    if (!transport) {
+      throw new Error('WSL test transport was not initialized')
     }
-  })
+    return transport
+  }
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'wsl-upload-'))
     source = join(root, 'source')
     dest = join(root, 'dest')
     commands = []
+    const transport = createWslOrcadHostTransport({
+      target: { kind: 'wsl', id: 'env-test', distro: 'test', label: 'test' },
+      spawn: (spec) => {
+        const args = spec.args ?? []
+        const execIndex = args.indexOf('--exec')
+        const command = args[execIndex + 3] ?? ''
+        commands.push(command)
+        const child = spawnProcess({
+          program: 'sh',
+          args: args.slice(execIndex + 2),
+          stdio: 'pipe'
+        })
+        children.push(child)
+        return child
+      }
+    })
+    transports.push(transport)
     mkdirSync(join(source, 'bin'), { recursive: true })
     mkdirSync(join(source, 'empty'), { recursive: true })
     writeFileSync(join(source, 'bin', 'tool'), '#!/bin/sh\necho ran\n')
@@ -81,6 +99,8 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
   })
 
   afterEach(() => {
+    transports.splice(0).forEach((transport) => transport.dispose())
+    children.splice(0).forEach((child) => child.kill())
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -94,19 +114,19 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
   }
 
   it('streams a tar when the guest cannot see the source', async () => {
-    await uploadDirectoryIntoWsl(transport, source, null, dest)
+    await uploadDirectoryIntoWsl(getTransport(), source, null, dest)
     expectUploaded()
     expect(commands.some((command) => command.includes('tar -x'))).toBe(true)
   })
 
   it('copies from the guest-visible path without a tar stream', async () => {
-    await uploadDirectoryIntoWsl(transport, source, source, dest)
+    await uploadDirectoryIntoWsl(getTransport(), source, source, dest)
     expectUploaded()
     expect(commands.some((command) => command.includes('tar -x'))).toBe(false)
   })
 
   it('falls back to the tar stream when the mount is missing', async () => {
-    await uploadDirectoryIntoWsl(transport, source, join(root, 'not-mounted'), dest)
+    await uploadDirectoryIntoWsl(getTransport(), source, join(root, 'not-mounted'), dest)
     expectUploaded()
     expect(commands.some((command) => command.includes('tar -x'))).toBe(true)
   })
@@ -115,7 +135,7 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
     mkdirSync(dest, { recursive: true })
     writeFileSync(join(dest, 'keep.txt'), 'kept')
     writeFileSync(join(dest, 'large.bin'), 'stale')
-    await uploadDirectoryIntoWsl(transport, source, null, dest)
+    await uploadDirectoryIntoWsl(getTransport(), source, null, dest)
     expectUploaded()
     expect(readFileSync(join(dest, 'keep.txt'), 'utf8')).toBe('kept')
   })
@@ -124,7 +144,7 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
     const other = join(root, 'other')
     execFileSync('cp', ['-R', source, other])
     writeFileSync(join(other, 'large.bin'), 'tampered')
-    await expect(uploadDirectoryIntoWsl(transport, source, other, dest)).rejects.toThrow(
+    await expect(uploadDirectoryIntoWsl(getTransport(), source, other, dest)).rejects.toThrow(
       /digest check/
     )
     expect(existsSync(join(dest, 'large.bin'))).toBe(false)
@@ -132,7 +152,7 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
   })
 
   it('writes a file atomically through stdin', async () => {
-    await transport.writeFile(join(dest, 'nested', 'record.json'), '{"ok":true}')
+    await getTransport().writeFile(join(dest, 'nested', 'record.json'), '{"ok":true}')
     expect(readFileSync(join(dest, 'nested', 'record.json'), 'utf8')).toBe('{"ok":true}')
   })
 })

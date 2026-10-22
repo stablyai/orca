@@ -19,10 +19,15 @@ import {
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   findUnhydratedHostMirrorForPane,
+  isHostMirroredSleepingRecord,
   type UnhydratedHostMirror
 } from './host-mirrored-pane-liveness'
 import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
-import { sleepingRecordNamesAnotherExecutionHost } from './sleeping-record-execution-host-scope'
+import { getClaimRepresentativeRecords } from './sleeping-record-claim-representative'
+import {
+  sleepingRecordHostAllowsSessionClaim,
+  sleepingRecordNamesAnotherExecutionHost
+} from './sleeping-record-execution-host-scope'
 import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
 import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
 
@@ -60,24 +65,6 @@ function getCurrentPaneOwnedClaimKeys(records: readonly SleepingAgentSessionReco
     }
   }
   return keys
-}
-
-function getNewestActiveRecordsByClaimKey(
-  records: readonly SleepingAgentSessionRecord[]
-): Map<string, SleepingAgentSessionRecord> {
-  const newestRecords = new Map<string, SleepingAgentSessionRecord>()
-  for (const record of records) {
-    const claimKey = getProviderSessionClaimKey(record)
-    const current = newestRecords.get(claimKey)
-    if (
-      !current ||
-      record.capturedAt > current.capturedAt ||
-      (record.capturedAt === current.capturedAt && record.updatedAt > current.updatedAt)
-    ) {
-      newestRecords.set(claimKey, record)
-    }
-  }
-  return newestRecords
 }
 
 function getAgentStatusTabId(entry: {
@@ -174,6 +161,24 @@ function activeOrQueuedResumeClaimsProviderSession(
   return false
 }
 
+function providerSessionOwnedElsewhere(
+  record: SleepingAgentSessionRecord,
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  // Same-worktree duplicates are handled by claim keys; finished notes never claim a session, and
+  // neither does a record whose host moved or that names a different machine than this record.
+  return Object.values(state.sleepingAgentSessionsByPaneKey).some(
+    (other) =>
+      other.worktreeId !== record.worktreeId &&
+      other.agent === record.agent &&
+      !isInvalidWorktreeActivationRecord(other) &&
+      !activationTreatsNoteAsFinished(other) &&
+      sleepingRecordHostAllowsSessionClaim(other, record, state) &&
+      agentProviderSessionsEqual(record.agent, other.providerSession, record.providerSession) &&
+      recordPaneIsOwnedByPreservedPane(other, state)
+  )
+}
+
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
 // prompt — so discarding those records only stranded the session across wake and restart.
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
@@ -231,7 +236,8 @@ export function resumeSleepingAgentSessionsForWorktree(
   // on it forks a second agent onto a transcript the host is still writing (STA-3500). Declining is
   // recoverable — the record survives, and the caller re-runs this sweep once the verdict lands.
   // Paired-runtime workspaces keep their own per-pane mirror park below, which is finer-grained.
-  if (resolveWorkspaceTerminalHostAuthority(state, worktreeId) === 'unverifiable') {
+  const hostAuthority = resolveWorkspaceTerminalHostAuthority(state, worktreeId)
+  if (hostAuthority === 'unverifiable') {
     return 0
   }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
@@ -244,7 +250,12 @@ export function resumeSleepingAgentSessionsForWorktree(
     (record) => !activationTreatsNoteAsFinished(record)
   )
   const activeClaimKeys = new Set(activeWorktreeRecords.map(getProviderSessionClaimKey))
-  const newestActiveRecordByClaimKey = getNewestActiveRecordsByClaimKey(activeWorktreeRecords)
+  // Why: a record this host may not resume must not outrank, and so delete, one it may.
+  const claimRepresentativeByKey = getClaimRepresentativeRecords(
+    activeWorktreeRecords.filter(
+      (record) => !sleepingRecordNamesAnotherExecutionHost(record, state)
+    )
+  )
   const freshlyLaunchedClaimKeys = new Set<string>()
 
   let launched = 0
@@ -311,11 +322,24 @@ export function resumeSleepingAgentSessionsForWorktree(
       state.clearSleepingAgentSession(record.paneKey)
       continue
     }
-    if (newestActiveRecordByClaimKey.get(claimKey) !== record) {
+    if (claimRepresentativeByKey.get(claimKey) !== record) {
       state.clearSleepingAgentSession(record.paneKey)
       continue
     }
     if (isPaneOwned) {
+      continue
+    }
+    // Why: on a paired runtime's workspace local rows cannot tell a close on another client from a
+    // re-key or pending handle, whatever the pane key's shape (#21235); only the host can authorize
+    // a writer. A mirrored record represents its claim key, so a native sibling never launches.
+    if (hostAuthority === 'live' || isHostMirroredSleepingRecord(record)) {
+      continue
+    }
+    // Why: claim keys are worktree-scoped, but a provider session is global —
+    // a record whose stored worktreeId went stale must not relaunch a session
+    // that a pane tracked by another record still owns.
+    if (providerSessionOwnedElsewhere(record, currentState)) {
+      state.clearSleepingAgentSession(record.paneKey)
       continue
     }
     if (launchSleepingAgentSession(record, options)) {

@@ -84,8 +84,8 @@ describe('automation search row fields', () => {
       throw new Error('fixture produced no external entry')
     }
     const fields = buildExternalAutomationSearchFields(entry)
-    expect(fields.name).toBe('Hermes job')
-    expect(fields.agent).toBe('Hermes')
+    expect(fields.name).toBe('OpenClaw job')
+    expect(fields.agent).toBe('OpenClaw')
     expect(fields.host).toBe('This computer')
     expect(fields.prompt).toBe('Sweep')
   })

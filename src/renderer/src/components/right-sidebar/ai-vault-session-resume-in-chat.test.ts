@@ -40,7 +40,7 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     expect(eligibility()).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca' })
   })
 
-  it.each<AiVaultSession['agent']>(['grok', 'omp', 'opencode', 'opencode2'])(
+  it.each<AiVaultSession['agent']>(['grok', 'omp', 'opencode', 'opencode2', 'pi'])(
     'offers the chat for a local %s row in its own workspace',
     (agent) => {
       expect(eligibility({ session: session({ agent }) })).toEqual({
@@ -50,7 +50,7 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     }
   )
 
-  it.each<AiVaultSession['agent']>(['hermes', 'pi'])(
+  it.each<AiVaultSession['agent']>(['hermes', 'gemini'])(
     'refuses %s, whose chats cannot take over a CLI conversation',
     (agent) => {
       expect(eligibility({ session: session({ agent }) })).toEqual({
@@ -124,7 +124,7 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
 })
 
 describe('workspace matching, which binds the agents that store conversations per folder', () => {
-  it.each<AiVaultSession['agent']>(['claude', 'grok', 'omp', 'opencode', 'opencode2'])(
+  it.each<AiVaultSession['agent']>(['claude', 'grok', 'omp', 'opencode', 'opencode2', 'pi'])(
     'refuses a %s row whose conversation was recorded in another workspace',
     (agent) => {
       // These key conversations by launch cwd, so resuming elsewhere finds or loads nothing.

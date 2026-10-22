@@ -5,6 +5,7 @@ import {
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
+import { selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
@@ -12,12 +13,40 @@ export type CliErrorContext = {
   commandPath?: readonly string[]
   /** The `--worktree` value this invocation sent; the runtime's error never echoes it. */
   worktreeSelector?: string
+  /** The `--repo` value this invocation sent, for the same reason. */
+  repoSelector?: string
+  /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
+  remoteServerSelected?: boolean
 }
 
-function selectorRecovery(code: string | undefined, context: CliErrorContext) {
-  return code === 'selector_not_found' && context.worktreeSelector
-    ? worktreeSelectorRecovery(context.worktreeSelector)
-    : undefined
+type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
+
+const STALE_HANDLE_SERVER_HINT =
+  'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
+
+function contextRecovery(
+  code: string | undefined,
+  context: CliErrorContext
+): ContextRecovery | undefined {
+  if (code === 'selector_not_found' && context.worktreeSelector) {
+    return worktreeSelectorRecovery(context.worktreeSelector)
+  }
+  if (code === 'selector_ambiguous') {
+    return selectorAmbiguityRecovery({
+      repo: context.repoSelector,
+      worktree: context.worktreeSelector,
+      remoteServerSelected: context.remoteServerSelected
+    })
+  }
+  // Why: a paired server's handle sent to this machine reads as a dead terminal, not a missing flag.
+  if (
+    code === 'terminal_handle_stale' &&
+    context.commandPath?.[0] === 'terminal' &&
+    context.remoteServerSelected === false
+  ) {
+    return { nextSteps: [STALE_HANDLE_SERVER_HINT] }
+  }
+  return undefined
 }
 
 function errorData(error: unknown): unknown {
@@ -36,11 +65,11 @@ function errorCode(error: unknown): string | undefined {
 
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
-  const selector = selectorRecovery(errorCode(error), context)
+  const selector = contextRecovery(errorCode(error), context)
   if (selector) {
     return formatMessageWithNextSteps(
       message,
-      nextStepsFromData(mergeSelectorRecovery(errorData(error), selector))
+      nextStepsFromData(mergeContextRecovery(errorData(error), selector))
     )
   }
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
@@ -54,6 +83,10 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
   const conflict = automationOwnerConflictRecovery(matchAutomationOwnerConflict(error))
   if (conflict) {
     return formatMessageWithNextSteps(stripAutomationOwnerConflictCode(message), conflict.nextSteps)
+  }
+  const sidecarExit = computerSidecarExitRecovery(error, context)
+  if (sidecarExit) {
+    return formatMessageWithNextSteps(message, sidecarExit.nextSteps)
   }
   if (error instanceof RuntimeClientError) {
     const nextSteps = nextStepsFromData(error.data)
@@ -88,10 +121,13 @@ function hasOrchestrationRequestId(data: unknown): boolean {
 }
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
-  const selector = selectorRecovery(errorCode(error), context)
+  const selector = contextRecovery(errorCode(error), context)
   if (json) {
     if (error instanceof RuntimeRpcFailureError) {
-      const response = withAutomationOwnerConflictRecovery(error.response)
+      const sidecarExit = computerSidecarExitRecovery(error, context)
+      const response = sidecarExit
+        ? { ...error.response, error: { ...error.response.error, data: sidecarExit } }
+        : withAutomationOwnerConflictRecovery(error.response)
       console.log(
         JSON.stringify(
           selector
@@ -99,7 +135,7 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
                 ...response,
                 error: {
                   ...response.error,
-                  data: mergeSelectorRecovery(response.error.data, selector)
+                  data: mergeContextRecovery(response.error.data, selector)
                 }
               }
             : response,
@@ -158,9 +194,9 @@ function formatMessageWithNextSteps(message: string, nextSteps: readonly string[
 }
 
 /** Why merge: a mutation error already carries its request id, and `??` dropped the selector grammar. */
-function mergeSelectorRecovery(
+function mergeContextRecovery(
   data: unknown,
-  selector: ReturnType<typeof selectorRecovery>
+  selector: ReturnType<typeof contextRecovery>
 ): unknown {
   if (!selector) {
     return data
@@ -188,11 +224,28 @@ function nextStepsFromData(data: unknown): string[] {
   return []
 }
 
+/** Read here, not from the error's data: the servers that send this predate the hint (#31777). */
+function computerSidecarExitRecovery(error: unknown, context: CliErrorContext) {
+  if (
+    context.commandPath?.[0] !== 'computer' ||
+    errorCode(error) !== 'accessibility_error' ||
+    !(error instanceof Error) ||
+    !error.message.startsWith('computer sidecar exited with code')
+  ) {
+    return undefined
+  }
+  return computerUseErrorRecoveryData('accessibility_error', error.message)
+}
+
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
-  const selector = selectorRecovery(errorCode(error), context)
+  const sidecarExit = computerSidecarExitRecovery(error, context)
+  if (sidecarExit) {
+    return sidecarExit
+  }
+  const selector = contextRecovery(errorCode(error), context)
   // Why: error-specific recovery must win over the generic computer fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
-    return mergeSelectorRecovery(error.data, selector)
+    return mergeContextRecovery(error.data, selector)
   }
   if (selector) {
     return selector

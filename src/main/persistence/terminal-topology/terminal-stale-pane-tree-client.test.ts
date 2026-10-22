@@ -6,7 +6,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
-import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from '../../runtime/orca-runtime-close-headless-mobile-terminal-tab'
+import type { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from '../../runtime/session-tabs/headless-terminal-tab-close'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../loading-store/store'
 import { closeLeafOrTab } from './terminal-topology-commit'
@@ -19,7 +19,7 @@ import { leafIds, WindowSession } from './terminal-topology-window-session-fixtu
 import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -46,12 +46,12 @@ class PaneLayoutRuntime extends OrcaRuntimeService {
     return null
   }
 
-  protected override getWorkspaceSessionForWorktree(): WorkspaceSessionState {
+  public override getWorkspaceSessionForWorktree(): WorkspaceSessionState {
     // SAFETY: paneLayoutHandler receives the real Store opened by this fixture.
     return this.requireStore().getWorkspaceSession!()
   }
 
-  protected override setWorkspaceSessionForWorktree(
+  public override setWorkspaceSessionForWorktree(
     _worktreeId: string,
     session: WorkspaceSessionState
   ): void {

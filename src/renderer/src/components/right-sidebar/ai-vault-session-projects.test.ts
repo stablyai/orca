@@ -10,7 +10,11 @@ import {
   buildAiVaultProjectContext,
   buildAiVaultSessionProjectById
 } from './ai-vault-session-projects'
-import { groupAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
+import { truncateAiVaultListResult } from '../../../../shared/ai-vault-session-depth'
+import {
+  groupAiVaultSessions,
+  filterAiVaultSessions
+} from '../../../../shared/ai-vault-session-filters'
 
 const baseSession: AiVaultSession = {
   id: 'claude:1',
@@ -524,6 +528,53 @@ describe('buildAiVaultSessionProjectById', () => {
 
     expect(map.get('claude:nfd')).toMatchObject({ kind: 'repo', key: 'repo:repo-1' })
   })
+  it('attributes a real-path session to the symlinked workspace its host alias names', () => {
+    const parent = makeRepo({ id: 'parent', displayName: 'Work', path: '/Users/ada/work' })
+    const child = makeRepo({ id: 'child', displayName: 'Api', path: '/Users/ada/work/api' })
+    const map = buildAiVaultSessionProjectById({
+      repos: [parent, child],
+      worktrees: [
+        makeWorktree({ id: 'wt-parent', repoId: parent.id, path: parent.path }),
+        makeWorktree({ id: 'wt-child', repoId: child.id, path: child.path })
+      ],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        makeSession({
+          id: 'claude:linked',
+          cwd: '/data/src/api/pkg',
+          cwdAliases: ['/Users/ada/work/api/pkg']
+        })
+      ]
+    })
+
+    expect(map.get('claude:linked')).toMatchObject({ kind: 'repo', key: 'repo:child' })
+  })
+
+  it('keeps a nested project over a longer-spelled parent link that reaches it through an alias', () => {
+    const parent = makeRepo({
+      id: 'parent',
+      displayName: 'Parent',
+      path: '/a-very-long-parent-link'
+    })
+    const child = makeRepo({ id: 'child', displayName: 'Child', path: '/real/child' })
+    const map = buildAiVaultSessionProjectById({
+      repos: [parent, child],
+      worktrees: [
+        makeWorktree({ id: 'wt-parent', repoId: parent.id, path: parent.path }),
+        makeWorktree({ id: 'wt-child', repoId: child.id, path: child.path })
+      ],
+      projectHostSetupProjection: makeProjection({}),
+      sessions: [
+        makeSession({
+          id: 'claude:nested',
+          cwd: '/real/child/pkg',
+          cwdAliases: ['/a-very-long-parent-link/child/pkg']
+        })
+      ]
+    })
+
+    expect(map.get('claude:nested')).toMatchObject({ kind: 'repo', key: 'repo:child' })
+  })
 })
 
 function makeSession(overrides: Partial<AiVaultSession>): AiVaultSession {
@@ -706,4 +757,54 @@ describe('AI vault session project attribution reuse', () => {
     expect(result.get('empty')?.kind).toBe('unknown')
     expect(result.get('real')?.key).toBe('repo:repo-a')
   })
+})
+
+it('keeps WSL distro identity through project memoization, Workspace filtering and cache depth', () => {
+  const scope = String.raw`\\wsl.localhost\Ubuntu\home\ada\repo`
+  const repo = makeRepo({ id: 'ubuntu', path: scope })
+  const sessions = ['Debian', 'Ubuntu'].map((distro) =>
+    makeSession({
+      id: distro,
+      cwd: '/home/ada/repo/src',
+      filePath: `//wsl$/${distro}/home/ada/session.jsonl`
+    })
+  )
+  const projects = buildAiVaultSessionProjectById({
+    repos: [repo],
+    worktrees: [],
+    projectHostSetupProjection: makeProjection({}),
+    sessions
+  })
+  expect(projects.get('Debian')?.kind).toBe('folder')
+  expect(projects.get('Ubuntu')?.key).toBe('repo:ubuntu')
+  const loaded = {
+    sessions: [makeSession({ id: 'global', cwd: '/other' }), ...sessions],
+    issues: [],
+    scannedAt: '2026-10-10T00:00:00.000Z'
+  }
+  for (const depth of [2, 1]) {
+    const trimmed = truncateAiVaultListResult(loaded, depth, [scope])
+    expect(
+      filterAiVaultSessions(trimmed.sessions, {
+        query: '',
+        agents: ['claude'],
+        scope: 'workspace',
+        sort: 'updated',
+        activeWorktreePaths: [scope],
+        hideEmptySessions: true
+      }).map((row) => row.id)
+    ).toEqual(['Ubuntu'])
+  }
+  expect(
+    filterAiVaultSessions(sessions, {
+      query: '',
+      agents: ['claude'],
+      scope: 'project',
+      sort: 'updated',
+      activeWorktreePaths: [scope],
+      activeProjectKey: 'repo:ubuntu',
+      sessionProjectById: projects,
+      hideEmptySessions: true
+    }).map((row) => row.id)
+  ).toEqual(['Ubuntu'])
 })

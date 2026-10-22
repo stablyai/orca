@@ -30,7 +30,10 @@ function pane(opts: { fontSize: number; cellWidth: number; title?: boolean }): F
     terminal: {
       element,
       options: { fontSize: opts.fontSize, scrollback: 1000, scrollbar: undefined },
-      dimensions: { css: { cell: { width: opts.cellWidth, height: 16 } } }
+      dimensions: {
+        device: { cell: { width: opts.cellWidth, height: 16 } },
+        css: { cell: { width: opts.cellWidth, height: 16 } }
+      }
     }
   }
 }

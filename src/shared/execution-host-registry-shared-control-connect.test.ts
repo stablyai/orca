@@ -33,6 +33,10 @@ function diagnostics(
 
 // Mirrors applyRuntimeHostStatusSnapshot: only a verified, unretired snapshot projects `status`.
 function healthFor(snapshot: RuntimeHostStatusSnapshot): string | undefined {
+  return hostFor(snapshot)?.health
+}
+
+function hostFor(snapshot: RuntimeHostStatusSnapshot) {
   const status =
     snapshot.verification === 'verified' && !snapshot.retired && snapshot.status
       ? { ...snapshot.status, remoteControl: snapshot.remoteControl ?? undefined }
@@ -52,7 +56,7 @@ function healthFor(snapshot: RuntimeHostStatusSnapshot): string | undefined {
         }
       ]
     ])
-  }).find((host) => host.id === 'runtime:env-1')?.health
+  }).find((host) => host.id === 'runtime:env-1')
 }
 
 function snapshot(patch: Partial<RuntimeHostStatusSnapshot>): RuntimeHostStatusSnapshot {
@@ -123,5 +127,27 @@ describe('runtime host health while shared control connects (#10704)', () => {
     expect(latest().status).toEqual(STATUS)
     expect(healthFor(latest())).toBe('connecting')
     owner.dispose()
+  })
+
+  it('carries why a blocked host refused this client', () => {
+    expect(
+      hostFor(snapshot({ verification: 'blocked', blockedReason: 'access-revoked' }))
+    ).toMatchObject({ health: 'blocked', blockedReason: 'access-revoked' })
+    expect(
+      hostFor(snapshot({ verification: 'blocked', blockedReason: 'incompatible' }))
+    ).toMatchObject({ health: 'blocked', blockedReason: 'incompatible' })
+    expect(
+      hostFor(
+        snapshot({
+          status: { ...STATUS, runtimeProtocolVersion: 0, protocolVersion: 0 }
+        })
+      )
+    ).toMatchObject({ health: 'blocked', blockedReason: 'incompatible' })
+    expect(hostFor(snapshot({}))).not.toHaveProperty('blockedReason')
+    const retired = hostFor(
+      snapshot({ verification: 'blocked', retired: true, transport: 'disconnected' })
+    )
+    expect(retired).toMatchObject({ health: 'disconnected' })
+    expect(retired).not.toHaveProperty('blockedReason')
   })
 })

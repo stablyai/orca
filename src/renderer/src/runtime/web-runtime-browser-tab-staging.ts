@@ -1,11 +1,18 @@
 import { useAppStore } from '../store'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import {
+  forgetDesktopCreatedServerTab,
+  noteDesktopCreatedServerTab
+} from '@/lib/desktop-created-server-tabs'
 
 /** Local rows minted for a browser tab whose host create RPC has not answered yet. */
 export type StagedWebRuntimeBrowserTab = {
   workspaceId: string
   pageId: string
   clientHosted: boolean
+  /** Its tab-bar entry, once staging drew one. */
+  tabId?: string
 }
 
 /**
@@ -53,7 +60,19 @@ export function stageWebRuntimeBrowserTab(args: {
       staged: true,
       ...(args.clientHosted ? { stagedClientHosted: true } : {})
     })
-    return { workspaceId: workspace.id, pageId, clientHosted: args.clientHosted === true }
+    const tabId = useAppStore
+      .getState()
+      .unifiedTabsByWorktree[args.worktreeId]?.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+      )?.id
+    const staged = {
+      workspaceId: workspace.id,
+      pageId,
+      clientHosted: args.clientHosted === true,
+      ...(tabId ? { tabId } : {})
+    }
+    noteClientHosting(args.environmentId, args.worktreeId, staged)
+    return staged
   } catch (error) {
     // Why: staging is an optimization; a store-side refusal must not fail the create itself.
     console.warn(
@@ -155,7 +174,7 @@ export function rehomeStagedWebRuntimeBrowserTab(
  */
 export function restageWebRuntimeBrowserTabHostingIntent(
   staged: StagedWebRuntimeBrowserTab,
-  args: { environmentId: string; remotePageId: string; clientHosted: boolean }
+  args: { environmentId: string; worktreeId: string; remotePageId: string; clientHosted: boolean }
 ): StagedWebRuntimeBrowserTab {
   if (staged.clientHosted === args.clientHosted) {
     return staged
@@ -170,7 +189,29 @@ export function restageWebRuntimeBrowserTabHostingIntent(
     staged: true,
     ...(args.clientHosted ? { stagedClientHosted: true } : {})
   })
-  return { ...staged, clientHosted: args.clientHosted }
+  const restaged = { ...staged, clientHosted: args.clientHosted }
+  noteClientHosting(args.environmentId, args.worktreeId, restaged)
+  return restaged
+}
+
+/** A client-hosted page never enters its server's layout, so that server's frames keep the tab (L274). */
+function noteClientHosting(
+  environmentId: string,
+  worktreeId: string,
+  staged: StagedWebRuntimeBrowserTab
+): void {
+  // Switch point: only a server's frames, which a layout-owner build draws, need the record.
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return
+  }
+  // By both ids: its browser workspace and its tab-bar entry.
+  for (const id of [staged.workspaceId, ...(staged.tabId ? [staged.tabId] : [])]) {
+    if (staged.clientHosted) {
+      noteDesktopCreatedServerTab(environmentId, worktreeId, id)
+    } else {
+      forgetDesktopCreatedServerTab(id)
+    }
+  }
 }
 
 /**

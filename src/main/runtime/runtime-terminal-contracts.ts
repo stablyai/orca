@@ -1,3 +1,4 @@
+import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
@@ -25,7 +26,7 @@ import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
-import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
+import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
 
 export type TerminalCreateOptions = {
   command?: string
@@ -40,6 +41,8 @@ export type TerminalCreateOptions = {
   shellOverride?: string
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
+  /** The caller's own measured pane size; wins over the group's measured size and the 120x40 fallback. */
+  initialSize?: { cols: number; rows: number }
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
@@ -56,6 +59,18 @@ export type TerminalCreateOptions = {
    * and post-start delivery belongs to whoever owns the live PTY.
    */
   startupPrompt?: string
+  /**
+   * `draft` puts `startupPrompt` in the agent's composer unsent, through its draft flag or env.
+   * TEMPORARY (createAgentSession parity, removed by the PR that gives prompts and drafts one
+   * delivery policy): a draft skips the typed-line carry rule, as it did before this planner.
+   */
+  startupPromptDelivery?: 'auto-submit' | 'draft'
+  /**
+   * TEMPORARY (createAgentSession parity, removed by the PR that delivers uncarried prompts after
+   * start): `startupPrompt` rides the typed line at any size, and an agent that reads it only after
+   * start launches clean instead of being refused, as createAgentSession did before this planner.
+   */
+  startupPromptCarry?: 'force-line'
   /** Main-internal: whether `startupPrompt` rode the launch command. Called once the plan is built. */
   onStartupPromptCarry?: (carried: boolean) => void
   /**
@@ -74,10 +89,13 @@ export type TerminalCreateOptions = {
   accountEnv?: Record<string, string>
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
+  terminalImageViewerSupported?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
+  /** Main-internal placement anchor; removed before PTY dispatch. */
+  afterTabId?: string
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   /** The surface that asked for this `startupAgent` launch; the runtime attributes every one it
@@ -92,6 +110,13 @@ export type TerminalCreateOptions = {
   agentLaunchViewer?: () => AgentLaunchTabViewerRule
   tabId?: string
   leafId?: string
+  /** Layout-owner build: a pane this create writes stays when its start fails, showing why. */
+  keepPaneOnStartFailure?: true
+  /** With `keepPaneOnStartFailure`: a start already known to fail; only its pane is written. */
+  startFailure?: Error
+  /** Layout-owner build: main's start wakes the pane's sleeping record in place of the window's
+   *  own restore, so it publishes whether the agent came back. */
+  resumesSleepingRecord?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string
@@ -161,11 +186,31 @@ export type RuntimeTerminalAgentStatusEvent = {
   /** Set by the process-lifetime producer; see AgentHookServer.ingestTerminalStatus. */
   origin?: 'process'
   yieldsToHookSince?: number
+  /** Projected from OSC 7501; the store applies it only where hooks do not speak for the pane. */
+  fromProgramStatus?: true
+  /** The program left no records, so a row it owns is removed rather than written. */
+  removesProgramStatusRow?: true
+  /** A repeat of the program's live report that renews its row's freshness lease. */
+  renewsProgramStatusLease?: true
+}
+
+/** A pane's OSC 7501 facet changed. `facet: null` means the program's root record is gone. */
+export type RuntimeTerminalProgramStatusFacetEvent = {
+  ptyId: string
+  paneKey: string
+  facet: ProgramStatusFacet | null
 }
 
 export type HookLiveAgentRow = Pick<
   RuntimeAgentRowSnapshot,
-  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId'
+  | 'payload'
+  | 'updatedAt'
+  | 'evidenceObservedAt'
+  | 'stateStartedAt'
+  | 'turnEndedAt'
+  | 'turnEndDisposition'
+  | 'worktreeId'
+  | 'programStatus'
 >
 
 export type TerminalHandleRecord = {
@@ -211,6 +256,14 @@ export type OrchestrationCompatibilitySshAttachmentAuthority = Extract<
   OrchestrationCompatibilityHostStamp,
   { kind: 'ssh' }
 >
+
+/** COMPAT(legacy-relay-bridge): a relay-era terminal this runtime no longer hosts, which the
+ *  bridge verified for the one CLI call its attachment lives for. */
+export type OrchestrationCompatibilitySshTerminal = Readonly<{
+  handle: string
+  paneKey: string
+  processIncarnation?: string
+}>
 
 export type TerminalWaiter = {
   handle: string

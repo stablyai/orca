@@ -1,5 +1,6 @@
 import { TaskPageJiraStatusFilters } from '../../TaskPageJiraStatusFilters'
 import { TaskPageJiraSavedFilters } from '../../TaskPageJiraSavedFilters'
+import { TaskPageJiraFavouriteFilters } from '../../TaskPageJiraFavouriteFilters'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -10,6 +11,8 @@ import { translate } from '@/i18n/i18n'
 import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { JiraProjectPicker } from '@/components/jira-project-picker'
+import { matchesJiraProject } from '../../../../../shared/jira-project-reference'
 export function TaskPageJiraFilters({
   model
 }: {
@@ -53,8 +56,22 @@ export function TaskPageJiraFilters({
     <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
+          <div className="min-w-0 max-w-64">
+            <JiraProjectPicker
+              projects={sortedAvailableJiraProjects}
+              value={model.jiraProjectFilter}
+              onChange={model.setJiraProjectFilter}
+              label={translate('components.jiraProjectPicker.label', 'Jira project')}
+              emptyLabel={translate('components.jiraProjectPicker.all', 'All Jira projects')}
+              disabled={jiraProjectsLoading || jiraHasWorkspace}
+            />
+          </div>
           {jiraPresets.map((preset) => {
-            const active = !jiraHasWorkspace && !jiraSearchInput && activeJiraPreset === preset.id
+            const active =
+              !jiraHasWorkspace &&
+              !jiraSearchInput &&
+              !model.jiraFavouriteFilter &&
+              activeJiraPreset === preset.id
             return (
               <button
                 key={preset.id}
@@ -98,6 +115,7 @@ export function TaskPageJiraFilters({
           </Button>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <TaskPageJiraFavouriteFilters key={model.jiraTaskSourceScopeKey} model={model} />
           <TaskPageJiraSavedFilters
             filters={jiraSavedFilters}
             activeFilterId={jiraActiveSavedFilterId}
@@ -125,11 +143,14 @@ export function TaskPageJiraFilters({
                   const draft = useAppStore.getState().newJiraIssueDraft
                   setNewJiraIssueTitle(draft?.title ?? '')
                   setNewJiraIssueBody(draft?.body ?? '')
-                  setNewJiraIssueProjectId(
-                    sortedAvailableJiraProjects[0]
-                      ? getJiraProjectSelectionKey(sortedAvailableJiraProjects[0])
-                      : null
-                  )
+                  const projectFilter = model.jiraProjectFilter
+                  const defaultProject = projectFilter
+                    ? sortedAvailableJiraProjects.find((project) =>
+                        matchesJiraProject(project, projectFilter)
+                      )
+                    : null
+                  const project = defaultProject ?? sortedAvailableJiraProjects[0]
+                  setNewJiraIssueProjectId(project ? getJiraProjectSelectionKey(project) : null)
                   setNewJiraIssueProjectQuery('')
                   setNewJiraIssueProjectCommandValue('')
                   setNewJiraIssueTypeId(null)

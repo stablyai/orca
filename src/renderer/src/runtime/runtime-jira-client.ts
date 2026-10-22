@@ -23,9 +23,12 @@ import type {
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { searchLocalJiraIssues } from './local-jira-search-cancellation'
 import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
+import { clearJiraImageCache } from './runtime-jira-image-cache'
 import { isRuntimeProviderSearchQueryWithinLimit } from './runtime-provider-search-bounds'
 import { getJiraRuntimeTarget, type RuntimeJiraSettings } from './runtime-jira-target'
 import { parseJiraConnectionStatus } from './runtime-jira-connection-status'
+import { jiraListProjectsForTarget, jiraStatusForTarget } from './runtime-jira-project-client'
+
 import {
   jiraGetIssueForTarget,
   jiraUpdateIssueForTarget,
@@ -42,6 +45,7 @@ export {
   jiraListPrioritiesForTarget,
   jiraListTransitionsForTarget
 } from './runtime-jira-detail-client'
+import { JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 export { jiraLookupIssueSummary, jiraReadStatus } from './runtime-jira-summary-client'
 export {
   jiraCreateIssue,
@@ -50,6 +54,8 @@ export {
   jiraListAssignableUsersForProject,
   jiraSearchUsers
 } from './runtime-jira-user-fields-client'
+export { jiraStatusForTarget } from './runtime-jira-project-client'
+export { jiraListFavouriteFiltersForTarget } from './runtime-jira-favourite-filters-client'
 export type { RuntimeJiraSettings } from './runtime-jira-target'
 
 export type JiraConnectResult = { ok: true; viewer: JiraViewer } | { ok: false; error: string }
@@ -58,16 +64,6 @@ import type { JiraCommentResult } from './runtime-jira-detail-client'
 
 export async function jiraStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
   return jiraStatusForTarget(getJiraRuntimeTarget(settings))
-}
-
-export async function jiraStatusForTarget(
-  target: RuntimeClientTarget
-): Promise<JiraConnectionStatus> {
-  return parseJiraConnectionStatus(
-    target.kind === 'environment'
-      ? await callRuntimeRpc<unknown>(target, 'jira.status', undefined, { timeoutMs: 15_000 })
-      : await window.api.jira.status()
-  )
 }
 
 export async function jiraConnect(
@@ -84,6 +80,7 @@ export async function jiraDisconnect(
   settings: RuntimeJiraSettings,
   siteId?: string | null
 ): Promise<void> {
+  clearJiraImageCache()
   const target = getJiraRuntimeTarget(settings)
   if (target.kind === 'environment') {
     await callRuntimeRpc<{ ok: true }>(target, 'jira.disconnect', siteId ? { siteId } : undefined, {
@@ -170,6 +167,13 @@ export async function jiraListIssuesForTarget(
 ): Promise<JiraIssue[]> {
   const args = { filter, limit, siteId: siteId ?? undefined, ...(filters ? { filters } : {}) }
   if (target.kind === 'environment') {
+    if (filters?.currentSprint) {
+      await assertRuntimeEnvironmentCapability(
+        target.environmentId,
+        JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY,
+        'Update the remote Orca server to filter preset issues by current sprint.'
+      )
+    }
     if (filters?.statuses?.length) {
       await assertRuntimeEnvironmentCapability(
         target.environmentId,
@@ -221,12 +225,7 @@ export async function jiraListProjects(
   settings: RuntimeJiraSettings,
   siteId?: JiraSiteSelection | null
 ): Promise<JiraProject[]> {
-  const target = getJiraRuntimeTarget(settings)
-  return target.kind === 'environment'
-    ? callRuntimeRpc<JiraProject[]>(target, 'jira.listProjects', siteId ? { siteId } : undefined, {
-        timeoutMs: 30_000
-      })
-    : window.api.jira.listProjects(siteId ? { siteId } : undefined)
+  return jiraListProjectsForTarget(getJiraRuntimeTarget(settings), siteId)
 }
 
 export async function jiraListIssueTypes(

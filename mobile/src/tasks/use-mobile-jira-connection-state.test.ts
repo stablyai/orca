@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { MobileJiraConnection } from './jira-mobile-connection'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
 
+type PairedDesktopClient = { id: string }
+const createClient = (): PairedDesktopClient => ({ id: 'paired-desktop' })
+
 const mounted: ReactTestRenderer[] = []
 afterEach(() => {
   act(() => {
@@ -13,9 +16,9 @@ afterEach(() => {
   })
 })
 
-function mountConnection(client: object) {
+function mountConnection(client: PairedDesktopClient) {
   let value: ReturnType<typeof useMobileJiraConnectionState> | undefined
-  function Probe(props: { client: object; state: string }) {
+  function Probe(props: { client: PairedDesktopClient; state: string }) {
     value = useMobileJiraConnectionState(props.client, props.state)
     return null
   }
@@ -31,7 +34,7 @@ function mountConnection(client: object) {
       }
       return value
     },
-    update(nextClient: object, state = 'connected') {
+    update(nextClient: PairedDesktopClient, state = 'connected') {
       act(() => {
         renderer?.update(createElement(Probe, { client: nextClient, state }))
       })
@@ -49,17 +52,17 @@ const connected: MobileJiraConnection = {
 
 describe('mobile Jira connection session ownership', () => {
   it('discards the previous connection on a host switch before another status arrives', () => {
-    const fixture = mountConnection({})
+    const fixture = mountConnection(createClient())
     act(() => fixture.current()[1](connected))
-    fixture.update({})
+    fixture.update(createClient())
     expect(fixture.current()[0]).toMatchObject({ connected: false, selection: null })
   })
 
   it('retires old setters even after switching back to the same client', () => {
-    const client = {}
+    const client = createClient()
     const fixture = mountConnection(client)
     const oldSet = fixture.current()[1]
-    fixture.update({})
+    fixture.update(createClient())
     fixture.update(client)
     act(() => fixture.current()[1](connected))
     act(() => oldSet({ ...connected, connected: false }))
@@ -67,7 +70,7 @@ describe('mobile Jira connection session ownership', () => {
   })
 
   it('requires fresh status after disconnecting and reconnecting the same client', () => {
-    const client = {}
+    const client = createClient()
     const fixture = mountConnection(client)
     const oldSet = fixture.current()[1]
     act(() => oldSet(connected))

@@ -115,6 +115,7 @@ export function bindParkRevealSnapshotVerdictActions(session: ConnectPanePtySess
       `${RESET_GRAPHIC_RENDITION}${PARK_REVEAL_NO_HOST_IMAGE_WARNING}`,
       { foreground: true, beforeWrite: session.beforeTerminalOutputWrite }
     )
+    session.requestRemoteProgramRedraw('park-reveal-no-host-image')
     return true
   }
 }

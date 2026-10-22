@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithBuildPtyTerminalSummary } from '../../orca-runtime-build-pty-terminal-summary'
+import { OrcaRuntimeWithBuildPtyTerminalSummary } from '../query/pty-terminal-summary'
 import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
 import type {
   RuntimeLeafRecord,

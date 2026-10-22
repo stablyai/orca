@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from 'playwright'
 import { expect } from 'vitest'
+import { waitForHiddenFrameInput } from './hidden-frame-input-readiness-fixture'
 import {
   artifactDir,
   browser,
@@ -98,14 +99,16 @@ export async function clickBackgroundPopupProbe(
   page: Page,
   probe: BackgroundPopupProbe
 ): Promise<void> {
-  if (probe.context === 'opaque') {
-    // Electron does not forward opaque OOPIF input to the root route gesture gate.
-    await page.locator('#background-gesture').click()
-  }
   const locator =
     probe.context === 'subframe' || probe.context === 'opaque'
       ? page.frameLocator('#background-probe').locator('#background-open')
       : page.locator('#background-open')
+  if (probe.context === 'opaque') {
+    await page.locator('#background-gesture').click()
+    await waitForHiddenFrameInput(locator)
+    // Opaque frame input does not reach Electron's root route gesture gate.
+    await page.locator('#background-gesture').click()
+  }
   await locator.click(
     probe.input === 'middle' ? { button: 'middle' } : { modifiers: [backgroundModifier] }
   )
@@ -170,7 +173,7 @@ export async function observeBackgroundPopupProbe(
       expect(status().native.creation.at(-1)).toMatchObject({
         firstNavigationPolicy: 'disable_non_proxied_udp',
         firstNavigationOwner: expect.any(Number),
-        firstNavigationTitle: targetOrigin
+        firstNavigationTitle: 'about:blank'
       })
       expect(await child.evaluate('window.open("about:blank")===null')).toBe(true)
     }

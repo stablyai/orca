@@ -11,13 +11,15 @@ import {
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
+import { seedResumeLaunchIdentityFromSpawn } from '../pane/resume-launch-identity'
 import {
   admitProviderReattachLaunchIdentity,
   admitRendererAgentLaunchAuthority
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { persistPtyIpcSpawnCommit, publishPtyIpcSpawnCommit } from './spawn-commit-persist'
-import { admitPtyReattachOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
+import { admitPtySpawnOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
@@ -29,7 +31,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
 
 async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
-  admitPtyReattachOwnership(ctx.deps.runtime, ctx.result)
+  admitPtySpawnOwnership(ctx.deps.runtime, ctx.result)
   if (ctx.nativeWindowsConptySpawn) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
@@ -59,6 +61,7 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
     const rejectedRegistration = registerPersistedPtySpawn(
       ctx.deps.runtime,
       ctx.deps.store,
+      ctx.pendingRegistrationClaim,
       ctx.result.id,
       args.worktreeId,
       null,
@@ -84,7 +87,11 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
           throw error
         }
       })
-      ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
+      ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+        ctx.result.id,
+        ctx.result.incarnationId,
+        ctx.pendingRegistrationClaim
+      )
       ctx.pendingRegistrationPtyId = null
       ctx.exitedBeforeRegistration = true
       // The renderer drains this incarnation's buffered output and exit without publishing it live.
@@ -98,7 +105,8 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
   } else if (ctx.pendingRegistrationPtyId) {
     ctx.deps.runtime?.cancelPendingPtyRegistration?.(
       ctx.pendingRegistrationPtyId,
-      ctx.result.incarnationId
+      ctx.result.incarnationId,
+      ctx.pendingRegistrationClaim
     )
     ctx.pendingRegistrationPtyId = null
   }
@@ -151,6 +159,17 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
       clearMigrationUnsupportedPtysForPaneKey(ctx.validatedPaneKey)
     }
   }
+  // Why after commit: a spawn rejected above must not leave a published identity behind.
+  seedResumeLaunchIdentityFromSpawn({
+    paneKey: ctx.validatedPaneKey,
+    launchAgent: args.launchAgent,
+    resumeProviderSession: args.resumeProviderSession,
+    connectionId: args.connectionId,
+    worktreeId: args.worktreeId,
+    launchedAt: ctx.codexHomeLaunchStartedAt,
+    resumeArgvDropped: ctx.codexResumeLaunch.droppedResumeArgv,
+    result: ctx.result
+  })
   // Why: record the spawn-result pid once here so the memory module needn't reach back into ipc/pty on a hot path (works for in-process and daemon-hosted PTYs).
   const spawnedPid = ctx.result.pid ?? null
   // Why: args.worktreeId/sessionId arrive as untrusted IPC strings (type unenforced at the boundary); bound them so malformed/oversized values can't pollute registerPty's maps.
@@ -178,8 +197,10 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)
   }
+  const { startupCwdSource: _startupCwdSource, ...providerResult } = ctx.result
+  const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
   const response = {
-    ...ctx.result,
+    ...providerResult,
     // Why both or neither: a pane can only adopt proven kitty flags together
     // with the sequence boundary they describe.
     ...(typeof ctx.result.snapshotKittyKeyboardFlags === 'number' &&
@@ -190,10 +211,7 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
     ...(!ctx.result.isReattach && ctx.effectiveLaunchConfig
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
-    // Why: a daemon-retry race can surface isReattach even for a minted session id, and a reattach must never claim its cwd was remapped.
-    ...(ctx.startupCwdFallback && !ctx.result.isReattach
-      ? { startupCwdFallback: ctx.startupCwdFallback }
-      : {}),
+    ...(startupCwdFallback ? { startupCwdFallback } : {}),
     // Why: the pane asked to resume and got a fresh session instead; only the
     // renderer can say so, and a reattach never ran this launch command.
     ...(ctx.codexResumeLaunch.notifyResumeUnavailable && !ctx.result.isReattach

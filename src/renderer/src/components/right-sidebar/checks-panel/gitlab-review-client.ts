@@ -33,7 +33,8 @@ export async function fetchGitLabMRDetailsForChecks(args: {
     repoId: args.repoId,
     repoOwnerExecutionHostId: args.repoOwnerExecutionHostId,
     iid: args.iid,
-    type: 'mr'
+    type: 'mr',
+    includeReviewDetails: false
   })
 }
 

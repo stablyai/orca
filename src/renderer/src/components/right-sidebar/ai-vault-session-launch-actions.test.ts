@@ -1,3 +1,4 @@
+import type * as ForkStartup from '@/lib/ai-vault-session-fork-startup'
 // @vitest-environment happy-dom
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +7,7 @@ import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-sess
 
 const mocks = vi.hoisted(() => ({
   buildAiVaultForkStartupForWorktree: vi.fn(),
+  getState: vi.fn(),
   buildAiVaultResumeStartupForWorktree: vi.fn(),
   prepareAiVaultSessionForFork: vi.fn(),
   prepareAiVaultSessionForResume: vi.fn(),
@@ -16,10 +18,16 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn()
 }))
 
-vi.mock('@/lib/ai-vault-session-fork-startup', () => ({
+vi.mock('@/lib/ai-vault-session-fork-startup', async (importOriginal) => ({
+  ...(await importOriginal<typeof ForkStartup>()),
+  buildAiVaultCopiedSessionStartupForWorktree: (args: { session: AiVaultSession }) => ({
+    ...mocks.buildAiVaultResumeStartupForWorktree(args),
+    agent: args.session.agent
+  }),
   buildAiVaultForkStartupForWorktree: mocks.buildAiVaultForkStartupForWorktree
 }))
 vi.mock('@/lib/ai-vault-resume-command', () => ({
+  resolveAiVaultResumeHost: () => ({ platform: 'linux', codexHome: null, liveShell: undefined }),
   buildAiVaultResumeStartupForWorktree: mocks.buildAiVaultResumeStartupForWorktree,
   buildAiVaultResumeCopyCommandForWorktree: vi.fn()
 }))
@@ -27,7 +35,9 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForFork: mocks.prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume: mocks.prepareAiVaultSessionForTerminalResume,
-  dropDeletedSshResumeCwd: async (session: unknown) => session
+  dropDeletedSshResumeCwd: async (session: unknown) => session,
+  aiVaultCliForkHostTooOldMessage: () =>
+    'Update Orca on the host that runs this chat to resume it in a new CLI.'
 }))
 vi.mock('@/lib/launch-ai-vault-session', () => ({
   launchAiVaultSessionInNewTab: mocks.launchAiVaultSessionInNewTab
@@ -46,7 +56,7 @@ vi.mock('./ai-vault-session-resume-in-chat-launch', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: mocks.toastSuccess } }))
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ activeWorktreeId: 'worktree-1', settings: {} }) }
+  useAppStore: { getState: mocks.getState }
 }))
 
 import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
@@ -77,24 +87,57 @@ const owned: AiVaultSession = {
 
 const FORK_STARTUP = { command: "claude --resume 'provider-1' --fork-session", cwd: '/repo' }
 
-function renderActions() {
+function renderActions(agentCmdOverrides?: { opencode?: string }) {
   return renderHook(() =>
     useAiVaultSessionLaunchActions({
       activeWorktree: null,
       activeWorktreeId: 'worktree-1',
+      agentCmdOverrides,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked launch target never reads it.
       targetState: {} as never
     })
   ).result.current
 }
 
-describe('Resume in New CLI launch', () => {
+describe('Switch to Terminal launch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.prepareAiVaultSessionForFork.mockImplementation(async (session) => session)
+    mocks.getState.mockReturnValue({ activeWorktreeId: 'worktree-1', settings: {} })
+    mocks.prepareAiVaultSessionForFork.mockImplementation(async (session) => ({
+      session,
+      copied: false
+    }))
     mocks.buildAiVaultForkStartupForWorktree.mockReturnValue(FORK_STARTUP)
     mocks.launchAiVaultSessionInNewTab.mockReturnValue({ tabId: 'tab-1' })
   })
+
+  // Either OpenCode chat may own a 2.x conversation, so the copy may open in either CLI.
+  it.each([
+    ['command', 'opencode'],
+    ['arguments', 'opencode'],
+    ['command', 'opencode2'],
+    ['arguments', 'opencode2']
+  ] as const)(
+    'refuses %s server routing on %s before asking for any copy',
+    async (location, cli) => {
+      const chat = { ...owned, agent: 'opencode2' as const }
+      const agentCmdOverrides =
+        location === 'command' ? { [cli]: `${cli} --server http://synthetic-server` } : {}
+      mocks.getState.mockReturnValue({
+        activeWorktreeId: 'worktree-1',
+        settings: {
+          agentCmdOverrides,
+          agentDefaultArgs:
+            location === 'arguments' ? { [cli]: '--server=http://synthetic-server' } : {}
+        }
+      })
+      renderActions(agentCmdOverrides).handleResumeInNewCli(chat, 'worktree-2')
+      await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
+      expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('Remove --server'))
+      expect(mocks.prepareAiVaultSessionForFork).not.toHaveBeenCalled()
+      expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
+    }
+  )
 
   it('opens the fork plan in the chosen workspace, never the plain resume plan', async () => {
     renderActions().handleResumeInNewCli(owned, 'worktree-2')
@@ -114,6 +157,36 @@ describe('Resume in New CLI launch', () => {
     expect(mocks.buildAiVaultResumeStartupForWorktree).not.toHaveBeenCalled()
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
+
+  it.each(['omp', 'opencode2'] as const)(
+    'opens the %s copy with the actual CLI in the chosen workspace',
+    async (agent) => {
+      const chat = { ...owned, agent, executionHostId: 'runtime:paired-host' as const }
+      const copy = {
+        ...chat,
+        agent: agent === 'omp' ? ('omp' as const) : ('opencode' as const),
+        sessionId: 'copy-1'
+      }
+      const startup = {
+        command: `${copy.agent} --resume copy-1`,
+        providerSession: { key: 'session_id', id: 'copy-1' }
+      }
+      mocks.prepareAiVaultSessionForFork.mockResolvedValue({ session: copy, copied: true })
+      mocks.buildAiVaultResumeStartupForWorktree.mockReturnValue(startup)
+      renderActions({ opencode: 'opencode --server http://synthetic-server' }).handleResumeInNewCli(
+        chat,
+        'worktree-2'
+      )
+      await waitFor(() => expect(mocks.launchAiVaultSessionInNewTab).toHaveBeenCalledTimes(1))
+      expect(mocks.launchAiVaultSessionInNewTab).toHaveBeenCalledWith({
+        agent: copy.agent,
+        worktreeId: 'worktree-2',
+        ...startup
+      })
+      expect(mocks.buildAiVaultForkStartupForWorktree).not.toHaveBeenCalled()
+      expect(mocks.toastError).not.toHaveBeenCalled()
+    }
+  )
 
   it('shows one toast and opens nothing when the agent cannot fork', async () => {
     mocks.buildAiVaultForkStartupForWorktree.mockReturnValue(null)

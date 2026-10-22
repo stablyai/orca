@@ -36,6 +36,7 @@ import {
 } from './orca-runtime'
 import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolution'
 import { canonicalWorktreeIdentity } from '../../shared/worktree/identity'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/Users/me/dev/app'
@@ -92,7 +93,7 @@ function makeStore(options: { connectionId?: string; repoCount?: number; repoPat
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
-    setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
       return metaById[id]
     },

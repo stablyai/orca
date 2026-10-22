@@ -3,6 +3,7 @@ import { runProcess } from '@orca/process-host'
 
 const JOB_REMOVAL_TIMEOUT_MS = 3_000
 const JOB_REMOVAL_POLL_MS = 50
+const JOB_RETIREMENT_POLL_MS = 250
 
 export type MacDaemonJobState = 'running' | 'stopped' | 'missing' | 'unverifiable'
 
@@ -54,8 +55,16 @@ export async function stopMacDaemonJob(service: string): Promise<void> {
 }
 
 /** True once no process can start under `service`: missing, or stopped and booted out. */
-export async function releaseMacDaemonJob(service: string): Promise<boolean> {
-  const state = await readMacDaemonJobState(service)
+export async function releaseMacDaemonJob(
+  service: string,
+  waitUntilMs = Date.now()
+): Promise<boolean> {
+  let state = await readMacDaemonJobState(service)
+  // Endpoint retirement can precede process exit; never boot out a running or unreadable job.
+  while (state === 'running' && Date.now() < waitUntilMs) {
+    await delay(Math.max(1, Math.min(JOB_RETIREMENT_POLL_MS, waitUntilMs - Date.now())))
+    state = await readMacDaemonJobState(service)
+  }
   if (state !== 'stopped') {
     return state === 'missing'
   }

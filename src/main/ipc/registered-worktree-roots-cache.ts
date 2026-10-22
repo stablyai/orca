@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
   listWorktreeRootsWithConcurrency,
   pruneCreatedWorktreeRoots

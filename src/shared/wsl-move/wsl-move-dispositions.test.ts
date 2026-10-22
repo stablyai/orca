@@ -79,3 +79,27 @@ describe('WSL mover dispositions', () => {
     expect([...new Set(pathLike)].sort()).toEqual(Object.keys(SETTINGS_KEYS_NAMING_A_PATH).sort())
   })
 })
+
+// Containers whose fields are decided one by one; any other item gets one verdict.
+const PER_FIELD_ITEMS = new Set([19, 32, 38])
+
+describe('WSL mover disposition consistency', () => {
+  it('never both moves and leaves an inventory item', () => {
+    const byItem = new Map<number, Set<string>>()
+    for (const row of ALL_ROWS) {
+      byItem.set(row.item, (byItem.get(row.item) ?? new Set()).add(row.disposition))
+    }
+    const conflicting = [...byItem]
+      .filter(([item, dispositions]) => {
+        return (
+          !PER_FIELD_ITEMS.has(item) &&
+          dispositions.has('move') &&
+          dispositions.has('not-applicable')
+        )
+      })
+      .map(([item]) => item)
+    expect(conflicting).toEqual([])
+    // Decision C: the native chat journal and its tables stay local.
+    expect(byItem.get(52)).toEqual(new Set(['not-applicable']))
+  })
+})

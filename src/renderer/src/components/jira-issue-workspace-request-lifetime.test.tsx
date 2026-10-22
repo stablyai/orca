@@ -287,6 +287,51 @@ describe('Jira issue workspace request lifetime', () => {
     expect(text('transitions')).toBe('existing-transition')
   })
 
+  it.each([false, true])(
+    'refreshes required transition comments without accepting older hydration (reopened: %s)',
+    async (reopened) => {
+      await render(issue())
+      await act(async () => take(boundary.issues).resolve(issue()))
+      const oldComments = take(boundary.comments)
+      await act(async () => {
+        if (!boundary.metadata) {
+          throw new Error('Missing issue metadata')
+        }
+        void boundary.metadata.mutateIssue(
+          'transition',
+          { transitionId: 'close', transitionComment: 'Verified fix' },
+          { status: { ...issue().status, id: 'done', name: 'Done' } }
+        )
+      })
+      const saveRefresh = take(boundary.issues)
+      if (reopened) {
+        await render(issue('JIR-2'))
+        await render(issue())
+        const currentIssue = boundary.issues.find((pending) => pending.key === 'JIR-1')
+        if (!currentIssue) {
+          throw new Error('Missing reopened issue read')
+        }
+        await act(async () => currentIssue.resolve(issue()))
+      }
+      await act(async () => saveRefresh.resolve(issue()))
+      const commentsRefresh = boundary.comments.at(-1)
+      if (!commentsRefresh || commentsRefresh.key !== 'JIR-1') {
+        throw new Error('Missing transition comments refresh')
+      }
+      await act(async () => commentsRefresh.resolve([comment('transition-comment')]))
+      await act(async () => {
+        oldComments.resolve([])
+        for (const pending of boundary.comments) {
+          if (pending !== commentsRefresh) {
+            pending.resolve([])
+          }
+        }
+      })
+      expect(text('comments')).toBe('transition-comment')
+      expect(text('comments-loading')).toBe('false')
+    }
+  )
+
   it('clears old issue transitions even when the new issue transition read fails', async () => {
     await render(issue())
     await act(async () =>
@@ -303,7 +348,7 @@ describe('Jira issue workspace request lifetime', () => {
     expect(text('transitions')).toBe('')
   })
 
-  it('finishes detail and comments hydration after StrictMode effect replay', async () => {
+  it('hydrates replayed detail reads and discards obsolete StrictMode reads', async () => {
     const mountedRoot = root
     if (!mountedRoot) {
       throw new Error('Missing React root')
@@ -320,17 +365,29 @@ describe('Jira issue workspace request lifetime', () => {
         </StrictMode>
       )
     )
+    expect(boundary.issues).toHaveLength(2)
+    expect(boundary.comments).toHaveLength(2)
+    expect(boundary.transitions).toHaveLength(2)
     await act(async () => {
-      for (const pending of boundary.issues.splice(0)) {
-        pending.resolve(issue('JIR-1', 'Loaded in StrictMode'))
-      }
-      for (const pending of boundary.comments.splice(0)) {
-        pending.resolve([comment('loaded')])
-      }
+      take(boundary.issues).resolve(issue('JIR-1', 'Discarded detail'))
+      take(boundary.comments).resolve([comment('discarded')])
+      take(boundary.transitions).resolve([
+        { id: 'discarded', name: 'Discarded', to: issue().status }
+      ])
     })
-
-    expect(text('title')).toBe('Loaded in StrictMode')
-    expect(text('comments')).toBe('loaded')
+    expect(text('title')).toBe('JIR-1')
+    expect(text('comments')).toBe('')
+    expect(text('transitions')).toBe('')
+    expect(text('issue-loading')).toBe('true')
+    expect(text('comments-loading')).toBe('true')
+    await act(async () => {
+      take(boundary.issues).resolve(issue('JIR-1', 'Replayed detail'))
+      take(boundary.comments).resolve([comment('current')])
+      take(boundary.transitions).resolve([{ id: 'current', name: 'Current', to: issue().status }])
+    })
+    expect(text('title')).toBe('Replayed detail')
+    expect(text('comments')).toBe('current')
+    expect(text('transitions')).toBe('current')
     expect(text('issue-loading')).toBe('false')
     expect(text('comments-loading')).toBe('false')
   })

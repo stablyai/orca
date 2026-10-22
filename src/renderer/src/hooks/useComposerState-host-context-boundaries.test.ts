@@ -177,6 +177,30 @@ describe('useComposerState host-context boundaries', () => {
     })
   })
 
+  it('uses an explicit creation target without borrowing the linked Jira account host', () => {
+    expect(
+      resolveInitialWorkspaceRunSeed({
+        initialTaskSourceContext: {
+          projectId: 'account-backed-task-source',
+          hostId: 'local',
+          projectHostSetupId: 'unrelated-setup'
+        },
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
+      })
+    ).toEqual({ projectId: 'mapped-project', hostId: 'ssh:builder', projectHostSetupId: null })
+  })
+
+  it('keeps a restored draft target ahead of an explicit creation target', () => {
+    expect(
+      resolveInitialWorkspaceRunSeed({
+        draftProjectId: 'draft-project',
+        draftHostId: 'local',
+        draftProjectHostSetupId: 'draft-setup',
+        initialWorkspaceTarget: { projectId: 'mapped-project', hostId: 'ssh:builder' }
+      })
+    ).toEqual({ projectId: 'draft-project', hostId: 'local', projectHostSetupId: 'draft-setup' })
+  })
+
   it('restores Jira draft context only when its site and issue identity agree', () => {
     const item = {
       provider: 'jira' as const,

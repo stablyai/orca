@@ -3,7 +3,8 @@
 
 import type {
   AgentJournalMessageItem,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -16,23 +17,22 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 type StoppedHistoryContext = {
-  journal: Pick<
-    AgentSessionJournal,
-    'submissions' | 'itemBody' | 'liveTurnScope' | 'stoppedHistoryCarried'
-  > & {
+  journal: Pick<AgentSessionJournal, 'submissions' | 'itemBody' | 'stoppedHistoryCarried'> & {
     context: Pick<AgentSessionJournal['context'], 'floor'>
   }
 }
 
 /** What a person's words-only send that opens a turn carries of the owed messages; null for a
- *  steer into a running turn, which may never record it, and for any other send. */
+ *  steer into a running turn, which may never record it, and for any other send. `turnScope`: where
+ *  the handover joins, by the host's read of what runs. */
 export function carriedStoppedHistory(
   ctx: StoppedHistoryContext,
+  turnScope: AgentJournalTurnScope,
   submission: AgentJournalSubmission,
   body: AgentJournalMessageItem
 ): StoppedHistoryDelivery | null {
   if (
-    ctx.journal.liveTurnScope().kind !== 'thread' ||
+    turnScope.kind !== 'thread' ||
     !agentSessionSendDeliversStoppedHistory(submission, body) ||
     !agentSessionSendCarriesStoppedHistory(body)
   ) {

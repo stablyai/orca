@@ -15,7 +15,7 @@ import {
   TabClose,
   TabSwitch,
   Wait
-} from './methods/browser-schemas'
+} from '../../../shared/rpc-contract/browser-params'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { TERMINAL_ORPHAN_METHODS } from './methods/terminal-orphan'
 import { WORKTREE_METHODS } from './methods/worktree'

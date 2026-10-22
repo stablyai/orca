@@ -122,6 +122,7 @@ export abstract class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeW
     // failed viewer reclaim; a later viewer cycle must capture this new truth.
     this.remoteDesktopFloor.clearStaleHostReclaimTarget(ptyId)
     this.resizeHeadlessTerminal(ptyId, cols, rows)
+    this.notePaneGrid(ptyId, cols, rows)
     this.refreshRendererGeometry(ptyId, cols, rows)
   }
 
@@ -145,13 +146,6 @@ export abstract class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeW
     // deferred host reclaim cache aligned with later trusted pane measurements.
     this.remoteDesktopFloor.updateHostReclaimTarget(ptyId, cols, rows)
     this.refreshRendererGeometry(ptyId, cols, rows)
-  }
-
-  // Why: test seam — exposes lastRendererSizes for assertions about
-  // pty:reportGeometry / onExternalPtyResize side effects without making
-  // the underlying Map writable from the outside.
-  getLastRendererSize(ptyId: string): { cols: number; rows: number } | null {
-    return this.lastRendererSizes.get(ptyId) ?? null
   }
 
   protected refreshRendererGeometry(ptyId: string, cols: number, rows: number): void {

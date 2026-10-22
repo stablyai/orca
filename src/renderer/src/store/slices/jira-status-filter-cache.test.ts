@@ -33,7 +33,9 @@ it('isolates status results from preset caches and reuses an equivalent selectio
   )
   list.mockImplementation(
     async (_source, _preset, _limit, _site, filters?: JiraIssueListFilters) => [
-      issue(filters?.statuses?.join('-') || 'default')
+      issue(
+        `${filters?.statuses?.join('-') || 'default'}${filters?.currentSprint ? '-sprint' : ''}`
+      )
     ]
   )
   expect(await store.getState().listJiraIssues('all', 50)).toMatchObject([{ key: 'default' }])
@@ -49,5 +51,18 @@ it('isolates status results from preset caches and reuses an equivalent selectio
   await store
     .getState()
     .listJiraIssues('all', 50, { filters: { statuses: ['Blocked', 'In Progress'] } })
-  expect(list).toHaveBeenCalledTimes(3)
+  expect(
+    await store.getState().listJiraIssues('all', 50, {
+      filters: { statuses: ['Blocked', 'In Progress'], currentSprint: true }
+    })
+  ).toMatchObject([{ key: 'Blocked-In Progress-sprint' }])
+  await store.getState().listJiraIssues('all', 50, {
+    filters: { currentSprint: true, statuses: ['In Progress', 'Blocked'] }
+  })
+  expect(
+    await store.getState().listJiraIssues('all', 50, {
+      filters: { statuses: ['Blocked', 'In Progress'] }
+    })
+  ).toMatchObject([{ key: 'Blocked-In Progress' }])
+  expect(list).toHaveBeenCalledTimes(4)
 })

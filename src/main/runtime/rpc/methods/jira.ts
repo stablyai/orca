@@ -3,6 +3,8 @@ import {
   JIRA_PAYLOAD_MAX_CHARS
 } from '../../../../shared/jira-payload-stream'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { JIRA_ATTACHMENT_IMAGE_METHODS } from './jira-attachment-image'
+import { JiraFavouriteFilterParams } from '../../../../shared/rpc-contract/jira-favourite-filter-params'
 import {
   AssignableUsers,
   GenerateIssueSummary,
@@ -51,6 +53,7 @@ function generationOwner(context: Pick<RpcContext, 'pairedDeviceId' | 'caller'>)
 }
 
 export const JIRA_METHODS = [
+  ...JIRA_ATTACHMENT_IMAGE_METHODS,
   defineMethod({
     name: 'jira.generateIssueSummary',
     permission: 'workspace',
@@ -132,7 +135,7 @@ export const JIRA_METHODS = [
     permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime }) =>
-      runtime.jiraGetIssue(params.key.trim(), params.siteId, params.strict)
+      runtime.jiraGetIssue(params.key.trim(), params.siteId, params.strict, params.mediaFormat)
   }),
   defineMethod({
     name: 'jira.lookupIssueSummary',
@@ -151,7 +154,12 @@ export const JIRA_METHODS = [
     params: IssueKey,
     handler: async (params, { runtime }, emit) => {
       emitJiraPayload(
-        await runtime.jiraGetIssue(params.key.trim(), params.siteId, params.strict),
+        await runtime.jiraGetIssue(
+          params.key.trim(),
+          params.siteId,
+          params.strict,
+          params.mediaFormat
+        ),
         emit
       )
     }
@@ -190,7 +198,7 @@ export const JIRA_METHODS = [
     permission: 'workspace',
     params: IssueKey,
     handler: async (params, { runtime }) =>
-      runtime.jiraIssueComments(params.key.trim(), params.siteId, params.strict)
+      runtime.jiraIssueComments(params.key.trim(), params.siteId, params.strict, params.mediaFormat)
   }),
   defineStreamingMethod({
     name: 'jira.issueCommentsStream',
@@ -198,10 +206,22 @@ export const JIRA_METHODS = [
     params: IssueKey,
     handler: async (params, { runtime }, emit) => {
       emitJiraPayload(
-        await runtime.jiraIssueComments(params.key.trim(), params.siteId, params.strict),
+        await runtime.jiraIssueComments(
+          params.key.trim(),
+          params.siteId,
+          params.strict,
+          params.mediaFormat
+        ),
         emit
       )
     }
+  }),
+  defineMethod({
+    name: 'jira.listFavouriteFilters',
+    permission: 'workspace',
+    params: JiraFavouriteFilterParams,
+    handler: async (params, { runtime, signal }) =>
+      runtime.jiraListFavouriteFilters(params.siteId, signal)
   }),
   defineMethod({
     name: 'jira.listProjects',

@@ -5,7 +5,7 @@ import type {
   RuntimePtyTitleTrackerEntry
 } from '../../runtime-terminal-state-records'
 import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
-import { OrcaRuntimeWithPreparePtyExecutionContext } from '../../orca-runtime-prepare-pty-execution-context'
+import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from '../../terminal-tail-buffer'
 import { normalizeTerminalChunk } from '../../terminal-ansi-normalization'
@@ -297,12 +297,17 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
           ptyRecord.lastExplicitAgentStatus = {
             state: latestAgentStatus.state,
             updatedAt: Date.now(),
-            sessionBoundary: latestAgentStatus.sessionBoundary
+            sessionBoundary: latestAgentStatus.sessionBoundary,
+            ...(latestAgentStatus.state === 'done' &&
+            agentStatusChunk.programStatusPayloads?.has(latestAgentStatus)
+              ? { programAtRest: true }
+              : {})
           }
         }
       }
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
-        titleScanData: titleInput
+        titleScanData: titleInput,
+        programActivity: agentStatusChunk.programActivity
       })
       // Why: the Command Code scrape rides the same per-chunk batch (its facts
       // trail the tracker's). cleanData keeps OSC 9999 payloads out of the

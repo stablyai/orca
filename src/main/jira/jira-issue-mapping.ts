@@ -130,6 +130,7 @@ export function mapCreateField(value: unknown, fallbackKey = ''): JiraCreateFiel
     schema: {
       type: asString(schema.type) || undefined,
       items: asString(schema.items) || undefined,
+      system: asString(schema.system) || undefined,
       custom: asString(schema.custom) || undefined
     },
     allowedValues

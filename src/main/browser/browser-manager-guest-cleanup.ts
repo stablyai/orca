@@ -14,6 +14,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
     }
     this.tabIdByWebContentsId.delete(guestWebContentsId)
     this.certificateTrustController?.onGuestRetired(guestWebContentsId)
+    this.siteDisplayController?.onGuestRetired(guestWebContentsId)
     const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
     if (policyCleanup) {
       policyCleanup()

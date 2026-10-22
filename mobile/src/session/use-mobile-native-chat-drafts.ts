@@ -66,7 +66,7 @@ export function useMobileNativeChatDrafts(args: {
   /** Phone-local previews rebound to the transcript message that replaced the
    *  optimistic echo, keyed by authoritative message id. */
   imagePreviewsByMessageId: Record<string, string[]>
-  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  captureSendOrigin: (text: string, sentAt?: number) => MobileNativeChatSendOrigin | null
   /** Launch-context text still believed to be parked on the agent's TUI input
    *  line, or null once it has been declined or retired. Send paths size their
    *  pre-clear from it, since one Ctrl+U clears only one logical line. */
@@ -149,7 +149,8 @@ export function useMobileNativeChatDrafts(args: {
   )
 
   const captureSendOrigin = useCallback(
-    (text: string) => {
+    // When Send was pressed, as desktop times its pending sends, not when the host took it.
+    (text: string, sentAt = Date.now()) => {
       if (!draftKey) {
         return null
       }
@@ -164,7 +165,8 @@ export function useMobileNativeChatDrafts(args: {
         // Only a settled read makes this a boundary. Anything else — hydrating,
         // or a read that failed — hands back an empty list that reads as "the
         // conversation was empty", which lets any row claim this send later.
-        baselineResolved: transcriptSettled
+        baselineResolved: transcriptSettled,
+        sentAt
       }
     },
     [draftKey, pendingKey, transcriptSettled]

@@ -37,8 +37,11 @@ export function writesAnotherCheckout(args: readonly string[]): boolean {
   return subcommandIndex !== -1 && OTHER_CHECKOUT_SUBCOMMANDS.has(args[subcommandIndex])
 }
 
-/** Deliberate cap: ~200 eligible files decide the checkout without reading the whole tree over drvfs. */
+/** Deliberate cap: ~200 eligible files decide the checkout. */
 export const LINE_ENDING_SAMPLE_LIMIT = 200
+// Why: `ls-files --eol` reads every file it lists over drvfs, so capping matches alone still reads
+// the whole tree when few files qualify (`* text=auto`); the scan stops after this many entries.
+export const LINE_ENDING_SCAN_LIMIT = 10 * LINE_ENDING_SAMPLE_LIMIT
 // Fewer eligible files than this is no evidence either way.
 export const LINE_ENDING_MIN_EVIDENCE = 5
 // Why a TTL: a re-clone at the same path can change the answer.
@@ -129,8 +132,8 @@ export function parseHostAutocrlf(showOriginOutput: string): 'true' | 'other' {
 /**
  * Classifies a bounded `ls-files --eol` sample of LF blobs with no eol attribute.
  *
- * Whole-tree rather than top-level: root files are the ones formatters re-save as LF, the ones
- * attributes pin, and absent in some repos. Majority of CRLF working files means Windows Git
+ * The first index entries, not just top-level files: root files are the ones formatters re-save
+ * as LF, the ones attributes pin, and absent in some repos. Majority of CRLF working files means Windows Git
  * (autocrlf=true) wrote this checkout; one CRLF README in a Linux checkout does not.
  */
 export function classifyLineEndingSample(

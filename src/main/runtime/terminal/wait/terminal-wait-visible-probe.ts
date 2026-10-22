@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../../orca-runtime-create-agent-prompt-render-gate'
+import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-agent-prompt-render'
 import type {
   RuntimeProviderSnapshotReadOptions,
   TerminalWaiter

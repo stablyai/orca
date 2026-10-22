@@ -1,11 +1,6 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { AgentTurnOutcome } from '../../../src/shared/agent-turn-outcome'
-
-// Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
-// 30 min). Defined locally rather than imported because a runtime-value import
-// from a root .ts breaks mobile's vitest transform (no tsconfig in the
-// mobile-only checkout); root type-only imports stay fine.
-export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
+import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
 
 // Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
 // status state; 'blocked'/'waiting' read as attention states, 'done' as
@@ -21,11 +16,13 @@ export type AgentDotState =
   | 'failed'
   | 'unconfirmed'
 
-type AgentRowVerdictSource = Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'mainAgent'>
+// A session tab's AgentStatusEntry leaves `interrupted` optional; worktree rows always send it.
+type AgentRowVerdictSource = Pick<RuntimeWorktreeAgentRow, 'state' | 'mainAgent'> & {
+  interrupted?: boolean
+}
 
-// Mirrors AGENT_TURN_OUTCOMES (src/shared/agent-turn-outcome.ts), which mobile cannot import as a
-// value (see AGENT_STATUS_STALE_AFTER_MS above). The rows arrive unparsed, so a newer host's arm
-// has to read as no verdict here.
+// Mirrors AGENT_TURN_OUTCOMES (src/shared/agent-turn-outcome.ts). The rows arrive unparsed, so a
+// newer host's arm has to read as no verdict here.
 const AGENT_TURN_OUTCOMES: readonly AgentTurnOutcome[] = [
   'success',
   'failure',
@@ -71,10 +68,9 @@ export function agentRowVerdictMark(
 }
 
 export function agentDotState(
-  row: Pick<
-    RuntimeWorktreeAgentRow,
-    'state' | 'workingMode' | 'interrupted' | 'mainAgent' | 'updatedAt'
-  >,
+  row: AgentRowVerdictSource &
+    Pick<RuntimeWorktreeAgentRow, 'workingMode'> &
+    Parameters<typeof isAgentStatusFresh>[0],
   now: number
 ): AgentDotState {
   const mark = agentRowVerdictMark(row)
@@ -87,9 +83,9 @@ export function agentDotState(
       // Why: an agent that exits without a final report would otherwise read as
       // active forever. Decay a stale active state to idle, matching desktop's
       // renderer-side staleness decay (worktree-agent-rows.ts).
-      return now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS ? 'idle' : row.state
+      return isAgentStatusFresh(row, now) ? row.state : 'idle'
     case 'working':
-      if (now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+      if (!isAgentStatusFresh(row, now)) {
         return 'idle'
       }
       return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
@@ -123,14 +119,13 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
-// Mirrors NATIVE_CHAT_TURN_STATUS_COPY.stopping. The cross-version suite copies this file alone
-// (`importWorkingTreeModuleCopy`), so a value import from another file would not resolve there.
+// Mirrors NATIVE_CHAT_TURN_STATUS_COPY.stopping.
 const STOPPING_LABEL = 'Stopping…'
 
 // Primary row text: "Stopping…" while the host says a person's Stop is ending the turn, else the
 // agent's last message, then the user prompt, then a human-readable state label so a row is never
 // blank. Matches the desktop DashboardAgentRow displayLabel fallback chain. The Stopping test
-// mirrors agentStopDisplayStatus (src/shared), inline for the same single-file copy.
+// mirrors agentStopDisplayStatus (src/shared).
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
   if (row.state === 'working' && row.mainAgent?.stopping === true) {
     return STOPPING_LABEL

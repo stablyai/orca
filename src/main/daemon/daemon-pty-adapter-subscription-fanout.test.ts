@@ -69,7 +69,7 @@ describe('DaemonPtyAdapterSubscriptionFanout.dropAdapter', () => {
     expect(data).toEqual(['before', 'kept'])
     expect(exits).toEqual(['live'])
     expect(onAdapterExit).toHaveBeenCalledTimes(1)
-    expect(onAdapterExit).toHaveBeenCalledWith('live')
+    expect(onAdapterExit).toHaveBeenCalledWith('live', kept.adapter)
 
     fanout.dispose()
     expect(dropped.unsubscribed()).toBe(2)

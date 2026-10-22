@@ -23,6 +23,7 @@ import type {
 import type {
   AdoptProvisionedRootArgs,
   CreateWorktreeArgs,
+  CreateWorktreeProgressEvent,
   CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult,
@@ -63,11 +64,10 @@ export type WorktreeApi = {
   listAll: () => Promise<Worktree[]>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
-  /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
-   *  create path emits nothing, so the surface falls back to an indeterminate spinner. */
-  onCreateProgress: (
-    callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
-  ) => () => void
+  /** Two-phase progress for a background `create`, correlated by `creationId`, plus git's
+   *  checkout meter for local creates. The remote/runtime create path emits nothing, so the
+   *  surface falls back to an indeterminate spinner. */
+  onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void) => () => void
   prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
   resolvePrBase: (args: {
     repoId: string
@@ -133,7 +133,7 @@ export type WorktreeApi = {
     parentWorktreeId?: string
     noParent?: boolean
   }) => Promise<WorktreeLineage | null>
-  persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
+  persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Full CLI output of the last branch auto-rename generation failure, held
    *  in main memory only — null after a restart or once the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>

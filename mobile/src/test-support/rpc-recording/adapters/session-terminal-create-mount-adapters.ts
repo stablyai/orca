@@ -73,6 +73,7 @@ export function sessionTerminalCreateMountAdapters(
       >(
         'mobile/src/session/use-mobile-session-terminal-create-actions.ts'
       ).useMobileSessionTerminalCreateActions
+      modules.load('mobile/src/session/mobile-session-terminal-create-request.ts')
 
       let terminals: Terminal[] = []
       let sessionTabs: MobileSessionTab[] = []

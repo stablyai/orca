@@ -6,6 +6,7 @@ import { SERVE_COMMAND_SPECS } from './serve'
 import { REPO_COMMAND_SPECS } from './repo'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_SET_PANE_TITLE_COMMAND_SPEC } from './terminal-set-pane-title'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -67,7 +68,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['reference'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--setup run|skip|inherit] [--base-branch <ref>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -79,6 +80,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'prompt',
       'model',
       'effort',
+      'surface',
       'retry-launch',
       'base-branch',
       'reference',
@@ -100,13 +102,14 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'This creates a new checkout. For a fresh agent in an existing worktree, use `orca agent launch` instead.',
       'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
-      'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
-      '--host runtime:<environment-id> creates on that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      'Use --project to create on a ready project host setup without spelling the backing repo id. --project takes the project id or the display name from `orca project list`.',
+      '--host is only needed when the project is set up on more than one host; with a single setup Orca uses it. When it is ambiguous the error names every host the project is set up on.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
       'Use --no-parent when the new worktree should be independent of the current context.',
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
       'By default this creates the worktree and its first terminal without switching the active Orca view.',
-      'Pass --agent to start an agent with the worktree, as a chat or a terminal per your Chat UI setting, exactly as a new agent tab does; --prompt sends initial work to it. --model and --effort pick its model and reasoning effort.',
+      'Pass --agent to start an agent with the worktree, as a chat or a terminal per your Chat UI setting, exactly as a new agent tab does; --prompt sends initial work to it. --model and --effort pick its model and reasoning effort, and --surface chat|terminal picks chat or terminal for this launch instead of your setting.',
       'After a lost agent launch reply, re-issue the same command from the same directory on the same host with --retry-launch <operationId> from the error. Never retry as a fresh launch; older hosts require inspecting the workspace first.',
       'With --agent --json, result.launch says what started: launch.outcome.kind (structured chat or terminal), launch.outcome.handle, and launch.receipt.detail for why. An Orca host older than this returns the terminal agent handle in result.agentTerminalHandle instead.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
@@ -239,6 +242,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Switch to a terminal tab in the UI',
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+    ],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   TERMINAL_CLOSE_COMMAND_SPEC,
@@ -253,6 +259,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal rename --terminal term_abc123 --json'
     ]
   },
+  TERMINAL_SET_PANE_TITLE_COMMAND_SPEC,
   {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',

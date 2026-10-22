@@ -1,9 +1,9 @@
-import { OrcaRuntimeWithOnPtyExit } from '../../orca-runtime-on-pty-exit'
+import { OrcaRuntimeWithOnPtyExit } from '../lifecycle/pty-exit-lifecycle'
 import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
 import type { DriverState } from '../../orca-runtime-core'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
-import { isUntypedTerminalInput } from '../../terminal-run-facts'
-import { clampTerminalViewport } from '../../terminal-viewport'
+import { isUntypedTerminalInput } from '../../../../shared/terminal-untyped-input'
+import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
 import { getPtyTerminalState, getTerminalState } from '../../terminal-wait-results'
 
 // Orphaned verdicts are bounded; active PTYs retain theirs until new evidence resolves them.
@@ -51,6 +51,11 @@ export abstract class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRun
    */
   markPtyStopRequested(ptyId: string): void {
     this.stopRequestedPtyIds.add(ptyId)
+  }
+
+  /** A stop that failed or was refused: the PTY runs on, so nothing may read it as closing. */
+  clearPtyStopRequest(ptyId: string): void {
+    this.stopRequestedPtyIds.delete(ptyId)
   }
 
   isPtyStopRequested(ptyId: string): boolean {

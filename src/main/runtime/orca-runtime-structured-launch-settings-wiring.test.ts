@@ -43,6 +43,11 @@ describe('execution host structured launch settings wiring', () => {
     settings.agentDefaultArgs = { claude: '--dangerously-skip-permissions', codex: '' }
     expect(deps?.resolveAgentFullAccess?.('claude')).toBe(true)
     expect(deps?.resolveAgentFullAccess?.('codex')).toBe(false)
+    // OMP has no bypass argument, so its chats from before modes take the new-chat setting.
+    settings.nativeChatPermissionMode = 'full-access'
+    expect(deps?.resolveAgentFullAccess?.('omp')).toBe(true)
+    settings.nativeChatPermissionMode = 'ask'
+    expect(deps?.resolveAgentFullAccess?.('omp')).toBe(false)
     const notRunnable = expect.objectContaining({ reason: 'agentCommandNotRunnable' })
     settings.agentCmdOverrides = { claude: 'wrapper --arg' }
     expect(() => deps?.resolveClaudeCommand?.()).toThrow(notRunnable)

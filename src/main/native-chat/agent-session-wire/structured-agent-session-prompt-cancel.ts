@@ -10,11 +10,13 @@ import { AgentSessionPromptUnavailableError } from './structured-agent-session-a
 import type { StructuredAgentSessionChatStopRun } from './structured-agent-session-chat-stop'
 import {
   answerCancelOfSettledPrompt,
+  isEndedGenerationPrompt,
   validatePendingPrompt,
   type PendingPromptValidation
 } from './structured-agent-session-prompt-state'
 import { cardCancelNotSavedRefusal, stopNotSaved } from './structured-agent-session-stop-acceptance'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 type CancelOutcome = TurnOutcome<AgentSessionCancelResult>
 type PendingPrompt = Extract<PendingPromptValidation, { ok: true }>
@@ -35,6 +37,9 @@ export async function cancelStructuredAgentSessionPrompt(
     sessionId: ctx.sessionId,
     prompt: validated.prompt
   })
+  if (isEndedGenerationPrompt(ctx, validated)) {
+    return cancelEndedGenerationPrompt(ctx, input, validated, route ? null : routes.interrupt)
+  }
   if (!route) {
     return routes.interrupt()
   }
@@ -60,18 +65,58 @@ export async function cancelStructuredAgentSessionPrompt(
   return dismissed.ok ? cancelled : dismissed
 }
 
+/** A card an ended generation raised: no live provider holds it, so it is dismissed in the journal
+ *  alone. As on main, a provider whose card Cancel routes (a dismissal, or a Stop of the turn that
+ *  raised it) stops nothing, since the live turn did not raise it. One with no route gets the
+ *  named live turn's own cancel with the card, as main's plan does, never the chat's Stop, so
+ *  queued messages stay and the queue is not paused: ACP interrupts that turn, and Codex, finding
+ *  no such card in its live child, interrupts nothing. */
+async function cancelEndedGenerationPrompt(
+  ctx: AgentSessionTurnContext,
+  input: { turnId?: string },
+  pending: PendingPrompt,
+  interrupt: (() => Promise<CancelOutcome>) | null
+): Promise<CancelOutcome> {
+  const liveTurnId = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
+  const interrupted =
+    interrupt && input.turnId !== undefined && input.turnId === liveTurnId
+      ? await interrupt()
+      : null
+  if (interrupted && !interrupted.ok) {
+    return interrupted
+  }
+  // The interrupt's provider may have let go of it already; what is still pending is dismissed.
+  const still = validatePendingPrompt(ctx, {
+    itemId: pending.item.itemId,
+    expectedRevision: pending.item.revision
+  })
+  if (still.ok) {
+    const dismissed = await dismissPrompt(ctx, still, null)
+    if (!dismissed.ok) {
+      return dismissed
+    }
+  }
+  return (
+    interrupted ?? {
+      ok: true,
+      value: { ...(input.turnId ? { turnId: input.turnId } : {}), cancelled: true }
+    }
+  )
+}
+
 function raisedByLiveTurn(ctx: AgentSessionTurnContext, pending: PendingPrompt): boolean {
-  const live = ctx.journal.liveTurnScope()
+  const live = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   const raised = pending.item.turnScope
   return live.kind === 'turn' && raised?.kind === 'turn' && raised.turnItemId === live.turnItemId
 }
 
 /** Records the card as cancelled by the caller, after every row the provider already sent (each
- *  landed at its call); `answer` also declines the provider's request. */
+ *  landed at its call); `answer` also declines the provider's request. Null: no live provider holds
+ *  the card (an ended generation's), so only the journal records it. */
 async function dismissPrompt(
   ctx: AgentSessionTurnContext,
   pending: PendingPrompt,
-  answer: boolean
+  answer: boolean | null
 ): Promise<TurnOutcome<null>> {
   const { item, prompt } = pending
   const identity = parseAgentJournalItemKey(item.itemId)
@@ -100,19 +145,21 @@ async function dismissPrompt(
         }
       },
       // A revision: the prompt keeps the turn it was raised in.
-      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() },
+      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() },
       receipt
     )
     committed = true
   }
   try {
-    await ctx.adapter.dismissPrompt?.({
-      sessionId: ctx.sessionId,
-      itemId: item.itemId,
-      fence: ctx.fence,
-      answer,
-      commit
-    })
+    if (answer !== null) {
+      await ctx.adapter.dismissPrompt?.({
+        sessionId: ctx.sessionId,
+        itemId: item.itemId,
+        fence: ctx.fence,
+        answer,
+        commit
+      })
+    }
   } catch (error) {
     if (!committed && !(error instanceof AgentSessionPromptUnavailableError)) {
       return dismissalNotSaved(ctx, error)
@@ -127,7 +174,7 @@ async function dismissPrompt(
             surface: 'row'
           })
         },
-        { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
+        { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
       )
     }
   }

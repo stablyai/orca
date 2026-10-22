@@ -133,9 +133,15 @@ test('CLI file positioning preserves background navigation and reveals the reque
     await orcaPage.evaluate(
       ({ id, split }) => {
         const state = window.__store?.getState()
-        if (!state?.copyUnifiedTabToGroup(split.tabId, split.siblingGroupId)) {
-          throw new Error('Editor tab was not copied')
+        const tab = state?.unifiedTabsByWorktree[id]?.find((item) => item.id === split.tabId)
+        if (!state || !tab) {
+          throw new Error('Editor tab missing')
         }
+        state.createUnifiedTab(id, tab.contentType, {
+          entityId: tab.entityId,
+          label: tab.label,
+          targetGroupId: split.siblingGroupId
+        })
         state.focusGroup(id, split.groupId)
       },
       { id: worktreeId, split }

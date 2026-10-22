@@ -11,7 +11,7 @@ import {
   stripConfiguredBranchPrefix
 } from '../../shared/branch-name-from-work'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
-import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
+import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-branch-name'
 import { gitExecFileAsync } from '../git/runner'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { resolveGitRouteForHost } from '../providers/execution-host-provider-dispatch'
@@ -30,6 +30,7 @@ import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
+import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 
 export type FirstWorkBranchRenameEvent = {
   paneKey: string
@@ -43,13 +44,17 @@ export type FirstWorkBranchRenameEvent = {
 }
 
 export type FirstWorkBranchRenameDeps = {
-  getSettings: () => GlobalSettings
+  getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
+    Parameters<typeof getConfiguredBranchPrefix>[0] &
+    Partial<Pick<GlobalSettings, 'autoRenameBranchFromWork'>>
   getRepo: (repoId: string) => Repo | undefined
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
   /** Current sidebar display name for the worktree, if one is stored. */
   getCurrentDisplayName: (worktreeId: string) => string | undefined
   /** Current workspace path for non-git folder workspaces. */
   getFolderWorkspacePath?: (worktreeId: string) => string | undefined
+  /** True while a WSL move is taking the folder workspace, or the WSL host owns it. */
+  isFolderWorkspaceWslMoveBlocked?: (worktreeId: string) => boolean
   /** True while a workspace title is waiting for the first agent message. */
   isPendingFirstAgentMessageRename?: (worktreeId: string) => boolean
   /** True only for Orca-created worktrees whose branch Orca is allowed to rename. */
@@ -176,6 +181,10 @@ async function runAutoRename(
     return stop('folder project has no branch to rename', true)
   }
   const worktreePath = parsed.worktreePath
+  // Before any git command; retry keeps the rename pending until the move settles.
+  if (isWslMoveRepoBlocked(repo)) {
+    return retry('a WSL move is taking the project')
+  }
 
   // Why: a runtime row's connectionId names the server's own SSH target; that host owns the branch, never this client.
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
@@ -235,6 +244,10 @@ async function runAutoRename(
     params,
     target
   )
+  // Generation takes seconds; a move may have started meanwhile.
+  if (isWslMoveRepoBlocked(repo)) {
+    return retry('a WSL move started during generation')
+  }
   if (!generated.success) {
     // Transient failure: retry on a later event; skip the badge for a user-canceled generation.
     if (!generated.canceled) {
@@ -281,6 +294,10 @@ async function runAutoRename(
     return stop(`no distinct unique branch name for slug "${slug}"`, true)
   }
 
+  // The name lookups above await git; a move may have started since the post-generation check.
+  if (isWslMoveRepoBlocked(repo)) {
+    return retry('a WSL move started before the branch rename')
+  }
   await renameCurrentBranch(exec, newBranch)
 
   // resolveUniqueBranchName may append a collision suffix (`-2`, …), so derive names from the resolved leaf, not the slug.
@@ -298,7 +315,9 @@ async function runAutoRename(
 
   // Best-effort local-only folder align, after setDisplayName so the new name rides into the migrated identity; a failure must never undo the landed rename.
   let folderRenamed = false
-  if (deps.renameWorktreeFolder) {
+  // The branch rename landed, but a move now taking the project must not see its folder moved.
+  const folderBlocked = isWslMoveRepoBlocked(repo)
+  if (deps.renameWorktreeFolder && !folderBlocked) {
     try {
       folderRenamed = await deps.renameWorktreeFolder(worktreeId, newBranchLeaf)
     } catch (error) {
@@ -313,7 +332,12 @@ async function runAutoRename(
   const displayLog = updateDisplay
     ? `display "${currentDisplayName ?? ''}" -> "${newDisplayName}"`
     : `display kept ("${currentDisplayName}")`
-  const folderLog = folderRenamed ? '; folder renamed' : ''
+  // The branch already has its new name, so a move that skipped the folder still settles the rename.
+  const folderLog = folderRenamed
+    ? '; folder renamed'
+    : folderBlocked
+      ? '; folder kept (a WSL move started)'
+      : ''
   console.info(
     `[auto-branch-rename] renamed ${currentBranch} -> ${newBranch}; ${displayLog}${folderLog}`
   )

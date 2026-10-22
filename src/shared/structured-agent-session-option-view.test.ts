@@ -4,13 +4,12 @@ import type { AgentSessionModelCatalogResult } from './agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
+  commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
 import {
-  nearestAgentEffort,
-  structuredAgentSessionListedPicks,
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection,
   structuredAgentSessionShownSnapshot
@@ -22,17 +21,26 @@ const SONNET = { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: level
 // Claude's session-less listing marks no default row.
 const LISTED: AgentSessionModelCatalogResult = { origin: 'probe', fetchedAt: 1, models: [OPUS] }
 const remembered = { model: 'claude-gone', effort: 'max' }
+// Claude Code 2.1.302 lists plain opus and no opus[1m], which still runs.
+const CLI302 = [{ ...OPUS, id: 'opus', isDefault: true }, SONNET]
 
 const fresh = () => createStructuredAgentSessionOptionState('claude', CLAUDE_SESSION_OPTION_CATALOG)
 const withHostList = (state = fresh(), catalog: AgentSessionModelCatalogResult = LISTED) =>
   applyStructuredAgentSessionModelCatalog(state, CLAUDE_SESSION_OPTION_CATALOG, catalog, {
     newLaunch: true
   })
-// A stopped chat's own answer lists the host's rows plus its own model, named by its id.
-const stopped = (model: string, rows = [OPUS]) =>
+// A chat's own answer lists its listing's rows plus its own model, named by its id; `listed` are
+// the ids its listing names (none from an older host).
+const stopped = (
+  model: string,
+  rows = [OPUS],
+  listed = rows.map((row) => row.id),
+  effort = 'high'
+) =>
   applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
     models: [...rows, { id: model, label: model, isDefault: false, efforts: [] }],
-    current: { model, effort: 'high' }
+    listedModelIds: listed,
+    current: { model, effort }
   })
 
 function shown(...args: Parameters<typeof structuredAgentSessionOptionView>) {
@@ -44,148 +52,61 @@ function shown(...args: Parameters<typeof structuredAgentSessionOptionView>) {
   return { model: value('model'), effort: value('effort') }
 }
 
-describe('a Claude model the verified list no longer offers', () => {
-  it('shows a new chat on the first listed row, effort moved to the nearest level', () => {
-    const state = withHostList()
-    expect(shown(state, remembered, {}, true)).toEqual({ model: 'opus[1m]', effort: 'xhigh' })
-    expect(structuredAgentSessionListedPicks(state, remembered, {})).toEqual({
-      model: 'opus[1m]',
-      effort: 'xhigh'
-    })
-    // Derived only: the record never takes it.
-    expect(state.record.model).toBeUndefined()
-  })
+const carried = (
+  state: StructuredAgentSessionOptionState,
+  seed?: Readonly<Record<string, string>>,
+  picks: Readonly<Record<string, string>> = {}
+) => structuredAgentSessionSendSelection(structuredAgentSessionOptionView(state, seed, picks))
 
-  it('shows a stopped chat on it too, its own unlisted row aside', () => {
-    expect(shown(withHostList(stopped('claude-gone')), undefined, {}, true)).toEqual({
-      model: 'opus[1m]',
-      effort: 'xhigh'
-    })
-  })
-
-  it('keeps a model the listing names, and takes a listed row whose label is its id', () => {
-    const live = withHostList(stopped('sonnet', [OPUS, SONNET]), {
+describe('a Claude model its CLI no longer lists', () => {
+  it('stays the chat model through a refresh and every send, its effort read-only', () => {
+    // The incident: a chat on opus[1m] at max, reopened under a CLI that lists only plain opus.
+    const restored = withHostList(stopped('opus[1m]', CLI302, undefined, 'max'), {
       ...LISTED,
-      models: [OPUS, SONNET]
+      models: CLI302
     })
-    expect(structuredAgentSessionListedPicks(live, undefined, {})).toBeNull()
-    const held = { model: 'opus[1m]' }
-    expect(structuredAgentSessionListedPicks(withHostList(), remembered, held)).toBeNull()
-    // A listing with no display names names each row by its id.
-    const plain = { id: 'opus', label: 'opus', isDefault: true, efforts: levels('low', 'high') }
-    const unnamed = withHostList(fresh(), { ...LISTED, models: [SONNET, plain] })
-    expect(structuredAgentSessionListedPicks(unnamed, remembered, {})).toEqual({
-      model: 'opus',
-      effort: 'high'
+    const refreshed = applyStructuredAgentSessionOptions(restored, CLAUDE_SESSION_OPTION_CATALOG, {
+      models: [...CLI302, { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }],
+      listedModelIds: CLI302.map((row) => row.id),
+      current: { model: 'opus[1m]', effort: 'max' }
     })
+    for (const state of [restored, refreshed]) {
+      expect(shown(state, undefined, {})).toEqual({ model: 'opus[1m]', effort: 'max' })
+      expect(carried(state)).toEqual({ model: 'opus[1m]', effort: 'max' })
+      const snapshot = structuredAgentSessionShownSnapshot(state)
+      // No inferred menu: the one level it holds, which nothing can change.
+      expect(snapshot.find((entry) => entry.id === 'effort')).toMatchObject({
+        settable: false,
+        kind: { choices: [{ value: 'max', label: 'max' }] }
+      })
+    }
   })
 
-  it('moves a model only the session itself lists, as the listing does not name it', () => {
-    const live = withHostList(stopped('sonnet', [OPUS, SONNET]))
-    expect(structuredAgentSessionListedPicks(live, undefined, {})).toEqual({
-      model: 'opus[1m]',
-      effort: 'xhigh'
+  it('keeps a remembered model and effort, including under a model with no listed effort', () => {
+    // The placeholder stands until the host answers with the chat's own model; create seeds it.
+    expect(carried(withHostList(), remembered)).toBeUndefined()
+    const haiku = { id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }
+    const listed = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+      models: [OPUS, haiku],
+      listedModelIds: ['opus[1m]', 'haiku'],
+      current: { model: 'haiku', effort: 'high' }
     })
-  })
-
-  it("shows the chat's own model to a host that cannot take a send's model", () => {
-    expect(shown(withHostList(stopped('claude-gone')), undefined, {}, false).model).toBe(
-      'claude-gone'
-    )
-  })
-
-  it.each<[string, AgentSessionModelCatalogResult]>([
-    ['still listing', { ...LISTED, listingInProgress: true }],
-    ['behind a failed sign-in', { ...LISTED, unavailable: { reason: 'notSignedIn' } }]
-  ])('keeps the model while the list is %s', (_name, catalog) => {
-    const state = withHostList(fresh(), catalog)
-    expect(structuredAgentSessionListedPicks(state, remembered, {})).toBeNull()
-    expect(
-      structuredAgentSessionListedPicks(
-        withHostList(stopped('claude-gone'), catalog),
-        undefined,
-        {}
-      )
-    ).toBeNull()
-  })
-
-  it('takes no row the finished listing does not name, as from a built-in fallback list', () => {
-    // A live answer from before startup finished lists the built-in rows, not the account's.
-    const fallback = applyStructuredAgentSessionOptions(
-      withHostList(),
-      CLAUDE_SESSION_OPTION_CATALOG,
-      {
-        models: CLAUDE_SESSION_OPTION_CATALOG.models.map((model) => ({
-          id: model.id,
-          label: model.label,
-          isDefault: model.isDefault === true,
-          efforts: []
-        })),
-        current: { model: 'claude-gone' }
-      }
-    )
-    expect(structuredAgentSessionListedPicks(fallback, undefined, {})).toBeNull()
-  })
-
-  it.each<[string, unknown[]]>([
-    ['a null row', [null]],
-    ['a row with no efforts', [{ id: 'opus[1m]', label: 'Opus', isDefault: false }]],
-    ['no rows', []]
-  ])('keeps the model when the host answer has %s', (_name, models) => {
-    const live = stopped('claude-gone')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a malformed host answer is the case under test.
-    const answer = { origin: 'probe', fetchedAt: 1, models } as AgentSessionModelCatalogResult
-    expect(structuredAgentSessionListedPicks(withHostList(live, answer), undefined, {})).toBeNull()
-  })
-
-  it('keeps the model before any host answer', () => {
-    expect(structuredAgentSessionListedPicks(fresh(), remembered, {})).toBeNull()
-    expect(structuredAgentSessionListedPicks(stopped('claude-gone'), undefined, {})).toBeNull()
+    expect(shown(listed, undefined, {})).toEqual({ model: 'haiku', effort: 'high' })
   })
 })
 
 describe('what a send carries', () => {
-  const carried = (
-    state: StructuredAgentSessionOptionState,
-    seed?: Readonly<Record<string, string>>,
-    picks: Readonly<Record<string, string>> = {}
-  ) =>
-    structuredAgentSessionSendSelection(
-      state.record.agent,
-      structuredAgentSessionOptionSnapshot(
-        structuredAgentSessionOptionView(state, seed, picks, true)
-      )
-    )
-
-  it('carries the shown model and effort, the replacement included', () => {
-    expect(carried(withHostList(), remembered)).toEqual({ model: 'opus[1m]', effort: 'xhigh' })
-    // A chat that still runs a listed model carries that one.
-    const listed = { ...LISTED, models: [OPUS, SONNET] }
-    expect(carried(withHostList(stopped('sonnet', [OPUS, SONNET]), listed))).toEqual({
-      model: 'sonnet',
-      effort: 'high'
-    })
-  })
-
-  it('carries the default it shows, and a model it keeps while the list is unproven', () => {
+  it('carries the default it shows when nothing names a model', () => {
     const named = { ...SONNET, isDefault: true }
     const listing = { ...LISTED, models: [OPUS, named], listingNamesConfiguredModel: true }
     expect(carried(withHostList(fresh(), listing))).toEqual({ model: 'sonnet' })
-    const listing2: AgentSessionModelCatalogResult = { ...LISTED, listingInProgress: true }
-    expect(carried(withHostList(stopped('claude-gone'), listing2))).toEqual({
-      model: 'claude-gone'
-    })
   })
 
-  it('resolves a pick on its way as the picker shows it, a gone model it names included', () => {
+  it('carries a pick on its way as given', () => {
     const listed = withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] })
     expect(carried(listed, remembered, { model: 'sonnet' })).toMatchObject({ model: 'sonnet' })
     expect(carried(withHostList(), undefined, { model: 'claude-retired' })).toMatchObject({
-      model: 'opus[1m]'
-    })
-    expect(carried(withHostList(), remembered, { effort: 'low' })).toEqual({
-      model: 'opus[1m]',
-      effort: 'low'
+      model: 'claude-retired'
     })
   })
 
@@ -198,22 +119,51 @@ describe('what a send carries', () => {
     )
     expect(carried(codex)).toBeUndefined()
   })
-
-  it("shows the phone's picker on the replacement too, only for a host that takes it", () => {
-    const model = (takes: boolean) =>
-      structuredAgentSessionShownSnapshot(withHostList(stopped('claude-gone')), takes).find(
-        (descriptor) => descriptor.id === 'model'
-      )?.kind
-    expect(model(true)).toMatchObject({ currentValue: 'opus[1m]' })
-    expect(model(false)).toMatchObject({ currentValue: 'claude-gone' })
-  })
 })
 
-describe('nearestAgentEffort', () => {
-  it('keeps an offered level, takes the higher on a tie, and names none it cannot rank', () => {
-    expect(nearestAgentEffort('high', ['low', 'high'])).toBe('high')
-    expect(nearestAgentEffort('medium', ['low', 'high'])).toBe('high')
-    expect(nearestAgentEffort('max', ['low', 'xhigh'])).toBe('xhigh')
-    expect(nearestAgentEffort('turbo', ['low', 'high'])).toBeUndefined()
+describe("a chat's model and effort, apart from the defaults filling them in", () => {
+  const listed = CLI302.map((row) => row.id)
+  // A resumed chat at rest that never picked a model: its host fills in the listing's default.
+  const resumed = (defaulted?: readonly ('model' | 'effort')[]) =>
+    applyStructuredAgentSessionOptions(
+      applyStructuredAgentSessionModelCatalog(
+        fresh(),
+        CLAUDE_SESSION_OPTION_CATALOG,
+        { ...LISTED, models: CLI302 },
+        { newLaunch: false }
+      ),
+      CLAUDE_SESSION_OPTION_CATALOG,
+      {
+        models: CLI302,
+        listedModelIds: listed,
+        current: { model: 'opus', effort: 'low', ...(defaulted ? { defaulted } : {}) }
+      }
+    )
+
+  it("names a resumed chat's defaults but never sends them, only its picks", () => {
+    const state = resumed(['model', 'effort'])
+    expect(shown(state, undefined, {})).toEqual({ model: 'opus', effort: 'low' })
+    expect(carried(state)).toBeUndefined()
+    const effort = commitStructuredAgentSessionOption(state, 'effort', 'xhigh')
+    expect(carried(effort)).toEqual({ effort: 'xhigh' })
+  })
+
+  it("reads an older host's answer, which marks no default, as it always has", () => {
+    const state = resumed()
+    expect(shown(state, undefined, {})).toEqual({ model: 'opus', effort: 'low' })
+    expect(carried(state)).toEqual({ model: 'opus', effort: 'low' })
+  })
+
+  it('lets a new chat pick its effort before its first message, under the default it shows', () => {
+    const state = withHostList(fresh(), {
+      ...LISTED,
+      models: CLI302,
+      listingNamesConfiguredModel: true
+    })
+    expect(shown(state, undefined, { effort: 'xhigh' })).toEqual({ model: 'opus', effort: 'xhigh' })
+    expect(carried(state, undefined, { effort: 'xhigh' })).toEqual({
+      model: 'opus',
+      effort: 'xhigh'
+    })
   })
 })

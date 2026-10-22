@@ -5,7 +5,7 @@ import {
   migrateFolderWorkspaceHostSshTargetId,
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId
-} from '../../ssh/ssh-target-id-migration'
+} from '../../ssh/targets/ssh-target-id-migration'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
 import {

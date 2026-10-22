@@ -11,15 +11,14 @@ import {
 } from '../native-chat/structured-agent-cli-conversations'
 
 const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
+  conversationStore: ({ accountHomePath }) => join(accountHomePath, 'projects'),
   accountHomeCandidates: ({ selectedAccountHomePath }) => [
     selectedAccountHomePath,
     join(homedir(), '.claude'),
     ...(getClaudeProfileRouter()?.accountHomes() ?? [])
   ],
-  findTranscript: ({ providerSessionId, accountHomePath }) =>
-    resolveSessionFilePath('claude', providerSessionId, {
-      claudeProjectsDir: join(accountHomePath, 'projects')
-    })
+  findTranscript: ({ providerSessionId, store, strictErrors }) =>
+    resolveSessionFilePath('claude', providerSessionId, { claudeProjectsDir: store, strictErrors })
 })
 
 const CLAUDE_SESSION_HISTORY: StructuredAgentSessionHistory = {

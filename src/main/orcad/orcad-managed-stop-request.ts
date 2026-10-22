@@ -27,7 +27,7 @@ export function readOrcadManagedStopRequest(path: string): OrcadManagedStopReque
   return OrcadManagedStopRequestSchema.parse(JSON.parse(buffer.toString('utf8')))
 }
 
-export function sameOrcadManagedStopInstance(
+function sameOrcadManagedStopInstance(
   left: OrcadManagedStopInstance,
   right: Pick<OrcadManagedStopInstance, 'pid' | 'startedAtMs' | 'nonce'>
 ): boolean {

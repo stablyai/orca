@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { getDockerSshHostImage } from './docker-ssh-host-image'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 import type { TestInfo } from '@stablyai/playwright-test'
 
@@ -190,7 +190,9 @@ export function writeDockerSshHostTargetFile(
 }
 
 export function startDockerSshHostTarget(
-  testInfo: Pick<TestInfo, 'workerIndex'>
+  testInfo: Pick<TestInfo, 'workerIndex'>,
+  /** A Docker volume mounted as `/root`, so several containers share one home as on NFS. */
+  options: { sharedHomeVolume?: string } = {}
 ): DockerSshHostTarget {
   const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
   if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
@@ -217,13 +219,24 @@ export function startDockerSshHostTarget(
         containerName,
         '-p',
         `${bindHost}::22`,
+        // Each container is its own machine, so it gets its own machine-id.
+        ...(options.sharedHomeVolume
+          ? [
+              '-v',
+              `${options.sharedHomeVolume}:/root`,
+              '-e',
+              `MACHINE_ID=${randomUUID().replace(/-/g, '')}`
+            ]
+          : []),
         '-e',
         `AUTHORIZED_KEY=${publicKey}`,
         getDockerSshHostImage(),
         'bash',
         '-lc',
         [
-          'printf "%s\\n" "$AUTHORIZED_KEY" > /root/.ssh/authorized_keys',
+          ...(options.sharedHomeVolume ? ['printf "%s\\n" "$MACHINE_ID" > /etc/machine-id'] : []),
+          // Appended on a shared home, so each container's key keeps working.
+          `printf "%s\\n" "$AUTHORIZED_KEY" ${options.sharedHomeVolume ? '>>' : '>'} /root/.ssh/authorized_keys`,
           'chmod 600 /root/.ssh/authorized_keys',
           'git config --global user.email e2e@test.local',
           'git config --global user.name "Orca Docker SSH E2E"',

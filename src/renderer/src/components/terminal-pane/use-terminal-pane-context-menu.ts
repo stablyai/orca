@@ -27,6 +27,7 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
+import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -57,6 +58,7 @@ type TerminalMenuState = {
   paneCount: number
   menuPaneId: number | null
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
+  onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
   onSelectAll: () => void
@@ -131,14 +133,21 @@ export function useTerminalPaneContextMenu({
       source
     )
 
-  const { open, setOpen, point, menuOpenedAtRef, onContextMenuCapture, onPaneTitleContextMenu } =
-    useTerminalContextMenuTrigger({
-      managerRef,
-      containerRef,
-      contextPaneIdRef,
-      rightClickToPaste,
-      pasteResolvedPane
-    })
+  const {
+    open,
+    setOpen,
+    point,
+    menuOpenedAtRef,
+    onContextMenuCapture,
+    onMouseDownCapture,
+    onPaneTitleContextMenu
+  } = useTerminalContextMenuTrigger({
+    managerRef,
+    containerRef,
+    contextPaneIdRef,
+    rightClickToPaste,
+    pasteResolvedPane
+  })
 
   const { onSplitRight, onSplitDown } = useTerminalPaneSplitActions({
     managerRef,
@@ -196,8 +205,9 @@ export function useTerminalPaneContextMenu({
     if (!pane || !manager) {
       return
     }
-    manager.equalizePaneSizes()
-    pane.terminal.focus()
+    equalizeTerminalPanes({ worktreeId, tabId, getManager: () => managerRef.current }, () =>
+      pane.terminal.focus()
+    )
   }
 
   const onClosePane = (): void => {
@@ -295,6 +305,7 @@ export function useTerminalPaneContextMenu({
     paneCount,
     menuPaneId,
     onContextMenuCapture,
+    onMouseDownCapture,
     onPaneTitleContextMenu,
     onCopy,
     onSelectAll,

@@ -33,7 +33,8 @@ import {
   getHiddenRateLimitWslCwdSetupCommands,
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
-import { quoteHiddenRateLimitShellValue } from './hidden-rate-limit-shell'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -52,9 +53,9 @@ function buildWslCodexCommand(
   }
   const setupCommands = [
     ...getHiddenRateLimitWslCwdSetupCommands(),
-    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`
+    `export CODEX_HOME=${quotePosixShell(wslInfo.linuxPath)}`
   ].join(' && ')
-  const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')} <&3 >&4 3<&- 4>&-`
+  const execSuffix = `${args.map(quotePosixShell).join(' ')} <&3 >&4 3<&- 4>&-`
   const loginShellCommand = buildWslLoginShellCommand(
     [setupCommands, `exec codex ${execSuffix}`].join(' && ')
   )
@@ -96,7 +97,8 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
   const child = spawnProcessOnWorkerThread({
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
-    cwd: resolveHiddenRateLimitPtyCwd(),
+    // Why: WSL holds wsl.exe's cwd busy ~60s, so never hand it a folder inside the profile (#29845).
+    cwd: wslCodex ? resolveWslInteropSpawnCwd() : resolveHiddenRateLimitPtyCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
       // WSL probes keep the guest's own proxy env; a Windows proxy address may not resolve there.

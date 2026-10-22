@@ -11,13 +11,25 @@ import {
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as Fs from 'node:fs'
 import type * as SecureFile from '../../shared/secure-file'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
 const restriction = vi.hoisted(() => vi.fn((_path: string, _directory: boolean) => false))
 
-vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
+beforeEach(() =>
+  setSecretStore({
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error('unavailable')
+    },
+    decryptString: () => {
+      throw new Error('unavailable')
+    },
+    describeProtectionGap: () => 'unavailable'
+  })
+)
 // Stands in for the born-restricted create: a real staged write, then the injected outcome.
 vi.mock('../../shared/secure-path-windows-acl', async () => {
   const { writeFileSync: stage } = await vi.importActual<typeof Fs>('node:fs')

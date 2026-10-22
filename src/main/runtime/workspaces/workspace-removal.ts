@@ -1,5 +1,4 @@
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { OrcaRuntimeWithStopTerminalsForWorktree } from '../orca-runtime-stop-terminals-for-worktree'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { OrcaRuntimeWithCreateManagedRemoteWorktree } from './workspace-metadata'
 import {
@@ -36,12 +35,12 @@ import { removeStaleLocalWorktreeRegistration } from '../../local-worktree-remov
 import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote'
 import { removeRuntimeRegisteredLocalWorktree } from '../runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './workspace-registration-removal'
+import {
+  assertWslMoveWorkspaceWritable,
+  isWslMoveSourceHost
+} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateManagedRemoteWorktree {
-  abstract forgetStructuredSessionMail(sessionId: string): void
-  abstract stopTerminalsForWorktree(
-    ...args: Parameters<OrcaRuntimeWithStopTerminalsForWorktree['stopTerminalsForWorktree']>
-  ): ReturnType<OrcaRuntimeWithStopTerminalsForWorktree['stopTerminalsForWorktree']>
   abstract removeWorktreeMetadataAndHistory(
     store: RuntimeStore,
     worktreeId: string,
@@ -61,12 +60,12 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
     repoId: string,
     removalHostId?: ExecutionHostId
   ): void
-  protected abstract retryFailedLocalRemoval(
+  protected abstract retryFailedRemoval(
     route: { kind: string },
     target: { id: string; path: string },
     registeredWorktrees: readonly GitWorktreeInfo[],
     options: RemoveManagedWorktreeOptions
-  ): boolean
+  ): Promise<boolean>
 
   async removeManagedWorktree(
     worktreeSelector: string,
@@ -85,6 +84,13 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
     const store = this.store
     const cleanupHostId = parseExecutionHostId(hostId)?.id
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, cleanupHostId)
+    // The repo row names the host; a caller may omit hostId for a worktree on another host.
+    const fenceOwner = resolveWorktreeRemovalRepoOwner(store, removalTarget.repoId, cleanupHostId)
+    const fenceHostId =
+      fenceOwner.kind === 'resolved' ? getRepoExecutionHostId(fenceOwner.repo) : cleanupHostId
+    if (isWslMoveSourceHost(fenceHostId)) {
+      assertWslMoveWorkspaceWritable(store, removalTarget.id)
+    }
     // Why: a retry or a second client asking while Git still deletes joins that removal.
     const pending = this.joinPendingWorktreeRemoval(removalTarget.id, options)
     if (pending) {
@@ -167,7 +173,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           registeredWorktrees,
           removalHome
         )
-        if (this.retryFailedLocalRemoval(route, removalTarget, registeredWorktrees, options)) {
+        if (await this.retryFailedRemoval(route, removalTarget, registeredWorktrees, options)) {
           return { removing: true }
         }
         if (!registeredWorktree) {

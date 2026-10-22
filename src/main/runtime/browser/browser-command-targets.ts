@@ -21,6 +21,7 @@ export class RuntimeBrowserCommandTargets {
       | 'resolveWorktreeSelector'
       | 'getAuthoritativeWindow'
       | 'retireRuntimeOwnedBrowserSessionTab'
+      | 'serveBrowserTabs'
     >
   ) {}
 
@@ -152,6 +153,9 @@ export class RuntimeBrowserCommandTargets {
 
   // Why: background-mount the worktree via a hidden visibility lease so the webview guest can register without stealing the user's visible pane.
   private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
+    if (await this.host.serveBrowserTabs?.start(worktreeId, undefined)) {
+      return
+    }
     const win = this.host.getAuthoritativeWindow()
     win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
     // Why: the pane is operable only after the webview mounts and calls registerGuest; wait on that IPC rather than a flaky fixed sleep.
@@ -162,6 +166,9 @@ export class RuntimeBrowserCommandTargets {
     worktreeId: string | undefined,
     browserPageId: string
   ): Promise<void> {
+    if (await this.host.serveBrowserTabs?.start(worktreeId, browserPageId)) {
+      return
+    }
     const win = this.host.getAuthoritativeWindow()
     win.webContents.send(
       'browser:activateView',

@@ -105,6 +105,12 @@ function bindRoutePartition(
       authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
       executionHostIdentity: routeIdentity.executionHostIdentity
     },
+    compatibleIdentity: {
+      orcaProfileId: routeIdentity.orcaProfileId,
+      browserProfileId,
+      authorityConnectionIdentity: routeIdentity.pairingAuthorityConnectionIdentity,
+      executionHostIdentity: routeIdentity.executionHostIdentity
+    },
     legacyIdentity: {
       orcaProfileId: routeIdentity.orcaProfileId,
       browserProfileId,
@@ -115,7 +121,12 @@ function bindRoutePartition(
   })
   const persisted = bindings.get(derived.partition)
   if (persisted === null) {
-    bindings.set(derived.partition, derived.bindingFingerprint, routeIdentity.storageScope)
+    bindings.set(
+      derived.partition,
+      derived.bindingFingerprint,
+      routeIdentity.storageScope,
+      derived.aliasFingerprint
+    )
   } else if (persisted !== derived.bindingFingerprint) {
     throw new Error('browser_route_partition_binding_conflict')
   }

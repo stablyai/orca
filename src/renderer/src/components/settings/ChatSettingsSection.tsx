@@ -3,6 +3,7 @@ import { AppearanceChatSection } from './AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
+import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 import { SettingsSection } from './SettingsSection'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -26,7 +27,7 @@ export function ChatSettingsSection({
   isMounted
 }: {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   writeSourceControlAiSettings: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onChatPromptDirtyChange?: (dirty: boolean) => void
   chatPromptDiscardSignal?: number
@@ -72,6 +73,13 @@ export function ChatSettingsSection({
                 </CardContent>
               </Card>
             </section>
+          ) : null}
+          {showDesktopOnlySettings ? (
+            <NativeChatProvidersSetting
+              settings={settings}
+              updateSettings={updateSettings}
+              forceVisible={matchesSettingsSearch(query, [{ title }])}
+            />
           ) : null}
           {showDesktopOnlySettings ? (
             <NativeChatInlineVisualsSetting

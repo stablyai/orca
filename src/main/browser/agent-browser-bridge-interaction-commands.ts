@@ -15,6 +15,8 @@ import { WAIT_PROCESS_TIMEOUT_GRACE_MS } from './agent-browser-bridge-types'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { parseCdpKeyEvent, imeFallbackKeyEvent } from './cdp-keyboard-us-layout'
 import { dispatchPageKeyEvent, type GuestCdpSender } from './guest-direct-key-input'
+import { sendGuestCdpCommand } from './guest-cdp-command'
+import { readRemoteCliAdmittedPage } from './remote-cli-page-admission'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
 
 export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeCaptureCommands {
@@ -203,7 +205,8 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         let releaseDebugger = (): void => {}
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
-          const send: GuestCdpSender = (method, params) => wc.debugger.sendCommand(method, params)
+          const send: GuestCdpSender = (method, params, sessionId) =>
+            sendGuestCdpCommand(wc, method, params, sessionId)
           const guardFocus = (): Promise<() => void> =>
             this.browserManager.guardUserFocusForAgentInput(target.webContentsId)
           await dispatchPageKeyEvent(
@@ -260,10 +263,9 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
-      const buffer = await wc.printToPDF({
-        printBackground: true,
-        preferCSSPageSize: true
-      })
+      const buffer = await readRemoteCliAdmittedPage(wc.id, () =>
+        wc.printToPDF({ printBackground: true, preferCSSPageSize: true })
+      )
       return { data: buffer.toString('base64') }
     })
   }

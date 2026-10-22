@@ -27,7 +27,16 @@ const PAGE_HTML = `<!doctype html>
     <form id="form"><input id="probe" /></form>
     <textarea id="notes"></textarea>
     <button id="target" style="position:absolute;left:40px;top:80px;width:200px;height:60px">target</button>
+    <iframe id="frame" src="__FRAME_URL__" style="position:absolute;left:40px;top:200px;width:300px;height:80px"></iframe>
     <script>
+      window.__frameValue = ''
+      window.__frameKeys = []
+      window.__frameReady = false
+      addEventListener('message', (event) => {
+        if (typeof event.data?.frameValue === 'string') window.__frameValue = event.data.frameValue
+        if (typeof event.data?.frameKey === 'string') window.__frameKeys.push(event.data.frameKey)
+        if (event.data?.frameReady) window.__frameReady = true
+      })
       window.__keys = []
       window.__submits = 0
       window.__clicks = 0
@@ -43,10 +52,40 @@ const PAGE_HTML = `<!doctype html>
   </body>
 </html>`
 
-async function startProbeServer(): Promise<{ url: string; close: () => Promise<void> }> {
-  const server: Server = createServer((_request, response) => {
+// Why: served from localhost while the page is on 127.0.0.1, so it is cross-site and Chromium puts
+// it in its own process, the case widget input cannot reach.
+const FRAME_HTML = `<!doctype html>
+<html>
+  <body>
+    <input id="field" style="position:absolute;left:0;top:0;width:280px;height:60px" />
+    <script>
+      const field = document.getElementById('field')
+      // Why: a cross-site frame cannot focus itself without user activation, so the field takes
+      // focus on the first key the frame receives.
+      addEventListener(
+        'keydown',
+        (event) => {
+          if (document.activeElement !== field) field.focus()
+          parent.postMessage({ frameKey: event.key }, '*')
+        },
+        true
+      )
+      field.addEventListener('input', () => parent.postMessage({ frameValue: field.value }, '*'))
+      parent.postMessage({ frameReady: true }, '*')
+    </script>
+  </body>
+</html>`
+
+export async function startProbeServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  const server: Server = createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-    response.end(PAGE_HTML)
+    const address = server.address()
+    const port = address !== null && typeof address === 'object' ? address.port : 0
+    response.end(
+      request.url === '/frame'
+        ? FRAME_HTML
+        : PAGE_HTML.replace('__FRAME_URL__', `http://localhost:${port}/frame`)
+    )
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -56,9 +95,12 @@ async function startProbeServer(): Promise<{ url: string; close: () => Promise<v
   return {
     url: `http://127.0.0.1:${address.port}/`,
     close: () =>
-      new Promise<void>((resolve, reject) =>
+      new Promise<void>((resolve, reject) => {
+        // Why: the page and its cross-site frame hold keep-alive sockets; on Windows close()
+        // otherwise waits for them until the test times out.
+        server.closeAllConnections()
         server.close((error) => (error ? reject(error) : resolve()))
-      )
+      })
   }
 }
 
@@ -68,7 +110,11 @@ function readProperty(value: unknown, key: string): unknown {
     : undefined
 }
 
-async function rpc(page: Page, method: string, params: Record<string, unknown>): Promise<unknown> {
+export async function rpc(
+  page: Page,
+  method: string,
+  params: Record<string, unknown>
+): Promise<unknown> {
   const response: unknown = await page.evaluate(
     ({ targetMethod, targetParams }) =>
       window.api.runtime.call({ method: targetMethod, params: targetParams }),
@@ -123,7 +169,7 @@ export async function readHost(page: Page): Promise<{ log: string[]; terminalFoc
 }
 
 /** Opens the probe in a browser tab, then puts the terminal back in front of it. */
-async function openBackgroundProbeTab(page: Page, url: string): Promise<string> {
+export async function openBackgroundProbeTab(page: Page, url: string): Promise<string> {
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   const worktreeId = await getActiveWorktreeId(page)
@@ -267,6 +313,39 @@ export async function runAgentShortcutsScenario(
     expect(await getActiveTabId(page)).toBe(activeTabBefore)
     const host = await readHost(page)
     expect(host.log.filter((entry) => entry.startsWith('key:'))).toEqual([])
+    expect(host.terminalFocused).toBe(true)
+    await afterAgentInput?.(pageId)
+  } finally {
+    await server.close()
+  }
+}
+
+export async function runAgentCrossSiteFrameScenario(
+  page: Page,
+  afterAgentInput?: AfterAgentInput
+): Promise<void> {
+  const server = await startProbeServer()
+  try {
+    const pageId = await openBackgroundProbeTab(page, server.url)
+    await focusTerminalAndWatchHost(page)
+    await expect.poll(() => evalInPage(page, pageId, 'String(window.__frameReady)')).toBe('true')
+    await evalInPage(page, pageId, `document.getElementById('frame').focus()`)
+    await expect
+      .poll(() => evalInPage(page, pageId, 'document.activeElement && document.activeElement.id'))
+      .toBe('frame')
+    const hostLogBeforeTyping = (await readHost(page)).log.length
+
+    // Why: keys and text for a focused cross-site frame go to its own session, so the user's
+    // focus never moves; before, they borrowed it.
+    await rpc(page, 'browser.keypress', { page: pageId, key: 'Z' })
+    await expect
+      .poll(() => evalInPage(page, pageId, 'JSON.stringify(window.__frameKeys)'))
+      .toBe('["Z"]')
+    await rpc(page, 'browser.type', { page: pageId, input: 'qr' })
+    await expect.poll(() => evalInPage(page, pageId, 'window.__frameValue')).toContain('qr')
+
+    const host = await readHost(page)
+    expect(host.log.slice(hostLogBeforeTyping)).toEqual([])
     expect(host.terminalFocused).toBe(true)
     await afterAgentInput?.(pageId)
   } finally {

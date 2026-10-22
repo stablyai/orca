@@ -5,6 +5,8 @@ import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-ou
 import { executeTerminalStartupCommandPaste } from '../terminal-startup-command-paste'
 import { resolveTerminalPasteRuntime } from '../terminal-paste-runtime'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/terminal-sleep-layout-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './foreground-output-budgets'
@@ -17,6 +19,9 @@ import { bindReplayDataDrain } from './replay-data-drain'
 import { bindStartFreshSpawn } from './fresh-spawn-start'
 
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
+import { deferHiddenAgentResume } from './hidden-agent-resume-deferral'
+import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
+import { startPaneThroughMainThenAttach } from './main-pane-start-request'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -38,6 +43,15 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
+      // Switch point: main records the wake of this pane alone, the one this window resumed.
+      // Before the drop below, whose record-only wake would leave main's wake nothing to wake.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        recordPaneWakeThroughLayoutOwner(
+          useAppStore.getState(),
+          session.deps.worktreeId,
+          session.cacheKey
+        )
+      }
       session.clearSleepingRecordProviderDuplicates(
         useAppStore.getState(),
         startup.sleepingRecordEntry
@@ -56,16 +70,30 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
             : {})
         }
       : undefined
+  // Why ungated: a reveal, a restart replacement on show, or a phone wake already chose to run now.
+  session.spawnColdRestoreAgentResume = (
+    startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
+    options: FreshSpawnOptions = {}
+  ): Promise<string | null> =>
+    startPaneThroughMainThenAttach(session, () => {
+      session.applyColdRestoreAgentResumeStartup(startup)
+      const spawned = session.startFreshSpawn(startup, options)
+      // Switch point: main's layout shows this pane unbound while the start runs.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        holdInPlaceResumeUntilSettled(() => !session.disposed, startup, spawned)
+      }
+      return spawned
+    })
   session.startFreshColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),
     options: FreshSpawnOptions = {}
-  ): Promise<string | null> => {
-    session.applyColdRestoreAgentResumeStartup(startup)
-    return session.startFreshSpawn(startup, options)
-  }
+  ): Promise<string | null> =>
+    deferHiddenAgentResume(session, startup)
+      ? Promise.resolve(null)
+      : session.spawnColdRestoreAgentResume(startup, options)
   // Why: the hibernation wake fires from noteVisibilityResume in the outer
   // connection scope, long after this deferred-connect closure has run.
-  session.wakeHibernatedAgentPane = () => session.startFreshColdRestoreAgentResume()
+  session.wakeHibernatedAgentPane = () => session.spawnColdRestoreAgentResume()
   const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&

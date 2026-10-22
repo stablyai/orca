@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
@@ -23,10 +24,11 @@ export type CodexChildWorkSink = {
 
 export function codexChildWorkSink(
   sessionId: string,
-  deps: Pick<CodexStructuredSessionAdapterDeps, 'onChildWorkEvidence' | 'now'>
+  deps: Pick<CodexStructuredSessionAdapterDeps, 'onChildWorkEvidence' | 'now'>,
+  producer?: StructuredAgentSessionChildWorkProducer
 ): CodexChildWorkSink {
   return {
-    deliver: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence),
+    deliver: (evidence) => deps.onChildWorkEvidence?.(sessionId, evidence, producer),
     now: () => deps.now?.() ?? Date.now()
   }
 }
@@ -129,10 +131,6 @@ export class CodexBackgroundTaskTracker {
   get state(): AgentSessionBackgroundTaskState | null {
     // Journal admission precedes observe; readers must not see its pending facts.
     return this.publishedState
-  }
-
-  canObserve(event: CodexBackgroundTaskEvent): boolean {
-    return this.commands.canObserve(event)
   }
 
   /** `unapproved`: commands whose approval the journal dropped with this frame's turn ending. */

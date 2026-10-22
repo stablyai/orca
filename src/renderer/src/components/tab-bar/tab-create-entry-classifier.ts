@@ -16,6 +16,7 @@ import {
   validateNewTabEntryRelativePath
 } from './tab-create-entry-path-validation'
 import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
+import { htmlFilePathFromUrl } from '../../../../shared/html-file-url'
 
 export {
   isTabEntryAbsolutePathLike,
@@ -40,6 +41,7 @@ export type TabEntryClassification =
   | { kind: 'search'; engine: SearchEngine; query: string }
   | { kind: 'new-file'; relativePath: string }
   | { kind: 'absolute-file'; filePath: string }
+  | { kind: 'html-file-url'; filePath: string }
   | { kind: 'blocked'; message: string }
 
 export type TabEntryActionClassification = Exclude<
@@ -58,6 +60,7 @@ function tabEntryActionOptionId(classification: TabEntryActionClassification): s
     case 'new-file':
       return `${classification.kind}:${classification.relativePath}`
     case 'absolute-file':
+    case 'html-file-url':
       return `${classification.kind}:${classification.filePath}`
     case 'explicit-url':
     case 'host-url':
@@ -160,6 +163,11 @@ export function getTabEntryOptions(
   }
   if (!trimmed) {
     return [emptyOption()]
+  }
+
+  const htmlFilePath = htmlFilePathFromUrl(trimmed)
+  if (htmlFilePath) {
+    return toOptions([{ kind: 'html-file-url', filePath: htmlFilePath }], limit)
   }
 
   if (isTabEntryAbsolutePathLike(trimmed)) {

@@ -5,6 +5,7 @@ import { resolveLoginShellEnvironment } from '../startup/login-shell-environment
 import type { ProviderRateLimits, UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 import {
   ANTIGRAVITY_MIN_USAGE_VERSION,
+  ANTIGRAVITY_PROBE_ENV,
   ANTIGRAVITY_USAGE_ARGS,
   ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
   ANTIGRAVITY_USAGE_TIMEOUT_MS,
@@ -121,7 +122,7 @@ export async function fetchAntigravityRateLimits(
 
   // Why the login shell's env: agy installs to ~/.local/bin, which is on the user's PATH but not on
   // the PATH an Electron app inherits from the window server or a desktop launcher.
-  const env = await resolveEnvironment()
+  const env = { ...(await resolveEnvironment()), ...ANTIGRAVITY_PROBE_ENV }
   const command = antigravityCommandName()
   const program = await resolve(command, { platform, env })
   if (!program) {

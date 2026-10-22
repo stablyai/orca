@@ -9,7 +9,9 @@ import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import {
   findBrowserTabWorktreeId,
-  isBrowserWorkspaceOwnedByPairedServer
+  isBrowserWorkspaceOwnedByPairedServer,
+  isDesktopRenderedBrowserTab,
+  resolveRemoteCliBrowserWorkspace
 } from './browser-request-workspace-owner'
 
 function pairedServerWorkspaceError(): string {
@@ -22,6 +24,18 @@ function pairedServerWorkspaceError(): string {
 // Why owner, not the Active Server setting: these requests come from this desktop's own runtime,
 // which only names workspaces it runs, so focus on a paired server must not refuse them (#22275).
 export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
+  unsubs.push(
+    window.api.ui.onRequestRemoteCliBrowserScope((data) => {
+      let workspaceId: string | null = null
+      try {
+        workspaceId = resolveRemoteCliBrowserWorkspace(useAppStore.getState(), data)
+      } catch {
+        // Why: an owner this window cannot prove is a refusal, never a pass.
+        workspaceId = null
+      }
+      window.api.ui.replyRemoteCliBrowserScope({ requestId: data.requestId, workspaceId })
+    })
+  )
   unsubs.push(
     window.api.ui.onRequestTabCreate((data) => {
       try {
@@ -60,11 +74,16 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
           sessionProfileId: data.sessionProfileId,
           sessionPartition: data.sessionPartition,
+          // Why null, not inferred: this desktop's runtime only ever asks for a page this desktop
+          // renders, including one in a managed SSH host's workspace (as the tab bar's + does).
+          browserRuntimeEnvironmentId: null,
           activate: data.activate === true
         })
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
-        const browserPageId = pages[0]?.id ?? workspace.id
+        // A layout-owner build draws the page once main's frame lands: answer the id it was opened under.
+        const browserPageId =
+          data.browserPageId ?? pages[0]?.id ?? workspace.activePageId ?? workspace.id
         acquireBrowserAutomationBootstrapLease(worktreeId, browserPageId)
         window.api.ui.replyTabCreate({ requestId: data.requestId, browserPageId })
       } catch (err) {
@@ -182,7 +201,11 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           return
         }
         const closeWorktreeId = findBrowserTabWorktreeId(store, tabToClose)
-        if (closeWorktreeId && isBrowserWorkspaceOwnedByPairedServer(store, closeWorktreeId)) {
+        if (
+          closeWorktreeId &&
+          isBrowserWorkspaceOwnedByPairedServer(store, closeWorktreeId) &&
+          !isDesktopRenderedBrowserTab(store, tabToClose)
+        ) {
           window.api.ui.replyTabClose({
             requestId: data.requestId,
             error: pairedServerWorkspaceError()

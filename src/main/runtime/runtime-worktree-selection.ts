@@ -1,5 +1,9 @@
 import type { Repo } from '../../shared/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { GitPushTarget } from '../../shared/worktree/types'
 
@@ -8,22 +12,6 @@ export type RuntimeWorktreeRemovalTarget = {
   repoId: string
   path: string
   pushTarget?: GitPushTarget
-}
-
-export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? error.message
-      : error && typeof error === 'object' && 'message' in error
-        ? String((error as { message: unknown }).message)
-        : typeof error === 'string'
-          ? error
-          : ''
-  const stderr =
-    error && typeof error === 'object' && 'stderr' in error
-      ? String((error as { stderr: unknown }).stderr)
-      : ''
-  return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
 /**
@@ -74,6 +62,17 @@ export function runtimeRepoMatchesExecutionHost(
     return true
   }
   return getRepoExecutionHostId(repo) === executionHostId
+}
+
+/**
+ * Whether `repo` can be the row a registration in this process dedupes onto. Registration reads its
+ * path on this machine, so an SSH row at the same path string is another machine's project.
+ */
+export function runtimeRepoIsRegistrationCandidate(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
+  executionHostId?: ExecutionHostId | null
+): boolean {
+  return runtimeRepoMatchesExecutionHost(repo, executionHostId) && !getRepoSshConnectionId(repo)
 }
 
 export function parseExactWorktreeIdSelector(

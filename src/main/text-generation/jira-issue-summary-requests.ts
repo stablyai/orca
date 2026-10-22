@@ -1,6 +1,5 @@
 import os from 'node:os'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
-import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
@@ -18,7 +17,7 @@ import {
 } from './jira-issue-summary-text-generation'
 
 export type JiraIssueSummaryGenerationHost = {
-  getSettings: () => GlobalSettings
+  getSettings: () => Parameters<typeof resolveTextGenerationParams>[0]
   getAgentEnvironment: () => CommitMessageAgentEnvironmentResolvers | undefined
 }
 

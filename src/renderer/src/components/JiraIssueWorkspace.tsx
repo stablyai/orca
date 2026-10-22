@@ -1,41 +1,29 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Jira issue hydration, comments, transitions, priorities, and user options are loaded from provider IPC for the selected issue. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import {
-  getCommentBodySubmitState,
-  hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
-
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { hasBoundedCommentBodyText } from '@/lib/comment-body-submit-state'
 import { useAppStore } from '@/store'
+import { jiraGetIssueForTarget, jiraUpdateIssueForTarget } from '@/runtime/runtime-jira-client'
+import type { JiraIssue, JiraMutationResult } from '../../../shared/jira-types'
 import {
-  jiraAddIssueCommentForTarget,
-  jiraGetIssueForTarget,
-  jiraListAssignableUsersForTarget,
-  jiraListPrioritiesForTarget,
-  jiraUpdateIssueForTarget
-} from '@/runtime/runtime-jira-client'
-import type { JiraComment, JiraIssue, JiraPriority, JiraUser } from '../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { JiraIssueMetadataBar, JiraIssueWorkspaceHeader } from './jira-issue-workspace-chrome'
 import { JiraIssueCommentComposer, JiraIssueWorkspaceContent } from './jira-issue-workspace-content'
-import { getJiraIssueWorkspaceActions } from './jira-issue-workspace-actions'
+import { useJiraIssueWorkspaceActions } from './jira-issue-workspace-actions'
 import { getJiraReadIdentity } from '@/store/slices/jira-read-coordination'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
-import {
-  editedJiraIssueFields,
-  mergeJiraIssueHydration,
-  type EditableJiraIssueField
-} from './jira-issue-workspace-hydration'
+import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { editedJiraIssueFields } from './jira-issue-workspace-hydration'
 import { enqueueJiraIssueMutation, jiraIssueRequestScope } from './jira-issue-mutation-queue'
-import { useJiraIssueComments } from './use-jira-issue-comments'
 import { useJiraIssueMutationState } from './use-jira-issue-mutation-state'
-import { useJiraIssueTransitions } from './use-jira-issue-transitions'
-
+import { useJiraIssueWorkspaceData } from './use-jira-issue-workspace-data'
+import { useJiraIssueCommentSubmission } from './use-jira-issue-comment-submission'
 type JiraIssueWorkspaceProps = {
   issue: JiraIssue | null
   onUse: (issue: JiraIssue) => void
@@ -54,125 +42,56 @@ export default function JiraIssueWorkspace({
     () => (sourceContext ? taskSourceRuntimeTarget(sourceContext) : defaultScopeHost(settings)),
     [settings, sourceContext]
   )
+  const runtimeContextKey = getEnvironmentRuntimeContextKey(runtimeTargetEnvironmentId(owner))
   const mutationContextKey = getJiraReadIdentity(settings, sourceContext).contextKey
   const patchJiraIssue = useAppStore((s) => s.patchJiraIssue)
-  const [fullIssue, setFullIssue] = useState<JiraIssue | null>(null)
-  const [issueLoading, setIssueLoading] = useState(false)
-  const [priorities, setPriorities] = useState<JiraPriority[]>([])
-  const [users, setUsers] = useState<JiraUser[]>([])
-  const [pendingField, setPendingField] = useState<string | null>(null)
-  const [titleDraft, setTitleDraft] = useState('')
-  const [labelsDraft, setLabelsDraft] = useState('')
-  const [commentDraft, setCommentDraft] = useState('')
-  const [commentSubmitting, setCommentSubmitting] = useState(false)
-  const requestIdRef = useRef(0)
+  const requestKey = jiraIssueRequestScope(issue, sourceContext, settings)
   const {
     comments,
     setComments,
     commentsLoading,
-    setCommentsLoading,
     commentsError,
-    setCommentsError,
+    loadComments,
+    transitions,
+    transitionsLoading,
+    transitionsError,
+    loadTransitions,
+    editedFieldsRef,
+    fullIssue,
+    issueLoading,
+    labelsDraft,
     optimisticCommentsRef,
-    loadComments
-  } = useJiraIssueComments(owner, requestIdRef)
-  const { transitions, setTransitions, loadTransitions } = useJiraIssueTransitions(
-    owner,
-    requestIdRef
-  )
-
+    pendingField,
+    priorities,
+    requestIdRef,
+    commentDraft,
+    commentSubmitting,
+    setCommentDraft,
+    setCommentSubmitting,
+    setFullIssue,
+    setLabelsDraft,
+    setPendingField,
+    setTitleDraft,
+    titleDraft
+  } = useJiraIssueWorkspaceData({ issue, owner, requestKey })
   const displayed = fullIssue ?? issue
   const siteId = displayed?.siteId ?? undefined
-  // Cache patches replace the issue object without opening a different issue.
-  const requestKey = jiraIssueRequestScope(issue, sourceContext, settings)
-  const loadedRequestKeyRef = useRef<string | null>(null)
-  const editedFieldsRef = useRef(new Set<EditableJiraIssueField>())
-
-  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: seeds editable issue drafts while IPC hydration runs and invalidates obsolete requests.
-  useEffect(() => {
-    if (issue && loadedRequestKeyRef.current === requestKey) {
-      return
-    }
-    loadedRequestKeyRef.current = requestKey
-    requestIdRef.current += 1
-    setPendingField(null)
-    setCommentSubmitting(false)
-    setCommentDraft('')
-    if (!issue) {
-      setFullIssue(null)
-      setIssueLoading(false)
-      setComments([])
-      setCommentsLoading(false)
-      setCommentsError(null)
-      setTransitions([])
-      setPriorities([])
-      setUsers([])
-      optimisticCommentsRef.current = []
-      return
-    }
-
-    const requestId = requestIdRef.current
-    optimisticCommentsRef.current = []
-    editedFieldsRef.current = new Set()
-    setFullIssue(issue)
-    setTitleDraft(issue.title)
-    setLabelsDraft(issue.labels.join(', '))
-    setComments([])
-    setCommentsError(null)
-    setTransitions([])
-    setIssueLoading(true)
-
-    void jiraGetIssueForTarget(owner, issue.key, issue.siteId)
-      .then((result) => {
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        if (result) {
-          const edited = new Set(editedFieldsRef.current)
-          setFullIssue((current) => mergeJiraIssueHydration(result, current, edited))
-          if (!edited.has('title')) {
-            setTitleDraft(result.title)
-          }
-          if (!edited.has('labels')) {
-            setLabelsDraft(result.labels.join(', '))
-          }
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (requestId === requestIdRef.current) {
-          setIssueLoading(false)
-        }
-      })
-
-    void Promise.all([
-      jiraListPrioritiesForTarget(owner, issue.siteId),
-      jiraListAssignableUsersForTarget(owner, issue.key, undefined, issue.siteId)
-    ])
-      .then(([nextPriorities, nextUsers]) => {
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        setPriorities(nextPriorities)
-        setUsers(nextUsers)
-      })
-      .catch(() => {})
-
-    void loadTransitions(issue, requestId)
-    void loadComments(issue, requestId)
-  }, [
-    issue,
-    loadComments,
-    loadTransitions,
-    owner,
-    requestKey,
-    setComments,
-    setCommentsError,
-    setCommentsLoading,
-    setTransitions,
-    optimisticCommentsRef
+  const metadataKey = JSON.stringify([
+    sourceContext ? getTaskSourceCacheScope(sourceContext) : owner,
+    siteId,
+    displayed?.key
   ])
-
+  const handleSubmitComment = useJiraIssueCommentSubmission({
+    commentDraft,
+    commentSubmitting,
+    displayed,
+    optimisticCommentsRef,
+    owner,
+    requestIdRef,
+    setCommentDraft,
+    setCommentSubmitting,
+    setComments
+  })
   useJiraIssueMutationState({
     scope: requestKey,
     issue,
@@ -181,17 +100,23 @@ export default function JiraIssueWorkspace({
     setFullIssue,
     setTitleDraft,
     setLabelsDraft,
-    onStatusSettled: () => displayed && void loadTransitions(displayed, requestIdRef.current)
+    onStatusSettled: () => displayed && void loadTransitions(displayed, requestIdRef.current),
+    onCommentsChanged: () => displayed && void loadComments(displayed, requestIdRef.current)
   })
-
   const mutateIssue = useCallback(
     async (
       field: string,
       updates: Parameters<typeof jiraUpdateIssueForTarget>[2],
       optimistic?: Partial<JiraIssue>
-    ): Promise<void> => {
+    ): Promise<JiraMutationResult> => {
       if (!displayed || pendingField || !requestKey) {
-        return
+        return {
+          ok: false,
+          error: translate(
+            'components.JiraIssueWorkspace.pendingChange',
+            'Another issue change is in progress.'
+          )
+        }
       }
       setPendingField(field)
       const previous = displayed
@@ -204,6 +129,7 @@ export default function JiraIssueWorkspace({
           scope: requestKey,
           previous,
           optimistic: optimistic ?? {},
+          commentsChanged: Boolean(updates.transitionComment?.trim()),
           update: () => jiraUpdateIssueForTarget(owner, previous.key, updates, siteId),
           refresh: () => jiraGetIssueForTarget(owner, previous.key, previous.siteId),
           patchIssue: (patch) =>
@@ -213,15 +139,19 @@ export default function JiraIssueWorkspace({
               contextKey: mutationContextKey
             })
         })
+        return { ok: true }
       } catch (error) {
-        toast.error(
+        const message =
           error instanceof Error
             ? error.message
             : translate(
                 'auto.components.JiraIssueWorkspace.ea21952aa3',
                 'Failed to update Jira issue.'
               )
-        )
+        if (field !== 'transition') {
+          toast.error(message)
+        }
+        return { ok: false, error: message }
       } finally {
         if (requestId === requestIdRef.current) {
           setPendingField(null)
@@ -230,97 +160,25 @@ export default function JiraIssueWorkspace({
     },
     [
       displayed,
+      editedFieldsRef,
       patchJiraIssue,
       pendingField,
       mutationContextKey,
       owner,
+      requestIdRef,
       requestKey,
+      setPendingField,
       siteId,
       sourceContext
     ]
   )
-
-  const handleSaveTitle = useCallback(() => {
-    if (!displayed) {
-      return
-    }
-    const title = titleDraft.trim()
-    if (!title || title === displayed.title) {
-      setTitleDraft(displayed.title)
-      return
-    }
-    void mutateIssue('title', { title }, { title })
-  }, [displayed, mutateIssue, titleDraft])
-
-  const handleSaveLabels = useCallback(() => {
-    if (!displayed) {
-      return
-    }
-    const labels = labelsDraft
-      .split(',')
-      .map((label) => label.trim())
-      .filter(Boolean)
-    void mutateIssue('labels', { labels }, { labels })
-  }, [displayed, labelsDraft, mutateIssue])
-
-  const handleSubmitComment = useCallback(async (): Promise<void> => {
-    if (!displayed || commentSubmitting) {
-      return
-    }
-    const bodyState = getCommentBodySubmitState(commentDraft)
-    if (bodyState.status === 'empty') {
-      return
-    }
-    if (bodyState.status === 'too-large-leading-whitespace') {
-      toast.error(
-        translate(
-          'auto.components.JiraIssueWorkspace.commentTooLarge',
-          'Comment is too large to submit safely.'
-        )
-      )
-      return
-    }
-    setCommentSubmitting(true)
-    const requestId = requestIdRef.current
-    try {
-      const result = await jiraAddIssueCommentForTarget(
-        owner,
-        displayed.key,
-        bodyState.body,
-        displayed.siteId
-      )
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      if (requestId !== requestIdRef.current) {
-        return
-      }
-      const comment: JiraComment = {
-        id: result.id || createBrowserUuid(),
-        body: bodyState.body,
-        createdAt: new Date().toISOString(),
-        user: { accountId: 'local', displayName: 'You' }
-      }
-      optimisticCommentsRef.current.push(comment)
-      setComments((prev) => [...prev, comment])
-      setCommentDraft('')
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : translate('auto.components.JiraIssueWorkspace.fa132c8aed', 'Failed to add comment.')
-      )
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setCommentSubmitting(false)
-      }
-    }
-  }, [commentDraft, commentSubmitting, displayed, owner, optimisticCommentsRef, setComments])
-
-  const actionItems = useMemo(
-    () => (displayed ? getJiraIssueWorkspaceActions(displayed) : []),
-    [displayed]
-  )
+  const { handleSaveTitle, handleSaveLabels, actionItems } = useJiraIssueWorkspaceActions({
+    displayed,
+    titleDraft,
+    labelsDraft,
+    setTitleDraft,
+    mutateIssue
+  })
 
   return (
     <Sheet open={issue !== null} onOpenChange={(open) => !open && onClose()}>
@@ -355,16 +213,23 @@ export default function JiraIssueWorkspace({
             />
 
             <JiraIssueMetadataBar
+              key={metadataKey}
               displayed={displayed}
               pendingField={pendingField}
               transitions={transitions}
+              transitionsLoading={transitionsLoading}
+              transitionsError={transitionsError}
+              reloadTransitions={() => void loadTransitions(displayed, requestIdRef.current)}
               priorities={priorities}
-              users={users}
+              sourceContext={sourceContext}
+              owner={owner}
+              runtimeContextKey={runtimeContextKey}
               mutateIssue={mutateIssue}
             />
 
             <JiraIssueWorkspaceContent
               displayed={displayed}
+              imageTarget={owner}
               titleDraft={titleDraft}
               setTitleDraft={setTitleDraft}
               labelsDraft={labelsDraft}

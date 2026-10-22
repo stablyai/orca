@@ -313,11 +313,21 @@ describe('a live-pane refusal under a named operation', () => {
 
     const response = await dispatch(runtime, 'agent.launchReplay', params)
 
-    expect(runtime.createTerminal).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(
+      1,
+      'id:wt-new',
+      expect.objectContaining({ startupAgent: 'claude' })
+    )
+    expect(runtime.createTerminal).toHaveBeenNthCalledWith(2, 'id:wt-new', {
+      surfaceOwner: false
+    })
     expect(response).toMatchObject({
       ok: false,
       error: { code: 'agent_session_operation_unknown' }
     })
     expect(outcomeOf(OPERATION_ID)?.status).toBe('unknown')
+    expect(await dispatch(runtime, 'agent.launchReplay', params)).toMatchObject(response)
+    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
+    expect(runtime.createTerminal).toHaveBeenCalledTimes(2)
   })
 })

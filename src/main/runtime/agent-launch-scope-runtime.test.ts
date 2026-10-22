@@ -8,6 +8,7 @@ import {
 } from './agent-launch-scope-runtime'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { agentLaunchQuotingShell } from '../../shared/agent-launch-runtime'
+import { buildMobileTerminalChatFork } from './terminal/launch/mobile-terminal-chat-fork'
 
 const WIN = 'C:\\repo'
 const SHARE = '\\\\wsl$\\Ubuntu\\home\\a\\repo'
@@ -97,15 +98,15 @@ it("answers from main's WSL cache, which the window may not have read yet", () =
   expect(claudeRuntime(store({}), scope(SHARE, { repo: repo(SHARE) })).platform).toBe('linux')
 })
 
-// TEMPORARY parity: the host finds a repo's project by its source repos only, as main does.
-it("finds a repo's project by its source repos, not a project named after the repo", () => {
+// The window's lookup: a project named after the repo counts as its project, as does one listing it.
+it("finds a repo's project the way the window does, by its id too", () => {
   const projects = [
     { id: 'r', sourceRepoIds: [], localWindowsRuntimePreference: UBUNTU },
     { id: 'p', sourceRepoIds: ['r'], localWindowsRuntimePreference: { kind: 'windows-host' } }
   ]
   const fake = { getProjects: () => projects, getSettings: () => ({}), getRepo: () => repo(WIN) }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these members.
-  expect(agentLaunchPlatformForScope(fake as never, scope(WIN, { repo: repo(WIN) }))).toBe('win32')
+  expect(agentLaunchPlatformForScope(fake as never, scope(WIN, { repo: repo(WIN) }))).toBe('linux')
 })
 
 // Relied on by C2: the pane's pty:spawn takes the fact as is, for quoting and shell alike.
@@ -116,6 +117,33 @@ it('quotes for the shell the PTY gets, not a setting the runtime replaced', () =
   expect(agentLaunchQuotingShell(local)).toBe('powershell')
   // A `\\wsl$` path runs in WSL whatever the setting says, so it is written for Linux there.
   expect(claudeRuntime(windowsHost, scope(SHARE, { repo: repo(SHARE) })).platform).toBe('linux')
+})
+
+it('builds a native Windows chat fork for the project shell even when the global shell is WSL', () => {
+  const fact = claudeRuntime(
+    store({ project: { kind: 'windows-host' }, shell: 'wsl.exe' }),
+    scope(WIN, { repo: repo(WIN) })
+  )
+  const startup = buildMobileTerminalChatFork({
+    prepared: {
+      useRealCodexHome: false,
+      cliForkSource: {
+        agent: 'codex',
+        sourceAgent: 'codex',
+        sessionId: 'chat-1',
+        filePath: 'C:\\sessions\\chat-1.jsonl',
+        cwd: WIN,
+        codexHome: 'C:\\codex-home',
+        executionHostPlatform: 'win32'
+      }
+    },
+    settings: { agentDefaultArgs: { codex: '' } },
+    runtime: fact
+  })
+  expect(startup.launchRuntime).toBe(fact)
+  expect(fact.pty.shellOverride).toBe('powershell.exe')
+  expect(startup.command).toContain('CODEX_HOME')
+  expect(startup.command).not.toContain('wsl.exe')
 })
 
 // TEMPORARY until STA-10231. Only folders reach it: every local repo has a project runtime.

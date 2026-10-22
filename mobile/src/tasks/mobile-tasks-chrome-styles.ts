@@ -26,6 +26,9 @@ export const mobileTasksChromeStyles = StyleSheet.create({
   },
   titleWrap: {
     flex: 1,
+    minWidth: 0
+  },
+  titleLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,

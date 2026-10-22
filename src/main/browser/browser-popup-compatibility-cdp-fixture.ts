@@ -1,3 +1,4 @@
+import type { PopupCompatibilityStatus } from './browser-popup-compatibility-status'
 import { spawnProcess } from '@orca/process-host'
 import { createServer } from 'node:http'
 import { createServer as createPortServer } from 'node:net'
@@ -9,7 +10,12 @@ import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest'
 import { build as buildVite } from 'vite'
 import { waitForBrowserCdpEndpoint } from './browser-session-ua-cdp-collector'
+import { popupFixtureHtml } from './browser-popup-compatibility-page-fixture'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
+import {
+  HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS,
+  startHiddenRendererFrameCapture
+} from './hidden-renderer-frame-capture-fixture'
 
 // Hidden renderer startup and CDP events can exceed the default one-second poll on CI.
 vi.setConfig({ expect: { poll: { timeout: 10_000 } } })
@@ -35,67 +41,22 @@ export let browser: Browser | null = null
 export let origin = ''
 let stderr = ''
 const pages = new Map<string, Page>()
+const stopFrameCaptures = new Map<Page, () => Promise<void>>()
 const statusPath = join(root, 'status.json')
 export const artifactDir = process.env.ORCA_POPUP_FIXTURE_ARTIFACT_DIR
 export const snapshots: ReturnType<typeof status>[] = []
 export const expectedSecurity = { sandbox: true, contextIsolation: true, nodeIntegration: false }
 
-export function status(): {
-  revision: number
-  ready?: boolean
-  error?: string
-  windowsHidden: boolean
-  tabOpens: { url: string; activate: boolean }[]
-  blocked: number[]
-  inputs: string[]
-  childRequests: {
-    adopted: boolean
-    native: boolean
-    sessionMatches: boolean
-    security: typeof expectedSecurity
-    permission?: string
-  }[]
-  routeGranted: boolean
-  routeContents: { security: typeof expectedSecurity; webRtcPolicy: string }[]
-  native: {
-    presentationCalls: string[]
-    requests: { disposition: string; features: string; frameName: string; post: boolean }[]
-    creation: {
-      firstNavigationPolicy: string
-      firstNavigationOwner: number | null
-      firstNavigationTitle: string
-    }[]
-    windows: {
-      closed: boolean
-      title: string
-      fullscreen: boolean
-      focused: boolean
-      contentSize: number[]
-    }[]
-  }
-} {
+export function status(): PopupCompatibilityStatus {
   return JSON.parse(readFileSync(statusPath, 'utf8'))
 }
 
-function fixtureHtml(): string {
-  return `<!doctype html><meta name="referrer" content="strict-origin-when-cross-origin"><body>
-    <button id="oauth" onclick="window.popup=window.open('/authorize?client_id=synthetic&amp;redirect_uri=${origin}/callback&amp;response_type=code');document.body.dataset.handle=String(!!window.popup)">OAuth</button>
-    <button id="blank" onclick="window.popup=window.open('about:blank#state');document.body.dataset.handle=String(!!window.popup);if(window.popup)window.popup.eval(&quot;window.opener.postMessage('blank:'+document.cookie,'*')&quot;)">Blank</button>
-    <button id="invalid" onclick="window.popup=window.open('about:blank?state=synthetic');document.body.dataset.handle=String(!!window.popup)">Invalid</button>
-    <button id="burst" onclick="window.handles=Array.from({length:5},()=>window.open('about:blank'));document.body.dataset.handles=JSON.stringify(window.handles.map(Boolean))">Burst</button>
-    <button id="stale" onclick="document.body.dataset.handle='waiting';setTimeout(()=>{window.popup=window.open('about:blank');document.body.dataset.handle=String(!!window.popup)},1100)">Stale</button>
-    <form method="post" target="_blank" action="/post"><input name="code" value="synthetic+value"><button id="post">POST</button></form>
-    <form method="post" target="_blank" action="/multipart" enctype="multipart/form-data"><input name="code" value="synthetic-multipart"><button id="multipart">Multipart</button></form>
-    <form method="post" target="_blank" action="/empty"><button id="empty">Empty POST</button></form>
-    <a id="link" href="/docs" target="_blank">Docs</a>
-    <a id="oauth-link" href="/authorize-link?client_id=synthetic&amp;redirect_uri=${origin}/callback&amp;response_type=code" target="_blank">OAuth link</a>
-    <a id="background" href="/background">Background</a>
-    <a id="shift" href="/shift">Popup link</a>
-    <script>window.addEventListener('message',event=>document.body.dataset.message=event.data)</script>
-  </body>`
-}
-
+const cdpConnected = Promise.withResolvers<void>()
 const server = createServer((request, response) => {
+  if (request.url === '/fixture-cdp-connected') {
+    void cdpConnected.promise.then(() => response.writeHead(204).end())
+    return
+  }
   const chunks: Buffer[] = []
   request.on('data', (chunk: Buffer) => chunks.push(chunk))
   request.on('end', () => {
@@ -126,8 +87,10 @@ const server = createServer((request, response) => {
     }
     response.setHeader('Content-Type', 'text/html')
     response.end(
-      ['/local', '/route', '/local-control', '/route-control'].includes(path)
-        ? fixtureHtml()
+      ['/local', '/route', '/local-control', '/route-control', '/probe-one', '/probe-two'].includes(
+        path
+      )
+        ? popupFixtureHtml(origin)
         : `<title>Hostile synthetic title</title><body>${path}<script>if(window.opener)window.opener.postMessage('callback:'+document.cookie,'*')</script></body>`
     )
   })
@@ -144,8 +107,8 @@ async function reservePort(): Promise<number> {
   return address.port
 }
 
-async function waitForFixture(predicate: () => boolean): Promise<void> {
-  const deadline = Date.now() + 20_000
+async function waitForFixture(predicate: () => boolean, timeoutMs = 20_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
   while (!predicate()) {
     if (Date.now() > deadline) {
       throw new Error(`Popup fixture did not become ready: ${stderr}`)
@@ -204,7 +167,8 @@ beforeAll(async () => {
       ORCA_BACKGROUND_LAUNCH: '1',
       ORCA_POPUP_FIXTURE_ORIGIN: origin,
       ORCA_POPUP_FIXTURE_STATUS: statusPath,
-      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0'
+      ORCA_POPUP_FIXTURE_NATIVE_CONTROLS: nativeControls ? '1' : '0',
+      ORCA_POPUP_FIXTURE_ADAPTER_PROBE: adapterProbe ? '1' : '0'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -213,6 +177,7 @@ beforeAll(async () => {
   })
   await waitForBrowserCdpEndpoint(cdpPort)
   browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`)
+  cdpConnected.resolve()
   await waitForFixture(() => {
     if (!existsSync(statusPath)) {
       return false
@@ -224,9 +189,13 @@ beforeAll(async () => {
     return current.ready === true
   })
   expect(status()).toMatchObject({ ready: true, windowsHidden: true })
-  for (const name of nativeControls
-    ? ['local', 'route', 'local-control', 'route-control']
-    : ['local', 'route']) {
+  const names = [
+    'local',
+    'route',
+    ...(nativeControls ? ['local-control', 'route-control'] : []),
+    ...(adapterProbe ? ['probe-one', 'probe-two'] : [])
+  ]
+  for (const name of names) {
     await waitForFixture(() =>
       Boolean(
         browser
@@ -243,8 +212,18 @@ beforeAll(async () => {
       throw new Error('Missing guest page')
     }
     pages.set(name, page)
+    // A fresh runner's first launch can take tens of seconds to start Chromium's GPU process, and
+    // no hidden page paints until it does; charge that to startup, not the first test's poll.
+    stopFrameCaptures.set(
+      page,
+      await startHiddenRendererFrameCapture(page, (hasFrame) =>
+        waitForFixture(hasFrame, HIDDEN_RENDERER_FIRST_FRAME_TIMEOUT_MS).catch((error: unknown) => {
+          throw new Error(`No first frame for ${name}`, { cause: error })
+        })
+      )
+    )
   }
-}, 60_000)
+}, 90_000)
 
 afterEach(async () => {
   const route = pages.get('route')
@@ -258,6 +237,8 @@ afterEach(async () => {
 })
 
 afterAll(async () => {
+  cdpConnected.resolve()
+  await Promise.allSettled([...stopFrameCaptures.values()].map((stop) => stop()))
   if (artifactDir && existsSync(statusPath)) {
     mkdirSync(artifactDir, { recursive: true })
     writeFileSync(
@@ -302,6 +283,10 @@ export async function closeChildren(page: Page): Promise<void> {
 
 let evidenceName = 'electron-evidence.json'
 let nativeControls = false
+let adapterProbe = false
+export function enablePopupAdapterProbe(): void {
+  adapterProbe = true
+}
 export function enablePopupFixtureNativeControls(): void {
   nativeControls = true
 }

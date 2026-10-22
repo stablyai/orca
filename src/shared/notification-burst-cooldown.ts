@@ -1,4 +1,4 @@
-const NOTIFICATION_COOLDOWN_MS = 5000
+export const NOTIFICATION_COOLDOWN_MS = 5000
 const MAX_RECENT_NOTIFICATION_KEYS = 50
 
 function pruneRecentNotifications(recentNotifications: Map<string, number>, now: number): void {

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodeKeepAliveFrame, KEEPALIVE_SEND_MS, TIMEOUT_MS } from './relay-protocol'
+import {
+  encodeKeepAliveFrame,
+  KEEPALIVE_SEND_MS,
+  TIMEOUT_MS
+} from './remote-exec/remote-frame-protocol'
 import { SshChannelMultiplexer, type MultiplexerTransport } from './ssh-channel-multiplexer'
 
 type WedgedTransport = MultiplexerTransport & { writes: Buffer[]; feed: (chunk: Buffer) => void }

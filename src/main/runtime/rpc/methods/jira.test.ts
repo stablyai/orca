@@ -116,7 +116,7 @@ describe('jira RPC methods', () => {
       undefined,
       undefined
     )
-    expect(runtime.jiraGetIssue).toHaveBeenCalledWith('ABC-3', 'site-1', undefined)
+    expect(runtime.jiraGetIssue).toHaveBeenCalledWith('ABC-3', 'site-1', undefined, undefined)
     expect(runtime.jiraLookupIssueSummary).toHaveBeenCalledWith(
       'ABC-3',
       'site-1',
@@ -142,7 +142,7 @@ describe('jira RPC methods', () => {
       'site-1'
     )
     expect(runtime.jiraAddIssueComment).toHaveBeenCalledWith('ABC-3', 'Looks good', 'site-1')
-    expect(runtime.jiraIssueComments).toHaveBeenCalledWith('ABC-3', 'site-1', undefined)
+    expect(runtime.jiraIssueComments).toHaveBeenCalledWith('ABC-3', 'site-1', undefined, undefined)
   })
 
   it('passes verified read requests and atomic label operations through RPC', async () => {
@@ -158,10 +158,20 @@ describe('jira RPC methods', () => {
       methods: JIRA_METHODS
     })
     await dispatcher.dispatch(
-      makeRequest('jira.getIssue', { key: 'ABC-1', siteId: 'site-1', strict: true })
+      makeRequest('jira.getIssue', {
+        key: 'ABC-1',
+        siteId: 'site-1',
+        strict: true,
+        mediaFormat: 'reference'
+      })
     )
     await dispatcher.dispatch(
-      makeRequest('jira.issueComments', { key: 'ABC-1', siteId: 'site-1', strict: true })
+      makeRequest('jira.issueComments', {
+        key: 'ABC-1',
+        siteId: 'site-1',
+        strict: true,
+        mediaFormat: 'reference'
+      })
     )
     await dispatcher.dispatch(
       makeRequest('jira.updateIssue', {
@@ -170,8 +180,8 @@ describe('jira RPC methods', () => {
         updates: { labelOperations: { add: ['bug'] } }
       })
     )
-    expect(runtime.jiraGetIssue).toHaveBeenCalledWith('ABC-1', 'site-1', true)
-    expect(runtime.jiraIssueComments).toHaveBeenCalledWith('ABC-1', 'site-1', true)
+    expect(runtime.jiraGetIssue).toHaveBeenCalledWith('ABC-1', 'site-1', true, 'reference')
+    expect(runtime.jiraIssueComments).toHaveBeenCalledWith('ABC-1', 'site-1', true, 'reference')
     expect(runtime.jiraUpdateIssue).toHaveBeenCalledWith(
       'ABC-1',
       { labelOperations: { add: ['bug'] } },
@@ -260,7 +270,7 @@ describe('jira RPC methods', () => {
     )
     await dispatcher.dispatch(makeRequest('jira.searchUsers', { query: 'Grace', siteId: 'site-1' }))
     await dispatcher.dispatch(
-      makeRequest('jira.listTransitions', { key: 'ABC-3', siteId: 'site-1' })
+      makeRequest('jira.listTransitions', { key: 'ABC-3', siteId: 'site-1', strict: true })
     )
     await dispatcher.dispatch(
       makeRequest('jira.getProjectStatusOrder', { projectKey: 'ALP', siteId: 'site-1' })
@@ -282,7 +292,7 @@ describe('jira RPC methods', () => {
       undefined
     )
     expect(runtime.jiraSearchUsers).toHaveBeenCalledWith('Grace', 'site-1')
-    expect(runtime.jiraListTransitions).toHaveBeenCalledWith('ABC-3', 'site-1', undefined)
+    expect(runtime.jiraListTransitions).toHaveBeenCalledWith('ABC-3', 'site-1', true)
     expect(runtime.jiraGetProjectStatusOrder).toHaveBeenCalledWith('ALP', 'site-1')
   })
 })

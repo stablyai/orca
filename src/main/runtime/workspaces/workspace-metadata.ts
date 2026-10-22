@@ -164,16 +164,25 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  persistManagedWorktreeSortOrder(orderedIds: string[]): { updated: number } {
+  persistManagedWorktreeSortOrder(
+    orderedIds: string[],
+    hostIds?: readonly string[]
+  ): { updated: number } {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     return persistRuntimeManagedWorktreeSortOrder({
       orderedIds,
+      hostIds,
       store: this.store,
       invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
-      notifyChanged: (repoId) =>
-        this.notifyWorktreesChanged(repoId, { invalidateGitScans: false, sortOrderOnly: true })
+      notifyChanged: (repoId, sortOrders) =>
+        this.notifyWorktreesChanged(
+          repoId,
+          sortOrders
+            ? { invalidateGitScans: false, sortOrderOnly: true, sortOrders }
+            : { invalidateGitScans: false }
+        )
     })
   }
 

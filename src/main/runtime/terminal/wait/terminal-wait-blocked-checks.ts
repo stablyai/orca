@@ -17,7 +17,7 @@ import {
 } from '../../terminal-wait-tail-state'
 import { ownRetainedString } from '../../../../shared/own-retained-string'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
-import { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
+import { createTerminalAgentStatusProcessor } from '../../../../shared/terminal-agent-status-processor'
 import type { RuntimePtyTitleTrackerEntry } from '../../runtime-terminal-state-records'
 
 import type { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
@@ -140,7 +140,7 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
   protected processAgentStatusOscForPty(ptyId: string, data: string): ProcessedAgentStatusChunk {
     let processor = this.agentStatusOscProcessorsByPtyId.get(ptyId)
     if (!processor) {
-      processor = createAgentStatusOscProcessor()
+      processor = createTerminalAgentStatusProcessor()
       this.agentStatusOscProcessorsByPtyId.set(ptyId, processor)
     }
     return processor(data)

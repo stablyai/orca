@@ -17,12 +17,15 @@ import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_REPO_ID,
   makeWorktreeMeta,
+  spawnedPtyEnv,
   store,
   makeRuntimeStoreWithWorkspaceSession
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 describe('OrcaRuntimeService', () => {
-  it('does not surface the new workspace when a background create splits its setup pane', async () => {
+  it('does not surface the new workspace when a background create opens Setup', async () => {
     const runtimeStore = {
       ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getSettings: () => ({
@@ -86,26 +89,24 @@ describe('OrcaRuntimeService', () => {
       setupDecision: 'run'
     })
 
-    // Split launch modes reach the renderer through splitTerminal, not
-    // createTerminal — that path must suppress owner surfacing too.
     expect(activateWorktree).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    const mainEnv = (spawn.mock.calls[0]![0] as { env?: Record<string, string> }).env ?? {}
+    const mainEnv = spawnedPtyEnv(spawn.mock.calls[0]![0])
     await vi.waitFor(() =>
       expect(revealTerminalSession).toHaveBeenLastCalledWith(
         result.worktree.id,
         expect.objectContaining({
           ptyId: 'pty-bg-split-setup',
-          tabId: mainEnv.ORCA_TAB_ID,
+          tabId: expect.not.stringMatching(`^${mainEnv.ORCA_TAB_ID}$`),
           activate: false,
           surfaceOwner: false,
-          splitDirection: 'horizontal'
+          title: 'Setup'
         })
       )
     )
   })
 
-  it('still surfaces the new workspace when an activating create splits its setup pane', async () => {
+  it('still surfaces the new workspace when an activating create opens Setup', async () => {
     const runtimeStore = {
       ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getSettings: () => ({
@@ -180,14 +181,12 @@ describe('OrcaRuntimeService', () => {
         result.worktree.id,
         expect.objectContaining({
           ptyId: 'pty-active-split-setup',
-          splitDirection: 'horizontal'
+          title: 'Setup'
         })
       )
     )
-    const splitRevealPayload = revealTerminalSession.mock.lastCall?.[1] as
-      | { surfaceOwner?: boolean }
-      | undefined
-    expect(splitRevealPayload).not.toHaveProperty('surfaceOwner')
+    const setupRevealPayload = revealTerminalSession.mock.lastCall?.[1]
+    expect(setupRevealPayload).not.toHaveProperty('surfaceOwner')
   })
 
   it('does not warn when setup is explicitly skipped for CLI-created worktrees', async () => {
@@ -196,7 +195,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -259,7 +258,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -331,10 +330,11 @@ describe('OrcaRuntimeService', () => {
   it('materializes default tabs for inactive local managed worktree creates', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {
-      ...store,
+      // Main's own layout, which a layout-owner build writes the default tabs into.
+      ...makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession()).runtimeStore,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -418,11 +418,13 @@ describe('OrcaRuntimeService', () => {
 
   it('puts the agent a create starts in the first default tab, as the window does', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
+    // Main's own layout, which a layout-owner build writes the default tabs into.
+    const mainLayout = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
     const runtimeStore = {
-      ...store,
+      ...mainLayout.runtimeStore,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -488,7 +490,15 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => expect(revealTerminalSession).toHaveBeenCalledTimes(2))
     const agentTabId = revealTerminalSession.mock.calls[0]?.[1].tabId
     expect(agentTabId).toEqual(expect.any(String))
-    expect(renameTerminal).toHaveBeenCalledWith(agentTabId, 'Dev', { recordInteraction: false })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // The window draws the title from main's layout.
+      const agentRow = Object.values(mainLayout.getSession().tabsByWorktree)
+        .flat()
+        .find((tab) => tab.id === agentTabId)
+      expect(agentRow?.customTitle).toBe('Dev')
+    } else {
+      expect(renameTerminal).toHaveBeenCalledWith(agentTabId, 'Dev', { recordInteraction: false })
+    }
     // The first template's command never runs beside the agent; only the rest are created.
     expect(spawn).toHaveBeenCalledTimes(2)
     expect(spawn.mock.calls.map(([options]) => options.command)).toEqual([
@@ -518,7 +528,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }
@@ -773,7 +783,7 @@ describe('OrcaRuntimeService', () => {
       }),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
         return metaById[worktreeId]
       }

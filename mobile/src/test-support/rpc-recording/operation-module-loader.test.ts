@@ -32,6 +32,19 @@ afterAll(() => {
 })
 
 describe('the mounted module loader', () => {
+  it('preserves constants through a star reexport in an evaluated module', () => {
+    const modules = loaderOver({
+      'constants.ts': `export const CAPABILITY = 'files.mutation-ownership.v1'`,
+      'protocol.ts': `export * from './constants'`,
+      'operation.ts': `
+        import { CAPABILITY } from './protocol'
+        export const read = () => CAPABILITY
+      `
+    })
+    const { read } = modules.load<{ read: () => string }>('mobile/src/operation.ts')
+    expect(read()).toBe('files.mutation-ownership.v1')
+  })
+
   it('follows named reexports reached through the task foundation barrel', () => {
     const modules = loaderOver({
       'mobile-tasks-legacy-foundation.tsx': `export * from './mapping'`,

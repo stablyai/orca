@@ -1,4 +1,5 @@
 import React from 'react'
+import { jiraImageReference } from '../../../../shared/jira-attachment-image'
 import type { Components } from 'react-markdown'
 import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat-href-routing'
 import {
@@ -35,7 +36,9 @@ export function isTrustedCompactImageSrc(src: string | undefined): src is string
   }
   const normalized = src.trim().toLowerCase()
   return (
-    normalized.startsWith('blob:') || /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
+    jiraImageReference(src) !== null ||
+    normalized.startsWith('blob:') ||
+    /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
   )
 }
 

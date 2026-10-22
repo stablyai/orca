@@ -15,6 +15,8 @@ type RuntimeFileWatchEvent =
 type RuntimeFileWatchListener = {
   onPayload: (payload: FsChangedPayload) => void
   onError?: (error: Error) => void
+  /** Fires once the host reports its watcher installed (immediately when joining a live one). */
+  onReady?: () => void
 }
 
 type SharedRuntimeFileWatch = {
@@ -26,6 +28,7 @@ type SharedRuntimeFileWatch = {
   remoteSubscriptionId: string | null
   keepStreamUntilReady: boolean
   closed: boolean
+  ready: boolean
 }
 
 const sharedRuntimeFileWatches = new Map<string, SharedRuntimeFileWatch>()
@@ -41,14 +44,17 @@ function getSharedRuntimeFileWatchKey(
 export async function subscribeRuntimeFileChanges(
   context: RuntimeFileOperationArgs,
   onPayload: (payload: FsChangedPayload) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  onReady?: () => void
 ): Promise<() => void> {
   const target = context.target
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
-    return window.api.fs.onFsChanged(onPayload)
+    const unsubscribe = window.api.fs.onFsChanged(onPayload)
+    onReady?.()
+    return unsubscribe
   }
 
-  const listener: RuntimeFileWatchListener = { onPayload, onError }
+  const listener: RuntimeFileWatchListener = { onPayload, onError, onReady }
   const key = getSharedRuntimeFileWatchKey(
     target.environmentId,
     context.worktreeId,
@@ -60,6 +66,9 @@ export async function subscribeRuntimeFileChanges(
     sharedRuntimeFileWatches.set(key, shared)
   }
   shared.listeners.add(listener)
+  if (shared.ready) {
+    onReady?.()
+  }
   try {
     await shared.start
   } catch (err) {
@@ -93,7 +102,8 @@ function createSharedRuntimeFileWatch(
     unsubscribe: null,
     remoteSubscriptionId: null,
     keepStreamUntilReady: isWebRuntimeFileWatchSharedSocket(),
-    closed: false
+    closed: false,
+    ready: false
   }
   // Why: editor reloads and the Explorer can watch the same remote worktree.
   // Keep one runtime WebSocket/server watcher and fan out events in renderer.
@@ -102,7 +112,8 @@ function createSharedRuntimeFileWatch(
       {
         selector: target.environmentId,
         method: 'files.watch',
-        params: { worktree: toRuntimeWorktreeSelector(worktreeId) },
+        // Why: this client coalesces watcher reads, so it can take the faster host cadence.
+        params: { worktree: toRuntimeWorktreeSelector(worktreeId), batchCadence: 'interval' },
         timeoutMs: 15_000
       },
       {
@@ -155,6 +166,11 @@ function handleSharedRuntimeFileWatchResponse(
         shared.unsubscribe = null
         if (!shared.keepStreamUntilReady) {
           unwatchSharedRuntimeFileWatch(shared)
+        }
+      } else if (event.type === 'ready' && !shared.ready) {
+        shared.ready = true
+        for (const listener of Array.from(shared.listeners)) {
+          listener.onReady?.()
         }
       }
     } else if (event.type === 'changed') {

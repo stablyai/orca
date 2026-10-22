@@ -1,12 +1,61 @@
+import { useCallback, useMemo } from 'react'
 import { Clipboard, ExternalLink, GitBranch } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue, JiraIssueUpdate, JiraMutationResult } from '../../../shared/jira-types'
 import { applyJiraIssueKeyCasing } from '../../../shared/workspace-name'
 import type { WorkspaceSeedNameOptions } from '../../../shared/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import { buildJiraIssuePrompt } from './jira-prompt-templates'
 import type { JiraIssueWorkspaceAction } from './jira-issue-workspace-content'
+
+export function useJiraIssueWorkspaceActions({
+  displayed,
+  titleDraft,
+  labelsDraft,
+  setTitleDraft,
+  mutateIssue
+}: {
+  displayed: JiraIssue | null
+  titleDraft: string
+  labelsDraft: string
+  setTitleDraft: (value: string) => void
+  mutateIssue: (
+    field: string,
+    updates: JiraIssueUpdate,
+    optimistic?: Partial<JiraIssue>
+  ) => Promise<JiraMutationResult>
+}) {
+  const handleSaveTitle = useCallback(() => {
+    if (!displayed) {
+      return
+    }
+    const title = titleDraft.trim()
+    if (!title || title === displayed.title) {
+      setTitleDraft(displayed.title)
+      return
+    }
+    void mutateIssue('title', { title }, { title })
+  }, [displayed, mutateIssue, setTitleDraft, titleDraft])
+
+  const handleSaveLabels = useCallback(() => {
+    if (!displayed) {
+      return
+    }
+    const labels = labelsDraft
+      .split(',')
+      .map((label) => label.trim())
+      .filter(Boolean)
+    void mutateIssue('labels', { labels }, { labels })
+  }, [displayed, labelsDraft, mutateIssue])
+
+  const actionItems = useMemo(
+    () => (displayed ? getJiraIssueWorkspaceActions(displayed) : []),
+    [displayed]
+  )
+
+  return { handleSaveTitle, handleSaveLabels, actionItems }
+}
 
 export function buildJiraBranchName(
   issue: Pick<JiraIssue, 'key' | 'title'>,

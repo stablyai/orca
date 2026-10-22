@@ -14,10 +14,14 @@ on:
       - '.github/actions/install-node-dependencies/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-windows-cli-launcher/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
       - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
+      - '.github/actions/prepare-wayland-clipboard/**'
+      - 'native/wayland-clipboard/**'
+      - 'config/scripts/build-wayland-clipboard.mjs'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
       - 'config/docker/daemon-shutdown-descendants/**'
@@ -25,8 +29,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - '.npmrc'
-      - '.pnpmfile.cjs'
+      - 'config/pnpmfile.cjs'
       - 'config/scripts/ensure-native-runtime.mjs'
+      - 'config/scripts/initialize-windows-native-toolchain.mjs'
+      - 'config/scripts/capture-windows-native-environment.cmd'
       - 'config/scripts/rebuild-native-deps.mjs'
       - 'config/scripts/node-pty-job-ownership.cjs'
       - 'config/scripts/windows-pe-machine.cjs'
@@ -42,18 +48,23 @@ on:
       - 'native/windows-registry/**'
       - 'native/windows-security/**'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
-      - '.github/workflows/ci-cache-warmup-platform-jobs.yml'
-      - '.github/workflows/ci-cache-warmup-platforms.yml'
       - '.github/actions/prepare-headless-compiler/**'
       - 'config/scripts/headless-detector-compiler-cache.mjs'
+      - '.github/actions/prepare-wayland-clipboard/**'
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-cache-warmup-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   warm:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     concurrency:
       group: ci-cache-warmup-linux-x64-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name != 'schedule' }}
@@ -82,6 +93,10 @@ jobs:
         run: node config/scripts/install-electron-package-binary.mjs
 
       - uses: ./.github/actions/prepare-git-compatibility
+
+      - uses: ./.github/actions/prepare-wayland-clipboard
+        with:
+          save-cache: 'true'
 
   warm-platforms:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

@@ -23,6 +23,9 @@ function fixture(
     jiraConnected: true,
     selectedJiraSiteId: 'site-1',
     taskSource: 'jira',
+    repos: [],
+    selectedRepos: [],
+    pageData: {},
     jiraTaskSourceContext: sourceContext
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated hook reads only the listed pipeline fields.

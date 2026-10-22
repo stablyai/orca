@@ -1,3 +1,5 @@
+import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
+
 export class JiraApiError extends Error {
   constructor(
     message: string,
@@ -8,9 +10,12 @@ export class JiraApiError extends Error {
   }
 }
 
-async function readJiraError(response: Response): Promise<string> {
+async function readJiraError(response: Response, maxResponseBytes?: number): Promise<string> {
   try {
-    const data: unknown = await response.json()
+    const data: unknown =
+      maxResponseBytes === undefined
+        ? await response.json()
+        : await readFetchResponseJsonWithinLimit(response, maxResponseBytes)
     if (data && typeof data === 'object') {
       const messages: unknown[] = []
       if ('errorMessages' in data && Array.isArray(data.errorMessages)) {
@@ -33,8 +38,12 @@ async function readJiraError(response: Response): Promise<string> {
   return response.statusText || `Jira request failed (${response.status})`
 }
 
-export async function toJiraApiError(response: Response, url: string): Promise<JiraApiError> {
-  const message = await readJiraError(response)
+export async function toJiraApiError(
+  response: Response,
+  url: string,
+  maxResponseBytes?: number
+): Promise<JiraApiError> {
+  const message = await readJiraError(response, maxResponseBytes)
   const target = new URL(url)
   const scopeMismatch =
     target.origin === 'https://api.atlassian.com' &&

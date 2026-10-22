@@ -97,3 +97,27 @@ export function removeWorktreeVisitEntriesForTargets(
   }
   return changed ? next : (timestamps as Record<string, number>)
 }
+
+/**
+ * Move one host's recency to another host when the same workspaces now live there (an SSH host
+ * converted to its managed server). Bare legacy keys and other hosts are untouched; a collision
+ * keeps the newer visit.
+ */
+export function rekeyWorktreeVisitHost(
+  timestamps: Readonly<Record<string, number>>,
+  fromHostId: ExecutionHostId,
+  toHostId: ExecutionHostId
+): Readonly<Record<string, number>> {
+  const prefix = `${fromHostId}|`
+  if (!Object.keys(timestamps).some((key) => key.startsWith(prefix))) {
+    return timestamps
+  }
+  const next: Record<string, number> = {}
+  for (const [key, timestamp] of Object.entries(timestamps)) {
+    const target = key.startsWith(prefix)
+      ? composeWorktreeHostIdentity(toHostId, getWorktreeIdFromHostIdentity(key))
+      : key
+    next[target] = Math.max(next[target] ?? timestamp, timestamp)
+  }
+  return next
+}

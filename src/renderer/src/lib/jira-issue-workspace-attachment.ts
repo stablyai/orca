@@ -21,18 +21,9 @@ function jiraKey(item: WorkspaceAttachment): string | null {
     : (parseJiraIssueUrl(value)?.issueKey ?? null)
 }
 
+// Why host only: the login is matched by siteId below and the label is display-only; legacy links are local.
 function sameSource(item: WorkspaceAttachment, source?: TaskSourceContext | null): boolean {
-  if (!source) {
-    return true
-  }
-  const stored = item.taskSourceContext
-  // Legacy links were created by the desktop-owned Jira connection.
-  if ((stored?.hostId ?? 'local') !== source.hostId) {
-    return false
-  }
-  const storedAccount = stored?.accountLabel?.trim()
-  const selectedAccount = source.accountLabel?.trim()
-  return !storedAccount || !selectedAccount || storedAccount === selectedAccount
+  return !source || (item.taskSourceContext?.hostId ?? 'local') === source.hostId
 }
 
 function itemSite(item: WorkspaceAttachment) {

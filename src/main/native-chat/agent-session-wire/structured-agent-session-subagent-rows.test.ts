@@ -12,6 +12,7 @@ import {
   StructuredAgentSessionSubagentRows,
   type AgentChildWorkRowView
 } from './structured-agent-session-subagent-rows'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -59,6 +60,7 @@ async function rig() {
   const rows = new StructuredAgentSessionSubagentRows({
     journal: () => journal,
     fence: () => 1,
+    currentWork: (_sessionId, open) => new StructuredAgentSessionCurrentWork(open, 1),
     readChildWork: () => children,
     onWriteFailed: failed
   })
@@ -243,7 +245,7 @@ describe("each subagent's saved row", () => {
   it('reads the live turn once per change, and never for subagents already saved', async () => {
     const r = await rig()
     await r.openTurn('turn-1')
-    const scan = vi.spyOn(r.journal, 'liveTurnScope')
+    const scan = vi.spyOn(r.journal, 'runningTurn')
     const three = ['agent-1', 'agent-2', 'agent-3']
     await r.report(three.map((id) => child({ id: `record-${id}`, providerId: id })))
     expect(scan).toHaveBeenCalledTimes(1)

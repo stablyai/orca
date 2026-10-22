@@ -255,6 +255,7 @@ export function createRelayServer(
         epoch: join.epoch
       })
     }
+    directory.onOutranked = (seat) => reservePlacement?.supersedeOutranked(seat)
     reserveLedger.start()
     const reconcile = (): void => {
       const now = (options.now ?? Date.now)()
@@ -371,6 +372,7 @@ export function createRelayServer(
           mode: effectiveAdmitMode,
           directorContact: () => reserveDeadMan?.contact(),
           reregisterInFlight: () => options.cellFlags?.().flags.reregisterInFlight,
+          phonePath: () => options.cellFlags?.().flags.phonePath ?? 'db',
           ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
           dryRunEnabled: () => options.cellFlags?.().flags.reserveDryRun === true,
           databaseShedding: () => databaseShedding(),
@@ -443,6 +445,7 @@ export function createRelayServer(
             effectiveAdmitMode() === 'reserve' || sessions.reregistrationPending() > 0
               ? 'reserve'
               : 'db',
+          cellPhonePathEffective: () => sessions.phonePathEffective(),
           cellDemote: (request: DemoteRequest) => sessions.demote(request),
           cellReserveCounts: () => sessions.reserveCounts(),
           cellPlacementCeiling: placementCeiling
@@ -469,6 +472,7 @@ export function createRelayServer(
     recordDrainReturnRetryAfter: (seconds) => observability.recordDrainReturnRetryAfter?.(seconds),
     recordAdmissionServiceMs: (lane, durationMs) =>
       observability.recordAdmissionServiceMs?.(lane, durationMs),
+    recordStickySlot: (sample) => observability.recordStickySlot?.(sample),
     recordAssignmentUnavailable: (cause) => observability.recordAssignmentUnavailable?.(cause),
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     shadowSeats: shadowSeatPoller?.directory,
@@ -870,7 +874,12 @@ export function createRelayServer(
     controls.close()
     clients.close()
     dataSockets.close()
+    store.resumeAudit.stop()
   })
+  const resumeAuditDropped = (): number => {
+    const drops = store.resumeAudit.drops()
+    return drops.overflow + drops.aged
+  }
   const runtimeCounts = () => {
     const ledgerCounts = connectionLedger?.counts()
     return {
@@ -878,6 +887,7 @@ export function createRelayServer(
       preAuthConnections,
       ...sessions.runtimeCounts(),
       queuedBytes: queuedBytes.current(),
+      ...(config.role === 'cell' ? { resumeAuditDropped: resumeAuditDropped() } : {}),
       ...(ledgerCounts
         ? {
             inFlightConnections: ledgerCounts.inFlightConnections,

@@ -6,6 +6,8 @@ import {
   assertBinding,
   assertStorageScope,
   BINDING_STORE_VERSION,
+  bindingAnswersTo,
+  MAX_ALIAS_FINGERPRINTS,
   parseBindings,
   readBoundedUtf8File,
   type BrowserRoutePartitionBinding
@@ -75,28 +77,45 @@ export class BrowserRoutePartitionBindingStore {
     return removed
   }
 
-  /** Partition already bound to `fingerprint`: where that identity's storage already lives. */
+  /** Partition already bound to `fingerprint` or aliased to it: where that identity's storage lives. */
   findPartitionByFingerprint(fingerprint: string): string | null {
     for (const [partition, binding] of Object.entries(this.load().bindings)) {
-      if (binding.fingerprint === fingerprint) {
+      if (bindingAnswersTo(binding, fingerprint)) {
         return partition
       }
     }
     return null
   }
 
-  /** Re-points a bound partition at a new fingerprint, so an identity-scheme change keeps its storage. */
-  rebind(partition: string, fingerprint: string, storageScope: string): void {
+  /**
+   * Re-points a bound partition at a new fingerprint, so an identity-scheme change keeps its
+   * storage. `alias` lets it also answer to a newer identity that older builds cannot derive.
+   */
+  rebind(partition: string, fingerprint: string, storageScope: string, alias?: string): void {
     assertBinding(partition, fingerprint)
     assertStorageScope(storageScope)
+    if (alias !== undefined) {
+      assertBinding(partition, alias)
+    }
     const state = this.load()
-    if (state.bindings[partition] === undefined) {
+    const existing = state.bindings[partition]
+    if (existing === undefined) {
       throw new Error('browser_route_partition_binding_invalid')
     }
+    const kept = (existing.aliasFingerprints ?? []).filter((entry) => entry !== fingerprint)
+    const aliases =
+      alias === undefined || alias === fingerprint || kept.includes(alias)
+        ? kept
+        : [...kept, alias].slice(-MAX_ALIAS_FINGERPRINTS)
     this.persist({
       bindings: {
         ...state.bindings,
-        [partition]: { fingerprint, storageScope, lastUsedAt: Date.now() }
+        [partition]: {
+          fingerprint,
+          storageScope,
+          lastUsedAt: Date.now(),
+          ...(aliases.length > 0 ? { aliasFingerprints: aliases } : {})
+        }
       }
     })
   }
@@ -116,9 +135,17 @@ export class BrowserRoutePartitionBindingStore {
    * Returns the evicted partitions: their metadata is gone, so the caller owns
    * destroying their storage. Capacity throws only when every binding is retained.
    */
-  set(partition: string, fingerprint: string, storageScope: string): readonly string[] {
+  set(
+    partition: string,
+    fingerprint: string,
+    storageScope: string,
+    alias?: string
+  ): readonly string[] {
     assertBinding(partition, fingerprint)
     assertStorageScope(storageScope)
+    if (alias !== undefined) {
+      assertBinding(partition, alias)
+    }
     const state = this.load()
     this.assertMetadataPrecedesPartitionData(partition, state)
     const existing = state.bindings[partition]
@@ -139,7 +166,17 @@ export class BrowserRoutePartitionBindingStore {
       delete bindings[victim]
       evicted.push(victim)
     }
-    bindings[partition] = { fingerprint, storageScope, lastUsedAt: Date.now() }
+    const kept = existing?.aliasFingerprints ?? []
+    const aliases =
+      alias === undefined || alias === fingerprint || kept.includes(alias)
+        ? kept
+        : [...kept, alias].slice(-MAX_ALIAS_FINGERPRINTS)
+    bindings[partition] = {
+      fingerprint,
+      storageScope,
+      lastUsedAt: Date.now(),
+      ...(aliases.length > 0 ? { aliasFingerprints: aliases } : {})
+    }
     this.persist({ bindings })
     return evicted
   }

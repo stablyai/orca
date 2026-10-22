@@ -6,6 +6,10 @@ import { isJiraGatewayBaseUrl } from './gateway-base-url'
 import { JiraApiError, toJiraApiError } from './jira-api-error'
 
 export { JiraApiError } from './jira-api-error'
+import {
+  readFetchResponseBytesWithinLimit,
+  readFetchResponseJsonWithinLimit
+} from '../../shared/fetch-response-body'
 
 // Why: Atlassian's XSRF filter rejects POST/PUT REST calls that carry a browser
 // User-Agent, failing them with "XSRF check failed" even under API-token auth.
@@ -129,7 +133,8 @@ export async function requestWithCredentials(
 export async function jiraRequest<T>(
   client: JiraClientForSite,
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  maxResponseBytes?: number
 ): Promise<T> {
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
@@ -143,10 +148,13 @@ export async function jiraRequest<T>(
     ...(isJiraGatewayBaseUrl(apiBaseUrl(client.site)) ? { redirect: 'error' as const } : {})
   })
   if (!response.ok) {
-    throw await toJiraApiError(response, url)
+    throw await toJiraApiError(response, url, maxResponseBytes)
   }
   if (response.status === 204) {
     return null as T
+  }
+  if (maxResponseBytes !== undefined) {
+    return readFetchResponseJsonWithinLimit<T>(response, maxResponseBytes)
   }
   return (await response.json()) as T
 }
@@ -177,7 +185,8 @@ function resolveBinaryRequestUrl(site: JiraSite, pathOrUrl: string): URL {
 
 export async function jiraRequestBinary(
   client: JiraClientForSite,
-  pathOrUrl: string
+  pathOrUrl: string,
+  options: { maxBytes?: number; signal?: AbortSignal } = {}
 ): Promise<{ data: ArrayBuffer; contentType: string }> {
   const requestUrl = resolveBinaryRequestUrl(client.site, pathOrUrl)
   const headers = new Headers()
@@ -188,14 +197,19 @@ export async function jiraRequestBinary(
   headers.set('Authorization', client.authorization)
   const response = await jiraFetch(requestUrl.toString(), {
     headers,
+    signal: options.signal,
     ...(isJiraGatewayBaseUrl(apiBaseUrl(client.site)) ? { redirect: 'error' as const } : {})
   })
   if (!response.ok) {
     throw await toJiraApiError(response, requestUrl.toString())
   }
   const contentType = response.headers.get('content-type') || 'application/octet-stream'
+  const bytes = await readFetchResponseBytesWithinLimit(
+    response,
+    options.maxBytes ?? 2 * 1024 * 1024
+  )
   return {
-    data: await response.arrayBuffer(),
+    data: Uint8Array.from(bytes).buffer,
     contentType
   }
 }

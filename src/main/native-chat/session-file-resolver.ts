@@ -63,6 +63,8 @@ function grokSessionsDir(): string {
 }
 
 export type ResolveSessionFileOptions = {
+  /** Execution admission must distinguish an unreadable tree from an absent source. */
+  strictErrors?: boolean
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
   /** Override the Codex sessions roots, searched in order (tests / isolated
@@ -177,7 +179,8 @@ async function resolveSessionFileById(
     const override = options.claudeProjectsDir
     return resolveTiered('claude', trimmedId, override ? [override] : claudeProjectsDirs(), {
       wslTier: !override,
-      signal
+      signal,
+      strictErrors: options.strictErrors
     })
   }
   if (transcriptAgent === 'codex') {
@@ -185,14 +188,16 @@ async function resolveSessionFileById(
     return resolveTiered('codex', trimmedId, override ?? codexSessionsDirs(), {
       wslTier: !override,
       ...(override ? {} : { accountDirs: codexAccountSessionsDirs }),
-      signal
+      signal,
+      strictErrors: options.strictErrors
     })
   }
   if (transcriptAgent === 'grok') {
     const override = options.grokSessionsDir
     return resolveTiered('grok', trimmedId, [override ?? grokSessionsDir()], {
       wslTier: !override,
-      signal
+      signal,
+      strictErrors: options.strictErrors
     })
   }
   if (transcriptAgent === 'omp') {
@@ -200,7 +205,8 @@ async function resolveSessionFileById(
     const root = resolveOmpSessionsDir({ sessionsDir: override })
     return resolveTiered('omp', trimmedId, root ? [root] : [], {
       wslTier: override === undefined,
-      signal
+      signal,
+      strictErrors: options.strictErrors
     })
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
@@ -218,15 +224,26 @@ async function resolveTiered(
   agent: SessionIdLookupAgent,
   sessionId: string,
   hostDirs: readonly string[],
-  options: { wslTier: boolean; accountDirs?: () => readonly string[]; signal?: AbortSignal }
+  options: {
+    wslTier: boolean
+    accountDirs?: () => readonly string[]
+    signal?: AbortSignal
+    strictErrors?: boolean
+  }
 ): Promise<string | null> {
   const { signal } = options
-  const hit = await findFirstInDirs(agent, sessionId, hostDirs, signal)
+  const hit = await findFirstInDirs(agent, sessionId, hostDirs, signal, options.strictErrors)
   if (hit) {
     return hit
   }
   const accountDirs = (options.accountDirs?.() ?? []).filter((dir) => !hostDirs.includes(dir))
-  const accountHit = await findFirstInDirs(agent, sessionId, accountDirs, signal)
+  const accountHit = await findFirstInDirs(
+    agent,
+    sessionId,
+    accountDirs,
+    signal,
+    options.strictErrors
+  )
   if (accountHit || !options.wslTier) {
     return accountHit
   }
@@ -235,27 +252,31 @@ async function resolveTiered(
   // user left stopped. Only pay that after this host's own roots miss (#10326, #13789).
   const wslDirs = (await wslAgentSessionsDirs(agent)).filter((dir) => !hostDirs.includes(dir))
   signal?.throwIfAborted()
-  return findFirstInDirs(agent, sessionId, wslDirs, signal)
+  return findFirstInDirs(agent, sessionId, wslDirs, signal, options.strictErrors)
 }
 
 async function findFirstInDirs(
   agent: SessionIdLookupAgent,
   sessionId: string,
   dirs: readonly string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  strictErrors?: boolean
 ): Promise<string | null> {
   let unavailable: WslTranscriptFsError | undefined
   for (const dir of dirs) {
     try {
       const hit = isWslUncPath(dir)
         ? await findWslSessionPath(agent, dir, sessionId, signal)
-        : await findHostSessionFile(agent, dir, sessionId, signal)
+        : await findHostSessionFile(agent, dir, sessionId, signal, strictErrors)
       if (hit) {
         return hit
       }
     } catch (error) {
       // A caller abort that races the refusal stays authoritative.
       signal?.throwIfAborted()
+      if (strictErrors) {
+        throw error
+      }
       // Why: one stalled distro must not hide another root's hit.
       unavailable = wslTranscriptFsRefusal(error)
     }
@@ -271,9 +292,10 @@ async function findHostSessionFile(
   agent: SessionIdLookupAgent,
   root: string,
   sessionId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  strictErrors?: boolean
 ): Promise<string | null> {
-  if (agent === 'grok') {
+  if (agent === 'grok' && !strictErrors) {
     // Why: Native Chat runs on the main thread; use the bounded async direct-layout
     // lookup instead of a recursive full-tree scan.
     signal?.throwIfAborted()
@@ -291,7 +313,8 @@ async function findHostSessionFile(
     directoryPredicate: directoryPredicate
       ? (name, depth) => directoryPredicate(name, depth, wanted)
       : undefined,
-    signal
+    signal,
+    strictErrors
   })
   return files[0] ?? null
 }

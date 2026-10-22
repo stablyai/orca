@@ -54,6 +54,17 @@ export type BrowserPageWebviewNavigationHandlers = {
   handleAnnotationViewportMessage: (event: { message?: string }) => void
 }
 
+/**
+ * A new document starting to load in the page itself. Not did-start-loading, which also fires for
+ * iframe loads; and this covers navigations the page starts (links, forms, redirects, history).
+ */
+export function isPageDocumentNavigationStart(event: {
+  isMainFrame: boolean
+  isInPlace: boolean
+}): boolean {
+  return event.isMainFrame && !event.isInPlace
+}
+
 export function createBrowserPageWebviewNavigationHandlers({
   webview,
   browserTabId,
@@ -97,9 +108,10 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (event.isMainFrame && event.url) {
       invalidateBrowserAnnotationDocumentRef.current()
     }
-    if (!event.isMainFrame || event.isInPlace || !event.url) {
+    if (!isPageDocumentNavigationStart(event) || !event.url) {
       return
     }
+    onUpdatePageStateRef.current(browserTabId, { loading: true })
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl

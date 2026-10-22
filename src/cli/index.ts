@@ -11,10 +11,10 @@ import {
 import { readOrcaCliVersion } from './cli-version'
 import { dispatch } from './dispatch'
 import {
-  assertEnvironmentSelectorResolvable,
+  resolveEnvironmentSelectorForStore,
   resolveHostFlagEnvironmentId
 } from './execution-host-flag'
-import { listSshTargets } from './host-selector-alternatives'
+import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
 import { reportCliError } from './cli-error'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
@@ -124,9 +124,10 @@ export async function main(
     // with the cross-kind hint rather than a bare store error at first use.
     const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
       listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
-    if (typeof environmentSelector === 'string') {
-      await assertEnvironmentSelectorResolvable(environmentSelector, listSshTargetsForSuggestion)
-    }
+    const storeEnvironmentSelector =
+      typeof environmentSelector === 'string'
+        ? await resolveEnvironmentSelectorForStore(environmentSelector, listSshTargetsForSuggestion)
+        : null
     // Why: --host runtime:<id> names a paired server, not a filter over this
     // runtime's rows, so it has to pick the connection before the client exists.
     // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
@@ -139,6 +140,12 @@ export async function main(
           // Why: only consulted when the name missed, and against this machine's own runtime —
           // SSH targets are registered there, not in the paired server we failed to find.
           listSshTargets: listSshTargetsForSuggestion,
+          verifySshTargets: async () =>
+            (
+              await fetchSshTargetSummaries<{ id: string; label: string }>(
+                new RuntimeClientClass(undefined, undefined, null, null)
+              )
+            ).targets,
           pairingCode: typeof pairingCode === 'string' ? pairingCode : null,
           environmentSelector:
             typeof environmentSelector === 'string'
@@ -161,9 +168,7 @@ export async function main(
     // An explicit --host runtime:<id> outranks an ambient pairing code or environment.
     const remotePairingCode =
       hostEnvironmentId !== null ? null : typeof pairingCode === 'string' ? pairingCode : suppressed
-    const remoteEnvironment =
-      hostEnvironmentId ??
-      (typeof environmentSelector === 'string' ? environmentSelector : suppressed)
+    const remoteEnvironment = hostEnvironmentId ?? storeEnvironmentSelector ?? suppressed
     let client: RuntimeClient | undefined
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
@@ -185,9 +190,17 @@ export async function main(
     })
   } catch (error) {
     const worktreeSelector = parsed.flags.get('worktree')
+    const repoSelector = parsed.flags.get('repo')
+    const hostFlag = parsed.flags.get('host')
     reportCliError(error, json, {
       commandPath: parsed.commandPath,
-      ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {})
+      ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {}),
+      ...(typeof repoSelector === 'string' ? { repoSelector } : {}),
+      remoteServerSelected:
+        parsed.flags.has('environment') ||
+        parsed.flags.has('pairing-code') ||
+        (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
+        Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())
     })
     process.exitCode = 1
   }

@@ -4,7 +4,7 @@
  * implements, not part of the sequencing it runs.
  */
 
-import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent, AgentLaunchPrompt } from '../../shared/agent-launch-intent'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -22,6 +22,9 @@ export type AgentLaunchSurfaceFactory = {
     /** The caller-reserved tab id (the tab half of `paneKey`), so the host records where this chat
      *  is shown; absent records the id clients derive. */
     tabId?: string
+    /** The launch carries no prompt, so a caller that sends the first message itself may get the
+     *  chat at rest, its agent started by that message. */
+    withoutPrompt?: true
   }): Promise<AgentLaunchStructuredSurface>
   createTerminalAgent(args: {
     worktreeId: string
@@ -105,6 +108,9 @@ export class AgentLaunchStructuredSessionRefusedError extends Error {
 export type AgentLaunchWorkspaceFactory = {
   createWorktree(args: {
     create: Readonly<Record<string, unknown>>
+    /** Main-internal registration at the metadata boundary, before the workspace is announced. */
+    onWorkspaceCreated?: (worktreeId: string) => void
+    promisedAgentChat?: boolean
     /** Set only when the settled mode is a terminal agent: agent-first creation sequences the
      *  agent's startup command behind the setup runner, which is how a PTY launch gets its
      *  wait-for-setup gate for free. A structured launch has no startup command to sequence and
@@ -127,6 +133,8 @@ export type AgentLaunchWorkspaceFactory = {
     accountEnv?: Readonly<Record<string, string>>
   }): Promise<{
     worktreeId: string
+    /** Actual host-resolved root, not a prediction from the create request. */
+    workspacePath?: string
     /** The new workspace's SSH connection; `null` is local. The executor carries it but nothing
      *  reads it yet; absent when the factory did not resolve it. */
     connectionId?: string | null
@@ -138,9 +146,25 @@ export type AgentLaunchWorkspaceFactory = {
     /** Reported by the create that built the startup command's typed line. */
     promptRodeLaunchCommand?: boolean
   }>
+  /** Leave a usable workspace when chat creation has an indeterminate outcome. */
+  createRecoveryShell?: (worktreeId: string) => Promise<void>
   /** A folder workspace has no startup terminal: the launch starts its agent there afterwards.
    *  Only `agent.launch` creates folders; callers that only create worktrees omit it. */
   createFolderWorkspace?(args: {
     create: Readonly<Record<string, unknown>>
-  }): Promise<{ worktreeId: string; connectionId: string | null }>
+  }): Promise<{ worktreeId: string; workspacePath?: string; connectionId: string | null }>
+}
+
+/** What every route that builds a terminal agent passes on, so the startup terminal of a new
+ *  workspace and the terminal of an existing one start the same agent. */
+export function terminalLaunchInputs(intent: AgentLaunchIntent) {
+  return {
+    ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
+    // `null` is a value the caller meant, so this tests for absence rather than falsiness.
+    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
+    ...(intent.cwd ? { cwd: intent.cwd } : {}),
+    ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
+    ...(intent.paneKey ? { paneKey: intent.paneKey } : {}),
+    ...(intent.accountEnv ? { accountEnv: intent.accountEnv } : {})
+  }
 }

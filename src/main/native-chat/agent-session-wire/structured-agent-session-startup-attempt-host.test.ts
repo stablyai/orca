@@ -12,6 +12,8 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session-journ
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../../shared/native-chat-stopped-before-start'
+import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
@@ -46,9 +48,17 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
-let readAcquisitionOptions: StructuredAgentSessionAdapter['readAcquisitionOptions']
 let startupLimits: Partial<StructuredAgentSessionStartupLimits> | undefined
 const providerStarted = vi.fn()
+const recordLiveListing = vi.fn()
+const openGates = new Map<string, (model: string) => void>()
+
+async function proveOpen(model = 'default'): Promise<void> {
+  const generation = `generation-${acquire.mock.calls.length}`
+  await eventually(() => expect(openGates.has(generation)).toBe(true))
+  openGates.get(generation)!(model)
+  openGates.delete(generation)
+}
 
 function acquisition(input: StructuredAgentSessionAcquireInput): AgentSessionAcquisition {
   return {
@@ -69,11 +79,8 @@ function acquisition(input: StructuredAgentSessionAcquireInput): AgentSessionAcq
   }
 }
 
-/** An acquire that publishes at spawn: the child proves its start later, with `started`. */
-const publishFirst: StructuredAgentSessionAdapter['acquire'] = async (input) => ({
-  ...acquisition(input),
-  providerChildPhase: 'starting'
-})
+/** A spawn that publishes its child before open proves readiness. */
+const publishFirst: StructuredAgentSessionAdapter['acquire'] = async (input) => acquisition(input)
 
 async function startHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
@@ -81,18 +88,23 @@ async function startHost(): Promise<void> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: ({ acquisitionGeneration }) =>
+        new Promise((resolve) => {
+          openGates.set(acquisitionGeneration!, (model) => resolve({ reportedOptions: { model } }))
+        }),
       acquire,
       dispatch,
       closeSession,
       releaseAcquisition: vi.fn(async () => true),
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
-      setOption,
-      ...(readAcquisitionOptions ? { readAcquisitionOptions } : {})
+      setOption
     },
     modelCatalog: {
+      peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
-      recordLiveListing: vi.fn(),
+      recordLiveListing,
+      retainedLiveModelIds: vi.fn(async () => []),
       prewarm: vi.fn(async () => {}),
       stop: vi.fn(),
       providerStarted
@@ -123,6 +135,8 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   startupLimits = undefined
   providerStarted.mockReset()
+  recordLiveListing.mockReset()
+  openGates.clear()
   acquire = vi.fn(async (input) => acquisition(input))
   dispatch = vi.fn(async () => ({
     state: 'accepted' as const,
@@ -135,7 +149,6 @@ beforeEach(async () => {
   }))
   closeSession = vi.fn(async () => true)
   setOption = vi.fn(async () => undefined)
-  readAcquisitionOptions = undefined
   store = await openTestAgentSessionRecordStore(root)
   await startHost()
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
@@ -182,41 +195,6 @@ async function submission(id: string): Promise<AgentJournalSubmission | undefine
   )
 }
 
-/** The revision the attempt's `optionRevision()` answers now, as a report's read would stamp. */
-function optionRevisionNow(): number {
-  const [input] = acquire.mock.calls.at(-1)!
-  return input.optionRevision!()
-}
-
-function startedEvent(generation = `generation-${acquire.mock.calls.length}`) {
-  return {
-    type: 'started' as const,
-    sessionId: SESSION,
-    fence: store.getRecord(SESSION)!.lease.runtimeFence,
-    acquisitionGeneration: generation,
-    reportedOptions: { model: 'default' },
-    restoreSkippedOptions: [],
-    optionRevision: optionRevisionNow()
-  }
-}
-
-function pick(value: string) {
-  const fields = { key: 'model', value }
-  return host.setOption(CALLER, {
-    envelope: {
-      sessionId: SESSION,
-      clientOperationId: hostTestOperationId(),
-      expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.setOption',
-        sessionId: SESSION,
-        fields
-      })
-    },
-    ...fields
-  })
-}
-
 /** The send's start has published its child, still starting; the host holds the send. */
 async function heldBehindStart(text: string, interval = 0): Promise<string> {
   const id = await accept(text)
@@ -250,7 +228,7 @@ const HOST_STOPPED = agentSessionFailureWords(agentSessionFailureFact('hostStopp
 })
 
 describe('a send while the agent starts', () => {
-  it('is accepted at once and handed over only once the start proves itself', async () => {
+  it('keeps a spawned child unopened until required protocol open proves readiness', async () => {
     await restartWith(publishFirst)
     const id = await heldBehindStart('hello')
 
@@ -258,7 +236,7 @@ describe('a send while the agent starts', () => {
     expect((await submission(id))?.handedOverAt).toBeUndefined()
     expect(dispatch).not.toHaveBeenCalled()
 
-    await host.handleAdapterEvent(startedEvent())
+    await proveOpen()
 
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
     expect(dispatch).toHaveBeenCalledTimes(1)
@@ -271,24 +249,10 @@ describe('a send while the agent starts', () => {
     // The same id again is the same message: it is recorded and handed over once.
     await accept('first', first)
 
-    await host.handleAdapterEvent(startedEvent())
+    await proveOpen()
 
     await eventually(async () => expect((await submission(second))?.dispatchState).toBe('accepted'))
     expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([first, second])
-  })
-
-  it('ignores a start proof from a child it no longer holds', async () => {
-    await restartWith(publishFirst)
-    const id = await heldBehindStart('hello')
-
-    await host.handleAdapterEvent(startedEvent('generation-stale'))
-    await host.handleAdapterEvent({ ...startedEvent(), fence: startedEvent().fence + 1 })
-    await host.flushStreamedEvents(SESSION)
-
-    expect(dispatch).not.toHaveBeenCalled()
-    expect((await host.readStatusSummary(SESSION))?.hostExecutionPhase).toBe('starting')
-    await host.handleAdapterEvent(startedEvent())
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
   })
 
   it('tells the model catalog once the start proves itself, never for a child it no longer holds', async () => {
@@ -297,11 +261,7 @@ describe('a send while the agent starts', () => {
     const id = await heldBehindStart('hello')
     expect(providerStarted).not.toHaveBeenCalled()
 
-    await host.handleAdapterEvent(startedEvent('generation-stale'))
-    await host.flushStreamedEvents(SESSION)
-    expect(providerStarted).not.toHaveBeenCalled()
-
-    await host.handleAdapterEvent(startedEvent())
+    await proveOpen()
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
     expect(providerStarted).toHaveBeenCalledTimes(1)
     expect(providerStarted.mock.calls[0]?.[0]).toMatchObject({ sessionId: SESSION })
@@ -319,8 +279,7 @@ describe('a start that ends before it proves itself', () => {
       fence: store.getRecord(SESSION)!.lease.runtimeFence,
       acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
       reason: 'exited with code 1',
-      cause: 'unexpected-exit',
-      startupUnproven: true
+      cause: 'unexpected-exit'
     })
 
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
@@ -341,6 +300,14 @@ describe('a start that ends before it proves itself', () => {
     })
     expect((await submission(id))?.handedOverAt).toBeUndefined()
     expect(closeSession).toHaveBeenCalled()
+    // The taken-back send carries the Stop's feedback; a host row would say it twice.
+    const snapshot = await host.journalSnapshot(SESSION)
+    expect(
+      projectStructuredAgentSessionMessages(snapshot.items, [], snapshot.submissions)
+    ).toMatchObject([
+      { role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { blocks: [{ type: 'text', text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT }] }
+    ])
     expect(dispatch).not.toHaveBeenCalled()
     expect(startupAttemptOpen()).toBe(false)
   })
@@ -361,10 +328,13 @@ describe('a start that ends before it proves itself', () => {
     expect(startupAttemptOpen()).toBe(false)
   })
 
-  it('stops a published start that goes silent and fails what it held', async () => {
-    startupLimits = { silenceMs: 50 }
+  it('stops a published start that never readies at the ceiling, not before, and fails what it held', async () => {
+    startupLimits = { ceilingMs: 400 }
     await restartWith(publishFirst)
     const id = await heldBehindStart('hello')
+    await vi.advanceTimersByTimeAsync(200)
+    expect(closeSession).not.toHaveBeenCalled()
+    expect(startupAttemptOpen()).toBe(true)
 
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'), 50)
     expect(await submission(id)).toMatchObject(HOST_STOPPED)
@@ -374,33 +344,8 @@ describe('a start that ends before it proves itself', () => {
     expect(startupAttemptOpen()).toBe(false)
   })
 
-  it('keeps a slow start that is still talking, and stops one that never readies at the ceiling', async () => {
-    startupLimits = { silenceMs: 50, ceilingMs: 400 }
-    const chatter: ReturnType<typeof setInterval>[] = []
-    await restartWith(async (input) => {
-      await input.onSpawned?.(acquisition(input).process)
-      chatter.push(setInterval(() => input.onOutput?.(), 10))
-      return { ...acquisition(input), providerChildPhase: 'starting' }
-    })
-    try {
-      const id = await heldBehindStart('hello')
-      await vi.advanceTimersByTimeAsync(200)
-      expect(closeSession).not.toHaveBeenCalled()
-      expect(startupAttemptOpen()).toBe(true)
-
-      await eventually(
-        async () => expect((await submission(id))?.dispatchState).toBe('rejected'),
-        50
-      )
-      expect(await submission(id)).toMatchObject(HOST_STOPPED)
-      expect(dispatch).not.toHaveBeenCalled()
-    } finally {
-      chatter.forEach(clearInterval)
-    }
-  })
-
-  it('aborts an acquire still in its handshake once it goes silent and fails what it held', async () => {
-    startupLimits = { silenceMs: 50 }
+  it('aborts an acquire still in its handshake at the ceiling and fails what it held', async () => {
+    startupLimits = { ceilingMs: 50 }
     await restartWith(
       (input) =>
         new Promise((_resolve, reject) => {
@@ -416,22 +361,7 @@ describe('a start that ends before it proves itself', () => {
     await eventually(() => expect(startupAttemptOpen()).toBe(false))
   })
 
-  it('ends a ready child’s option read that never answers, and fails what it held', async () => {
-    startupLimits = { silenceMs: 50 }
-    readAcquisitionOptions = () => new Promise(() => {})
-    await restartWith(async (input) => {
-      await input.onSpawned?.(acquisition(input).process)
-      return acquisition(input)
-    })
-    const id = await accept('hello')
-
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'), 50)
-    expect(await submission(id)).toMatchObject(HOST_STOPPED)
-    expect(dispatch).not.toHaveBeenCalled()
-    await eventually(() => expect(startupAttemptOpen()).toBe(false))
-  })
-
-  it('ends a ready child inside its start when the chat closes before its options are read', async () => {
+  it('ends a start whose acquire is still running when the chat closes', async () => {
     let land = (): void => {}
     const landed = new Promise<void>((resolve) => {
       land = resolve
@@ -453,11 +383,11 @@ describe('a start that ends before it proves itself', () => {
   })
 
   it('is not ended by the limit once it proved itself', async () => {
-    startupLimits = { silenceMs: 50 }
+    startupLimits = { ceilingMs: 50 }
     await restartWith(publishFirst)
-    const id = await heldBehindStart('hello', 0)
-    await host.handleAdapterEvent(startedEvent())
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'), 0)
+    const id = await heldBehindStart('hello')
+    await proveOpen()
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
 
     await vi.advanceTimersByTimeAsync(100)
 
@@ -468,149 +398,61 @@ describe('a start that ends before it proves itself', () => {
 })
 
 describe('what a started child reports', () => {
-  it('is persisted only after what was held is handed over', async () => {
-    await restartWith(publishFirst)
-    await heldBehindStart('hello')
-    const order: string[] = []
-    dispatch.mockImplementationOnce(async (input) => {
-      order.push('dispatch')
-      return {
-        state: 'accepted' as const,
-        providerIdentity: {
-          provider: 'codex' as const,
-          threadId: THREAD,
-          turnId: `turn-${input.clientMessageId}`,
-          ordinal: 1
-        }
-      }
-    })
-    const replace = store.replaceSessionOptions.bind(store)
-    vi.spyOn(store, 'replaceSessionOptions').mockImplementation(async (args) => {
-      order.push('persist')
-      return replace(args)
-    })
-
-    await host.handleAdapterEvent({ ...startedEvent(), reportedOptions: { model: 'reported' } })
-
-    await eventually(() => expect(order).toEqual(['dispatch', 'persist']))
-    expect(store.getRecord(SESSION)?.options).toMatchObject({ model: 'reported' })
-  })
-
-  it('never overwrites a pick made after the child reported', async () => {
-    await restartWith(publishFirst)
-    await heldBehindStart('hello')
-    const report = { ...startedEvent(), reportedOptions: { model: 'reported' } }
-    dispatch.mockImplementationOnce(async () => {
-      // A pick lands while the first handover is still running.
-      void pick('picked')
-      return { state: 'admitted' as const }
-    })
-
-    await host.handleAdapterEvent(report)
-    await eventually(() => expect(store.getRecord(SESSION)?.options).toEqual({ model: 'picked' }))
-    await vi.advanceTimersByTimeAsync(50)
-    await host.flushStreamedEvents(SESSION)
-
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'picked' })
-  })
-
-  it('never lets a settings read made before a pick undo it, even queued behind the pick', async () => {
+  it('keeps provider reports out of the saved next-message choice', async () => {
     await restartWith(publishFirst)
     const id = await heldBehindStart('hello')
-    await host.handleAdapterEvent(startedEvent())
+    await proveOpen('reported')
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    await eventually(() => expect(store.getRecord(SESSION)?.options).toEqual({ model: 'default' }))
-    // The settings read starts, then the user picks while it is out.
-    const readAt = optionRevisionNow()
-    let landPick = (): void => {}
-    setOption.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          landPick = () => resolve(undefined)
-        })
-    )
-    const picked = pick('picked')
-    await eventually(() => expect(setOption).toHaveBeenCalled())
-
-    // The read answers with what the child ran before the pick, while the pick is still in flight.
-    const reported = host.handleAdapterEvent({
-      ...startedEvent(),
-      type: 'options-reported',
-      reportedOptions: { model: 'default' },
-      optionRevision: readAt
-    })
-    landPick()
-    expect(await picked).toMatchObject({ ok: true })
-    await reported
-    await host.flushStreamedEvents(SESSION)
-
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'picked' })
-  })
-
-  it('never lands the start’s report after a newer settings report', async () => {
-    await restartWith(publishFirst)
-    await heldBehindStart('hello')
-    let landHandover = (): void => {}
-    dispatch.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          landHandover = () => resolve({ state: 'admitted' as const })
-        })
-    )
-    // The start's report waits on the handover; the settings report that follows it does not.
-    await host.handleAdapterEvent({ ...startedEvent(), reportedOptions: { model: 'at-start' } })
-    await eventually(() => expect(dispatch).toHaveBeenCalled())
-    const reported = host.handleAdapterEvent({
-      ...startedEvent(),
-      type: 'options-reported',
-      reportedOptions: { model: 'from-settings' }
-    })
-
-    landHandover()
-    await reported
-    await vi.advanceTimersByTimeAsync(50)
-    await host.flushStreamedEvents(SESSION)
-
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'from-settings' })
-  })
-
-  it('keeps a settings read stamped before the host took the start’s report', async () => {
-    await restartWith(publishFirst)
-    await heldBehindStart('hello')
-    // Both reads are stamped before the host takes either report, as a delivery that lags would.
-    const started = { ...startedEvent(), reportedOptions: { model: 'at-start' } }
-    const settings = {
-      ...started,
-      type: 'options-reported' as const,
-      reportedOptions: { model: 'from-settings' }
-    }
-
-    await host.handleAdapterEvent(started)
-    await host.handleAdapterEvent(settings)
-    await vi.advanceTimersByTimeAsync(50)
-    await host.flushStreamedEvents(SESSION)
-
-    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'from-settings' })
-  })
-
-  it('takes a report read after a pick that failed', async () => {
-    await restartWith(publishFirst)
-    const id = await heldBehindStart('hello')
-    await host.handleAdapterEvent(startedEvent())
-    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    await eventually(() => expect(store.getRecord(SESSION)?.options).toEqual({ model: 'default' }))
-    setOption.mockRejectedValueOnce(new Error('the provider refused the model'))
-    await expect(pick('refused')).rejects.toThrow('the provider refused the model')
-
     await host.handleAdapterEvent({
-      ...startedEvent(),
       type: 'options-reported',
+      sessionId: SESSION,
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
       reportedOptions: { model: 'from-settings' }
     })
+    await host.flushStreamedEvents(SESSION)
+    expect(store.getRecord(SESSION)?.options).toBeUndefined()
+  })
 
-    await eventually(() =>
-      expect(store.getRecord(SESSION)?.options).toEqual({ model: 'from-settings' })
-    )
+  it('preserves a later accepted pick when an older child reports options', async () => {
+    await restartWith(publishFirst)
+    const id = await heldBehindStart('hello')
+    await store.replaceSessionOptions({
+      sessionId: SESSION,
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      options: { model: 'picked' },
+      now: NOW
+    })
+    await proveOpen('reported')
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
+    await host.handleAdapterEvent({
+      type: 'options-reported',
+      sessionId: SESSION,
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
+      reportedOptions: { model: 'from-settings' }
+    })
+    await host.flushStreamedEvents(SESSION)
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'picked' })
+  })
+
+  it('saves a settings readback that arrives before open proves the start', async () => {
+    await restartWith(publishFirst)
+    await heldBehindStart('hello')
+    const listing = { models: [], configuredDefault: { modelId: 'opus' } }
+    // Claude's settings readback can land while the host still holds the child as starting.
+    const reported = host.handleAdapterEvent({
+      type: 'options-reported',
+      sessionId: SESSION,
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      acquisitionGeneration: `generation-${acquire.mock.calls.length}`,
+      reportedOptions: { model: 'opus' },
+      catalogListing: listing
+    })
+    await proveOpen()
+    await reported
+
+    await eventually(() => expect(recordLiveListing).toHaveBeenCalledWith(SESSION, listing))
   })
 })
 
@@ -619,7 +461,7 @@ function startupAttemptOpen(): boolean {
 }
 
 describe('the attempt an acquire runs under', () => {
-  it('is minted by the host with the lease, the pinned launch and its progress report', async () => {
+  it('is minted by the host with the lease and the pinned launch', async () => {
     await restartWith(publishFirst)
     await heldBehindStart('hello')
 
@@ -629,12 +471,8 @@ describe('the attempt an acquire runs under', () => {
       fence: record.lease.runtimeFence,
       launch: { location: record.location, accountHome: record.accountHome }
     })
-    expect(input.onOutput).toEqual(expect.any(Function))
     expect(input.attemptId).toEqual(expect.any(String))
     expect(input.signal).toBeInstanceOf(AbortSignal)
-    expect(input.optionRevision!()).toBe(
-      host.collaboratorsForTests().runtimeState.optionRevisions.current(SESSION)
-    )
   })
 })
 
@@ -649,7 +487,7 @@ describe('a chat after startup permission backfill', () => {
       await restartWith(publishFirst)
       await heldBehindStart('hello')
       expect(acquire.mock.calls.at(-1)![0].permissionMode).toBe(mode)
-      await host.handleAdapterEvent(startedEvent())
+      await proveOpen()
       await vi.advanceTimersByTimeAsync(50)
       await host.flushStreamedEvents(SESSION)
       expect(store.getRecord(SESSION)?.permissionMode).toBe(mode)

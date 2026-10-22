@@ -45,7 +45,6 @@ export function createLaunchFunnelStore(): {
   tabBarOrderByWorktree: Record<string, string[]>
   createTab: ReturnType<typeof vi.fn>
   queueTabInitialCwd: ReturnType<typeof vi.fn>
-  queueTabStartupCommand: ReturnType<typeof vi.fn>
   setActiveTabType: ReturnType<typeof vi.fn>
   setTabBarOrder: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
@@ -65,7 +64,6 @@ export function createLaunchFunnelStore(): {
     tabBarOrderByWorktree: {},
     createTab: vi.fn(),
     queueTabInitialCwd: vi.fn(),
-    queueTabStartupCommand: vi.fn(),
     setActiveTabType: vi.fn(),
     setTabBarOrder: vi.fn(),
     setAgentStatus: vi.fn(),
@@ -117,16 +115,18 @@ export function resetLaunchFunnelStore(
   store.createTab.mockImplementation(createTabInto(store))
 }
 
-/** The startup command `queueTabStartupCommand` received, or undefined when no tab was queued. */
+/** The startup command the window planned for the new tab, or undefined when the host plans it. */
 export function queuedStartupCommand(store: LaunchFunnelStore): string | undefined {
-  return store.queueTabStartupCommand.mock.calls[0]?.[1]?.command
+  return queuedStartupPayload(store)?.command
 }
 
-/** The whole startup-command payload, for callers that assert more than the command string. */
+/** The whole window-planned startup payload, for callers that assert more than the command string. */
 export function queuedStartupPayload(
   store: LaunchFunnelStore
-): Record<string, unknown> | undefined {
-  return store.queueTabStartupCommand.mock.calls[0]?.[1]
+): { command?: string; [key: string]: unknown } | undefined {
+  const options: { pendingStartup?: { command?: string; agentLaunch?: unknown } } =
+    store.createTab.mock.calls[0]?.[3] ?? {}
+  return options.pendingStartup?.agentLaunch ? undefined : options.pendingStartup
 }
 
 /** The tab-creation options object (`createTab`'s 4th argument). */

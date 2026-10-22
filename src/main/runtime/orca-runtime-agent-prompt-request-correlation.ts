@@ -1,7 +1,5 @@
-import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './orca-runtime-serialize-agent-prompt-submission'
+import { OrcaRuntimeWithSerializeAgentPromptSubmission } from './terminal/input/terminal-agent-status-and-submission'
 import type { RuntimeTerminalPromptDelivery } from '../../shared/runtime-types'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { TerminalHandleRecord } from './runtime-terminal-contracts'
 import type {
   AgentPromptTurnStartEvidence,
   AgentPromptWaitTextCache
@@ -11,14 +9,6 @@ import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlatio
 
 export abstract class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithSerializeAgentPromptSubmission {
   private readonly agentPromptCorrelation = new AgentPromptRequestCorrelation()
-  // Declared, not defined: both live further up the mixin chain, so this link cannot see them.
-  declare protected getLivePtyForHandle: (
-    handle: string
-  ) => { record: TerminalHandleRecord; pty: RuntimePtyWorktreeRecord } | null
-  declare protected getLiveLeafForHandle: (handle: string) => {
-    record: TerminalHandleRecord
-    leaf: RuntimeLeafRecord
-  }
 
   getTerminalPromptRequestBinding(handle: string): {
     ptyId: string

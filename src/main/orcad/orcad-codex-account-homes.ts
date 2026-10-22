@@ -35,6 +35,9 @@ export function orcadCodexAccountHomes(
   }
   return {
     selectLaunchHome,
+    /** selectLaunchHome's home with no hook reconcile, for record-less catalog reads. */
+    readLaunchHome: (launchEnv?: NodeJS.ProcessEnv): string | null =>
+      resolveGuestCodexAccountHome(launchEnv?.CODEX_HOME),
     listSessionHomes: (): readonly string[] => listGuestCodexAccountHomes()
   }
 }

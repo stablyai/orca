@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { useForceReconnect } from '../transport/client-context'
+import { useForceReconnect } from '../transport/host-client-hooks'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { gitCommitCompareRead } from './mobile-git-read-operations'
 import type { MobileGitChangedFile } from './git-compare-reply-schema'
@@ -14,6 +14,11 @@ import {
   type MobileCommitRow
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
+
+type CommitFilesState = {
+  files?: MobileGitChangedFile[]
+  error?: string
+}
 
 type Props = {
   client: RpcClient | null
@@ -43,7 +48,8 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const [error, setError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [filesById, setFilesById] = useState<Record<string, MobileGitChangedFile[] | 'loading'>>({})
+  const [filesById, setFilesById] = useState<Record<string, CommitFilesState>>({})
+  const [filesReloadNonce, setFilesReloadNonce] = useState(0)
 
   // Host or worktree identity change must wipe history immediately — even while
   // disconnected — so a kept-mounted hub segment never shows another tree's commits.
@@ -111,34 +117,37 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     }
     const commitId = expanded
     let stale = false
-    setFilesById((prev) => (prev[commitId] ? prev : { ...prev, [commitId]: 'loading' }))
+    setFilesById((prev) => ({ ...prev, [commitId]: { files: prev[commitId]?.files } }))
     void gitCommitCompareRead
       .request(client, { worktree: `id:${worktreeId}`, commitId })
       .then((reply) => {
         const compared = gitCommitCompareRead.interpret(reply)
-        const entries = compared.accepted ? compared.value.entries : []
         if (!stale) {
-          setFilesById((prev) => ({ ...prev, [commitId]: entries }))
+          setFilesById((prev) => ({ ...prev, [commitId]: { files: compared.entries } }))
         }
       })
-      .catch(() => {
-        // Keep an already-loaded list; a first load that fails resolves to "No file changes".
+      .catch((err) => {
         if (!stale) {
-          setFilesById((prev) =>
-            prev[commitId] === 'loading' ? { ...prev, [commitId]: [] } : prev
-          )
+          setFilesById((prev) => ({
+            ...prev,
+            [commitId]: {
+              files: prev[commitId]?.files,
+              error: err instanceof Error ? err.message : 'Unable to load commit files'
+            }
+          }))
         }
       })
     return () => {
       stale = true
     }
-  }, [client, connState, expanded, worktreeId])
+  }, [client, connState, expanded, filesReloadNonce, hostId, refreshNonce, worktreeId])
 
   const connected = client !== null && connState === 'connected'
 
   const renderCommit = useCallback(
     ({ item }: { item: MobileCommitRow }) => {
-      const files = filesById[item.id]
+      const filesState = filesById[item.id]
+      const files = filesState?.files
       const isOpen = expanded === item.id
       return (
         <View style={styles.commit}>
@@ -162,34 +171,56 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
           </Pressable>
           {isOpen ? (
             <View style={styles.files}>
-              {files === 'loading' || files === undefined ? (
-                // No request can complete while disconnected, so say so instead of spinning forever.
+              {filesState?.error ? (
+                <View>
+                  <Text style={styles.empty}>{filesState.error}</Text>
+                  {connected || retryAction ? (
+                    <Pressable
+                      style={styles.retryButton}
+                      accessibilityLabel="Retry commit files"
+                      onPress={() => {
+                        if (connState !== 'connected') {
+                          retryAction?.()
+                        } else {
+                          setFilesReloadNonce((value) => value + 1)
+                        }
+                      }}
+                    >
+                      <Text style={styles.retryText}>Retry</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+              {files === undefined && !filesState?.error ? (
                 connected ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : (
                   <Text style={styles.empty}>Waiting for desktop...</Text>
                 )
-              ) : files.length === 0 ? (
-                <Text style={styles.empty}>No file changes</Text>
-              ) : (
-                files.map((file) => (
-                  <View key={file.path} style={styles.fileRow}>
-                    <Text style={styles.filePath} numberOfLines={1}>
-                      {file.path}
-                    </Text>
-                    <Text style={styles.fileStat}>
-                      {file.added ? <Text style={styles.add}>+{file.added} </Text> : null}
-                      {file.removed ? <Text style={styles.del}>-{file.removed}</Text> : null}
-                    </Text>
-                  </View>
-                ))
-              )}
+              ) : null}
+              {files !== undefined ? (
+                files.length === 0 ? (
+                  <Text style={styles.empty}>No file changes</Text>
+                ) : (
+                  files.map((file) => (
+                    <View key={file.path} style={styles.fileRow}>
+                      <Text style={styles.filePath} numberOfLines={1}>
+                        {file.path}
+                      </Text>
+                      <Text style={styles.fileStat}>
+                        {file.added ? <Text style={styles.add}>+{file.added} </Text> : null}
+                        {file.removed ? <Text style={styles.del}>-{file.removed}</Text> : null}
+                      </Text>
+                    </View>
+                  ))
+                )
+              ) : null}
             </View>
           ) : null}
         </View>
       )
     },
-    [connected, expanded, filesById, toggleCommit]
+    [connected, connState, expanded, filesById, retryAction, toggleCommit]
   )
 
   const view = resolveMobileHistoryScreenView({ connected, rows, error })

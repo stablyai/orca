@@ -23,8 +23,11 @@ vi.mock('./registered-worktree-roots-cache', () => ({
 }))
 vi.mock('./repos/repos-changed-notification', () => ({ notifyReposChanged: fake.reposChanged }))
 vi.mock('./worktree-remote', () => ({ notifyWorktreesChanged: fake.worktreesChanged }))
+vi.mock('./worktree-base-directory-marker-poller', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  WORKTREE_BASE_BACKSTOP_TICKS: 15
+}))
 vi.mock('./worktree-base-directory-poller', () => ({
-  WORKTREE_BASE_BACKSTOP_TICKS: 15,
   WORKTREE_BASE_POLL_INTERVAL_MS: 2000,
   createWorktreePollerWindowVisibility: () => ({
     isWindowVisible: () => true,
@@ -57,7 +60,7 @@ function begin(repos = [folder()], meta: ReturnType<Store['getAllWorktreeMeta']>
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getAllWorktreeMeta: () => meta,
-    updateRepo: vi.fn((id: string, patch: Partial<Repo>) => {
+    updateRepo: vi.fn(({ id }: Pick<Repo, 'id'>, patch: Partial<Repo>) => {
       const repo = repos.find((row) => row.id === id)
       return repo ? Object.assign(repo, patch) : null
     })

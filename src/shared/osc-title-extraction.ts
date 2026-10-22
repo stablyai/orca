@@ -100,11 +100,20 @@ export function extractLastOscTitle(data: string): string | null {
 }
 
 export function extractAllOscTitles(data: string): string[] {
+  return scanAllOscTitles(data, (title) => title)
+}
+
+/** Every complete OSC title with the offset just past it, for ordering titles against other events. */
+export function extractAllOscTitleEntries(data: string): { title: string; end: number }[] {
+  return scanAllOscTitles(data, (title, end) => ({ title, end }))
+}
+
+function scanAllOscTitles<T>(data: string, make: (title: string, end: number) => T): T[] {
   if (!data.includes('\x1b]')) {
     return []
   }
 
-  const titles: string[] = []
+  const titles: T[] = []
   let oldestTitleIndex = 0
   let searchStart = 0
   while (searchStart < data.length) {
@@ -117,10 +126,11 @@ export function extractAllOscTitles(data: string): string[] {
       break
     }
     if (parsed.kind === 'title') {
+      const entry = make(parsed.title, parsed.nextIndex)
       if (titles.length < MAX_OSC_TITLES_PER_CHUNK) {
-        titles.push(parsed.title)
+        titles.push(entry)
       } else {
-        titles[oldestTitleIndex] = parsed.title
+        titles[oldestTitleIndex] = entry
         oldestTitleIndex = (oldestTitleIndex + 1) % MAX_OSC_TITLES_PER_CHUNK
       }
       searchStart = parsed.nextIndex

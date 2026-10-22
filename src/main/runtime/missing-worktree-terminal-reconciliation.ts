@@ -1,9 +1,9 @@
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
-import type { OrcaRuntimeService } from './orca-runtime'
-import { killAllProcessesForWorktree } from './worktree-teardown'
+import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
 
 const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 
@@ -53,14 +53,15 @@ function hostFence(
   repo: Repo,
   worktreeId: string
 ): { resolvedWorktreeId: string; resolvedConnectionId?: string } {
+  const connectionId = getRepoRoutingConnectionId(repo)
   return {
     resolvedWorktreeId: worktreeId,
-    ...(repo.connectionId ? { resolvedConnectionId: repo.connectionId } : {})
+    ...(connectionId ? { resolvedConnectionId: connectionId } : {})
   }
 }
 
 type MissingWorktreeTerminalReconciliationDeps = {
-  runtime: OrcaRuntimeService
+  runtime: WorktreeTeardownRuntime
   getLocalProvider: () => IPtyProvider | null
   onPtyStopped?: (ptyId: string) => void
 }
@@ -85,7 +86,7 @@ export async function stopMissingWorktreeTerminals(
   }
 
   // Why: this process holds no SSH PTY provider; an SSH repo's sweep goes through the runtime.
-  const ownedProvider = repo.connectionId ? null : deps.getLocalProvider()
+  const ownedProvider = getRepoRoutingConnectionId(repo) ? null : deps.getLocalProvider()
   const provider = ownedProvider ? withSharedProcessSnapshot(ownedProvider) : ownedProvider
   if (!provider) {
     const stoppedWorktreeIds = (
@@ -118,8 +119,7 @@ export async function stopMissingWorktreeTerminals(
             onPtyStopped: deps.onPtyStopped,
             // Why: the shared process snapshot is only valid while nothing needs a
             // post-shutdown re-list, so this sweep stays explicitly best-effort.
-            requirePhysicalStop: false,
-            ...(repo.connectionId ? { includeLocalRegistry: false } : {})
+            requirePhysicalStop: false
           })
           return worktreeId
         } catch (error) {

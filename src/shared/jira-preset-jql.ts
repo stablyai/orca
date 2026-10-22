@@ -17,5 +17,8 @@ export function buildJiraPresetJql(
     const names = statuses.map((name) => `"${name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
     clauses.push(`status in (${names.join(', ')})`)
   }
+  if (filters?.currentSprint) {
+    clauses.push('sprint in openSprints()')
+  }
   return `${clauses.join(' AND ')} ORDER BY updated DESC`
 }

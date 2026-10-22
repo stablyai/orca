@@ -1,4 +1,7 @@
-import type { RuntimeVisibleTerminalState } from '../../runtime-terminal-state-records'
+import type {
+  RuntimeHeadlessTerminal,
+  RuntimeVisibleTerminalState
+} from '../../runtime-terminal-state-records'
 import { OrcaRuntimeWithSerializeTerminalBufferFromAvailableState } from './terminal-buffer-selection'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
@@ -12,7 +15,12 @@ import {
 import type { RuntimeTerminalProjection } from '../../orca-runtime-core'
 import { DEFAULT_TERMINAL_READ_LIMIT } from '../../terminal-tail-limits'
 import { HeadlessEmulator } from '../../../daemon/headless-emulator'
-import { projectTerminalTailLines } from '../../orca-runtime-terminal-projection'
+import {
+  projectTerminalTailLines,
+  projectTerminalVisibleLines
+} from '../../orca-runtime-terminal-projection'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
   protected abstract readVisibleTerminalState(
@@ -21,6 +29,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   protected abstract readRendererVisibleSnapshotLines(
     ptyId: string
   ): Promise<RuntimeTerminalProjection>
+  protected abstract readWholeScreenModel(
+    ptyId: string | null | undefined
+  ): RuntimeHeadlessTerminal | null
   protected abstract parseVisibleSnapshot(snapshot: {
     data: string
     cols: number
@@ -131,11 +142,13 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
+    const conpty = isNativeWindowsConptyPty(ptyId)
     if (
       !blankFallback &&
       !recoveredWorkerFallback &&
       !providerModeUnknown &&
       !knownAlternateScreen &&
+      !conpty &&
       !this.headlessTerminals.has(ptyId)
     ) {
       return read
@@ -147,7 +160,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       !knownAlternateScreen &&
       !visibleState?.isAlternateScreen
     ) {
-      return read
+      return conpty
+        ? await this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
+        : read
     }
     let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
     if (projection.lines.length === 0) {
@@ -163,6 +178,57 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       projection.draft,
       projection.tailRows
     )
+  }
+
+  // Why: ConPTY re-encodes all output as screen paints placed by absolute cursor moves the stream
+  // tail cannot follow, so overwritten text survives in it — e.g. PSReadLine's ghost history
+  // prediction (another shell's command) reads as typed before this terminal's own input.
+  private async withConptyRenderedTail(
+    ptyId: string,
+    read: RuntimeTerminalRead,
+    limit: number | undefined,
+    providerSnapshot: RuntimeProviderSnapshotReadOptions
+  ): Promise<RuntimeTerminalRead> {
+    const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
+    return projection.lines.length > 0
+      ? buildVisibleSnapshotReadFallback(
+          read,
+          projection.lines,
+          limit,
+          projection.draft,
+          projection.tailRows
+        )
+      : read
+  }
+
+  private async readRenderedTerminalTailLines(
+    ptyId: string,
+    limit: number | undefined,
+    providerSnapshot: RuntimeProviderSnapshotReadOptions
+  ): Promise<RuntimeTerminalProjection> {
+    // Why over-fetch by a screen: the projection drops blank grid rows after taking its rows, so
+    // the empty rows below the prompt would otherwise eat into the requested line count.
+    const rowLimit =
+      terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
+      (this.getTerminalSize(ptyId)?.rows ?? 0)
+    const state = this.readWholeScreenModel(ptyId)
+    if (!state) {
+      return this.readProviderTerminalTailLines(ptyId, rowLimit, {
+        timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        ...providerSnapshot
+      })
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    await state.writeChain
+    if (
+      this.headlessTerminals.get(ptyId) !== state ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation
+    ) {
+      return { lines: [] }
+    }
+    return providerSnapshot.visibleScreenOnly
+      ? projectTerminalVisibleLines(state.emulator)
+      : projectTerminalTailLines(state.emulator, rowLimit)
   }
 
   protected async readProviderTerminalTailLines(

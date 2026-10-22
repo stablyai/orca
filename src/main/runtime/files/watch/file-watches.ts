@@ -13,6 +13,7 @@ import { stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
 import { resolveAuthorizedPath } from '../../../ipc/filesystem-auth'
+import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
 import { watchWindowsRuntimeFileExplorer } from './windows-file-watch'
 import { beginWatcherInstall } from '../../../ipc/watcher-removal-gate'
 import {
@@ -57,7 +58,7 @@ export class RuntimeFileWatches {
       const finishInstall = beginWatcherInstall(target.path, sshTargetId)
       try {
         requireLocalRuntimeFileRoute(target)
-        const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
+        const rootPath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
         const rootStats = await stat(rootPath)
         if (!rootStats.isDirectory()) {
           throw new Error('not_a_directory')

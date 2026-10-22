@@ -13,7 +13,10 @@ import {
 } from '@/lib/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import {
+  haveConflictingTaskSourceAccounts,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
 import type { CmdJTaskSearchResult } from './task-search-results'
 import { getJiraIssueWorkspaceSeed } from '../task-page-source-context'
 
@@ -21,30 +24,18 @@ function sourceMatches(source: TaskSourceContext, target: TaskSourceContext): bo
   if (source.provider !== target.provider || source.hostId !== target.hostId) {
     return false
   }
-  if (source.accountLabel && target.accountLabel && source.accountLabel !== target.accountLabel) {
+  if (haveConflictingTaskSourceAccounts(source, target)) {
     return false
   }
   const left = source.providerIdentity
   const right = target.providerIdentity
-  if (
+  return !(
     left?.provider === 'linear' &&
     right?.provider === 'linear' &&
     left.workspaceId &&
     right.workspaceId &&
     left.workspaceId !== right.workspaceId
-  ) {
-    return false
-  }
-  if (
-    left?.provider === 'jira' &&
-    right?.provider === 'jira' &&
-    left.siteId &&
-    right.siteId &&
-    left.siteId !== right.siteId
-  ) {
-    return false
-  }
-  return true
+  )
 }
 
 export function findCmdJTaskWorkspace(

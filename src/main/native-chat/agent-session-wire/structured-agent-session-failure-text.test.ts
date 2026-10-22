@@ -15,6 +15,7 @@ import {
   AgentSessionPreSpawnError
 } from './structured-agent-session-adapter'
 import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 import {
@@ -28,6 +29,32 @@ const ORCA_INTERNAL =
   /agent_session_|execution_owner|provider_[a-z_]+|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
 describe('structuredAgentSessionStartFailure', () => {
+  it('names a provider request that ran out of time, through wrappers, unless the provider exited', () => {
+    const timedOut = withProviderRequestTimeout(new Error('thread/start exceeded 30000ms'), {
+      method: 'thread/start',
+      timeoutMs: 30_000
+    })
+    const wrapped = new Error('codex open failed', { cause: timedOut })
+    expect(structuredAgentSessionStartFailure({ error: wrapped }, { agentName: 'Codex' })).toEqual({
+      reason:
+        'Codex took too long to start (no response to thread/start after 30s). Send your message to try again. If this keeps happening, the computer running this chat may be overloaded.',
+      rejection: {
+        kind: 'startFailed',
+        requestTimeout: { method: 'thread/start', timeoutMs: 30_000 }
+      }
+    })
+    expect(
+      structuredAgentSessionStartFailure(
+        { error: wrapped },
+        { agentName: 'Codex', retryControl: true }
+      ).reason
+    ).toBe(
+      'Codex took too long to start (no response to thread/start after 30s). If this keeps happening, the computer running this chat may be overloaded.'
+    )
+    expect(
+      structuredAgentSessionStartFailure({ error: withObservedProviderExit(wrapped) }).rejection
+    ).toEqual({ kind: 'providerStartFailed' })
+  })
   it('names a saved Arguments option in start and restart failures without exposing its value', () => {
     const error = new StructuredAgentArgumentsError(
       'Codex',
@@ -194,7 +221,7 @@ describe('structuredAgentSessionStartFailure', () => {
     ],
     [
       'accountSwitchInProgress',
-      'A Claude account switch is in progress. Try again after it finishes.'
+      "Claude's setup is changing on this host. Try again after it finishes."
     ],
     [
       'managedAccountUnsupported',

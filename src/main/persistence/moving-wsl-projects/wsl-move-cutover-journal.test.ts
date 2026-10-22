@@ -2,8 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
+import {
+  WSL_MOVE_CUTOVER_PHASES,
+  wslMoveJournalKey
+} from '../../../shared/wsl-move/wsl-move-cutover'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
+import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { orcadMigrationCutoverJournalDirectory } from '../../ssh/orcad-migration-cutover-journal'
 import {
   listWslMoveCutoverChain,
@@ -12,12 +16,19 @@ import {
   writeWslMoveCutover,
   wslMoveJournalDirectory
 } from './wsl-move-cutover-journal'
+import {
+  resetWslMoveDesktopRewriteStoresForTests,
+  setWslMoveDesktopRewriteRegistryCompleteForTests
+} from './wsl-move-desktop-rewrite-stores'
 
 let userDataPath: string
 beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'wsl-move-journal-'))
 })
-afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))
+afterEach(() => {
+  resetWslMoveDesktopRewriteStoresForTests()
+  rmSync(userDataPath, { recursive: true, force: true })
+})
 
 const journalPath = (id: string) => join(wslMoveJournalDirectory(userDataPath), `${id}.json`)
 
@@ -47,7 +58,7 @@ describe('WSL move journal', () => {
   })
 
   it('refuses a second move into a distro while the first is in flight', () => {
-    writeWslMoveCutover(userDataPath, cutover('move-1', 'quiesced'))
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'quiesced'))
     expect(() =>
       writeWslMoveCutover(
         userDataPath,
@@ -57,7 +68,7 @@ describe('WSL move journal', () => {
   })
 
   it('chains a delta move after a finished one, and only onto the head', () => {
-    writeWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-2'))).toThrow(
       'wsl_move_must_extend_its_chain'
     )
@@ -77,7 +88,8 @@ describe('WSL move journal', () => {
   })
 
   it('never moves a record backwards, rebinds it, or advances a superseded one', () => {
-    writeWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
+    setWslMoveDesktopRewriteRegistryCompleteForTests(true)
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'prepared'))).toThrow(
       'wsl_move_phase_regressed'
     )
@@ -87,6 +99,7 @@ describe('WSL move journal', () => {
         cutover('move-1', 'retained', {}, { repoIds: ['repo-1', 'repo-2'] })
       )
     ).toThrow('wsl_move_binding_changed')
+    writeWslMoveCutover(userDataPath, cutover('move-1', 'client-rewritten'))
     writeWslMoveCutover(userDataPath, cutover('move-1', 'retained'))
     writeWslMoveCutover(
       userDataPath,
@@ -97,7 +110,7 @@ describe('WSL move journal', () => {
   })
 
   it('hands out records a caller cannot edit into the next comparison', () => {
-    writeWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
     const [listed] = listWslMoveCutovers(userDataPath)
     if (listed) {
       listed.phase = 'prepared'
@@ -122,10 +135,38 @@ describe('WSL move journal', () => {
     ).toThrow()
   })
 
-  it('keeps the fence: an in-flight record cannot be removed', () => {
-    writeWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))
+  it('refuses a later phase whose record is missing or was lifted, or that skips a phase', () => {
+    expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))).toThrow(
+      'wsl_move_record_missing'
+    )
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))
+    removeWslMoveCutover(userDataPath, 'move-1')
+    expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'quiesced'))).toThrow(
+      'wsl_move_record_missing'
+    )
+    expect(listWslMoveCutovers(userDataPath)).toEqual([])
+    writeWslMoveCutover(userDataPath, cutover('move-1', 'prepared'))
+    expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'quiesced'))).toThrow(
+      'wsl_move_phase_skipped'
+    )
+  })
+
+  it.each(WSL_MOVE_CUTOVER_PHASES.slice(2, -1))('refuses to remove a %s record', (phase) => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', phase))
+    expect(() => removeWslMoveCutover(userDataPath, 'move-1')).toThrow('wsl_move_in_flight')
+    expect(listWslMoveCutovers(userDataPath)[0]?.phase).toBe(phase)
+  })
+
+  it('keeps the fence: a record past quiesce cannot be removed', () => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'quiesced'))
     expect(() => removeWslMoveCutover(userDataPath, 'move-1')).toThrow('wsl_move_in_flight')
     expect(listWslMoveCutovers(userDataPath)).toHaveLength(1)
+  })
+
+  it('lifts a fence whose quiesce refused: nothing reached the destination yet', () => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))
+    removeWslMoveCutover(userDataPath, 'move-1')
+    expect(listWslMoveCutovers(userDataPath)).toEqual([])
   })
 
   it('fails closed on a manifest edited without re-signing it', () => {

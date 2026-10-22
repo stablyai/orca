@@ -44,7 +44,8 @@ describe('OSC 9999 pending storage', () => {
       expect(process('"}\x07after')).toEqual({
         cleanData: 'after',
         payloads: [{ state: 'working', prompt: 'fragment' }],
-        lastPayloadCleanOffset: 0
+        lastPayloadCleanOffset: 0,
+        payloadCleanOffsets: [0]
       })
     }
   })
@@ -64,7 +65,8 @@ describe('OSC 9999 pending storage', () => {
       expect(process(`\ude00"}${terminator}after`)).toEqual({
         cleanData: 'after',
         payloads: [{ state: 'working', prompt: '漢字\ud800|\udc00|😀' }],
-        lastPayloadCleanOffset: 0
+        lastPayloadCleanOffset: 0,
+        payloadCleanOffsets: [0]
       })
     }
   )
@@ -80,7 +82,8 @@ describe('OSC 9999 pending storage', () => {
     expect(process('\x07after')).toEqual({
       cleanData: 'after',
       payloads: [{ state: 'working', prompt: '' }],
-      lastPayloadCleanOffset: 0
+      lastPayloadCleanOffset: 0,
+      payloadCleanOffsets: [0]
     })
   })
 })

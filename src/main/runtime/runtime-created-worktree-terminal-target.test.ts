@@ -5,7 +5,7 @@ import { Store } from '../persistence/loading-store/store'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { RuntimeRemoteFetchController } from './runtime-remote-fetch-controller'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
-import type { OrcaRuntimeWithNotifySshStateChanged } from './orca-runtime-notify-ssh-state-changed'
+import type { OrcaRuntimeWithNotifySshStateChanged } from './workspaces/workspace-host-notifications'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
 import type { RuntimeWorkspaceCreateEvents } from '../workspace-create-telemetry'
@@ -15,6 +15,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { Worktree } from '../../shared/worktree/types'
 import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
@@ -89,9 +90,10 @@ function makeFixture(repos: Repo[] = [owner()], hostId: ExecutionHostId = 'local
     getAllWorktreeMeta: () => metadata,
     getWorktreeMeta: (id) => metadata[id],
     getAllWorktreeLineage: () => lineageById,
-    setWorktreeMeta: (id, patch) => (metadata[id] = { ...meta, ...metadata[id], ...patch }),
-    removeWorktreeMeta: (id) => {
-      delete metadata[id]
+    setWorktreeMeta: (target, patch) =>
+      (metadata[target.id] = { ...meta, ...metadata[target.id], ...patch }),
+    removeWorktreeMeta: (target) => {
+      delete metadata[target.id]
     },
     getGitHubCache: vi.fn<RuntimeStore['getGitHubCache']>(),
     getSettings: () => ({
@@ -385,8 +387,11 @@ describe('workspace activation and metadata reentry', () => {
     expect(store.getWorktreeMeta(runtime.selectedWorktree.id)?.comment).toBe('updated')
     expect(notify.mock.calls).toEqual([['repo']])
     const otherId = `repo::${join(directory, 'other')}`
-    store.setWorktreeMeta(runtime.selectedWorktree.id, { sortOrder: 0 })
-    store.setWorktreeMeta(otherId, { sortOrder: 0 })
+    store.setWorktreeMeta(
+      hostWorktreeTarget({ id: runtime.selectedWorktree.id, hostId: 'local' }),
+      { sortOrder: 0 }
+    )
+    store.setWorktreeMeta(hostWorktreeTarget({ id: otherId, hostId: 'local' }), { sortOrder: 0 })
     expect(runtime.persistManagedWorktreeSortOrder([runtime.selectedWorktree.id, otherId])).toEqual(
       {
         updated: 2
@@ -394,7 +399,17 @@ describe('workspace activation and metadata reentry', () => {
     )
     expect(notify.mock.calls).toEqual([
       ['repo'],
-      ['repo', { invalidateGitScans: false, sortOrderOnly: true }]
+      [
+        'repo',
+        {
+          invalidateGitScans: false,
+          sortOrderOnly: true,
+          sortOrders: [
+            { worktreeId: runtime.selectedWorktree.id, sortOrder: expect.any(Number) },
+            { worktreeId: otherId, sortOrder: expect.any(Number) }
+          ]
+        }
+      ]
     ])
   })
 

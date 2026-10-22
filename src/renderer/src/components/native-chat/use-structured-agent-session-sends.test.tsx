@@ -23,7 +23,13 @@ it.each([
   ['a text follow-up while the agent works', QUEUEING, true, [], 'queued'],
   ['the same follow-up when the agent is idle', QUEUEING, false, [], true],
   ['with the queue setting off', { capability: 'supported', enabled: false }, true, [], true],
-  ['an image, which never queues', QUEUEING, true, [{ path: '/a.png', previewUri: '/a.png' }], true]
+  [
+    'an image follow-up, which queues like text',
+    QUEUEING,
+    true,
+    [{ path: '/a.png', previewUri: '/a.png' }],
+    'queued'
+  ]
 ] as const)(
   'answers whether %s waits as a queued card',
   (_case, queue, isWorking, images, admission) => {
