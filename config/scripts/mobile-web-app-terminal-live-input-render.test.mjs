@@ -154,16 +154,6 @@ async function openProbe({ userAgent } = {}) {
 const fieldValue = (page) =>
   page.evaluate((id) => document.getElementById(id)?.value ?? null, LIVE_INPUT_FIELD_ID)
 
-/** Typed text, as the field and the mirror both hold it once a native edit has landed. */
-async function typeIntoField(page, text) {
-  await page.evaluate((typed) => globalThis.__orcaLiveInputProbe.type(typed), text)
-  await page.waitForFunction(
-    ([id, typed]) => document.getElementById(id)?.value === typed,
-    [LIVE_INPUT_FIELD_ID, text],
-    { timeout: 30_000, polling: 100 }
-  )
-}
-
 describeRender(
   'the terminal live input on the page',
   () => {
@@ -303,7 +293,8 @@ describeRender(
       // shortened text into the field itself and the mirror diff sends the PTY erase. On the page
       // the write threw before the send, so the bar did nothing at all.
       const { errors, page } = await openProbe()
-      await typeIntoField(page, 'ab')
+      await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+      await page.keyboard.type('ab')
 
       const result = await page.evaluate(() =>
         globalThis.__orcaLiveInputProbe.accessory({ bytes: '\u007f', localEdit: 'backspace' })
@@ -318,9 +309,35 @@ describeRender(
       // One DEL reached the terminal, so the field edit above is a mirror of the PTY rather than a
       // local edit that silently diverged from it.
       expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([
-        'ab',
+        'a',
+        'b',
         '\u007f'
       ])
+      expect(errors).toEqual([])
+      await page.close()
+    }, 300_000)
+
+    it('preserves the middle caret after accessory Delete and subsequent typing', async () => {
+      const { errors, page } = await openProbe()
+      await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+      await page.keyboard.type('abcdef')
+      const sentBeforeSelection = await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())
+      await page.evaluate((id) => {
+        const field = document.getElementById(id)
+        field.setSelectionRange(3, 3)
+        field.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      }, LIVE_INPUT_FIELD_ID)
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual(
+        sentBeforeSelection
+      )
+      expect(
+        await page.evaluate(() =>
+          globalThis.__orcaLiveInputProbe.accessory({ bytes: '\x1b[3~', localEdit: 'delete' })
+        )
+      ).toEqual({ kind: 'handled' })
+      expect(await fieldValue(page)).toBe('abcef')
+      await page.keyboard.type('X')
+      expect(await fieldValue(page)).toBe('abcXef')
       expect(errors).toEqual([])
       await page.close()
     }, 300_000)

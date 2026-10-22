@@ -164,36 +164,21 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     marginRight: spacing.sm
   },
   liveInputBar: {
-    gap: spacing.sm
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.xs
   },
-
-  liveInputFocusTarget: {
-    flex: 1,
-    minHeight: 34,
+  liveInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.sm + 2
+    gap: spacing.sm
   },
-
-  liveInputFocusTargetPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-
-  liveInputFocusTargetDisabled: {
-    opacity: 0.45
-  },
-
   liveInputCapture: {
-    position: 'absolute',
-    opacity: 0,
-    width: 1,
-    height: 1,
-    color: colors.textPrimary
+    minWidth: 0,
+    marginRight: 0
+  },
+  liveInputCaptureDisabled: {
+    opacity: 0.45
   },
   sendButton: {
     backgroundColor: colors.bgRaised,

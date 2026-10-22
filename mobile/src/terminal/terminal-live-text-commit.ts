@@ -15,6 +15,8 @@ export type TerminalLiveSpecialKeyDecisionInput = {
 
 export type TerminalLiveAccessoryLocalEdit = 'backspace' | 'delete'
 
+export type TerminalLiveInputSelection = { readonly start: number; readonly end: number }
+
 export type TerminalLiveAccessoryBytesDecision =
   | { readonly kind: 'local-edit'; readonly localEdit: TerminalLiveAccessoryLocalEdit }
   | { readonly kind: 'send-now'; readonly bytes: string }
@@ -80,20 +82,25 @@ export function getTerminalLiveAccessoryBytesDecision({
   return { kind: 'send-now', bytes }
 }
 
+/** Uses native UTF-16 selection offsets; collapsed deletion preserves adjacent surrogate pairs. */
 export function getTerminalLiveAccessoryLocalEditText({
   localEdit,
-  fieldText
+  fieldText,
+  selection
 }: {
   readonly localEdit: TerminalLiveAccessoryLocalEdit
   readonly fieldText: string
+  readonly selection?: TerminalLiveInputSelection | null
 }): string {
-  if (localEdit === 'delete') {
-    // Why: accessory Delete mirrors forward-delete at the hidden input's end;
-    // it stays local but does not remove the field text.
-    return fieldText
+  const start = Math.max(0, Math.min(selection?.start ?? fieldText.length, fieldText.length))
+  const end = Math.max(start, Math.min(selection?.end ?? start, fieldText.length))
+  if (start !== end) {
+    return fieldText.slice(0, start) + fieldText.slice(end)
   }
-
-  const end = fieldText.length
-  const width = end > 1 && readUtf8CodePointAt(fieldText, end - 2) > 0xffff ? 2 : 1
-  return fieldText.slice(0, -width)
+  if (localEdit === 'delete') {
+    const width = readUtf8CodePointAt(fieldText, start) > 0xffff ? 2 : 1
+    return fieldText.slice(0, start) + fieldText.slice(start + width)
+  }
+  const width = start > 1 && readUtf8CodePointAt(fieldText, start - 2) > 0xffff ? 2 : 1
+  return fieldText.slice(0, Math.max(0, start - width)) + fieldText.slice(start)
 }

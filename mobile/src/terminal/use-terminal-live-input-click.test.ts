@@ -249,4 +249,63 @@ describe('terminal live input around a click', () => {
       harness.unmount()
     }
   })
+  it.each(['before', 'after'] as const)(
+    'ignores pre-click selection arriving %s the stale text echo before repeated typing',
+    async (selectionOrder) => {
+      const { handlers, sent, captures, unmount } = createClickHarness()
+      const staleSelection = {
+        nativeEvent: { text: 'x', selection: { start: 0, end: 0 } }
+      }
+      try {
+        change(handlers, 'x')
+        handlers.handleLiveInputSelectionChange(staleSelection)
+        await handlers.sendLiveInputClick('terminal-a', CLICK)
+        if (selectionOrder === 'before') {
+          handlers.handleLiveInputSelectionChange(staleSelection)
+        }
+        change(handlers, 'x')
+        if (selectionOrder === 'after') {
+          handlers.handleLiveInputSelectionChange(staleSelection)
+        }
+
+        handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'x' } })
+        change(handlers, 'x')
+        expect(
+          await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+        ).toEqual({ kind: 'suppress-raw' })
+        expect(captures.at(-1)).toBe('x')
+
+        handlers.handleLiveInputSelectionChange({
+          nativeEvent: { text: 'x', selection: { start: 1, end: 1 } }
+        })
+        expect(
+          await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+        ).toEqual({ kind: 'handled' })
+        expect(captures.at(-1)).toBe('')
+        expect(sent.join('')).toBe('x' + CLICK + 'x\x7f')
+      } finally {
+        unmount()
+      }
+    }
+  )
+
+  it('pairs fresh selection before its text after a keypress starts the new session', async () => {
+    const { handlers, captures, unmount } = createClickHarness()
+    try {
+      change(handlers, 'x')
+      await handlers.sendLiveInputClick('terminal-a', CLICK)
+      handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'x' } })
+      handlers.handleLiveInputSelectionChange({
+        nativeEvent: { text: 'x', selection: { start: 1, end: 1 } }
+      })
+      change(handlers, 'x')
+
+      expect(
+        await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+      ).toEqual({ kind: 'handled' })
+      expect(captures.at(-1)).toBe('')
+    } finally {
+      unmount()
+    }
+  })
 })
