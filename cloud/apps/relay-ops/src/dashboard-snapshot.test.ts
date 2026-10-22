@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DashboardSnapshotCache } from './dashboard-snapshot.js'
 import type { DashboardSnapshot } from './dashboard-snapshot.js'
 import type { GcloudClient } from './gcloud-client.js'
@@ -28,6 +28,24 @@ function snapshot(kind: 'good' | 'unavailable'): DashboardSnapshot {
 }
 
 describe('DashboardSnapshotCache', () => {
+  it('releases expired windows as the dashboard continues reading other windows', async () => {
+    let now = 1_000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const cache = new DashboardSnapshotCache(gcloud, 30_000, async () => snapshot('good'))
+    try {
+      for (let cycle = 0; cycle < 10; cycle++) {
+        await cache.read('production', 30 + cycle)
+        now += 30_001
+        await cache.read('production', 360)
+        const retained: unknown = Reflect.get(cache, 'entries')
+        if (!(retained instanceof Map)) throw new Error('snapshot entries unavailable')
+        expect([...retained.keys()]).toEqual(['production:360'])
+      }
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('keeps the last good view when a later credential refresh fails', async () => {
     let calls = 0
     const cache = new DashboardSnapshotCache(gcloud, 0, async () => {
