@@ -48,6 +48,7 @@ function makeConnector(distros: WslHostDistroCandidate[]) {
       return opened
     }),
     get: vi.fn((distro: string) => active.get(distro.toLowerCase()) ?? null),
+    forgetPairingFailures: vi.fn((_environmentId: string) => {}),
     isReachable: vi.fn(async (distro: string) => active.has(distro.toLowerCase())),
     disconnect: vi.fn(async (distro: string) => {
       active.delete(distro.toLowerCase())
@@ -258,6 +259,8 @@ describe('WslHostService', () => {
     expect(connector.connect).toHaveBeenLastCalledWith('Ubuntu', {
       intent: 'force'
     })
+    // A user's Connect is asking again, so a standing pairing-repair failure must not answer it.
+    expect(connector.forgetPairingFailures).toHaveBeenLastCalledWith('wsl:ubuntu')
   })
 
   it('reconciles a retained dead connection for user work without booting for passive calls', async () => {

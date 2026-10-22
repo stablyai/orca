@@ -72,16 +72,14 @@ describe('lastViewUnsavedFiles', () => {
     ).toEqual(['unstaged'])
   })
 
-  it('skips a file whose record or model still has a view that stays open', () => {
+  it('skips a file whose record still has a view that stays open', () => {
     const shared = state([tab('a', '/w/a.ts', 'wt'), tab('b', '/w/a.ts', 'other')], {
       editorBufferIdOf: { a: 'rec', b: 'rec' },
       editorBufferViews: { rec: ['a', 'b'] }
     })
     expect(lastViewUnsavedFiles(shared, new Set(['a']))).toEqual([])
 
-    const model = state([tab('a', '/w/a.ts', 'wt'), tab('b', '/w/a.ts', 'wt2')])
-    expect(lastViewUnsavedFiles(model, new Set(['a']))).toEqual([])
-    expect(lastViewUnsavedFiles(model, new Set(['a', 'b']))).toHaveLength(1)
+    expect(lastViewUnsavedFiles(shared, new Set(['a', 'b']))).toHaveLength(1)
   })
 })
 

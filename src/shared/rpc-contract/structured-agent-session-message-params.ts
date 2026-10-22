@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { measureUtf8ByteLength } from '../utf8-byte-limits'
 
 export const MAX_PROMPT_BYTES = 256 * 1024
 export const MAX_BLOCKS = 64
@@ -37,6 +38,17 @@ export const SendBodyStructure = z
     skills: z.array(SendSkillRef).min(1).max(MAX_SKILL_REFS).optional()
   })
   .strict()
+
+/** UTF-8 size of a message's blocks as sent, measured where `Buffer` is absent exactly as `SendBody`
+ *  measures it on the host, so a client refuses before Send what the host would. */
+export function structuredAgentSessionBlocksByteLength(blocks: readonly unknown[]): number {
+  return measureUtf8ByteLength(JSON.stringify(blocks)).byteLength
+}
+
+export function structuredAgentSessionBlocksTooLarge(blocks: readonly unknown[]): boolean {
+  return measureUtf8ByteLength(JSON.stringify(blocks), { stopAfterBytes: MAX_PROMPT_BYTES })
+    .exceededLimit
+}
 
 export const SendBody = SendBodyStructure.refine(
   (value) => Buffer.byteLength(JSON.stringify(value.blocks), 'utf8') <= MAX_PROMPT_BYTES,

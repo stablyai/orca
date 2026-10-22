@@ -8493,7 +8493,7 @@
           "reassurance": "É executado em cada host, acessado pela sua própria conexão SSH. Seu código e seus arquivos permanecem onde estão. Apenas a lista de projetos, abas e terminais do Orca é movida para o host."
         },
         "sshHostServer": {
-          "sourceChanged": "Uma versão anterior do Orca alterou os projetos deste host. Mova essas alterações para o servidor Orca deste host ou mantenha a versão do servidor para conectar novamente.",
+          "sourceChanged": "Este computador tem projetos ou pastas deste host que o servidor Orca dele ainda não tem, muitas vezes adicionados por uma versão anterior do Orca. Mova-os para o servidor Orca deste host ou mantenha a versão do servidor para conectar novamente.",
           "deploying": "Configurando Orca em {{host}}…",
           "converting": "Movendo para o Orca em {{host}}…",
           "connecting": "Conectando ao Orca em {{host}}…",
@@ -10369,7 +10369,6 @@
             "databaseCount_one": "{{value0}} banco de dados",
             "databaseCount_other": "{{value0}} bancos de dados",
             "scanning": "Verificando {{value0}}",
-            "reading": "Lendo {{value0}} arquivos",
             "scanned": "Verificação concluída: {{value0}}"
           }
         }
@@ -19049,6 +19048,10 @@
         "localAttachmentUnsupported": "Anexos locais não estão disponíveis para sessões remotas.",
         "removeAttachment": "Remover anexo",
         "pastedImageLabel": "Imagem colada",
+        "pastedTextLabel": "Texto colado",
+        "pasteNotSavedLabel": "Colagem não salva",
+        "pasteNotSaved": "Esta colagem não foi salva. Cole novamente ou remova-a.",
+        "pastedTextTooLarge": "Esta colagem faria sua mensagem ultrapassar o limite de 256 KB por mensagem. Encurte o texto e cole novamente.",
         "imagePasteFailed": "Falha ao colar a imagem.",
         "imageSaving": "Salvando imagem colada…",
         "worktreeNotReady": "Worktree não está pronta — tente novamente em um momento.",
@@ -19543,6 +19546,8 @@
         "settleEarlierMessage": "Aguarde o envio da sua mensagem anterior ou tente enviá-la novamente.",
         "queueTooLarge": "Há texto demais aguardando na fila.",
         "shrinkQueue": "Exclua uma mensagem da fila ou aguarde o envio de uma delas e tente novamente.",
+        "messageTooLarge": "Ela ultrapassa o limite de 256 KB por mensagem.",
+        "shortenMessage": "Encurte ou divida a mensagem e envie novamente.",
         "optionRejected": "O agente não aceitou esta configuração.",
         "goalsUnsupported": "Este agente não aceita objetivos.",
         "agentRefused": "O agente recusou esta ação.",

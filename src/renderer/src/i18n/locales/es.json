@@ -12663,7 +12663,7 @@
           "reassurance": "Se ejecuta en cada host y se accede a través de tu propia conexión SSH. Tu código y tus archivos se quedan donde están. Solo la lista de proyectos, pestañas y terminales de Orca pasa al host."
         },
         "sshHostServer": {
-          "sourceChanged": "Una versión anterior de Orca cambió los proyectos de este host. Mueve esos cambios al servidor de Orca de este host o conserva la versión del servidor para volver a conectarte.",
+          "sourceChanged": "Este equipo tiene proyectos o carpetas de este host que su servidor de Orca aún no tiene, a menudo añadidos por una versión anterior de Orca. Muévelos al servidor de Orca de este host o conserva la versión del servidor para volver a conectarte.",
           "deploying": "Configurando Orca en {{host}}…",
           "converting": "Pasando a Orca en {{host}}…",
           "connecting": "Conectando con Orca en {{host}}…",
@@ -14482,12 +14482,13 @@
             "sourceActionsUnavailable": "La fuente de la transcripción no está disponible."
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados",
             "fileCount_one": "{{value0}} archivo",
             "fileCount_other": "{{value0}} archivos",
             "databaseCount_one": "{{value0}} base de datos",
             "databaseCount_other": "{{value0}} bases de datos",
             "scanning": "Analizando {{value0}}",
-            "reading": "Leyendo {{value0}} archivos",
+            "checking": "Comprobando {{value0}}",
             "scanned": "Analizados {{value0}}"
           }
         }
@@ -18482,6 +18483,8 @@
         "settleEarlierMessage": "Espere a que se entregue su mensaje anterior o vuelva a intentarlo.",
         "queueTooLarge": "Hay demasiado texto esperando en la cola.",
         "shrinkQueue": "Elimine un mensaje de la cola o espere a que se entregue uno y vuelva a intentarlo.",
+        "messageTooLarge": "Supera el límite de 256 KB por mensaje.",
+        "shortenMessage": "Acórtelo o divídalo y vuelva a enviarlo.",
         "optionRejected": "El agente no aceptó este ajuste.",
         "goalsUnsupported": "Este agente no admite objetivos.",
         "agentRefused": "El agente lo rechazó.",
@@ -18524,6 +18527,10 @@
         "uploadingFile": "Subiendo {{name}}…",
         "removeAttachment": "Quitar archivo adjunto",
         "pastedImageLabel": "Imagen pegada",
+        "pastedTextLabel": "Texto pegado",
+        "pasteNotSavedLabel": "Pegado no guardado",
+        "pasteNotSaved": "Este pegado no se guardó. Vuelve a pegarlo o quítalo.",
+        "pastedTextTooLarge": "Este pegado haría que su mensaje superara el límite de 256 KB por mensaje. Acórtelo y vuelva a pegarlo.",
         "copyImage": "Copiar imagen",
         "copyImageFailed": "No se pudo copiar la imagen",
         "copyImageTooLarge": "La imagen es demasiado grande para copiarla.",

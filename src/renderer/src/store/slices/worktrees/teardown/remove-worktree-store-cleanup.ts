@@ -44,7 +44,7 @@ export function applyRemoveWorktreeSuccessState(
         removedFileIds.add(file.markdownPreviewSourceFileId)
       }
     }
-    noticeRemovedUnsavedFiles(s, removedFileIds, confirmedDiscards)
+    const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, removedFileIds, confirmedDiscards)
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
     // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
@@ -52,6 +52,7 @@ export function applyRemoveWorktreeSuccessState(
       : false
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
     return {
+      editorBufferKeepRequest,
       ...removeWorktreeLayout(s, {
         worktreeIds: new Set(worktreeIds),
         tabIds,

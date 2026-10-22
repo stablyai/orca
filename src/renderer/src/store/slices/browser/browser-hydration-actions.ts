@@ -10,6 +10,7 @@ import { findWorkspace } from '../browser-page-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { sendBrowserLayoutCommand } from './browser-layout-owner-commands'
 import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 
 export function createBrowserHydrationActions(
   set: BrowserSliceSet,
@@ -60,6 +61,10 @@ export function createBrowserHydrationActions(
       // desktop was hosting pages, and the runtime only hands them back once it sees an attach.
       void ensureBrowserClientHostsForRestoredPages(state)
       for (const [worktreeId, browserTabs] of Object.entries(state.browserTabsByWorktree)) {
+        // Switch point: main's layout load gives a tabless record its tab; its frame draws it.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN && !runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
+          continue
+        }
         for (const bt of browserTabs) {
           const exists = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
             (t) => t.contentType === 'browser' && t.entityId === bt.id

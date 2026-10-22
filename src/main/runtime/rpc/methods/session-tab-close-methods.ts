@@ -56,7 +56,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
             {
               reason: 'user',
               // Why explicit reason only: a reasonless legacy close never carried a confirmation.
-              ...(params.force && params.reason === 'user' ? { force: true } : {}),
+              ...(params.force && params.reason !== undefined ? { force: true } : {}),
               ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )

@@ -12,6 +12,7 @@ import { PANE_NOT_LIVE_ERROR } from '../../../../../shared/pane-attach-only-view
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { holdInPlaceResumeUntilSettled } from './in-place-resume-hold'
 import { mainStartsPane, startMainPaneOnFirstView } from './main-starts-pane'
+import { attachResumeCheck } from './main-pane-resume-banner'
 
 import {
   awaitAgentStatusStartupSnapshot,
@@ -94,6 +95,7 @@ function connectDeferredSessionReattach(
   const attachOnlyView = mainStartsPane(session)
   const resumeStartup = session.buildColdRestoreAgentResumeStartup()
   const coldRestoreStartup = attachOnlyView ? null : resumeStartup
+  const resumedAgent = attachResumeCheck(session, coldRestoreStartup)
   const outputCallbacks = session.captureTransportOutputCallbacks(
     (message) => {
       if (isSshSessionGoneError(message)) {
@@ -151,7 +153,7 @@ function connectDeferredSessionReattach(
       .then(
         (ptyId: string | null) => ({
           reopened: ptyId !== null,
-          agentResumed: ptyId !== null && Boolean(coldRestoreStartup)
+          agentResumed: ptyId !== null && resumedAgent(ptyId)
         }),
         () => NOT_REOPENED
       )
@@ -267,10 +269,7 @@ function connectDeferredSessionReattach(
       }
       return {
         reopened: accepted,
-        agentResumed:
-          accepted &&
-          Boolean(coldRestoreStartup) &&
-          !(result && typeof result === 'object' && result.agentResumeUnavailable)
+        agentResumed: accepted && resumedAgent(deferredReattachSessionId, result)
       }
     })
     .catch(async (err): Promise<HeldPaneReopenOutcome> => {

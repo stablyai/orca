@@ -26,6 +26,8 @@ import {
   settleStaleCacheReload
 } from './editor-stale-mount-guard'
 
+function ignoreCursorLine(): void {}
+
 // Why: binds a freshly created Monaco instance to the app; reads everything through refs so the callback identity stays stable across renders.
 export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
   const {
@@ -34,6 +36,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
     modelOwnerKey,
     viewStateKey,
     viewStateId,
+    passiveMirror = false,
     worktreeId,
     autoHeight,
     autoHeightLineHeight,
@@ -173,7 +176,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         fileIdRef,
         viewStateKey,
         scrollThrottleTimerRef,
-        setEditorCursorLine
+        setEditorCursorLine: passiveMirror ? ignoreCursorLine : setEditorCursorLine
       })
 
       // Why: custom Radix gutter menu instead of Monaco's built-in right-click menu (VSCode approach).
@@ -211,7 +214,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       })
 
       // If there's a pending reveal at mount time, execute it now
-      const reveal = useAppStore.getState().pendingEditorReveal
+      const reveal = passiveMirror ? null : useAppStore.getState().pendingEditorReveal
       // Why: scope reveal consumption to the destination file, or the previously mounted editor clears it before openFile switches tabs.
       const revealMatchesEditor = reveal?.fileId
         ? reveal.fileId === fileId
@@ -270,6 +273,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       updateMarkdownCompletionDocuments,
       viewStateKey,
       viewStateId,
+      passiveMirror,
       autoHeight,
       autoHeightLineHeight,
       worktreeId,

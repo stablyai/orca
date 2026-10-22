@@ -12776,7 +12776,7 @@
           "reassurance": "S’exécute sur chaque hôte, accessible via votre propre connexion SSH. Votre code et vos fichiers restent où ils sont. Seule la liste des projets, onglets et terminaux d’Orca passe sur l’hôte."
         },
         "sshHostServer": {
-          "sourceChanged": "Une version plus ancienne d’Orca a modifié les projets de cet hôte. Déplacez ces modifications vers le serveur Orca de cet hôte, ou conservez la version du serveur, pour vous reconnecter.",
+          "sourceChanged": "Cet ordinateur contient des projets ou dossiers de cet hôte que son serveur Orca n’a pas encore, souvent ajoutés par une version plus ancienne d’Orca. Déplacez-les vers le serveur Orca de cet hôte, ou conservez la version du serveur, pour vous reconnecter.",
           "deploying": "Configuration d’Orca sur {{host}}…",
           "converting": "Passage à Orca sur {{host}}…",
           "connecting": "Connexion à Orca sur {{host}}…",
@@ -14595,12 +14595,13 @@
             "sourceActionsUnavailable": "La source de la transcription n'est pas disponible."
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}} : {{settled}} sur {{total}} éléments potentiels de l’historique vérifiés",
             "fileCount_one": "{{value0}} fichier",
             "fileCount_other": "{{value0}} fichiers",
             "databaseCount_one": "{{value0}} base de données",
             "databaseCount_other": "{{value0}} bases de données",
             "scanning": "Analyse de {{value0}}",
-            "reading": "Lecture de {{value0}} fichiers",
+            "checking": "Vérification {{value0}}",
             "scanned": "{{value0}} analysés"
           }
         }
@@ -18591,6 +18592,8 @@
         "settleEarlierMessage": "Attendez que votre message précédent soit transmis, ou renvoyez-le.",
         "queueTooLarge": "Trop de texte est en attente dans la file.",
         "shrinkQueue": "Supprimez un message de la file, ou attendez qu'un message soit transmis, puis réessayez.",
+        "messageTooLarge": "Il dépasse la limite de 256 Ko par message.",
+        "shortenMessage": "Raccourcissez-le ou divisez-le, puis renvoyez-le.",
         "optionRejected": "L'agent n'a pas accepté ce réglage.",
         "goalsUnsupported": "Cet agent ne prend pas en charge les objectifs.",
         "agentRefused": "L'agent l'a refusé.",
@@ -18649,6 +18652,10 @@
         "uploadingFile": "Envoi de {{name}}…",
         "removeAttachment": "Retirer la pièce jointe",
         "pastedImageLabel": "Image collée",
+        "pastedTextLabel": "Texte collé",
+        "pasteNotSavedLabel": "Collage non enregistré",
+        "pasteNotSaved": "Ce collage n'a pas été enregistré. Collez-le à nouveau ou retirez-le.",
+        "pastedTextTooLarge": "Ce collage ferait dépasser à votre message la limite de 256 Ko par message. Raccourcissez-le, puis collez-le à nouveau.",
         "draftNotSaved": "Ce brouillon n'a pas encore pu être enregistré. Orca continue d'essayer.",
         "imageNotBroughtBack": "L'image {{name}} n'a pas pu être récupérée avec ce brouillon. Joignez-la à nouveau ou retirez-la.",
         "pastedImageNotBroughtBack": "Cette image collée n'a pas pu être récupérée avec ce brouillon. Retirez-la, puis collez-la à nouveau si vous en avez encore besoin.",

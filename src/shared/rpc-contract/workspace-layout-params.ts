@@ -81,6 +81,8 @@ const MoveTabCommand = z.object({
   ...OnTab,
   toGroupId: z.string().min(1),
   index: z.number().int().nonnegative(),
+  // Optional so an older main still takes the move; it places by `index`.
+  afterTabId: z.union([z.string().min(1), z.null()]).optional(),
   isPinned: z.boolean().optional()
 })
 

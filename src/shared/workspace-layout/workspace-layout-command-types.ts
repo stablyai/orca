@@ -94,6 +94,8 @@ export type LayoutCommand =
       tabId: string
       toGroupId: string
       index: number
+      /** Right after this tab (null: first) when it is in the target group; else `index`. */
+      afterTabId?: string | null
       /** Pins or unpins the tab where `index` puts it, in the same step. */
       isPinned?: boolean
     })

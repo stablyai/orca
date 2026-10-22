@@ -15,6 +15,7 @@ import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { landOnEmptiedWorktree } from '../tabs/tabs-close-actions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
 import {
   closeBrowserTabThroughLayoutOwner,
   withDrawnBrowserPages,
@@ -27,6 +28,7 @@ export function createBrowserCloseActions(
 ): Pick<BrowserSlice, 'closeBrowserTab' | 'shutdownWorktreeBrowsers'> {
   return {
     closeBrowserTab: (tabId, options) => {
+      forgetDesktopCreatedServerTab(tabId)
       // Why: a cleanup close unwinds a tab that never finished being created — it owns no host
       // page to close and must not enter the reopen stack as if the user had closed something.
       const isCleanup = options?.reason === 'cleanup'

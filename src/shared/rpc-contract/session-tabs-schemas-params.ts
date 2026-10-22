@@ -35,7 +35,9 @@ export const ActivateTab = WorktreeTabSelector.extend({
 export const CloseTab = ActivateTab.extend({
   // Why: optional preserves authenticated legacy user closes; lifecycle intent
   // uses the additive evidence-bearing method instead.
-  reason: z.literal('user').optional(),
+  // 'replay' is a held user close re-sent after reconnect; only sent to hosts advertising
+  // SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY.
+  reason: z.enum(['user', 'replay']).optional(),
   // Why: the user confirmed closing a pinned tab. Older hosts strip it and keep refusing, so
   // clients send it only to hosts advertising SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY.
   force: z.literal(true).optional()

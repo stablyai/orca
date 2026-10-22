@@ -37,6 +37,8 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))
+// Main's resume banner has its own tests (main-pane-resume-banner.test.ts).
+vi.mock('./main-pane-resume-banner', () => ({ showMainPaneResumeOutcome: vi.fn() }))
 // Why: the payload handlers need a mounted xterm; what matters here is the
 // context the handler decided on, so capture it and report the payload applied.
 vi.mock('./apply-reattach-payload', () => ({

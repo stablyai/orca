@@ -9,7 +9,7 @@ import {
   getAgentRowPrimaryText,
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
-} from './agent-row-primary-text'
+} from '../../../shared/agent-row-primary-text'
 import { formatAgentToolPreview } from './agent-row-tool-preview'
 import { agentVerdictStatusLine } from './agent-verdict-status-line'
 

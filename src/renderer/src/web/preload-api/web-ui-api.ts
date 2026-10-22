@@ -1,5 +1,6 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
+import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
@@ -173,6 +174,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
+    savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.
     readClipboardFilePaths: async () => [],

@@ -6,7 +6,8 @@ import {
   bindsPaneInStore,
   expectWindowStartAskedMain,
   mainLayoutApplyTransport,
-  mainStartsPaneAs
+  mainStartsPaneAs,
+  publishesResumeOutcomeInStore
 } from './pty-connection-test-main-pane-start-fixtures'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { UUID_RE } from './pty-connection-test-constants'
@@ -238,7 +239,14 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         await mainStartsPaneAs({
           ptyId: 'pty-main',
-          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2),
+          bind: (ptyId) => {
+            bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
+            publishesResumeOutcomeInStore(
+              () => mockStoreState,
+              paneKey,
+              'resume-unavailable'
+            )(ptyId)
+          },
           transport
         })
       }
@@ -247,11 +255,11 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       await flushAsyncTicks(4)
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Main starts the pane and decides its resume; the window attaches. Ledger L251: main does
-        // not yet publish a declined resume, so the window shows no banner (a known switch-on loss).
+        // Main starts the pane and declines its resume; the window attaches and says so.
         await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
         await flushAsyncTicks(10)
-        expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
         return
       }
       expect(transport.connect).toHaveBeenCalledWith(
@@ -327,7 +335,10 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         await mainStartsPaneAs({
           ptyId: 'pty-main',
-          bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2),
+          bind: (ptyId) => {
+            bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
+            publishesResumeOutcomeInStore(() => mockStoreState, paneKey, 'restored')(ptyId)
+          },
           transport
         })
       }
@@ -337,10 +348,10 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       await flushAsyncTicks(10)
 
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Main starts and resumes the pane; the window attaches and claims no restore of its own.
-        // Ledger L251: main does not yet publish its resume outcome, so neither banner shows.
+        // Main starts and resumes the pane; the window attaches and shows main's outcome once.
         await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
-        expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
         return
       }
       expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')

@@ -12682,7 +12682,7 @@
           "reassurance": "在各个主机上运行，通过你自己的 SSH 连接访问。你的代码和文件留在原处。只有 Orca 的项目、标签页和终端列表会移到该主机。"
         },
         "sshHostServer": {
-          "sourceChanged": "较旧版本的 Orca 更改了此主机的项目。要重新连接，请将这些更改迁移到此主机上的 Orca 服务器，或保留服务器版本。",
+          "sourceChanged": "此计算机上有此主机的 Orca 服务器尚未包含的项目或文件夹，通常是由较旧版本的 Orca 添加的。要重新连接，请将它们迁移到此主机上的 Orca 服务器，或保留服务器版本。",
           "deploying": "正在 {{host}} 上设置 Orca…",
           "converting": "正在迁移到 {{host}} 上的 Orca…",
           "connecting": "正在连接到 {{host}} 上的 Orca…",
@@ -14487,12 +14487,13 @@
             "sourceActionsUnavailable": "转录来源不可用。"
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项",
             "fileCount_one": "{{value0}} 个文件",
             "fileCount_other": "{{value0}} 个文件",
             "databaseCount_one": "{{value0}} 个数据库",
             "databaseCount_other": "{{value0}} 个数据库",
             "scanning": "正在扫描 {{value0}}",
-            "reading": "正在读取 {{value0}} 个文件",
+            "checking": "正在检查 {{value0}}",
             "scanned": "已扫描 {{value0}}"
           }
         }
@@ -18487,6 +18488,8 @@
         "settleEarlierMessage": "请等待之前的消息送达，或重试该消息。",
         "queueTooLarge": "队列中等待的文本过多。",
         "shrinkQueue": "请删除一条排队的消息，或等待其送达，然后重试。",
+        "messageTooLarge": "超过了单条消息 256 KB 的上限。",
+        "shortenMessage": "请缩短或拆分后再发送。",
         "optionRejected": "智能体未接受此设置。",
         "goalsUnsupported": "此智能体不支持目标。",
         "agentRefused": "智能体拒绝了此请求。",
@@ -18529,6 +18532,10 @@
         "uploadingFile": "正在上传 {{name}}…",
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
+        "pastedTextLabel": "粘贴的文本",
+        "pasteNotSavedLabel": "粘贴未保存",
+        "pasteNotSaved": "此粘贴内容未保存。请重新粘贴或将其移除。",
+        "pastedTextTooLarge": "此次粘贴会使消息超过单条消息 256 KB 的上限。请缩短后再粘贴。",
         "draftNotSaved": "此草稿尚未保存成功。Orca 会继续尝试。",
         "imageNotBroughtBack": "无法随此草稿恢复 {{name}}。请重新附加或将其移除。",
         "pastedImageNotBroughtBack": "无法随此草稿恢复这张粘贴的图片。请将其移除，如仍需要请重新粘贴。",

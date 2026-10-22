@@ -11,7 +11,7 @@ import { probeLinuxLibc, type GlibcVersion } from '../node-runtime/linux-libc-pr
 import { execCommand } from './remote-exec/remote-exec-command'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 
-export type OrcadDeploymentTargetFacts = {
+type OrcadDeploymentTargetFacts = {
   target: ServerTarget
   /** The host's glibc, when the libc probe printed one; null on musl and non-Linux hosts. */
   glibc: GlibcVersion | null

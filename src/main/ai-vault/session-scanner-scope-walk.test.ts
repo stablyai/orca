@@ -352,6 +352,7 @@ it('walks a history larger than the spread-argument limit', async () => {
     modifiedAt: new Date(1).toISOString()
   }))
   const sessions = await scanInScopeSessions({
+    inventory: [],
     discoveries: [
       {
         agent: 'codex',

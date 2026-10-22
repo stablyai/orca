@@ -14,6 +14,8 @@ import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
+  frameDrawnServerOfSimulatorTab,
+  noteSimulatorTabCreatedHere,
   openingSimulatorTabId,
   openSimulatorTabThroughLayoutOwner
 } from './simulator-tab-layout-owner'
@@ -134,7 +136,16 @@ export function ensureSimulatorTab(
     options?.placement === 'rightSplit' && shouldSurface
       ? findReusableRightSplitGroupId(store.layoutByWorktree[worktreeId], sourceGroupId)
       : null
-  const rightSplit = options?.placement === 'rightSplit' && shouldSurface && !reusableRightGroupId
+  // Switch point: a paired server's frame-drawn workspace has no group of this desktop's own, so
+  // the tab opens in the group it would split beside.
+  const serverEnvironmentId = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? frameDrawnServerOfSimulatorTab(store, worktreeId)
+    : null
+  const rightSplit =
+    options?.placement === 'rightSplit' &&
+    shouldSurface &&
+    !reusableRightGroupId &&
+    !serverEnvironmentId
   const groupId = reusableRightGroupId ?? sourceGroupId
   const drawHere = (tabId?: string): string | null => {
     // Why: publish the simulator directly in its split group. A two-step
@@ -185,7 +196,11 @@ export function ensureSimulatorTab(
       return sent
     }
   }
-  return drawHere()
+  const drawnId = drawHere()
+  if (drawnId && serverEnvironmentId) {
+    noteSimulatorTabCreatedHere(serverEnvironmentId, worktreeId, drawnId)
+  }
+  return drawnId
 }
 
 function hostOf(executionHostId: ExecutionHostId | undefined): {

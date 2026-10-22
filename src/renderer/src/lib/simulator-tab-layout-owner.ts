@@ -5,6 +5,9 @@ import { createBrowserUuid } from './browser-uuid'
 import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
 import { afterPendingTab, isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { AppState } from '@/store/types'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces'
+import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
+import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
 
 export type SimulatorTabOpen = {
   worktreeId: string
@@ -56,4 +59,22 @@ export function openSimulatorTabThroughLayoutOwner(
     }
   })
   return tabId
+}
+
+/** The paired server whose frames draw `worktreeId` now: its simulator tab is this desktop's own. */
+export function frameDrawnServerOfSimulatorTab(state: AppState, worktreeId: string): string | null {
+  const environmentId = runtimeEnvironmentIdUnlessTwin(state, worktreeId)
+  return environmentId && isFrameDrawnServerWorkspace(environmentId, worktreeId)
+    ? environmentId
+    : null
+}
+
+/** A simulator tab this desktop drew in that server's workspace: its frames keep it (L273). */
+export function noteSimulatorTabCreatedHere(
+  environmentId: string,
+  worktreeId: string,
+  tabId: string
+): void {
+  // L290 deletes this: post-flip, the host runs the simulator and streams it (#6701).
+  noteDesktopCreatedServerTab(environmentId, worktreeId, tabId)
 }

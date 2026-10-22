@@ -14,6 +14,7 @@ import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signa
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
 import { getRecentSelfWrite } from './editor-self-write-registry'
+import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -219,7 +220,11 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         continue
       }
       seenFileIds.add(file.id)
-      if (needsDiskCheck(file) && !inFlightFileIds.has(file.id)) {
+      // Why: views of one record share its disk version, so one read checks them all.
+      const siblingInFlight = editorBufferSiblingViewIds(store.getState(), file.id).some((id) =>
+        inFlightFileIds.has(id)
+      )
+      if (needsDiskCheck(file) && !inFlightFileIds.has(file.id) && !siblingInFlight) {
         inFlightFileIds.add(file.id)
         verifyQueue.push(file.id)
       }

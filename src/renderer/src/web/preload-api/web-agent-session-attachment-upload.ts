@@ -47,14 +47,15 @@ async function callPinned<TResult>(
 /** The browser client's paste into a structured chat: the same store the desktop client uses. */
 export async function saveClipboardImageAsWebAgentSessionAttachment(
   contentBase64: string,
-  target: AgentSessionAttachmentUploadTarget
+  target: AgentSessionAttachmentUploadTarget,
+  name: string = agentSessionPastedImageName(Date.now(), createBrowserUuid())
 ): Promise<string> {
   const { uploadId } = await callPinned<{ uploadId: string }>(
     target,
     'agentSessionAttachment.uploadStart',
     {
       sessionId: target.sessionId,
-      name: agentSessionPastedImageName(Date.now(), createBrowserUuid()),
+      name,
       byteLength: base64DecodedByteLength(contentBase64)
     }
   )

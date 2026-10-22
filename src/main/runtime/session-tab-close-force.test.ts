@@ -124,6 +124,13 @@ describe.each([false, true])('ORCA_LAYOUT_OWNER_IS_MAIN=%s', (layoutOwnerIsMain)
     }
   })
 
+  it('closes a pinned tab on a replayed confirmed close, which a newer client marks as replay', async () => {
+    const { f, close } = await pinnedServerTab(layoutOwnerIsMain)
+    const reply = await close({ reason: 'replay', force: true })
+    expect(reply.ok).toBe(true)
+    expect(f.hasTab()).toBe(false)
+  })
+
   it('ignores force on a reasonless legacy close, which never carried a confirmation', async () => {
     const { f, close } = await pinnedServerTab(layoutOwnerIsMain)
     const reply = await close({ reason: undefined, force: true }, [])

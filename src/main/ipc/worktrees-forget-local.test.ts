@@ -7,7 +7,6 @@ import {
 import {
   listWorktreesMock,
   removeWorktreeMock,
-  getSshFilesystemProviderMock,
   deleteWorktreeHistoryDirMock,
   advertisedUrlWatcherForgetWorktreeMock,
   killAllProcessesForWorktreeMock,
@@ -42,9 +41,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -148,8 +144,6 @@ describe('registerWorktreeHandlers', () => {
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
         repoId: 'repo-1'
       })
-      // The whole point: local-only cleanup never dispatches to the SSH provider.
-      expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
       expect(listWorktreesMock).not.toHaveBeenCalled()
       expect(removeWorktreeMock).not.toHaveBeenCalled()
     })
@@ -540,7 +534,6 @@ describe('worktree execution-host disambiguation', () => {
       hooks: null,
       mayNeedUpdate: false
     })
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
     expect(hasHooksFileMock).not.toHaveBeenCalled()
   })
 

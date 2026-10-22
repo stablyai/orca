@@ -218,6 +218,10 @@ export type ServerLayoutFrameTranslator = {
   rebind: (key: string) => WorkspaceLayoutRecordsFrame | null
   /** The workspaces the server's stream holds now. */
   keys: () => string[]
+  /** A desktop tab id as this server's latest frames name it; null when they hold no such tab. */
+  serverTabId: (key: string, desktopTabId: string) => string | null
+  /** A server tab id under desktop ids; unchanged when the frames hold no such tab. */
+  desktopTabId: (key: string, serverTabId: string) => string
   /** A workspace as the server publishes it, under the server's ids. */
   serverLayout: (key: string) => PublishedWorkspaceLayout | undefined
 }
@@ -294,6 +298,15 @@ export function createServerLayoutFrameTranslator(
       }
     },
     keys: () => [...server.keys()],
+    // Both copies list the same tabs in the same order (serverLayoutForDesktop maps one to one).
+    serverTabId: (key, desktopTabId) => {
+      const index = desktop.get(key)?.layout.tabs.findIndex((tab) => tab.id === desktopTabId) ?? -1
+      return index < 0 ? null : (server.get(key)?.tabs[index]?.id ?? null)
+    },
+    desktopTabId: (key, serverTabId) => {
+      const index = server.get(key)?.tabs.findIndex((tab) => tab.id === serverTabId) ?? -1
+      return index < 0 ? serverTabId : (desktop.get(key)?.layout.tabs[index]?.id ?? serverTabId)
+    },
     serverLayout: (key) => server.get(key),
     rebind: (key) => {
       const layout = server.get(key)

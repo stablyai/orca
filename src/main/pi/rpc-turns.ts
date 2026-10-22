@@ -5,6 +5,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
+import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-reply'
 import type { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcContextUsage } from './rpc-context-usage'
 import { PiRpcMessages } from './rpc-messages'
@@ -20,10 +21,12 @@ export type PiRpcTurnDeps = {
   request: (
     command: string,
     params?: Record<string, unknown>,
-    options?: { timeoutMs?: number | null }
+    options?: JsonlRpcRequestOptions
   ) => Promise<unknown>
   settled: (id: string, outcome: AgentSessionDispatchOutcome) => void
   idle: () => void
+  /** A turn's end reached the timeline. */
+  turnEnded?: () => void
   failed: (error: Error) => void
   diagnostic?: (error: unknown) => void
 }
@@ -88,6 +91,10 @@ export class PiRpcTurns {
   }
   get working(): boolean {
     return this.active !== undefined
+  }
+  /** Moves whenever Pi or a send does anything. */
+  get activity(): number {
+    return this.revision
   }
 
   async submit(
@@ -284,6 +291,7 @@ export class PiRpcTurns {
     this.settling = false
     this.messages.reset()
     this.deps.idle()
+    this.deps.turnEnded?.()
   }
 
   private refreshUsage(): void {

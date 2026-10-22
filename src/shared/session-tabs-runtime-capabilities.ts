@@ -20,6 +20,10 @@ export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-i
 // Why: an older host drops session.tabs.close's `force` and refuses a pinned tab, so a client sends
 // a confirmed pinned close's force only when advertised. Not behind a build switch: both builds honour it.
 export const SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY = 'session-tabs.close-force.v1' as const
+// Why: an older host's close schema accepts only reason 'user', so a client re-sending a held close
+// marks it 'replay' only where advertised; elsewhere it stays 'user', exactly as before.
+export const SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY =
+  'session-tabs.close-replay-reason.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
 // Why: a client advertising this retains every terminal retirement proof it receives until the
@@ -39,6 +43,7 @@ export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY,

@@ -1,5 +1,10 @@
 import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../shared/execution-host'
+import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/local-only-worktree-meta-ids'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -84,6 +89,10 @@ export function resolveWorktreeMetaOwner(
   },
   worktreeId: string
 ): HostWorktreeTarget | undefined {
+  // Why: no repo stands behind these ids, so without this their id-only writes were dropped.
+  if (isLocalOnlyWorktreeMetaId(worktreeId)) {
+    return hostWorktreeTarget({ id: worktreeId, hostId: LOCAL_EXECUTION_HOST_ID })
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const owners = store.getRepos().filter((repo) => repo.id === repoId)
   // Why: the raw-id row's stamp names whichever twin wrote first, not the twin the caller means.

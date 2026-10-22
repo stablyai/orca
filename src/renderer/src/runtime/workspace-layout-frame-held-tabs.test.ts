@@ -365,32 +365,30 @@ describe('a change main applies first, with frames flowing', () => {
     sync.close()
   })
 
-  it('settles a generated title once main’s frame shows it, so the next one is sent', async () => {
-    const { store, sync, answer } = await boot()
+  it('sends main no generated title, and shows the one main derived from its frame alone', async () => {
+    const { store, sync } = await boot()
     store.setState({ settings: { ...store.getState().settings!, tabAutoGenerateTitle: true } })
     const leafId = store.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
     const paneKey = makePaneKey('tab-unbound', leafId)
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth middleware')
     const renames = () => callsOf('renameTabs')
-    expect(renames()).toHaveLength(1)
-    const title = renames()[0]!.command.renames![0]!.title
-    // Unanswered: a later prompt for the same tab waits for the first.
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test')
-    expect(renames()).toHaveLength(1)
-
-    const writes = writesOf(store, (state) => state.tabsByWorktree)
-    await answer(rpc.calls.indexOf(renames()[0]!), okReply, (layout) => {
-      layout.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = title
-    })
-    writes.stop()
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.generatedTitle).toBe(title)
-    // Main's frame is the title's one store write.
-    expect(writes.count()).toBe(1)
+    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth middleware')
     store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test', {
       replaceExistingGeneratedTitle: true
     })
-    expect(renames()).toHaveLength(2)
+    expect(renames()).toEqual([])
+
+    // Main's frame carries the title main derived from its own agent status.
+    const writes = writesOf(store, (state) => state.tabsByWorktree)
+    const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
+    frame.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = 'Refactor the auth'
+    stream.onFrame!(frames.records(GIT_KEY, frame, ++seq))
+    stream.onPosition!(seq)
+    await settle()
+    writes.stop()
+    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
+    expect(row.generatedTitle).toBe('Refactor the auth')
+    expect(writes.count()).toBe(1)
+    expect(renames()).toEqual([])
     sync.close()
   })
 

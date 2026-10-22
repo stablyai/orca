@@ -12668,7 +12668,7 @@
           "reassurance": "各ホスト上で動作し、あなた自身の SSH 接続を通じて利用します。コードやファイルは今の場所から動きません。ホストに移るのは、Orca のプロジェクト、タブ、ターミナルの一覧だけです。"
         },
         "sshHostServer": {
-          "sourceChanged": "古いバージョンの Orca がこのホストのプロジェクトを変更しました。再接続するには、その変更をこのホストの Orca サーバーに移動するか、サーバーのバージョンを維持してください。",
+          "sourceChanged": "このコンピューターには、このホストの Orca サーバーにまだないプロジェクトまたはフォルダーがあります。多くは古いバージョンの Orca で追加されたものです。再接続するには、それらをこのホストの Orca サーバーに移動するか、サーバーのバージョンを維持してください。",
           "deploying": "{{host}} に Orca をセットアップ中…",
           "converting": "{{host}} 上の Orca に移行中…",
           "connecting": "{{host}} 上の Orca に接続中…",
@@ -14487,12 +14487,13 @@
             "sourceActionsUnavailable": "トランスクリプトのソースが利用できません。"
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み",
             "fileCount_one": "{{value0}} 個のファイル",
             "fileCount_other": "{{value0}} 個のファイル",
             "databaseCount_one": "{{value0}} 個のデータベース",
             "databaseCount_other": "{{value0}} 個のデータベース",
             "scanning": "{{value0}}をスキャン中",
-            "reading": "{{value0}} ファイルを読み込み中",
+            "checking": "確認中 {{value0}}",
             "scanned": "{{value0}}をスキャン済み"
           }
         }
@@ -18522,6 +18523,8 @@
         "settleEarlierMessage": "以前のメッセージが届くまで待つか、再試行してください。",
         "queueTooLarge": "キューで待機中のテキストが多すぎます。",
         "shrinkQueue": "キュー内のメッセージを削除するか、送信されるまで待ってから、もう一度お試しください。",
+        "messageTooLarge": "1 件のメッセージの上限である 256 KB を超えています。",
+        "shortenMessage": "短くするか分割してから、もう一度送信してください。",
         "optionRejected": "Agent はこの設定を受け入れませんでした。",
         "goalsUnsupported": "この Agent は目標に対応していません。",
         "agentRefused": "Agent がこれを拒否しました。",
@@ -18564,6 +18567,10 @@
         "uploadingFile": "{{name}} をアップロードしています…",
         "removeAttachment": "添付ファイルを削除する",
         "pastedImageLabel": "貼り付けた画像",
+        "pastedTextLabel": "貼り付けたテキスト",
+        "pasteNotSavedLabel": "貼り付けを保存できませんでした",
+        "pasteNotSaved": "この貼り付けは保存されませんでした。もう一度貼り付けるか、削除してください。",
+        "pastedTextTooLarge": "この貼り付けでメッセージが 1 件あたりの上限 256 KB を超えます。短くしてからもう一度貼り付けてください。",
         "draftNotSaved": "この下書きはまだ保存できていません。Orca は保存を再試行し続けます。",
         "imageNotBroughtBack": "{{name}} をこの下書きと一緒に復元できませんでした。もう一度添付するか、削除してください。",
         "pastedImageNotBroughtBack": "この貼り付けた画像をこの下書きと一緒に復元できませんでした。削除して、必要であればもう一度貼り付けてください。",

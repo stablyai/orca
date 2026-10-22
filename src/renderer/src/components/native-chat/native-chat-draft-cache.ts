@@ -94,13 +94,14 @@ export function readNativeChatDraftDocument(
 export function writeNativeChatDraftDocument(
   scopeKey: string,
   text: string,
-  document: JSONContent
+  document: JSONContent,
+  pastedTextFiles?: Readonly<Record<string, string>>
 ): void {
   if (!text) {
     writeNativeChatDraftCache(scopeKey, '')
     return
   }
-  updateNativeChatComposerDraft(scopeKey, { text, document }, 'deferred')
+  updateNativeChatComposerDraft(scopeKey, { text, document, pastedTextFiles }, 'deferred')
 }
 
 export function readNativeChatAttachmentCache(

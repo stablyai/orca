@@ -23,13 +23,22 @@ export function OpenPlainSshTerminalButton({
     return null
   }
   return (
-    <Button
-      type="button"
-      size="xs"
-      variant="outline"
-      onClick={() => showPlainSshPanel(targetId, targetLabel)}
-    >
-      {translate('auto.components.plainSshTerminal.open', 'Open plain SSH terminal')}
-    </Button>
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        onClick={() => showPlainSshPanel(targetId, targetLabel)}
+      >
+        {translate('auto.components.plainSshTerminal.open', 'Open plain SSH terminal')}
+      </Button>
+      {/* The next step for any block, including ones retrying can't clear. */}
+      <span className="text-xs text-muted-foreground">
+        {translate(
+          'auto.components.plainSshTerminal.openHint',
+          'Keeps you working on the host while Orca can’t set up there.'
+        )}
+      </span>
+    </span>
   )
 }

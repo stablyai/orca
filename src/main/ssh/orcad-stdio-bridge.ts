@@ -24,7 +24,7 @@ export type OrcadStdioBridge = {
   wrapCommand: boolean
 }
 
-export const ORCAD_STDIO_BRIDGE_CHECK_TIMEOUT_MS = 20_000
+const ORCAD_STDIO_BRIDGE_CHECK_TIMEOUT_MS = 20_000
 const MAX_STDERR_TAIL_CHARS = 2_000
 // POSIX shells and cmd.exe report a command they cannot find with these.
 const COMMAND_NOT_FOUND_EXITS: ReadonlySet<number | null> = new Set([127, 9009])

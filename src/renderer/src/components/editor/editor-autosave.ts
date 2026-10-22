@@ -74,6 +74,8 @@ export type EditorSaveFileDetail = EditorSaveFileTarget & {
 export type EditorFileSavedDetail = {
   fileId: string
   content: string
+  /** Every view of the saved record, read when the write landed: the saving view may close. */
+  recordViewIds?: readonly string[]
 }
 
 export type EditorRequestFileCloseDetail = {

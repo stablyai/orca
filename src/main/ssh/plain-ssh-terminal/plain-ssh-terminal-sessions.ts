@@ -28,7 +28,7 @@ export type PlainSshTerminalDeps = {
 }
 
 /** Where a session's output and exit go; false once that window is gone. */
-export type PlainSshTerminalSink = (event: PlainSshTerminalEvent) => boolean
+type PlainSshTerminalSink = (event: PlainSshTerminalEvent) => boolean
 
 type Session = {
   id: string

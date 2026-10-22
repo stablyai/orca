@@ -10,6 +10,7 @@
   },
   "main": "./out/main/index.js",
   "scripts": {
+    "check:dependencies": "pnpm run build:packages && node config/scripts/check-dependency-security.mjs",
     "install:release": "pnpm install --frozen-lockfile --cpu=current,x64,arm64",
     "audit:perf": "oxlint --config config/oxlint-performance-audit.json --format json src",
     "test:perf:contracts": "vitest run --config config/vitest.performance.config.ts",

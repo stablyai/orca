@@ -1,5 +1,7 @@
 import { expect } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'
 import type { layoutApplyTestTransport as answeringFallback } from '@/runtime/layout-apply-test-transport.test-fixture'
 
@@ -129,6 +131,25 @@ export function bindsPaneInStore(
     state.terminalLayoutsByTabId = {
       ...state.terminalLayoutsByTabId,
       [tabId]: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId } }
+    }
+  }
+}
+
+type ResumeOutcomesHolder = {
+  terminalPaneResumeOutcomesByPaneKey?: Record<string, TerminalPaneResumeOutcome>
+}
+
+/** Main's frame saying its start of the pane resumed (or could not resume) the agent in `ptyId`. */
+export function publishesResumeOutcomeInStore(
+  getState: () => ResumeOutcomesHolder,
+  paneKey: string,
+  outcome: PaneResumeOutcome
+): (ptyId: string) => void {
+  return (ptyId) => {
+    const state = getState()
+    state.terminalPaneResumeOutcomesByPaneKey = {
+      ...state.terminalPaneResumeOutcomesByPaneKey,
+      [paneKey]: { ptyId, ptyGeneration: 1, outcome }
     }
   }
 }

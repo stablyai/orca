@@ -22,6 +22,7 @@ jobs:
             const superseded = context.payload.action === 'synchronize'
             const targets = [
               ['pr-checks', 'pr.yml'],
+              ['dependency-security', 'dependency-security.yml'],
               ['node-server', 'node-server-tests.yml'],
               ['ssh-windows-hosts', 'ssh-windows-hosts.yml'],
               ['ssh-hostile-hosts', 'ssh-hostile-hosts.yml'],

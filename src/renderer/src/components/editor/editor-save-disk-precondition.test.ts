@@ -417,7 +417,7 @@ describe('editor saves guarded by the disk precondition', () => {
     }
   })
 
-  it('blocks the second of two independently viewed tabs of one file that both save', async () => {
+  it('two workspaces saving one record write it once; the second save finds it clean', async () => {
     const md = '/repo/notes.md'
     const disk = stubGuardedDisk({ [md]: 'original' })
     const store = createEditorStore()
@@ -449,15 +449,20 @@ describe('editor saves guarded by the disk precondition', () => {
       store.getState().markFileDirty(tab.id, true)
     }
 
+    // One record: the last edit is the one draft both views hold.
+    expect(store.getState().editorDrafts[code.id]).toBe('second tab')
+
     const cleanup = attachEditorAutosaveController(store)
     try {
       await requestEditorFileSave({ fileId: code.id })
-      await expect(requestEditorFileSave({ fileId: rich.id })).rejects.toThrow(/changed on disk/)
+      await requestEditorFileSave({ fileId: rich.id })
 
-      expect(disk.files.get(md)).toBe('first tab')
-      const second = store.getState().openFiles.find((f) => f.id === rich.id)
-      expect(second?.externalMutation).toBe('changed')
-      expect(second?.isDirty).toBe(true)
+      expect(disk.writeFile).toHaveBeenCalledTimes(1)
+      expect(disk.files.get(md)).toBe('second tab')
+      for (const tab of store.getState().openFiles) {
+        expect(tab.externalMutation).toBeUndefined()
+        expect(tab.isDirty).toBe(false)
+      }
     } finally {
       cleanup()
     }

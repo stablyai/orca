@@ -1,52 +1,41 @@
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
+import {
+  editorBufferIdOfView,
+  editorBufferSiblingViewIds
+} from '@/store/slices/editor/buffers/editor-buffer-views'
 import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
 import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
 import { canAutoSaveOpenFile } from './editor-autosave'
 import { flushClosingEditorBuffers } from './editor-pending-flush'
-import {
-  editorModelSiblingTabs,
-  editorTabModelUri,
-  isCodeViewTab
-} from './editor-save-disk-precondition'
+import { editorTabModelUri, isCodeViewTab } from './editor-save-disk-precondition'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
 
 /**
- * Savable tabs among `closedIds` holding unsaved text whose every view (shared model, shared
- * record) also closes, one per model.
+ * Savable tabs among `closedIds` holding unsaved text whose every view of the record also closes,
+ * one per record.
  */
 export function lastViewUnsavedFiles(state: AppState, closedIds: ReadonlySet<string>): OpenFile[] {
-  const seenModels = new Set<string>()
+  const seenRecords = new Set<string>()
   const result: OpenFile[] = []
   for (const file of state.openFiles ?? []) {
     const unsaved = file.isDirty || state.editorDrafts?.[file.id] !== undefined
     if (!closedIds.has(file.id) || !unsaved || !canAutoSaveOpenFile(file)) {
       continue
     }
-    const modelSiblings = editorModelSiblingTabs(state, file)
-    const viewIds = [
-      ...modelSiblings.map((tab) => tab.id),
-      ...editorBufferSiblingViewIds(state, file.id)
-    ]
-    const modelKey = modelSiblings.length > 1 ? editorTabModelUri(state, file) : file.id
-    if (viewIds.every((id) => closedIds.has(id)) && !seenModels.has(modelKey)) {
-      seenModels.add(modelKey)
+    const recordId = editorBufferIdOfView(state, file.id)
+    const viewIds = editorBufferSiblingViewIds(state, file.id)
+    if (viewIds.every((id) => closedIds.has(id)) && !seenRecords.has(recordId)) {
+      seenRecords.add(recordId)
       result.push(file)
     }
   }
   return result
 }
 
-/** Every view that shows `file`'s text: tabs on its model and views of its record. */
+/** Every view that shows `file`'s text: the views of its record. */
 export function unsavedTextViewIds(state: AppState, file: OpenFile): string[] {
-  return [
-    ...new Set([
-      file.id,
-      ...editorModelSiblingTabs(state, file).map((tab) => tab.id),
-      ...editorBufferSiblingViewIds(state, file.id)
-    ])
-  ]
+  return [...new Set([file.id, ...editorBufferSiblingViewIds(state, file.id)])]
 }
 
 /** The freshest text of `file`: its mounted code model, else a draft a sharing view holds. */

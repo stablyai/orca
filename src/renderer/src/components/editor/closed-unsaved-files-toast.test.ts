@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     activeWorktreeId: nullableActiveWorkspace(),
     activeWorkspaceExecutionHostId: nullableActiveHost(),
     getKnownWorktreeById: vi.fn((_id: string, _host?: string) => ({ path: '/active' })),
+    releaseKeptEditorBuffers: vi.fn((_notice: number) => {}),
     openFile: vi.fn()
   }
   return {
@@ -135,7 +136,7 @@ describe('closed unsaved files toast', () => {
 
   it('keeps the payload for retry when no workspace is active', async () => {
     mocks.state.activeWorktreeId = null
-    showClosedUnsavedFilesToast([closed()], 'Feature work')
+    showClosedUnsavedFilesToast([closed()], 'Feature work', 7)
     click()
     await vi.waitFor(() => expect(mocks.error).toHaveBeenCalledTimes(1))
     expect(mocks.dismiss).not.toHaveBeenCalled()
@@ -148,7 +149,11 @@ describe('closed unsaved files toast', () => {
 
   it('retries only the documents that failed to create', async () => {
     mocks.create.mockRejectedValueOnce(new Error('Offline'))
-    showClosedUnsavedFilesToast([closed(), closed({ filePath: '/removed/b.ts' })], 'Feature work')
+    showClosedUnsavedFilesToast(
+      [closed(), closed({ filePath: '/removed/b.ts' })],
+      'Feature work',
+      7
+    )
     click()
     await vi.waitFor(() => expect(mocks.error).toHaveBeenCalledTimes(1))
     click()
@@ -158,7 +163,7 @@ describe('closed unsaved files toast', () => {
   })
 
   it('releases the holder after Reopen even if the library retains the callbacks', async () => {
-    showClosedUnsavedFilesToast([closed()], 'Feature work')
+    showClosedUnsavedFilesToast([closed()], 'Feature work', 7)
     click()
     click()
     await vi.waitFor(() => expect(mocks.dismiss).toHaveBeenCalledTimes(1))
@@ -169,7 +174,11 @@ describe('closed unsaved files toast', () => {
   })
 
   it('shows one combined notice and releases text on dismissal', () => {
-    showClosedUnsavedFilesToast([closed(), closed({ filePath: '/removed/b.ts' })], 'Feature work')
+    showClosedUnsavedFilesToast(
+      [closed(), closed({ filePath: '/removed/b.ts' })],
+      'Feature work',
+      7
+    )
     expect(mocks.warning).toHaveBeenCalledWith(
       'Closed 2 files with unsaved edits from Feature work',
       expect.anything()
@@ -178,6 +187,8 @@ describe('closed unsaved files toast', () => {
     notice().onDismiss()
     click()
     expect(mocks.create).not.toHaveBeenCalled()
+    // The removed tabs' kept records go with the notice.
+    expect(mocks.state.releaseKeptEditorBuffers).toHaveBeenCalledWith(7)
     expect(console.warn).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledWith(
       '[editor] dropped unsaved edits from a removed workspace',

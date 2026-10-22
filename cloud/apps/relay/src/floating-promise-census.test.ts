@@ -35,8 +35,13 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
 }
 
 function productionFiles(): string[] {
-  return readdirSync(sourceDirectory)
-    .filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
+  return readdirSync(sourceDirectory, { recursive: true, encoding: 'utf8' })
+    .filter(
+      (entry) =>
+        entry.endsWith('.ts') &&
+        !entry.endsWith('.test.ts') &&
+        !entry.split(/[\\/]/).includes('test-fixtures')
+    )
     .map((entry) => join(sourceDirectory, entry))
 }
 

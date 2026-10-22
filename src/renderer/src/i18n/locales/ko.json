@@ -12668,7 +12668,7 @@
           "reassurance": "각 호스트에서 실행되며 사용자 본인의 SSH 연결로 접속합니다. 코드와 파일은 지금 있는 곳에 그대로 있습니다. 호스트로 옮겨지는 것은 Orca의 프로젝트, 탭, 터미널 목록뿐입니다."
         },
         "sshHostServer": {
-          "sourceChanged": "이전 버전의 Orca가 이 호스트의 프로젝트를 변경했습니다. 다시 연결하려면 해당 변경 사항을 이 호스트의 Orca 서버로 이동하거나 서버 버전을 유지하세요.",
+          "sourceChanged": "이 컴퓨터에 이 호스트의 Orca 서버에 아직 없는 프로젝트나 폴더가 있습니다. 대개 이전 버전의 Orca에서 추가된 것입니다. 다시 연결하려면 이를 이 호스트의 Orca 서버로 이동하거나 서버 버전을 유지하세요.",
           "deploying": "{{host}}에 Orca 설정 중…",
           "converting": "{{host}}의 Orca로 옮기는 중…",
           "connecting": "{{host}}의 Orca에 연결 중…",
@@ -14487,12 +14487,13 @@
             "sourceActionsUnavailable": "스크립트 소스를 사용할 수 없습니다."
           },
           "AiVaultScanProgressStrip": {
+            "agentChecked": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨",
             "fileCount_one": "파일 {{value0}}개",
             "fileCount_other": "파일 {{value0}}개",
             "databaseCount_one": "데이터베이스 {{value0}}개",
             "databaseCount_other": "데이터베이스 {{value0}}개",
             "scanning": "{{value0}} 스캔 중",
-            "reading": "파일 {{value0}}개 읽는 중",
+            "checking": "확인 중 {{value0}}",
             "scanned": "{{value0}} 스캔함"
           }
         }
@@ -18522,6 +18523,8 @@
         "settleEarlierMessage": "앞서 보낸 메시지가 전달될 때까지 기다리거나 다시 시도하세요.",
         "queueTooLarge": "대기열에 기다리는 텍스트가 너무 많습니다.",
         "shrinkQueue": "대기 중인 메시지를 삭제하거나 전달될 때까지 기다린 후 다시 시도하세요.",
+        "messageTooLarge": "메시지 하나의 한도인 256KB를 초과합니다.",
+        "shortenMessage": "줄이거나 나눈 다음 다시 보내세요.",
         "optionRejected": "에이전트가 이 설정을 받아들이지 않았습니다.",
         "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
         "agentRefused": "에이전트가 이를 거부했습니다.",
@@ -18564,6 +18567,10 @@
         "uploadingFile": "{{name}} 업로드 중…",
         "removeAttachment": "첨부파일 삭제",
         "pastedImageLabel": "붙여넣은 이미지",
+        "pastedTextLabel": "붙여넣은 텍스트",
+        "pasteNotSavedLabel": "붙여넣기 저장 안 됨",
+        "pasteNotSaved": "이 붙여넣기는 저장되지 않았습니다. 다시 붙여넣거나 제거하세요.",
+        "pastedTextTooLarge": "이 붙여넣기로 메시지가 메시지당 한도인 256KB를 초과합니다. 줄인 다음 다시 붙여넣으세요.",
         "draftNotSaved": "이 초안을 아직 저장하지 못했습니다. Orca가 계속 다시 시도합니다.",
         "imageNotBroughtBack": "{{name}}을(를) 이 초안과 함께 복원하지 못했습니다. 다시 첨부하거나 제거하세요.",
         "pastedImageNotBroughtBack": "이 붙여넣은 이미지를 이 초안과 함께 복원하지 못했습니다. 제거한 후 필요하면 다시 붙여넣으세요.",

@@ -95,10 +95,14 @@ export async function reopenClosedUnsavedFiles(
   return failed
 }
 
-/** Callbacks retained by the toast keep only a clearable holder, not the recovered text. */
+/**
+ * Callbacks retained by the toast keep only a clearable holder, not the recovered text. Dismissing
+ * it releases the records kept under `notice`.
+ */
 export function showClosedUnsavedFilesToast(
   closed: readonly ClosedUnsavedFile[],
-  workspaceLabel: string
+  workspaceLabel: string,
+  notice: number
 ): void {
   const holder: { files: readonly ClosedUnsavedFile[] | null } = { files: closed }
   let reopening = false
@@ -128,6 +132,7 @@ export function showClosedUnsavedFilesToast(
     onDismiss: () => {
       const files = holder.files
       holder.files = null
+      useAppStore.getState().releaseKeptEditorBuffers(notice)
       if (files) {
         console.warn('[editor] dropped unsaved edits from a removed workspace', {
           filePaths: files.map((file) => file.filePath)

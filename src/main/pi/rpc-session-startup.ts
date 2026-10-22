@@ -18,9 +18,14 @@ import { piRpcProviderLink, type PiRpcResolvedLaunch } from './rpc-launch-resolu
 import { piModelOptionId, readPiRpcCommands, readPiRpcSessionOptions } from './rpc-options'
 import { piRpcStateSchema, type PiRpcState } from './rpc-protocol'
 import type { PiRpcConnection, PiRpcSessionDeps } from './rpc-session'
+import { catchUpPiSession } from './rpc-history-catch-up'
+import type { PiHistoryAnchor } from './rpc-history-capture'
+import { decodePiHistoryClaim, encodePiHistoryClaim } from './rpc-history-journal-view'
 
 export class PiRpcSessionStartup {
   commands?: AgentSessionSlashCommand[]
+  /** Set by an open that left its claim at Pi's current leaf. */
+  historyAnchor?: PiHistoryAnchor
 
   constructor(
     private readonly input: StructuredAgentSessionAcquireInput,
@@ -51,13 +56,36 @@ export class PiRpcSessionStartup {
       Date.now()
     )
     this.setState(state)
+    // Only the conversation this open continues can carry the claim; a replacement starts over.
+    const continued = launch.sessionFile !== undefined || launch.forkFile !== undefined
+    const history = await this.wait(
+      catchUpPiSession({
+        connection: this.connection,
+        sessionId: this.input.identity.sessionId,
+        sessionFile: state.sessionFile,
+        lineage: new Set([...(launch.lineage ?? []), state.sessionFile]),
+        claim: continued ? decodePiHistoryClaim(launch.previous?.handle.resumeCursor) : null,
+        sink: this.input.events,
+        signal,
+        assertCurrent: () => this.assertLive(signal),
+        logger: this.deps.logger
+      }),
+      signal
+    )
+    this.assertLive(signal)
+    if (history.current) {
+      this.historyAnchor = { entry: history.claim?.entry ?? null }
+    }
     const current: AgentSessionOptionsResult['current'] = {
       model: state.model ? piModelOptionId(state.model.provider, state.model.id) : '',
       ...(state.thinkingLevel ? { effort: state.thinkingLevel } : {})
     }
     this.assertLive(signal)
     current.confirmed = [...(current.model ? ['model'] : []), ...(current.effort ? ['effort'] : [])]
-    return { link, reportedOptions: current }
+    const claimed = history.claim
+      ? { ...link, handle: { ...link.handle, resumeCursor: encodePiHistoryClaim(history.claim) } }
+      : link
+    return { link: claimed, reportedOptions: current }
   }
 
   /** After the open: the listing and the `/` commands reach the host as later reports, and a read

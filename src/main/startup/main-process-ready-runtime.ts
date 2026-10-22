@@ -35,6 +35,7 @@ import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-stat
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
+import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -96,6 +97,9 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Why deferred: nothing on the startup path needs it, and it only rewrites plugin files that changed.
   runAfterFirstWindowShown(() => {
     refreshInstalledOpenCodeStatusPlugins(store.getSettings())
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
+  runAfterFirstWindowShown(() => {
+    new WslUsageReporter(store, app.getPath('userData')).start()
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   runAfterFirstWindowShown(() => {
     void pruneDesktopOrcadArtifactCache(app.getPath('userData')).catch((error) => {

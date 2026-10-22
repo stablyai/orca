@@ -1,18 +1,29 @@
 import type { JSONContent } from '@tiptap/react'
 import { splitImageReferences } from '../../../../shared/native-chat-image-reference'
+import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-reference'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
+export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
 
-/** Every path from text to a document goes through here, so each image token becomes its chip. */
+/** Every path from text to a document goes through here, so each image token becomes its chip and
+ *  each pasted text still saving its pill. */
 export function promptTextContent(text: string): JSONContent {
   return {
     type: 'doc',
     content: text.split('\n').map((line) => ({
       type: 'paragraph',
-      content: splitImageReferences(line).map((part) =>
+      content: splitImageReferences(line).flatMap((part) =>
         typeof part === 'string'
-          ? { type: 'text', text: part }
-          : { type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }
+          ? part
+              .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
+              .flatMap((piece, index): JSONContent[] =>
+                piece === ''
+                  ? []
+                  : index % 2 === 1
+                    ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
+                    : [{ type: 'text', text: piece }]
+              )
+          : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
       )
     }))
   }

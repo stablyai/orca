@@ -1,4 +1,4 @@
-import type { JiraMediaFormat } from '../../shared/jira-attachment-image'
+import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
 import type { JiraFavouriteFilterList } from '../../shared/jira-favourite-filters'
 import type {
   JiraIssueSummaryGenerationRequest,

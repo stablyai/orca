@@ -6,6 +6,7 @@
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
+import { heldTabsInMainGroups } from './workspace-layout-frame-held-tab-groups'
 import type { LayoutFrameSlices } from './workspace-layout-frame-slices'
 import type { LayoutFrameStoreState } from './workspace-layout-frame-store-patch'
 
@@ -13,11 +14,28 @@ export type HeldDrawnTabs = {
   /** By tab-bar or entity id. */
   isTabHeld: (workspace: string, id: string) => boolean
   isGroupLayoutHeld: (workspace: string) => boolean
+  /** A held tab that shows only in main's groups (heldTabsInMainGroups). */
+  keepsInMainGroups?: (workspace: string, id: string) => boolean
 }
 
 export const NO_HELD_TABS: HeldDrawnTabs = {
   isTabHeld: () => false,
   isGroupLayoutHeld: () => false
+}
+
+/** Holds what either holds. */
+export function eitherHeld(a: HeldDrawnTabs, b: HeldDrawnTabs | undefined): HeldDrawnTabs {
+  if (!b) {
+    return a
+  }
+  return {
+    isTabHeld: (workspace, id) => a.isTabHeld(workspace, id) || b.isTabHeld(workspace, id),
+    isGroupLayoutHeld: (workspace) =>
+      a.isGroupLayoutHeld(workspace) || b.isGroupLayoutHeld(workspace),
+    keepsInMainGroups: (workspace, id) =>
+      (a.keepsInMainGroups?.(workspace, id) ?? false) ||
+      (b.keepsInMainGroups?.(workspace, id) ?? false)
+  }
 }
 
 /** `built`'s records with the held ones as `existing` has them: kept, dropped or added. */
@@ -68,7 +86,9 @@ function heldOrder(
 function heldGroups(
   existing: readonly TabGroup[],
   built: readonly TabGroup[],
-  heldIds: ReadonlySet<string>
+  heldIds: ReadonlySet<string>,
+  /** A held tab the user was on, moved into this group: shown there. */
+  shownTabId?: string
 ): TabGroup[] {
   const touches = (group: TabGroup | undefined): boolean =>
     group?.tabOrder.some((id) => heldIds.has(id)) ?? false
@@ -85,7 +105,9 @@ function heldGroups(
     }
     const base = (drawn ?? main)!
     const activeTabId =
-      [drawn?.activeTabId, main?.activeTabId].find((id) => id && tabOrder.includes(id)) ??
+      [shownTabId, drawn?.activeTabId, main?.activeTabId].find(
+        (id) => id && tabOrder.includes(id)
+      ) ??
       tabOrder[0] ??
       null
     return [{ ...base, tabOrder, activeTabId }]
@@ -129,12 +151,32 @@ export function withHeldTabsAsDrawn(
 ): LayoutFrameSlices {
   let next = built
   for (const key of keys) {
+    const keepsInMain = held.keepsInMainGroups
+    const placement = keepsInMain
+      ? heldTabsInMainGroups(
+          {
+            tabs: state.unifiedTabsByWorktree[key] ?? [],
+            groups: state.groupsByWorktree[key] ?? [],
+            tree: state.layoutByWorktree[key],
+            activeGroupId: state.activeGroupIdByWorktree[key]
+          },
+          next.groupsByWorktree[key] ?? [],
+          (tab) => keepsInMain(key, tab.id) || keepsInMain(key, tab.entityId)
+        )
+      : null
+    // The window's tabs and groups with held tabs placed in main's groups.
+    const drawnTabs = placement
+      ? (state.unifiedTabsByWorktree[key] ?? []).map((tab) => {
+          const groupId = placement.tabGroupIdById.get(tab.id)
+          return groupId ? { ...tab, groupId } : tab
+        })
+      : state.unifiedTabsByWorktree[key]
+    const drawnGroups = placement?.groups ?? state.groupsByWorktree[key] ?? []
     const isHeld = (tab: Tab): boolean =>
       held.isTabHeld(key, tab.id) || held.isTabHeld(key, tab.entityId)
-    const heldTabs = [
-      ...(state.unifiedTabsByWorktree[key] ?? []),
-      ...(built.unifiedTabsByWorktree[key] ?? [])
-    ].filter(isHeld)
+    const heldTabs = [...(drawnTabs ?? []), ...(built.unifiedTabsByWorktree[key] ?? [])].filter(
+      isHeld
+    )
     const layoutHeld = held.isGroupLayoutHeld(key)
     const slots = launchSlotIds(state, built, key)
     if (heldTabs.length === 0 && slots.length === 0 && !layoutHeld) {
@@ -142,9 +184,10 @@ export function withHeldTabsAsDrawn(
     }
     const heldIds = new Set([...heldTabs.map((tab) => tab.id), ...slots])
     const groups = heldGroups(
-      state.groupsByWorktree[key] ?? [],
+      drawnGroups,
       next.groupsByWorktree[key] ?? [],
-      heldIds
+      heldIds,
+      placement?.shownTabId
     )
     const groupIds = (list: readonly TabGroup[]): string =>
       list
@@ -181,7 +224,7 @@ export function withHeldTabsAsDrawn(
       unifiedTabsByWorktree: withKey(
         next.unifiedTabsByWorktree,
         key,
-        asDrawn(state.unifiedTabsByWorktree[key], next.unifiedTabsByWorktree[key], heldIds, idOf)
+        asDrawn(drawnTabs, next.unifiedTabsByWorktree[key], heldIds, idOf)
       ),
       groupsByWorktree: withKey(next.groupsByWorktree, key, groups),
       layoutByWorktree: withKey(next.layoutByWorktree, key, layout),

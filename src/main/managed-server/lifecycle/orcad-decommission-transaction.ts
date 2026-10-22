@@ -29,12 +29,12 @@ export type OrcadDecommissionTransaction = {
 }
 
 /** A dispatched stop as journaled: the real phase, under a field released desktops drop. */
-export type OrcadDecommissionDispatch = {
+type OrcadDecommissionDispatch = {
   phase: 'stop-dispatched' | 'process-exited'
   request: OrcadManagedStopRequest
 }
 
-export type OrcadDecommissionJournal = Omit<OrcadDecommissionTransaction, 'phase' | 'request'> & {
+type OrcadDecommissionJournal = Omit<OrcadDecommissionTransaction, 'phase' | 'request'> & {
   phase: 'prepared'
   request: null
   dispatched?: OrcadDecommissionDispatch

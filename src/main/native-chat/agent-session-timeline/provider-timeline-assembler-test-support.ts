@@ -228,8 +228,10 @@ export function refusingSink(
   }
 }
 
+/** `journalIdentity` writes the chat as another agent's, for a lane that writes `eventSink` itself. */
 export async function openProviderTimelineRig(
-  overrides: Partial<ProviderTimelineAssemblerDeps> = {}
+  overrides: Partial<ProviderTimelineAssemblerDeps> = {},
+  journalIdentity: Partial<Pick<TestJournalOptions['identity'], 'agent' | 'providerHandle'>> = {}
 ): Promise<ProviderTimelineRig> {
   const root = await mkdtemp(join(tmpdir(), 'orca-provider-timeline-'))
   roots.push(root)
@@ -239,7 +241,8 @@ export async function openProviderTimelineRig(
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: AGENT,
-      providerHandle: { transport: 'acp', agent: AGENT, nativeId: 'provider-session-1' }
+      providerHandle: { transport: 'acp', agent: AGENT, nativeId: 'provider-session-1' },
+      ...journalIdentity
     },
     stateDirectory: root,
     now: () => 1_000

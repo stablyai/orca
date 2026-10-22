@@ -19,7 +19,10 @@ import {
 import type * as RuntimeRpcClient from './runtime-rpc-client'
 import type * as WebRuntimeSessionEnvironment from './web-runtime-session-environment'
 import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
-import { SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
+import {
+  SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY
+} from '../../../shared/session-tabs-runtime-capabilities'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
@@ -234,7 +237,7 @@ describe('a confirmed close of a pinned server tab', () => {
 
     expect(closeCalls(runtimeCall)).toEqual([
       expect.objectContaining({ force: true }),
-      expect.objectContaining({ tabId: HOST_TAB, reason: 'user', force: true })
+      expect.objectContaining({ tabId: HOST_TAB, reason: 'replay', force: true })
     ])
   })
 
@@ -268,7 +271,7 @@ describe('a confirmed close of a pinned server tab', () => {
     mocks.isWebRuntimeSessionActive.mockReturnValue(true)
     await replayWebSessionTabCloses(ENVIRONMENT_ID, due)
     expect(closeCalls(runtimeCall)).toEqual([
-      expect.objectContaining({ tabId: HOST_TAB, reason: 'user', force: true })
+      expect.objectContaining({ tabId: HOST_TAB, reason: 'replay', force: true })
     ])
   })
 
@@ -287,4 +290,37 @@ describe('a confirmed close of a pinned server tab', () => {
       takeDueWebSessionCloseReplays(INTENTS, ENVIRONMENT_ID, WORKTREE_ID, new Set([HOST_TAB]))
     ).toEqual([expect.objectContaining({ force: true })])
   })
+
+  it.each([
+    [true, 'replay'],
+    [false, 'user']
+  ])(
+    'marks a re-sent held close as a replay only for a host that accepts it (%s)',
+    async (hostAcceptsReplay, reason) => {
+      mocks.runtimeEnvironmentSupportsCapability.mockImplementation(
+        async (_environmentId: string, capability: string) =>
+          capability !== SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY || hostAcceptsReplay
+      )
+      const runtimeCall = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('socket hang up'))
+        .mockResolvedValueOnce({ id: 'c', ok: true, result: { closed: true } })
+        .mockResolvedValue({ id: 'list', ok: true, result: makeSnapshot() })
+      stubRuntimeEnvironmentBridge({ call: runtimeCall })
+
+      await expect(closeTab()).resolves.toBe('failed')
+      const due = takeDueWebSessionCloseReplays(
+        INTENTS,
+        ENVIRONMENT_ID,
+        WORKTREE_ID,
+        new Set([HOST_TAB])
+      )
+      await replayWebSessionTabCloses(ENVIRONMENT_ID, due)
+
+      expect(closeCalls(runtimeCall)).toEqual([
+        expect.objectContaining({ reason: 'user' }),
+        expect.objectContaining({ tabId: HOST_TAB, reason })
+      ])
+    }
+  )
 })

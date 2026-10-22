@@ -180,9 +180,6 @@ export function isRemoteForegroundEvidence(value: unknown): value is RemoteForeg
   )
 }
 
-/** Alias used by provider-facing callers. */
-export const isRemoteForegroundProcessEvidence = isRemoteForegroundEvidence
-
 export function isForegroundProcessEvidence(value: unknown): value is ForegroundProcessEvidence {
   if (typeof value !== 'object' || value === null) {
     return false

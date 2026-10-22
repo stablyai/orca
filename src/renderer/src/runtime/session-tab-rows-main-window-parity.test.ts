@@ -1,4 +1,4 @@
-// Diff and markdown-preview rows: main's projection of its layout model (the window's session plus
+// Diff, markdown-preview, conflict-review and check-details rows: main's projection of its layout model (the window's session plus
 // the editor views the window publishes) must equal the rows the window builds for the same tabs.
 
 import { describe, expect, it, vi } from 'vitest'
@@ -98,6 +98,25 @@ const files: OpenFile[] = [
     diffSource: 'branch',
     isDirty: false
   },
+  // L287: a conflict review and a check's details; older clients list both as plain file rows.
+  {
+    id: `${GIT_KEY}::conflict-review`,
+    filePath: '/Users/dev/orca',
+    relativePath: 'Merge conflicts',
+    worktreeId: GIT_KEY,
+    language: 'plaintext',
+    mode: 'conflict-review',
+    isDirty: false
+  },
+  {
+    id: `${GIT_KEY}::check-details::build`,
+    filePath: '/Users/dev/orca',
+    relativePath: 'build',
+    worktreeId: GIT_KEY,
+    language: 'plaintext',
+    mode: 'check-details',
+    isDirty: false
+  },
   {
     id: `${GIT_KEY}::all-diffs::uncommitted`,
     filePath: '/Users/dev/orca',
@@ -121,7 +140,10 @@ function scenario(activeFileId: string) {
       tabs: files.map((file) => ({
         id: tabIdOf(file),
         entityId: file.id,
-        kind: file.mode === 'diff' ? ('diff' as const) : ('editor' as const),
+        kind:
+          file.mode === 'diff' || file.mode === 'conflict-review' || file.mode === 'check-details'
+            ? file.mode
+            : ('editor' as const),
         entry: { color: file.mode === 'diff' ? '#00ff00' : null }
       }))
     }
@@ -177,7 +199,7 @@ function published(snapshot: Pick<RuntimeMobileSessionTabsSnapshot, 'tabs' | 'ta
   return { tabs: snapshot.tabs, tabGroups: snapshot.tabGroups }
 }
 
-describe("main's diff and markdown-preview rows", () => {
+describe("main's diff, markdown-preview and review rows", () => {
   it.each([
     ['a diff', `${GIT_KEY}::diff::unstaged::src/app.ts`],
     ['a markdown preview', `markdown-preview::${README}`]

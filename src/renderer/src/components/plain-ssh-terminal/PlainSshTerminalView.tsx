@@ -314,5 +314,18 @@ export function PlainSshTerminalView({
     }
   }, [hidden])
 
-  return <div ref={containerRef} className="size-full min-h-0 overflow-hidden px-2 py-1" />
+  // Why the theme's background: fit leaves a remainder of pixels beside the grid that must not show the card.
+  const themeBackground = resolveThemeColors(settings, systemPrefersDark).theme?.background
+  // A translucent theme is painted once by xterm already; painting it again would darken the grid.
+  // Same test as xterm's allowTransparency (preview-terminal-options), not the rgba form opacity 1 also takes.
+  const translucent =
+    settings?.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+  const background = translucent ? undefined : themeBackground
+  return (
+    <div
+      ref={containerRef}
+      className="size-full min-h-0 overflow-hidden px-2 py-1"
+      style={background ? { backgroundColor: background } : undefined}
+    />
+  )
 }

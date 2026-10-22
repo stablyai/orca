@@ -852,6 +852,13 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/create-draft-release.mjs "$TAG"
 
+  dependency-security:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true' && !contains(needs.cut.outputs.tag, '-')
+    uses: ./.github/workflows/dependency-security.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
   terminal-rendering-golden:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -2436,6 +2443,7 @@ jobs:
   publish-release:
     needs:
       - cut
+      - dependency-security
       - build
       - build-mac
       - verify-mac-build
@@ -2446,6 +2454,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
+      (needs.dependency-security.result == 'success' || contains(needs.cut.outputs.tag, '-')) &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&

@@ -30,6 +30,7 @@ import type { AppState } from '../../types'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -43,6 +44,8 @@ export function createTabsCloseActions(
         return null
       }
       const { tab, worktreeId } = found
+      forgetDesktopCreatedServerTab(tab.id)
+      forgetDesktopCreatedServerTab(tab.entityId)
       const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
       // Why: a tab whose group record vanished must still close; its order is the worktree's tabs.
       const groupOrder =

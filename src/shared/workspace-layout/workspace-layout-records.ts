@@ -28,7 +28,7 @@ export type PublishedTabRow = Omit<PublishedTab, 'terminal'> & {
 /** A pane as its tab's tree holds it: all but its terminal binding. */
 export type PublishedTreePane = Omit<
   PublishedPane,
-  'ptyId' | 'ptyGeneration' | 'status' | 'statusReason'
+  'ptyId' | 'ptyGeneration' | 'status' | 'statusReason' | 'resumeOutcome'
 >
 
 /** A terminal tab's pane tree, keyed by the tab's id. */
@@ -39,10 +39,11 @@ export type PublishedPaneTree = Pick<PublishedTerminal, 'root' | 'chatLeafId'> &
 }
 
 /** A pane's terminal binding, apart from its tree so a respawn changes only this record. Its start
- *  status rides here too: a start ends in a binding or a failure, never in a tree change. */
+ *  status and resume outcome ride here too: a start ends in a binding or a failure, never in a
+ *  tree change. */
 export type PublishedPaneBinding = Pick<
   PublishedPane,
-  'leafId' | 'ptyId' | 'ptyGeneration' | 'status' | 'statusReason'
+  'leafId' | 'ptyId' | 'ptyGeneration' | 'status' | 'statusReason' | 'resumeOutcome'
 >
 
 type RecordKinds = {
@@ -98,19 +99,21 @@ export function splitPublishedLayout(layout: PublishedWorkspaceLayout): Publishe
       tabId: tab.id,
       root,
       ...(chatLeafId !== undefined ? { chatLeafId } : {}),
-      panes: panes.map(({ ptyId, ptyGeneration, status, statusReason, ...pane }) => {
+      panes: panes.map(({ ptyId, ptyGeneration, status, statusReason, resumeOutcome, ...pane }) => {
         if (
           ptyId !== undefined ||
           ptyGeneration !== undefined ||
           status !== undefined ||
-          statusReason !== undefined
+          statusReason !== undefined ||
+          resumeOutcome !== undefined
         ) {
           bindings.push({
             leafId: pane.leafId,
             ...(ptyId !== undefined ? { ptyId } : {}),
             ...(ptyGeneration !== undefined ? { ptyGeneration } : {}),
             ...(status !== undefined ? { status } : {}),
-            ...(statusReason !== undefined ? { statusReason } : {})
+            ...(statusReason !== undefined ? { statusReason } : {}),
+            ...(resumeOutcome !== undefined ? { resumeOutcome } : {})
           })
         }
         return pane

@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { acceptReplayedWebSessionTabsSnapshot } from './state'
 
 export {
@@ -25,6 +26,11 @@ export function setFrameDrawnServerWorkspaces(
 
 export function isFrameDrawnServerWorkspace(environmentId: string, worktreeId: string): boolean {
   return frameDrawnWorktreeIdsByEnvironment.get(environmentId)?.has(worktreeId) ?? false
+}
+
+/** Switch point: a desktop write to a frame-drawn workspace keeps none of the mirror's ledgers. */
+export function isServerFrameDrawnWorkspace(environmentId: string, worktreeId: string): boolean {
+  return ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, worktreeId)
 }
 
 /** Hands a workspace back: a fresh full snapshot replaces what frames drew. Rejects when the fetch fails. */

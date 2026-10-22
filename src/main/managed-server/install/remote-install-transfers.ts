@@ -16,7 +16,7 @@ import {
 import { isSftpHandshakeCorruption } from '../../ssh/sftp-handshake-corruption'
 import { explainRemoteInstallWriteFailure, localTreeBytes } from './remote-install-out-of-space'
 
-export type RemoteInstallTransferOptions = {
+type RemoteInstallTransferOptions = {
   signal?: AbortSignal
   sftpNamespace?: SftpNamespacePathMapping
 }
@@ -70,7 +70,7 @@ export async function writeRemoteInstallFile(
   )
 }
 
-export type SftpExecFallbackReason = 'sftp-unavailable' | 'sftp-sandboxed'
+type SftpExecFallbackReason = 'sftp-unavailable' | 'sftp-sandboxed'
 
 /**
  * Only the host's own answer about SFTP selects exec stdin. A lost transport, a timeout or an

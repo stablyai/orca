@@ -15,7 +15,9 @@ import { sessionCandidatesFromDiscoveries } from './session-scanner-candidates'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import { createSessionParseStats } from './session-scanner-parse-cache'
 import { recordSessionScanIssue } from './session-scan-issues'
-import { scanInScopeSessions } from './session-scanner-scope-walk'
+import { aiVaultScanWorkload, noteAiVaultScanReading } from './ai-vault-scan-progress'
+import { yieldScanInventory } from './session-scanner-scope-inventory'
+import { prepareScopeScan, scanInScopeSessions } from './session-scanner-scope-walk'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import { cursorChatMetaRefusals, withCursorChatMetaScan } from './session-scanner-cursor-chat-meta'
 import type { AiVaultScanOptions } from './session-scanner-types'
@@ -75,6 +77,17 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
         const parseCandidates = candidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER)
 
+        const workload = aiVaultScanWorkload(options.signal)
+        if (workload) {
+          for (const [index, candidate] of parseCandidates.entries()) {
+            await yieldScanInventory(index, options.signal)
+            workload.register(candidate, 'global')
+          }
+        }
+        const inventory = await prepareScopeScan({ discoveries, options, limit })
+        throwIfAiVaultScanCancelled(options.signal)
+        noteAiVaultScanReading(options.signal)
+
         const parsedSessions = await parseSessionCandidates({
           candidates: parseCandidates,
           limit,
@@ -83,7 +96,8 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           issues,
           parseStats,
           signal: options.signal,
-          antigravityWorkspaceResolver
+          antigravityWorkspaceResolver,
+          settled: (candidate, parsed) => workload?.settle(candidate, 'global', parsed)
         })
 
         const cappedSessions = dedupeScannedSessions(parsedSessions)
@@ -91,6 +105,7 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           .slice(0, limit)
 
         const scopeSessions = await scanInScopeSessions({
+          inventory,
           discoveries,
           options,
           limit,

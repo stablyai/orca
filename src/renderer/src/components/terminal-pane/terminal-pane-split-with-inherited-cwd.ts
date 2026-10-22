@@ -5,7 +5,12 @@ import type { PtyTransport } from './pty-transport-types'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { splitPaneFirstSize, splitPaneInMain } from './terminal-pane-split-in-main'
+import {
+  splitPaneFirstSize,
+  splitPaneInMain,
+  splitServerPane,
+  type SplitInMainRequest
+} from './terminal-pane-split-in-main'
 
 type SplitArgs = {
   worktreeId: string
@@ -31,24 +36,21 @@ export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
   ) {
     return
   }
-  // Switch point: main writes the split and starts its terminal; main's frame draws the pane.
+  // Switch point: main writes the split and starts its terminal; main's frame draws the pane. A
+  // server workspace's handle-less pane goes to that server's main while its frames draw it.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const cwd = splitCwd(args, ptyId)
     const asToday = (): void => splitLocally(args, () => cwd)
-    if (
-      splitPaneInMain(
-        {
-          worktreeId: args.worktreeId,
-          tabId: args.tabId,
-          sourceLeafId: args.pane.leafId,
-          direction: args.direction,
-          cwd: 'cwd' in cwd ? cwd.cwd : cwd.cwdPromise,
-          initialSize: splitPaneFirstSize(args.pane.terminal, args.direction),
-          telemetry: { source: args.source }
-        },
-        asToday
-      )
-    ) {
+    const request: SplitInMainRequest = {
+      worktreeId: args.worktreeId,
+      tabId: args.tabId,
+      sourceLeafId: args.pane.leafId,
+      direction: args.direction,
+      cwd: 'cwd' in cwd ? cwd.cwd : cwd.cwdPromise,
+      initialSize: splitPaneFirstSize(args.pane.terminal, args.direction),
+      telemetry: { source: args.source }
+    }
+    if (splitPaneInMain(request, asToday) || splitServerPane(request)) {
       return
     }
   }

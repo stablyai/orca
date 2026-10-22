@@ -98,6 +98,7 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
+import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
   sshHostServerConversionSchema,
   sshHostServerDecidedSchema,
@@ -213,5 +214,7 @@ export const eventSchemas = {
   ssh_host_server_conversion: sshHostServerConversionSchema,
   ssh_host_server_deploy_failed: sshHostServerDeployFailedSchema,
   ssh_host_server_move: sshHostServerMoveSchema,
-  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema
+  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema,
+
+  wsl_usage_snapshot: wslUsageSnapshotSchema
 } as const

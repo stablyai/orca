@@ -17,6 +17,7 @@ import type { StoreState } from './pty-connection-test-store-state'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
 import type { LayoutApplyHandlers, WindowLayoutCommand } from '@/runtime/layout-apply-send'
 import type * as LayoutApplySend from '@/runtime/layout-apply-send'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -99,7 +100,7 @@ async function connectBound(
 /** Main's start: the frame shows the pane starting, its reply lands, then the pane binds. */
 async function mainStartsAndBinds(ptyId: string): Promise<void> {
   setStore({ terminalPaneStartsByPaneKey: { [PANE_KEY]: { status: 'resuming' } } })
-  sent.at(-1)?.handlers.apply({})
+  sent.at(-1)?.handlers.apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
   await flushAsyncTicks()
   setStore({ ...layoutBoundTo(ptyId), terminalPaneStartsByPaneKey: {} })
   await flushAsyncTicks()

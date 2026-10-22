@@ -51,6 +51,9 @@ on:
 permissions:
   contents: read
 
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 jobs:
   terminal-perf:
     name: terminal scale perf

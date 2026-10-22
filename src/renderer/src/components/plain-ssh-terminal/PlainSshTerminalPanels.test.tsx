@@ -241,6 +241,7 @@ describe('plain SSH terminal', () => {
     render(<Harness status={blocked} />)
     await user.click(screen.getByRole('button', { name: 'Open plain SSH terminal' }))
     expect(await screen.findByText(/couldn’t find OpenSSH/)).toBeInTheDocument()
+    expect(document.querySelector('[data-plain-ssh-screen]')).toHaveClass('hidden')
   })
 
   it('hangs up when its window closes', async () => {

@@ -1,3 +1,4 @@
+import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 // The one owner of each composer scope's unsent message: its text, the editor document for that
 // text and its settled image refs. Every writer changes the whole record here in memory, and
 // storage is written from that record, so a reload or quit gives the draft back and a failed or
@@ -64,6 +65,7 @@ export function hasUnsavedNativeChatComposerDraftChange(scopeKey: string): boole
 
 export type NativeChatComposerDraftChange = {
   text?: string
+  pastedTextFiles?: Readonly<Record<string, string>>
   /** Present, even as undefined, to replace the document. */
   document?: JSONContent
   images?: readonly NativeChatComposerDraftImage[]
@@ -136,9 +138,15 @@ export function updateNativeChatComposerDraft(
   const current = records.get(scopeKey) ?? EMPTY_DRAFT
   const text = change.text ?? current.text
   const document = 'document' in change ? change.document : current.document
+  const pastedTextFiles = Object.fromEntries(
+    Object.entries(change.pastedTextFiles ?? current.pastedTextFiles ?? {}).filter(([id]) =>
+      text.includes(nativeChatPastedTextToken(id))
+    )
+  )
   const images = change.images ?? current.images
   const unsavedText = change.unsavedText ?? current.unsavedText
   if (
+    JSON.stringify(pastedTextFiles) === JSON.stringify(current.pastedTextFiles ?? {}) &&
     text === current.text &&
     sameNativeChatComposerDraftDocument(document, current.document) &&
     unsavedText === current.unsavedText &&
@@ -160,6 +168,7 @@ export function updateNativeChatComposerDraft(
   const owner = current.owner ?? change.owner ?? resolveOwner?.(scopeKey)
   const record: DraftRecord = {
     text,
+    ...(Object.keys(pastedTextFiles).length ? { pastedTextFiles } : {}),
     ...(document ? { document } : {}),
     images: [...images],
     savedAt: nextSavedAt(),

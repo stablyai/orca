@@ -853,28 +853,23 @@
       "protection": "partial",
       "owner": "runtime-platform",
       "layer": "ipc-contract",
-      "surfaces": [
-        "desktop file explorer watchers",
-        "desktop editor file watchers",
-        "direct SSH file watchers"
-      ],
+      "surfaces": ["desktop file explorer watchers", "desktop editor file watchers"],
       "platforms": ["macos", "linux", "windows"],
-      "providers": ["local", "ssh", "wsl"],
+      "providers": ["local", "wsl"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "ssh", "wsl"],
-      "coverageNotes": "Actual desktop local/WSL subscription and SSH watcher controller logic under mocked filesystem/provider handles on macOS. Document events use an EventEmitter sender. Live remote/native Windows/Linux/WSL and rendered reload reattachment are unproved; PTY/process liveness and wire formats are unaffected.",
+      "coveredProviders": ["local", "wsl"],
+      "coverageNotes": "Actual desktop local/WSL subscription logic under mocked filesystem handles on macOS. Document events use an EventEmitter sender. Native Windows/Linux/WSL and rendered reload reattachment are unproved; PTY/process liveness and wire formats are unaffected. SSH roots have no desktop watcher.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/main/ipc/filesystem-watcher-listener-lifecycle.ts"
       ],
       "invariant": "A replaced or crashed renderer document retains no file watches or pending ownership and cannot recreate them from an old asynchronous continuation. Shared roots retain live sibling owners; blocked and same-document navigation retain the current document. Shutdown removes registered lifecycle listeners.",
-      "oracle": "Run repeated reloads/crash, pending local/SSH installation cancellation with late success, aborted-install joiners, reconnect retry snapshots, failed-removal restoration and shutdown/reopen. Require zero obsolete roots/intent/listeners, no stale setup/retry, physical handle disposal and preservation of sibling notifications and same-tick remote handoff.",
+      "oracle": "Run repeated reloads/crash, pending installation cancellation with late success, aborted-install joiners, failed-removal restoration and shutdown/reopen. Require zero obsolete roots/listeners, no stale setup, physical handle disposal and preservation of sibling notifications.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
         "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
-        "src/main/ipc/filesystem-watcher-remote-cancellation.test.ts",
         "src/main/ipc/filesystem-watcher-native-capacity.test.ts"
       ],
       "assertionRefs": [
@@ -882,22 +877,21 @@
           "file": "src/main/ipc/filesystem-watcher-document-lifetime.test.ts",
           "assertions": [
             "retains zero roots and listeners across 15 reloads and a renderer crash",
-            "does not revive a cancelled %s setup for a joiner whose document reloaded",
-            "does not re-arm an old provider snapshot into the same WebContents after replacement",
-            "does not restore a replaced sibling document after an awaited %s removal recovery",
+            "does not revive a cancelled setup for a joiner whose document reloaded",
+            "does not restore a replaced sibling document after an awaited removal recovery",
             "keeps same-document and blocked navigations alive, and removes lifecycle listeners at shutdown"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-25",
+          "date": "2026-10-22",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-remote-cancellation.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher-document-lifetime.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 1.08,
-          "summary": "45 tests across four focused suites pass. Broader watcher suite passes 146 plus one existing skipped; isolated publication without sibling #22995 passes 145 plus one existing skipped."
+          "durationSeconds": 0.99,
+          "summary": "33 tests across three focused suites pass after the dead SSH watcher was removed."
         }
       ],
       "runtimeBudget": {
@@ -910,14 +904,14 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Seven permanent regressions fail with HEAD source substituted: cancelled joiner resurrection for local and SSH, restoration into replaced local/SSH documents, stale provider retry, shutdown listener retention, and root retention. All 13 document ownership cases pass after the change."
+        "evidence": "Seven permanent regressions failed with HEAD source substituted when this gate landed: cancelled joiner resurrection, restoration into replaced documents, stale retry, shutdown listener retention and root retention. The SSH cases went with the dead SSH watcher; the local cases remain."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "15 reloads plus crash: retained local/SSH/desired roots 16→0 each; pending setup aborted; sender lifecycle listeners 1→0. Actual ownership modules with synthetic handles; no native process/heap/latency claim. No new timer, polling, process scan or provider fanout; existing root cleanup runs at document end."
+        "evidence": "15 reloads plus crash: retained local roots 16→0; pending setup aborted; sender lifecycle listeners 1→0. Actual ownership modules with synthetic handles; no native process/heap/latency claim. No new timer, polling, process scan or provider fanout; existing root cleanup runs at document end."
       },
       "knownGaps": [
-        "No native Windows/Linux/WSL or live SSH execution.",
+        "No native Windows/Linux/WSL execution.",
         "No rendered Electron reload-reattachment/paint run or CI soak; broader watcher process isolation is a separate gate."
       ],
       "promotionCriteria": [
@@ -4540,8 +4534,8 @@
         "https://github.com/stablyai/orca/pull/7086",
         "https://github.com/stablyai/orca/issues/16477"
       ],
-      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Nested SSH watchers and colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
-      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a nested SSH connection id or a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
+      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
+      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/watched-worktree-catalog-notification.test.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
@@ -4582,8 +4576,7 @@
             "linked index bursts produce zero notifyWorktreesChanged calls and one debounced status-only notification",
             "linked HEAD and locked metadata still produce a structural worktree notification",
             "status-only head moves emit head identities without structural fanout and only when heads actually changed",
-            "structural notifications re-baseline head identities silently and SSH watches never read identities",
-            "SSH-shaped index renames are status-only while overflow remains conservatively structural"
+            "structural notifications re-baseline head identities silently"
           ]
         },
         {
@@ -4635,7 +4628,7 @@
             "host inventory and both paired catalogs advance to the same worktree identity after runtime cache invalidation",
             "an invalidated in-flight host scan and a second client's joined read converge through one fresh retry before either can return stale data",
             "a disconnected client reconnects to current catalog state without replaying a stale invalidation",
-            "an event-ignoring client remains compatible, and nested SSH or colliding local/SSH owners do not publish an owner-blind event",
+            "an event-ignoring client remains compatible, and colliding local/SSH owners do not publish an owner-blind event",
             "the shared runtime publication remains valid without a headed renderer notifier"
           ]
         },
@@ -4643,8 +4636,7 @@
           "file": "src/main/ipc/watched-worktree-catalog-notification.test.ts",
           "assertions": [
             "the watcher authority refreshes the host renderer and paired clients from one boundary",
-            "remote publication failure cannot suppress the host renderer refresh",
-            "nested SSH discoveries remain host-local until the existing event can preserve their owner identity"
+            "remote publication failure cannot suppress the host renderer refresh"
           ]
         },
         {

@@ -34,7 +34,7 @@ import {
   validateCookieEntry,
   type RawCookieEntry,
   type ValidatedCookie
-} from './browser-cookie-validation'
+} from './cookies/sources/browser-cookie-validation'
 
 // Why (STA-4300): the import writes get a store with no `set` on it and no Session behind it, so
 // the partition-dropping write is not merely unused here — it cannot be reached.

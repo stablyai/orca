@@ -5,7 +5,7 @@ import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
 
-export type OrcadProfileStateStartup = {
+type OrcadProfileStateStartup = {
   store: ProfileStateStoreFactoryResult['store']
   authority: {
     backend: ProfileStateStoreFactoryResult['backend']

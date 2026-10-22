@@ -18,7 +18,7 @@ import type {
 } from '../../runtime-session-contracts'
 import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
 import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
-import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'
+import { diffTabRow, editorTabRow, reviewTabRow } from './old-client-session-editor-rows'
 import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
 import { groupsInLayoutOrder } from './old-client-group-order'
@@ -157,9 +157,12 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       const row = agentSessionRow(tab, scope)
       return row ? [row] : []
     }
-    // These need the desktop to draw them.
     case 'conflict-review':
-    case 'check-details':
+    case 'check-details': {
+      const row = reviewTabRow({ ...tab, kind: tab.kind }, scope)
+      return row ? [row] : []
+    }
+    // A simulator needs the desktop to draw it; the window lists none either.
     case 'simulator':
       return []
   }

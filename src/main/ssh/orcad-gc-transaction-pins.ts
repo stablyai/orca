@@ -12,7 +12,7 @@ import { orcadActivationFenceExists } from '../managed-server/activation/orcad-a
 import { isUnconfirmedSshCommandTermination } from './remote-exec/remote-exec-command'
 import type { OrcadRemoteExecTarget } from '../managed-server/install/orcad-remote-runtime-control'
 
-export type OrcadGcTransactionPins = { state: 'pinned'; dirNames: string[] } | { state: 'keep-all' }
+type OrcadGcTransactionPins = { state: 'pinned'; dirNames: string[] } | { state: 'keep-all' }
 
 function transactionVersions(transaction: OrcadActivationTransaction): (string | null)[] {
   const records = [transaction.recordBefore, transaction.recordAfter]

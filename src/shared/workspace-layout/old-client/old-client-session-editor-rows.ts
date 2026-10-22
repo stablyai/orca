@@ -140,3 +140,30 @@ export function diffTabRow(
     ...tabRowProps(tab, scope)
   }
 }
+
+/**
+ * A conflict-review or check-details tab's row from its view: a plain file row, as the window lists
+ * it (buildMobileFileTab), so an older client keeps seeing the tab once the window's rows are gone.
+ */
+export function reviewTabRow(
+  tab: LayoutContentTab & { kind: 'conflict-review' | 'check-details' },
+  scope: EditorRowScope
+): RuntimeMobileSessionFileTab | null {
+  const editorView = scope.workspace.editorViews?.[tab.id]
+  if (editorView?.view.mode !== tab.kind) {
+    return null
+  }
+  const { file } = editorView
+  return {
+    type: 'file',
+    id: tab.id,
+    title: fileName(file.relativePath, 'File'),
+    filePath: file.filePath,
+    relativePath: file.relativePath,
+    language: file.language,
+    mode: 'edit',
+    // The model holds no unsaved edit of a review; the window's row it lists wins.
+    isDirty: false,
+    ...tabRowProps(tab, scope)
+  }
+}
