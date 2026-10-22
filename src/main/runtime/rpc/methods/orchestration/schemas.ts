@@ -19,6 +19,9 @@ export {
   DispatchParams,
   DispatchShowParams,
   InboxParams,
+  MessageReplyParams,
+  QuestionInspectParams,
+  QuestionReplyParams,
   ReplyParams,
   ResetParams,
   TaskCreateParams,
@@ -56,7 +59,7 @@ export async function routeAllMailboxPages(
 
 const SEND_MESSAGE_TYPE_ERROR = [
   `Invalid --type. Expected one of: ${MESSAGE_TYPES.join(', ')}.`,
-  'To answer a worker question, use the same Orca CLI executable with orchestration reply --id <msg_id> --body <text>.'
+  'To answer a worker question, use the same Orca CLI executable with orchestration reply --mode question --id <msg_id> --run <run_id> --task <task_id> --dispatch <dispatch_id> --body <text>.'
 ].join(' ')
 
 export function parseRemoteWorkerPayload(payload: string | undefined): Record<string, unknown> {

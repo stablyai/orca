@@ -1,5 +1,6 @@
 import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { QuestionThread } from '../../../shared/orchestration-rpc-contract'
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -110,21 +111,9 @@ export type LegacyMailReceiptRow = {
   acknowledged_at: string | null
 }
 
-export type QuestionStatus = 'pending' | 'answered' | 'closed'
+export type QuestionStatus = QuestionThread['status']
 
-export type QuestionRow = {
-  message_id: string
-  run_id: string
-  dispatch_id: string
-  asker_handle: string
-  status: QuestionStatus
-  answer_message_id: string | null
-  answer_body: string | null
-  answered_by_generation: number | null
-  created_at: string
-  answered_at: string | null
-  closed_at: string | null
-}
+export type QuestionRow = QuestionThread
 
 export type MutationState = 'pending' | 'completed'
 

@@ -1,5 +1,6 @@
 import type { MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
+import { formatOrchestrationReplyHints } from '../../../shared/orchestration-check-output'
 import type { OrchestrationCliCommand } from './cli-command'
 
 const BANNER_WIDTH = 60
@@ -87,11 +88,7 @@ export function formatMessageBanner(
   }
 
   if (authority === 'current') {
-    const explicitFrom =
-      msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
-        ? ''
-        : ` --from ${msg.to_handle}`
-    lines.push(`[Reply: orca orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
+    lines.push(...formatOrchestrationReplyHints(msg, msg.to_handle))
   }
   lines.push(SEPARATOR)
 

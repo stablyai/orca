@@ -25,7 +25,9 @@ const COORDINATOR_PREFLIGHT_METHODS = new Set([
   'orchestration.requestShow',
   'orchestration.send',
   'orchestration.check',
-  'orchestration.reply'
+  'orchestration.reply',
+  'orchestration.messageReply',
+  'orchestration.questionReply'
 ])
 
 const CURRENT_AUTHORITY_PREFLIGHT_METHODS = new Set([
@@ -234,7 +236,10 @@ export class OrchestrationLegacyCompatibility {
         signal
       })
     }
-    if (request.method === 'orchestration.reply') {
+    if (
+      request.method === 'orchestration.reply' ||
+      request.method === 'orchestration.messageReply'
+    ) {
       return await handleLegacyReply({
         runtime: this.runtime,
         authority: this.authority,

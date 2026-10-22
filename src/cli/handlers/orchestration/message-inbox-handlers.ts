@@ -9,24 +9,53 @@ import {
   formatMessageReadOnlyTag,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../../shared/orchestration-check-output'
+import type { QuestionInspectResult } from '../../../shared/orchestration-rpc-contract'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
+    const mode = getRequiredStringFlag(flags, 'mode')
+    if (mode !== 'question' && mode !== 'message') {
+      throw new Error('--mode must be question or message')
+    }
+    const selector = mode === 'question' ? getRequiredStringFlag : getOptionalStringFlag
+    const run = selector(flags, 'run')
+    const task = selector(flags, 'task')
+    const dispatch = selector(flags, 'dispatch')
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const result = await callOrchestrationMutation<{ message: { id: string } }>(
       client,
       flags,
-      'orchestration.reply',
+      mode === 'question' ? 'orchestration.questionReply' : 'orchestration.messageReply',
       {
         id: getRequiredStringFlag(flags, 'id'),
         body: getRequiredStringFlag(flags, 'body'),
-        run: getOptionalStringFlag(flags, 'run'),
+        mode,
+        run,
+        task,
+        dispatch,
         from
       }
     )
     printResult(result, json, (value) => `Replied ${value.message.id}`)
+  },
+
+  'orchestration question-inspect': async ({ flags, client, json }) => {
+    const result = await client.call<QuestionInspectResult>('orchestration.questionInspect', {
+      id: getRequiredStringFlag(flags, 'id'),
+      run: getRequiredStringFlag(flags, 'run'),
+      task: getRequiredStringFlag(flags, 'task'),
+      dispatch: getRequiredStringFlag(flags, 'dispatch')
+    })
+    printResult(result, json, (value) => {
+      const question = value.question
+      return [
+        `${question.message_id} (${question.status})`,
+        question.body,
+        ...question.options.map((option) => `- ${option}`)
+      ].join('\n')
+    })
   },
 
   'orchestration inbox': async ({ flags, client, json }) => {

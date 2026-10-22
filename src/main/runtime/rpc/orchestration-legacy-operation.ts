@@ -171,7 +171,7 @@ export function supportedLegacyHints(
     return []
   }
   return [
-    `${cliCommand} orchestration reply --id ${message.id} --from ${principal.terminal_handle} --body "..."`
+    `${cliCommand} orchestration reply --mode message --id ${message.id} --from ${principal.terminal_handle} --body "..."`
   ]
 }
 

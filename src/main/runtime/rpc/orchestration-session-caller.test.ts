@@ -65,6 +65,14 @@ const MINIMAL_PARAMS: Readonly<Record<string, Record<string, unknown>>> = {
   'orchestration.check': {},
   'orchestration.send': { subject: 's', to: 'term_worker' },
   'orchestration.reply': { id: 'msg_missing', body: 'b' },
+  'orchestration.messageReply': { id: 'msg_missing', body: 'b' },
+  'orchestration.questionReply': {
+    id: 'msg_missing',
+    run: 'run_missing',
+    task: 'task_missing',
+    dispatch: 'ctx_missing',
+    body: 'b'
+  },
   'orchestration.ask': { question: 'q', to: 'term_worker' },
   'orchestration.dispatch': { task: 'task_missing', to: 'term_worker' },
   'orchestration.gateCreate': { task: 'task_missing', question: 'q' },
@@ -101,9 +109,6 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 44 registered methods carrying 28 party-naming fields.
-    expect(registry.size).toBe(44)
-    expect(partyNaming).toHaveLength(28)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(

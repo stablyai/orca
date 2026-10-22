@@ -162,16 +162,62 @@ function formatLegacyAwareCheckMessages(
         lines.push(formatQuotedMessageField('payload', message.payload))
       }
       if (!legacyReadOnly) {
-        const replyTarget = message.to_handle ?? checkedTerminal
-        const replyFrom =
-          replyTarget.startsWith('run:') || replyTarget.startsWith('dispatch:')
-            ? ''
-            : ` --from ${replyTarget}`
-        lines.push(`[Reply: orca orchestration reply --id ${message.id}${replyFrom} --body "..."]`)
+        lines.push(...formatOrchestrationReplyHints(message, checkedTerminal))
       }
       return lines.join('\n')
     })
     .join('\n\n')
+}
+
+export function formatOrchestrationReplyHints(
+  message: OrchestrationMessageSummary,
+  checkedTerminal: string
+): string[] {
+  const replyTarget = message.to_handle ?? checkedTerminal
+  const replyFrom =
+    replyTarget.startsWith('run:') || replyTarget.startsWith('dispatch:')
+      ? ''
+      : ` --from ${replyTarget}`
+  if (message.type !== 'question') {
+    return [
+      `[Reply: orca orchestration reply --mode message --id ${message.id}${replyFrom} --body "..."]`
+    ]
+  }
+  const selector = questionSelectorFlags(message)
+  if (!selector) {
+    return [
+      '[Question: resolve its exact Run, Task, and Dispatch, then use question-inspect before replying.]'
+    ]
+  }
+  return [
+    `[Inspect: orca orchestration question-inspect --id ${message.id}${selector} --json]`,
+    `[Reply: orca orchestration reply --mode question --id ${message.id}${selector}${replyFrom} --body "..."]`
+  ]
+}
+
+function questionSelectorFlags(message: OrchestrationMessageSummary): string | undefined {
+  if (!message.run_id || !message.payload) {
+    return undefined
+  }
+  let payload: unknown
+  try {
+    payload = JSON.parse(message.payload)
+  } catch {
+    return undefined
+  }
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    !('taskId' in payload) ||
+    typeof payload.taskId !== 'string' ||
+    !payload.taskId ||
+    !('dispatchId' in payload) ||
+    typeof payload.dispatchId !== 'string' ||
+    !payload.dispatchId
+  ) {
+    return undefined
+  }
+  return ` --run ${message.run_id} --task ${payload.taskId} --dispatch ${payload.dispatchId}`
 }
 
 function formatCurrentDeliveryNotice(

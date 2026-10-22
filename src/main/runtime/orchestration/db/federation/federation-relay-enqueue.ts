@@ -7,6 +7,11 @@ import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { isWorkerStateIn, SETTLEABLE_WORKER_STATES } from '../../worker-report-admission'
+import {
+  beginLifecycleWriteTransaction,
+  commitLifecycleWriteTransaction,
+  rollbackLifecycleWriteTransaction
+} from '../lifecycle-transition'
 
 export function enqueueFederationRelay(
   this: OrchestrationDb,
@@ -28,7 +33,7 @@ export function enqueueFederationRelay(
       'A federated orchestration message cannot exceed 64 KiB.'
     )
   }
-  this.db.exec('BEGIN IMMEDIATE')
+  const transaction = beginLifecycleWriteTransaction(this.db, 'enqueue_federation_relay')
   try {
     if (params.settleRemoteOutcome) {
       const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
@@ -56,7 +61,7 @@ export function enqueueFederationRelay(
              WHERE dispatch_id = ? AND direction = ? AND sequence = ?`
           )
           .run(params.payload, byteCount, params.dispatchId, params.direction, heartbeat.sequence)
-        this.db.exec('COMMIT')
+        commitLifecycleWriteTransaction(this.db, transaction)
         return this.getFederationRelayItem(
           params.dispatchId,
           params.direction,
@@ -77,7 +82,7 @@ export function enqueueFederationRelay(
         | undefined
       if (identicalReport) {
         this.settleRemoteAttachmentInRelayTransaction(params.dispatchId, params.settleRemoteOutcome)
-        this.db.exec('COMMIT')
+        commitLifecycleWriteTransaction(this.db, transaction)
         return identicalReport
       }
     }
@@ -119,7 +124,7 @@ export function enqueueFederationRelay(
             params.dispatchId,
             params.settleRemoteOutcome
           )
-          this.db.exec('COMMIT')
+          commitLifecycleWriteTransaction(this.db, transaction)
           return this.getFederationRelayItem(
             params.dispatchId,
             params.direction,
@@ -163,14 +168,14 @@ export function enqueueFederationRelay(
         .run(messageId, params.dispatchId)
     }
     this.settleRemoteAttachmentInRelayTransaction(params.dispatchId, params.settleRemoteOutcome)
-    this.db.exec('COMMIT')
+    commitLifecycleWriteTransaction(this.db, transaction)
     return this.getFederationRelayItem(
       params.dispatchId,
       params.direction,
       sequence
     ) as FederationRelayItemRow
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    rollbackLifecycleWriteTransaction(this.db, transaction)
     throw error
   }
 }

@@ -62,11 +62,50 @@ export const CheckParams = z
     }
   })
 
-export const ReplyParams = z.object({
+export const ReplyParams = z
+  .object({
+    id: requiredString('Missing --id'),
+    body: requiredString('Missing --body'),
+    from: OptionalString,
+    mode: z.enum(['question', 'message']).optional(),
+    run: OptionalString,
+    task: OptionalString,
+    dispatch: OptionalString
+  })
+  .superRefine((params, ctx) => {
+    if (params.mode !== 'question') {
+      return
+    }
+    for (const selector of ['run', 'task', 'dispatch'] as const) {
+      if (!params[selector]?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [selector],
+          message: `Question replies require --${selector}.`
+        })
+      }
+    }
+  })
+
+export const QuestionInspectParams = z.object({
+  id: requiredString('Missing --id'),
+  run: requiredString('Missing --run'),
+  task: requiredString('Missing --task'),
+  dispatch: requiredString('Missing --dispatch')
+})
+
+export const QuestionReplyParams = QuestionInspectParams.extend({
+  body: requiredString('Missing --body'),
+  from: OptionalString,
+  mode: z.literal('question').optional()
+})
+
+export const MessageReplyParams = z.object({
   id: requiredString('Missing --id'),
   body: requiredString('Missing --body'),
   from: OptionalString,
-  run: OptionalString
+  run: OptionalString,
+  mode: z.literal('message').optional()
 })
 
 export const InboxParams = z.object({

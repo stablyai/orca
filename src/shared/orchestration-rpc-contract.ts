@@ -1,5 +1,23 @@
 import { ORCHESTRATION_CONTRACT_VERSION } from './protocol-version'
 
+export type QuestionThread = {
+  message_id: string
+  run_id: string
+  dispatch_id: string
+  asker_handle: string
+  status: 'pending' | 'answered' | 'closed'
+  answer_message_id: string | null
+  answer_body: string | null
+  answered_by_generation: number | null
+  created_at: string
+  answered_at: string | null
+  closed_at: string | null
+}
+
+export type QuestionInspectResult = {
+  question: QuestionThread & { task_id: string; body: string; options: string[] }
+}
+
 export type OrchestrationMigrationReason =
   | 'client_contract_missing'
   | 'client_contract_unsupported'
@@ -23,6 +41,8 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.runUse',
   'orchestration.send',
   'orchestration.reply',
+  'orchestration.messageReply',
+  'orchestration.questionReply',
   'orchestration.taskCreate',
   'orchestration.taskUpdate',
   'orchestration.dispatch',

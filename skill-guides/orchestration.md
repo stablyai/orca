@@ -124,7 +124,8 @@ message: reply to questions, validate each `worker_done` against the expected
 active Dispatch, and decide each settled terminal's next owner before the ack:
 
 ```text
-ORCA orchestration reply --id <message_id> --body "<answer>" --json
+ORCA orchestration question-inspect --id <message_id> --run <run_id> --task <task_id> --dispatch <dispatch_id> --json
+ORCA orchestration reply --mode question --id <message_id> --run <run_id> --task <task_id> --dispatch <dispatch_id> --body "<answer>" --json
 ORCA orchestration worker-release --dispatch <dispatch_id> --json
 ORCA orchestration check --ack <delivery_id> --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
 ```

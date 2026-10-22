@@ -356,9 +356,25 @@ describe('legacy compatibility through RpcDispatcher', () => {
         count: 2
       }
     })
-    expect((coordinatorCheck as { result: { formatted: string } }).result.formatted).toContain(
-      `orca orchestration reply --id ${firstId}`
+    const answered = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.messageReply',
+        { id: firstId, body: 'Approved', from: COORDINATOR_HANDLE, mode: 'message' },
+        evidence('coordinator'),
+        'explicit-legacy-message-reply'
+      )
     )
+    expect(answered).toMatchObject({ ok: true })
+    await expect(
+      harness.dispatcher.dispatch(
+        request(
+          'orchestration.ask',
+          { from: WORKER_HANDLE, resume: firstId, timeoutMs: 0 },
+          evidence('worker'),
+          'resume-explicit-legacy-reply'
+        )
+      )
+    ).resolves.toMatchObject({ ok: true, result: { answer: 'Approved', messageId: firstId } })
   })
 
   it('keeps the normal wait budget when legacy check omits timeout', async () => {
@@ -598,6 +614,43 @@ describe('legacy compatibility through RpcDispatcher', () => {
         }
       }
     })
+  })
+
+  it('answers a current question as the attested adopted-Run coordinator', async () => {
+    const harness = createHarness()
+    const task = harness.db.createTask({
+      spec: 'current question work',
+      runId: harness.adoptedRunId
+    })
+    const dispatch = createRootDispatch(harness.db, task.id, 'term_current_worker')
+    const asked = harness.db.createQuestion({
+      runId: harness.adoptedRunId,
+      dispatchId: dispatch.id,
+      askerHandle: 'term_current_worker',
+      question: 'Continue current work?'
+    })
+    const answer = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.questionReply',
+        {
+          id: asked.message.id,
+          run: harness.adoptedRunId,
+          task: task.id,
+          dispatch: dispatch.id,
+          from: COORDINATOR_HANDLE,
+          body: 'Continue'
+        },
+        evidence('coordinator'),
+        'strict-adopted-run-answer'
+      )
+    )
+    expect(answer).toMatchObject({
+      ok: true,
+      result: { question: { status: 'answered', answer_body: 'Continue' } }
+    })
+    expect(harness.db.getAllMessagesForHandle(`dispatch:${dispatch.id}`, 100)).toMatchObject([
+      { body: 'Continue', thread_id: asked.message.id }
+    ])
   })
 
   it('rejects a legacy coordinator reply outside the adopted Run with zero effects', async () => {
