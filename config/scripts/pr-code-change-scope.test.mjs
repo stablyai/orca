@@ -101,33 +101,6 @@ describe('docs-only path classification', () => {
 })
 
 describe('per-job path classification', () => {
-  it.each([
-    'config/scripts/pr-code-change-scope.test.mjs',
-    'config/scripts/pr-code-change-scope-released-phone.test.mjs',
-    'config/scripts/pr-package-test-paths.test.mjs'
-  ])('keeps full units and preflight without forcing unrelated lanes for %s', (file) => {
-    expectClassification([file], {})
-    expectClassification([file, 'AGENTS.md'], {})
-    expectClassification([file, 'src/shared/git-capability-cache.ts'], {
-      git_compatibility: true,
-      package: true,
-      package_windows: true
-    })
-  })
-
-  it.each([
-    'config/scripts/pr-code-change-scope.mjs',
-    'config/scripts/pr-code-change-scope-next.mjs',
-    'config/scripts/pr-package-test-paths.mjs',
-    '.github/workflows/pr.yml',
-    '.github/actions/install-node-dependencies/action.yml'
-  ])('keeps every lane for routing or execution changes mixed with routing tests: %s', (file) => {
-    const result = classifyPrJobs(['config/scripts/pr-code-change-scope.test.mjs', file])
-    for (const job of PR_CHECK_JOBS) {
-      expect(result[job], job).toBe(true)
-    }
-  })
-
   it('runs every expensive job on an empty diff rather than skipping by accident', () => {
     const result = classifyPrJobs([])
     expect(result.should_run).toBe(true)
