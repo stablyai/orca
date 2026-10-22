@@ -139,7 +139,7 @@ describe('registerZoomIpcBridge', () => {
       uiZoomLevel?: number
       nativeChatAppearance?: NativeChatAppearanceSettings
       editorFontZoomLevel?: number
-      pdfTakesZoom?: boolean
+      viewerTakesZoom?: boolean
     } = {}
   ) {
     const {
@@ -149,7 +149,7 @@ describe('registerZoomIpcBridge', () => {
       uiZoomLevel = 0,
       editorFontZoomLevel = 0,
       nativeChatAppearance,
-      pdfTakesZoom = false
+      viewerTakesZoom = false
     } = args
 
     const applyUIZoom = vi.fn()
@@ -161,12 +161,12 @@ describe('registerZoomIpcBridge', () => {
       Object.assign(settings, updates)
     })
 
-    const requestPdfZoom = vi.fn(() => pdfTakesZoom)
+    const requestViewerZoom = vi.fn(() => viewerTakesZoom)
     const dispatchBrowserPageZoom = vi.fn()
     vi.doMock('@/components/browser-pane/host-guest/browser-page-zoom', () => ({
       dispatchBrowserPageZoom
     }))
-    vi.doMock('@/components/editor/pdf-zoom-request', () => ({ requestPdfZoom }))
+    vi.doMock('@/components/editor/viewer-zoom-request', () => ({ requestViewerZoom }))
     vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom }))
     vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged }))
     vi.doMock('../store', () => ({
@@ -211,7 +211,7 @@ describe('registerZoomIpcBridge', () => {
     return {
       fire,
       dispatchBrowserPageZoom,
-      requestPdfZoom,
+      requestViewerZoom,
       applyUIZoom,
       dispatchZoomLevelChanged,
       setEditorFontZoomLevel,
@@ -334,23 +334,23 @@ describe('registerZoomIpcBridge', () => {
     const zoom = await mountZoomBridge({
       activeTabType: 'editor',
       activeElement: makeTarget({}),
-      pdfTakesZoom: true
+      viewerTakesZoom: true
     })
 
     zoom.fire('out')
 
-    expect(zoom.requestPdfZoom).toHaveBeenCalledWith('out')
+    expect(zoom.requestViewerZoom).toHaveBeenCalledWith('out')
     expect(zoom.setEditorFontZoomLevel).not.toHaveBeenCalled()
     expect(zoom.dispatchZoomLevelChanged).not.toHaveBeenCalled()
     expect(zoom.applyUIZoom).not.toHaveBeenCalled()
   })
 
   it('never offers app zoom outside editor tabs to a PDF', async () => {
-    const zoom = await mountZoomBridge({ activeTabType: 'browser', pdfTakesZoom: true })
+    const zoom = await mountZoomBridge({ activeTabType: 'browser', viewerTakesZoom: true })
 
     zoom.fire('in')
 
-    expect(zoom.requestPdfZoom).not.toHaveBeenCalled()
+    expect(zoom.requestViewerZoom).not.toHaveBeenCalled()
     expect(zoom.applyUIZoom).toHaveBeenCalledWith(0.5)
   })
 

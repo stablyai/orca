@@ -18,6 +18,9 @@ vi.mock('react', async () => {
     useEffect() {
       return undefined
     },
+    useContext() {
+      return false
+    },
     useRef<T>(initial: T) {
       return { current: initial }
     },
