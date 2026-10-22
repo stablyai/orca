@@ -1,4 +1,6 @@
 import type { ClientOptions } from 'ws'
+import type { PairedRuntimeConnection } from './paired-runtime-connection'
+import { endpointAuthOrigin, normalizeEndpointAuthHeaders } from './network/endpoint-auth-headers'
 
 /** Bound silent Node WebSocket connects before the whole-RPC timeout (15s, or 60s in the CLI).
  * Node resets this inactivity timer on connect and response chunks; it is not a wall-clock budget.
@@ -13,11 +15,14 @@ export const REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE = 'Could not connect to the r
 
 export function remoteRuntimeConnectOptions<TOptions extends ClientOptions>(
   options?: TOptions,
-  connectTimeoutMs?: number
+  connectTimeoutMs?: number,
+  connection?: PairedRuntimeConnection
 ): TOptions & { handshakeTimeout: number } {
+  const edgeHeaders = connection?.edgeAuth ? boundEdgeHeaders(connection) : null
   return {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the empty default stands in for an absent TOptions; every property it could carry is optional, and the spread below is the only use.
     ...(options ?? ({} as TOptions)),
+    ...(edgeHeaders ? { headers: edgeHeaders, followRedirects: false } : {}),
     // Both ws and net treat zero as unbounded; reject invalid overrides.
     handshakeTimeout:
       typeof connectTimeoutMs === 'number' &&
@@ -26,6 +31,30 @@ export function remoteRuntimeConnectOptions<TOptions extends ClientOptions>(
         ? connectTimeoutMs
         : REMOTE_RUNTIME_CONNECT_TIMEOUT_MS
   }
+}
+
+function boundEdgeHeaders(connection: PairedRuntimeConnection) {
+  const auth = connection.edgeAuth
+  const origin = endpointAuthOrigin(connection.endpoint)
+  const normalized = normalizeEndpointAuthHeaders(
+    auth && typeof auth.headers === 'object' && auth.headers !== null
+      ? Object.entries(auth.headers).map(([name, value]) => ({ name, value }))
+      : null
+  )
+  if (
+    !auth ||
+    !connection.endpoint.toLowerCase().startsWith('wss://') ||
+    !origin ||
+    auth.origin !== origin ||
+    auth.hostPublicKeyB64 !== connection.hostPublicKeyB64 ||
+    !normalized.ok ||
+    Object.keys(normalized.headers).length === 0
+  ) {
+    throw new Error(
+      'Invalid edge authentication. Check the secure origin, host identity and headers.'
+    )
+  }
+  return normalized.headers
 }
 
 /** Exclude URL-legal underscores: hosts containing terminal_gone-like tokens can fool downstream substring classifiers. */
