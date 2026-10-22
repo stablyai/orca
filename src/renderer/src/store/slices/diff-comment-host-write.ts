@@ -18,6 +18,7 @@ export async function writeDiffCommentsToHost(
   state: AppState,
   worktreeId: string,
   diffComments: DiffComment[],
+  diffCommentsBase: DiffComment[],
   folderExecutionHostId?: ReturnType<typeof getExecutionHostIdForFolderWorkspace>,
   writeHostId?: ExecutionHostId
 ): Promise<void> {
@@ -39,13 +40,16 @@ export async function writeDiffCommentsToHost(
               at: 'local'
             }),
             'folderWorkspace.update',
-            { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
+            {
+              folderWorkspaceId: scope.folderWorkspaceId,
+              updates: { diffComments, diffCommentsBase }
+            },
             { timeoutMs: 15_000 }
           )
         ).folderWorkspace
       : await window.api.folderWorkspaces.update({
           folderWorkspaceId: scope.folderWorkspaceId,
-          updates: { diffComments }
+          updates: { diffComments, diffCommentsBase }
         })
     if (!updated?.diffComments) {
       throw new Error('Failed to persist folder workspace review notes')
@@ -63,7 +67,7 @@ export async function writeDiffCommentsToHost(
     const meta = await window.api.worktrees.updateMeta({
       worktreeId,
       ...(writeHostId ? { executionHostId: writeHostId } : {}),
-      updates: { diffComments }
+      updates: { diffComments, diffCommentsBase }
     })
     // Why: main answers null when it refuses or drops the write; reporting success would lose the notes.
     if (!meta) {
@@ -74,7 +78,7 @@ export async function writeDiffCommentsToHost(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments, diffCommentsBase },
     { timeoutMs: 15_000 }
   )
 }

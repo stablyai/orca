@@ -1,3 +1,4 @@
+import type { DiffCommentMutation } from '../../shared/diff-comment-mutation'
 import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
 import type { GitPushTarget, Worktree } from '../../shared/worktree/types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -21,10 +22,11 @@ import {
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
-type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
-  pushTarget?: GitPushTarget | null
-  lineage?: { parentWorktree?: string; noParent?: boolean }
-}
+type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> &
+  DiffCommentMutation & {
+    pushTarget?: GitPushTarget | null
+    lineage?: { parentWorktree?: string; noParent?: boolean }
+  }
 
 type Ports = {
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>

@@ -1,3 +1,5 @@
+import { normalizeDiffCommentUpdate } from '../../../shared/diff-comment-mutation'
+import type { DiffCommentMutation } from '../../../shared/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -152,12 +154,14 @@ export class FolderWorkspacePersistenceOperations {
         | 'diffComments'
       >
     > &
-      WorkspaceAttachmentMutation
+      WorkspaceAttachmentMutation &
+      DiffCommentMutation
   ): FolderWorkspace | null {
     const workspace = this.getFolderWorkspace(id)
     if (!workspace) {
       return null
     }
+    updates = normalizeDiffCommentUpdate(workspace.diffComments, updates)
     const linkedUpdates = normalizeWorkspaceAttachmentUpdate(
       {
         linkedItems: workspace.linkedItems,

@@ -127,7 +127,10 @@ describe('folder workspace diff comments', () => {
     ])
     expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
       folderWorkspaceId: folderWorkspace.id,
-      updates: { diffComments: [expect.objectContaining({ body: 'folder note' })] }
+      updates: {
+        diffComments: [expect.objectContaining({ body: 'folder note' })],
+        diffCommentsBase: []
+      }
     })
   })
 
@@ -175,7 +178,8 @@ describe('folder workspace diff comments', () => {
         diffComments: [
           expect.objectContaining({ body: 'first note' }),
           expect.objectContaining({ body: 'second note' })
-        ]
+        ],
+        diffCommentsBase: [expect.objectContaining({ body: 'first note' })]
       }
     })
   })
@@ -249,7 +253,8 @@ describe('folder workspace diff comments', () => {
           method: 'folderWorkspace.update',
           params: expect.objectContaining({
             updates: {
-              diffComments: [expect.objectContaining({ body: 'runtime note' })]
+              diffComments: [expect.objectContaining({ body: 'runtime note' })],
+              diffCommentsBase: []
             }
           })
         })
@@ -345,7 +350,8 @@ describe('folder workspace diff comment rollback convergence', () => {
         diffComments: [
           expect.objectContaining({ body: 'note A' }),
           expect.objectContaining({ body: 'note B' })
-        ]
+        ],
+        diffCommentsBase: []
       }
     })
     expect(bodies(store, key)).toEqual(['note A', 'note B'])
@@ -393,7 +399,7 @@ describe('folder workspace diff comment rollback convergence', () => {
     expect(bodies(store, key)).toEqual(['C'])
     expect(folderWorkspacesUpdate).toHaveBeenLastCalledWith({
       folderWorkspaceId: folderWorkspace.id,
-      updates: { diffComments: [expect.objectContaining({ body: 'C' })] }
+      updates: { diffComments: [expect.objectContaining({ body: 'C' })], diffCommentsBase: [] }
     })
   })
 
@@ -535,7 +541,7 @@ describe('folder workspace diff comment rollback convergence', () => {
     const store = createTestStore()
     const folderWorkspace = seedLocalFolderWorkspace(store)
     const key = folderWorkspaceKey(folderWorkspace.id)
-    // Why: a malformed entry makes normalizeDiffComment throw inside run, before persist is ever called.
+    // Why: malformed persisted notes fail schema validation before the write reaches the host.
     const malformed = [null as unknown as DiffComment]
     store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: malformed }] })
     folderWorkspacesUpdate.mockImplementation(async ({ updates }) => ({

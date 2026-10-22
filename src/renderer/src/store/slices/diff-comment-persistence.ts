@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
+import { DiffCommentSchema } from '../../../../shared/diff-comment-schema'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -52,6 +53,8 @@ export function normalizeDiffComment(comment: DiffComment): DiffComment {
     ...(sentAt === undefined ? { sentAt: undefined } : {})
   }
 }
+
+const persistedDiffCommentsSchema = DiffCommentSchema.array()
 
 // Why: IPC writes aren't ordered, so serialize per worktree to stop an older snapshot from overwriting a newer one on disk.
 const persistQueueByWorktree = new Map<string, Promise<void>>()
@@ -139,7 +142,8 @@ export function enqueueDiffCommentPersist(
         await writeDiffCommentsToHost(
           state,
           worktreeId,
-          (stateList ?? []).map(normalizeDiffComment),
+          persistedDiffCommentsSchema.parse(stateList ?? []),
+          persistedDiffCommentsSchema.parse(lastPersistedByQueue.get(floorKey) ?? []),
           folderExecutionHostId
         )
       } else {
@@ -158,7 +162,8 @@ export function enqueueDiffCommentPersist(
         await writeDiffCommentsToHost(
           state,
           worktreeId,
-          (stateList ?? []).map(normalizeDiffComment),
+          persistedDiffCommentsSchema.parse(stateList ?? []),
+          persistedDiffCommentsSchema.parse(lastPersistedByQueue.get(floorKey) ?? []),
           undefined,
           writeHostId
         )

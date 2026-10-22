@@ -171,7 +171,8 @@ export const FolderWorkspaceUpdateArgs = z.object({
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),
       lastActivityAt: z.number().finite().optional(),
-      diffComments: z.array(DiffCommentSchema).optional()
+      diffComments: z.array(DiffCommentSchema).optional(),
+      diffCommentsBase: z.array(DiffCommentSchema).optional()
     })
     .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
 })

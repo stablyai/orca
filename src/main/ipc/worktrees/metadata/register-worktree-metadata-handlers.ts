@@ -1,3 +1,4 @@
+import type { DiffCommentMutation } from '../../../../shared/diff-comment-mutation'
 import { ipcMain } from 'electron'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
@@ -32,7 +33,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
       args: {
         worktreeId: string
         executionHostId?: string
-        updates: Partial<WorktreeMeta>
+        updates: Partial<WorktreeMeta> & DiffCommentMutation
       }
     ) => {
       const executionHostId =

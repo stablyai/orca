@@ -1,3 +1,4 @@
+import type { DiffCommentMutation } from '../../../shared/diff-comment-mutation'
 import { OrcaRuntimeWithCreateManagedWorktree } from './workspace-creation'
 import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
@@ -117,13 +118,14 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
 
   async updateManagedWorktreeMeta(
     worktreeSelector: string,
-    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
-      pushTarget?: GitPushTarget | null
-      lineage?: {
-        parentWorktree?: string
-        noParent?: boolean
+    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> &
+      DiffCommentMutation & {
+        pushTarget?: GitPushTarget | null
+        lineage?: {
+          parentWorktree?: string
+          noParent?: boolean
+        }
       }
-    }
   ) {
     if (!this.store) {
       throw new Error('runtime_unavailable')

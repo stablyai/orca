@@ -159,6 +159,7 @@ export const WorktreeSet = WorktreeSelector.extend({
     .optional(),
   // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
+  diffCommentsBase: z.array(DiffCommentSchema).optional(),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
   noParent: OptionalBoolean

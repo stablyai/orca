@@ -1,3 +1,5 @@
+import { normalizeDiffCommentUpdate } from '../../../shared/diff-comment-mutation'
+import type { DiffCommentMutation } from '../../../shared/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
@@ -33,10 +35,13 @@ function createDefaultWorktreeMeta(): WorktreeMeta {
 /** Merge and normalize the metadata shape shared by legacy and identity-keyed writes. */
 export function mergeWorktreeMetaForWrite(
   existing: WorktreeMeta | undefined,
-  updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation,
+  updates: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentMutation,
   identity?: WorktreeMetaIdentity
 ): WorktreeMeta {
-  const normalizedUpdates = normalizeWorkspaceAttachmentUpdate(existing, updates)
+  const normalizedUpdates = normalizeWorkspaceAttachmentUpdate(
+    existing,
+    normalizeDiffCommentUpdate(existing?.diffComments, updates)
+  )
   const updated = {
     ...(existing ?? createDefaultWorktreeMeta()),
     ...normalizeGitHubPRSuppressionUpdate(normalizedUpdates),

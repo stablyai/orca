@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WorktreeSet } from './worktree-params'
+import { FolderWorkspaceUpdate } from './folder-workspace-params'
 
 describe('optional review metadata wire compatibility', () => {
   it.each([
@@ -31,6 +32,18 @@ describe('optional review metadata wire compatibility', () => {
       mobileDiffReview
     })
     expect(WorktreeSet.parse({ worktree: 'wt', diffComments: [] }).diffComments).toEqual([])
+  })
+
+  it('rejects malformed baselines rather than downgrading to whole-list replacement', () => {
+    expect(
+      WorktreeSet.safeParse({ worktree: 'wt', diffComments: [], diffCommentsBase: [{}] }).success
+    ).toBe(false)
+    expect(
+      FolderWorkspaceUpdate.safeParse({
+        folderWorkspaceId: 'folder',
+        updates: { diffComments: [], diffCommentsBase: [{}] }
+      }).success
+    ).toBe(false)
   })
 
   it('continues rejecting malformed attachment writes rather than silently dropping them', () => {

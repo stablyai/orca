@@ -16,7 +16,21 @@ import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { DiffNotesDelivery } from './mobile-session-route-types'
 import type { MobileSessionDocumentReadersModel } from './use-mobile-session-document-readers'
 
-export function useMobileSessionDiffComments(scope: MobileSessionDocumentReadersModel) {
+type DiffCommentsScope = Pick<
+  MobileSessionDocumentReadersModel,
+  | 'worktreeId'
+  | 'isFloatingWorkspaceRoute'
+  | 'client'
+  | 'connState'
+  | 'setDiffComments'
+  | 'diffCommentsRef'
+  | 'diffCommentBusy'
+  | 'setDiffCommentBusy'
+  | 'setPendingDiffNotesDelivery'
+  | 'showToast'
+>
+
+export function useMobileSessionDiffComments(scope: DiffCommentsScope) {
   const {
     worktreeId,
     isFloatingWorkspaceRoute,
@@ -51,13 +65,14 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
   }, [client, connState, worktreeId, isFloatingWorkspaceRoute])
 
   const persistDiffComments = useCallback(
-    async (comments: readonly DiffComment[]): Promise<void> => {
+    async (comments: readonly DiffComment[], base: readonly DiffComment[]): Promise<void> => {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
       const response = await sessionWorktreeNotesWrite.request(client, {
         worktree: `id:${worktreeId}`,
-        diffComments: [...comments]
+        diffComments: [...comments],
+        diffCommentsBase: [...base]
       })
       interpretOrThrowRefusalMessage(
         () => sessionWorktreeNotesWrite.interpret(response),
@@ -95,7 +110,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       setDiffCommentBusy(true)
       setDiffComments(result.comments)
       try {
-        await persistDiffComments(result.comments)
+        await persistDiffComments(result.comments, previous)
         triggerSuccess()
         showToast('Note added')
         return true
@@ -124,7 +139,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       setDiffCommentBusy(true)
       setDiffComments(next)
       try {
-        await persistDiffComments(next)
+        await persistDiffComments(next, previous)
         triggerSelection()
       } catch (err) {
         setDiffComments(previous)
@@ -200,7 +215,7 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       setDiffCommentBusy(true)
       setDiffComments(next)
       try {
-        await persistDiffComments(next)
+        await persistDiffComments(next, previous)
       } catch {
         setDiffComments(previous)
       } finally {

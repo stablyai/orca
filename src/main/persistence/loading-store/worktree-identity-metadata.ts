@@ -1,3 +1,4 @@
+import type { DiffCommentMutation } from '../../../shared/diff-comment-mutation'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -215,7 +216,7 @@ export function setWorktreeMetaForHost(
   scheduling: WriteSchedulingOperations,
   worktreeId: string,
   executionHostId: ExecutionHostId,
-  meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation
+  meta: Partial<WorktreeMeta> & WorkspaceAttachmentMutation & DiffCommentMutation
 ): WorktreeMeta {
   const state = runtime.state
   migrateLegacyWorktreeMetadata(state, worktreeId, executionHostId)

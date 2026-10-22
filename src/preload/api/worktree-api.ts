@@ -1,3 +1,4 @@
+import type { DiffCommentMutation } from '../../shared/diff-comment-mutation'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -122,7 +123,7 @@ export type WorktreeApi = {
   updateMeta: (args: {
     worktreeId: string
     executionHostId?: ExecutionHostId
-    updates: Partial<WorktreeMeta>
+    updates: Partial<WorktreeMeta> & DiffCommentMutation
   }) => Promise<Worktree | null>
   listLineage: () => Promise<{
     lineage: Record<string, WorktreeLineage>
@@ -183,7 +184,8 @@ export type FolderWorkspacesApi = {
         | 'lastActivityAt'
         | 'diffComments'
       >
-    >
+    > &
+      DiffCommentMutation
   }) => Promise<FolderWorkspace | null>
   delete: (args: { folderWorkspaceId: string }) => Promise<boolean>
 }

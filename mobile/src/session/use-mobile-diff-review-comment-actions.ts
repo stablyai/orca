@@ -64,13 +64,18 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
   const { openSheet, openSheetWhenIdle, closeSheet } = sheets
 
   const persistMetadata = useCallback(
-    async (comments: readonly DiffComment[], reviewState: MobileDiffReviewState) => {
+    async (
+      comments: readonly DiffComment[],
+      reviewState: MobileDiffReviewState,
+      base: readonly DiffComment[]
+    ) => {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
       const response = await sessionWorktreeNotesWrite.request(client, {
         worktree: `id:${worktreeId}`,
         diffComments: [...comments],
+        diffCommentsBase: [...base],
         mobileDiffReview: reviewState
       })
       interpretOrThrowRefusalMessage(
@@ -93,7 +98,11 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       const previous = screenState
       updateReadyState((state) => ({ ...state, comments, reviewState }))
       try {
-        await persistMetadata(comments, reviewState)
+        await persistMetadata(
+          comments,
+          reviewState,
+          previous.kind === 'ready' ? previous.comments : []
+        )
         triggerSuccess()
       } catch (err) {
         if (previous.kind === 'ready') {

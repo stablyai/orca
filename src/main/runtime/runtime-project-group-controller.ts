@@ -1,3 +1,4 @@
+import type { DiffCommentMutation } from '../../shared/diff-comment-mutation'
 import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
@@ -58,7 +59,8 @@ type FolderWorkspaceUpdates = Partial<
     | 'diffComments'
   >
 > &
-  WorkspaceAttachmentMutation
+  WorkspaceAttachmentMutation &
+  DiffCommentMutation
 
 export class RuntimeProjectGroupController {
   constructor(private readonly deps: RuntimeProjectGroupDependencies) {}

@@ -193,6 +193,7 @@ export const WORKTREE_METHODS = [
         workspaceStatus: params.workspaceStatus,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
+        diffCommentsBase: params.diffCommentsBase,
         mobileDiffReview: params.mobileDiffReview,
         lineage:
           params.parentWorktree || params.noParent === true

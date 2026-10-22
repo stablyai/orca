@@ -1,3 +1,6 @@
+import { normalizeDiffCommentUpdate } from '../../../../shared/diff-comment-mutation'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
+import type { DiffCommentMutation } from '../../../../shared/diff-comment-mutation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -189,7 +192,10 @@ describe('diff comments on twin worktrees', () => {
 
     expect(rowNotes(store, 'ssh:box')).toEqual([])
     expect(updateMeta).toHaveBeenLastCalledWith(
-      expect.objectContaining({ executionHostId: 'ssh:box', updates: { diffComments: [] } })
+      expect.objectContaining({
+        executionHostId: 'ssh:box',
+        updates: { diffComments: [], diffCommentsBase: [sent] }
+      })
     )
   })
 
@@ -348,7 +354,10 @@ describe('diff comments on twin worktrees', () => {
 
     expect(updateMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        updates: { diffComments: [expect.objectContaining({ body: 'new' })] }
+        updates: {
+          diffComments: [expect.objectContaining({ body: 'new' })],
+          diffCommentsBase: [note('l1', 'old')]
+        }
       })
     )
   })
@@ -487,5 +496,79 @@ describe('diff comments on twin worktrees', () => {
 
     expect(await pending).not.toBeNull()
     expect(updateMeta).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('desktop note saves preserve other clients while queued writes coalesce', () => {
+  it('can delete a persisted note with exact selections and accepted fields', async () => {
+    const store = createTwinStore('local')
+    const original = {
+      ...note('A', '  spacing  '),
+      source: 'markdown' as const,
+      selectedText: '  selection\n',
+      startLine: 9,
+      sentAt: 0
+    }
+    const removed = note('B', 'remove')
+    let hostMeta: Partial<WorktreeMeta> = { diffComments: [original, removed] }
+    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', hostMeta.diffComments)] } })
+    updateMeta.mockImplementation(
+      async ({ updates }: { updates: Partial<WorktreeMeta> & DiffCommentMutation }) => {
+        hostMeta = { ...hostMeta, ...normalizeDiffCommentUpdate(hostMeta.diffComments, updates) }
+        return hostMeta
+      }
+    )
+    await store.getState().deleteDiffComment(WT, 'A')
+    expect(hostMeta.diffComments).toEqual([removed])
+    expect(updateMeta.mock.calls[0][0].updates.diffCommentsBase).toEqual([original, removed])
+  })
+
+  it('keeps a phone addition and deletion across two local writes in flight', async () => {
+    const store = createTwinStore('local')
+    const original = note('A', 'original')
+    store.setState({ worktreesByRepo: { [REPO]: [worktree('local', [original])] } })
+    let hostMeta: Partial<WorktreeMeta> = { diffComments: [original] }
+    let releaseFirst: (() => void) | undefined
+    updateMeta.mockImplementation(
+      async ({ updates }: { updates: Partial<WorktreeMeta> & DiffCommentMutation }) => {
+        hostMeta = { ...hostMeta, ...normalizeDiffCommentUpdate(hostMeta.diffComments, updates) }
+        if (updateMeta.mock.calls.length === 1) {
+          await new Promise<void>((resolve) => {
+            releaseFirst = resolve
+          })
+        }
+        return hostMeta
+      }
+    )
+    const first = store.getState().addDiffComment({
+      worktreeId: WT,
+      filePath: 'a',
+      lineNumber: 2,
+      body: 'desktop one',
+      side: 'modified'
+    })
+    await vi.waitFor(() => expect(releaseFirst).toBeDefined())
+    // The phone removes the original and adds its own note while the desktop save awaits its reply.
+    hostMeta = {
+      ...hostMeta,
+      diffComments: [
+        ...(hostMeta.diffComments ?? []).filter((comment) => comment.id !== 'A'),
+        note('B', 'phone')
+      ]
+    }
+    const second = store.getState().addDiffComment({
+      worktreeId: WT,
+      filePath: 'a',
+      lineNumber: 3,
+      body: 'desktop two',
+      side: 'modified'
+    })
+    releaseFirst?.()
+    await Promise.all([first, second])
+    expect(hostMeta.diffComments?.map((comment) => comment.body)).toEqual([
+      'desktop one',
+      'phone',
+      'desktop two'
+    ])
   })
 })
