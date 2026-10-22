@@ -8,6 +8,7 @@ import {
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
+import { BROWSER_SIDECAR_OWNER_ENV } from '../shared/browser-sidecar-lifetime'
 
 const { appMock, getCanonicalUserDataPathMock } = vi.hoisted(() => ({
   appMock: { getVersion: vi.fn(() => '1.0.51'), quit: vi.fn() },
@@ -94,6 +95,32 @@ describe('serve update handoff', () => {
       removeListener()
     }
   )
+
+  it('remembers a browser sidecar launch after consuming its owner variable', async () => {
+    const parent = Object.assign(new EventEmitter(), { connected: true })
+    const { installServeSupervisorDisconnectQuit, isBrowserSidecarProcess } =
+      await import('./serve-update-handoff')
+    process.env[BROWSER_SIDECAR_OWNER_ENV] = '1'
+
+    const removeListener = installServeSupervisorDisconnectQuit(true, parent)
+
+    expect(process.env[BROWSER_SIDECAR_OWNER_ENV]).toBeUndefined()
+    expect(isBrowserSidecarProcess()).toBe(true)
+    // A repeat call no longer sees the variable but must not forget the launch.
+    installServeSupervisorDisconnectQuit(true, parent)()
+    expect(isBrowserSidecarProcess()).toBe(true)
+    removeListener()
+  })
+
+  it('does not treat an ordinary serve process as a browser sidecar', async () => {
+    const { installServeSupervisorDisconnectQuit, isBrowserSidecarProcess } =
+      await import('./serve-update-handoff')
+    delete process.env[BROWSER_SIDECAR_OWNER_ENV]
+
+    installServeSupervisorDisconnectQuit(true, new EventEmitter())()
+
+    expect(isBrowserSidecarProcess()).toBe(false)
+  })
 })
 
 function readState(root: string) {

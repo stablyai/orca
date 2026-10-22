@@ -71,6 +71,13 @@ export function notifyServeSupervisorReady(runtimeId: string): void {
   }
 }
 
+let launchedAsBrowserSidecar = false
+
+/** True when orcad launched this process as its headless browser sidecar. */
+export function isBrowserSidecarProcess(): boolean {
+  return launchedAsBrowserSidecar
+}
+
 export function installServeSupervisorDisconnectQuit(
   isServeMode: boolean,
   parent: {
@@ -81,6 +88,8 @@ export function installServeSupervisorDisconnectQuit(
 ): () => void {
   const isBrowserSidecar = process.env[BROWSER_SIDECAR_OWNER_ENV] === '1'
   delete process.env[BROWSER_SIDECAR_OWNER_ENV]
+  // Why: the variable is deleted above so children don't inherit it; later startup still needs the answer.
+  launchedAsBrowserSidecar ||= isBrowserSidecar
   if (!isServeMode || (!isBrowserSidecar && !hasServeUpdateSupervisor())) {
     return () => undefined
   }
