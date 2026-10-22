@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { redactKagiSessionToken } from '../../../shared/browser-url'
 import { resolveBrowserSourceUnifiedTab } from './browser-workspace-source-resolution'
 
 /** Opens `url` in a new Orca browser tab right after the page's tab, in the page's own profile. */
@@ -22,7 +23,8 @@ export function openUrlInTabBesideBrowserPage(args: {
     : undefined
   const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(store, sourcePageId, worktreeId)
   store.createBrowserTab(worktreeId, url, {
-    title: url,
+    // Why: a Kagi private-session search URL carries a token; only the stored URL is redacted.
+    title: redactKagiSessionToken(url),
     activate,
     ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
     ...(sourceUnifiedTab?.executionHostId
