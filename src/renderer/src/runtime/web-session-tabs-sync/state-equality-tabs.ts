@@ -36,6 +36,10 @@ export function sameTerminalTabs(
   a: readonly TerminalTab[] | undefined,
   b: readonly TerminalTab[] | null
 ): boolean {
+  // Why: an explicit empty row is the user-emptied tombstone, so it must replace a missing row.
+  if (a === undefined && b?.length === 0) {
+    return false
+  }
   const left = a ?? []
   const right = b ?? []
   if (left.length !== right.length) {
