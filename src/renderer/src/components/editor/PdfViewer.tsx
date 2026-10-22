@@ -24,7 +24,7 @@ import {
 } from './pdf-scale-preference'
 import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
-import { listenForPdfZoomRequests } from './pdf-zoom-request'
+import { listenForViewerZoomRequests } from './viewer-zoom-request'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -179,7 +179,7 @@ function PdfDocumentViewer({
     if (!isCommandOwner) {
       return
     }
-    return listenForPdfZoomRequests((direction) =>
+    return listenForViewerZoomRequests((direction) =>
       direction === 'reset' ? zoomReset() : stepZoom(direction)
     )
   }, [isCommandOwner, stepZoom, zoomReset])
