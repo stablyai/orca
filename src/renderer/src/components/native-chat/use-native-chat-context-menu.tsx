@@ -26,6 +26,7 @@ import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shor
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
 import { isEditableTarget } from '@/lib/editable-target'
+import { findOwnedTextControlPasteTarget } from '@/lib/text-control-paste-ownership'
 import {
   findNativeChatAnswerField,
   findNativeChatPasteField
@@ -194,8 +195,12 @@ export function useNativeChatContextMenu({
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      event.preventDefault()
       event.stopPropagation()
+      if (opensNativeEditableMenu(event.target)) {
+        window.api.ui.markPlainTextContextMenuTarget()
+        return
+      }
+      event.preventDefault()
       if (!enabled) {
         return
       }
@@ -345,9 +350,20 @@ export function useNativeChatContextMenu({
 
 function keepSelectionThroughMenuPress(event: React.PointerEvent<HTMLElement>): void {
   // Why: left alone, the press that opens the menu collapses the selection before contextmenu fires.
-  if (event.button === 2 || (isMacPlatform() && event.ctrlKey)) {
+  if (
+    (event.button === 2 || (isMacPlatform() && event.ctrlKey)) &&
+    !opensNativeEditableMenu(event.target)
+  ) {
     event.preventDefault()
   }
+}
+
+// Why: only Chromium's own menu for a typing target carries the OS spellchecker's suggestions.
+function opensNativeEditableMenu(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || findOwnedTextControlPasteTarget(target) === target)
+  )
 }
 
 function getNativeChatSelectedText(root: HTMLElement | null): string {

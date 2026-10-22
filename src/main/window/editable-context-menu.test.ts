@@ -243,15 +243,19 @@ describe('buildEditableContextMenuTemplate', () => {
     expect(send).toHaveBeenCalledWith('ui:editableContextPaste', { plainTextOnly: true })
   })
 
-  it('keeps regular text inputs to spelling and native edit actions', () => {
+  it.each([
+    ['regular text inputs', 'input-text' as const, false],
+    ['a plain-text contenteditable', 'none' as const, true]
+  ])('keeps %s to spelling and native edit actions', (_surface, formControlType, plainText) => {
     const send = vi.fn()
     const template = buildEditableContextMenuTemplate(
-      contextParams({ formControlType: 'input-text' }),
+      contextParams({ formControlType }),
       {
         replaceMisspelling: vi.fn(),
         send,
         session: { addWordToSpellCheckerDictionary: vi.fn() } as unknown as Electron.Session
-      }
+      },
+      { plainText }
     )
 
     expect(template.map((item) => item.label ?? item.role ?? item.type)).toEqual([
