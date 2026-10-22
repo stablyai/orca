@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isUsableSkillsCliAgentKey, toSkillsCliAgentKeys } from './skills-cli-agent-keys'
+import {
+  SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT,
+  isUsableSkillsCliAgentKey,
+  toRequestedSkillsCliAgentKey,
+  toSkillsCliAgentKeys
+} from './skills-cli-agent-keys'
 
 describe('skills CLI agent keys', () => {
   it('rejects values the skills CLI would drop, and allows the explicit wildcard', () => {
@@ -20,5 +25,18 @@ describe('skills CLI agent keys', () => {
     // Why: `omp` has no skills-CLI equivalent, so it must not reach the argv.
     expect(toSkillsCliAgentKeys(['omp'])).toEqual(['universal'])
     expect(toSkillsCliAgentKeys([])).toEqual(['universal'])
+  })
+
+  it('maps a typed Orca agent id unless the skills CLI already owns that key', () => {
+    for (const [agent, key] of Object.entries(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT)) {
+      // Why: an id that is itself a valid skills key (only `trae`) keeps the CLI's meaning.
+      const expected = key === null || agent === 'trae' ? agent : key
+      expect(toRequestedSkillsCliAgentKey(agent), agent).toBe(expected)
+    }
+    expect(toRequestedSkillsCliAgentKey('claude')).toBe('claude-code')
+    expect(toRequestedSkillsCliAgentKey('trae')).toBe('trae')
+    for (const passthrough of ['claude-code', 'universal', '*', 'Claude', 'inference-sh']) {
+      expect(toRequestedSkillsCliAgentKey(passthrough), passthrough).toBe(passthrough)
+    }
   })
 })

@@ -11,7 +11,10 @@ import {
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
-import { isUsableSkillsCliAgentKey } from '../../shared/skills-cli-agent-keys'
+import {
+  isUsableSkillsCliAgentKey,
+  toRequestedSkillsCliAgentKey
+} from '../../shared/skills-cli-agent-keys'
 import {
   detectSkillsCliAgentKeys,
   detectSkillsCliUpdateAgentKeys
@@ -130,6 +133,8 @@ function resolveAgentKeys(verb: SkillMutationVerb, flags: Map<string, string | b
           .split(',')
           .map((entry) => entry.trim())
           .filter(Boolean)
+          // Why: dedupe after mapping so `claude,claude-code` yields one target.
+          .map(toRequestedSkillsCliAgentKey)
       )
     ]
     // Why: a value like "," parses to nothing. Falling through to detection would

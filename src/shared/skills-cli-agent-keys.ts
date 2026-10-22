@@ -1,4 +1,5 @@
 import type { TuiAgent } from './tui-agent'
+import { isTuiAgent } from './tui-agent-config'
 
 /**
  * The community `skills` CLI's own `--agent` key for each agent Orca detects.
@@ -92,4 +93,21 @@ export function toSkillsCliAgentKeys(detectedAgents: readonly TuiAgent[]): strin
     }
   }
   return [...keys].sort()
+}
+
+// Why: `trae` is also the skills CLI's own key for TRAE international, so a typed
+// `trae` keeps that meaning rather than becoming the detected-agent target `trae-cn`.
+const SKILLS_CLI_KEYS_SHADOWING_TUI_AGENTS: ReadonlySet<string> = new Set(['trae'])
+
+/**
+ * Map a user-typed `--agent` value onto its skills key when it is an Orca agent id.
+ *
+ * Why: users type the id Orca accepts everywhere else (`claude`), which the skills CLI
+ * rejects. Values Orca cannot map pass through for the CLI to judge, as before.
+ */
+export function toRequestedSkillsCliAgentKey(value: string): string {
+  if (!isTuiAgent(value) || SKILLS_CLI_KEYS_SHADOWING_TUI_AGENTS.has(value)) {
+    return value
+  }
+  return SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT[value] ?? value
 }
