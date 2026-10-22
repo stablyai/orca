@@ -229,6 +229,10 @@ function fuzzyMatchIndexedFile(
   ) {
     score -= 100
   }
+  // Why #26142: `default.ini` must outrank `default.ini.example`, which ties on the bonus above.
+  if (file.lowerPath === query || file.lowerPath.endsWith(`/${query}`)) {
+    score -= 50
+  }
   return score
 }
 

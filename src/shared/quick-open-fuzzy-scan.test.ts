@@ -25,7 +25,8 @@ function referenceScore(query: string, file: QuickOpenIndexedFile): number | nul
   if (qi < query.length) {
     return null
   }
-  return score - (file.lowerFilename.includes(query) ? 100 : 0)
+  const exactSuffix = file.lowerPath === query || file.lowerPath.endsWith(`/${query}`)
+  return score - (file.lowerFilename.includes(query) ? 100 : 0) - (exactSuffix ? 50 : 0)
 }
 
 it.each(['az', 'aq'])('skips nonmatching path spans for %s', (query) => {
