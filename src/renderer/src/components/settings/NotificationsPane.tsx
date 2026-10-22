@@ -9,6 +9,7 @@ import {
   useMacNotificationPermissionState
 } from '@/components/notifications/mac-notification-permission-card'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
+import { WorkspaceNotificationSettings } from './WorkspaceNotificationSettings'
 import { NotificationHostToggles } from './NotificationHostToggles'
 import { NotificationSoundSection } from './NotificationSoundSection'
 import {
@@ -146,6 +147,11 @@ export function NotificationsPane({
             agentTaskComplete: !notificationSettings.agentTaskComplete
           })
         }
+      />
+
+      <WorkspaceNotificationSettings
+        settings={notificationSettings}
+        onUpdate={updateNotificationSettings}
       />
 
       <NotificationSettingToggle

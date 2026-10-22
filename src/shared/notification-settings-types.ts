@@ -1,11 +1,14 @@
 import type { StructuredAttentionRead, StructuredAttentionOrigin } from './agent-session-attention'
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { WorkspaceNotificationOrigin } from './workspace-notification-policy'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {
   enabled: boolean
   agentTaskComplete: boolean
+  cliWorktreeTaskComplete?: boolean
+  automationWorktreeTaskComplete?: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:
@@ -40,6 +43,8 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
+  /** Optional for older senders; resolved from the workspace on its owning host. */
+  workspaceOrigin?: WorkspaceNotificationOrigin
   /** Configured notification source; independent of physical execution location. */
   notificationSourceId?: NotificationSourceId
   /** The server the workspace runs on, so a paired phone opens it there; absent for this desktop's own work. */

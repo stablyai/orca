@@ -12,6 +12,8 @@
  */
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
+import { useAppStore } from '@/store'
+import { allowsWorkspaceAgentNotification } from '../../../shared/workspace-notification-policy'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult
@@ -27,6 +29,12 @@ export function deliverAgentAttentionNotification(
   sound: AgentAttentionNotificationSound,
   onResult?: (result: NotificationDispatchResult | null) => void
 ): void {
+  if (request.source === 'agent-task-complete' && request.workspaceOrigin === undefined) {
+    const notifications = useAppStore.getState().settings?.notifications ?? {}
+    if (!allowsWorkspaceAgentNotification(notifications, undefined, request.agentState)) {
+      return
+    }
+  }
   void window.api.notifications
     .dispatch(request)
     .then((result) => {

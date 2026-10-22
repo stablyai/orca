@@ -9,6 +9,7 @@ import type {
 } from './runtime-mobile-notification-controller'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { TerminalAgentPhonePush } from './terminal-agent-phone-push'
+import type { WorkspaceNotificationOrigin } from '../../shared/workspace-notification-policy'
 
 const WT = 'repo-1::/tmp/wt'
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -47,6 +48,7 @@ function harness(
     settings?: Partial<NotificationSettings>
     muted?: boolean
     hookRow?: AgentStatusIpcPayload | null
+    workspaceOrigin?: WorkspaceNotificationOrigin
   } = {}
 ) {
   const clock = { now: 10_000 }
@@ -71,7 +73,11 @@ function harness(
       notifyHiddenWorkspaces: true,
       ...options.settings
     }),
-    readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
+    readWorkspaceLabels: () => ({
+      repoLabel: 'orca',
+      worktreeLabel: 'feature',
+      workspaceOrigin: options.workspaceOrigin
+    }),
     isWorkspaceMuted: () => state.muted,
     readHookRow: () => state.hookRow,
     dispatch: (event) => sent.push(event),
@@ -116,6 +122,21 @@ function harness(
 const ID = `agent:${encodeURIComponent(WT)}:${encodeURIComponent(PANE)}:5000`
 
 describe('TerminalAgentPhonePush', () => {
+  it.each(['cli', 'automation'] as const)(
+    'mutes %s finishes without silencing input requests',
+    (workspaceOrigin) => {
+      const h = harness({
+        workspaceOrigin,
+        settings: { cliWorktreeTaskComplete: false, automationWorktreeTaskComplete: false }
+      })
+      h.finish()
+      h.state.hookRow = row({ state: 'blocked' })
+      h.push.observe(moved('needs-input', 'needs-you'))
+      expect(h.sent[0]).toMatchObject({ agentState: 'done', desktopAllowed: false })
+      expect(h.sent[1]?.desktopAllowed).toBeUndefined()
+    }
+  )
+
   it('pushes a finish that followed live work once its quiet window passes, worded as the window', () => {
     const { push, sent, advance, working, finish } = harness()
     working()

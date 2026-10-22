@@ -88,6 +88,9 @@ export function mergeWorktree(
       ? { automationProvenance: meta.automationProvenance }
       : {}),
     ...(meta?.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
+    ...(meta?.orcaCreationSource !== undefined
+      ? { orcaCreationSource: meta.orcaCreationSource }
+      : {}),
     ...(meta?.pendingFirstAgentMessageRename !== undefined
       ? { pendingFirstAgentMessageRename: meta.pendingFirstAgentMessageRename }
       : {}),

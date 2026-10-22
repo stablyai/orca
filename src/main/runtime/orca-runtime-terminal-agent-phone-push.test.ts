@@ -6,6 +6,8 @@ import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { NotificationSettings } from '../../shared/notification-settings-types'
 
 // Switched on, as it ships next: that build's host reads hookless agents' titles itself.
 vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -13,13 +15,19 @@ vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MA
 const WT = 'repo-1::/tmp/worktree-a'
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 
-function createHost(windowId: number | null = HEADLESS_RUNTIME_WINDOW_ID) {
+function createHost(
+  windowId: number | null = HEADLESS_RUNTIME_WINDOW_ID,
+  meta: Partial<WorktreeMeta> = {},
+  notifications: Partial<NotificationSettings> = {}
+) {
   const store = {
     getRepos: () => [],
     getRepo: (id: string) =>
       id === 'repo-1' ? { id, connectionId: null, displayName: 'orca' } : undefined,
-    getSettings: () => ({ notifications: { enabled: true, agentTaskComplete: true } }),
-    getWorktreeMeta: (id: string) => (id === WT ? { displayName: 'feature' } : undefined),
+    getSettings: () => ({
+      notifications: { enabled: true, agentTaskComplete: true, ...notifications }
+    }),
+    getWorktreeMeta: (id: string) => (id === WT ? { displayName: 'feature', ...meta } : undefined),
     getAllWorktreeMeta: () => ({}),
     getFolderWorkspaces: () => [{ id: 'f1', name: 'Notes', projectGroupId: 'g1' }],
     getProjectGroups: () => [{ id: 'g1', name: 'Research' }]
@@ -54,6 +62,24 @@ function createHost(windowId: number | null = HEADLESS_RUNTIME_WINDOW_ID) {
 }
 
 describe('terminal agent phone push on a headless host', () => {
+  it('applies the host CLI completion mute while still announcing input requests', () => {
+    const h = createHost(
+      HEADLESS_RUNTIME_WINDOW_ID,
+      { cliProvenance: { kind: 'created-by-cli', createdAt: 1 } },
+      { cliWorktreeTaskComplete: false }
+    )
+    h.report('working')
+    h.report('done')
+    vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
+    h.report('working')
+    h.report('waiting')
+    expect(h.alerts).toEqual([
+      expect.objectContaining({ agentState: 'done', desktopAllowed: false }),
+      expect.objectContaining({ agentState: 'waiting' })
+    ])
+    expect(h.alerts[1]).not.toHaveProperty('desktopAllowed')
+  })
+
   beforeEach(() => {
     vi.useFakeTimers({ now: 100_000 })
   })

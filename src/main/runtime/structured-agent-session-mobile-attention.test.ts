@@ -83,6 +83,21 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
 }
 
 describe('structured attention mobile delivery', () => {
+  it.each(['cli', 'automation'] as const)(
+    'mutes %s completions but preserves prompts',
+    (workspaceOrigin) => {
+      const h = harness({
+        readNotificationSettings: () =>
+          settings({ cliWorktreeTaskComplete: false, automationWorktreeTaskComplete: false }),
+        readWorkspaceLabels: () => ({ workspaceOrigin })
+      })
+      h.delivery.deliver(completion('success'), SUMMARY)
+      h.delivery.deliver(PROMPT, SUMMARY)
+      expect(h.sent[0]).toMatchObject({ agentState: 'done', desktopAllowed: false })
+      expect(h.sent[1]?.desktopAllowed).toBeUndefined()
+    }
+  )
+
   it('pushes a raised prompt at once as "needs input", keyed by the prompt', () => {
     const h = harness()
     h.delivery.deliver(PROMPT, SUMMARY)
@@ -173,7 +188,11 @@ describe('readStructuredAttentionWorkspaceLabels', () => {
   it('reads a worktree and its repo from persisted metadata', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the read fields are stubbed.
     const labels = readStructuredAttentionWorkspaceLabels(store as never, SCOPE)
-    expect(labels).toEqual({ repoLabel: 'orca', worktreeLabel: 'feature' })
+    expect(labels).toEqual({
+      repoLabel: 'orca',
+      worktreeLabel: 'feature',
+      workspaceOrigin: 'other'
+    })
   })
 
   it('reads a folder workspace from the folder key a chat scope carries', () => {
@@ -182,7 +201,7 @@ describe('readStructuredAttentionWorkspaceLabels', () => {
       store as never,
       { ...SCOPE, workspaceId: 'folder:folder-1', workspaceKind: 'folder' }
     )
-    expect(labels).toEqual({ worktreeLabel: 'Notes' })
+    expect(labels).toEqual({ worktreeLabel: 'Notes', workspaceOrigin: 'other' })
   })
 })
 

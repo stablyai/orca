@@ -24,6 +24,7 @@ import {
 } from './terminal-platform-defaults'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
+export { getDefaultNotificationSettings } from './notification-settings-defaults'
 export {
   COMPACT_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,

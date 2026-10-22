@@ -27,8 +27,15 @@ import { buildNotificationOptions } from '../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
+import {
+  allowsWorkspaceAgentNotification,
+  getWorkspaceNotificationOrigin
+} from '../../shared/workspace-notification-policy'
 
-export type StructuredAttentionWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
+export type StructuredAttentionWorkspaceLabels = Pick<
+  NotificationDispatchRequest,
+  'repoLabel' | 'worktreeLabel' | 'workspaceOrigin'
+>
 
 export type StructuredAttentionMobileDeliveryDeps = {
   readNotificationSettings: () => NotificationSettings | undefined
@@ -57,13 +64,15 @@ export function readStructuredAttentionWorkspaceLabels(
     const folder = store
       .getFolderWorkspaces?.()
       .find((item) => item.id === folderScope.folderWorkspaceId)
-    return folder ? { worktreeLabel: folder.name } : {}
+    return { ...(folder ? { worktreeLabel: folder.name } : {}), workspaceOrigin: 'other' }
   }
   const repo = store.getRepo(getRepoIdFromWorktreeId(scope.workspaceId))
-  const worktreeLabel = store.getWorktreeMeta(scope.workspaceId)?.displayName
+  const meta = store.getWorktreeMeta(scope.workspaceId)
+  const worktreeLabel = meta?.displayName
   return {
     ...(repo?.displayName ? { repoLabel: repo.displayName } : {}),
-    ...(worktreeLabel ? { worktreeLabel } : {})
+    ...(worktreeLabel ? { worktreeLabel } : {}),
+    ...(meta ? { workspaceOrigin: getWorkspaceNotificationOrigin(meta) } : {})
   }
 }
 
@@ -112,7 +121,10 @@ export function createStructuredAttentionMobileDelivery(
         getRuntimeDesktopSurface().translateNotification
       )
       // The same eligibility the desktop's own fan-out applies: these preferences gate the phone too.
-      const desktopAllowed = settings.enabled && settings.agentTaskComplete
+      const desktopAllowed =
+        settings.enabled &&
+        settings.agentTaskComplete &&
+        allowsWorkspaceAgentNotification(settings, request.workspaceOrigin, news.agentState)
       deps.dispatch({
         type: 'notification',
         emittedAt: deps.now(),

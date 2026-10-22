@@ -20,11 +20,16 @@ import type {
 import { isPiCompatibleAgentType } from '../../shared/pi-agent-kind'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
+import { allowsWorkspaceAgentNotification } from '../../shared/workspace-notification-policy'
 
-export type TerminalAgentWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
+export type TerminalAgentWorkspaceLabels = Pick<
+  NotificationDispatchRequest,
+  'repoLabel' | 'worktreeLabel' | 'workspaceOrigin'
+>
 
 type PaneNews = {
   worktreeId: string
+  workspaceOrigin: NotificationDispatchRequest['workspaceOrigin']
   event: MobileNotificationDispatchEvent
   /** Waiting out a finish's quiet window. */
   quiet: { cancel: () => void } | null
@@ -149,9 +154,11 @@ export class TerminalAgentPhonePush {
     if (row.structuredHost) {
       return
     }
+    const labels = this.readLabels(worktreeId, paneKey)
     const news: PaneNews = {
       worktreeId,
-      event: this.buildEvent(worktreeId, paneKey, row),
+      workspaceOrigin: labels.workspaceOrigin,
+      event: this.buildEvent(worktreeId, paneKey, row, labels),
       quiet: null
     }
     if (!waitOutQuiet) {
@@ -173,14 +180,15 @@ export class TerminalAgentPhonePush {
   private buildEvent(
     worktreeId: string,
     paneKey: string,
-    row: AgentStatusIpcPayload
+    row: AgentStatusIpcPayload,
+    labels: TerminalAgentWorkspaceLabels
   ): MobileNotificationDispatchEvent {
     const outcome = agentMainAgentVerdict(row)
     const request: NotificationDispatchRequest = {
       source: 'agent-task-complete',
       worktreeId,
       paneKey,
-      ...this.readLabels(worktreeId, paneKey),
+      ...labels,
       agentState: row.state,
       ...(row.agentType ? { agentType: row.agentType } : {}),
       ...(row.prompt ? { agentPrompt: row.prompt } : {}),
@@ -213,7 +221,10 @@ export class TerminalAgentPhonePush {
     }
     const settings = this.deps.readNotificationSettings()
     // The window's own fan-out gates the phone on these same preferences.
-    const desktopAllowed = settings?.enabled !== false && settings?.agentTaskComplete !== false
+    const desktopAllowed =
+      settings?.enabled !== false &&
+      settings?.agentTaskComplete !== false &&
+      allowsWorkspaceAgentNotification(settings ?? {}, news.workspaceOrigin, news.event.agentState)
     const now = this.deps.now()
     const burstKey = JSON.stringify([desktopAllowed, news.event.agentState, news.worktreeId])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {

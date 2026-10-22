@@ -4,6 +4,36 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   {
+    title: translate('settings.notifications.cliWorktrees', 'CLI-created Worktrees'),
+    description: translate(
+      'settings.notifications.cliWorktreesDescription',
+      'Agent completion banners and phone pushes for worktrees created from the CLI.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.924a660a78', 'cli'),
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree'),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      )
+    ]
+  },
+  {
+    title: translate('settings.notifications.automationWorktrees', 'Automation-created Worktrees'),
+    description: translate(
+      'settings.notifications.automationWorktreesDescription',
+      'Agent completion banners and phone pushes for worktrees created by automations.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.7edf4f69e2', 'automation'),
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree'),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      )
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.notifications.search.4a210b2f72',
       'Enable Notifications'

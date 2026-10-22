@@ -3,6 +3,8 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contrac
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { getWorkspaceNotificationOrigin } from '../../shared/workspace-notification-policy'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { AgentStatusStoreView } from './sidebar-inputs/workspace-activity-facts-producer'
@@ -81,7 +83,11 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
       const group = folder
         ? store?.getProjectGroups?.().find((item) => item.id === folder.projectGroupId)
         : undefined
-      return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
+      return {
+        repoLabel: group?.name,
+        worktreeLabel: folder?.name || fallback,
+        workspaceOrigin: 'other'
+      }
     }
     const id = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
     // The listing is a cache a catalog change empties; the persisted record names it meanwhile.
@@ -91,7 +97,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     const repo = repoId ? store?.getRepo(repoId) : undefined
     return {
       repoLabel: repo?.displayName,
-      worktreeLabel: listed?.displayName || listed?.branch || meta?.displayName || fallback
+      worktreeLabel: listed?.displayName || listed?.branch || meta?.displayName || fallback,
+      workspaceOrigin:
+        id === FLOATING_TERMINAL_WORKTREE_ID
+          ? 'other'
+          : listed || meta
+            ? getWorkspaceNotificationOrigin(listed ?? meta)
+            : undefined
     }
   }
 }
