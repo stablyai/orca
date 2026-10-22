@@ -160,10 +160,9 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.monitor-run-id }}
 
-      - uses: pnpm/setup@v2
+      - uses: ./.github/actions/setup-pnpm
         with:
           package-json-file: cloud/package.json
-          install: false
 
       - uses: actions/setup-node@v4
         with:

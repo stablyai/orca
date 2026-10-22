@@ -91,8 +91,8 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - uses: pnpm/setup@v2
-        with: { package-json-file: cloud/package.json, install: false }
+      - uses: ./.github/actions/setup-pnpm
+        with: { package-json-file: cloud/package.json }
 
       - uses: actions/setup-node@v4
         with:

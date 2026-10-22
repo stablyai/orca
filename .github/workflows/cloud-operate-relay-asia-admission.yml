@@ -195,10 +195,9 @@ jobs:
           node-version: 24
           check-latest: true
 
-      - uses: pnpm/setup@v2
+      - uses: ./.github/actions/setup-pnpm
         with:
           package-json-file: cloud/package.json
-          install: false
         if: ${{ steps.inputs.outputs.canary == 'true' }}
 
       - name: Install exact canary dependencies

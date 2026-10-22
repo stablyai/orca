@@ -8,6 +8,7 @@ on:
       - src/packages/process-host/**
       - .github/workflows/cloud-*.yml
       - .github/actions/cloud-sql-rollout-lease/**
+      - .github/actions/setup-pnpm/**
   push:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - src/packages/process-host/**
       - .github/workflows/cloud-*.yml
       - .github/actions/cloud-sql-rollout-lease/**
+      - .github/actions/setup-pnpm/**
 
 permissions:
   contents: read
@@ -86,10 +88,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/setup@v2
+      - uses: ./.github/actions/setup-pnpm
         with:
           package-json-file: cloud/package.json
-          install: false
 
       - uses: actions/setup-node@v4
         with:
@@ -222,10 +223,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/setup@v2
+      - uses: ./.github/actions/setup-pnpm
         with:
           package-json-file: cloud/package.json
-          install: false
 
       - uses: actions/setup-node@v4
         with:

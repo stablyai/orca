@@ -57,10 +57,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/setup@v2
+      - uses: ./.github/actions/setup-pnpm
         with:
           package-json-file: cloud/package.json
-          install: false
 
       - uses: actions/setup-node@v4
         with:

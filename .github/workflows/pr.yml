@@ -1536,9 +1536,7 @@ jobs:
           package-manager-cache: false
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
+        uses: ./.github/actions/setup-pnpm
 
       - name: Install with every package isolated in its own store slot
         run: |

@@ -50,6 +50,7 @@ const MOBILE_CI_TOOL_FILES = new Set([
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
   '.github/actions/install-node-dependencies/',
+  '.github/actions/setup-pnpm/',
   '.github/actions/restore-pnpm-verification/',
   '.github/actions/prepare-native-runtime/',
   'config/scripts/pr-code-change-scope',

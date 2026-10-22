@@ -35,6 +35,7 @@ on:
       - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/setup-pnpm/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
@@ -76,6 +77,8 @@ on:
       - 'config/mobile-ci.vitest.config.mjs'
       - 'config/scripts/run-mobile-ci-tests.mjs'
       - 'config/.bun-version'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/setup-pnpm/**'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'
       - '!src/shared/**/*.test.[jt]sx'
