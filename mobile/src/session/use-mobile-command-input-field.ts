@@ -4,6 +4,25 @@ import type { TextInput } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import { subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 
+const MIN_COMMAND_INPUT_HEIGHT = 34
+const MAX_COMMAND_INPUT_HEIGHT = 120
+
+function clampCommandInputHeight(height: number): number {
+  return Math.min(Math.max(height, MIN_COMMAND_INPUT_HEIGHT), MAX_COMMAND_INPUT_HEIGHT)
+}
+
+/** Web `<textarea>` defaults to 2 rows when `numberOfLines` is omitted. */
+function measureWebTextareaHeight(node: unknown): number | undefined {
+  if (typeof HTMLTextAreaElement === 'undefined' || !(node instanceof HTMLTextAreaElement)) {
+    return undefined
+  }
+  node.rows = 1
+  node.style.height = `${MIN_COMMAND_INPUT_HEIGHT}px`
+  const measured = clampCommandInputHeight(node.scrollHeight)
+  node.style.height = `${measured}px`
+  return measured
+}
+
 /**
  * Android command field: blur when the keyboard hides, and remount when the buffer
  * goes empty, so native selection handles cannot stick at the top-left.
@@ -17,7 +36,7 @@ export function useMobileCommandInputField({
 }): {
   commandFieldRef: (node: TextInput | null) => void
   emptyResetEpoch: number
-  inputHeight: number | undefined
+  inputHeight: number
   onContentSizeChange: (e: { nativeEvent: { contentSize: { height: number } } }) => void
   onCommandFieldFocus: () => void
   onCommandFieldBlur: () => void
@@ -26,11 +45,15 @@ export function useMobileCommandInputField({
   const isFocusedRef = useRef(false)
   const prevInputRef = useRef(input)
   const [emptyResetEpoch, setEmptyResetEpoch] = useState(0)
+  const [contentHeight, setContentHeight] = useState(MIN_COMMAND_INPUT_HEIGHT)
 
   const commandFieldRef = useCallback(
     (node: TextInput | null) => {
       commandInputNodeRef.current = node
       bindCommandField(node)
+      if (typeof HTMLTextAreaElement !== 'undefined' && node instanceof HTMLTextAreaElement) {
+        node.rows = 1
+      }
       if (node && isFocusedRef.current) {
         node.focus()
       }
@@ -67,15 +90,31 @@ export function useMobileCommandInputField({
       }
       prevInputRef.current = input
     }
+    if (!input) {
+      const node: unknown = commandInputNodeRef.current
+      if (typeof HTMLTextAreaElement !== 'undefined' && node instanceof HTMLTextAreaElement) {
+        node.rows = 1
+        node.style.height = `${MIN_COMMAND_INPUT_HEIGHT}px`
+      }
+      setContentHeight(MIN_COMMAND_INPUT_HEIGHT)
+      return
+    }
+    const measured = measureWebTextareaHeight(commandInputNodeRef.current)
+    if (typeof measured === 'number') {
+      setContentHeight(measured)
+    }
   }, [input])
-
-  const [contentHeight, setContentHeight] = useState<number | undefined>(undefined)
 
   const onContentSizeChange = useCallback(
     (e: { nativeEvent: { contentSize: { height: number } } }) => {
+      const measured = measureWebTextareaHeight(commandInputNodeRef.current)
+      if (typeof measured === 'number') {
+        setContentHeight(measured)
+        return
+      }
       const height = e.nativeEvent?.contentSize?.height
       if (typeof height === 'number' && Number.isFinite(height)) {
-        setContentHeight(Math.min(Math.max(height, 34), 120))
+        setContentHeight(clampCommandInputHeight(height))
       }
     },
     []
@@ -84,7 +123,7 @@ export function useMobileCommandInputField({
   return {
     commandFieldRef,
     emptyResetEpoch,
-    inputHeight: input ? contentHeight : undefined,
+    inputHeight: input ? contentHeight : MIN_COMMAND_INPUT_HEIGHT,
     onContentSizeChange,
     onCommandFieldFocus: () => {
       isFocusedRef.current = true

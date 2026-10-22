@@ -85,7 +85,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           ? `cmd-input-${emptyResetEpoch}-${autocompleteEnabled ? 'ac-on' : 'ac-off'}`
           : 'cmd-input'
       }
-      style={[styles.textInput, inputHeight !== undefined ? { height: inputHeight } : null]}
+      style={[styles.textInput, { height: inputHeight }]}
       value={bufferedTerminalDraftState.input}
       // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
       onChangeText={bufferedTerminalDraftState.setInput}

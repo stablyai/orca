@@ -254,4 +254,83 @@ describe('multiline command input', () => {
     expect(commandField().props.value).toBe(buffer)
     expect(dockHierarchy()).toEqual(hierarchy)
   })
+
+  it('defaults an empty command field to a single-line height', () => {
+    const draft: Draft = { input: '' }
+    mount(commandController(draft, []))
+    expect(commandField().props.numberOfLines).toBeUndefined()
+    expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 34 }]))
+  })
+
+  it('resets to a single-line height after a multiline draft is cleared', () => {
+    const draft: Draft = { input: 'echo first' }
+    const sent: string[] = []
+    mount(commandController(draft, sent))
+
+    act(() => {
+      commandField().props.onContentSizeChange({ nativeEvent: { contentSize: { height: 60 } } })
+    })
+    expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 60 }]))
+
+    act(() => {
+      commandField().props.onChangeText('')
+    })
+    act(() => {
+      tree?.update(
+        createElement(MobileSessionCommandDock, { controller: commandController(draft, sent) })
+      )
+    })
+    expect(commandField().props.value).toBe('')
+    expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 34 }]))
+  })
+
+  it('sets rows=1 on a web HTMLTextAreaElement and shrinks height when lines are deleted', () => {
+    class MockTextArea {
+      rows = 2
+      style = { height: '' }
+      scrollHeight = 30
+      focus(): void {}
+      blur(): void {}
+    }
+    const prevTextArea = Reflect.get(globalThis, 'HTMLTextAreaElement')
+    Reflect.set(globalThis, 'HTMLTextAreaElement', MockTextArea)
+    try {
+      const textarea = new MockTextArea()
+      const draft: Draft = { input: 'echo first\necho second' }
+      const sent: string[] = []
+      act(() => {
+        tree = create(
+          createElement(MobileSessionCommandDock, { controller: commandController(draft, sent) }),
+          {
+            createNodeMock: (element) => (element.type === 'TextInput' ? textarea : null)
+          }
+        )
+      })
+      expect(textarea.rows).toBe(1)
+
+      textarea.scrollHeight = 54
+      act(() => {
+        commandField().props.onContentSizeChange({ nativeEvent: { contentSize: { height: 54 } } })
+      })
+      expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 54 }]))
+
+      textarea.scrollHeight = 30
+      act(() => {
+        commandField().props.onChangeText('echo first')
+      })
+      act(() => {
+        tree?.update(
+          createElement(MobileSessionCommandDock, { controller: commandController(draft, sent) })
+        )
+      })
+      expect(textarea.style.height).toBe('34px')
+      expect(commandField().props.style).toEqual(expect.arrayContaining([{ height: 34 }]))
+    } finally {
+      if (prevTextArea === undefined) {
+        Reflect.deleteProperty(globalThis, 'HTMLTextAreaElement')
+      } else {
+        Reflect.set(globalThis, 'HTMLTextAreaElement', prevTextArea)
+      }
+    }
+  })
 })
