@@ -17,7 +17,7 @@ import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence
 import { forgetHeldOrcadFence, rememberHeldOrcadFence } from '../../ssh/orcad-held-fence-tokens'
 import { exitedOwnLockProof } from '../../ssh/orcad-exited-own-lock'
 import { orcadWindowsBaseDir } from './orcad-remote-windows-node'
-import { uploadRelayDirectory, writeRelayFile } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
 import {
   abandonInstall,
   finalizeInstall,
@@ -91,9 +91,15 @@ export async function installOrcadBundle(
     ) {
       return
     }
-    await uploadRelayDirectory(options.conn, options.localOrcadDir, remoteDir, options.host, {
-      signal: options.signal
-    })
+    await uploadRemoteInstallDirectory(
+      options.conn,
+      options.localOrcadDir,
+      remoteDir,
+      options.host,
+      {
+        signal: options.signal
+      }
+    )
     if (options.host.os !== 'win32') {
       await execCommand(
         options.conn,
@@ -104,7 +110,7 @@ export async function installOrcadBundle(
         }
       )
     }
-    await writeRelayFile(
+    await writeRemoteInstallFile(
       options.conn,
       options.host,
       joinRemotePath(options.host, remoteDir, ORCAD_INSTALL_MODEL.versionFilename),

@@ -120,6 +120,8 @@ export class StructuredAgentSessionClientDelivery {
   publishConversationName = (sessionId: string): void =>
     this.statusFeed.publishConversationName(sessionId)
 
+  publishRecordNotes = (sessionId: string): void => this.statusFeed.publishRecordNotes(sessionId)
+
   publishChildWork = (
     sessionId: string,
     evidence: AgentChildWorkEvidence[],

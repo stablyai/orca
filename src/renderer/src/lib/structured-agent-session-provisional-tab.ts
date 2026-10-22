@@ -1,5 +1,4 @@
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import type { Tab } from '../../../shared/tab-types'
 import type {
   AgentSessionLaunchPlan,
   AgentSessionLaunchTarget
@@ -27,13 +26,14 @@ import {
   opensAtAction
 } from './structured-agent-session-action-launch'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from './empty-workspace-default-surface-claims'
+import type { OpenedAgentSessionTab } from './structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
   openStructuredAgentSessionProvisionalTab
 } from './structured-agent-session-launch-surface'
 export { openStructuredAgentSessionProvisionalTab } from './structured-agent-session-launch-surface'
 
-type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: Tab }
+type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: OpenedAgentSessionTab }
 
 /** A chat's tab opens once its host admits it; a launch with no host to ask takes the direct path. */
 export type StructuredAgentSessionProvisionalLaunch =

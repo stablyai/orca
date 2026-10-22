@@ -2,7 +2,7 @@ import { absolutePathToFileUri } from '@/components/editor/markdown-internal-lin
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { basename } from '@/lib/path'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 
 /** Still the answer for flows that need a real `file://` URL (e.g. dropping a file on a browser pane). */
@@ -39,7 +39,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
   }
   if (
     getConnectionIdForFile(params.worktreeId, params.filePath) !== null ||
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, params.worktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, params.worktreeId)
   ) {
     // Why: Chromium resolves file:// URLs on the local machine. Remote files
     // need an Orca-served URL before the browser can render them correctly.

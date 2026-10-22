@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
+import { isHeadlessBuiltPublication } from '../mobile-session-snapshot-equality'
 import { sameRuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 
@@ -130,8 +131,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
   // snapshot must not be classified as headless-built, or its renderer tabs
   // read as runtime-owned.
   protected isHeadlessBuiltMobileSessionPublicationBase(publicationEpoch: string): boolean {
-    const base = publicationEpoch.split(':headless-merge:')[0]
-    return base.startsWith('headless:') || base.startsWith('headless-hydrated:')
+    return isHeadlessBuiltPublication(publicationEpoch)
   }
 
   protected getMergedMobileSessionPublicationEpoch(

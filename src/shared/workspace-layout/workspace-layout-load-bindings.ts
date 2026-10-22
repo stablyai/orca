@@ -2,7 +2,7 @@
 // key (records); the model keys it by leaf id alone, so a leaf id repeated in the partition gets a
 // new id first and every record lands on the pane it named.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import { isPaneSleepRecord, type SleepingAgentSessionRecord } from '../agent-session-resume'
 import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { omitStoredFields } from './stored-record-fields'
@@ -75,7 +75,8 @@ function loadLeaf(
   paneKey: string,
   records: PaneRecords
 ) {
-  const sleeping = records.sleeping[paneKey]
+  const saved = records.sleeping[paneKey]
+  const record = saved && omitStoredFields(saved, ['paneKey', 'tabId', 'worktreeId'])
   const leaf: LayoutLeaf = {
     ...(stored.ptyIdsByLeafId?.[leafId] !== undefined
       ? { ptyId: stored.ptyIdsByLeafId[leafId] }
@@ -89,9 +90,7 @@ function loadLeaf(
     ...(stored.lastGridsByLeafId?.[leafId] !== undefined
       ? { lastGrid: stored.lastGridsByLeafId[leafId] }
       : {}),
-    ...(sleeping
-      ? { sleeping: omitStoredFields(sleeping, ['paneKey', 'tabId', 'worktreeId']) }
-      : {})
+    ...(record && (isPaneSleepRecord(record) ? { sleeping: record } : { resume: record }))
   }
   delete records.sleeping[paneKey]
   delete records.incarnations[paneKey]

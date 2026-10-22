@@ -19,7 +19,6 @@ import {
   prepareClaudeStructuredSessionAcquisitionOptions
 } from './claude-structured-session-acquisition-options'
 import {
-  claudeResolvedCatalogListing,
   claudeStructuredSessionOptionsFrom,
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
@@ -33,10 +32,7 @@ import type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 
-export type ClaudeOpenFacts = Pick<
-  StructuredAgentSessionProviderOpenResult,
-  'reportedOptions' | 'catalogListing'
->
+export type ClaudeOpenFacts = Pick<StructuredAgentSessionProviderOpenResult, 'reportedOptions'>
 
 /** A lifecycle event the start reports, before the session's identity is stamped on it. */
 export type ClaudeStartupReport = {
@@ -198,23 +194,17 @@ function applyClaudeSettingsFacts(
  *  on every reopen, past a later settings change. */
 function claudeStartedReportedOptions(
   session: ClaudeSession,
-  catalog: unknown[],
-  readMutationSequence = session.optionMutationSequence
-): Pick<ClaudeOpenFacts, 'reportedOptions' | 'catalogListing'> {
-  const { current, catalogListing } = claudeStructuredSessionOptionsFrom(
-    session,
-    catalog,
-    readMutationSequence
-  )
-  const listing = catalogListing ? { catalogListing } : {}
+  catalog: unknown[]
+): Pick<ClaudeOpenFacts, 'reportedOptions'> {
+  const { current } = claudeStructuredSessionOptionsFrom(session, catalog)
   const { model: _projected, ...rest } = current
   const model = claudeExecutionObservations(session).model
   const observed = { ...rest, ...(model ? { model } : {}) }
   if (session.options.has('effort') || session.reportedOptions.effort !== undefined) {
-    return { reportedOptions: observed, ...listing }
+    return { reportedOptions: observed }
   }
   const { effort: _displayOnly, ...persisted } = observed
-  return { reportedOptions: persisted, ...listing }
+  return { reportedOptions: persisted }
 }
 
 /** The host awaits initialize and proof while owning the published child. */
@@ -239,11 +229,7 @@ export async function openClaudeSession(input: {
   }
   applyClaudeInitializeFacts(session, initialized)
   const result: ClaudeOpenFacts = {
-    ...claudeStartedReportedOptions(
-      session,
-      readClaudeModels(initialized.initialization),
-      session.fastModeAtStart ? session.optionMutationSequence - 1 : undefined
-    )
+    ...claudeStartedReportedOptions(session, readClaudeModels(initialized.initialization))
   }
   void settleClaudeStartupSettings(input, initialized)
   return result
@@ -280,10 +266,7 @@ async function settleClaudeStartupSettings(
   applyClaudeSettingsFacts(session, facts, writtenSinceRead)
   input.report({
     type: 'options-reported',
-    // Open already returned the initialize listing to the host.
     reportedOptions: claudeStartedReportedOptions(session, readClaudeModels(facts.initialization))
-      .reportedOptions,
-    // The one report of what the config resolved: the readback just applied it.
-    ...claudeResolvedCatalogListing(session, readClaudeModels(facts.initialization))
+      .reportedOptions
   })
 }

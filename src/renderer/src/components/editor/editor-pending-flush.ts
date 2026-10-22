@@ -3,15 +3,17 @@ import {
   type EditorBufferViewIndex
 } from '@/store/slices/editor/buffers/editor-buffer-views'
 
-type PendingEditor = { flush: () => void; hasChange?: () => boolean }
+type PendingEditor = { flush: () => void; hasChange?: () => boolean; preserve?: () => void }
 const pendingEditorFlushes = new Map<string, Set<PendingEditor>>()
 
 export function registerPendingEditorFlush(
   fileId: string,
   flush: () => void,
-  hasChange?: () => boolean
+  hasChange?: () => boolean,
+  /** Keeps pending input as draft text when the view closes and `flush` can't commit it. */
+  preserve?: () => void
 ): () => void {
-  const entry = { flush, hasChange }
+  const entry = { flush, hasChange, preserve }
   const entries = pendingEditorFlushes.get(fileId) ?? new Set<PendingEditor>()
   entries.add(entry)
   pendingEditorFlushes.set(fileId, entries)
@@ -53,4 +55,33 @@ export function hasPendingEditorBufferChange(
   return pendingEntriesOf(editorBufferSiblingViewIds(state, fileId)).some((entry) =>
     entry.hasChange?.()
   )
+}
+
+/**
+ * Before tabs close: commits pending text from every pane of these files and the views sharing
+ * their records. Idle panes no-op; panes of other files are left alone, so their edits continue.
+ */
+export function flushClosingEditorBuffers(
+  state: EditorBufferViewIndex,
+  fileIds: Iterable<string>
+): void {
+  const entries = new Set<PendingEditor>()
+  for (const fileId of fileIds) {
+    for (const entry of pendingEntriesOf(editorBufferSiblingViewIds(state, fileId))) {
+      entries.add(entry)
+    }
+  }
+  for (const entry of entries) {
+    try {
+      entry.flush()
+    } catch (error) {
+      // Why: one pane failing to flush must not block the close, nor lose the pane's input.
+      console.error('[editor] flushing pending edits before tabs close failed', error)
+      try {
+        entry.preserve?.()
+      } catch (preserveError) {
+        console.error('[editor] preserving pending edits before tabs close failed', preserveError)
+      }
+    }
+  }
 }

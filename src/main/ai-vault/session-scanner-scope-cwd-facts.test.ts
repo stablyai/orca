@@ -63,10 +63,9 @@ it.each([false, true])('keeps cold authority with read failure=%s', async (failR
     )
     if (index === 0) {
       const context = jsonLines([{ type: 'turn_context', payload: { cwd: '/repo' } }])
+      const { atime, mtime } = await stat(path)
       await appendFile(path, `\n${context}\n`)
-      // Why: the append stamps wall-clock mtime, which overtakes the busy files once real time passes their date.
-      const day1 = new Date(Date.UTC(2026, 9, 1, 10))
-      await utimes(path, day1, day1)
+      await utimes(path, atime, mtime)
     }
     const { mtimeMs, size: sizeBytes, mtime } = await stat(path)
     const parsed = await parseAgentSessionFileCached(

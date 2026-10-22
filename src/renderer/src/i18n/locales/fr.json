@@ -128,7 +128,7 @@
   "settings": {
     "chat": {
       "permissionsTitle": "Autorisations pour les nouveaux chats",
-      "permissionsDescription": "S’applique uniquement aux nouveaux chats. Les agents ouverts dans un terminal utilisent Paramètres → Agents → Autorisations des agents.",
+      "permissionsDescription": "Uniquement pour les nouveaux chats. Les paramètres par défaut propres à chaque agent se trouvent dans Paramètres → Agents.",
       "description": "Choisissez l’apparence et le comportement des chats.",
       "names": {
         "title": "Noms des chats",
@@ -199,7 +199,8 @@
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "portuguese": "Português (Brasil)"
       },
       "statusBar": {
         "claudeToggleDescription": "Afficher l'utilisation des tokens et des coûts de Claude pour l'espace de travail actif.",
@@ -314,6 +315,10 @@
       "readFailed": "Impossible de lire les paramètres des agents. Vérifiez la connexion à l’hôte et réessayez.",
       "saveFailed": "Impossible d’enregistrer les paramètres des agents. Vérifiez la connexion à l’hôte et réessayez.",
       "hostDefaults": "Paramètres par défaut des nouveaux agents sur l’hôte sélectionné.",
+      "defaultOpensAs": "Ouvrir {{value0}} en tant que",
+      "defaultOpensAsChat": "Chat",
+      "defaultOpensAsCli": "CLI",
+      "defaultOpensAsScope": "S’applique aux nouvelles sessions {{value0}} lancées depuis cet ordinateur, y compris sur les hôtes associés. Correspond à son interrupteur dans Fournisseurs.",
       "save": "Enregistrer",
       "clearDefault": "Effacer l'agent par défaut"
     },
@@ -1379,6 +1384,12 @@
       }
     },
     "components": {
+      "hostPicker": {
+        "searchHosts": "Rechercher des hôtes…",
+        "noHostsMatch": "Aucun hôte ne correspond.",
+        "moreHosts_one": "{{count}} autre hôte. Recherchez-le par son nom.",
+        "moreHosts_other": "{{count}} autres hôtes. Recherchez par nom pour en trouver un."
+      },
       "BrowserCookieImportDisclosure": {
         "title": "Connexions Google non importées",
         "description": "Connectez-vous à Google directement dans Orca."
@@ -3617,7 +3628,6 @@
         "bar": {
           "BrowserTab": {
             "6e0bc8f3a8": "Ouvrir dans le navigateur",
-            "9dd880bd56": "Fermer tous les onglets à droite",
             "1611a1324b": "Fermer",
             "5d6e89891f": "Dupliquer l'onglet",
             "966feb9ad5": "Scinder vers la droite",
@@ -3634,7 +3644,6 @@
             "52ce4f4605": "Copier le chemin relatif",
             "5b85754786": "Copier le chemin",
             "bfd5797ef4": "Ouvrir l'aperçu Markdown",
-            "e5ff31ccaf": "Fermer tous les onglets à droite",
             "ba1369dd24": "Fermer tous les onglets de l'éditeur",
             "1ba8492c5b": "Fermer",
             "68cc610e7f": "Renommer",
@@ -3667,7 +3676,6 @@
           "SortableTabContextMenu": {
             "35e8892fd0": "Couleur de l'onglet",
             "2f697b3c31": "Modifier le titre",
-            "c1ee099c7e": "Fermer tous les onglets à droite",
             "8d16f9cd30": "Fermer les autres",
             "89359a36f7": "Fermer",
             "21132389e9": "Scinder vers la droite",
@@ -3936,6 +3944,12 @@
             "connectedHostCount_one": "{{count}} hôte",
             "connectedHostCount_other": "{{count}} hôtes",
             "connecting": "Connexion…",
+            "searchSshHosts": "Rechercher des hôtes SSH…",
+            "noMatchingSshHosts": "Aucun hôte SSH ne correspond.",
+            "moreSshHostMatches_one": "{{count}} autre résultat. Continuez à taper pour affiner.",
+            "moreSshHostMatches_other": "{{count}} autres résultats. Continuez à taper pour affiner.",
+            "moreSshHosts_one": "Trouver {{count}} autre hôte SSH…",
+            "moreSshHosts_other": "Chercher parmi {{count}} autres hôtes SSH…",
             "runtime_unavailable_transport_up": "Orque indisponible"
           },
           "StatusBar": {
@@ -6950,7 +6964,6 @@
           "4e32e030b2": "Stocké localement. Orca ne l'envoie qu'à platform.minimax.io pour les actualisations de consommation.",
           "remoteServerFallback": "le serveur distant",
           "loadAccountsFailed": "Impossible de charger les comptes du fournisseur.",
-          "remoteScopeAccounts": "Affiche les comptes gérés par {{value0}}. Ajoutez ou réauthentifiez les comptes sur ce serveur.",
           "accountScopePrefix": "Portée des comptes",
           "accountScopeRemoteServerUnnamed": "Serveur distant",
           "remoteScopeLocalAccountsKept": "Les comptes gérés sur ce bureau restent inchangés. Repassez le runtime par défaut sur Local desktop pour les voir.",
@@ -7203,8 +7216,6 @@
           "ee110e1830": "Aucun ref de base par défaut"
         },
         "BrowserDefaultZoomSetting": {
-          "2622126877": "Niveau de zoom appliqué aux nouveaux onglets du navigateur.",
-          "bbeec087d3": "Appliqué aux nouveaux onglets du navigateur.",
           "265597101f": "Zoom par défaut"
         },
         "BrowserHomePageSetting": {
@@ -12808,7 +12819,8 @@
           "behindRolledBack": "Exécute une version du serveur Orca plus ancienne que cette app ; la dernière mise à jour a été annulée. Utilisez Mettre à jour le serveur pour réessayer.",
           "behindNoTemplate": "Exécute une version du serveur Orca que cette app ne peut pas mettre à jour ; cette version d’Orca n’inclut pas de serveur pour cet hôte.",
           "behindMigrating": "Exécute le serveur Orca, qui se mettra à jour une fois le déplacement de ses projets terminé.",
-          "behindCheckFailed": "Exécute le serveur Orca ; Orca n’a pas pu vérifier s’il est en retard sur cette app."
+          "behindCheckFailed": "Exécute le serveur Orca ; Orca n’a pas pu vérifier s’il est en retard sur cette app.",
+          "refusedBlockedReason": "Orca n’est pas encore configuré sur cet hôte. {{reason}}"
         },
         "deltaMove": {
           "action": "Déplacer les nouveaux projets…",
@@ -12950,7 +12962,7 @@
         "SshRestoreRemovedHosts": {
           "title": "Restaurer les hôtes supprimés ?",
           "description": "Les hôtes de ~/.ssh/config supprimés dans Orca réapparaissent dans les réglages et dans tous les sélecteurs d’hôte.",
-          "none": "Aucun hôte de ~/.ssh/config supprimé.",
+          "none": "Aucun hôte de ~/.ssh/config supprimé dans Orca n’est disponible pour la restauration.",
           "confirm": "Restaurer"
         },
         "SshTargetList": {
@@ -14409,8 +14421,8 @@
             "deleteReasonUnsupportedAgent": "{{value0}} sessions ne peuvent pas être supprimées depuis Orca.",
             "resumeInNewNativeChat": "Reprendre dans un nouveau chat",
             "resumeInNewCli": "Reprendre dans un nouveau terminal",
-            "resumeInNewCliTooltipFork": "Forke cette conversation dans une nouvelle session CLI.",
-            "resumeInNewCliTooltipChat": "Le chat natif reste tel quel."
+            "resumeInNewCliTooltipFork": "Démarre une nouvelle session de l’agent de terminal avec une copie de cette conversation.",
+            "resumeInNewCliTooltipChat": "Ce chat reste inchangé."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Supprimer cette session ?",
@@ -14588,7 +14600,7 @@
             "databaseCount_one": "{{value0}} base de données",
             "databaseCount_other": "{{value0}} bases de données",
             "scanning": "Analyse de {{value0}}",
-            "reading": "Lecture de {{value0}} fichiers",
+            "checking": "Vérification {{value0}}",
             "scanned": "{{value0}} analysés"
           }
         }
@@ -16382,17 +16394,20 @@
             }
           }
         },
+        "staleViewEdit": {
+          "rejected": "Votre saisie récente dans cette vue a été abandonnée, car le fichier a été modifié dans une autre vue."
+        },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "Le collage est trop volumineux.",
           "stopped": "La grosse pâte s'est arrêtée avant d'avoir fini.",
           "cancelled": "Gros collage annulé car sa cible d'origine a changé."
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "Ce fichier a changé sur le disque alors que vous avez des modifications non enregistrées. L’écrasement remplace le contenu plus récent sur le disque.",
           "3fa2b8d417": "Recharger depuis le disque",
           "a95d02c644": "Garder mes modifications",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "Écraser",
+          "keepHint": "Conservez votre version. Le prochain enregistrement remplacera la version sur le disque.",
           "5c02de9b31": "Rechargé depuis le disque",
           "d1e830fa22": "Annuler",
           "90b2ce7d43": "Comparer"
@@ -16433,10 +16448,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "Ce fichier a changé sur le disque depuis vos modifications. Utilisez le bandeau pour comparer, recharger ou écraser."
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "Ce fichier a changé sur le disque depuis le chargement de cette section."
             }
           }
         },
@@ -16757,7 +16772,6 @@
             "95af781091": "Envoyer un retour à un agent",
             "ac39b9366b": "Envoyer",
             "a3508d7e6e": "{{value0}} annotation{{value1}} prête. Sélectionnez un autre élément ou copiez tous les retours.",
-            "f796c774a4": "Saisissez une URL ci-dessus pour commencer à naviguer.",
             "366bf5d62c": "Nouvel onglet",
             "1c78adc73d": "Ouvrir en externe",
             "da68d35f7b": "Ouvrir la page en erreur dans le navigateur par défaut",
@@ -16883,7 +16897,8 @@
               "bar": {
                 "suggestions": {
                   "87fcdd0da9": "Recherche {{value0}}"
-                }
+                },
+                "placeholder": "Rechercher ou saisir une URL"
               }
             }
           },
@@ -18429,9 +18444,9 @@
         "couldNotStart": "{{agent}} n'a pas pu démarrer.",
         "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
         "couldNotRestart": "{{agent}} n'a pas pu redémarrer.",
+        "cliTooOld": "{{agent}} {{installedVersion}} est trop ancien pour les conversations. Mettez-le à jour vers {{minimumVersion}} ou une version ultérieure.",
         "startTimedOut": "{{agent}} a mis trop de temps à démarrer (aucune réponse à {{method}} après {{seconds}} s).",
         "startTimedOutKeepsHappening": "Si cela se reproduit, l'ordinateur qui exécute ce chat est peut-être surchargé.",
-        "codexCliTooOld": "Codex {{installedVersion}} est trop ancien pour les conversations. Mettez-le à jour vers {{minimumVersion}} ou une version ultérieure.",
         "notSignedIn": "{{agent}} n’est pas connecté.",
         "claudeSystemNotSignedIn": "Claude n’est pas connecté. Exécutez `{{loginCommand}}`, ou choisissez un compte dans les paramètres des Comptes Claude.",
         "claudeManagedNotSignedIn": "Ce compte Claude n’est pas connecté. Reconnectez-vous dans les paramètres des Comptes Claude.",
@@ -18929,6 +18944,8 @@
         "plan": "Plan",
         "historyRepaired": "Une partie de l'historique de ce chat n'a pas pu être chargée.",
         "historyItemTooLarge": "Cette partie du chat était trop volumineuse pour être affichée.",
+        "continuedOutside": "Poursuivi en dehors de ce chat.",
+        "continuedOutsideRewound": "Poursuivi en dehors de ce chat. Les réponses précédentes ne font plus partie de l'historique de cette conversation.",
         "stoppedBeforeStart": "Arrêté manuellement",
         "dismiss": "Ignorer",
         "copyError": "Copier l'erreur",
@@ -19117,7 +19134,7 @@
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",
       "structuredSessionHostDeclined": "{{value0}} ouvert dans un terminal",
-      "structuredSessionHostDeclinedDescription": "Ce serveur ne peut pas exécuter de discussion {{value0}} dans cet espace de travail.",
+      "structuredSessionHostDeclinedDescription": "Cet espace de travail ne peut pas exécuter de discussion {{value0}}.",
       "structuredSessionHostUnreachable": "Impossible de joindre {{value0}}",
       "structuredSessionHostUnreachableDescription": "Orca n'a pas ouvert de discussion {{value0}}. Vérifiez la connexion au serveur et réessayez.",
       "hostOutage": {
@@ -19174,17 +19191,14 @@
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "Passer à l’agent de terminal",
-          "switchToChatView": "Passer à l’interface de chat",
-          "closeTabsToLeft": "Fermer tous les onglets à gauche"
+          "switchToTerminalView": "Continuer avec l’agent de terminal",
+          "switchToChatView": "Continuer dans l’interface de chat"
         },
         "BrowserTab": {
-          "closeOthers": "Fermer les autres",
-          "closeTabsToLeft": "Fermer tous les onglets à gauche"
+          "closeOthers": "Fermer les autres"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Fermer les autres",
-          "closeTabsToLeft": "Fermer tous les onglets à gauche"
+          "closeOthers": "Fermer les autres"
         },
         "CopyTabIdMenuItem": {
           "copied": "ID de l'onglet copié",
@@ -19458,6 +19472,17 @@
           "checking": "Recherche de modifications…",
           "checkingDetails": "Vérification…",
           "unavailableDetails": "Détails indisponibles"
+        },
+        "unsavedEdits": {
+          "discarded_one": "Les modifications non enregistrées de {{count}} fichier seront ignorées :",
+          "discarded_other": "Les modifications non enregistrées de {{count}} fichiers seront ignorées :",
+          "moreFiles": "et {{value}} de plus",
+          "blocked_one": "Enregistrez ou fermez d'abord {{count}} fichier non enregistré dans {{name}}",
+          "blocked_other": "Enregistrez ou fermez d'abord {{count}} fichiers non enregistrés dans {{name}}",
+          "closedToast_one": "{{count}} fichier avec des modifications non enregistrées de {{workspace}} a été fermé",
+          "closedToast_other": "{{count}} fichiers avec des modifications non enregistrées de {{workspace}} ont été fermés",
+          "reopen": "Rouvrir",
+          "reopenFailed": "Certains fichiers n’ont pas pu être rouverts. Ouvrez un espace de travail et réessayez avec Rouvrir."
         }
       }
     },
@@ -19928,8 +19953,12 @@
       "status": "PR #{{number}} non lié"
     },
     "discard": {
+      "deleteUntrackedFileDescription": "Cela supprimera définitivement ce fichier non suivi. Cette action est irréversible.",
+      "deleteUntrackedFilesDescription": "Cela supprimera définitivement ces {{count}} fichiers non suivis. Cette action est irréversible.",
       "restoreStagedVersionDescription": "Cela restaurera la dernière version intermédiaire et annulera la suppression. Cela ne peut pas être annulé.",
-      "unstagedChangesDescription": "Cela annulera les modifications non planifiées apportées à ce fichier. Cela ne peut pas être annulé."
+      "unstagedChangesDescription": "Cela annulera les modifications non planifiées apportées à ce fichier. Cela ne peut pas être annulé.",
+      "unstagedSelectionIncludingUntrackedDescription": "Cela annulera les modifications non indexées et supprimera définitivement tous les fichiers non suivis de cette sélection. Cette action est irréversible.",
+      "unstagedFilesIncludingUntrackedDescription": "Cela annulera les modifications non indexées et supprimera définitivement tous les fichiers non suivis parmi ces {{count}} fichiers. Cette action est irréversible."
     }
   },
   "agentsSidebarIntro": {
@@ -20609,6 +20638,27 @@
       "waitingAriaLabel": "Mise à jour en attente d'autres instances Orca. Cliquez pour développer.",
       "preparingLabel": "Préparation de la mise à jour",
       "preparingAriaLabel": "Préparation de la mise à jour. Cliquez pour développer."
+    }
+  },
+  "onboarding": {
+    "language": {
+      "back": "Langues",
+      "requestPrompt": "Quelle langue aimeriez-vous voir prise en charge par Orca ?",
+      "requestSuccess": "Demande de langue enregistrée. Vous pouvez poursuivre la configuration.",
+      "requestError": "Impossible d’enregistrer votre demande. Réessayez.",
+      "retry": "Réessayer",
+      "requestAction": "Demander une langue",
+      "title": "Langue d’affichage",
+      "device": "Langue du système : {{language}}",
+      "unsupported": "Langue du système : {{language}}. Cette langue n’est pas encore prise en charge.",
+      "unknown": "La langue du système n’a pas pu être détectée. Choisissez une langue ci-dessous.",
+      "loadError": "Impossible de charger cette langue. Réessayez.",
+      "saveError": "Impossible d’enregistrer votre préférence de langue. Réessayez.",
+      "other": "Autre langue…",
+      "settingsError": "Impossible de charger vos paramètres.",
+      "loadingSettings": "Chargement des paramètres…",
+      "loading": "Chargement de la langue…",
+      "saving": "Enregistrement de la langue…"
     }
   }
 }

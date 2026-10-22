@@ -93,6 +93,7 @@ function buildSession(overrides: Record<string, unknown> = {}): ConnectPanePtySe
     hiddenOutputRestoreRemoteOutcomeAttempts: 0,
     hiddenOutputRestoreLocalGateAttempts: 0,
     markHiddenOutputRestoreNeeded: vi.fn(),
+    requestRemoteProgramRedraw: vi.fn(),
     ...overrides
   } as unknown as ConnectPanePtySession
   bindParkRevealSnapshotVerdictActions(session)
@@ -115,6 +116,10 @@ describe('warnParkRevealNoHostImage', () => {
       { foreground: true, beforeWrite: session.beforeTerminalOutputWrite }
     )
     expect(writeTerminalOutput.mock.calls[0]?.[1]).not.toContain('\x18')
+    // Why: without an image an idle TUI keeps its old frame until it repaints (#26887).
+    expect(session.requestRemoteProgramRedraw).toHaveBeenCalledExactlyOnceWith(
+      'park-reveal-no-host-image'
+    )
   })
 
   it('stays silent for a local pane, whose layout copy is never released', () => {

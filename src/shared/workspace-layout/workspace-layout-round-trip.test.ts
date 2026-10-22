@@ -94,7 +94,8 @@ describe('workspace layout Loader and Serializer', () => {
     // round trip above saved its pane records under the terminal id.
     expect(workspace.leaves?.[leaf(3)]).toMatchObject({
       incarnationId: 'inc-3',
-      sleeping: { agent: 'claude' }
+      // The fixture's record is a quit capture: a running agent's resume record, not a sleep.
+      resume: { agent: 'claude' }
     })
     expect(workspace.groups.map((group) => group.tabOrder)).toEqual([
       ['tab-shell', 'tab-agent', 'editor:src/app.ts'],

@@ -18,6 +18,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
+import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import {
   planSidebarFeedRows,
   renderSidebarFeedRows,
@@ -44,18 +45,6 @@ import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 
-const NO_FEED: SidebarFeedDomains = {
-  workspaces: new Map(),
-  activity: new Map(),
-  review: new Map(),
-  creations: new Map(),
-  pairedServerHosts: new Map(),
-  pairedServerRows: new Map(),
-  repoIcons: new Map(),
-  desktop: null,
-  projectCatalog: null,
-  retention: null
-}
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
 
@@ -121,7 +110,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const domains = useMemo(
     () =>
       withWindowCreations(
-        overlaySidebarPendingLayer(feed?.domains ?? NO_FEED, pending, {
+        overlaySidebarPendingLayer(feed?.domains ?? EMPTY_SIDEBAR_FEED_DOMAINS, pending, {
           repos,
           lineageById: args.worktreeLineageById
         }),

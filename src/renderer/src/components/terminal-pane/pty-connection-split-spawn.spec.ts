@@ -188,120 +188,121 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       'disposed',
       'hide-wait',
       'disposed-hide-wait'
-    ])(
-      'preserves first-fit startup and bounded fallback: %s',
-      async (scenario) => {
-        const visibility = scenario === 'hidden' ? 'hidden' : 'visible'
-        const narrow = scenario.startsWith('narrow-')
-        const pendingCwd = scenario.includes('cwd') ? createDeferred<string>() : null
-        const hideWait = scenario.endsWith('hide-wait')
-        let measurable = !pendingCwd && scenario !== 'disposed' && !hideWait
-        const frameCallbacks: FrameRequestCallback[] = []
-        globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-          frameCallbacks.push(callback)
-          return frameCallbacks.length
-        })
-        const doc = Object.assign(new EventTarget(), {
-          visibilityState: visibility,
-          addEventListener: vi.fn(EventTarget.prototype.addEventListener),
-          removeEventListener: vi.fn(EventTarget.prototype.removeEventListener)
-        })
-        vi.stubGlobal('document', doc)
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    ])('preserves first-fit startup and bounded fallback: %s', async (scenario) => {
+      const visibility = scenario === 'hidden' ? 'hidden' : 'visible'
+      const narrow = scenario.startsWith('narrow-')
+      const pendingCwd = scenario.includes('cwd') ? createDeferred<string>() : null
+      const hideWait = scenario.endsWith('hide-wait')
+      let measurable = !pendingCwd && scenario !== 'disposed' && !hideWait
+      const frameCallbacks: FrameRequestCallback[] = []
+      globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+        frameCallbacks.push(callback)
+        return frameCallbacks.length
+      })
+      const doc = Object.assign(new EventTarget(), {
+        visibilityState: visibility,
+        addEventListener: vi.fn(EventTarget.prototype.addEventListener),
+        removeEventListener: vi.fn(EventTarget.prototype.removeEventListener)
+      })
+      vi.stubGlobal('document', doc)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
 
-        const { connectPanePty } = await import('./pty-connection')
-        const { applyOrDeferPaneMetricOptions } =
-          await import('@/lib/pane-manager/pane-metric-options-deferral')
-        const transport = createMockTransport()
-        transportFactoryQueue.push(transport)
-        const pane = createPane(1)
-        Object.assign(pane.terminal, { cols: 80, rows: 24 })
-        const terminalOptions = Object.assign(pane.terminal.options, { fontSize: 12 })
-        pane.container = createMeasuredElement({ rect: () => createRect(1200, 800) })
-        const dimensions = () => {
-          if (!measurable) {
-            return { cols: 0, rows: 0 }
-          }
-          return narrow || terminalOptions.fontSize === 24
-            ? { cols: 5, rows: 20 }
-            : { cols: 120, rows: 40 }
+      const { connectPanePty } = await import('./pty-connection')
+      const { applyOrDeferPaneMetricOptions } =
+        await import('@/lib/pane-manager/pane-metric-options-deferral')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      const pane = createPane(1)
+      Object.assign(pane.terminal, { cols: 80, rows: 24 })
+      const terminalOptions = Object.assign(pane.terminal.options, { fontSize: 12 })
+      pane.container = createMeasuredElement({ rect: () => createRect(1200, 800) })
+      const dimensions = () => {
+        if (!measurable) {
+          return { cols: 0, rows: 0 }
         }
-        pane.fitAddon.proposeDimensions = vi.fn(dimensions)
-        pane.fitAddon.fit = vi.fn(() => {
-          Object.assign(pane.terminal, dimensions())
-        })
-        const startup = scenario === 'narrow-plain' ? null : { command: 'claude' }
-        const deps = createDeps({
-          startup,
-          ...(pendingCwd ? { cwdPromise: pendingCwd.promise } : {})
-        })
-        if (scenario === 'narrow-remote') {
-          mockStoreState.repos[0].executionHostId = 'runtime:env-1'
-          mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
-        }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane, manager and deps doubles implement every member connectPanePty reads on this startup path.
-        const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
-        if (scenario === 'metrics') {
-          applyOrDeferPaneMetricOptions(args[0], { fontSize: 24 }, false)
-        }
-        const binding = connectPanePty(...args)
-
-        if (visibility === 'visible' && scenario !== 'starved') {
-          frameCallbacks.shift()?.(0)
-          const hideListener = doc.addEventListener.mock.calls.at(-1)?.[1]
-          if (pendingCwd || hideWait || ['metrics', 'disposed', 'narrow-command'].includes(scenario)) {
-            expect(transport.connect).not.toHaveBeenCalled()
-          }
-          if (scenario.startsWith('disposed')) {
-            binding.dispose()
-          }
-          if (hideWait) {
-            doc.visibilityState = 'hidden'
-            doc.dispatchEvent(new Event('visibilitychange'))
-            expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
-            expect(doc.removeEventListener).toHaveBeenCalledWith('visibilitychange', hideListener)
-            if (typeof hideListener === 'function') {
-              hideListener(new Event('visibilitychange'))
-            }
-          }
-          if (scenario === 'late-cwd') {
-            vi.advanceTimersByTime(250)
-            expect(transport.connect).not.toHaveBeenCalled()
-          }
-          pendingCwd?.resolve('/workspace')
-          await flushAsyncTicks()
-          if (scenario === 'cwd') {
-            expect(transport.connect).not.toHaveBeenCalled()
-          }
-          measurable = true
-          terminalOptions.fontSize = 12
-          if (scenario === 'narrow-command') {
-            for (let retry = 0; retry < 11; retry += 1) {
-              frameCallbacks.shift()?.(0)
-            }
-            expect(transport.connect).not.toHaveBeenCalled()
-          }
-          frameCallbacks.shift()?.(0)
-          expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
-        } else {
-          vi.advanceTimersByTime(250)
-        }
-
-        vi.advanceTimersByTime(250)
-        expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
-        if (scenario.startsWith('disposed')) {
-          return
-        }
-        expect(createdTransportOptions[0]?.command).toBe(startup?.command)
-        expect(transport.connect).toHaveBeenCalledWith(
-          expect.objectContaining(
-            narrow || hideWait || scenario === 'late-cwd'
-              ? { cols: 80, rows: 24 }
-              : { cols: 120, rows: 40 }
-          )
-        )
+        return narrow || terminalOptions.fontSize === 24
+          ? { cols: 5, rows: 20 }
+          : { cols: 120, rows: 40 }
       }
-    )
+      pane.fitAddon.proposeDimensions = vi.fn(dimensions)
+      pane.fitAddon.fit = vi.fn(() => {
+        Object.assign(pane.terminal, dimensions())
+      })
+      const startup = scenario === 'narrow-plain' ? null : { command: 'claude' }
+      const deps = createDeps({
+        startup,
+        ...(pendingCwd ? { cwdPromise: pendingCwd.promise } : {})
+      })
+      if (scenario === 'narrow-remote') {
+        mockStoreState.repos[0].executionHostId = 'runtime:env-1'
+        mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane, manager and deps doubles implement every member connectPanePty reads on this startup path.
+      const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+      if (scenario === 'metrics') {
+        applyOrDeferPaneMetricOptions(args[0], { fontSize: 24 }, false)
+      }
+      const binding = connectPanePty(...args)
+
+      if (visibility === 'visible' && scenario !== 'starved') {
+        frameCallbacks.shift()?.(0)
+        const hideListener = doc.addEventListener.mock.calls.at(-1)?.[1]
+        if (
+          pendingCwd ||
+          hideWait ||
+          ['metrics', 'disposed', 'narrow-command'].includes(scenario)
+        ) {
+          expect(transport.connect).not.toHaveBeenCalled()
+        }
+        if (scenario.startsWith('disposed')) {
+          binding.dispose()
+        }
+        if (hideWait) {
+          doc.visibilityState = 'hidden'
+          doc.dispatchEvent(new Event('visibilitychange'))
+          expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
+          expect(doc.removeEventListener).toHaveBeenCalledWith('visibilitychange', hideListener)
+          if (typeof hideListener === 'function') {
+            hideListener(new Event('visibilitychange'))
+          }
+        }
+        if (scenario === 'late-cwd') {
+          vi.advanceTimersByTime(250)
+          expect(transport.connect).not.toHaveBeenCalled()
+        }
+        pendingCwd?.resolve('/workspace')
+        await flushAsyncTicks()
+        if (scenario === 'cwd') {
+          expect(transport.connect).not.toHaveBeenCalled()
+        }
+        measurable = true
+        terminalOptions.fontSize = 12
+        if (scenario === 'narrow-command') {
+          for (let retry = 0; retry < 11; retry += 1) {
+            frameCallbacks.shift()?.(0)
+          }
+          expect(transport.connect).not.toHaveBeenCalled()
+        }
+        frameCallbacks.shift()?.(0)
+        expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
+      } else {
+        vi.advanceTimersByTime(250)
+      }
+
+      vi.advanceTimersByTime(250)
+      expect(transport.connect).toHaveBeenCalledTimes(scenario.startsWith('disposed') ? 0 : 1)
+      if (scenario.startsWith('disposed')) {
+        return
+      }
+      expect(createdTransportOptions[0]?.command).toBe(startup?.command)
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining(
+          narrow || hideWait || scenario === 'late-cwd'
+            ? { cols: 80, rows: 24 }
+            : { cols: 120, rows: 40 }
+        )
+      )
+    })
 
     it('spawns the delayed primary pane of an issue-command split when its sibling owns the tab PTY fallback', async () => {
       const { connectPanePty } = await import('./pty-connection')

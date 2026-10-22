@@ -40,7 +40,7 @@ import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import { ORCAD_WINDOWS_LIVENESS_MANY_MARKER } from '../host-state/orcad-windows-host-script'
 
-export type OrcadGcOptions = {
+type OrcadGcOptions = {
   conn: OrcadHostTransport
   host: RemoteHostPlatform
   remoteHome: string

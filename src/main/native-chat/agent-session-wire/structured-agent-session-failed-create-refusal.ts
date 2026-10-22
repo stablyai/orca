@@ -30,7 +30,8 @@ import {
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
-import { codexInstallationProblemOf } from '../../codex/codex-cli-installation-error'
+import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
+import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
 import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
 
 /** Who a failed acquisition's sentence names, and whether it was the session's first start. */
@@ -114,9 +115,9 @@ function isExitProvenAcquisitionFailure(error: unknown): error is Error {
 function failedAcquisitionDetails(
   error: unknown
 ): AgentSessionRefusalDetailsByCode['agent_session_operation_invalid'] | undefined {
-  const codexInstallation = codexInstallationProblemOf(error)
-  if (codexInstallation) {
-    return { reason: 'attachFailed', codexInstallation }
+  const installation = agentCliInstallationProblemOf(error)
+  if (installation) {
+    return { reason: 'attachFailed', ...agentCliInstallationFacts(installation) }
   }
   const argumentProblem = argumentProblemOf(error)
   if (argumentProblem) {
@@ -148,7 +149,7 @@ export function failedAcquisitionRefusal(
     error instanceof AgentSessionAcquisitionRefusal ||
     isExitProvenAcquisitionFailure(error) ||
     (isAgentSessionPreSpawnError(error) &&
-      (argumentProblemOf(error) || codexInstallationProblemOf(error)))
+      (argumentProblemOf(error) || agentCliInstallationProblemOf(error)))
   ) {
     return {
       ok: false,

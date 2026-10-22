@@ -9,6 +9,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/codex-terminal-clipboard'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -79,6 +80,27 @@ describe('a terminal create that is handed a launch prompt', () => {
       expect(spawn.mock.calls[0]?.[0]?.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(flag)
       expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('claude')
       expect(spawnedCommand(spawn)).toContain('claude')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  // #10861: a paired client's Codex on a desktop host copied to the host's clipboard, not the viewer's.
+  it.each([
+    { supported: undefined, marker: undefined },
+    { supported: true, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION },
+    { supported: false, marker: CODEX_REMOTE_VIEWER_SSH_CONNECTION }
+  ])('routes Codex copy to a remote launcher (%s)', async ({ supported, marker }) => {
+    vi.stubEnv('SSH_CONNECTION', undefined)
+    vi.stubEnv('SSH_TTY', undefined)
+    try {
+      const { runtime, spawn } = runtimeWithAgentLaunch()
+      await runtime.createTerminal('id:wt-1', {
+        startupAgent: 'codex',
+        terminalImageViewerSupported: supported
+      })
+      expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('codex')
+      expect(spawn.mock.calls[0]?.[0]?.env.SSH_CONNECTION).toBe(marker)
     } finally {
       vi.unstubAllEnvs()
     }

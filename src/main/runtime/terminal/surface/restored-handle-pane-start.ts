@@ -24,8 +24,8 @@ export abstract class OrcaRuntimeWithRestoredHandlePaneStart extends OrcaRuntime
     return withinCallerBounds(this.ensureRestoredPaneStarted(pane), {
       ...bounds,
       startTimeoutMs: MOBILE_TERMINAL_SURFACE_TIMEOUT_MS
-    }).then((ptyId) => {
-      const pty = ptyId === null ? undefined : this.ptysById.get(ptyId)
+    }).then((started) => {
+      const pty = started === null ? undefined : this.ptysById.get(started.id)
       if (!pty) {
         throw new Error('terminal_not_found')
       }

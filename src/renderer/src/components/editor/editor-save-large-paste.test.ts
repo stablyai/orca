@@ -58,8 +58,15 @@ function pasteIntoGuardedTab(pasted: string) {
   const files = new Map([[PATH, 'base']])
   const writeFile = vi.fn(async (args: GuardedWriteArgs) => {
     const conflict = args.diskPrecondition
-      ? compareDiskWritePrecondition(args.diskPrecondition, files.get(args.filePath) ?? null)
+      ? compareDiskWritePrecondition(
+          args.diskPrecondition,
+          files.get(args.filePath) ?? null,
+          args.content
+        )
       : null
+    if (conflict === 'identical') {
+      return { ok: true, unchanged: true }
+    }
     if (conflict) {
       return { ok: false, diskConflict: conflict }
     }
@@ -118,7 +125,11 @@ it('holds autosave while a chunked paste is in flight, then saves the pasted tex
   expect(files.get(PATH)).toBe(`${pasted}base`)
   expect(writeFile).toHaveBeenCalledWith(
     expect.objectContaining({
-      diskPrecondition: { expectedSignature: getDiskBaselineSignature('base'), allowMissing: false }
+      diskPrecondition: {
+        expectedSignature: getDiskBaselineSignature('base'),
+        allowMissing: false,
+        requireLosslessUtf8: true
+      }
     })
   )
   queue.dispose()

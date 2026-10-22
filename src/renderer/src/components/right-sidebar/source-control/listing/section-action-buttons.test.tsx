@@ -20,11 +20,9 @@ const UNSTAGED_ENTRY: GitStatusEntry = {
 
 function renderUncommittedSections({
   sections = [{ id: 'unstaged', area: 'unstaged', items: [UNSTAGED_ENTRY] }],
-  isStatusTruncated = false,
   handleStageSectionPaths = vi.fn()
 }: {
   sections?: SourceControlDisplaySection[]
-  isStatusTruncated?: boolean
   handleStageSectionPaths?: (
     sectionId: SourceControlDisplaySectionId,
     paths: readonly string[]
@@ -46,7 +44,6 @@ function renderUncommittedSections({
         requestDiscardAllInArea={vi.fn()}
         handleStageAllPaths={vi.fn()}
         handleStageSectionPaths={handleStageSectionPaths}
-        isStatusTruncated={isStatusTruncated}
         handleUnstagePaths={vi.fn()}
         sourceControlViewMode="list"
         visibleTreeRowsBySection={{}}
@@ -65,7 +62,7 @@ function renderUncommittedSections({
         handleContextMenu={vi.fn()}
         revealInExplorer={vi.fn()}
         activeConnectionId={null}
-        handleOpenDiff={vi.fn()}
+        openUncommittedFile={vi.fn()}
         handleStage={vi.fn()}
         handleUnstage={vi.fn()}
         requestDiscardEntry={vi.fn()}
@@ -78,24 +75,24 @@ function renderUncommittedSections({
 describe('source control section header actions', () => {
   it('routes the Changes header Stage all through the section handler', () => {
     const handleStageSectionPaths = vi.fn(async () => {})
-    renderUncommittedSections({ handleStageSectionPaths, isStatusTruncated: true })
+    renderUncommittedSections({ handleStageSectionPaths })
 
     fireEvent.click(screen.getByRole('button', { name: 'Stage all' }))
 
     expect(handleStageSectionPaths).toHaveBeenCalledWith('unstaged', ['src/app.ts'])
   })
 
-  it('hides the Untracked header Stage all when the listing hit its cap', () => {
-    const untracked: SourceControlDisplaySection = {
-      id: 'untracked',
-      area: 'untracked',
-      items: [{ path: 'new.ts', status: 'untracked', area: 'untracked' }]
+  it('includes untracked files in the Changes header Stage all', () => {
+    const handleStageSectionPaths = vi.fn(async () => {})
+    const changes: SourceControlDisplaySection = {
+      id: 'unstaged',
+      area: 'unstaged',
+      items: [UNSTAGED_ENTRY, { path: 'new.ts', status: 'untracked', area: 'untracked' }]
     }
-    renderUncommittedSections({ sections: [untracked], isStatusTruncated: true })
-    expect(screen.queryByRole('button', { name: 'Stage all' })).toBeNull()
+    renderUncommittedSections({ sections: [changes], handleStageSectionPaths })
 
-    cleanup()
-    renderUncommittedSections({ sections: [untracked], isStatusTruncated: false })
-    expect(screen.getByRole('button', { name: 'Stage all' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Stage all' }))
+
+    expect(handleStageSectionPaths).toHaveBeenCalledWith('unstaged', ['src/app.ts', 'new.ts'])
   })
 })

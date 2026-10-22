@@ -1,5 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { expectMainFrameClosesExitedSplitPaneOnce } from './pty-connection-test-exited-split-pane-close'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
@@ -107,7 +108,12 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         await flushAsyncTicks()
 
         expect(hasPty).toHaveBeenCalledWith('pty-pane-2')
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        // Switch on: the host's authoritative absence is a confirmed end; main closes, the frame shows it.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('does not close when targeted liveness is live or unknown', async () => {
@@ -229,7 +235,11 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         binding.reconcileIfSessionMissing(async () => false, afterSpawn + 1)
         await flushAsyncTicks()
 
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('routes the last pane through onPtyExitRef when its session is dead', async () => {
@@ -349,11 +359,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         // Restart rebinds the pane to a new live PTY; its later real exit must not be ignored by a stale guard.
         transport.getPtyId.mockReturnValue('pty-pane-2-restarted')
         onPtyExit?.('pty-pane-2-restarted')
-        // A switch-on build closes it on main's answer.
-        await layoutApplyTestTransport.settle()
 
-        expect(manager.closePane).toHaveBeenCalledTimes(1)
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledTimes(1)
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('closes a split pane exactly once across reconcile + a racing real exit', async () => {
@@ -385,8 +397,14 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         // A racing real/synthetic pty:exit for the SAME id must not close twice.
         onPtyExit?.('pty-pane-2')
 
-        expect(manager.closePane).toHaveBeenCalledTimes(1)
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          // The racing exit must not re-run the teardown that registered main's close.
+          expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledTimes(1)
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledTimes(1)
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
 
       it('closes a genuinely-dead non-suppressed pane once (not misread as suppressed)', async () => {
@@ -419,8 +437,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         onPtyExit?.('pty-pane-2')
 
         // Observable outcome: single close, pane was treated as dead (closed).
-        expect(manager.closePane).toHaveBeenCalledTimes(1)
-        expect(manager.closePane).toHaveBeenCalledWith(2)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledTimes(1)
+          await expectMainFrameClosesExitedSplitPaneOnce(manager)
+        } else {
+          expect(manager.closePane).toHaveBeenCalledTimes(1)
+          expect(manager.closePane).toHaveBeenCalledWith(2)
+        }
       })
     })
 

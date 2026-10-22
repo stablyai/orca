@@ -91,6 +91,8 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
           runtime: this,
           livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
           liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+          remoteSessionIdOf: (worktreeId, tabId) =>
+            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
           applyLayoutCommand: (command) => this.applyLayoutCommand(command),
           stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
           describe: (...args) => this.describeTerminalClose(...args)
@@ -258,6 +260,8 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
           runtime: this,
           livePty: () => this.getLivePtyForHandle(handle)?.pty ?? null,
           liveLeaf: () => this.getLiveLeafForHandle(handle).leaf,
+          remoteSessionIdOf: (worktreeId, tabId) =>
+            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[tabId],
           applyLayoutCommand: (command) => this.applyLayoutCommand(command),
           stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
           describe: (...args) => this.describeTerminalClose(...args)

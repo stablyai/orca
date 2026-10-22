@@ -3,7 +3,10 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type * as BackgroundMountModule from '@/components/terminal/background-terminal-worktree-mount'
 
-const { requestMount } = vi.hoisted(() => ({ requestMount: vi.fn() }))
+const { requestMount, mainStarts } = vi.hoisted(() => {
+  const started: unknown[] = []
+  return { requestMount: vi.fn(), mainStarts: started }
+})
 
 vi.mock('@/components/terminal/background-terminal-worktree-mount', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundMountModule>()),
@@ -27,12 +30,34 @@ import {
   seedEmptyActivatableWorktree
 } from './worktree-activation-created-agent.test-fixture'
 
-// Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
-  (
+// Main's answer to the window's layout commands, as a switch-on build sends them, and the first
+// terminals it starts for the window's new tabs.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const client = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
-)
+  return {
+    ...client,
+    callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) => {
+      if (args[1] !== 'terminal.create') {
+        return client.callRuntimeRpc(...args)
+      }
+      mainStarts.push(args[2])
+      return new Promise(() => undefined)
+    }
+  }
+})
+
+/** Whether the tab's startup runs: main runs it in a layout-owner build, else the window's mount. */
+function startupRuns(tabId: string): boolean {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    return useAppStore.getState().pendingStartupByTabId[tabId] !== undefined
+  }
+  return mainStarts.some(
+    (params) =>
+      typeof params === 'object' && params !== null && 'tabId' in params && params.tabId === tabId
+  )
+}
 
 /** Whether the user sees the terminal titled Setup: a layout-owner build sends the title to main,
  *  whose frame (not modelled here) draws it; otherwise the window titles the row itself. */
@@ -93,6 +118,7 @@ async function createAfterUserSwitchedAway(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mainStarts.length = 0
   seedEmptyActivatableWorktree(worktree)
 })
 
@@ -111,7 +137,7 @@ describe('a create finishing after the user switched away', () => {
     const state = useAppStore.getState()
     const tabs = state.tabsByWorktree[worktree.id] ?? []
     expect(new Set(tabs.map((tab) => tab.id)).size).toBe(2)
-    expect(tabs.every((tab) => state.pendingStartupByTabId[tab.id] !== undefined)).toBe(true)
+    expect(tabs.every((tab) => startupRuns(tab.id))).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(requestMount).toHaveBeenCalledWith({
       worktreeId: worktree.id,

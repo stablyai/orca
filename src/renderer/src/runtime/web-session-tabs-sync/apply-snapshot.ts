@@ -1,6 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,
@@ -29,9 +30,12 @@ export function applyWebSessionTabsSnapshotWithContext(
   batchContext?: WebSessionTabsBatchContext,
   options?: WebSessionTabsSnapshotApplyOptions
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  // Why: the floating panel is this machine's own, so only its local chat inventory may write it.
+  const isLocalChatInventory =
+    environmentId === LOCAL_STRUCTURED_SESSION_OWNER && options?.contentScope === 'agent-session'
   if (
     suppressE2eWebRuntimeBrowserSnapshot(rawSnapshot) ||
-    rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID
+    (rawSnapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID && !isLocalChatInventory)
   ) {
     return state
   }

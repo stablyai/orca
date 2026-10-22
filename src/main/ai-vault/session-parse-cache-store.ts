@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ResumableSessionParseState } from './session-scanner-types'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { TranscriptMessageChannel } from './session-transcript-channel'
@@ -44,6 +44,8 @@ export type SessionParseCacheEntry = {
   resume: SessionParseResumePoint | null
   // The dropped resume point's skipped records, so its notice outlives it.
   skippedRecords?: SkippedTranscriptRecord[]
+  // The agent whose parser folded this row. In-memory only: a stored row names it on `session`.
+  agent?: AiVaultAgent
 }
 
 // Persisted subset of a cache entry: the non-serializable parser state is
@@ -51,7 +53,7 @@ export type SessionParseCacheEntry = {
 // session whose sibling moved rather than storing every row twice.
 export type PersistedSessionParseCacheEntry = Omit<
   SessionParseCacheEntry,
-  'resume' | 'foldSession' | 'skippedRecords'
+  'resume' | 'foldSession' | 'skippedRecords' | 'agent'
 >
 
 // A transcript version's cwd for scope membership: null means the version is
@@ -112,15 +114,37 @@ export function resetSessionParseCacheForTests(): void {
   coldTier = null
 }
 
-// Drops one entry after its file is deleted, or to force a whole re-read. The
-// cold tier drops it too, or the next lookup would read it back.
+// Why: OMP also honors Pi's PI_CODING_AGENT_DIR, so both can list one transcript. The path's row
+// stays with the agent that folded it first; the other keeps its own row beside it.
+const SHARED_TRANSCRIPT_AGENTS: ReadonlySet<string> = new Set<AiVaultAgent>(['pi', 'omp'])
+
+export function sessionParseCacheKey(agent: AiVaultAgent, path: string): string {
+  if (!SHARED_TRANSCRIPT_AGENTS.has(agent)) {
+    return path
+  }
+  // Peeked, not placed: a listing names its row before the row enters memory.
+  const hot = cache.get(path)
+  const owner = hot?.agent ?? (hot ?? peekSessionParseCacheEntry(path))?.session?.agent
+  return owner === undefined || owner === agent ? path : `${path}#${agent}`
+}
+
+/** The transcript a row's key names. */
+export function sessionParseCacheTranscriptPath(key: string): string {
+  const agent = key.slice(key.lastIndexOf('#') + 1)
+  return SHARED_TRANSCRIPT_AGENTS.has(agent) ? key.slice(0, -agent.length - 1) : key
+}
+
+// Drops one transcript's rows after its file is deleted, or to force a whole re-read. The
+// cold tier drops them too, or the next lookup would read them back.
 export function invalidateSessionParseCacheEntry(path: string): void {
-  unlistedPaths.delete(path)
-  resumePaths.delete(path)
-  cache.delete(path)
-  readScopeCwds.delete(path)
-  scopeKnowledge.delete(path)
-  coldTier?.deleted(path)
+  for (const key of [path, ...[...SHARED_TRANSCRIPT_AGENTS].map((agent) => `${path}#${agent}`)]) {
+    unlistedPaths.delete(key)
+    resumePaths.delete(key)
+    cache.delete(key)
+    readScopeCwds.delete(key)
+    scopeKnowledge.delete(key)
+    coldTier?.deleted(key)
+  }
 }
 
 export function noteSessionParseCacheListed(path: string): void {

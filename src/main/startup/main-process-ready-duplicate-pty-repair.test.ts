@@ -39,7 +39,6 @@ vi.mock('electron', () => ({
   app: { isPackaged: false, on: vi.fn(), once: vi.fn(), getPath: () => fixture.userData },
   nativeTheme: {}
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./main-process-state', () => ({ mainProcessState: fixture.state }))
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {

@@ -24,7 +24,7 @@
   "settings": {
     "chat": {
       "permissionsTitle": "새 채팅의 권한",
-      "permissionsDescription": "새 채팅에만 적용됩니다. 터미널에서 여는 에이전트는 설정 → 에이전트 → 에이전트 권한을 사용합니다.",
+      "permissionsDescription": "새 채팅에만 적용됩니다. 에이전트별 기본값은 설정 → 에이전트에 있습니다.",
       "description": "채팅의 모양과 동작 방식을 선택하세요.",
       "names": {
         "title": "채팅 이름",
@@ -95,7 +95,8 @@
         "korean": "한국어",
         "japanese": "日本語",
         "spanish": "Español",
-        "french": "Français"
+        "french": "Français",
+        "portuguese": "Português (Brasil)"
       },
       "statusBar": {
         "claudeToggleDescription": "활성 워크스페이스에 대한 Claude 토큰 및 비용 사용량을 표시합니다.",
@@ -210,6 +211,10 @@
       "readFailed": "에이전트 설정을 읽을 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
       "saveFailed": "에이전트 설정을 저장할 수 없습니다. 호스트 연결을 확인하고 다시 시도하세요.",
       "hostDefaults": "선택한 호스트의 새 에이전트 기본값입니다.",
+      "defaultOpensAs": "{{value0}} 여는 방식",
+      "defaultOpensAsChat": "채팅",
+      "defaultOpensAsCli": "CLI",
+      "defaultOpensAsScope": "이 컴퓨터에서 시작하는 새 {{value0}} 세션(페어링된 호스트 포함)에 적용됩니다. 공급자의 스위치와 같습니다.",
       "save": "저장",
       "clearDefault": "기본 에이전트 지우기"
     },
@@ -1275,6 +1280,12 @@
       }
     },
     "components": {
+      "hostPicker": {
+        "searchHosts": "호스트 검색…",
+        "noHostsMatch": "일치하는 호스트가 없습니다.",
+        "moreHosts_one": "호스트 {{count}}개 더 있음. 이름으로 검색하세요.",
+        "moreHosts_other": "호스트 {{count}}개 더 있음. 이름으로 검색하세요."
+      },
       "CodexRestartChip": {
         "c72a5fb234": "다시 시작",
         "9263e75f49": "Codex는 이전 계정을 사용하고 있습니다",
@@ -3509,7 +3520,6 @@
         "bar": {
           "BrowserTab": {
             "6e0bc8f3a8": "브라우저에서 열기",
-            "9dd880bd56": "오른쪽의 모든 탭 닫기",
             "1611a1324b": "닫기",
             "5d6e89891f": "탭 복제",
             "966feb9ad5": "오른쪽 분할",
@@ -3526,7 +3536,6 @@
             "52ce4f4605": "상대 경로 복사",
             "5b85754786": "경로 복사",
             "bfd5797ef4": "Markdown 미리보기 열기",
-            "e5ff31ccaf": "오른쪽의 모든 탭 닫기",
             "ba1369dd24": "모든 편집기 탭 닫기",
             "1ba8492c5b": "닫기",
             "68cc610e7f": "이름 바꾸기",
@@ -3559,7 +3568,6 @@
           "SortableTabContextMenu": {
             "35e8892fd0": "탭 색상",
             "2f697b3c31": "제목 변경",
-            "c1ee099c7e": "오른쪽의 모든 탭 닫기",
             "8d16f9cd30": "다른 탭 닫기",
             "89359a36f7": "닫기",
             "21132389e9": "오른쪽 분할",
@@ -3827,6 +3835,12 @@
             "connectedHostCount_one": "호스트 {{count}}개",
             "connectedHostCount_other": "호스트 {{count}}개",
             "connecting": "연결 중…",
+            "searchSshHosts": "SSH 호스트 검색…",
+            "noMatchingSshHosts": "일치하는 SSH 호스트가 없습니다.",
+            "moreSshHostMatches_one": "{{count}}개 더 일치합니다. 계속 입력해 범위를 좁히세요.",
+            "moreSshHostMatches_other": "{{count}}개 더 일치합니다. 계속 입력해 범위를 좁히세요.",
+            "moreSshHosts_one": "SSH 호스트 {{count}}개 더 찾기…",
+            "moreSshHosts_other": "SSH 호스트 {{count}}개 중에서 찾기…",
             "runtime_unavailable_transport_up": "Orca를 사용할 수 없습니다.",
             "runtime_workspace_window_closed": "워크스페이스 창이 닫혔습니다."
           },
@@ -5838,8 +5852,8 @@
           "workspaceSection": "워크스페이스",
           "primaryDeleteDisabled": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
           "deleteWorktree": "작업 트리 삭제",
-          "sleepWithDescendants": "자손과 동침({{value0}})",
-          "sleepWithDescendantsDescription": "메모리와 CPU를 확보하려면 이 워크스페이스과 모든 중첩 하위 항목의 활성 패널을 닫으세요.",
+          "sleepWithDescendants": "하위 항목도 절전 ({{value0}})",
+          "sleepWithDescendantsDescription": "이 워크스페이스와 모든 하위 워크스페이스의 활성 패널을 닫아 메모리와 CPU 사용량을 줄입니다.",
           "deleteWithDescendants": "하위 항목과 함께 삭제…"
         },
         "WorktreeList": {
@@ -6827,7 +6841,6 @@
           "4e32e030b2": "로컬에 저장됩니다. Orca는 사용량 새로 고침을 위해 platform.minimax.io로만 전송합니다.",
           "remoteServerFallback": "원격 서버",
           "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
-          "remoteScopeAccounts": "{{value0}}에서 관리하는 계정을 표시하고 있습니다. 계정 추가나 재인증은 해당 서버에서 진행하세요.",
           "accountScopePrefix": "계정 범위",
           "accountScopeRemoteServerUnnamed": "원격 서버",
           "remoteScopeLocalAccountsKept": "이 데스크탑에서 관리되는 계정은 그대로 유지됩니다. 기본 런타임을 로컬 데스크탑으로 다시 전환하면 확인할 수 있습니다.",
@@ -7080,8 +7093,6 @@
           "ee110e1830": "기본 기준 참조 없음"
         },
         "BrowserDefaultZoomSetting": {
-          "2622126877": "새로 열린 브라우저 탭에 적용되는 확대/축소 수준입니다.",
-          "bbeec087d3": "새로 열린 브라우저 탭에 적용됩니다.",
           "265597101f": "기본 줌"
         },
         "BrowserHomePageSetting": {
@@ -12700,7 +12711,8 @@
           "behindRolledBack": "이 앱보다 오래된 Orca 서버를 실행합니다. 마지막 업데이트가 롤백되었습니다. 서버 업데이트를 사용해 다시 시도하세요.",
           "behindNoTemplate": "이 앱이 업데이트할 수 없는 Orca 서버를 실행합니다. 이 빌드에는 이 호스트용 서버가 없습니다.",
           "behindMigrating": "Orca 서버를 실행합니다. 프로젝트 이동이 끝나면 업데이트됩니다.",
-          "behindCheckFailed": "Orca 서버를 실행합니다. Orca가 이 앱보다 뒤처졌는지 확인하지 못했습니다."
+          "behindCheckFailed": "Orca 서버를 실행합니다. Orca가 이 앱보다 뒤처졌는지 확인하지 못했습니다.",
+          "refusedBlockedReason": "아직 이 호스트에 Orca가 설정되지 않았습니다. {{reason}}"
         },
         "deltaMove": {
           "action": "새 프로젝트 이동…",
@@ -12842,7 +12854,7 @@
         "SshRestoreRemovedHosts": {
           "title": "제거한 호스트를 복원할까요?",
           "description": "Orca에서 제거한 ~/.ssh/config 호스트가 설정과 모든 호스트 선택 목록에 다시 표시됩니다.",
-          "none": "~/.ssh/config에서 제거한 호스트가 없습니다.",
+          "none": "Orca에서 제거한 ~/.ssh/config 호스트 중 복원할 수 있는 호스트가 없습니다.",
           "confirm": "복원"
         },
         "SshTargetList": {
@@ -14301,8 +14313,8 @@
             "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
             "resumeInNewNativeChat": "새 채팅에서 재개",
             "resumeInNewCli": "새 터미널에서 재개",
-            "resumeInNewCliTooltipFork": "이 대화를 새 CLI 세션으로 포크합니다.",
-            "resumeInNewCliTooltipChat": "기본 채팅은 그대로 유지됩니다."
+            "resumeInNewCliTooltipFork": "이 대화의 복사본으로 새 터미널 에이전트 세션을 시작합니다.",
+            "resumeInNewCliTooltipChat": "이 채팅은 그대로 유지됩니다."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",
@@ -14480,7 +14492,7 @@
             "databaseCount_one": "데이터베이스 {{value0}}개",
             "databaseCount_other": "데이터베이스 {{value0}}개",
             "scanning": "{{value0}} 스캔 중",
-            "reading": "파일 {{value0}}개 읽는 중",
+            "checking": "확인 중 {{value0}}",
             "scanned": "{{value0}} 스캔함"
           }
         }
@@ -16280,6 +16292,9 @@
             }
           }
         },
+        "staleViewEdit": {
+          "rejected": "파일이 다른 보기에서 변경되어 이 보기에서 최근에 입력한 내용이 삭제되었습니다."
+        },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "붙여넣기 내용이 너무 큽니다.",
           "stopped": "큰 페이스트는 완성되기 전에 멈췄습니다.",
@@ -16294,11 +16309,11 @@
           "copy": "복사 작업"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "저장하지 않은 편집 내용이 있는 동안 디스크의 파일이 변경되었습니다. 덮어쓰면 디스크의 최신 내용이 대체됩니다.",
           "3fa2b8d417": "디스크에서 다시 로드",
           "a95d02c644": "편집 내용 유지",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "덮어쓰기",
+          "keepHint": "편집 중인 버전을 유지합니다. 다음에 저장하면 디스크의 버전이 대체됩니다.",
           "5c02de9b31": "디스크에서 다시 로드됨",
           "d1e830fa22": "실행 취소",
           "90b2ce7d43": "비교"
@@ -16339,10 +16354,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "편집한 이후 디스크의 파일이 변경되었습니다. 배너에서 비교하거나 다시 로드하거나 덮어쓰세요."
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "이 섹션을 불러온 이후 디스크의 파일이 변경되었습니다."
             }
           }
         },
@@ -16649,7 +16664,6 @@
             "95af781091": "agent에게 피드백 보내기",
             "ac39b9366b": "보내기",
             "a3508d7e6e": "{{value0}} 주석{{value1}}이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
-            "f796c774a4": "탐색을 시작하려면 위에 URL을 입력하세요.",
             "366bf5d62c": "새 탭",
             "1c78adc73d": "외부에서 열기",
             "da68d35f7b": "기본 브라우저에서 실패한 페이지 열기",
@@ -16775,7 +16789,8 @@
               "bar": {
                 "suggestions": {
                   "87fcdd0da9": "{{value0}} 검색"
-                }
+                },
+                "placeholder": "검색어 또는 URL 입력"
               }
             }
           },
@@ -18360,9 +18375,9 @@
         "couldNotStart": "{{agent}}을(를) 시작하지 못했습니다.",
         "editSavedArguments": "설정 > 에이전트 > 인수에서 수정하세요.",
         "couldNotRestart": "{{agent}}을(를) 다시 시작하지 못했습니다.",
+        "cliTooOld": "{{agent}} {{installedVersion}}은 채팅에 사용하기에는 너무 오래된 버전입니다. {{minimumVersion}} 이상으로 업데이트하세요.",
         "startTimedOut": "{{agent}}을(를) 시작하는 데 시간이 너무 오래 걸렸습니다({{seconds}}초 후에도 {{method}}에 응답이 없음).",
         "startTimedOutKeepsHappening": "이 문제가 계속되면 이 채팅을 실행하는 컴퓨터에 과부하가 걸렸을 수 있습니다.",
-        "codexCliTooOld": "Codex {{installedVersion}}은 채팅에 사용하기에는 너무 오래된 버전입니다. {{minimumVersion}} 이상으로 업데이트하세요.",
         "notSignedIn": "{{agent}}에 로그인되어 있지 않습니다.",
         "claudeSystemNotSignedIn": "Claude에 로그인되어 있지 않습니다. `{{loginCommand}}`을 실행하거나 Claude 계정 설정에서 계정을 선택하세요.",
         "claudeManagedNotSignedIn": "이 Claude 계정에 로그인하지 않았습니다. Claude 계정 설정에서 다시 로그인하세요.",
@@ -18860,6 +18875,8 @@
         "plan": "계획",
         "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다.",
         "historyItemTooLarge": "채팅의 이 부분은 너무 커서 표시할 수 없습니다.",
+        "continuedOutside": "이 채팅 밖에서 이어졌습니다.",
+        "continuedOutsideRewound": "이 채팅 밖에서 이어졌습니다. 위의 이전 답변은 더 이상 이 대화 기록에 없습니다.",
         "stoppedBeforeStart": "수동으로 중지됨",
         "dismiss": "닫기",
         "copyError": "오류 복사",
@@ -19048,7 +19065,7 @@
       "thought": "생각함",
       "thoughtForDuration": "{{duration}} 동안 생각함",
       "structuredSessionHostDeclined": "{{value0}}을(를) 터미널에서 열었습니다",
-      "structuredSessionHostDeclinedDescription": "이 서버는 이 워크스페이스에서 {{value0}} 채팅을 실행할 수 없습니다.",
+      "structuredSessionHostDeclinedDescription": "이 워크스페이스에서는 {{value0}} 채팅을 실행할 수 없습니다.",
       "structuredSessionHostUnreachable": "{{value0}}에 연결할 수 없습니다",
       "structuredSessionHostUnreachableDescription": "Orca가 {{value0}} 채팅을 열지 않았습니다. 서버 연결을 확인하고 다시 시도하세요.",
       "hostOutage": {
@@ -19105,17 +19122,14 @@
     "tab": {
       "bar": {
         "SortableTabContextMenu": {
-          "switchToTerminalView": "터미널 에이전트로 전환",
-          "switchToChatView": "채팅 UI로 전환",
-          "closeTabsToLeft": "왼쪽의 모든 탭 닫기"
+          "switchToTerminalView": "터미널 에이전트로 계속하기",
+          "switchToChatView": "채팅 UI에서 계속하기"
         },
         "BrowserTab": {
-          "closeOthers": "다른 탭 닫기",
-          "closeTabsToLeft": "왼쪽의 모든 탭 닫기"
+          "closeOthers": "다른 탭 닫기"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "다른 탭 닫기",
-          "closeTabsToLeft": "왼쪽의 모든 탭 닫기"
+          "closeOthers": "다른 탭 닫기"
         },
         "CopyTabIdMenuItem": {
           "copied": "탭 ID 복사됨",
@@ -19389,6 +19403,17 @@
           "checking": "변경 사항 확인 중…",
           "checkingDetails": "확인 중…",
           "unavailableDetails": "세부 정보를 사용할 수 없음"
+        },
+        "unsavedEdits": {
+          "discarded_one": "파일 {{count}}개의 저장되지 않은 편집 내용이 버려집니다:",
+          "discarded_other": "파일 {{count}}개의 저장되지 않은 편집 내용이 버려집니다:",
+          "moreFiles": "외 {{value}}개",
+          "blocked_one": "먼저 {{name}}에서 저장되지 않은 파일 {{count}}개를 저장하거나 닫으세요",
+          "blocked_other": "먼저 {{name}}에서 저장되지 않은 파일 {{count}}개를 저장하거나 닫으세요",
+          "closedToast_one": "{{workspace}}에서 저장되지 않은 편집 내용이 있는 파일 {{count}}개를 닫았습니다",
+          "closedToast_other": "{{workspace}}에서 저장되지 않은 편집 내용이 있는 파일 {{count}}개를 닫았습니다",
+          "reopen": "다시 열기",
+          "reopenFailed": "일부 파일을 다시 열지 못했습니다. 워크스페이스를 열고 다시 열기를 다시 시도하세요."
         }
       }
     },
@@ -19943,8 +19968,12 @@
       "status": "PR #{{number}} 연결 해제됨"
     },
     "discard": {
+      "deleteUntrackedFileDescription": "이 추적되지 않는 파일은 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
+      "deleteUntrackedFilesDescription": "이 {{count}}개의 추적되지 않는 파일은 영구적으로 삭제됩니다. 이 작업은 취소할 수 없습니다.",
       "restoreStagedVersionDescription": "이렇게 하면 마지막 단계 버전이 복원되고 삭제가 취소됩니다. 이 작업은 취소할 수 없습니다.",
-      "unstagedChangesDescription": "이렇게 하면 단계가 지정되지 않은 변경 사항이 이 파일로 되돌아갑니다. 이 작업은 취소할 수 없습니다."
+      "unstagedChangesDescription": "이렇게 하면 단계가 지정되지 않은 변경 사항이 이 파일로 되돌아갑니다. 이 작업은 취소할 수 없습니다.",
+      "unstagedSelectionIncludingUntrackedDescription": "스테이징되지 않은 변경 사항을 되돌리고 이 선택 항목의 추적되지 않는 파일을 영구적으로 삭제합니다. 이 작업은 취소할 수 없습니다.",
+      "unstagedFilesIncludingUntrackedDescription": "스테이징되지 않은 변경 사항을 되돌리고 이 {{count}}개 파일 중 추적되지 않는 파일을 영구적으로 삭제합니다. 이 작업은 취소할 수 없습니다."
     }
   },
   "rendererRecovery": {
@@ -20609,6 +20638,27 @@
       "waitingAriaLabel": "다른 Orca 인스턴스를 기다리는 업데이트입니다. 클릭하여 펼치세요.",
       "preparingLabel": "업데이트 준비 중",
       "preparingAriaLabel": "업데이트 준비 중입니다. 클릭하여 펼치세요."
+    }
+  },
+  "onboarding": {
+    "language": {
+      "back": "언어",
+      "requestPrompt": "Orca에서 어떤 언어를 지원하면 좋을까요?",
+      "requestSuccess": "언어 요청이 기록되었습니다. 설정을 계속할 수 있습니다.",
+      "requestError": "요청을 기록하지 못했습니다. 다시 시도하세요.",
+      "retry": "다시 시도",
+      "requestAction": "언어 지원 요청",
+      "title": "표시 언어",
+      "device": "시스템 언어: {{language}}",
+      "unsupported": "시스템 언어: {{language}}. 이 언어는 아직 지원되지 않습니다.",
+      "unknown": "시스템 언어를 감지하지 못했습니다. 아래에서 언어를 선택하세요.",
+      "loadError": "이 언어를 불러오지 못했습니다. 다시 시도하세요.",
+      "saveError": "언어 설정을 저장하지 못했습니다. 다시 시도하세요.",
+      "other": "다른 언어…",
+      "settingsError": "설정을 불러오지 못했습니다.",
+      "loadingSettings": "설정 불러오는 중…",
+      "loading": "언어 불러오는 중…",
+      "saving": "언어 저장 중…"
     }
   }
 }

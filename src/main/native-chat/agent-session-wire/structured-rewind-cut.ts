@@ -200,9 +200,10 @@ function keptRow(
   if (!body || !identity) {
     throw new Error('agent_session_rewind:missing-retained-item')
   }
-  const { ownerFence, executionOwner } = journal.itemProvenance(itemId)
+  const { ownerFence, executionOwner, ...echo } = journal.itemProvenance(itemId)
   return {
     identity,
+    ...echo,
     body: renameRewindTurnOpener(body, providerKey),
     observedAt,
     ...(turnScope ? { turnScope } : {}),

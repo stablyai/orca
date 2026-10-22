@@ -6,6 +6,7 @@ import { terminalDocumentDouble } from './document/document-terminal-double.test
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
+import terminalNerdFontUrl from '../../assets/fonts/SymbolsNerdFontMono-Regular.woff2'
 
 /**
  * The page's mount, as a unit.
@@ -91,6 +92,15 @@ afterEach(() => {
 })
 
 describe('a stopped document takes its engines with it', () => {
+  it('loads the page symbol font from its bundled asset before starting the document', () => {
+    const terminal = mountTerminalWebDocument(plantHost(), () => {})
+    const style = document.getElementById('orca-terminal-document-style')?.textContent ?? ''
+    expect(style).toContain(`src:url('${terminalNerdFontUrl}') format('woff2')`)
+    expect(style).not.toContain('data:font/')
+    expect(style).toContain('unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD')
+    terminal.dispose()
+  })
+
   /**
    * `stopTerminalInit`'s set (ruling 22's disposal): a swap that never committed leaves the
    * committed terminal with nothing pointing at it, so `scope.term` alone is not every engine the

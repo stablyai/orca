@@ -41,6 +41,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [input, setInput] = useState('')
   // Why: baseline terminal zoom reloaded on focus so a Settings → Terminal change applies in place (panes stay mounted).
   const [terminalTextScale, setTerminalTextScale] = useState(1)
+  const terminalTextScaleRevisionRef = useRef(0)
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
@@ -123,6 +124,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   // Holds the host's spelling verbatim, and undefined once a setup reply arrives without one: only
   // the two arms below bind mic handlers, so anything else leaves the button as inert as it starts.
   const [dictationMode, setDictationMode] = useState<string | undefined>('toggle')
+  const [dictationEnabled, setDictationEnabled] = useState(true)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -143,6 +145,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setInput,
     terminalTextScale,
     setTerminalTextScale,
+    terminalTextScaleRevisionRef,
     autocompleteEnabled,
     setAutocompleteEnabled,
     terminalLinkOpenMode,
@@ -233,6 +236,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowDictationSetup,
     dictationMode,
     setDictationMode,
+    dictationEnabled,
+    setDictationEnabled,
     toastMessage,
     setToastMessage,
     toastOpacityRef,

@@ -5,6 +5,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-type
 import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { collectLeafIds } from '../../shared/terminal-pane-layout-tree'
 import { OrcaRuntimeService } from './orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
@@ -223,9 +224,6 @@ function createHarness(
         }
       }
     },
-    /** The split pane's terminal starting, as its window reports it. */
-    registerSplitPty: (leafId: string) =>
-      runtime.registerPty(SPLIT_PTY_ID, WORKTREE_ID, connectionId, { tabId: TAB_ID, leafId }),
     resolveReveal: () => resolveReveal?.({ tabId: TAB_ID }),
     resolveSpawn: () => resolveSpawn?.({ id: SPLIT_PTY_ID, incarnationId: SPLIT_INCARNATION_ID })
   }
@@ -234,9 +232,26 @@ function createHarness(
 describe('remote runtime terminal split authority', () => {
   it('addresses a graph-backed split by stable leaf identity across a parked remount', async () => {
     const harness = createHarness(true, { rendererMounted: true, graphOnlySource: true })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main writes the split and starts its terminal under the new pane's stable id; no window
+      // is asked, so a parked or remounting tab cannot hold the split up.
+      const started = await harness.runtime.splitTerminal(harness.handle, {
+        direction: 'vertical'
+      })
+      const startedLeafId = started.leafId ?? ''
+      expect(harness.rendererSplitTerminal).not.toHaveBeenCalled()
+      expect(started).toMatchObject({ tabId: TAB_ID, handle: expect.stringMatching(/^term_/) })
+      expect(harness.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({ tabId: TAB_ID, leafId: startedLeafId })
+      )
+      expect(collectLeafIds(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root)).toEqual([
+        SOURCE_LEAF_ID,
+        startedLeafId
+      ])
+      return
+    }
 
     const split = harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
-    // A switch-on build tells the window once main has admitted the new pane.
     await vi.waitFor(() => expect(harness.rendererSplitTerminal).toHaveBeenCalled())
 
     const newLeafId = harness.rendererSplitTerminal.mock.calls[0]?.[2]?.newLeafId
@@ -252,10 +267,6 @@ describe('remote runtime terminal split authority', () => {
       telemetrySource: undefined,
       newLeafId
     })
-    // A switch-on build binds the new pane only once its terminal registered, before the graph.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      harness.registerSplitPty(newLeafId)
-    }
     harness.runtime.syncWindowGraph(1, {
       tabs: [
         {

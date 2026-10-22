@@ -1,6 +1,6 @@
 /** Windows normalizes these names even when the host doing validation does not. */
 const WINDOWS_DEVICE_NAME_RE =
-  /^(?:con|prn|aux|nul|clock\$|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$/i
+  /^(?:con|prn|aux|nul|clock\$|conin\$|conout\$|com[1-9\u00B9\u00B2\u00B3]|lpt[1-9\u00B9\u00B2\u00B3])(?:\..*)?$/i
 
 const WINDOWS_FORBIDDEN_CHAR_RE = /[<>:"|?*]/
 

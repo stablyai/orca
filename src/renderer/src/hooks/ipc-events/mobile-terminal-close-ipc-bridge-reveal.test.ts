@@ -85,13 +85,21 @@ function setup(): {
     }
   })
   store.getState().setActiveWorktree(WT)
-  store.getState().openFile({
-    ...FILE,
-    worktreeId: WT,
-    language: 'markdown',
-    runtimeEnvironmentId: null,
-    mode: 'edit'
+  // The tab main wrote, as the window already draws it: these cases test the reveal, not the open.
+  store.setState({
+    openFiles: [
+      {
+        ...FILE,
+        id: FILE.filePath,
+        worktreeId: WT,
+        language: 'markdown',
+        runtimeEnvironmentId: null,
+        isDirty: false,
+        mode: 'edit'
+      }
+    ]
   })
+  store.getState().createUnifiedTab(WT, 'editor', { entityId: FILE.filePath, label: 'notes.md' })
   // A terminal tab in front, so showing the file's tab is visible in the selection.
   store.getState().createTab(WT)
   const fileTab = store

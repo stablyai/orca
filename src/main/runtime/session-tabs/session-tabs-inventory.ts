@@ -4,6 +4,7 @@ import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as Re
 import type { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession as HydrateHeadlessMobileSessionTabsFromWorkspaceSessionMethods } from './mobile-session-hydration'
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs as BuildHeadlessMobileSessionBrowserTabsMethods } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals as RestoreLivePairedRendererSessionOwnedMobileTerminalsMethods } from './renderer-session-terminal-rescue'
+import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from './mobile-session-membership'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { OrcaRuntimeWithSyncWindowGraph } from '../session-graph/session-window-graph'
 import {
@@ -37,11 +38,18 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       registered: (ptyId) => this.ptysById.has(ptyId),
       // Certified exit only: a dropped relay leaves records disconnected but unverifiable.
       exited: (ptyId) => this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited',
+      live: (ptyId) => this.ptysById.get(ptyId)?.connected === true,
       paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null,
       readyGraphPublisher: () => (this.graphStatus === 'ready' ? this.authoritativeWindowId : null),
       publish: (publisher, next) => {
         this.syncWindowGraph(publisher, next)
-      }
+      },
+      heldRows: () => this.mobileSessionTabsByWorktree,
+      replaceHeldRows: (worktreeId, next) => {
+        this.storeMobileSessionSnapshot(worktreeId, next)
+        this.scheduleMobileSessionTabsChanged(worktreeId)
+      },
+      fenceExited: (rows) => this.applyMobileSessionRetirementFences(rows)
     })
     return mainTerminalSurfaces(this, host).withMainSurfaces(windowId, graph)
   }
@@ -51,6 +59,12 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       SessionTabsInventoryPublicationMethods['getAuthoritativeSessionTabsInventoryEpoch']
     >
   ): ReturnType<SessionTabsInventoryPublicationMethods['getAuthoritativeSessionTabsInventoryEpoch']>
+
+  protected abstract applyMobileSessionRetirementFences(
+    ...args: Parameters<
+      TouchMobileSessionTabsForWorktreeMethods['applyMobileSessionRetirementFences']
+    >
+  ): ReturnType<TouchMobileSessionTabsForWorktreeMethods['applyMobileSessionRetirementFences']>
 
   protected abstract getMobileSessionTabsForWorktree(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['getMobileSessionTabsForWorktree']>

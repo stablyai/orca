@@ -20,6 +20,7 @@ import {
   nodeRuntimeReleaseUrl,
   type NodeRuntimeTarget
 } from '../../shared/node-runtime-pin'
+import { errorMessage } from '../../shared/error-message'
 
 export type PinnedRuntimeMaterializeOptions = {
   fetcher?: MainHttpClient['fetch']
@@ -107,7 +108,7 @@ function unreachableArchiveError(
   if (signal?.aborted || error instanceof ReleaseMismatchError || localFailure) {
     return error
   }
-  const cause = error instanceof Error ? error.message : String(error)
+  const cause = errorMessage(error)
   return new DesktopDownloadUnreachableError(
     `This computer couldn't download ${archive.label} from ${archive.url} (${cause}). ` +
       `Orca uploads ${archive.label} to the host from this computer, so the host doesn't need ` +
@@ -246,9 +247,9 @@ async function withNodeDistMirror<T>(
       const mirrorReason =
         mirrorError instanceof DesktopDownloadUnreachableError
           ? mirrorError.reason
-          : `${mirrorUrl}: ${errorText(mirrorError)}`
+          : `${mirrorUrl}: ${errorMessage(mirrorError)}`
       throw new DesktopDownloadUnreachableError(
-        `${errorText(error)} (the mirror ${mirrorReason} failed too)`,
+        `${errorMessage(error)} (the mirror ${mirrorReason} failed too)`,
         `${mirrorReason}; ${errorReason(error)}`,
         error
       )
@@ -256,12 +257,8 @@ async function withNodeDistMirror<T>(
   }
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function errorReason(error: unknown): string {
-  return error instanceof DesktopDownloadUnreachableError ? error.reason : errorText(error)
+  return error instanceof DesktopDownloadUnreachableError ? error.reason : errorMessage(error)
 }
 
 /** The pinned official archive, uploaded to hosts as published (design D5). */

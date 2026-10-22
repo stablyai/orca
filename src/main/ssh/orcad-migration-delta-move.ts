@@ -48,7 +48,7 @@ import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
 import { errorMessage } from '../../shared/error-message'
 
-export type OrcadDeltaMoveArgs = {
+type OrcadDeltaMoveArgs = {
   userDataPath: string
   store: Store
   claims: SshTargetOrcadClaims

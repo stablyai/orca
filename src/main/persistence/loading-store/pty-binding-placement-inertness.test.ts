@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as fs from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { resolvePtySpawnStartupTarget } from '../../ipc/pty/spawn-startup-target'
+import { resolveTerminalStartupCwd } from '../../../shared/terminal-startup-cwd'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
 import { _resetTracerForTests, setActiveSink } from '../../observability/tracer'
 import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
@@ -8,6 +12,7 @@ import { fixture } from './profile-state-delayed-authority-fixture'
 import type * as AgreementModule from '../terminal-topology/terminal-pane-placement-agreement'
 import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 
+vi.mock('node:fs/promises', { spy: true })
 // rollback build (switch-off) — delete with the switch-off code post-flip
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
@@ -276,5 +281,50 @@ describe('placement on the binding write is inert', () => {
       })
     ).resolves.toBe(false)
     expect(store.getWorkspaceSession()).toEqual(before)
+  })
+  it('keeps an unreadable WSL saved folder until explicitly corrected, even with a matching PTY', async () => {
+    const { store, readState } = await fixture()
+    const session = store.getWorkspaceSession()
+    const tab = session.tabsByWorktree[LOCAL_WORKTREE].find((tab) => tab.id === 'tab-local')!
+    const savedTab = (saved: typeof session | undefined) =>
+      saved?.tabsByWorktree[LOCAL_WORKTREE].find((tab) => tab.id === 'tab-local')
+    tab.startupCwd = '/mnt/c/private'
+    store.setWorkspaceSession(session)
+    const leafId = firstLayoutLeafId(session.terminalLayoutsByTabId['tab-local']?.root ?? null)!
+    const binding = { worktreeId: LOCAL_WORKTREE, tabId: 'tab-local', leafId, ptyId: 'pty-correct' }
+    await store.persistPtyBinding(binding)
+    const originalPlatform = process.platform
+    const directoryStat = await fs.stat(tmpdir())
+    const stat = vi.spyOn(fs, 'stat').mockClear().mockResolvedValue(directoryStat)
+    stat.mockRejectedValueOnce(Object.assign(new Error('access denied'), { code: 'EACCES' }))
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const target = await resolvePtySpawnStartupTarget({
+        worktreeId: LOCAL_WORKTREE,
+        cwd: tab.startupCwd,
+        sessionId: undefined,
+        shellOverride: 'wsl.exe',
+        plannedPty: { shellOverride: 'wsl.exe', terminalWindowsWslDistro: 'Ubuntu' },
+        projectRuntimeSource: { kind: 'sent', projectRuntime: undefined },
+        preAdopted: false,
+        getSettings: undefined,
+        resolveStartupCwd: (_id, cwd, fallback) =>
+          resolveTerminalStartupCwd('/fixture/local', cwd, fallback)
+      })
+      expect(stat).toHaveBeenNthCalledWith(1, String.raw`C:\private`)
+      expect(target.startupCwdFallback).toEqual({ kind: 'worktree', cwd: '/fixture/local' })
+      expect(target.cwd).toBe('/fixture/local')
+      await store.persistPtyBinding({ ...binding, correctStartupCwd: target.correctStartupCwd })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      stat.mockRestore()
+    }
+    await store.flushPendingOrThrowAsync()
+    expect(savedTab(readState().workspaceSession)?.startupCwd).toBe('/mnt/c/private')
+    expect(savedTab(store.getWorkspaceSession())?.startupCwd).toBe('/mnt/c/private')
+    await store.persistPtyBinding({ ...binding, correctStartupCwd: '/fixture/local' })
+    await store.flushPendingOrThrowAsync()
+    expect(savedTab(store.getWorkspaceSession())?.startupCwd).toBe('/fixture/local')
+    expect(savedTab(readState().workspaceSession)?.startupCwd).toBe('/fixture/local')
   })
 })

@@ -35,7 +35,6 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
         ...(outcome.state === 'accepted' ? { providerIdentity: outcome.providerIdentity } : outcome)
       })
     },
-    onIdle: context.followUps.releaseUnansweredDispatches,
     logger: deps.logger
   })
 }

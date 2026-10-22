@@ -247,7 +247,7 @@ const CASES: Case[] = [
     session: previewSession,
     command: PIN_PREVIEW,
     windowAction: (state) => state.pinFile(APP_FILE, 'editor:src/app.ts'),
-    // Preview stays the window's until main opens files (phase C4).
+    // Main's copy keeps the preview until the window's keep reaches main.
     mainCopyLags: {
       [`${GIT_KEY} tab editor:src/app.ts props`]: { pinned: true, preview: true, color: null }
     }
@@ -285,6 +285,12 @@ describe('tab properties through main', () => {
       // window still owns (a preview's end) changes, which leaves what today's action shows.
       entry.windowAction(drawn.getState())
       await layoutApplyTestTransport.settle()
+      // A preview's end goes to main as well; its frame draws it.
+      const promotes = layoutApplyTestTransport.sentOfType('promotePreviewTab')
+      if (promotes.length > 0) {
+        stream.onFrame!(frameOf(promotes.reduce(mainApplies, afterMain)))
+        await flushMicrotasks()
+      }
       expect(shownTabs(drawn.getState())).toEqual(expected)
       sync.close()
 

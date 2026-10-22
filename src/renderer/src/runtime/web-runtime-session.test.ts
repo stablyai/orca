@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: vi.fn(),
+  runtimeEnvironmentIdOrLocalUnlessTwin: vi.fn(),
   hasMaterializedWebRuntimeBrowserPage: vi.fn(),
   recoverWebSessionTerminalOrphansBeforeApply: vi.fn(
     async (_state: unknown, snapshot: unknown) => snapshot
@@ -76,8 +76,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin:
-    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin: mocks.runtimeEnvironmentIdOrLocalUnlessTwin
 }))
 
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({

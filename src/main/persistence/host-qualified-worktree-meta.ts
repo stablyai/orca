@@ -1,3 +1,4 @@
+import { getRepoRegistrationHostIds } from '../../shared/repo-host-identity'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -86,7 +87,7 @@ export function resolveWorktreeMetaOwner(
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const owners = store.getRepos().filter((repo) => repo.id === repoId)
   // Why: the raw-id row's stamp names whichever twin wrote first, not the twin the caller means.
-  if (new Set(owners.map(getRepoExecutionHostId)).size > 1) {
+  if (getRepoRegistrationHostIds(owners, repoId).size > 1) {
     return undefined
   }
   const stamped = store.getWorktreeMeta(worktreeId)?.hostId

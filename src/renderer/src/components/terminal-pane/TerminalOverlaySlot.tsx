@@ -18,6 +18,8 @@ type TerminalOverlaySlotProps = {
   isWorktreeActive: boolean
   isVisible: boolean
   isActive: boolean
+  /** Visible on the unfocused side of a split. */
+  dimmed?: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -35,6 +37,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isWorktreeActive,
   isVisible,
   isActive,
+  dimmed = false,
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
@@ -106,6 +109,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       isVisible={isVisible}
       measureWhileHidden={shouldMeasureHiddenStartup}
       fitTerminal
+      dimmed={dimmed}
       data-terminal-overlay-tab-id={terminalTabId}
       onFocusOwningGroup={onFocusOwningGroup}
     >

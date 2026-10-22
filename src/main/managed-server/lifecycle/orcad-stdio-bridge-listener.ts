@@ -23,10 +23,10 @@ import { listenForPortForward } from '../../ssh/port-forwarding/ssh2-port-forwar
  * covers it and leaves room for the exec work sharing the connection. Past it, sockets queue.
  */
 export const ORCAD_STDIO_BRIDGE_MAX_CHANNELS = 8
-export const ORCAD_STDIO_BRIDGE_QUEUE_TIMEOUT_MS = 30_000
+const ORCAD_STDIO_BRIDGE_QUEUE_TIMEOUT_MS = 30_000
 
 /** Opens one bridge channel for one accepted socket; a rejection just drops that socket. */
-export type OrcadStdioBridgeChannelFactory = () => Promise<{
+type OrcadStdioBridgeChannelFactory = () => Promise<{
   channel: RemoteCommandChannel
   mode: OrcadStdioBridgeMode
 }>

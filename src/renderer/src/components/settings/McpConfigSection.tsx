@@ -39,6 +39,7 @@ import {
 } from '../../../../shared/file-write-disk-precondition'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -58,7 +59,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const repos = useAppStore((state) => state.repos)
   const allWorktreesForRepo = useAppStore(
-    (state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES
+    (state) => selectWorktreesByRepo(state)[repo.id] ?? EMPTY_WORKTREES
   )
   // Why: a path only means something on the host that owns this repo row, not the focused one.
   const repoHostId = getRepoExecutionHostId(repo)

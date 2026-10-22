@@ -19,6 +19,13 @@ import {
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
+import { addClaudeAccountOnHost } from '@/runtime/runtime-host-account-sign-in-client'
+import { HostAccountSignInPrompt } from './HostAccountSignInPrompt'
+import {
+  accountAdditionShownInPrompt,
+  cancelAccountAddition,
+  trackAccountAddition
+} from './account-add-cancel-target'
 
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
@@ -50,22 +57,21 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     claudeAccounts.accounts.some(
       (account) => account.email.toLowerCase() === systemDefaultEmail.toLowerCase()
     )
-  // Why: interactive `claude login` needs a desktop browser and
-  // would authenticate against this device, not the server.
-  const addDisabled =
-    isRemoteAccountScope ||
-    claudeAction !== 'idle' ||
-    wslCapabilitiesLoading ||
-    accountRuntimeUnavailable
+  const addDisabled = claudeAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
+  // Why the server's own login for a remote owner: one here would sign in this device, not it.
   const addClaudeAccount = (copyLink: boolean): Promise<void> =>
     runClaudeAccountAction('adding', () =>
-      withCopiedClaudeLink(
-        copyLink,
-        window.api.claudeAccounts.add({
-          runtime: accountRuntime.runtime,
-          wslDistro: accountRuntime.wslDistro,
-          copyLink
-        })
+      trackAccountAddition('claude', accountOwner, () =>
+        accountOwner.kind === 'environment'
+          ? addClaudeAccountOnHost(accountOwner)
+          : withCopiedClaudeLink(
+              copyLink,
+              window.api.claudeAccounts.add({
+                runtime: accountRuntime.runtime,
+                wslDistro: accountRuntime.wslDistro,
+                copyLink
+              })
+            )
       )
     )
   return (
@@ -100,8 +106,8 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             <p className="text-xs text-muted-foreground">
               {isRemoteAccountScope
                 ? translate(
-                    'auto.components.settings.AccountsPane.remoteScopeAccounts',
-                    'Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.',
+                    'accounts.remoteScopeAccountsAddHere',
+                    'Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.',
                     { value0: accountRuntimeSentenceLabel }
                   )
                 : translate(
@@ -127,7 +133,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 )}
                 {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
               </Button>
-              {canOfferClaudeSignInLink(accountRuntime.runtime) ? (
+              {!isRemoteAccountScope && canOfferClaudeSignInLink(accountRuntime.runtime) ? (
                 <ClaudeSignInLinkMenu
                   variant="outline"
                   disabled={addDisabled}
@@ -135,11 +141,16 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 />
               ) : null}
             </ButtonGroup>
-            {claudeAction === 'adding' ? (
+            {/* Why: follows the running addition; hidden only where its server's prompt has Cancel. */}
+            {claudeAction === 'adding' && !accountAdditionShownInPrompt('claude', accountOwner) ? (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => void window.api.claudeAccounts.cancelPendingLogin()}
+                onClick={() =>
+                  void cancelAccountAddition('claude', () =>
+                    window.api.claudeAccounts.cancelPendingLogin()
+                  )
+                }
                 className="gap-1.5 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-3" />
@@ -149,6 +160,13 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
           </div>
         </div>
         {remoteAccountScopeNotice}
+        {isRemoteAccountScope ? (
+          <HostAccountSignInPrompt
+            owner={accountOwner}
+            provider="claude"
+            hostLabel={accountRuntimeSentenceLabel}
+          />
+        ) : null}
 
         <div className="space-y-2">
           <button

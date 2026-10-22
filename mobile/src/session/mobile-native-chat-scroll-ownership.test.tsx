@@ -7,7 +7,6 @@ import {
   Suspense,
   useLayoutEffect,
   useMemo,
-  useRef,
   type ReactNode
 } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -15,9 +14,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { MobileNativeChatScrollHold } from './MobileNativeChatScrollHold'
-import { MobileNativeChatPageRows } from './mobile-native-chat-page-rows'
-import { MobileNativeChatPageMotion } from './mobile-native-chat-page-motion'
+import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
+import { MobileNativeChatScrollMotion } from './mobile-native-chat-scroll-motion'
 import {
   mobileNativeChatScrollFrame,
   mobileNativeChatReadingParts,
@@ -99,9 +97,6 @@ let owners: (string | undefined)[]
 let projected: (string | undefined)[]
 let store: MobileNativeChatDisclosureStore
 const abandoned = new Promise<void>(() => {})
-const correctPage = vi.fn((drift: number) => {
-  page.scrollTop += drift
-})
 const msg = (
   id: string,
   blocks: NativeChatMessage['blocks'],
@@ -166,7 +161,7 @@ function Shift({ value }: { value: number }): null {
 }
 function Chat({
   rows,
-  tools = true,
+  open = true,
   shown = true,
   scope = 'chat',
   shift = 0,
@@ -175,7 +170,8 @@ function Chat({
   working = false
 }: {
   rows: NativeChatMessage[]
-  tools?: boolean
+  /** Runs, their lines and settled turns start open, as a reader who opened them left them. */
+  open?: boolean
   shown?: boolean
   scope?: string
   shift?: number
@@ -184,6 +180,17 @@ function Chat({
   working?: boolean
 }) {
   const current = useMobileNativeChatDisclosures(scope)
+  const disclosures = useMemo(
+    () =>
+      open
+        ? {
+            ...current,
+            read: (key: string) =>
+              current.read(key) ?? (/^(run|line|diff):/.test(key) ? true : undefined)
+          }
+        : current,
+    [current, open]
+  )
   const drawn = useMemo(() => (structured ? rows : foldToolMessages(rows)), [rows, structured])
   const turns = useMobileNativeChatTurnDisclosure({
     messages: drawn,
@@ -192,10 +199,6 @@ function Chat({
     scopeKey: scope
   })
   const keys = useMobileNativeChatRowKeys(drawn, rows, scope, turns.presentation)
-  const ref = useRef({
-    getScrollableNode: () => page,
-    keepInPlace: correctPage
-  })
   useLayoutEffect(() => {
     store = current
     roots = current.roots
@@ -207,16 +210,14 @@ function Chat({
   }
   return h(
     MobileNativeChatDisclosureContext.Provider,
-    { value: current },
+    { value: disclosures },
     h(
-      MobileNativeChatScrollHold,
+      MobileNativeChatScrollRootsBoundary,
       {
         rowKeys: keys,
         roots: current.roots,
         runPlacements: keys.runPlacements,
-        layoutKey: String(tools),
-        listRef: ref,
-        isFollowing: () => false
+        layoutKey: '1'
       },
       h(Shift, { value: shift }),
       h(
@@ -229,9 +230,9 @@ function Chat({
               message,
               rowKey: keys.keyOf(message),
               ...turns.resolveRow(i, message),
+              ...(open ? { foldedAway: false } : {}),
               runOwner: keys.runOwners.get(message.id),
-              structuredActivityUi: structured,
-              toolsExpanded: tools
+              structuredActivityUi: structured
             })
           )
       )
@@ -272,7 +273,6 @@ afterEach(() => {
   page?.remove()
   renderer = undefined
   frameShift = 0
-  correctPage.mockClear()
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -291,16 +291,10 @@ it('keeps real structured runs and nested offsets under their own viewport acros
     throw new Error('missing command viewport')
   }
   const row = run.closest('[data-testid^="chat-row:"]')!
-  const rows = new MobileNativeChatPageRows()
-  rows.ref('a')(row)
-  rows.takeAnchor(page, ['a'], [0, 1], true)
   reader(run, 100)
   reader(detail, 35)
   act(() => vi.advanceTimersByTime(160))
   roots.restoreAll()
-  expect(rows.placeShift(page)).toBe(0)
-  expect(page.scrollTop).toBe(0)
-  expect(correctPage).not.toHaveBeenCalled()
   const clipped = run.querySelector('[data-testid="chat-member:call:c0"]')!
   expect(mobileNativeChatVisible(clipped, page)).toBe(false)
   expect(mobileNativeChatReadingParts(row)).toContain(run)
@@ -314,8 +308,6 @@ it('keeps real structured runs and nested offsets under their own viewport acros
     rect(restored.querySelector('[data-testid="chat-member:call:c3"]')!).top - rect(restored).top
   ).toBe(offset)
   expect(restored.querySelector('[data-chat-scroll-root]')?.scrollTop).toBe(35)
-  expect(page.scrollTop).toBe(80)
-  expect(correctPage).toHaveBeenCalledExactlyOnceWith(80, false)
   const top = restored.scrollTop
   draw([user, thought, a], { shown: false, shift: 80 })
   draw([user, thought, a], { shift: 80 })
@@ -361,7 +353,7 @@ it.each([true, false])(
     const draw = mount(structured)
     draw([user, a, b], { working: true })
     const original = owners[1]
-    const oldKey = `run:${original}:true`
+    const oldKey = `run:${original}`
     act(() => store.write(oldKey, false))
     store.runScroll.set(oldKey, { top: 111, followsEnd: false })
     const splitRows = [
@@ -389,38 +381,22 @@ it.each([true, false])(
     expect(store.runScroll.get(oldKey)?.top).toBe(111)
     expect(roots.frame(`run:${owners[1]}`)).toBe(reused)
     expect(reused.scrollTop).toBe(40)
-    expect(store.runScroll.get(`run:${owners[1]}:true`)?.followsEnd).toBe(false)
+    expect(store.runScroll.get(`run:${owners[1]}`)?.followsEnd).toBe(false)
   }
 )
 
-it('waits for simultaneous inner rest, releases on close/scope change, and separates work-follow from reader chaining', async () => {
+it('releases on close/scope change, and separates work-follow from reader chaining', async () => {
   const draw = mount()
   draw([user, a])
   const run = container.querySelector('[data-chat-scroll-root]')!
   const detail = run.querySelector('[data-chat-scroll-root]')!
   vi.stubGlobal('navigator', { userAgent: 'AppleWebKit Chrome' })
-  const pageMotion = new MobileNativeChatPageMotion(() => {})
+  const pageMotion = new MobileNativeChatScrollMotion()
   const detach = pageMotion.attach(page)
   pageMotion.reconciled(100, 1000)
-  run.dispatchEvent(new Event('touchstart'))
-  run.scrollTop = 100
-  run.dispatchEvent(new Event('scroll'))
-  let settled = false
-  const waiting = roots.settled(pageMotion).then(() => {
-    settled = true
-  })
-  await Promise.resolve()
-  expect(pageMotion.settled()).toBe(true)
-  expect(settled).toBe(false)
-  detail.dispatchEvent(new Event('touchstart'))
-  detail.scrollTop = 35
-  detail.dispatchEvent(new Event('scroll'))
-  run.dispatchEvent(new Event('touchend'))
+  reader(run, 100)
+  reader(detail, 35)
   await vi.advanceTimersByTimeAsync(160)
-  expect(settled).toBe(false)
-  detail.dispatchEvent(new Event('touchend'))
-  await vi.advanceTimersByTimeAsync(0)
-  await waiting
   reader(run, run.scrollHeight - run.clientHeight - 20)
   await vi.advanceTimersByTimeAsync(160)
   const parked = run.scrollTop
@@ -430,52 +406,40 @@ it('waits for simultaneous inner rest, releases on close/scope change, and separ
   draw([user, a, b])
   expect(run.scrollTop).toBe(run.scrollHeight - run.clientHeight)
   run.dispatchEvent(new Event('scroll'))
-  await roots.settled(pageMotion)
+  await vi.advanceTimersByTimeAsync(160)
   expect(pageMotion.scrolled(100, 1000, () => false).by).toBe('none')
   run.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, bubbles: true }))
   expect(pageMotion.scrolled(90, 1000, () => false).by).toBe('reader')
   pageMotion.release()
-  run.dispatchEvent(new Event('touchstart'))
-  const closing = roots.settled(pageMotion)
   act(() => container.querySelector<HTMLElement>('[data-live]')!.click())
-  await closing
   expect(run.hasAttribute('data-chat-scroll-root')).toBe(false)
   draw([user, a], { scope: 'intermediate' })
-  container.querySelector('[data-chat-scroll-root]')!.dispatchEvent(new Event('touchstart'))
-  const leaving = roots.settled(pageMotion)
   draw([user, a], { scope: 'other' })
-  await leaving
   vi.stubGlobal('navigator', { userAgent: 'AppleWebKit Safari' })
-  draw([user, a], { scope: 'other', tools: false, working: true })
+  draw([user, a], { scope: 'live', open: false, working: true })
   act(() => container.querySelector<HTMLElement>('[data-live]')!.click())
   const key = `run:${owners[1]}`
   const live = roots.frame(key)!
   const end = live.scrollTop
   expect(end).toBe(live.scrollHeight - live.clientHeight)
-  const previous = store.runScroll.get(`${key}:false`)!
-  draw([user, a], { scope: 'other', working: true, shift: 40 })
-  expect(roots.frame(key)).toBe(live)
-  expect(live.scrollTop).toBe(end)
-  expect(live.scrollTop).toBeLessThan(live.scrollHeight - live.clientHeight)
-  expect(correctPage).toHaveBeenCalledExactlyOnceWith(40, true)
   reader(live, end - 100)
-  draw([user, a], { scope: 'other', tools: false, working: true, shift: 40 })
+  draw([user, a], { scope: 'live', open: false, working: true, shift: 40 })
+  expect(roots.frame(key)).toBe(live)
   expect(live.scrollTop).toBe(end - 100)
-  expect(store.runScroll.get(`${key}:false`)?.followsEnd).toBe(false)
-  expect(previous.followsEnd).toBe(true)
+  expect(store.runScroll.get(key)?.followsEnd).toBe(false)
   reader(live, live.scrollHeight - live.clientHeight - 20)
   await vi.advanceTimersByTimeAsync(160)
-  draw([user, a, b], { scope: 'other', tools: false, working: true, shift: 40 })
+  draw([user, a, b], { scope: 'live', open: false, working: true, shift: 40 })
   expect(live.scrollTop).toBe(live.scrollHeight - live.clientHeight)
-  draw([user, a, b], { scope: 'other', tools: false, working: true, shown: false, shift: 40 })
-  store.runScroll.set(`${key}:false`, { top: 37, followsEnd: false })
-  draw([user, a, b], { scope: 'other', tools: false, working: true, shift: 40 })
+  draw([user, a, b], { scope: 'live', open: false, working: true, shown: false, shift: 40 })
+  store.runScroll.set(key, { top: 37, followsEnd: false })
+  draw([user, a, b], { scope: 'live', open: false, working: true, shift: 40 })
   expect(roots.frame(key)?.scrollTop).toBe(37)
   detach()
   pageMotion.release()
 })
 
-it('keeps the actual changed task checklist through eviction and Tools, isolated by chat', () => {
+it('keeps the actual changed task checklist through eviction, isolated by chat', () => {
   const draw = mount()
   const tasks = msg(
     'tasks',
@@ -504,9 +468,6 @@ it('keeps the actual changed task checklist through eviction and Tools, isolated
   draw([user, tasks], { shown: false })
   draw([user, tasks])
   expect(count()).toBe(before + 1)
-  draw([user, tasks], { tools: false })
-  draw([user, tasks])
-  expect(count()).toBe(before + 1)
   draw([user, tasks], { scope: 'different' })
   expect(count()).toBe(before)
 })
@@ -514,14 +475,10 @@ it('keeps the actual changed task checklist through eviction and Tools, isolated
 it("forgets a closed tool line's nested command and output positions, not its neighbours'", () => {
   const at = { top: 30, followsEnd: false }
   const memory = new Map(
-    ['run:o:true', 'run:o:true/line:a:command', 'run:o:true/line:a:output', 'line:a:command']
-      .concat(['run:o:true/line:ab:command', 'diff:src/line:a.ts'])
+    ['run:o', 'run:o/line:a:command', 'run:o/line:a:output', 'line:a:command']
+      .concat(['run:o/line:ab:command', 'diff:src/line:a.ts'])
       .map((address) => [address, at] as const)
   )
   new MobileNativeChatScrollRoots(memory, 10).forget('line:a')
-  expect([...memory.keys()]).toEqual([
-    'run:o:true',
-    'run:o:true/line:ab:command',
-    'diff:src/line:a.ts'
-  ])
+  expect([...memory.keys()]).toEqual(['run:o', 'run:o/line:ab:command', 'diff:src/line:a.ts'])
 })

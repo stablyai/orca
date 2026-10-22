@@ -25,7 +25,7 @@ import {
 } from '../../ssh/connection/ssh-connection-store'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
-import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-access'
+import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
 import { notifyReposChanged } from '../repos/repos-changed-notification'
 import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-reconcile'
@@ -126,7 +126,7 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
   if (environmentId && updated) {
     // Why: the tunnel and the SSH transport under it were built from the old fields, so both go
     // and the next use dials the edited target. Only a host reached through its managed server:
-    // one an older build changed runs on the relay directly, whose session owns the transport.
+    // one an older build changed is unserved, so it has no managed connect to redial.
     const redial =
       !allowsDirectSshRelay(updated) &&
       (!before || fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated))

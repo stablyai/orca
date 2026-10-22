@@ -1,12 +1,12 @@
 // Old layout methods' params as layout commands (design 2.6). Pure: the handler resolves the
 // worktree selector and terminal handles, applies the commands and shapes today's reply.
 
-import type { z } from 'zod'
-import type { MoveTab } from '../../rpc-contract/session-tabs-schemas-params'
+import type { RuntimeMobileSessionTabMove } from '../../runtime-session-contracts'
 import { isTerminalLeafId } from '../../stable-pane-id'
 import { isValidHostTerminalTabId } from '../../terminal-tab-id'
 import type { TerminalPaneSplitDirection } from '../../terminal-tab-types'
 import { resolveSessionTabRow } from './old-client-session-tab-rows'
+import { tabOrderAnchor } from '../tab-order'
 import { collectLayoutLeafIdsInOrder, layoutContainsLeafId } from '../terminal-pane-tree'
 import type { ProjectedSessionTabs } from './old-client-session-tabs-projection'
 import type { LayoutCommand, LayoutRefusalCode } from '../workspace-layout-command-types'
@@ -168,8 +168,8 @@ export function translateSessionTabClose(
 export function translateSessionTabMove(
   workspaceKey: string,
   workspace: WorkspaceLayout,
-  projected: ProjectedSessionTabs,
-  params: z.infer<typeof MoveTab>
+  projected: Pick<ProjectedSessionTabs, 'tabGroups'>,
+  params: RuntimeMobileSessionTabMove
 ): MethodTranslation {
   const shownTabIds = new Set(
     (projected.tabGroups ?? []).flatMap((group) => toTabIds(workspace, group.tabOrder))
@@ -195,16 +195,18 @@ export function translateSessionTabMove(
   }
   const shownOrder = toTabIds(workspace, shown.tabOrder)
   if (params.kind === 'move-to-group') {
-    const index = Math.max(0, Math.min(params.index ?? shownOrder.length, shownOrder.length))
+    const shownIndex = Math.max(0, Math.min(params.index ?? shownOrder.length, shownOrder.length))
+    // A shown index lands before the same tab in the full order; the end stays the end.
+    const index =
+      shownIndex === shownOrder.length
+        ? target.tabOrder.length
+        : target.tabOrder.indexOf(shownOrder[shownIndex]!)
     return to({
       ...on,
       type: 'moveTab',
       tabId: tab.id,
-      // A shown index lands before the same tab in the full order; the end stays the end.
-      index:
-        index === shownOrder.length
-          ? target.tabOrder.length
-          : target.tabOrder.indexOf(shownOrder[index]!)
+      index,
+      afterTabId: tabOrderAnchor(target.tabOrder, index)
     })
   }
   const sent = params.tabOrder.map((rowId) => resolveSessionTabRow(workspace, rowId)?.tab.id)
@@ -225,7 +227,13 @@ export function translateSessionTabMove(
     if (order[index] !== id) {
       order.splice(order.indexOf(id), 1)
       order.splice(index, 0, id)
-      commands.push({ ...on, type: 'moveTab', tabId: id, index })
+      commands.push({
+        ...on,
+        type: 'moveTab',
+        tabId: id,
+        index,
+        afterTabId: tabOrderAnchor(wanted, index)
+      })
     }
   })
   return to(...commands)

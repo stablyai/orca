@@ -72,7 +72,7 @@ let cachedClaims: { key: string; readAt: number; claims: SshConfigAliasClaims } 
  * Null and empty are different answers here: an absent or unreadable file is the uncertainty case,
  * while a readable file with no matching block is the proof {@link sshConfigMayClaimAlias} needs.
  */
-export function loadUserSshConfigAliasClaims(): SshConfigAliasClaims | null {
+function loadUserSshConfigAliasClaims(): SshConfigAliasClaims | null {
   const configPath = join(homedir(), '.ssh', 'config')
   try {
     if (!existsSync(configPath)) {

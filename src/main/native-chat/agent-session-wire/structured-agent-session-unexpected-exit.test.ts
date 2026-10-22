@@ -343,7 +343,12 @@ describe('provider-exit settlement', () => {
   it('settles a submission the dead child never acknowledged', async () => {
     const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 }))
     const session: StructuredAgentSessionChildExitSession = {
-      child: { generation: GENERATION, fence: 7, phase: 'ready' },
+      child: {
+        generation: GENERATION,
+        fence: 7,
+        phase: 'ready',
+        exitObservation: () => ({ heldSends: new Set(['client-1']) })
+      },
       journal: exitJournalDouble({
         items: () => [],
         appendLifecycleBatch,

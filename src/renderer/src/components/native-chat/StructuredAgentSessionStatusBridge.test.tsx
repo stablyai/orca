@@ -651,9 +651,12 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(mocks.setAgentStatus).toHaveBeenCalledTimes(calls)
   })
 
-  it('keeps the host-fed chat row through Sleep and stops offering Sleep once the host lets go', async () => {
+  it('keeps the host-fed chat row through Sleep and offers Sleep until its host marks the chat slept', async () => {
     const state = (): AppState => useAppStore.getState()
     const sleepable = (): boolean => hasSleepableWorkspaceActivity('wt-1', state())
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, executionHostId: 'local' }] }
+    })
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
     act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 2 }) }))
@@ -675,7 +678,19 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([expect.objectContaining({ state: 'done' })])
     expect(statuses()[0].structuredHostOwned).toBeUndefined()
     expect(state().acknowledgedAgentsByPaneKey).toEqual({ [paneKey]: 3 })
+    // The host let go: only its Sleep mark stops offering Sleep, and the chat running again wakes it.
+    expect(sleepable()).toBe(true)
+    const slept = summary({
+      status: 'idle',
+      updatedAt: 2,
+      hostExecutionOwned: undefined,
+      sleptAt: 5
+    })
+    act(() => feed().emit({ type: 'status', session: slept }))
+    expect(state().structuredChatSleptAtByPaneKey).toEqual({ [paneKey]: 5 })
     expect(sleepable()).toBe(false)
+    act(() => feed().emit({ type: 'status', session: summary({ updatedAt: 3, sleptAt: 5 }) }))
+    expect(Object.values(state().structuredChatSleptAtByPaneKey)).toEqual([null])
   })
 
   it('drops the status and the feed when the last structured tab closes', async () => {

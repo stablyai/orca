@@ -115,7 +115,6 @@ describe('a clean tab of a dirty shared model', () => {
 
   it('after a restart, a file changed while closed banners every tab of the model', async () => {
     const { store, a, b, tab } = openSharedTabsWithDirtySibling()
-    store.getState().setPendingDiskBaselineVerification(b.id, true)
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'E', isBinary: false })
 
     const detach = attachRestoredTabConflictScan(store)

@@ -22,6 +22,7 @@ import {
   type SidebarFeedView
 } from './sidebar-feed-rows'
 import { IDLE_WORKSPACE_ACTIVITY } from './workspace-activity-facts'
+import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { buildWorkspaceRows } from './workspace-rows'
 
 function worktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
@@ -130,7 +131,12 @@ describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () 
     const built = buildSidebarFeedRows(
       domains({
         workspaces,
-        activity: new Map([['r::/w/other', { ...IDLE_WORKSPACE_ACTIVITY, browser: true }]]),
+        activity: new Map([
+          [
+            composeWorktreeHostIdentity('local', 'r::/w/other'),
+            { ...IDLE_WORKSPACE_ACTIVITY, browser: true }
+          ]
+        ]),
         retention: {
           retainedIds: [...workspaces.keys()].filter((key) => key.startsWith('ssh:')),
           retentionDecidedAt: 0
@@ -140,6 +146,78 @@ describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () 
       view({ filters: { ...NO_WORKSPACE_ROW_FILTERS, hideSleepingWorkspaces: true } })
     )
     expect(outline(built.sectionRows)).toEqual(['ssh:box|r::/w/same@0', 'local|r::/w/other@0'])
+  })
+
+  const hideSleeping = view({
+    filters: { ...NO_WORKSPACE_ROW_FILTERS, hideSleepingWorkspaces: true }
+  })
+  const busy = { ...IDLE_WORKSPACE_ACTIVITY, browser: true }
+
+  it('keeps one host’s activity off its same-id twin', () => {
+    const activity = new Map([[composeWorktreeHostIdentity('ssh:box', 'r::/w/same'), busy]])
+    const built = buildSidebarFeedRows(
+      domains({ workspaces, activity }),
+      catalog(repos),
+      hideSleeping
+    )
+    expect(outline(built.sectionRows)).toEqual(['ssh:box|r::/w/same@0'])
+  })
+
+  it('keeps one host’s retention off its same-id twin', () => {
+    const built = buildSidebarFeedRows(
+      domains({
+        workspaces,
+        retention: {
+          retainedIds: [composeWorktreeHostIdentity('local', 'r::/w/same')],
+          retentionDecidedAt: 0
+        }
+      }),
+      catalog(repos),
+      hideSleeping
+    )
+    expect(outline(built.sectionRows)).toEqual(['local|r::/w/same@0'])
+  })
+
+  it('lanes each twin by its own PR', () => {
+    const review = new Map([
+      [
+        composeWorktreeHostIdentity('ssh:box', 'r::/w/same'),
+        { provider: 'github' as const, reviewState: 'merged' }
+      ]
+    ])
+    const built = buildSidebarFeedRows(
+      domains({ workspaces, review }),
+      catalog(repos),
+      view({ groupBy: 'pr-status' })
+    )
+    const laneOf = (identity: string) => {
+      let lane = ''
+      for (const row of built.sectionRows) {
+        if (row.type === 'header') {
+          lane = row.key
+        } else if (
+          row.type === 'item' &&
+          `${row.worktree.hostId ?? ''}|${row.worktree.id}` === identity
+        ) {
+          return lane
+        }
+      }
+      return null
+    }
+    expect(laneOf('ssh:box|r::/w/same')).not.toEqual(laneOf('local|r::/w/same'))
+    expect(laneOf('local|r::/w/same')).toEqual(laneOf('local|r::/w/other'))
+  })
+
+  it('gives each twin’s row its own host’s registration of the repo', () => {
+    const built = buildSidebarFeedRows(domains({ workspaces }), catalog(repos), view())
+    const repoOf = (hostId: string) =>
+      built.sectionRows.find(
+        (row) =>
+          row.type === 'item' && row.worktree.id === 'r::/w/same' && row.worktree.hostId === hostId
+      )
+    expect(repoOf('ssh:box')).toMatchObject({ repo: { connectionId: 'box' } })
+    expect(repoOf('local')).toMatchObject({ repo: { id: 'r' } })
+    expect(repoOf('local')).not.toMatchObject({ repo: { connectionId: 'box' } })
   })
 })
 
@@ -181,20 +259,20 @@ describe('buildSidebarFeedRows nests each paired server’s own lineage', () => 
     ])
   })
 
-  it('brings back each server’s filtered-out parent above its own child', () => {
-    // Activity is per bare id, so both servers' children are awake and both parents asleep.
-    const awake = new Map([['r::/r/c', { ...IDLE_WORKSPACE_ACTIVITY, browser: true }]])
+  it('brings back a server’s filtered-out parent above its own child, not its twin’s', () => {
+    // Only server A's child is awake: B's same-id rows stay asleep.
+    const awake = new Map([
+      [
+        composeWorktreeHostIdentity('runtime:a', 'r::/r/c'),
+        { ...IDLE_WORKSPACE_ACTIVITY, browser: true }
+      ]
+    ])
     const built = buildSidebarFeedRows(
       feed(false, awake),
       catalog(repos),
       view({ filters: { ...NO_WORKSPACE_ROW_FILTERS, hideSleepingWorkspaces: true } })
     )
-    expect(outline(built.sectionRows)).toEqual([
-      'runtime:b|r::/r/p@0',
-      'runtime:b|r::/r/c@1',
-      'runtime:a|r::/r/p@0',
-      'runtime:a|r::/r/c@1'
-    ])
+    expect(outline(built.sectionRows)).toEqual(['runtime:a|r::/r/p@0', 'runtime:a|r::/r/c@1'])
   })
 })
 
@@ -282,5 +360,26 @@ describe('the desktop’s hover hold over the shared builder', () => {
       '|a::/w/1@0',
       '|b::/w/2@0'
     ])
+  })
+})
+
+describe('buildSidebarFeedRows reads a row’s own registration of a repo two hosts register', () => {
+  it('files and counts an unqualified local row under this computer, not the server', () => {
+    // The server's registration of `r` comes last, so a lookup by repo id alone finds it.
+    const repos = [repo('r'), repo('r', { executionHostId: 'runtime:env' })]
+    const workspaces = buildWorkspaceRows({
+      worktrees: [worktree('r::/w/a')],
+      folderWorkspaces: [],
+      repos: [repos[0]],
+      lineageById: {}
+    })
+    const built = buildSidebarFeedRows(
+      domains({ workspaces }),
+      catalog(repos),
+      view({ visibleWorkspaceHostIds: ['local'] })
+    )
+    expect(outline(built.sectionRows)).toEqual(['|r::/w/a@0'])
+    const header = built.sectionRows.find((row) => row.type === 'header')
+    expect(header).toMatchObject({ hostWorktreeIds: new Map([['local', ['r::/w/a']]]) })
   })
 })

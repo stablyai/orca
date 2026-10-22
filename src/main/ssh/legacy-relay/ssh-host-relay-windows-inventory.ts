@@ -21,9 +21,9 @@ import {
 import { joinRemotePath, type RemoteHostPlatform } from '../ssh-remote-platform'
 
 /** The instance that serves a pipe: its version directory and the credential its bridge presents. */
-export type WindowsRelayPipeOwner = { dir: string; credentialFile: string }
+type WindowsRelayPipeOwner = { dir: string; credentialFile: string }
 
-export type WindowsRelayInventory = {
+type WindowsRelayInventory = {
   /** Every `orca-relay-*` pipe on the machine, as full `\\.\pipe\` paths. */
   pipes: string[]
   /** Pipes this account's version directories account for, keyed by lower-cased path. */

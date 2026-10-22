@@ -9,12 +9,25 @@ import { buildOwnedEditorFileId } from './editor/file-ids/editor-file-ids'
 import type { OpenFile } from './editor/types/open-file'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { createTestStore, makeWorktree } from './store-test-helpers'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 createStoreSessionMockApi()
 
@@ -67,9 +80,12 @@ describe('a server file keeps its id across a restart', () => {
     vi.clearAllMocks()
   })
 
-  it('names a server file by its owned id on first open, and a restart keeps that id', () => {
+  it('names a server file by its owned id on first open, and a restart keeps that id', async () => {
     const store = prepareStore()
+    const main = await drawTabsFromMain(store)
     const fileId = openServerFile(store, WT_A, ENV)
+    await main.settle()
+    main.close()
     expect(fileId).toBe(buildOwnedEditorFileId(FILE_PATH, WT_A, ENV))
     const tabIds = (store.getState().unifiedTabsByWorktree[WT_A] ?? []).map((tab) => tab.id)
 
@@ -142,10 +158,13 @@ describe('a server file keeps its id across a restart', () => {
     expect(restarted.openFiles.map((file) => file.id).sort()).toEqual([localId, serverId].sort())
   })
 
-  it('keeps the same server path in two workspaces apart, before and after a restart', () => {
+  it('keeps the same server path in two workspaces apart, before and after a restart', async () => {
     const store = prepareStore()
+    const main = await drawTabsFromMain(store)
     const idA = openServerFile(store, WT_A, ENV)
     const idB = openServerFile(store, WT_B, ENV)
+    await main.settle()
+    main.close()
     expect(idA).toBe(buildOwnedEditorFileId(FILE_PATH, WT_A, ENV))
     expect(idB).toBe(buildOwnedEditorFileId(FILE_PATH, WT_B, ENV))
     store.getState().setEditorDraft(idA, 'draft a')

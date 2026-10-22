@@ -11,12 +11,7 @@ import {
  */
 export type EditorBufferRecord = Pick<
   OpenFile,
-  | 'isDirty'
-  | 'lastKnownDiskSignature'
-  | 'externalMutation'
-  | 'pendingDiskBaselineVerification'
-  | 'pendingLiveDiskVerification'
-  | 'pendingOwnerMigration'
+  'isDirty' | 'lastKnownDiskSignature' | 'externalMutation' | 'pendingOwnerMigration'
 >
 
 export type EditorBufferRecords = Record<string, EditorBufferRecord>
@@ -31,8 +26,6 @@ export const EDITOR_BUFFER_FIELDS = [
   'isDirty',
   'lastKnownDiskSignature',
   'externalMutation',
-  'pendingDiskBaselineVerification',
-  'pendingLiveDiskVerification',
   'pendingOwnerMigration'
 ] as const satisfies readonly (keyof EditorBufferRecord)[]
 
@@ -41,8 +34,6 @@ export function editorBufferRecordFromFile(file: OpenFile): EditorBufferRecord {
     isDirty: file.isDirty,
     lastKnownDiskSignature: file.lastKnownDiskSignature,
     externalMutation: file.externalMutation,
-    pendingDiskBaselineVerification: file.pendingDiskBaselineVerification,
-    pendingLiveDiskVerification: file.pendingLiveDiskVerification,
     pendingOwnerMigration: file.pendingOwnerMigration
   }
 }

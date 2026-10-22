@@ -318,7 +318,13 @@ export type RuntimeMobileSessionCreateTerminalResult = {
   publicationEpoch: string
   snapshotVersion: number
   warning?: 'desktop-tab-not-shown'
+  /** The saved folder was gone, so the terminal started at the workspace root. */
+  startupCwdFallback?: 'workspace-root'
 }
+
+/** Activation's reply: the fallback rides this one answer and is never stored on the snapshot. */
+export type RuntimeMobileSessionTabActivationResult = RuntimeMobileSessionTabsResult &
+  Pick<RuntimeMobileSessionCreateTerminalResult, 'startupCwdFallback'>
 
 export type RuntimeMobileSessionTabsRemovedResult = RuntimeMobileSessionTabsResult & {
   removed: true

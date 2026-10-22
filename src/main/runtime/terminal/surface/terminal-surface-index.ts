@@ -10,7 +10,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import { bindingOf } from '../../pane-start-statuses'
+import { bindingOf } from '../../pane-live-facts'
 import {
   projectSessionTabs,
   type ProjectedSessionTabs
@@ -37,6 +37,7 @@ export class TerminalSurfaceIndex {
   private currentJson = ''
   /** The loaded partitions `current` was projected from: the projection's own cached objects. */
   private projectedFrom: (LoadedWorkspaceLayout | null)[] = []
+  private projectedHostIds: readonly ExecutionHostId[] = []
   private projectedHomes = ''
   private projectedTitles: boolean | null = null
   /** Workspace key → its home partition, as of the last projection. */
@@ -112,6 +113,7 @@ export class TerminalSurfaceIndex {
     }
     this.projectedTitles = titles
     this.projectedFrom = loaded
+    this.projectedHostIds = hostIds
     this.projectedHomes = homes
     const next = this.project(hostIds, loaded)
     const json = JSON.stringify({
@@ -182,11 +184,16 @@ export class TerminalSurfaceIndex {
   /** A workspace main owns as today's `session.tabs` rows, from its owning partition's layout. */
   sessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
     this.surfaces()
-    const hostIds = this.deps
-      .hostIds()
-      .filter((hostId) => parseExecutionHostId(hostId)?.kind !== 'runtime')
+    return this.lastSessionTabsOf(worktreeId)
+  }
+
+  /** As sessionTabsOf, from the partitions last projected: reads no session. */
+  lastSessionTabsOf(worktreeId: string): ProjectedSessionTabs | null {
+    if (!this.current?.worktreeIds.has(worktreeId)) {
+      return null
+    }
     for (const [index, partition] of this.projectedFrom.entries()) {
-      const hostId = hostIds[index]
+      const hostId = this.projectedHostIds[index]
       for (const [key, workspace] of Object.entries(partition?.layout.workspaces ?? {})) {
         if (partition && workspace.worktreeId === worktreeId && this.routes.get(key) === hostId) {
           return projectSessionTabs(

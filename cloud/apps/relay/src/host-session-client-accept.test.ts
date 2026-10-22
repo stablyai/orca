@@ -823,6 +823,8 @@ describe('paced drain and the phones of a host not yet told', () => {
     const { h, untold } = await twoHostCell()
     h.registry.drain(0, { paceWindowMs: 40_000 })
     await vi.advanceTimersByTimeAsync(40_000)
+    // Told by its zero-grace close, a timer nested 1 ms after the send.
+    await vi.advanceTimersByTimeAsync(1)
     expect(untold.send).toHaveBeenCalledWith(expect.stringContaining('"type":"drain"'))
 
     const refused = await dial(h, laterHostId)

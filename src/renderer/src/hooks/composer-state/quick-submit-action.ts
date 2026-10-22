@@ -69,7 +69,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   const submitQuick = useCallback(
     async (requestedAgent: TuiAgent | null, options?: QuickSubmitOptions): Promise<void> => {
       if (isProjectGroupTarget) {
-        await submitFolderTarget(requestedAgent)
+        await submitFolderTarget(requestedAgent, options)
         return
       }
 

@@ -12,6 +12,7 @@ import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {
   scopeCwdStampOf,
+  sessionParseCacheTranscriptPath,
   setSessionParseCacheColdTier,
   type PersistedSessionParseCacheEntry,
   type SessionScopeCwdRead,
@@ -136,7 +137,7 @@ async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Pro
   let dropped = db.deleteSeenBefore(Date.now() - WSL_EXPIRE_AFTER_MS, WSL_PATH_GLOB)
   const stale = db.pathsSeenBefore(Date.now() - RECHECK_AFTER_MS, RECHECK_BATCH_ROWS, WSL_PATH_GLOB)
   for (const path of stale) {
-    if (await transcriptMissing(path)) {
+    if (await transcriptMissing(sessionParseCacheTranscriptPath(path))) {
       db.delete(path)
       dropped = true
     } else {

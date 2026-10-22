@@ -498,7 +498,7 @@ describe('codex turn lifecycle rows', () => {
     expect(connection.resumeReading).not.toHaveBeenCalled()
   })
 
-  it('restores terminal rows for historical turns with both endpoints, in milliseconds', () => {
+  it('restores historical turn rows with optional endpoints in milliseconds', () => {
     const tap = recorder()
     const translator = translatorFor(tap)
 
@@ -593,6 +593,26 @@ describe('codex turn lifecycle rows', () => {
           userItemId: 'codex:thread-abc:turn-unplaced:0',
           startedAt: 1_700_000_170_000,
           completedAt: 1_700_000_171_000
+        }
+      },
+      {
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-open',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-open',
+          state: 'completed',
+          userItemId: 'codex:thread-abc:turn-open:0',
+          startedAt: 1_700_000_200_000
+        }
+      },
+      {
+        key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-untimed',
+        body: {
+          kind: 'turn',
+          turnId: 'turn-untimed',
+          state: 'completed',
+          outcome: 'success',
+          userItemId: 'codex:thread-abc:turn-untimed:0'
         }
       }
     ])

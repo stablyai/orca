@@ -8,6 +8,7 @@ import {
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { keepAbsentPaneBindingForSwap, releaseAbsentPaneOwner } from './absent-pane-owner'
 import { excludeReplacedPaneOwner } from './replaced-pane-owner'
+import { PANE_NOT_LIVE_ERROR } from '../../../../shared/pane-attach-only-view'
 import type { StablePaneOwner, StablePaneSpawnContext } from './stable-owner'
 
 type StablePaneAttachAttempt =
@@ -61,6 +62,10 @@ export async function attemptStablePaneAttach(
     const ownerBeforeRetire = args.resolveOwner?.()
     if (ownerBeforeRetire && !isSameStablePaneOwner(ownerBeforeRetire, owner)) {
       return { lostTo: ownerBeforeRetire }
+    }
+    if (args.attachOnlyView) {
+      // Why the binding stays: main's start reuses its id, which carries the terminal's history.
+      throw new Error(PANE_NOT_LIVE_ERROR)
     }
     // The adoption holds the pane's reservation, so its fresh bind can swap the dead binding.
     const kept = args.keepAbsentBinding ? keepAbsentPaneBindingForSwap(args, owner) : null

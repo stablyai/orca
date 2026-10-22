@@ -3,16 +3,27 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { encodePairingOffer, parsePairingCode, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { OrcadManagedIdentityError } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
+import {
+  ManagedOrcadPairingRepairs,
+  type ManagedOrcadPairingRepairDeps
+} from '../managed-server/lifecycle/orcad-managed-pairing-repair'
+import {
+  createEnvironmentFromPairingOffer,
+  getPreferredPairingOffer,
+  type KnownRuntimeEnvironment
+} from '../../shared/runtime-environments'
 import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../ssh/orcad-stdio-bridge'
 import { startEchoServer } from '../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import { fakeWslBridgeChildren, posixOrcadStdioBridge } from './wsl-orcad-bridge-test-child'
 import {
   WslOrcadConnectionManager,
-  WslOrcadConnectionSupersededError,
-  WslOrcadLaunchDeferredError,
   type WslOrcadConnection,
   type WslOrcadConnectionDependencies
 } from './wsl-orcad-connection'
+import {
+  WslOrcadConnectionSupersededError,
+  WslOrcadLaunchDeferredError
+} from './wsl-orcad-connection-errors'
 import type { WslOrcadLaunch } from './wsl-orcad-deploy'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
@@ -220,10 +231,10 @@ describe('WslOrcadConnectionManager', () => {
     const incumbent = await manager.ensure('Ubuntu')
     expect(incumbent.deferredUpdate).toEqual(deferredUpdate)
     launches.push({ ...ready(first.port), fullVersion: '2.0.0' })
-    const updated = await manager.ensure('Ubuntu', { force: true })
+    const updated = await manager.ensure('Ubuntu', { intent: 'force' })
     expect(deployAndLaunch).toHaveBeenLastCalledWith(
       'Ubuntu',
-      expect.objectContaining({ force: true })
+      expect.objectContaining({ intent: 'force' })
     )
     expect(updated).toMatchObject({
       fullVersion: '2.0.0',
@@ -238,27 +249,44 @@ describe('WslOrcadConnectionManager', () => {
   it('runs a forced connect after a plain one in flight instead of joining it', async () => {
     const { manager, deployAndLaunch } = setup()
     const plain = manager.ensure('Ubuntu')
-    const forced = manager.ensure('Ubuntu', { force: true })
+    const forced = manager.ensure('Ubuntu', { intent: 'force' })
     await Promise.all([plain, forced])
     expect(deployAndLaunch).toHaveBeenCalledTimes(2)
     expect(deployAndLaunch).toHaveBeenLastCalledWith(
       'Ubuntu',
-      expect.objectContaining({ force: true })
+      expect.objectContaining({ intent: 'force' })
     )
   })
 
   it('drops a queued forced connect that a close overtook', async () => {
     const { manager, deployAndLaunch } = setup()
     const plain = manager.ensure('Ubuntu')
-    const forced = manager.ensure('Ubuntu', { force: true })
+    const forced = manager.ensure('Ubuntu', { intent: 'force' })
     await manager.close('Ubuntu')
     await plain.catch(() => {})
     await expect(forced).rejects.toBeInstanceOf(WslOrcadConnectionSupersededError)
     expect(deployAndLaunch).toHaveBeenCalledTimes(1)
   })
 
+  it("hands the deploy this desktop's enrolled pairing for the incumbent's terminal count", async () => {
+    const enrolled = parsePairingCode(
+      encodePairingOffer({
+        v: PAIRING_OFFER_VERSION,
+        endpoint: 'ws://127.0.0.1:41000',
+        deviceToken: 'enrolled-token',
+        publicKeyB64: Buffer.alloc(32, 7).toString('base64')
+      })
+    )
+    const { manager, deployAndLaunch } = setup({ getPairingOffer: () => enrolled })
+    await manager.ensure('Ubuntu')
+    expect(deployAndLaunch).toHaveBeenCalledWith(
+      'Ubuntu',
+      expect.objectContaining({ pairedOffer: enrolled })
+    )
+  })
+
   it('throws the deferral and starts no bridge', async () => {
-    const { manager, launches, children } = setup()
+    const { manager, launches, children, onChange } = setup()
     launches.push({
       outcome: 'deferred',
       distro: 'Ubuntu',
@@ -270,6 +298,20 @@ describe('WslOrcadConnectionManager', () => {
     await expect(manager.ensure('Ubuntu')).rejects.toBeInstanceOf(WslOrcadLaunchDeferredError)
     expect(children.commands).toHaveLength(0)
     expect(manager.get('Ubuntu')).toBeNull()
+    // Nothing serves, so the deferral is what offers Update or Force.
+    expect(onChange).toHaveBeenLastCalledWith(
+      'Ubuntu',
+      null,
+      expect.objectContaining({
+        state: 'failed',
+        deferredUpdate: {
+          candidateVersion: '2.0.0',
+          code: 'live_terminals',
+          reason: 'Terminals are running.',
+          forceable: true
+        }
+      })
+    )
   })
 
   it('refuses a foreign server behind the port and closes its bridge', async () => {
@@ -348,5 +390,166 @@ describe('WslOrcadConnectionManager', () => {
     expect(wslOrcadHostDistro(connection.environmentId)).toBe('Ubuntu')
     await connection.close()
     expect(wslOrcadHostDistro(connection.environmentId)).toBeNull()
+  })
+})
+
+describe('a WSL host that refuses the enrolled pairing', () => {
+  function offerCode(deviceToken: string, publicKeyB64 = 'public-key'): string {
+    return encodePairingOffer({
+      v: PAIRING_OFFER_VERSION,
+      endpoint: 'ws://127.0.0.1:41000',
+      deviceToken,
+      publicKeyB64
+    })
+  }
+
+  /** An in-memory pairing store and the managed repair gate over it. */
+  function repairable(published: ServeReadiness) {
+    let stored: KnownRuntimeEnvironment = createEnvironmentFromPairingOffer({
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu',
+      now: 1,
+      offer: parsePairingCode(offerCode('lost-token'))!
+    })
+    const refresh = vi.fn((environmentId: string, pairingCode: string) => {
+      stored = createEnvironmentFromPairingOffer({
+        id: environmentId,
+        name: 'Ubuntu',
+        now: 2,
+        offer: parsePairingCode(pairingCode)!
+      })
+      return stored
+    })
+    const deps: ManagedOrcadPairingRepairDeps = {
+      resolve: () => stored,
+      connect: async () => {
+        const target = { kind: 'wsl', id: 'wsl:ubuntu', distro: 'Ubuntu', label: 'Ubuntu' } as const
+        // Never used: readReadiness answers from the fixture.
+        const spawn = fakeWslBridgeChildren().spawn
+        return { target, connection: createWslOrcadHostTransport({ target, spawn }) }
+      },
+      readReadiness: async () => published,
+      ports: () => ({ localPort: 41000, remotePort: 6790 }),
+      refresh,
+      repaired: vi.fn(),
+      now: () => 1_000
+    }
+    const recovery = { repairs: new ManagedOrcadPairingRepairs(deps), resolve: deps.resolve }
+    return { stored: () => stored, refresh, recovery }
+  }
+
+  // The host knows only the token it published after losing its device registry.
+  const verifyIdentity = async (pairingOffer: string) =>
+    parsePairingCode(pairingOffer)?.deviceToken === 'fresh-token'
+      ? ({ verdict: 'verified' } as const)
+      : ({ verdict: 'unpaired', detail: 'access grant refused' } as const)
+
+  it('heals on the next connect, and the next update counts terminals with the new pairing', async () => {
+    const store = repairable(readiness(first.port, 'fresh-token'))
+    const { manager, deployAndLaunch } = setup({
+      verifyIdentity,
+      pairingRecovery: store.recovery,
+      getPairingOffer: () => getPreferredPairingOffer(store.stored())
+    })
+    const connection = await manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })
+    expect(parsePairingCode(connection.pairingOffer)?.deviceToken).toBe('fresh-token')
+    expect(store.refresh).toHaveBeenCalledOnce()
+    await manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })
+    expect(deployAndLaunch).toHaveBeenLastCalledWith(
+      'Ubuntu',
+      expect.objectContaining({
+        pairedOffer: expect.objectContaining({ deviceToken: 'fresh-token' })
+      })
+    )
+  })
+
+  it('retires the bridge when the repaired pairing is refused too, so no failure stores the old token', async () => {
+    const store = repairable(readiness(first.port, 'fresh-token'))
+    let hostLostRegistry = false
+    const onChange = vi.fn()
+    const { manager } = setup({
+      // The host accepts the enrolled token until it loses its registry, then accepts nothing.
+      verifyIdentity: async (pairingOffer: string) =>
+        !hostLostRegistry && parsePairingCode(pairingOffer)?.deviceToken === 'lost-token'
+          ? ({ verdict: 'verified' } as const)
+          : ({ verdict: 'unpaired', detail: 'access grant refused' } as const),
+      pairingRecovery: store.recovery,
+      getPairingOffer: () => getPreferredPairingOffer(store.stored()),
+      onChange
+    })
+    await manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })
+    hostLostRegistry = true
+    await expect(manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })).rejects.toThrow()
+    expect(manager.get('Ubuntu')).toBeNull()
+    expect(onChange).toHaveBeenLastCalledWith(
+      'Ubuntu',
+      null,
+      expect.objectContaining({ state: 'failed' })
+    )
+    expect(getPreferredPairingOffer(store.stored()).deviceToken).toBe('fresh-token')
+  })
+
+  it('still runs an Update queued behind a reconnect whose pairing failed', async () => {
+    const store = repairable(readiness(first.port, 'fresh-token'))
+    let hostLostRegistry = false
+    const { manager, deployAndLaunch } = setup({
+      verifyIdentity: async (pairingOffer: string) =>
+        !hostLostRegistry && parsePairingCode(pairingOffer)?.deviceToken === 'lost-token'
+          ? ({ verdict: 'verified' } as const)
+          : ({ verdict: 'unpaired', detail: 'access grant refused' } as const),
+      pairingRecovery: store.recovery,
+      getPairingOffer: () => getPreferredPairingOffer(store.stored())
+    })
+    await manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })
+    hostLostRegistry = true
+    const reconnect = manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })
+    const update = manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu', intent: 'update' })
+    await reconnect.catch(() => {})
+    const settled = await update.then(
+      () => null,
+      (error: unknown) => error
+    )
+    expect(settled).not.toBeInstanceOf(WslOrcadConnectionSupersededError)
+    expect(deployAndLaunch).toHaveBeenLastCalledWith(
+      'Ubuntu',
+      expect.objectContaining({ intent: 'update' })
+    )
+  })
+
+  it('reuses the bridge of a host still being added, which has no stored pairing to repair', async () => {
+    const store = repairable(readiness(first.port, 'fresh-token'))
+    const resolve = vi.fn(() => {
+      throw new Error('no environment is recorded for this host yet')
+    })
+    const { manager } = setup({
+      pairingRecovery: { repairs: store.recovery.repairs, resolve },
+      getPairingOffer: () => null
+    })
+    const opened = await manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })
+    await expect(manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })).resolves.toMatchObject({
+      pairingOffer: opened.pairingOffer
+    })
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('never gives the token to a server under another host key', async () => {
+    const published = readiness(first.port, 'fresh-token')
+    if (!published.pairing.available) {
+      throw new Error('fixture readiness publishes a pairing offer')
+    }
+    const store = repairable({
+      ...published,
+      pairing: { ...published.pairing, url: offerCode('fresh-token', 'another-key') }
+    })
+    const { manager } = setup({
+      verifyIdentity,
+      pairingRecovery: store.recovery,
+      getPairingOffer: () => getPreferredPairingOffer(store.stored())
+    })
+    await expect(manager.ensure('Ubuntu', { environmentId: 'wsl:ubuntu' })).rejects.toBeInstanceOf(
+      OrcadManagedIdentityError
+    )
+    expect(store.refresh).not.toHaveBeenCalled()
+    expect(getPreferredPairingOffer(store.stored()).deviceToken).toBe('lost-token')
   })
 })

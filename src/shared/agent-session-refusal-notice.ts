@@ -103,7 +103,7 @@ function reasonParts(
 ): AgentSessionWriteNoticePart[] | undefined {
   if (
     failure.code === 'agent_session_operation_invalid' &&
-    failure.details?.codexInstallation &&
+    (failure.details?.agentInstallation || failure.details?.codexInstallation) &&
     (write === 'send' || write === 'composer-send')
   ) {
     return [

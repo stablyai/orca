@@ -30,6 +30,7 @@ import {
   MOBILE_WEB_APP_SOURCE_DIRS,
   assertAssetCeilingFitsShell,
   mobileWebAppBundleMaxAssets,
+  mobileWebAppBundleBudgetBytes,
   mobileWebAppBundleMaxChunks,
   readMobileWebBundleMaxAssets,
   verifyMobileWebAppBundle
@@ -380,6 +381,41 @@ describeBundling('the app bundle', () => {
 })
 
 describe('the Phase C budget', () => {
+  it('reserves the font allowance only for the exact licensed symbol asset', async () => {
+    const font = hashedAsset(
+      await readFile(join(projectDir, 'mobile/assets/fonts/SymbolsNerdFontMono-Regular.woff2')),
+      'woff2'
+    )
+    const manifest = { totalBytes: font.byteLength + 123, assets: [font] }
+    expect(mobileWebAppBundleBudgetBytes(manifest)).toBe(123)
+    expect(
+      mobileWebAppBundleBudgetBytes({
+        ...manifest,
+        totalBytes: font.byteLength + MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES + 1
+      })
+    ).toBeGreaterThan(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)
+    expect(mobileWebAppBundleBudgetBytes({ totalBytes: 123, assets: [] })).toBe(123)
+    for (const change of [
+      { path: 'assets/another.woff2' },
+      { sha256: 'a'.repeat(64) },
+      { contentType: 'text/javascript' },
+      { byteLength: font.byteLength + 1 }
+    ]) {
+      expect(() =>
+        mobileWebAppBundleBudgetBytes({ ...manifest, assets: [{ ...font, ...change }] })
+      ).toThrow(/approved hash, path, MIME type and bounded byte length/)
+    }
+    expect(() => mobileWebAppBundleBudgetBytes({ ...manifest, assets: [font, font] })).toThrow(
+      /only one licensed terminal font/
+    )
+    expect(
+      mobileWebAppBundleBudgetBytes({
+        totalBytes: font.byteLength,
+        assets: [{ ...font, path: 'assets/code.js', contentType: 'text/javascript' }]
+      })
+    ).toBe(font.byteLength)
+  })
+
   it('sits below the contract per-asset ceiling, so growth trips a build not a phone', () => {
     expect(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES).toBeLessThan(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
   })
@@ -389,7 +425,9 @@ describe('the Phase C budget', () => {
     async () => {
       const { manifest, chunkCount, entryStaticBytes, imageCount, routeKeys } =
         await readWrittenBundle()
-      expect(manifest.totalBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)
+      expect(mobileWebAppBundleBudgetBytes(manifest)).toBeLessThanOrEqual(
+        MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES
+      )
       expect(manifest.assets.length).toBeLessThanOrEqual(
         mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
       )
@@ -430,10 +468,10 @@ describe('the Phase C budget', () => {
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // 1 to 11 per route, which is why four per route was a bound rather than a fit and why the
+    // 1 to 14 per route, which is why four per route was a bound rather than a fit and why the
     // envelope cannot be a line through the measurement either.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
-    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(11)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(14)
   })
 
   it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
@@ -505,13 +543,13 @@ describe('the Phase C budget', () => {
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
     // The shell hands back null for a manifest over its own ceiling, so a derived ceiling above
     // that ships a green build no device can open. At the 42 images the tree carries, the envelope
-    // plus 42 plus the document crosses 256 at 27 routes, which Phase C reaches. The crossing came
+    // plus 42 plus the document crosses 256 at 25 routes, which Phase C reaches. The crossing came
     // in from 50 with the envelope: it grants the worst swept route to each one past the sweep,
     // where `4r + 16` granted four, so re-measuring a tree whose routes share more moves it out.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(26, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(246)
-    expect(() => assertAssetCeilingFitsShell(27, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /257 .*256/
+    expect(assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(250)
+    expect(() => assertAssetCeilingFitsShell(25, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /264 .*256/
     )
   })
 })

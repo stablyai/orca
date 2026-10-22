@@ -8,7 +8,6 @@ import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
 import type { SleepingAgentSessionRecord } from '../agent-session-resume'
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
-import type { EditorTabView } from '../editor-tab-view-types'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
 import type {
   TerminalGrid,
@@ -18,6 +17,7 @@ import type {
 import type { PaneSide } from './terminal-pane-tree'
 import type { SplitRatioIntent } from './split-ratio-intents'
 import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
+import type { LayoutEditorView } from './layout-editor-view'
 import type { LayoutEditorFile, LayoutTerminalCreation } from './workspace-layout-model'
 
 type On = { workspace: string }
@@ -89,7 +89,16 @@ export type LayoutCommand =
        */
       recordClose?: 'user' | 'cleanup'
     })
-  | (On & { type: 'moveTab'; tabId: string; toGroupId: string; index: number })
+  | (On & {
+      type: 'moveTab'
+      tabId: string
+      toGroupId: string
+      index: number
+      /** Right after this tab (null: first) when it is in the target group; else `index`. */
+      afterTabId?: string | null
+      /** Pins or unpins the tab where `index` puts it, in the same step. */
+      isPinned?: boolean
+    })
   | (On & { type: 'splitGroup'; tabId: string; besideGroupId: string; direction: GroupSide })
   /** `ratios`, or from a window older than them, `groupLayout`: exactly one. */
   | (On & {
@@ -142,8 +151,10 @@ export type LayoutCommand =
       /** Present for edit-mode files, which are restored after restart. */
       file?: LayoutEditorFile
       /** What the tab shows beyond its file; not saved. */
-      view?: EditorTabView
+      view?: LayoutEditorView
       groupId?: string
+      /** Placement in the group: at this index, else at its end. */
+      index?: number
       preview?: boolean
       /** Editor tabs whose view reported an unsaved draft: a preview among them is not replaced. */
       dirtyTabIds?: string[]
@@ -168,8 +179,9 @@ export type LayoutCommand =
       type: 'moveTabToWorkspace'
       /** The workspace that owns the tabs' file, as the window resolved it; same partition. */
       toWorkspace: string
-      /** In the order they join the group's end; ids change when they name the old owner. */
-      tabs: { tabId: string; newTabId: string; newEntityId: string }[]
+      /** In the order they join the group's end; ids change when they name the old owner. A
+       *  non-plain tab's view names its file under the new owner. */
+      tabs: { tabId: string; newTabId: string; newEntityId: string; view?: LayoutEditorView }[]
       groupId: string
       /** The moved edit-mode file's record in its new workspace. */
       file?: LayoutEditorFile
@@ -178,6 +190,8 @@ export type LayoutCommand =
       type: 'renameEditorFiles'
       /** Under the window's ids; one workspace's files only. */
       renames: EditorFileRename[]
+      /** Other workspaces' renames of the same disk move: all are applied, or none. */
+      alsoIn?: { workspace: string; renames: EditorFileRename[] }[]
     })
   | (On & {
       type: 'openBrowserTab'
@@ -231,7 +245,7 @@ export type LayoutCommand =
       /** Records how each agent resumes and stops nothing: the window's live and quit captures. */
       recordOnly?: true
     })
-  /** `recordOnly`: drops the records and starts nothing. */
+  /** Starts the slept panes, which keep their records. `recordOnly`: drops them, starts nothing. */
   | (On & { type: 'wake'; paneKeys?: string[]; recordOnly?: true })
   /** The workspace's default tabs were applied (or it had none): never apply them again. */
   | (On & { type: 'setDefaultTabsApplied' })
@@ -260,6 +274,8 @@ export type EditorFileRename = {
   fileId: string
   newFileId: string
   record?: { fromFilePath: string; file: LayoutEditorFile }
+  /** A non-plain tab's view under the file's new path. */
+  view?: LayoutEditorView
 }
 
 export type GroupSide = 'left' | 'right' | 'up' | 'down'
@@ -314,6 +330,7 @@ export type LayoutRefusalCode =
   | 'pane_structure_changed'
   | 'same_pane'
   | 'last_pane'
+  /** Sent by older hosts only: a startPane of an unbound pane with a sleeping record. */
   | 'pane_sleeping'
   | 'pane_already_bound'
   | 'workspace_exists'
@@ -377,6 +394,13 @@ export type LayoutContext = {
   now: () => number
   /** True while a start of this pane is in flight; such a pane is not started again. */
   isStarting?: (leafId: string) => boolean
+  /**
+   * Whether the pane's bound terminal is live, as the runtime knows it; a binding with a start
+   * status, or to a terminal that ended, names what the pane restores from. Absent: live.
+   */
+  isBindingLive?: (paneKey: string, ptyId: string) => boolean
+  /** Whether the live bound terminal is an empty shell a hibernated agent left: startPane replaces it. */
+  retiresBinding?: (paneKey: string, ptyId: string) => boolean
 }
 
 export type LayoutApplyResult<Model> =

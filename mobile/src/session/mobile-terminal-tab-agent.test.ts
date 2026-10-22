@@ -4,6 +4,7 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,
+  getMobileTerminalTabHostAgentIdentity,
   resolveMobileTerminalTabAgentId,
   resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
@@ -73,6 +74,71 @@ describe('resolveMobileTerminalTabAgentId', () => {
     expect(
       resolveMobileTerminalTabAgentId(terminalTab('Codex ready', { agentType: 'unknown' }))
     ).toBe('codex')
+  })
+})
+
+describe('host pane identity', () => {
+  it('prefers the host cursor identity over a claude report from a Claude hook Cursor imported', () => {
+    const tab = terminalTab('Fix the build - ⏳ Working ···', { agentType: 'claude' })
+    expect(resolveMobileTerminalTabAgentId(tab)).toBe('claude')
+    expect(resolveMobileTerminalTabAgentId(tab, 'cursor')).toBe('cursor')
+    expect(resolveMobileTerminalTabOwnedAgentId(tab, 'cursor')).toBe('cursor')
+  })
+
+  it('does not replace a launch identity Orca chose', () => {
+    expect(
+      resolveMobileTerminalTabAgentId(terminalTab('Terminal', { launchAgent: 'claude' }), 'cursor')
+    ).toBe('claude')
+  })
+
+  it('keeps launch identity when the hook report is unknown', () => {
+    const tab = terminalTab('Terminal', { agentType: 'unknown', launchAgent: 'claude' })
+    expect(resolveMobileTerminalTabOwnedAgentId(tab, 'cursor')).toBe('claude')
+    expect(resolveMobileTerminalTabAgentId(tab, 'cursor')).toBe('claude')
+  })
+
+  it("does not replace another agent's hook report", () => {
+    for (const agentType of ['codex', 'grok', 'gemini']) {
+      expect(
+        resolveMobileTerminalTabAgentId(terminalTab('Terminal', { agentType }), 'cursor')
+      ).toBe(agentType)
+    }
+  })
+
+  it('keeps a real Claude tab as Claude when the host says claude or has no identity', () => {
+    const tab = terminalTab('✳ working', { agentType: 'claude' })
+    expect(resolveMobileTerminalTabAgentId(tab, 'claude')).toBe('claude')
+    expect(resolveMobileTerminalTabAgentId(tab, undefined)).toBe('claude')
+    expect(resolveMobileTerminalTabAgentId(tab, null)).toBe('claude')
+  })
+
+  it('shows Cursor for a saved task name with no hook or launch identity', () => {
+    expect(resolveMobileTerminalTabAgentId(terminalTab('Saved task name'), 'cursor')).toBe('cursor')
+    expect(
+      resolveMobileTerminalTabOwnedAgentId(terminalTab('Saved task name'), 'cursor')
+    ).toBeNull()
+  })
+
+  it('cleans the title with the same host identity the icon uses', () => {
+    expect(getMobileSessionTabTitle(terminalTab('✳ investigating'))).toBe('✳ investigating')
+    expect(getMobileSessionTabTitle(terminalTab('✳ investigating'), 'cursor')).toBe('investigating')
+  })
+
+  it("reads the host identity from the terminal.list record of the tab's handle", () => {
+    const terminals = [
+      { handle: 'pty-0', agentIdentity: 'codex' },
+      { handle: 'pty-1', agentIdentity: 'cursor' }
+    ]
+    expect(getMobileTerminalTabHostAgentIdentity(terminalTab('Terminal'), terminals)).toBe('cursor')
+    expect(
+      getMobileTerminalTabHostAgentIdentity(
+        { ...terminalTab('Terminal'), terminal: null },
+        terminals
+      )
+    ).toBeUndefined()
+    expect(
+      getMobileTerminalTabHostAgentIdentity(terminalTab('Terminal'), [{ handle: 'pty-1' }])
+    ).toBeUndefined()
   })
 })
 

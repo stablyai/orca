@@ -132,14 +132,14 @@ describe('mobile tool result availability', () => {
   }
 
   // The page's window unmounts a row scrolled past; older messages joining its fold change its id.
-  it('keeps what the reader opened in a windowed-out row by its row key, per Tools default', () => {
+  it('keeps what the reader opened in a windowed-out row by its row key', () => {
     const row = message([
       { type: 'tool-call', callId: 'one', name: 'Bash', input: 'first input' },
       { type: 'tool-result', callId: 'one', output: 'first output' },
       { type: 'tool-call', callId: 'two', name: 'Bash', input: 'second input' },
       { type: 'tool-result', callId: 'two', output: 'second output' }
     ])
-    function Window({ shown, id, tools }: { shown: boolean; id: string; tools: boolean }) {
+    function Window({ shown, id }: { shown: boolean; id: string }) {
       const disclosures = useMobileNativeChatDisclosures('chat')
       return createElement(
         MobileNativeChatDisclosureContext.Provider,
@@ -147,15 +147,14 @@ describe('mobile tool result availability', () => {
         shown
           ? createElement(MobileNativeChatMessage, {
               message: { ...row, id },
-              rowKey: 'kept',
-              toolsExpanded: tools
+              rowKey: 'kept'
             })
           : null
       )
     }
-    const draw = (shown: boolean, id = 'source', tools = false) =>
+    const draw = (shown: boolean, id = 'source') =>
       act(() => {
-        const element = createElement(Window, { shown, id, tools })
+        const element = createElement(Window, { shown, id })
         if (renderer) {
           renderer.update(element)
         } else {
@@ -173,18 +172,6 @@ describe('mobile tool result availability', () => {
     draw(false)
     draw(true, 'older-head')
     expect(toolLines(renderer!.root)).toHaveLength(2)
-    expect(textIn(renderer!.root)).toContain('first output')
-    expect(textIn(renderer!.root)).not.toContain('second output')
-
-    // Tools opens every run and line; the reader closes this run under that default.
-    draw(true, 'older-head', true)
-    expect(textIn(renderer!.root)).toContain('second output')
-    press(header())
-    draw(false, 'older-head', true)
-    draw(true, 'older-head', true)
-    expect(toolLines(renderer!.root)).toHaveLength(0)
-    // Back to the old default: the choices made under it come back.
-    draw(true, 'older-head', false)
     expect(textIn(renderer!.root)).toContain('first output')
     expect(textIn(renderer!.root)).not.toContain('second output')
   })
@@ -330,8 +317,7 @@ describe('mobile tool result availability', () => {
               key: row.id,
               message: row,
               ...disclosure.resolveRow(index, row),
-              structuredActivityUi: true,
-              toolsExpanded: true
+              structuredActivityUi: true
             })
           )
         )
@@ -340,6 +326,18 @@ describe('mobile tool result availability', () => {
         renderer = create(createElement(Phone, { journal: items }))
       })
       const tree = renderer!
+      // Open every run, then every line in it, as a reader would.
+      const headers = () =>
+        tree.root.findAll(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+        )
+      for (let index = 0; index < headers().length; index += 1) {
+        press(headers()[index]!)
+      }
+      for (let index = 0; index < toolLines(tree.root).length; index += 1) {
+        press(toolLines(tree.root)[index]!)
+      }
       const orphan = drawn.find((row) => row.role === 'tool')!
       expect(orphan.id).not.toBe('source')
       expect(orphan.journalPosition).toEqual({ sequence: 5, index: 0 })

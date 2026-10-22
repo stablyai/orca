@@ -30,8 +30,7 @@ vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
     getState: () => ({
       openFiles: harness.openFiles,
-      setExternalMutation: harness.setExternalMutation,
-      setPendingDiskBaselineVerification: vi.fn()
+      setExternalMutation: harness.setExternalMutation
     })
   })
 }))

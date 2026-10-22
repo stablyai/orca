@@ -12,9 +12,11 @@ import {
 } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from '@/lib/open-editor-move-owner'
 import { documentFolderAccess } from '@/lib/local-file-access'
+import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 let moveOperationCounter = 0
 
@@ -53,7 +55,7 @@ export async function executeOpenEditorPathMove(args: {
   const addScope = (wtId: string, owner: string | null): void => {
     scopes.set(`${wtId}::${owner ?? 'local'}`, { worktreeId: wtId, owner })
   }
-  addScope(worktreeId, runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(moveState, worktreeId))
+  addScope(worktreeId, runtimeEnvironmentIdOrLocalUnlessTwin(moveState, worktreeId))
   for (const f of affected) {
     addScope(f.worktreeId, f.runtimeEnvironmentId?.trim() || null)
   }
@@ -99,7 +101,7 @@ export async function executeOpenEditorPathMove(args: {
 
     // Commit: retarget the live sessions in place (the rekey installs the gate +
     // provenance on dirty destinations).
-    const rekeyResult = remapOpenEditorTabsForPathChange({
+    let rekeyResult = remapOpenEditorTabsForPathChange({
       fromPath,
       toPath,
       worktreePath,
@@ -107,6 +109,14 @@ export async function executeOpenEditorPathMove(args: {
       owner,
       moveOperationId: operationId
     })
+    // Switch point: main renames the tabs; its frame rekeys the sessions, or main refused.
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      rekeyResult.ok &&
+      !(await contentRekeyOutcome(affected.map((file) => file.id)))
+    ) {
+      rekeyResult = { ok: false, reason: 'stale' }
+    }
     if (!rekeyResult.ok) {
       // The disk rename succeeded but the editor state couldn't be retargeted
       // (a destination collision or stale plan). Undo the on-disk move so the

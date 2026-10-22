@@ -6,15 +6,15 @@ import { JIRA_ATTACHMENT_IMAGE_METHODS } from './jira-attachment-image'
 import {
   registerAttachmentImageGrant,
   resetAttachmentImageGrantsForTest
-} from '../../../jira/attachment-image-grants'
+} from '../../../jira/attachments/image-grants'
 import {
   clearAttachmentImagesForSite,
   _resetAttachmentImageCache
-} from '../../../jira/attachment-image-cache'
+} from '../../../jira/attachments/image-cache'
 import { decodeJiraImageFrame } from '../../../../shared/jira-image-stream-frame'
 
 const { read } = vi.hoisted(() => ({ read: vi.fn() }))
-vi.mock('../../../jira/attachment-image-read', () => ({ readGrantedAttachmentImage: read }))
+vi.mock('../../../jira/attachments/image-read', () => ({ readGrantedAttachmentImage: read }))
 const transferId = '12345678-1234-4234-8234-123456789012'
 const runtime = { getRuntimeId: () => 'runtime' }
 const dispatcher = new RpcDispatcher({

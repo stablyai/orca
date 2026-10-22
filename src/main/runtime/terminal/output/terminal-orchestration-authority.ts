@@ -14,14 +14,8 @@ import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from '../../recent-pty
 import { appendRecentPtyPathCandidates } from '../../terminal-output-path-candidates'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
-import {
-  HOST_DEFAULT_AGENT_DETECTION,
-  resolveWorkspaceAgentDetectionHost,
-  type AgentDetectionHost
-} from '../../../preflight/workspace-agent-detection'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
+import { resolveRuntimeAgentDetectionHost } from '../../runtime-agent-detection-host'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import {
   localOrchestrationCliCommand,
@@ -263,39 +257,19 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       : undefined
   }
 
-  // Why the host's own worktree record: it carries the owning host and the real path, where the
-  // client's id alone could pick the wrong row for a repo id shared across hosts.
   async resolveAgentDetectionHost(
-    worktreeId: string | null | undefined
+    worktreeId: string | null | undefined,
+    repoId?: string
   ): Promise<AgentDetectionHost> {
-    if (!this.store || !worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-      return HOST_DEFAULT_AGENT_DETECTION
-    }
-    const store = this.requireStore()
-    const scope = parseWorkspaceKey(worktreeId)
-    if (scope?.type === 'folder') {
-      return resolveWorkspaceAgentDetectionHost(store, {
-        kind: 'folder',
-        folderWorkspaceId: scope.folderWorkspaceId
-      })
-    }
-    let worktree: ResolvedWorktree
-    try {
-      worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
-    } catch (error) {
-      // Only an unknown workspace keeps the answer older clients always got; an ambiguous one
-      // has no single host, and probing this one would list another machine's agents.
-      if (error instanceof Error && error.message === 'selector_not_found') {
-        return HOST_DEFAULT_AGENT_DETECTION
-      }
-      throw error
-    }
-    return resolveWorkspaceAgentDetectionHost(store, {
-      kind: 'worktree',
-      repoId: worktree.repoId,
-      path: worktree.path,
-      hostId: worktree.hostId
-    })
+    return resolveRuntimeAgentDetectionHost(
+      {
+        store: this.store,
+        resolveRepo: (selector) => this.resolveRepoSelector(selector),
+        resolveWorktree: (selector) => this.resolveWorktreeSelector(selector)
+      },
+      worktreeId,
+      repoId
+    )
   }
 
   getOrchestrationFleetAgentStatusSnapshot() {

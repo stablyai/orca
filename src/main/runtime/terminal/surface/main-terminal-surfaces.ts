@@ -9,6 +9,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
 import { withMainSessionTabRows } from '../../session-tabs/main-session-tab-rows'
+import { withMainTabOrder } from '../../session-tabs/main-session-tab-order'
+import { headlessMobileSnapshotContentUnchanged } from '../../mobile-session-snapshot-equality'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
 import {
@@ -26,12 +28,20 @@ export type MainTerminalSurfacesHost = {
   registered: (ptyId: string) => boolean
   /** Whether the host certified the terminal exited (not merely disconnected or unverifiable). */
   exited: (ptyId: string) => boolean
+  /** Whether the terminal runs now. */
+  live: (ptyId: string) => boolean
   /** Main's start status of a pane, as the layout stream publishes it. */
   paneStartFact: PaneStartFactOf
   /** The graph authority now, when its graph is ready; null otherwise. */
   readyGraphPublisher: () => number | null
   /** Installs a graph under the publisher's authority, as the window's own publication does. */
   publish: (windowId: number, graph: RuntimeSyncWindowGraph) => void
+  /** The session.tabs rows the runtime holds, by workspace. */
+  heldRows: () => ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
+  /** Stores a workspace's rows and pushes them to its subscribers. */
+  replaceHeldRows: (worktreeId: string, next: RuntimeMobileSessionTabsSnapshot) => void
+  /** The rows less every terminal the window path's exit filters retire. */
+  fenceExited: (rows: RuntimeMobileSessionTabsSnapshot) => RuntimeMobileSessionTabsSnapshot
 }
 
 class MainSurfacePublisher {
@@ -42,6 +52,7 @@ class MainSurfacePublisher {
   private installed: MainTerminalSurfaces | null = null
   private scheduled = false
   private forceNext = false
+  private mergeNext = false
 
   constructor(private readonly host: MainTerminalSurfacesHost) {
     this.index = new TerminalSurfaceIndex({
@@ -49,7 +60,7 @@ class MainSurfacePublisher {
       hostIds: () => host.store()?.getWorkspaceSessionHostIds?.() ?? [],
       homeHostId: host.homeHostId,
       generatedTitlesEnabled: () => host.store()?.getSettings?.().tabAutoGenerateTitle === true,
-      onChanged: () => this.schedule()
+      onChanged: () => this.schedule({ merge: true })
     })
   }
 
@@ -71,10 +82,39 @@ class MainSurfacePublisher {
   private withMainRows(
     published: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
-    const projected = this.installed?.worktreeIds.has(published.worktree)
-      ? this.index.sessionTabsOf(published.worktree)
-      : null
+    const projected = this.index.lastSessionTabsOf(published.worktree)
     return projected ? withMainSessionTabRows(published, projected, this.host.exited) : published
+  }
+
+  /** Rows a writer stores, ordered and grouped as main's last projection has them: no read. */
+  withMainOrder(written: RuntimeMobileSessionTabsSnapshot): RuntimeMobileSessionTabsSnapshot {
+    const projected = this.index.lastSessionTabsOf(written.worktree)
+    return projected ? withMainTabOrder(written, projected) : written
+  }
+
+  /**
+   * After a layout commit: held rows take main's new rows, names and order. A row main's layout
+   * lacks stays (drops are the close path's); an added terminal passes the window's exit filters.
+   */
+  private mergeIntoHeldRows(): void {
+    this.index.surfaces()
+    for (const [worktreeId, held] of this.host.heldRows()) {
+      const projected = this.index.lastSessionTabsOf(held.worktree)
+      if (!projected) {
+        continue
+      }
+      const merged = withMainSessionTabRows(held, projected, this.host.exited, {
+        live: this.host.live,
+        keepUnlisted: true
+      })
+      const heldIds = new Set(held.tabs.map((row) => row.id))
+      const next = merged.tabs.some((row) => row.type === 'terminal' && !heldIds.has(row.id))
+        ? this.host.fenceExited(merged)
+        : merged
+      if (!headlessMobileSnapshotContentUnchanged(held, next)) {
+        this.host.replaceHeldRows(worktreeId, next)
+      }
+    }
   }
 
   /** The pane main's layout binds a terminal to, read fresh; null when no pane main owns holds it. */
@@ -162,21 +202,27 @@ class MainSurfacePublisher {
   /** A pane's terminal came or went: its record changes with no layout change, so reinstall. */
   terminalChanged(): void {
     this.index.invalidateRouting()
-    this.schedule({ force: true })
+    // A binding main made before its terminal connected reaches the held rows now.
+    this.schedule({ force: true, merge: true })
   }
 
   /** Deferred so a connected flip, noted inside syncWindowGraph's record update, cannot recurse into it. */
-  private schedule(opts: { force?: boolean } = {}): void {
+  private schedule(opts: { force?: boolean; merge?: boolean } = {}): void {
     this.forceNext ||= opts.force === true
+    this.mergeNext ||= opts.merge === true
     if (this.scheduled) {
       return
     }
     this.scheduled = true
     queueMicrotask(() => {
-      const force = this.forceNext
+      const { forceNext: force, mergeNext: merge } = this
       this.scheduled = false
       this.forceNext = false
+      this.mergeNext = false
       this.republish({ force })
+      if (merge) {
+        this.mergeIntoHeldRows()
+      }
     })
   }
 }

@@ -127,7 +127,6 @@ export async function setup(
   const connections: FakeConnection[] = []
   const lifecycle = vi.fn<PiRpcSessionAdapterDeps['onLifecycle']>()
   const settled = vi.fn<PiRpcSessionAdapterDeps['onSettled']>()
-  const idle = vi.fn<PiRpcSessionAdapterDeps['onIdle']>()
   const onSpawned = vi.fn(async (_process: AgentSessionProcessIdentity) => {
     expect(connections.at(-1)?.requests).toEqual([])
   })
@@ -164,7 +163,6 @@ export async function setup(
     openConnection,
     onLifecycle: lifecycle,
     onSettled: settled,
-    onIdle: idle,
     logger: { warn: vi.fn(), error: vi.fn() }
   })
   const acquired = await adapter.acquire(input)
@@ -193,7 +191,6 @@ export async function setup(
     onSpawned,
     lifecycle,
     settled,
-    idle,
     input,
     resolveLaunch,
     openConnection,

@@ -22,7 +22,7 @@ function workspaceRow(id: string) {
 function connectMain() {
   const workspaces = testDomain('workspaces', workspaceRow('repo-1::/w/a'))
   const review = testDomain('review', {
-    'repo-1::/w/a': { provider: 'github', reviewState: 'open' }
+    'local|repo-1::/w/a': { provider: 'github', reviewState: 'open' }
   })
   const notices = new Set<(event: SidebarInputsChangedEvent) => void>()
   const feed = new SidebarInputsFeed(

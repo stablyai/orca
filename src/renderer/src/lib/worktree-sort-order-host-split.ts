@@ -1,6 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { isUnprovenServerSshRoute } from './resolve-owner'
-import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
+import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 export type WorktreeSortOrderHostGroup = {
@@ -25,7 +25,7 @@ export function splitWorktreeSortOrderByHost(
 ): WorktreeSortOrderHostGroup[] {
   const groups = new Map<string, { orderedIds: string[]; rowHostIds: string[] }>()
   for (const id of orderedIds) {
-    const owner = resolveOwnerWithLegacyFallback(state, { workspaceId: id })
+    const owner = resolveOwnerOrLocal(state, { workspaceId: id })
     // Why: a twin names no host to write to, and an unproven server route may be another machine.
     if (owner.kind !== 'resolved' || isUnprovenServerSshRoute(state, id, owner.owner)) {
       continue

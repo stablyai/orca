@@ -14,7 +14,7 @@ import { searchRuntimeFiles } from '@/runtime/runtime-file-search-client'
 import { useAppStore } from '@/store'
 import {
   getExecutionHostIdForWorktree,
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import type { SearchResult } from '../../../../shared/code-search-types'
@@ -45,7 +45,7 @@ export function useFileSearchRunner({
   cancelPendingSearch: () => void
 } {
   const runtimeEnvironmentId = useAppStore((state) =>
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, activeWorktreeId)
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
   )
   const executionHostId = useAppStore((state) =>
     getExecutionHostIdForWorktree(state, activeWorktreeId)

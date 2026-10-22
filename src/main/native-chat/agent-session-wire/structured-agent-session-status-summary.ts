@@ -70,6 +70,7 @@ export function structuredAgentSessionStatusSummary({
     ...(providerSession ? { providerSession } : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
     ...structuredSummaryConversationNaming(record, namingFailure),
+    ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: journal.lastActivityAt() || now()
   }
 }
@@ -91,19 +92,18 @@ function structuredSummaryConversationNaming(
     : { conversationName: name }
 }
 
-/** A closed chat's retained summary with its current naming, or null when nothing changed. */
+/** A closed chat's retained summary with current record annotations, or null if unchanged. */
 export function renamedStructuredStatusSummary(
   previous: AgentSessionStatusSummary,
   deps: Pick<StructuredAgentSessionStatusFeedDeps, 'getRecord' | 'namingFailure'>,
   sessionId: string
 ): AgentSessionStatusSummary | null {
-  const { conversationName: _name, namingError: _error, ...rest } = previous
+  const record = deps.getRecord(sessionId)
+  const { conversationName: _name, namingError: _error, sleptAt: _sleptAt, ...rest } = previous
   const summary = {
     ...rest,
-    ...structuredSummaryConversationNaming(
-      deps.getRecord(sessionId),
-      deps.namingFailure?.(sessionId)
-    )
+    ...structuredSummaryConversationNaming(record, deps.namingFailure?.(sessionId)),
+    ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {})
   }
   return structuredStatusSummariesEqual(previous, summary) ? null : summary
 }

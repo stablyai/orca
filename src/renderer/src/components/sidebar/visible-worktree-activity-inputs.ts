@@ -1,8 +1,10 @@
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { getStructuredAgentSessionTabs } from '@/components/native-chat/structured-agent-session-tabs'
 import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
+import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/structured-chat-slept-at'
 
 export type TerminalActivityTab = Pick<TerminalTab, 'id'>
 export type BrowserActivityTab = Pick<BrowserWorkspace, 'id'>
@@ -37,40 +39,55 @@ export function getVisibleWorktreeBrowserActivityTabs(
 }
 
 export const EMPTY_STRUCTURED_CHAT_WORKTREE_IDS: ReadonlySet<string> = new Set()
-const structuredChatWorktreeIds = new WeakMap<Record<string, Tab[]>, ReadonlySet<string>>()
+const EMPTY_SLEPT_CHATS: StructuredChatSleptAtByPaneKey = {}
+const structuredChatWorktreeIds = new WeakMap<
+  Record<string, Tab[]>,
+  WeakMap<StructuredChatSleptAtByPaneKey, ReadonlySet<string>>
+>()
 
 /**
- * Worktree ids holding a structured chat tab.
+ * Workspace ids holding a structured chat that Sleep has not put to rest.
  *
- * Why existence rather than a live provider child: that child is held only while the chat's pane is
- * visible and is evicted after it sits idle unheld, so keying on it would flip a workspace to sleeping
- * after any worktree switch and report a process recycle the user never sees. The chat itself — its
- * transcript, and its ability to take the next send — outlives the child.
+ * Why the host's Sleep mark rather than the provider child: the child starts only on a send and the
+ * host's idle sweep stops it, so keying on it would put every quiet chat workspace to sleep after a
+ * restart or a pause. Only the user's Sleep marks a chat, and the next admitted send clears it.
  */
 export function getWorktreeIdsWithStructuredChat(
-  unifiedTabsByWorktree: Record<string, Tab[]> | null | undefined
+  unifiedTabsByWorktree: Record<string, Tab[]> | null | undefined,
+  structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey = EMPTY_SLEPT_CHATS
 ): ReadonlySet<string> {
   if (!unifiedTabsByWorktree) {
     return EMPTY_STRUCTURED_CHAT_WORKTREE_IDS
   }
   // Keyed on the snapshot, like the tab projection it reads: zustand re-runs every mounted card's
   // selector on each store write, and this is a whole-store scan.
-  const cached = structuredChatWorktreeIds.get(unifiedTabsByWorktree)
+  const cached = structuredChatWorktreeIds
+    .get(unifiedTabsByWorktree)
+    ?.get(structuredChatSleptAtByPaneKey)
   if (cached) {
     return cached
   }
   const worktreeIds = new Set(
-    getStructuredAgentSessionTabs(unifiedTabsByWorktree).map((tab) => tab.worktreeId)
+    getStructuredAgentSessionTabs(unifiedTabsByWorktree)
+      .filter(
+        (tab) =>
+          structuredChatSleptAtByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)] ===
+          null
+      )
+      .map((tab) => tab.worktreeId)
   )
-  structuredChatWorktreeIds.set(unifiedTabsByWorktree, worktreeIds)
+  const bySleptAt = structuredChatWorktreeIds.get(unifiedTabsByWorktree) ?? new WeakMap()
+  bySleptAt.set(structuredChatSleptAtByPaneKey, worktreeIds)
+  structuredChatWorktreeIds.set(unifiedTabsByWorktree, bySleptAt)
   return worktreeIds
 }
 
 export function getStructuredChatWorktreeIds(
   showSleepingWorkspaces: boolean,
-  unifiedTabsByWorktree: Record<string, Tab[]> | null | undefined
+  unifiedTabsByWorktree: Record<string, Tab[]> | null | undefined,
+  structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey = EMPTY_SLEPT_CHATS
 ): ReadonlySet<string> {
   return showSleepingWorkspaces
     ? EMPTY_STRUCTURED_CHAT_WORKTREE_IDS
-    : getWorktreeIdsWithStructuredChat(unifiedTabsByWorktree)
+    : getWorktreeIdsWithStructuredChat(unifiedTabsByWorktree, structuredChatSleptAtByPaneKey)
 }

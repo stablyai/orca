@@ -51,14 +51,14 @@ describe('a restored pane with no live terminal, on a host with no window (layou
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
     started.resolve({ id: 'persisted-pty' })
 
-    await expect(cliSend).resolves.toBe('persisted-pty')
+    await expect(cliSend).resolves.toEqual({ id: 'persisted-pty' })
     await firstView
     expect(spawn).toHaveBeenCalledOnce()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'persisted-pty', tabId: 'host-tab' })
     )
     // Live now: a later trigger starts nothing.
-    await expect(runtime.ensureRestoredPaneStarted(PANE)).resolves.toBe('persisted-pty')
+    await expect(runtime.ensureRestoredPaneStarted(PANE)).resolves.toEqual({ id: 'persisted-pty' })
     expect(spawn).toHaveBeenCalledOnce()
   })
 
@@ -77,7 +77,7 @@ describe('a restored pane with no live terminal, on a host with no window (layou
     const cliSend = runtime.ensureRestoredPaneStarted(PANE)
     started.resolve({ id: 'pty-fresh' })
 
-    await expect(cliSend).resolves.toBe('pty-fresh')
+    await expect(cliSend).resolves.toEqual({ id: 'pty-fresh' })
   })
 
   it("refuses a client's first view of a pane main dropped after the client listed it", async () => {

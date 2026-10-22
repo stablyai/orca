@@ -123,13 +123,17 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     expect(spawn).toHaveBeenCalledOnce()
   })
 
-  it('a wait starts the pane once and waits on the started terminal', async () => {
-    const { runtime, handle, spawn, started } = await restoredPane()
+  it('a saved held pane starts once and answers send, read and wait by its terminal id', async () => {
+    const { runtime, handle, spawn, started, write } = await restoredPane()
 
+    const send = runtime.sendTerminal(handle, { text: 'echo hi', enter: true }, DRIVING)
+    const read = runtime.readTerminal(handle)
     const wait = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
     started.resolve({ id: 'pty-c' })
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await expect(send).resolves.toMatchObject({ handle, accepted: true })
+    expect(write).toHaveBeenCalledWith('pty-c', 'echo hi', 'driving')
+    await expect(read).resolves.toMatchObject({ handle, status: 'running' })
     runtime.onPtyExit('pty-c', 0)
 
     await expect(wait).resolves.toMatchObject({ handle, condition: 'exit', satisfied: true })

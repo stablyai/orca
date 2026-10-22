@@ -6,6 +6,8 @@ import {
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
 } from './claude-profile-routing'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
+import type { AgentCliInstallationProblem } from './agent-cli-installation-problem'
+import { tuiAgentDisplayName } from './tui-agent-display-names'
 
 /** Sentences a refusal notice shows too, so a chat says them one way. */
 export const TERMINAL_AGENT_HOLDS_CHAT = 'This chat is still open in a terminal agent.'
@@ -28,11 +30,11 @@ export const AGENT_SESSION_FAILURE_COPY = {
   sendAgainToTryOnceMore: 'Send your message again to try once more.',
   couldNotStart: "{{agent}} couldn't start.",
   couldNotRestart: "{{agent}} couldn't restart.",
+  cliTooOld:
+    '{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
   startTimedOut: '{{agent}} took too long to start (no response to {{method}} after {{seconds}}s).',
   startTimedOutKeepsHappening:
     'If this keeps happening, the computer running this chat may be overloaded.',
-  codexCliTooOld:
-    'Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
   argumentsUnsupportedOption: 'Saved Arguments contain an unsupported option ({{option}}).',
   argumentsMissingValue: 'Saved Arguments need a value for {{option}}.',
   argumentsMultipleValues: 'Saved Arguments give {{option}} more than one value.',
@@ -193,21 +195,37 @@ export type AgentSessionFailureSay = (
   values?: AgentSessionFailureCopyValues
 ) => string
 
-export function codexInstallationFailureWords(
+/** The sentence for an agent binary too old for chats. */
+export function agentCliTooOldWords(
+  { agent, installedVersion, minimumVersion }: AgentCliInstallationProblem,
+  say: AgentSessionFailureSay
+): string {
+  return say('cliTooOld', {
+    agent: tuiAgentDisplayName(agent) ?? agent,
+    installedVersion,
+    minimumVersion
+  })
+}
+
+/** A refusal's installation sentence; a refusal saved before `agentInstallation` is Codex's. */
+export function agentCliInstallationFailureWords(
   refusal: AgentSessionRefusalReference | undefined,
   say: AgentSessionFailureSay
 ): string | null {
-  const installation =
-    refusal?.code === 'agent_session_operation_invalid'
-      ? refusal.details?.codexInstallation
-      : undefined
-  return installation
-    ? say(installation.installedVersion === null ? 'cliMissing' : 'codexCliTooOld', {
-        agent: 'Codex',
-        installedVersion: installation.installedVersion ?? '',
-        minimumVersion: installation.minimumVersion
-      })
-    : null
+  if (refusal?.code !== 'agent_session_operation_invalid') {
+    return null
+  }
+  const { agentInstallation, codexInstallation } = refusal.details ?? {}
+  if (agentInstallation) {
+    return agentCliTooOldWords(agentInstallation, say)
+  }
+  if (!codexInstallation) {
+    return null
+  }
+  const { installedVersion, minimumVersion } = codexInstallation
+  return installedVersion === null
+    ? say('cliMissing', { agent: 'Codex' })
+    : agentCliTooOldWords({ agent: 'codex', installedVersion, minimumVersion }, say)
 }
 
 /** The host's words, and any surface without translations. */

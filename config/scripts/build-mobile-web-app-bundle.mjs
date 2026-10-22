@@ -327,7 +327,7 @@ export function mobileWebAppBuildOptions(routes) {
     // Images are emitted as same-origin assets, not data: URLs, so their content-hashed names keep
     // the buildId reproducible and the bytes out of every chunk that imports one. The policy now
     // admits data: for images, but that is for a preview the page composes at runtime, not for a
-    // bundled asset. A font would fail the build here rather than silently ship under font-src 'none'.
+    // bundled asset. The terminal font also uses its own hashed asset to avoid base64 overhead.
     loader: {
       ...ROUTE_SOURCE_LOADERS,
       '.png': 'file',
@@ -335,7 +335,8 @@ export function mobileWebAppBuildOptions(routes) {
       '.jpeg': 'file',
       '.gif': 'file',
       '.webp': 'file',
-      '.svg': 'file'
+      '.svg': 'file',
+      '.woff2': 'file'
     },
     assetNames: '[hash]',
     // Absolute, because the document is served at every route depth and a path relative to the

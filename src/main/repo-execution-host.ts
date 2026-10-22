@@ -17,12 +17,6 @@ export function getStoredRepoExecutionHostId(
   return getSshTargetIdForExecutionHost(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID
 }
 
-export function getStoredRepoSshConnectionId(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
-): string | null {
-  return getSshTargetIdForExecutionHost(getStoredRepoExecutionHostId(repo))
-}
-
 /**
  * The gate for Git this process runs on a row from its own Store. `ssh:` rows throw, as does any row
  * still carrying a `connectionId` (a nested SSH target, or a stale one beside `local`). A `runtime:`

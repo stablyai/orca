@@ -10,6 +10,7 @@ import type { AppState } from '../../../../store/types'
 import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
 import { getAllWorktreesFromState } from '../../../../store/selectors'
 import { getWorkspaceStatus } from '../../workspace-status'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The cards a drag picked up, by host: a twin on another host shares each card's id. */
 export type DraggedWorktreeCopies = readonly Pick<Worktree, 'id' | 'hostId'>[]
@@ -42,7 +43,7 @@ export function dropWriteRows(
   // Folder workspaces share the manual-order catalog, so a drop ranks them too.
   for (const row of [
     ...getAllWorktreesFromState(state),
-    ...state.folderWorkspaces.map(folderWorkspaceToWorktree)
+    ...selectFolderWorkspaces(state).map(folderWorkspaceToWorktree)
   ]) {
     rowsById.set(row.id, [...(rowsById.get(row.id) ?? []), row])
   }

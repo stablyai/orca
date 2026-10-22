@@ -16,6 +16,7 @@ import {
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
 import { splitRatioIntentAt } from '../../../../shared/workspace-layout/split-ratio-intents'
+import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
 
 /** A tab drop as the window resolved it: within its group, into another, or beside a group. */
 export type TabDrop =
@@ -98,11 +99,18 @@ function commandFor(worktreeId: string, drop: TabDrop): WindowLayoutCommand | nu
   if (!group || (drop.kind === 'move' && group.tabOrder.includes(tabId))) {
     return null
   }
+  const order = drop.kind === 'reorder' ? drop.tabOrder : group.tabOrder
   const index =
     drop.kind === 'reorder'
       ? drop.tabOrder.indexOf(tabId)
       : Math.min(drop.index ?? group.tabOrder.length, group.tabOrder.length)
-  return { type: 'moveTab', tabId, toGroupId: groupId, index }
+  return {
+    type: 'moveTab',
+    tabId,
+    toGroupId: groupId,
+    index,
+    afterTabId: tabOrderAnchor(order, index)
+  }
 }
 
 /** Today's move, mirrored to a web client's server as today. */

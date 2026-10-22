@@ -1,7 +1,6 @@
 import { app, nativeTheme } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
-import { is } from '@electron-toolkit/utils'
 import { StarNagService } from '../star-nag/service'
 import { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { EmulatorBridge } from '../emulator/emulator-bridge'
@@ -116,7 +115,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       return state.codexRuntimeHome.resolveHostCodexHomePathForLaunchReadOnly()
     }
   })
-  if (shouldInstallManagedHooks(is.dev)) {
+  if (shouldInstallManagedHooks(!app.isPackaged)) {
     reconcileStartupManagedAgentHooks({
       getSettings: () => store.getSettings(),
       isQuitting: () => state.isQuitting,

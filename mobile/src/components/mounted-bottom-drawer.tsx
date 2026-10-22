@@ -14,7 +14,10 @@ import Animated, {
 import { spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
-import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
+import {
+  BOTTOM_DRAWER_HIDE_DURATION_MS,
+  BOTTOM_DRAWER_SHOW_DURATION_MS
+} from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import {
   useBottomDrawerModalHost,
@@ -32,7 +35,6 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // so the drawer resists upward dragging — a subtle polish touch that signals
 // the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
-const SHOW_DURATION = 180
 const TOP_SCROLL_EPSILON = 1
 
 export type MountedBottomDrawerProps = {
@@ -114,7 +116,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = 0
-    progress.value = withTiming(1, { duration: SHOW_DURATION })
+    progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -122,7 +124,7 @@ export function MountedBottomDrawer({
     if (visible) {
       translateY.value = 0
       scrollOffsetY.value = 0
-      progress.value = withTiming(1, { duration: SHOW_DURATION })
+      progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)

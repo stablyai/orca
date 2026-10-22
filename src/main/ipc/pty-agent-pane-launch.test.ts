@@ -13,6 +13,9 @@ import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../shared/agent-launch-pane-v
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node:fs/promises', async (importOriginal) =>
+  (await import('./pty-ipc-mock-registry')).fsPromisesModuleMock(await importOriginal())
+)
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
@@ -186,9 +189,7 @@ describe('a pane that starts its own agent launch', () => {
     )
   })
 
-  // TEMPORARY parity (row 3 pin; spawn-agent-launch.ts drops cwdFallback): a launch into a deleted
-  // folder fails there, as the host's launch does, instead of starting in the workspace root.
-  it('starts in the requested folder even when it is gone, without the root fallback', async () => {
+  it('starts an agent in the workspace root when its folder is gone, and says so', async () => {
     const missing = '/tmp/pane-launch/deleted'
     statSyncMock.mockImplementation((target: string) => {
       if (target === missing) {
@@ -196,13 +197,18 @@ describe('a pane that starts its own agent launch', () => {
       }
       return { isDirectory: () => true, mode: 0o755 }
     })
-    const providerSpawn = vi.fn(async (_options: { cwd?: string }) => ({ id: 'pty-agent' }))
+    const providerSpawn = vi.fn(async (_options: { cwd?: string }) => ({
+      id: 'pty-agent',
+      startupCwdSource: 'request' as const
+    }))
     register(providerSpawn)
 
-    const result = await spawnPane(AI_BUTTON, { cwd: missing, cwdFallback: 'worktree' })
+    const result = await spawnPane(AI_BUTTON, { cwd: missing })
 
-    expect(providerSpawn.mock.calls[0]?.[0].cwd).toBe(missing)
-    expect(result).not.toHaveProperty('startupCwdFallback')
+    expect(providerSpawn.mock.calls[0]?.[0].cwd).toBe('/tmp/pane-launch')
+    expect(result).toMatchObject({
+      startupCwdFallback: { kind: 'worktree', cwd: '/tmp/pane-launch' }
+    })
   })
 
   it('starts one agent when the pane spawns twice at once', async () => {

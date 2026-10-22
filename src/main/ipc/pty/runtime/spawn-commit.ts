@@ -1,4 +1,4 @@
-import { completeRuntimeSpawnResponse } from './spawn-commit-response'
+import { completeRuntimeSpawnResponse, reportRuntimeResumeOutcome } from './spawn-commit-response'
 import type { Store } from '../../../persistence'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/pty-binding-persistence'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/pty-binding-refusals'
@@ -37,6 +37,7 @@ import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 import {
   admitPtySpawnOwnership,
@@ -51,6 +52,10 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
 async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
   admitPtySpawnOwnership(ctx.deps.runtime, ctx.result)
+  const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
+  // Fallback may follow an access error; only proven absence authorizes changing the saved folder.
+  const correctStartupCwd = startupCwdFallback ? ctx.correctStartupCwd : undefined
+  const savedStartupCwd = correctStartupCwd ?? ctx.requestedCwd
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
   if (
     isNativeWindowsLocalPtySpawn({
@@ -120,6 +125,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       agentSessionEnsure: ctx.result.agentSessionEnsure
     }
   }
+  reportRuntimeResumeOutcome(ctx)
   if (ctx.hostSessionBinding) {
     try {
       const { store, worktreeId, tabId, leafId, expectedSourceBinding, placement } =
@@ -132,7 +138,8 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         // The runtime wrote the pane before spawning; a pane gone by now was closed meanwhile.
         mayCreate: false,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-        ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
+        ...(savedStartupCwd ? { startupCwd: savedStartupCwd } : {}),
+        ...(correctStartupCwd ? { correctStartupCwd } : {}),
         ...(expectedSourceBinding ? { expectedSourceBinding } : {}),
         ...(placement ? { placement } : {}),
         origin: spawnCommitBindingOrigin(ctx.result, expectedSourceBinding)

@@ -30,6 +30,7 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../shared/sidebar-list/host-filtering'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
@@ -98,7 +99,7 @@ export function computeRenderedSidebarRows(
     pendingCreations: EMPTY_PENDING_CREATIONS,
     projectGrouping: { projects: projection.projects, projectHostSetups: projection.setups },
     folderWorkspaces: filterFolderWorkspacesForVisibleHosts(
-      state.folderWorkspaces,
+      selectFolderWorkspaces(state),
       projectGroups,
       visibleHostIdSet,
       defaultHostId

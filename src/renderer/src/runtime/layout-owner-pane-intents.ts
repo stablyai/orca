@@ -1,23 +1,15 @@
 // What this window asked main to do to a tab's panes, in a layout-owner build: main's frames say
-// which panes a tab has, these say what the window wants done when one appears or goes (its
-// spawn inputs, its close, the selection of a tab it moved) and keep a tab's drawn tree while the
-// window's own command is in flight. A pane a frame adds or drops with no intent here is left to
-// main's notice to the window.
+// which panes a tab has, these say how the window wants a pane closed when one goes and the
+// selection of a tab it moved, and keep a tab's drawn tree while the window's own command is in
+// flight. A pane a frame drops with no intent here is left to main's notice to the window; every
+// pane a frame adds is mounted, and takes focus unless the window's own split asked to keep focus
+// where it was.
 
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
-
-export type PaneAppearIntent = {
-  tabId: string
-  cwd?: string
-  cwdPromise?: Promise<string>
-  telemetry: { source: TerminalPaneSplitSource; direction: 'vertical' | 'horizontal' }
-}
 
 /** Intents outlive their frame only when a tab never mounts again; keep the newest few. */
 const MAX_INTENTS = 64
 
-const appearing = new Map<string, PaneAppearIntent>()
 /** 'user': the user's close, with its status and launch clean-up. 'exit': its terminal ended. */
 export type PaneCloseKind = 'user' | 'exit'
 
@@ -31,24 +23,6 @@ function remember<T>(map: Map<string, T>, key: string, value: T): void {
   }
 }
 
-export function expectPaneToAppear(leafId: string, intent: PaneAppearIntent): () => void {
-  remember(appearing, leafId, intent)
-  return () => {
-    if (appearing.get(leafId) === intent) {
-      appearing.delete(leafId)
-    }
-  }
-}
-
-export function takePaneAppearIntent(tabId: string, leafId: string): PaneAppearIntent | null {
-  const intent = appearing.get(leafId)
-  if (intent?.tabId !== tabId) {
-    return null
-  }
-  appearing.delete(leafId)
-  return intent
-}
-
 export function expectPaneToClose(tabId: string, leafId: string, kind: PaneCloseKind): () => void {
   const intent = { tabId, kind }
   remember(closing, leafId, intent)
@@ -57,6 +31,26 @@ export function expectPaneToClose(tabId: string, leafId: string, kind: PaneClose
       closing.delete(leafId)
     }
   }
+}
+
+const unfocused = new Map<string, string>()
+
+/** A split of the window's that leaves focus on its source pane (a tab's startup split). */
+export function expectPaneToMountUnfocused(tabId: string, leafId: string): () => void {
+  remember(unfocused, leafId, tabId)
+  return () => {
+    if (unfocused.get(leafId) === tabId) {
+      unfocused.delete(leafId)
+    }
+  }
+}
+
+export function takePaneMountUnfocused(tabId: string, leafId: string): boolean {
+  if (unfocused.get(leafId) !== tabId) {
+    return false
+  }
+  unfocused.delete(leafId)
+  return true
 }
 
 /** Of these panes, how many no close of this window's is about to take. */
@@ -171,8 +165,8 @@ export function onTabPaneTreeRedraw(listener: (tabId: string) => void): () => vo
 }
 
 export function _resetLayoutOwnerPaneIntentsForTests(): void {
-  appearing.clear()
   closing.clear()
+  unfocused.clear()
   rowFields.clear()
   movedTabSelections.clear()
   heldTabs.clear()

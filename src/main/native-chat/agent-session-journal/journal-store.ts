@@ -262,10 +262,11 @@ export class AgentSessionJournal {
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
+  historyOrigin = () => this.state.historyOrigin
+
   submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
 
-  pendingSubmissions = (): AgentJournalSubmission[] =>
-    this.submissions().filter((entry) => entry.dispatchState === 'pending')
+  pendingSubmissions = () => this.submissions().filter((entry) => entry.dispatchState === 'pending')
 
   /** The durable answer to "did my send land?" — a reconnecting client asking
    *  again gets this instead of re-sending. */

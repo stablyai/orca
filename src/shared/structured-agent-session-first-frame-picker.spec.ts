@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionModelCatalogResult } from './agent-session-wire'
+import { independentAgentModelCatalog } from './agent-model-catalog-ownership'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -124,9 +125,22 @@ describe('the first frame of every agent’s picker', () => {
     })
     expect(live.catalogSource).toBe('live')
     expect(live.catalog?.models.map((model) => model.id)).toEqual(['model-live'])
-    // A later host answer never downgrades what the session reported.
+    // A later host answer never downgrades what the session reported on older hosts.
     expect(
       applyStructuredAgentSessionModelCatalog(live, seed, HOST_CATALOG, { newLaunch: true })
     ).toBe(live)
+    const refreshed = applyStructuredAgentSessionModelCatalog(live, seed, HOST_CATALOG, {
+      newLaunch: true,
+      coherentCatalog: true
+    })
+    if (independentAgentModelCatalog(agent)) {
+      expect(refreshed.catalog?.models.map((model) => model.id)).toContain('model-listed')
+      expect(refreshed.record).toBe(live.record)
+      expect(currentValue(structuredAgentSessionOptionSnapshot(refreshed), 'model')).toBe(
+        'model-live'
+      )
+    } else {
+      expect(refreshed).toBe(live)
+    }
   })
 })

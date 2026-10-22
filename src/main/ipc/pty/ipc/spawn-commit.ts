@@ -17,6 +17,7 @@ import {
   admitRendererAgentLaunchAuthority
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { persistPtyIpcSpawnCommit, publishPtyIpcSpawnCommit } from './spawn-commit-persist'
 import { admitPtySpawnOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
@@ -196,8 +197,10 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)
   }
+  const { startupCwdSource: _startupCwdSource, ...providerResult } = ctx.result
+  const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
   const response = {
-    ...ctx.result,
+    ...providerResult,
     // Why both or neither: a pane can only adopt proven kitty flags together
     // with the sequence boundary they describe.
     ...(typeof ctx.result.snapshotKittyKeyboardFlags === 'number' &&
@@ -208,10 +211,7 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
     ...(!ctx.result.isReattach && ctx.effectiveLaunchConfig
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
-    // Why: a daemon-retry race can surface isReattach even for a minted session id, and a reattach must never claim its cwd was remapped.
-    ...(ctx.startupCwdFallback && !ctx.result.isReattach
-      ? { startupCwdFallback: ctx.startupCwdFallback }
-      : {}),
+    ...(startupCwdFallback ? { startupCwdFallback } : {}),
     // Why: the pane asked to resume and got a fresh session instead; only the
     // renderer can say so, and a reattach never ran this launch command.
     ...(ctx.codexResumeLaunch.notifyResumeUnavailable && !ctx.result.isReattach

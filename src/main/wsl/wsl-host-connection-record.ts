@@ -33,7 +33,13 @@ export function toWslHostStatus(
     distro: record.distro,
     state: status.state,
     detail: status.state === 'failed' || status.state === 'unverifiable' ? status.reason : null,
-    // Only a ready host is serving the incumbent the deferral describes.
-    deferredUpdate: status.state === 'ready' ? (connection?.deferredUpdate ?? null) : null
+    // A ready host serves the incumbent the deferral describes; a deferred connect serves nothing,
+    // and its deferral is what offers Update or Force.
+    deferredUpdate:
+      status.state === 'ready'
+        ? (connection?.deferredUpdate ?? null)
+        : status.state === 'failed'
+          ? (status.deferredUpdate ?? null)
+          : null
   }
 }

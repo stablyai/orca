@@ -12,6 +12,7 @@ import {
   savedAgentSessionCatalogModels,
   structuredAgentSessionPickReply
 } from './structured-agent-session-pick-reply'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { pickAgentSessionOption } from '../../runtime/agent-session-record-options'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 
@@ -56,6 +57,7 @@ export async function recordStructuredAgentSessionOptionIntent(
       'getRecord' | 'replaceSessionOptions' | 'reviseSessionOptions'
     >
     agents: Pick<StructuredAgentRegistry, 'definition'>
+    adapter?: Pick<StructuredAgentSessionAdapter, 'projectOptions'>
   } & Parameters<typeof savedAgentSessionCatalogModels>[0],
   ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'publish' | 'now'>,
   input: { key: string; value: string }
@@ -92,9 +94,17 @@ export async function recordStructuredAgentSessionOptionIntent(
       throw error
     }
   }
+  const displayModels =
+    models ??
+    (await savedAgentSessionCatalogModels(deps, record.provider, sessionId, undefined, false))
   ctx.publish()
   return {
     ok: true,
-    value: { ...input, options: structuredAgentSessionPickReply(options, models) }
+    value: {
+      ...input,
+      options:
+        deps.adapter?.projectOptions?.(sessionId, options)?.options ??
+        structuredAgentSessionPickReply(options, displayModels)
+    }
   }
 }

@@ -3,6 +3,9 @@ import { resolveAutoAckTabTargets } from '@/hooks/agent-auto-ack-targets'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore, makeOpenFile } from './store-test-helpers'
+import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -15,6 +18,18 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
   }
 })
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 createTabsSliceMockApi()
 
@@ -39,18 +54,34 @@ describe('TabsSlice', () => {
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(t1.id)
     })
 
-    it('promotes a preview tab to permanent on activation', () => {
+    it('promotes a preview tab to permanent on activation', async () => {
+      store.setState({ openFiles: [makeOpenFile({ id: 'f.ts', worktreeId: WT, isPreview: true })] })
       const preview = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'f.ts',
         label: 'f.ts',
         isPreview: true
       })
+      const main = await drawTabsFromMain(store)
+      try {
+        expect(store.getState().unifiedTabsByWorktree[WT][0].isPreview).toBe(true)
 
-      expect(store.getState().unifiedTabsByWorktree[WT][0].isPreview).toBe(true)
+        store.getState().activateTab(preview.id)
+        // A layout-owner build: main promotes it, and only its frame ends the preview.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          expect(store.getState().unifiedTabsByWorktree[WT][0].isPreview).toBe(true)
+          expect(layoutApplyTestTransport.sentOfType('promotePreviewTab')).toEqual([
+            { type: 'promotePreviewTab', workspace: WT, tabId: preview.id }
+          ])
+        }
+        await main.settle()
 
-      store.getState().activateTab(preview.id)
-
-      expect(store.getState().unifiedTabsByWorktree[WT][0].isPreview).toBe(false)
+        // Main stores no false preview flag.
+        expect(store.getState().unifiedTabsByWorktree[WT][0].isPreview).toBe(
+          ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : false
+        )
+      } finally {
+        main.close()
+      }
     })
 
     // Why (regression): activateTab gets a *unified* tabId but the bell is keyed by entityId, so the on-screen read must name the entityId.

@@ -226,6 +226,7 @@ export async function acquireAcpStructuredSession(input: {
   await identity.onSpawned(pid)
   const process = await identity.read(pid)
   const child: AcpStructuredChild = {
+    events,
     sessionId,
     fence: acquire.fence,
     acquisitionGeneration: generation,

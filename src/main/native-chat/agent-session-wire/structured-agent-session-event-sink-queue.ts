@@ -1,6 +1,7 @@
 import type {
   StructuredAgentSessionAppendOptions,
   StructuredAgentSessionEventTarget,
+  StructuredAgentSessionHistoryJournal,
   StructuredAgentSessionLinkageJournal,
   StructuredAgentSessionReadingControl,
   StructuredAgentSessionSinkAdmission,
@@ -91,6 +92,8 @@ export class StructuredAgentSessionSinkQueue {
   journalEpoch = (): string | null => this.target?.journal.epoch ?? null
 
   journalLinkage = (): StructuredAgentSessionLinkageJournal | null => this.target?.journal ?? null
+
+  journalHistory = (): StructuredAgentSessionHistoryJournal | null => this.target?.journal ?? null
 
   journalItems = (): StructuredAgentSessionTransitionJournal | null => this.target?.journal ?? null
 

@@ -23,7 +23,7 @@ const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 /** E2E-only: reproduce a host that retains nothing for a pty — the state a client cannot tell
  *  apart from a host that is merely slow, and the one a parked pane must survive. Mirrors
  *  ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED. */
-function isTerminalSnapshotForcedUnavailable(): boolean {
+export function isTerminalSnapshotForcedUnavailable(): boolean {
   return process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_SNAPSHOT_UNAVAILABLE === '1'
 }
 

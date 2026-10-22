@@ -13,7 +13,7 @@
  */
 import process from 'node:process'
 
-export type LibcFlavor = 'glibc' | 'musl' | 'none'
+type LibcFlavor = 'glibc' | 'musl' | 'none'
 
 export type NativeHostAbi = {
   platform: NodeJS.Platform

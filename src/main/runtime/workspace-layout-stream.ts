@@ -24,7 +24,7 @@ import type {
 } from '../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeStore } from './runtime-store-contract'
 import { withLiveTitles } from './published-pane-live-titles'
-import { paneStartFactsOf, withPaneStartFacts, type PaneStartFactOf } from './pane-start-statuses'
+import { paneStartFactsOf, withPaneStartFacts, type PaneFactSources } from './pane-start-statuses'
 import {
   workspaceLayoutFrameObserver,
   workspaceLayoutPartitionReadObserver
@@ -88,13 +88,12 @@ export class WorkspaceLayoutStream {
   private readonly epoch = ORCA_LAYOUT_OWNER_IS_MAIN ? randomUUID() : undefined
 
   constructor(
-    private readonly deps: {
+    private readonly deps: PaneFactSources & {
       store: () => StreamStore | null
       /** The partition that owns a workspace key; null when none does. */
       homeHostId: (key: string) => ExecutionHostId | null
       /** The title a terminal shows now; null when it has none. */
       liveTitle: (ptyId: string) => string | null
-      paneStartFact?: PaneStartFactOf
     }
   ) {
     this.projection = new WorkspaceLayoutProjection(deps)
@@ -280,7 +279,7 @@ export class WorkspaceLayoutStream {
     const changed: string[] = []
     for (const [key, { layout, json }] of next) {
       const titles = this.liveTitlesOf(layout)
-      // Switch point: a pane's start status is live state, laid over as its title is.
+      // Switch point: a pane's start facts are live state, laid over as its title is.
       const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
       const liveTitles = JSON.stringify(starts ? [titles, starts] : titles)
       const previous = before.get(key)

@@ -75,6 +75,10 @@ async function stopRendererOwnedPtyAs(
     stopped = true
   } finally {
     settleStop?.(stopped)
+    if (!stopped) {
+      // The failed shutdown left the process running.
+      deps.runtime?.clearPtyStopRequest?.(args.id)
+    }
   }
 }
 

@@ -1,14 +1,14 @@
 import { expect } from '@stablyai/playwright-test'
 import type { Page } from '@stablyai/playwright-test'
 import { buildSidebarFeedRows } from '../../../src/shared/sidebar-list/sidebar-feed-rows'
-import {
-  HostSidebarFeedReader,
-  type HostSidebarFeedRead
-} from '../../../mobile/src/host-screen/host-sidebar-feed-reader'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
 import { buildHostFeedView } from '../../../mobile/src/host-screen/host-sidebar-feed-inputs'
 import { buildHostFeedSections } from '../../../mobile/src/host-screen/host-sidebar-feed-sections'
-import { readHostSidebarFeed } from '../../../mobile/src/host-screen/use-host-sidebar-feed'
+import {
+  readHostSidebarFeed,
+  type HostSidebarFeedRead
+} from '../../../mobile/src/host-screen/use-host-sidebar-feed'
+import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
 import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
 import {
   hostPlatformRead,
@@ -21,6 +21,8 @@ import {
   type WorkspaceViewSettings
 } from '../../../mobile/src/worktree/workspace-view-settings'
 import type { RpcResponse } from '../../../mobile/src/transport/types'
+import { NODE_PLATFORM_NAMES } from '../../../mobile/src/transport/mobile-runtime-host-platform'
+import type { LastVisitedWorktreeOnHost } from '../../../mobile/src/worktree/host-list-highlight'
 import type { Section } from '../../../mobile/src/worktree/workspace-list-types'
 import type { PairedMobileClient, PairedMobileSocket } from './paired-mobile-client'
 
@@ -90,14 +92,18 @@ function socketEventClient(socket: PairedMobileSocket) {
  * refresh lifecycle, feed reader, the shared builder and its section mapping. Reads happen only
  * when that lifecycle makes them; an assertion reads what the page last installed.
  */
-export async function openPhoneFeedList(phone: PairedMobileClient) {
+export async function openPhoneFeedList(
+  phone: PairedMobileClient,
+  /** The workspace this phone last opened on the host: its list's only highlight. */
+  lastVisited: LastVisitedWorktreeOnHost | null = null
+) {
   const socket = await phone.openSocket()
   const port = socketPort(socket)
-  let read: HostSidebarFeedRead = { installed: null, unavailable: false }
+  let read: HostSidebarFeedRead = { snapshot: null, unavailable: false }
   const installListeners = new Set<() => void>()
-  const reader = new HostSidebarFeedReader(port, (next) => {
-    const installed = next.installed && next.installed !== read.installed
-    read = next
+  const reader = createHostSidebarFeedReader(port, ({ snapshot, unavailable }) => {
+    const installed = snapshot !== null && snapshot !== read.snapshot
+    read = { snapshot, unavailable }
     if (installed) {
       installListeners.forEach((listener) => listener())
     }
@@ -118,7 +124,10 @@ export async function openPhoneFeedList(phone: PairedMobileClient) {
     await port.sendRequest('host.platform'),
     hostPlatformRead.interpret
   )
-  const hostPlatform = platformRead.kind === 'answered' ? platformRead.value : null
+  const answered = platformRead.kind === 'answered' ? platformRead.value : null
+  // Why matched, not read: this helper and the page may resolve different zod copies, so the
+  // reply's inferred type does not carry across.
+  const hostPlatform = NODE_PLATFORM_NAMES.find((name) => name === answered) ?? null
   await syncViewSettings()
   const stop = startHostWorktreeRefresh({
     client: socketEventClient(socket),
@@ -156,7 +165,7 @@ export async function openPhoneFeedList(phone: PairedMobileClient) {
     )
     return buildHostFeedSections({
       rows: built.sectionRows,
-      activeRowKeys: built.activeRowKeys,
+      lastVisited,
       liveRows: [],
       repoHostIdByRepoId: new Map(),
       search: ''
@@ -184,6 +193,11 @@ export async function openPhoneFeedList(phone: PairedMobileClient) {
       socket.close()
     }
   }
+}
+
+/** An outline without its highlight marks: the phone highlights its own last-opened workspace. */
+export function outlineRows(outline: ListOutline): ListOutline {
+  return outline.map((line) => line.replace(/ ACTIVE$/, ''))
 }
 
 /** The rows the desktop sidebar has rendered, in order, in the outline's terms. */

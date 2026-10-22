@@ -1356,6 +1356,7 @@ describe('source-owned idle cutover', () => {
       await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
     ).toEqual({ outcome })
     expect(commit).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
+    await vi.advanceTimersByTimeAsync(0)
     expect(h.socket.close).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
   })
   it('restarts the age when the host rebinds its control socket', async () => {
@@ -1414,6 +1415,7 @@ describe('source-owned idle cutover', () => {
     expect(
       await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
     ).toEqual({ outcome: 'committed' })
+    await vi.advanceTimersByTimeAsync(0)
     expect(h.socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
     expect(h.releaseActivity).toHaveBeenCalled()
   })
@@ -1961,6 +1963,8 @@ describe('paced drain', () => {
   it('sends every drain at once when no window is given', async () => {
     const { registry, sockets } = await connectHosts(4)
     registry.drain(0)
+    // A zero-grace drain is told by its close, once the host's release has landed.
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(4)
   })
 
@@ -1969,13 +1973,19 @@ describe('paced drain', () => {
   it('spreads the sends evenly across the window', async () => {
     const { registry, sockets } = await connectHosts(5)
     registry.drain(0, { paceWindowMs: 40_000 })
-    // The first host is sent synchronously; the last lands on the window's closing edge.
+    // Each host is told by its zero-grace close, which a timer nested in the send runs 1 ms on.
+    const advance = async (ms: number): Promise<void> => {
+      await vi.advanceTimersByTimeAsync(ms)
+      await vi.advanceTimersByTimeAsync(1)
+    }
+    // The first host is told at once; the last lands on the window's closing edge.
+    await advance(0)
     expect(drainsSent(sockets)).toBe(1)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await advance(10_000)
     expect(drainsSent(sockets)).toBe(2)
-    await vi.advanceTimersByTimeAsync(20_000)
+    await advance(20_000)
     expect(drainsSent(sockets)).toBe(4)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await advance(10_000)
     expect(drainsSent(sockets)).toBe(5)
   })
 
@@ -1987,6 +1997,7 @@ describe('paced drain', () => {
     const socket = new FakeSocket()
     registry.acceptControl(socket as unknown as WebSocket, { ...identity, sub: 'user-late' })
     expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(1)
   })
 
@@ -2032,8 +2043,10 @@ describe('paced drain', () => {
   it('lets an emergency drain supersede the sends still queued by a paced one', async () => {
     const { registry, sockets } = await connectHosts(4)
     registry.drain(0, { paceWindowMs: 40_000 })
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(1)
     registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(4)
     const sendsAfterEmergency = sockets.map((socket) => socket.send.mock.calls.length)
     await vi.advanceTimersByTimeAsync(40_000)

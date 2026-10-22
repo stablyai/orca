@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Check, ChevronRight, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Command, CommandItem, CommandList } from '@/components/ui/command'
+import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { useBoundedHostRows } from '../host-picker/use-bounded-host-rows'
+import { HostListOverflowNote } from '../host-picker/HostListOverflowNote'
+import { searchHostsLabel } from '../host-picker/host-picker-copy'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { SidebarHostOption } from './sidebar-host-options'
@@ -50,6 +53,7 @@ export function AddRepoHostSelector({
   onOpenWslHostsSetting
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
   const [addHostOpen, setAddHostOpen] = useState(false)
+  const rows = useBoundedHostRows(hosts, new Set(selectedHostId ? [selectedHostId] : []))
   const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer || onAddWslHost)
   if (!shouldShowHostScopeControls(hosts) && !showHostSetupActions) {
     return null
@@ -89,9 +93,18 @@ export function AddRepoHostSelector({
           align="start"
           className="w-[min(340px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
         >
-          <Command>
+          <Command shouldFilter={false} label={searchHostsLabel()}>
+            {rows.searchable ? (
+              <CommandInput
+                value={rows.query}
+                onValueChange={rows.setQuery}
+                placeholder={searchHostsLabel()}
+                aria-label={searchHostsLabel()}
+              />
+            ) : null}
             <CommandList>
-              {showHostSetupActions ? (
+              {/* Why hidden while searching: Enter must pick the matching host, not open setup. */}
+              {showHostSetupActions && rows.query === '' ? (
                 <Popover open={addHostOpen} onOpenChange={setAddHostOpen}>
                   <PopoverTrigger asChild>
                     <CommandItem
@@ -200,7 +213,7 @@ export function AddRepoHostSelector({
                   </PopoverContent>
                 </Popover>
               ) : null}
-              {hosts.map((host) => {
+              {rows.shown.map((host) => {
                 const selected = host.id === selectedHostId
                 const disabled = !canSelectAddRepoHost(host)
                 const canConnectHost = canConnectAddRepoHost(host)
@@ -288,6 +301,7 @@ export function AddRepoHostSelector({
                 )
               })}
             </CommandList>
+            <HostListOverflowNote hiddenCount={rows.hiddenCount} />
           </Command>
         </PopoverContent>
       </Popover>

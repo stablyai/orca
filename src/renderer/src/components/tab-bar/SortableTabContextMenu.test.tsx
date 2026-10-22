@@ -270,14 +270,14 @@ describe('SortableTabContextMenu', () => {
   it('does not expose a native/terminal view switch', () => {
     const { container } = renderMenu()
 
-    expect(container.textContent).not.toContain('Switch to Terminal Agent')
-    expect(container.textContent).not.toContain('Switch to Chat UI')
+    expect(container.textContent).not.toContain('Continue with Terminal Agent')
+    expect(container.textContent).not.toContain('Continue in Chat UI')
   })
 
   it('hides switching a terminal-view tab into chat view', () => {
     const { container } = renderMenu({ canToggleViewMode: true, onToggleViewMode: vi.fn() })
 
-    expect(container.textContent).not.toContain('Switch to Chat UI')
+    expect(container.textContent).not.toContain('Continue in Chat UI')
   })
 
   it('keeps the way back for a tab already in chat view, in the chat/CLI move section', () => {
@@ -289,11 +289,11 @@ describe('SortableTabContextMenu', () => {
     })
     const marker = getSurfaceSwitchMarker(container)
 
-    expect(getButton(container, 'Switch to Terminal Agent').compareDocumentPosition(marker)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
+    expect(
+      getButton(container, 'Continue with Terminal Agent').compareDocumentPosition(marker)
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(marker.getAttribute('data-leading-separator')).toBe('false')
-    act(() => getButton(container, 'Switch to Terminal Agent').click())
+    act(() => getButton(container, 'Continue with Terminal Agent').click())
     expect(onToggleViewMode).toHaveBeenCalled()
   })
 
@@ -352,34 +352,14 @@ describe('SortableTabContextMenu', () => {
     expect(container.textContent).not.toContain('Split terminal')
   })
 
-  it('routes the directional close actions to their handlers with the tab id', () => {
+  it('keeps Close Others available without directional close entries', () => {
     const onCloseOthers = vi.fn()
-    const onCloseToRight = vi.fn()
-    const onCloseToLeft = vi.fn()
-    const { container } = renderMenu({
-      onCloseOthers,
-      onCloseToRight,
-      onCloseToLeft
-    })
+    const { container } = renderMenu({ onCloseOthers })
 
     act(() => getButton(container, 'Close Others').click())
     expect(onCloseOthers).toHaveBeenCalledWith('term-1')
-
-    act(() => getButton(container, 'Close All Tabs To The Right').click())
-    expect(onCloseToRight).toHaveBeenCalledWith('term-1')
-
-    act(() => getButton(container, 'Close All Tabs To The Left').click())
-    expect(onCloseToLeft).toHaveBeenCalledWith('term-1')
-  })
-
-  it('disables directional closes when no tabs exist on that side', () => {
-    const { container } = renderMenu({
-      hasTabsToLeft: false,
-      hasTabsToRight: false
-    })
-
-    expect(getButton(container, 'Close All Tabs To The Left').disabled).toBe(true)
-    expect(getButton(container, 'Close All Tabs To The Right').disabled).toBe(true)
+    expect(container.textContent).not.toContain('Close All Tabs To The Left')
+    expect(container.textContent).not.toContain('Close All Tabs To The Right')
   })
 
   it('hides move-tab split actions for a single-tab group', () => {

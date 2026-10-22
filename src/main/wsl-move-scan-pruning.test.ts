@@ -202,7 +202,6 @@ describe('inferred lineage hydration under a WSL move', () => {
     ])
     const controller = new RuntimeWorktreeLineageController({
       getStore: () => store,
-      getCachedWorktrees: () => null,
       getDb: () => null,
       resolveWorktree: async () => {
         throw new Error('unused')

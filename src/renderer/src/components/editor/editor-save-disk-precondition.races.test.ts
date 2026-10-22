@@ -251,7 +251,7 @@ describe('guarded editor saves under races', () => {
       gate.resolve()
       await saves
 
-      // Each save is guarded against the advanced baseline and rewrites identical bytes.
+      // The second guarded save completes without rewriting the identical bytes.
       expect(disk.writeFile).toHaveBeenCalledTimes(2)
       expect(disk.files.get(GUARDED_PATH)).toBe('X')
       expect([...shown.values()]).toEqual(['X', 'X'])

@@ -54,6 +54,17 @@ export type WorkspacePortAdvertisedUrlChangedEvent = {
   port: number
 }
 
+/** Asks whether a scanned listener serves a web page. Loopback only; the scan supplies host and port. */
+export type WorkspacePortPageProbeRequest = {
+  host: string
+  port: number
+  protocol: 'http' | 'https'
+}
+
+export type WorkspacePortPageProbeResult =
+  | { kind: 'page'; title: string | null; faviconDataUrl: string | null }
+  | { kind: 'not-page' }
+
 export type WorkspacePortKillRequest = {
   repoId?: string
   pid: number

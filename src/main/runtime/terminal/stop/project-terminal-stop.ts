@@ -12,6 +12,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { listFailedAgentLaunchWorktreeIds } from '../../../agent-launch/agent-launch-pane-attachment'
 import {
+  TerminalUpdateAdmission,
+  type WorktreeTerminalSpawnLeaseOptions
+} from './terminal-update-admission'
+import {
   closeStructuredSessionsForWorktree,
   createStructuredSweepProgress,
   listStructuredSessionsForProject,
@@ -64,10 +68,29 @@ export function listProjectTerminalWorktreeIds(
 export abstract class OrcaRuntimeWithStopTerminalsForProject extends OrcaRuntimeWithStopExactTerminalsForWorktree {
   /** Removed projects' spawn hosts by id; ids are UUIDs, so a remaining row means a same-id sibling. */
   private readonly removedProjectHosts = new Map<string, Set<ExecutionHostId>>()
+  /** Closed by an update's last census until the stop; every spawn lease passes it. */
+  readonly terminalUpdateAdmission = new TerminalUpdateAdmission()
 
+  /**
+   * `target` is the spawn's own workspace copy: the host whose provider runs it. An update's closed
+   * admission still lets through an attach to `reattachSessionId`, calling `requireAttachOnly` so
+   * the caller spawns attach-only.
+   */
   override async acquireWorktreeTerminalSpawn(
     target: HostWorktreeTarget | undefined,
-    opts: { refuseSleptWorktree?: boolean } = {}
+    opts: WorktreeTerminalSpawnLeaseOptions = {}
+  ): Promise<() => void> {
+    // Admission first: the whole lease, lock wait included, is a spawn an update's census awaits.
+    return await this.terminalUpdateAdmission.hold(
+      opts.reattachSessionId,
+      () => this.acquireProjectTerminalSpawn(target, opts),
+      opts.requireAttachOnly
+    )
+  }
+
+  private async acquireProjectTerminalSpawn(
+    target: HostWorktreeTarget | undefined,
+    opts: WorktreeTerminalSpawnLeaseOptions
   ): Promise<() => void> {
     const release = await super.acquireWorktreeTerminalSpawn(target, opts)
     const repoId = target ? getRepoIdFromWorktreeId(target.id) : null

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as I18nModule from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({
   /** What the per-file resolver answers: null local, a string remote, undefined unresolved. */
@@ -17,7 +18,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string, params?: Record<string, string>) =>
     fallback.replace('{{value0}}', params?.value0 ?? '')
 }))
@@ -26,7 +28,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionIdForFile
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => mocks.worktreeRuntimeOwnerId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => mocks.worktreeRuntimeOwnerId
 }))
 vi.mock('@/lib/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
@@ -103,7 +105,8 @@ describe('openDocPreviewSource', () => {
         worktreeId: 'wt-1',
         language: 'html',
         mode: 'edit'
-      })
+      }),
+      undefined
     )
   })
 
@@ -113,7 +116,8 @@ describe('openDocPreviewSource', () => {
     openDocPreviewSource({ ...REMOTE_DOCUMENT, externalSshTargetId: 'ssh-7' })
 
     expect(mocks.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({ externalSshTargetId: 'ssh-7' })
+      expect.objectContaining({ externalSshTargetId: 'ssh-7' }),
+      undefined
     )
   })
 

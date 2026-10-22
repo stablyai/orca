@@ -464,7 +464,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(
         join(sessionDir, 'meta.json'),
         JSON.stringify({
-          cwd: '/projects/probeless',
+          cwd: historyDir,
           cols: 132,
           rows: 43,
           startedAt: '2026-04-15T10:00:00Z',
@@ -495,7 +495,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore!.scrollback).toContain('probeless output')
       expect(lastSpawnOpts).toMatchObject({
         sessionId,
-        cwd: '/projects/probeless',
+        cwd: historyDir,
         cols: 132,
         rows: 43
       })

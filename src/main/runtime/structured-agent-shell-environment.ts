@@ -88,13 +88,14 @@ const SHELL_ENVIRONMENT_TTL_MS = 10_000
  * background past the TTL. Windows keeps a loaded PowerShell profile for good (only a failed load
  * is retried) and lays the saved PATH, where installers add themselves, over it on every read.
  */
-async function hostShellEnvironment(): Promise<NodeJS.ProcessEnv> {
+async function hostShellEnvironment(cachedOnly = false): Promise<NodeJS.ProcessEnv> {
   const windows = process.platform === 'win32'
   const env = await resolveLoginShellEnvironment({
+    cachedOnly,
     refreshAfterMs: SHELL_ENVIRONMENT_TTL_MS,
     keepCaptured: windows
   })
-  if (!windows) {
+  if (!windows || cachedOnly) {
     return env
   }
   const withSavedPath = { ...env }
@@ -154,7 +155,7 @@ export function createStructuredAgentEnvironmentResolvers(
   sources: StructuredAgentEnvironmentSources
 ): {
   /** The shared base every agent's child env starts from, before its own overlay. */
-  resolveBaseEnvironment: () => Promise<Record<string, string>>
+  resolveBaseEnvironment: (cachedOnly?: boolean) => Promise<Record<string, string>>
   /** The base with the user's overlay for `agent` laid over it. */
   resolveAgentEnvironment: (agent: string) => Promise<Record<string, string>>
   refreshAfterMissingProgram: (askedAt: number) => Promise<void>
@@ -165,9 +166,9 @@ export function createStructuredAgentEnvironmentResolvers(
   if (!injected) {
     void hostShellEnvironment().catch(() => {})
   }
-  const resolveBase = async (): Promise<Record<string, string>> =>
+  const resolveBase = async (cachedOnly = false): Promise<Record<string, string>> =>
     structuredAgentBaseEnvironment({
-      shellEnv: await shellEnvironment(),
+      shellEnv: await shellEnvironment(cachedOnly),
       policy: sources.resolveShellEnvironmentPolicy?.() ?? nativeChatShellEnvironmentPolicy(null)
     })
   return {

@@ -37,6 +37,7 @@ export function structuredStatusSummariesEqual(
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.launchDirectory === b.launchDirectory &&
     a.conversationName === b.conversationName &&
+    a.sleptAt === b.sleptAt &&
     a.namingError?.message === b.namingError?.message &&
     a.namingError?.failedAt === b.namingError?.failedAt &&
     a.turnOutcome === b.turnOutcome &&

@@ -28,7 +28,14 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     ? await acquireWorktreeSpawn.call(
         runtime,
         spawnWorktreeTarget(args.worktreeId, args.connectionId),
-        { refuseSleptWorktree: args.refuseSleptWorktree }
+        {
+          refuseSleptWorktree: args.refuseSleptWorktree,
+          // A pre-adopted stable pane attaches to its live owner, not a new terminal.
+          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
+          requireAttachOnly: () => {
+            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
+          }
+        }
       )
     : undefined
   let awaitingAnotherStart = false

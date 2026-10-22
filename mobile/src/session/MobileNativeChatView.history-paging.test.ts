@@ -133,232 +133,83 @@ describe('MobileNativeChatView: history paging and anchoring', () => {
     expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
   })
 
-  describe('on the page, where the list reports no drag or momentum', () => {
-    const observers = new Set<(entries: unknown[]) => void>()
-    // The browser's resize step, before paint; RN Web's size report comes a task later.
-    const resized = () => act(() => observers.forEach((deliver) => deliver([])))
+  describe('on the page, whose list is anchored at its end', () => {
     const page = () => root().find((node) => hostType(node) === 'ScrollView')
-    const loadEarlier = () =>
-      root().find(
-        (node) =>
-          hostType(node) === 'Pressable' &&
-          node.findAll((text) => text.props.children === 'Load earlier messages').length > 0
-      )
+    const jumpControl = () =>
+      root().findAll((node) => node.props.accessibilityLabel === 'Scroll to latest')
 
     beforeEach(() => {
       platform.OS = 'web'
-      scrollToOffset.mockImplementation((to: { offset: number }) => {
-        pageScroller.scrollTop = to.offset
-      })
-      observers.clear()
-      vi.stubGlobal('ResizeObserver', function (deliver: (entries: unknown[]) => void) {
-        return {
-          observe: () => observers.add(deliver),
-          unobserve: () => {},
-          disconnect: () => observers.delete(deliver)
-        }
-      })
+      Object.assign(pageScroller, { scrollTop: 0, scrollHeight: 20_000, clientHeight: 500 })
     })
 
     afterEach(() => {
       platform.OS = 'ios'
     })
 
-    function scrolledTo(y: number, contentHeight: number) {
-      Object.assign(pageScroller, { scrollTop: y, scrollHeight: contentHeight })
-      return scrollEvent(y, contentHeight)
-    }
-
-    // RN Web's report and the scroller's own event, for one position.
-    function scrollTo(y: number, contentHeight: number) {
+    // The reader's own scroll to `y`: 0 at the newest message, negative above it.
+    function readerScrollsTo(y: number) {
       act(() => {
-        page().props.onScroll(scrolledTo(y, contentHeight))
-        pageScroller.scroll()
+        pageScroller.scrollTop = y
+        page().props.onScroll(scrollEvent(y, pageScroller.scrollHeight))
       })
     }
 
-    it('holds a following reader at the live end through growth and a smaller viewport', async () => {
-      const latest = [assistantTurn('a1', 'Latest')]
-      const landed = [assistantTurn('a0', 'Older'), ...latest]
-      const onLoadEarlier = vi.fn()
-      await render({ folded: latest, hasMore: true, onLoadEarlier })
-      scrollTo(500, 1_000)
+    it('stops following once the reader scrolls off the end, and follows again back at it', async () => {
+      await render({ folded: [assistantTurn('a1', 'Latest')] })
 
-      // Older rows land; the observer pins before paint.
-      act(() => loadEarlier().props.onPress())
-      await update({ folded: landed, hasMore: true, onLoadEarlier })
-      pageScroller.scrollHeight = 5_000
-      resized()
-      expect(onLoadEarlier).toHaveBeenCalledOnce()
-      expect(scrollToOffset).toHaveBeenCalledOnce()
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 4_500 })
+      readerScrollsTo(-600)
+      expect(jumpControl()).toHaveLength(1)
+      readerScrollsTo(0)
+      expect(jumpControl()).toHaveLength(0)
 
-      // The pin's own move, short of a reply that grew meanwhile, is not the reader's.
-      scrollTo(4_500, 5_400)
-      resized()
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 4_900 })
-
-      // The browser clamping the scroll to a shorter end is layout's, not the reader's: it still
-      // follows, and the next growth pins.
-      scrollTo(3_500, 4_000)
-      pageScroller.scrollHeight = 5_400
-      resized()
-      expect(scrollToOffset).toHaveBeenCalledTimes(3)
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 4_900 })
-      scrollTo(4_900, 5_400)
-
-      // The reader's wheel moves it up: it leaves the end.
-      pageScroller.input('wheel')
-      scrollTo(3_000, 5_400)
-      pageScroller.scrollHeight = 6_000
-      resized()
-      expect(scrollToOffset).toHaveBeenCalledTimes(3)
-      expect(
-        root().findAll((node) => node.props.accessibilityLabel === 'Scroll to latest')
-      ).toHaveLength(1)
-
-      // Back at the end it follows again, and a smaller viewport pins to the live end.
-      scrollTo(5_500, 6_000)
-      pageScroller.scrollHeight = 6_400
-      resized()
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 5_900 })
-      pageScroller.clientHeight = 300
-      resized()
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 6_100 })
-      expect(scrollToEnd).not.toHaveBeenCalled()
+      // The control jumps to the end through the list, whose own move is not the reader's.
+      readerScrollsTo(-600)
+      act(() => jumpControl()[0]!.props.onPress())
+      expect(pageScroller.scrollTop).toBe(0)
+      act(() => page().props.onScroll(scrollEvent(0, pageScroller.scrollHeight)))
+      expect(jumpControl()).toHaveLength(0)
     })
 
-    it('resumes an expired downward fling near the end, preserving small upward detachment', async () => {
-      const now = vi.spyOn(Date, 'now').mockReturnValue(10_000)
-      vi.stubGlobal('navigator', { userAgent: 'Chrome' })
-      const browserHolds = () => pageScroller.style.overflowAnchor === 'auto'
-      await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
-      scrollTo(500, 1_000)
-      resized()
-      pageScroller.input('wheel')
-      scrollTo(497, 1_000)
-      // Expired input and geometry away from the end cannot detach or attach by themselves.
-      now.mockReturnValue(11_100)
-      pageScroller.scrollHeight = 1_200
-      resized()
-      expect(browserHolds()).toBe(true)
-      scrollTo(632, 1_200)
-      expect(browserHolds()).toBe(false)
-      pageScroller.scrollHeight = 1_300
-      resized()
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 800 })
-      scrollTo(800, 1_300) // Deliver the pin's own scroll before the next reader movement.
-      // The first upward movement can arrive in resize before its scroll event.
-      pageScroller.input('wheel')
-      pageScroller.scrollTop = 780
-      resized()
-      expect(browserHolds()).toBe(true)
-      scrollTo(799, 1_300)
-      expect(browserHolds()).toBe(false)
-      now.mockRestore()
-    })
-
-    it('detaches a following reader who drags up slowly, one pixel per scroll event', async () => {
-      // iOS, where it happened: WebKit has no anchoring, so every move that isn't a clamp is the reader's.
-      vi.stubGlobal('navigator', {
-        userAgent:
-          'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/604.1'
-      })
-      await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
-      scrollTo(500, 1_000)
-      resized()
-      const pins = scrollToOffset.mock.calls.length
-      // Each step's frame reconciles what it drew, as the browser's resize step does.
-      for (let top = 499; top >= 470; top -= 1) {
-        scrollTo(top, 1_000)
-        resized()
-      }
-      // A reply lands: the reader who dragged 30px up is not pulled back to the end.
-      pageScroller.scrollHeight = 1_063
-      resized()
-      expect(scrollToOffset.mock.calls.length).toBe(pins)
-    })
-
-    it('resumes following after a slow one-pixel return to the end on Safari', async () => {
-      vi.stubGlobal('navigator', {
-        userAgent:
-          'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/604.1'
-      })
-      await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
-      scrollTo(500, 1_000)
-      resized()
-      // Deliver the initial pin's own scroll before the reader moves.
-      scrollTo(500, 1_000)
-      scrollTo(470, 1_000)
-      resized()
-      const pins = scrollToOffset.mock.calls.length
-
-      for (let top = 471; top <= 500; top += 1) {
-        scrollTo(top, 1_000)
-        resized()
-        expect(scrollToOffset.mock.calls.length).toBe(pins)
-      }
-
-      pageScroller.scrollHeight = 1_063
-      resized()
-      expect(scrollToOffset.mock.calls.length).toBe(pins + 1)
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 563 })
-      expect(pageScroller.scrollTop).toBe(563)
-    })
-
-    it.each([false, true])(
-      'leaves a parked reader parked when a collapse below them clamps the page onto its end (finger down: %s)',
-      async (fingerDown) => {
-        await render({ folded: ['a1', 'a2', 'a3'].map((id) => assistantTurn(id, id)) })
-        scrollTo(500, 1_000)
-        resized()
-        // Parked 29 px short of the end by the reader's own wheel.
-        pageScroller.input('wheel')
-        scrollTo(471, 1_000)
-        const pins = scrollToOffset.mock.calls.length
-
-        // A run below collapses: the browser clamps onto the shorter end, possibly under the tap.
-        if (fingerDown) {
-          pageScroller.input('touchstart')
-        }
-        scrollTo(200, 700)
-        resized()
-        if (fingerDown) {
-          pageScroller.input('touchend')
-        }
-        // A reply lands. Main leaves the reader where the clamp put them; so does the page.
-        pageScroller.scrollHeight = 763
-        resized()
-        expect(scrollToOffset.mock.calls.length).toBe(pins)
-      }
-    )
-
-    it("opens another chat at its live end, not the last chat's", async () => {
+    it('opens another chat at its newest message, not where the reader left the last one', async () => {
       await render({ folded: [assistantTurn('a1', 'Chat A')] })
-      scrollTo(500, 1_000)
-      // The next chat is taller; its size report hasn't come yet.
-      pageScroller.scrollHeight = 2_500
-      scrollToOffset.mockClear()
+      readerScrollsTo(-600)
 
       await update({ folded: [assistantTurn('b1', 'Chat B')], sendSurfaceId: 'tab-b' })
 
-      expect(scrollToEnd).not.toHaveBeenCalled()
-      expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 2_000 })
+      expect(pageScroller.scrollTop).toBe(0)
+      expect(jumpControl()).toHaveLength(0)
     })
 
-    it('loads older history from the Load earlier control, not from reaching the top', async () => {
+    it('asks for older history ahead of the top, and after a failure only the retry asks', async () => {
       const onLoadEarlier = vi.fn()
-      await render({ folded: [assistantTurn('a1', 'Latest')], hasMore: true, onLoadEarlier })
-
-      // Down to the top and into iOS's bounce past it.
-      act(() => {
-        page().props.onScroll(scrolledTo(40, 540))
-        page().props.onScroll(scrolledTo(-15, 540))
-      })
+      const folded = [assistantTurn('a1', 'Latest')]
+      await render({ folded, hasMore: true, onLoadEarlier })
       expect(onLoadEarlier).not.toHaveBeenCalled()
 
-      act(() => loadEarlier().props.onPress())
+      // Ten screens from the top of what is loaded, from the reader or not.
+      readerScrollsTo(-15_000)
+      expect(onLoadEarlier).toHaveBeenCalled()
+
+      onLoadEarlier.mockClear()
+      await update({ folded, hasMore: true, olderPages: 'loading', onLoadEarlier })
+      readerScrollsTo(-19_500)
+      await update({ folded, hasMore: true, olderPages: 'failed', onLoadEarlier })
+      readerScrollsTo(-19_500)
+      expect(onLoadEarlier).not.toHaveBeenCalled()
+
+      const retry = root().find(
+        (node) => hostType(node) === 'Pressable' && node.props.accessibilityRole === 'button'
+      )
+      act(() => retry.props.onPress())
       expect(onLoadEarlier).toHaveBeenCalledOnce()
+    })
+
+    it('fills a chat that opens shorter than its reach without a scroll', async () => {
+      const onLoadEarlier = vi.fn()
+      pageScroller.scrollHeight = 600
+      await render({ folded: [assistantTurn('a1', 'Latest')], hasMore: true, onLoadEarlier })
+      expect(onLoadEarlier).toHaveBeenCalled()
     })
   })
 })

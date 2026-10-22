@@ -1,3 +1,6 @@
 minimumReleaseAge: 4320
 ignoreScripts: true
 allowBuilds: {}
+
+patchedDependencies:
+  braces@3.0.3: ../patches/braces@3.0.3.patch

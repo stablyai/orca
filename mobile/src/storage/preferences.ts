@@ -236,8 +236,10 @@ export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
 export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+let terminalLinkWriteBarrier: Promise<void> | null = null
 
 export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+  await terminalLinkWriteBarrier
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
     return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
@@ -246,8 +248,18 @@ export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpen
   }
 }
 
-export async function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
-  await persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+export function saveTerminalLinkOpenMode(mode: MobileTerminalLinkOpenMode): Promise<void> {
+  const write = (terminalLinkWriteBarrier ?? Promise.resolve()).then(() =>
+    persistMirrored(TERMINAL_LINK_OPEN_MODE_KEY, mode)
+  )
+  const barrier = write.catch(() => undefined)
+  terminalLinkWriteBarrier = barrier
+  void barrier.then(() => {
+    if (terminalLinkWriteBarrier === barrier) {
+      terminalLinkWriteBarrier = null
+    }
+  })
+  return write
 }
 
 function stringArray(value: unknown): string[] {

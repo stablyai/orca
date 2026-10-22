@@ -1,3 +1,4 @@
+import type { JournalItemEcho } from './journal-item-echo'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type {
   AgentJournalAnsweredTurnIdentity,
@@ -64,6 +65,7 @@ export type JournalAppendResult = {
 }
 
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
+  echoOf?: JournalItemEcho['echoOf']
   fence: number
   /** The generation whose execution produced the item: set by a provider's observation, and by
    *  nothing else. Host bookkeeping leaves it out and keeps the item's (`journalItemOwnerFence`). */

@@ -2,6 +2,10 @@ import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
 import type { GrabIntent } from '../../shared/browser-grab-types'
+import type {
+  BrowserSitePermission,
+  BrowserSitePermissionDecision
+} from '../../shared/browser-site-permission'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
@@ -173,6 +177,14 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+  sitePermissionsList: (args: { profileId: string }) =>
+    ipcRenderer.invoke('browser:sitePermissions:list', args),
+  sitePermissionsSet: (args: {
+    profileId: string
+    origin: string
+    permission: BrowserSitePermission
+    decision: BrowserSitePermissionDecision | null
+  }) => ipcRenderer.invoke('browser:sitePermissions:set', args),
   notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:activeTabChanged', args)
 } satisfies Partial<PreloadApi['browser']>

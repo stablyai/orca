@@ -12,6 +12,8 @@ import type {
   CommandOf,
   LayoutApplyOutcome,
   LayoutCommand,
+  LayoutContext,
+  LayoutEffects,
   LayoutRefusalCode
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
@@ -30,6 +32,7 @@ import {
 } from './pane-remote-session-follow'
 import { pruneClosedTerminalTabTombstones } from '../../../shared/closed-terminal-tab-tombstones'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { editorViewsOfModel, type PartitionEditorViews } from '../loading-store/layout-editor-views'
 
 /** A new tab, or a split of an existing pane, with the ids its terminal will run under. */
 export type TerminalPaneAdmission =
@@ -39,8 +42,17 @@ export type TerminalPaneAdmission =
 /** 'exists': the start attaches to a pane already in the layout, so nothing is written. */
 export type TerminalPaneAdmissionOutcome = 'admitted' | 'exists' | LayoutRefusalCode
 
-/** The partition to write, or null when nothing changes. */
-export type PaneLayoutChange<T> = { value: T; session: WorkspaceSessionState | null }
+/** The partition to write, or null when nothing changes; `views`: the result's, when seeded. */
+export type PaneLayoutChange<T> = {
+  value: T
+  session: WorkspaceSessionState | null
+  views?: PartitionEditorViews
+  /** What the runtime runs once the change is written; never part of a reply. */
+  effects?: LayoutEffects
+}
+
+/** The runtime's live facts a command reads; the stored layout cannot know them. */
+export type LayoutLiveContext = Pick<LayoutContext, 'isBindingLive' | 'retiresBinding'>
 
 export function admitPaneToSession(
   hostId: ExecutionHostId,
@@ -53,7 +65,7 @@ export function admitPaneToSession(
   if (workspace && locatePane(workspace, paneKeyOf(admission.tabId, leafId))) {
     return { value: 'exists', session: null }
   }
-  const change = applyToSession(loaded, admission, touchedRecordsWrite(session, loaded))
+  const change = applyToSession(loaded, admission, false, {}, touchedRecordsWrite(session, loaded))
   return { ...change, value: change.value.ok ? 'admitted' : change.value.code }
 }
 
@@ -63,7 +75,7 @@ export function withdrawPaneFromSession(
   pane: CommandOf<'closePane'>
 ): PaneLayoutChange<LayoutRefusalCode | null> {
   const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
-  const change = applyToSession(loaded, pane, touchedRecordsWrite(session, loaded))
+  const change = applyToSession(loaded, pane, false, {}, touchedRecordsWrite(session, loaded))
   return { ...change, value: change.value.ok ? null : change.value.code }
 }
 
@@ -93,14 +105,20 @@ function touchedRecords(
 export function applyCommandToSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
-  command: LayoutCommand
+  command: LayoutCommand,
+  /** Main's in-memory editor views, which the saved form lacks (layout-editor-views). */
+  views?: PartitionEditorViews,
+  live: LayoutLiveContext = {}
 ): PaneLayoutChange<LayoutApplyOutcome> {
-  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+  const context = views
+    ? { ...nameBasedLoadContext(), editorViewsOf: (key: string) => views[key] }
+    : nameBasedLoadContext()
+  const loaded = loadWorkspaceLayout(hostId, session, context)
   const taken = takenIds(loaded.layout, command)
   if (taken) {
     return { value: taken, session: null }
   }
-  return applyToSession(loaded, command, (after) => {
+  return applyToSession(loaded, command, views !== undefined, live, (after) => {
     const patched = touchedRecords(session, loaded, after)
     return patched
       ? followRemoteSessionAfterPaneDetach(
@@ -143,6 +161,8 @@ const RENAME_CONTEXT = { mintId: randomUUID, mintLeafId: randomUUID, now: Date.n
 function applyToSession(
   loaded: LoadedWorkspaceLayout,
   command: LayoutCommand,
+  keepsViews: boolean,
+  live: LayoutLiveContext,
   write: (after: WorkspaceSessionState) => WorkspaceSessionState | null = (after) => after
 ): PaneLayoutChange<LayoutApplyOutcome> {
   const closed = closedIds(loaded.layout, command)
@@ -150,6 +170,7 @@ function applyToSession(
     return { value: closed, session: null }
   }
   const applied = applyLayoutCommand(loaded.layout, command, {
+    ...live,
     mintId: randomUUID,
     mintLeafId: randomUUID,
     now: Date.now
@@ -157,7 +178,9 @@ function applyToSession(
   return applied.ok
     ? {
         value: { ok: true, result: applied.result },
-        session: write(saveWorkspaceLayout({ ...loaded, layout: applied.model }))
+        session: write(saveWorkspaceLayout({ ...loaded, layout: applied.model })),
+        effects: applied.effects,
+        ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
       }
     : { value: { ok: false, code: applied.code }, session: null }
 }

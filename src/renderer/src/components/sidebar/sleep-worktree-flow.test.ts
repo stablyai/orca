@@ -33,8 +33,10 @@ const mocks = vi.hoisted(() => {
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
   const callChat = vi.fn()
+  const hostMarksSleep = vi.fn()
   return {
     callChat,
+    hostMarksSleep,
     clearWorktreeSleepIntent,
     markWorktreeSleepIntent,
     state,
@@ -58,6 +60,10 @@ vi.mock('@/lib/worktree-sleep-intent', () => ({
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.callChat
+}))
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readCachedRuntimeEnvironmentCapability: mocks.hostMarksSleep
 }))
 
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
@@ -98,6 +104,7 @@ describe('runSleepWorktree', () => {
     mocks.state.ptyIdsByTabId = {}
     mocks.state.worktreesByRepo = {}
     mocks.callChat.mockReset().mockResolvedValue({ stoppedSessionIds: [] })
+    mocks.hostMarksSleep.mockReset().mockReturnValue(true)
   })
 
   it('tears down browsers before terminals on the sleep path', async () => {
@@ -340,6 +347,10 @@ describe('runSleepWorktree', () => {
     expect(outcome.failedWorktreeIds).toEqual(['wt-1'])
     expect(outcome.errors).toHaveLength(1)
     expect(mocks.toastError).not.toHaveBeenCalled()
+    // A project move pauses through this core; only the user's Sleep asks hosts to mark chats.
+    expect(mocks.callChat.mock.calls.map(([, , params]) => params)).toEqual([
+      { workspaceId: 'wt-2' }
+    ])
   })
 
   it('sleeps multiple worktrees and clears active only once when included', async () => {
@@ -378,8 +389,19 @@ describe('runSleepWorktree', () => {
     mocks.callChat.mockImplementation(async (target: { kind: string }) => ({
       stoppedSessionIds: [`chat-${target.kind}`]
     }))
+    mocks.hostMarksSleep.mockReturnValue(null)
 
     const results = await runSleepWorktrees([twinId])
+
+    // Only a host known to keep the mark is asked to; an older one would refuse the whole stop.
+    expect(mocks.callChat.mock.calls.map(([target, , params]) => [target.kind, params])).toEqual([
+      ['local', { workspaceId: twinId, markAsleep: true }],
+      ['environment', { workspaceId: twinId }]
+    ])
+    expect(mocks.hostMarksSleep).toHaveBeenCalledWith(
+      'env-a',
+      'agent-session.workspace-sleep-mark.v1'
+    )
 
     expect(results).toEqual([
       expect.objectContaining({ executionHostId: 'local', stoppedSessionIds: ['chat-local'] }),

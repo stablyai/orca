@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayCellConfig } from './config.js'
@@ -44,7 +44,7 @@ const ACTIVITY_LEASE_READERS: Record<string, string> = {
   // One host's rows under lock; each caller is classified in the reserve-mode census.
   'assignment-store.ts:lockAssignmentActivities': 'host-lock',
   // Metrics and previews: they report, and act on nothing.
-  'assignment-inventory-snapshot.ts:readAssignmentInventorySnapshot': 'report-only',
+  'assignment/assignment-inventory-snapshot.ts:readAssignmentInventorySnapshot': 'report-only',
   'region-correction-preview.ts:previewRegionalRehomeEligibility': 'report-only',
   'registered-migration-inventory.ts:readRegisteredMigrationInventory': 'report-only',
   // Step 5's existing-only stranded release, fixed separately in #30609 before the first flip.
@@ -147,7 +147,8 @@ function activityLeaseReaders(): { readers: string[]; bareTableNames: string[] }
   const files = readdirSync(directory, { recursive: true, encoding: 'utf8' }).filter(
     (file) => file.endsWith('.ts') && !file.includes('.test.') && !file.split(/[\\/]/).includes('test-fixtures')
   )
-  for (const file of files) {
+  for (const relativeFile of files) {
+    const file = relativeFile.split(sep).join('/')
     const text = readFileSync(join(directory, file), 'utf8')
     if (!text.includes(LEASE_TABLE)) continue
     const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true)

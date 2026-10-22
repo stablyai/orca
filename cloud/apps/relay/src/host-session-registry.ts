@@ -189,6 +189,22 @@ function send(socket: WebSocket, type: string, message: object): void {
   socket.send(JSON.stringify({ type, ...message }))
 }
 
+// Whether `work` settled within `ms`; never rejects, and unref'd so it never holds exit.
+async function settledWithin(work: Promise<unknown>, ms: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const elapsed = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), ms)
+    timer.unref?.()
+  })
+  const settled = await Promise.race([work.then(settledTrue, settledTrue), elapsed])
+  clearTimeout(timer)
+  return settled
+}
+
+function settledTrue(): true {
+  return true
+}
+
 function readControlFrame(
   socket: WebSocket,
   timeoutMs: number,
@@ -234,6 +250,12 @@ const preAuthEnded =
 // Hosts abandon connects after 15s; waiting much longer than that behind a
 // stalled predecessor only accumulates doomed sockets.
 const ACTIVATION_QUEUE_WAIT_MS = 30_000
+
+// A drained host redials the director the moment it is told, and a redial that meets this
+// cell's release still holding its assignment row is refused row_busy. From asia-east2 one
+// release holds the row ~1 s (c34/c35 drains, 2026-10), and a host's releases run one after
+// another, so 3 s covers a control plus one phone. Past that, it is told anyway.
+export const DRAIN_RELEASE_BEFORE_CLOSE_MS = 3_000
 
 // Why: this lease bounds how long a host lingers on a cell after a missed drain,
 // and rebinding it is the only passive rebalancing we have, so it has to stay
@@ -1499,8 +1521,11 @@ export class HostSessionRegistry {
     session.authorityRevision += 1
     this.markSeatDrainOnly(session)
     this.drainSentHosts.add(session.relayHostId)
-    if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
-    this.scheduleDrainTimer(graceMs, () => this.closeDrainedSession(session))
+    // With no grace the host is told by the close, after its release, not ahead of it.
+    if (graceMs > 0 && session.socket) {
+      send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
+    }
+    this.scheduleDrainTimer(graceMs, () => this.closeDrainedSession(session, graceMs === 0))
   }
 
   // Unref'd so a drain in flight never holds the process open past its own work.
@@ -1944,7 +1969,7 @@ export class HostSessionRegistry {
         this.rejectClient(pending.client, RELAY_CLOSE_CODE.PEER_DROPPED)
       }
       existing.socket?.close(RELAY_CLOSE_CODE.PEER_DROPPED, 'replaced by a newer generation')
-      this.releaseControlActivity(existing)
+      void this.releaseControlActivity(existing)
     }
     const session: HostSession = {
       identity,
@@ -2120,7 +2145,7 @@ export class HostSessionRegistry {
         for (const close of session.activeSplices.values()) close()
         const key = this.key(session.identity.sub, session.relayHostId)
         if (this.sessions.get(key) === session) this.sessions.delete(key)
-        this.releaseControlActivity(session)
+        void this.releaseControlActivity(session)
       }, CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
     })
     if (session.heartbeatTimer) clearInterval(session.heartbeatTimer)
@@ -2315,7 +2340,7 @@ export class HostSessionRegistry {
     })
   }
 
-  private closeDrainedSession(session: HostSession): void {
+  private closeDrainedSession(session: HostSession, sendDrainFirst = false): void {
     if (session.state === 'closed') return
     const forcedConnections = session.activeConnIds.size + session.pendingConns.size
     if (forcedConnections > 0) {
@@ -2346,29 +2371,62 @@ export class HostSessionRegistry {
     for (const close of session.activeSplices.values()) {
       close(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
     }
+    const releases: Promise<void>[] = []
     for (const pending of session.pendingConns.values()) {
       clearTimeout(pending.attachTimer)
       pending.capacityReservation?.release()
       this.failReservationBestEffort(pending.reservation)
       if (pending.credentialActivityId) {
-        this.releaseActivityBestEffort(
-          {
-            userId: pending.reservation.userId,
-            relayHostId: pending.reservation.relayHostId
-          },
-          pending.credentialActivityId
+        releases.push(
+          this.releaseActivitySettled(
+            {
+              userId: pending.reservation.userId,
+              relayHostId: pending.reservation.relayHostId
+            },
+            pending.credentialActivityId
+          )
         )
       }
       this.rejectClient(pending.client, RELAY_CLOSE_CODE.DRAINING)
     }
     session.pendingConns.clear()
     session.state = 'closed'
-    if (session.socket) {
-      closeRelayWebSocket(session.socket, RELAY_CLOSE_CODE.DRAINING, 'resolve configured director')
-    }
     const key = this.key(session.identity.sub, session.relayHostId)
     if (this.sessions.get(key) === session) this.sessions.delete(key)
-    this.releaseControlActivity(session)
+    const controlRelease = this.releaseControlActivity(session)
+    if (controlRelease) {
+      releases.push(controlRelease)
+    }
+    const socket = session.socket
+    if (!socket) {
+      return
+    }
+    const close = (): void => {
+      if (sendDrainFirst && socket.readyState === socket.OPEN) {
+        send(socket, 'drain', { graceMs: 0, recovery: 'resolve-director' })
+      }
+      closeRelayWebSocket(socket, RELAY_CLOSE_CODE.DRAINING, 'resolve configured director')
+    }
+    if (releases.length === 0) {
+      close()
+      return
+    }
+    // The host redials on this close, so its row is released first; a stuck release still closes.
+    // The splice releases above are queued ahead of these, so they have landed too.
+    const startedAt = this.now()
+    void settledWithin(Promise.all(releases), DRAIN_RELEASE_BEFORE_CLOSE_MS).then((settled) => {
+      if (!settled) {
+        console.warn(
+          JSON.stringify({
+            event: 'orca_relay_host_drain_release_slow',
+            ...this.logIdentity(),
+            relayHostIdDigest: relayHostLogDigest(session.relayHostId),
+            waitedMs: this.now() - startedAt
+          })
+        )
+      }
+      close()
+    })
   }
 
   private reassertRegionalDrain(session: HostSession): void {
@@ -2576,20 +2634,32 @@ export class HostSessionRegistry {
     closeRelayWebSocket(socket, code, closeReason ?? 'relay connection rejected')
   }
 
-  private releaseControlActivity(session: HostSession): void {
-    if (!session.controlActivityId) return
-    this.releaseActivityBestEffort(
+  private releaseControlActivity(session: HostSession): Promise<void> | undefined {
+    if (!session.controlActivityId) {
+      return undefined
+    }
+    return this.releaseActivitySettled(
       { userId: session.identity.sub, relayHostId: session.relayHostId },
       session.controlActivityId
     )
   }
 
   private releaseActivityBestEffort(identity: RelayIdentityKey, activityId: string): void {
-    void this.assignments.releaseActivity(identity, activityId).catch(() => {
+    void this.releaseActivitySettled(identity, activityId)
+  }
+
+  // Never rejects, so a caller may wait on it without handling the failure again.
+  private async releaseActivitySettled(
+    identity: RelayIdentityKey,
+    activityId: string
+  ): Promise<void> {
+    try {
+      await this.assignments.releaseActivity(identity, activityId)
+    } catch {
       // Why: expiry cleanup is the durable fallback; a transient SQL failure while
       // closing a socket must not become an unhandled rejection that kills the cell.
       console.warn('[orca-relay] activity release deferred to lease cleanup')
-    })
+    }
   }
 
   private failReservationBestEffort(reservation: CredentialReservation): void {

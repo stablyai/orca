@@ -94,6 +94,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
         )
       }),
     sessionClearDefaultCookies: () => Promise.resolve(false),
+    sitePermissionsList: () => Promise.resolve([]),
+    sitePermissionsSet: () => Promise.resolve([]),
     notifyActiveTabChanged: () => Promise.resolve(false)
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }

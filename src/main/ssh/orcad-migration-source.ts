@@ -26,7 +26,7 @@ export type OrcadMigrationSourceCutoverPort = {
   releaseFence: (cutover: OrcadMigrationSourceCutover) => Promise<void>
 }
 
-export type OrcadMigrationFenceAcquireArgs = {
+type OrcadMigrationFenceAcquireArgs = {
   destinationEnvironmentId: string
   destinationName: string
   /** Taken by `assessTerminals` while the source could still answer. */

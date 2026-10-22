@@ -1,4 +1,5 @@
 import { defineMethod } from '../../core'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { remoteFileContentBudget } from '../files-remote-content-budget'
 import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-rpc-content-budget'
 import {
@@ -19,12 +20,18 @@ export const TERMINAL_QUERY_METHODS = [
     name: 'terminal.list',
     permission: 'workspace',
     params: TerminalListParams,
-    handler: async (params, { runtime }) =>
-      runtime.listTerminals(params.worktree, params.limit, {
+    handler: async (params, { runtime }) => {
+      // Switch point: main places the swept workspace's live terminals itself, so this listing
+      // names their panes and the window's sweep only reads it.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && params.placeUnshownLiveTerminals && params.worktree) {
+        await runtime.placeUnshownLiveTerminalsOf(params.worktree)
+      }
+      return runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
         includeVisualLayouts: params.includeVisualLayouts
       })
+    }
   }),
   defineMethod({
     name: 'terminal.resolveActive',

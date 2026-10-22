@@ -20,6 +20,13 @@ import type {
   LayoutApplyReply
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { AppState } from '../types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  clearWindowTabMark,
+  markWindowTabStarting,
+  startWindowTabInMain,
+  windowTabStartsInMain
+} from './window-tab-start-in-main'
 
 /**
  * The row a tab main made itself is drawn with: main's time, title and the creation fields main
@@ -94,20 +101,44 @@ export function terminalTabCreateCommand(
  */
 export function recordCreatedTerminalTabInLayoutOwner(
   state: AppState,
-  command: CommandOf<'createTerminalTab'> & { tabId: string; leafId: string }
+  command: CommandOf<'createTerminalTab'> & { tabId: string; leafId: string },
+  start?: { tab: TerminalTab; store: Parameters<typeof startWindowTabInMain>[0] }
 ): void {
   // Why: a tab main already holds is its own.
   if (layoutFrameTerminalTab(command.workspace, command.tabId)) {
     return
   }
   const { workspace, ...rest } = command
-  const keep = (): void => {}
-  sendLayoutApply(state, workspace, rest, {
-    apply: keep,
-    asToday: keep,
-    refused: () => state.closeTab(command.tabId, { reason: 'cleanup' }),
+  // Main starts the first terminal once it holds the tab; until then the pane waits for it.
+  const startsInMain =
+    start !== undefined &&
+    runtimeEnvironmentIdUnlessTwin(state, workspace) === null &&
+    windowTabStartsInMain(state, start.tab)
+  const mark = startsInMain
+    ? markWindowTabStarting(start.store, command.tabId, command.leafId)
+    : null
+  const unmark = (): void => {
+    if (start && mark) {
+      clearWindowTabMark(start.store, makePaneKey(command.tabId, command.leafId), mark)
+    }
+  }
+  const sent = sendLayoutApply(state, workspace, rest, {
+    apply: () => {
+      if (start && mark) {
+        startWindowTabInMain(start.store, start.tab, command.leafId, mark)
+      }
+    },
+    // A paired server may hold it: the pane starts its own terminal, as today.
+    asToday: unmark,
+    refused: () => {
+      unmark()
+      state.closeTab(command.tabId, { reason: 'cleanup' })
+    },
     drawn: true
   })
+  if (!sent) {
+    unmark()
+  }
 }
 
 /**

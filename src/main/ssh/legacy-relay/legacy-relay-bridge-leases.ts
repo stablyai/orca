@@ -10,8 +10,6 @@ import type { LegacyRelayClient, LegacyRelayPty } from './legacy-relay-client'
 import { isEpochScopedRelayPtyId } from '../../../shared/ssh-pending-pty-kill'
 import type { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 
-export type { LegacyRelayPty }
-
 /** A relay's listing row: the endpoint that answered, and the connection the answer came on. */
 export type ListedRow = LegacyRelayPty & { endpoint: string; client?: LegacyRelayClient }
 

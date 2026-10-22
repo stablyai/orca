@@ -12,6 +12,10 @@ import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-d
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
 import { deleteWorkspaceChatDrafts } from './removed-worktree-chat-drafts'
+import {
+  flushPurgedWorkspaceEdits,
+  type ConfirmedUnsavedDiscards
+} from './removed-workspace-unsaved-files'
 import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
 /**
@@ -30,6 +34,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   beforeRemoval: WorktreeStateBeforeRemoval
   /** The catalog the host's removal produced, when the host stamps it. */
   catalogVersion?: WorktreeCatalogVersion
+  confirmedDiscards?: ConfirmedUnsavedDiscards
 }): Promise<void> {
   const { set, get, worktreeId, hostId, requiredExecutionHostId, beforeRemoval } = args
   // Why first: a listing scanned before this removal must not be applied after it and bring
@@ -90,7 +95,15 @@ export async function tearDownRemovedWorktreeRendererState(args: {
 
   // Why: dispose parked terminal watchers only on explicit deletion; identity migration/remounts must keep buffered PTY state.
   disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, beforeRemoval.terminalPtyIds)
-  applyRemoveWorktreeSuccessState(set, worktreeId, tabIds, requiredExecutionHostId ?? hostId)
+  // Why: delayed views must commit text the teardown may offer back.
+  flushPurgedWorkspaceEdits(get(), [{ id: worktreeId }])
+  applyRemoveWorktreeSuccessState(
+    set,
+    worktreeId,
+    tabIds,
+    requiredExecutionHostId ?? hostId,
+    args.confirmedDiscards
+  )
   // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
   // Why after the row drops: the project purge clears the selection, which must clear with the row.
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)

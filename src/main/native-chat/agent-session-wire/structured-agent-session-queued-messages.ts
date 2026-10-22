@@ -37,6 +37,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
+import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 
 /** Waiting, not held on its own, and not positioned behind a returned card or a
  *  card the queue's pause holds: the queue never reorders. The admission rule
@@ -252,6 +253,7 @@ export type QueuedMessageDrainDeps = {
   currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
   /** The consumed submission is ordinary #22821 work from here on. */
   wakeDelivery: (sessionId: string) => void
+  submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   logger: StructuredAgentSessionLogger
 }
 
@@ -359,7 +361,8 @@ export class StructuredAgentSessionQueuedMessageDrain {
           settledByOp: null,
           hostInstance: structuredAgentSessionHostInstance(),
           yieldsToPause: true
-        }
+        },
+        this.deps.submissionReceipt?.(sessionId)
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {

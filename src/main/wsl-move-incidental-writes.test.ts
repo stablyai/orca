@@ -11,13 +11,13 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from './persistence/moving-wsl-projects/wsl-move-scope-guard'
-import type * as LinearCommandDependencies from './runtime/runtime-linear-command-dependencies'
+import type * as LinearCurrentIssueContext from './linear/issue-context/current'
 import type { ResolvedWorktree } from './runtime/runtime-worktree-path-identity'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
 vi.mock('./git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
-vi.mock('./runtime/runtime-linear-command-dependencies', async (importOriginal) => ({
-  ...(await importOriginal<typeof LinearCommandDependencies>()),
+vi.mock('./linear/issue-context/current', async (importOriginal) => ({
+  ...(await importOriginal<typeof LinearCurrentIssueContext>()),
   resolveLegacyLinearLinkWorkspace: () => ({ workspaceId: 'ws-1', organizationUrlKey: 'acme' })
 }))
 

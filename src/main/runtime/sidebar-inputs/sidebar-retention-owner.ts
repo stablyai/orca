@@ -1,5 +1,8 @@
 import { ProducerRevision } from './producer-revision'
-import { getWorktreeIdFromHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import {
+  getWorktreeIdFromHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../shared/worktree/host-qualified-identity'
 import {
   createSleepingSweepRetentionState,
   updateSleepingSweepRetention
@@ -10,10 +13,8 @@ import type {
 } from '../../../shared/sidebar-list/sidebar-temporal-snapshot'
 import type { SidebarClock } from './sidebar-clock'
 
-/** The sweep's view of one workspace, by bare id. */
+/** This host's activity by bare id, read for each listed row: its session names no host. */
 export type SidebarRetentionCandidates = {
-  /** Active ids; the last listing's rows are added to them. */
-  ids: Iterable<string>
   isActive: (worktreeId: string) => boolean
   /** False when the inactivity is definitive: a sleep this host started, or no terminal tab left. */
   isUnverifiableGap: (worktreeId: string) => boolean
@@ -22,7 +23,7 @@ export type SidebarRetentionCandidates = {
 export type SidebarRetentionInputs = {
   showSleepingWorkspaces: () => boolean
   /** The keys the workspaces domain lists this host's rows under; readers match retention on them. */
-  listRowKeys: () => Promise<readonly string[]>
+  listRowKeys: () => Promise<readonly HostScopedWorktreeKey[]>
   retentionCandidates: () => SidebarRetentionCandidates
 }
 
@@ -38,8 +39,8 @@ export class SidebarRetentionOwner {
   private disposed = false
   // A listing started before a reset or a later one must not land.
   private listingSeq = 0
-  // Both of a same-id pair on two hosts: the sweep and activity are by bare id.
-  private keysById = new Map<string, string[]>()
+  // The last listing's rows; the sweep keeps a grace window per row, not per bare id.
+  private listedKeys: readonly HostScopedWorktreeKey[] = []
   private retentionState = createSleepingSweepRetentionState()
   private retention: SidebarRetention | null = null
   // Until a listing lands no retained id can be host-qualified, so nothing is published.
@@ -109,16 +110,12 @@ export class SidebarRetentionOwner {
     )
   }
 
-  private applyListing(keys: readonly string[]): void {
+  private applyListing(keys: readonly HostScopedWorktreeKey[]): void {
     if (!this.listed) {
       this.listed = true
       this.revision.bump()
     }
-    this.keysById = new Map()
-    for (const key of keys) {
-      const id = getWorktreeIdFromHostIdentity(key)
-      this.keysById.set(id, [...(this.keysById.get(id) ?? []), key])
-    }
+    this.listedKeys = keys
     this.retentionPass()
   }
 
@@ -137,12 +134,12 @@ export class SidebarRetentionOwner {
     }
     const candidates = this.inputs.retentionCandidates()
     const now = Date.now()
+    // Every listed row is a candidate, so one that just went idle is not pruned out of its grace.
     const { retainedIds, nextExpiryInMs } = updateSleepingSweepRetention({
       state: this.retentionState,
-      // The last listing's rows too, so an id that just went idle is not pruned out of its grace.
-      candidateWorktreeIds: [...new Set([...candidates.ids, ...this.keysById.keys()])],
-      isActive: candidates.isActive,
-      isUnverifiableGap: candidates.isUnverifiableGap,
+      candidateWorktreeIds: this.listedKeys,
+      isActive: (key) => candidates.isActive(getWorktreeIdFromHostIdentity(key)),
+      isUnverifiableGap: (key) => candidates.isUnverifiableGap(getWorktreeIdFromHostIdentity(key)),
       nowMs: now
     })
     if (nextExpiryInMs === null) {
@@ -150,8 +147,7 @@ export class SidebarRetentionOwner {
     } else {
       this.clock.schedule(RETENTION_DEADLINE, now + nextExpiryInMs, () => this.retentionPass())
     }
-    // An id no listing has carried yet has no host to qualify it with, so it waits for one.
-    const ids = [...retainedIds].flatMap((id) => this.keysById.get(id) ?? []).sort()
+    const ids = [...retainedIds].sort()
     const previous = this.retention?.retainedIds
     if (!previous || previous.length !== ids.length || previous.some((id, i) => id !== ids[i])) {
       this.retention = { retainedIds: ids, retentionDecidedAt: now }

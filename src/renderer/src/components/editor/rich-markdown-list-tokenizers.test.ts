@@ -1,6 +1,5 @@
 import type { MarkdownLexerConfiguration, MarkdownTokenizer } from '@tiptap/core'
-import { OrderedList } from '@tiptap/extension-list'
-import TaskList from '@tiptap/extension-task-list'
+import { OrderedList, TaskList } from '@tiptap/extension-list'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'

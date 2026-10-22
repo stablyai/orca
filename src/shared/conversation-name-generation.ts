@@ -47,8 +47,8 @@ export function sanitizeGeneratedConversationName(raw: string): string | null {
     const unwrapped = name
       .replace(/^(\*\*|__)(.*?)\1$/u, '$2')
       .replace(/^("|'|`)(.*?)\1$/u, '$2')
-      .replace(/^“(.*)”$/u, '$1')
-      .replace(/^‘(.*)’$/u, '$1')
+      .replace(/^\u201C(.*)\u201D$/u, '$1')
+      .replace(/^\u2018(.*)\u2019$/u, '$1')
       .replace(/^title\s*:\s*/iu, '')
       .trim()
     if (unwrapped === name) {

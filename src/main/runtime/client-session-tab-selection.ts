@@ -1,6 +1,5 @@
 import {
   CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
-  type RuntimeMobileSessionClientTab,
   type RuntimeMobileSessionTabsResult
 } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
@@ -10,122 +9,14 @@ import {
 } from './client-session-tab-closed-selection'
 import type { StoredClientSessionTabSelection } from './client-session-tab-closed-selection'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
-
-export type ClientSessionTabSelection = {
-  activeTabId: string | null
-  activeGroupId: string | null
-  activeTabIdByGroupId: Readonly<Record<string, string>>
-}
-
-function emptyClientSessionTabSelection(): ClientSessionTabSelection {
-  return { activeTabId: null, activeGroupId: null, activeTabIdByGroupId: {} }
-}
-
-function topLevelTabId(tab: RuntimeMobileSessionClientTab): string {
-  if (tab.type === 'terminal') {
-    return tab.parentTabId
-  }
-  return tab.id
-}
-
-function findTabByTopLevelId(
-  snapshot: RuntimeMobileSessionTabsResult,
-  topLevelId: string | null | undefined
-): RuntimeMobileSessionClientTab | null {
-  if (!topLevelId) {
-    return null
-  }
-  return snapshot.tabs.find((tab) => topLevelTabId(tab) === topLevelId) ?? null
-}
-
-export function deriveClientSessionTabSelection(
-  snapshot: RuntimeMobileSessionTabsResult
-): ClientSessionTabSelection {
-  return {
-    activeTabId: snapshot.activeTabId,
-    activeGroupId: snapshot.activeGroupId,
-    activeTabIdByGroupId: Object.fromEntries(
-      snapshot.tabGroups?.flatMap((group) =>
-        group.activeTabId ? [[group.id, group.activeTabId] as const] : []
-      ) ?? []
-    )
-  }
-}
-
-export function activateClientSessionTabSelection(
-  snapshot: RuntimeMobileSessionTabsResult,
-  selection: ClientSessionTabSelection,
-  activeTabId: string
-): ClientSessionTabSelection {
-  const activeTab = snapshot.tabs.find((tab) => tab.id === activeTabId)
-  if (!activeTab) {
-    return selection
-  }
-  const activeTopLevelTabId = topLevelTabId(activeTab)
-  const activeGroup = snapshot.tabGroups?.find((group) =>
-    group.tabOrder.includes(activeTopLevelTabId)
-  )
-  return {
-    activeTabId,
-    activeGroupId: activeGroup?.id ?? selection.activeGroupId,
-    activeTabIdByGroupId: activeGroup
-      ? { ...selection.activeTabIdByGroupId, [activeGroup.id]: activeTopLevelTabId }
-      : selection.activeTabIdByGroupId
-  }
-}
-
-export function projectClientSessionTabSelection(
-  snapshot: RuntimeMobileSessionTabsResult,
-  selection: ClientSessionTabSelection
-): { snapshot: RuntimeMobileSessionTabsResult; selection: ClientSessionTabSelection } {
-  const selectedGroup = snapshot.tabGroups?.find((group) => group.id === selection.activeGroupId)
-  // Why: preserve the client's leaf and group choices before falling back to shared snapshot order.
-  const activeTab =
-    snapshot.tabs.find((tab) => tab.id === selection.activeTabId) ??
-    findTabByTopLevelId(
-      snapshot,
-      selectedGroup ? selection.activeTabIdByGroupId[selectedGroup.id] : null
-    ) ??
-    findTabByTopLevelId(snapshot, selectedGroup?.tabOrder[0]) ??
-    snapshot.tabs[0] ??
-    null
-  const activeTopLevelTabId = activeTab ? topLevelTabId(activeTab) : null
-  const activeTabIdByGroupId: Record<string, string> = {}
-  const tabGroups = snapshot.tabGroups?.map((group) => {
-    const selected = selection.activeTabIdByGroupId[group.id]
-    const activeTabId =
-      (selected && group.tabOrder.includes(selected) ? selected : null) ?? group.tabOrder[0] ?? null
-    if (activeTabId) {
-      activeTabIdByGroupId[group.id] = activeTabId
-    }
-    return { ...group, activeTabId }
-  })
-  const activeGroupId =
-    tabGroups?.find((group) =>
-      activeTopLevelTabId ? group.tabOrder.includes(activeTopLevelTabId) : false
-    )?.id ??
-    (selection.activeGroupId && tabGroups?.some((group) => group.id === selection.activeGroupId)
-      ? selection.activeGroupId
-      : null) ??
-    tabGroups?.[0]?.id ??
-    null
-  const nextSelection: ClientSessionTabSelection = {
-    activeTabId: activeTab?.id ?? null,
-    activeGroupId,
-    activeTabIdByGroupId
-  }
-  return {
-    selection: nextSelection,
-    snapshot: {
-      ...snapshot,
-      activeGroupId,
-      activeTabId: activeTab?.id ?? null,
-      activeTabType: activeTab?.type ?? null,
-      ...(tabGroups ? { tabGroups } : {}),
-      tabs: snapshot.tabs.map((tab) => ({ ...tab, isActive: tab.id === activeTab?.id }))
-    }
-  }
-}
+import {
+  deriveClientSessionTabSelection,
+  emptyClientSessionTabSelection,
+  projectClientSessionTabSelection,
+  activateClientSessionTabSelection,
+  topLevelTabId,
+  type ClientSessionTabSelection
+} from './client-session-tab-selection-projection'
 
 export class ClientSessionTabSelectionStore {
   private statesByClient = new Map<string, Map<string, StoredClientSessionTabSelection>>()
@@ -218,7 +109,11 @@ export class ClientSessionTabSelectionStore {
     const selection = state.shouldPersist
       ? state.selection
       : deriveClientSessionTabSelection(closed.snapshot)
-    const projected = projectClientSessionTabSelection(closed.snapshot, selection)
+    const projected = projectClientSessionTabSelection(
+      closed.snapshot,
+      selection,
+      state.topologyBeforeClose
+    )
     // Why: a browser guest process swap drops its tab for one snapshot; the topology fallback
     // must not overwrite (and persist) the device's explicit pick, or focus never returns.
     const selectionSurvived =
@@ -227,7 +122,11 @@ export class ClientSessionTabSelectionStore {
       selection: selectionSurvived ? projected.selection : selection,
       revision: state.revision,
       shouldPersist: state.shouldPersist,
-      closedTabIds: closed.retainedClosedTabIds
+      closedTabIds: closed.retainedClosedTabIds,
+      // Why: frozen while the pick is gone, so a close's fallback holds across snapshots.
+      topologyBeforeClose: selectionSurvived
+        ? { tabGroups: closed.snapshot.tabGroups, tabGroupLayout: closed.snapshot.tabGroupLayout }
+        : state.topologyBeforeClose
     })
     return {
       ...projected.snapshot,
@@ -256,6 +155,7 @@ export class ClientSessionTabSelectionStore {
       closedTabIds.delete(topLevelTabId(activeTab))
     }
     statesByWorktree.set(snapshot.worktree, {
+      ...state,
       selection: nextSelection,
       revision: state.revision + 1,
       shouldPersist: true,

@@ -27,8 +27,6 @@ export type PtySpawnIpcArgs = {
   cols: number
   rows: number
   cwd?: string
-  // Why: fresh local spawns opt into recovering a saved cwd whose dir was deleted (#7239); reattach/remote need exact cwd, so the flag alone isn't sufficient.
-  cwdFallback?: 'worktree'
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
@@ -41,6 +39,8 @@ export type PtySpawnIpcArgs = {
   connectionId?: string | null
   worktreeId?: string
   sessionId?: string
+  // Layout-owner build: a view of a pane main starts; it attaches to `sessionId` or starts nothing.
+  attachOnlyView?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalKittyKeyboardProtocol?: boolean
@@ -88,6 +88,7 @@ export type AdoptStablePaneArgs = {
   spawnFresh?: (operation: PaneSpawnOperation) => Promise<PtySpawnResult>
   /** See StablePaneSpawnContext; adoption holds the pane's reservation through its fresh launch. */
   keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
+  attachOnlyView?: true
 }
 
 export type AdoptStablePaneResult = {
@@ -117,7 +118,6 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ) => string | undefined
-  localStartupCwdDirectoryExists: (path: string) => boolean
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>
   sendPtySpawnedToRenderer: (id: string) => void

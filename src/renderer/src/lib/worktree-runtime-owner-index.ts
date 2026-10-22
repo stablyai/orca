@@ -22,7 +22,7 @@ type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'execu
 // immutable-slice indexes prevent unrelated store writes from rescanning.
 const worktreeOwnerIndexCache = new WeakMap<
   Record<string, readonly WorktreeOwnerRecord[]>,
-  ReadonlyMap<string, IndexedWorktreeOwnerResolution>
+  ReadonlyMap<string, IndexedWorktreeOwnerEntry>
 >()
 const repoOwnerIndexCache = new WeakMap<
   readonly RepoOwnerRecord[],
@@ -91,19 +91,17 @@ export function findIndexedWorktreeOwner(
   return resolution.kind === 'resolved' ? resolution.owner : null
 }
 
-export function findIndexedWorktreeOwnerForHost(
-  worktreesByRepo: Record<string, readonly WorktreeOwnerRecord[]> | undefined,
+/** Returns the caller's own row type: the index records where the owner is listed. */
+export function findIndexedWorktreeOwnerForHost<T extends WorktreeOwnerRecord>(
+  worktreesByRepo: Record<string, readonly T[]> | undefined,
   worktreeId: string,
   executionHostId: ExecutionHostId
-): WorktreeOwnerRecord | null {
-  if (!worktreesByRepo) {
-    return null
-  }
+): T | null {
+  const hostKey = `${worktreeId}\0${executionHostId}`
   resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
-  const resolution = worktreeOwnerIndexCache
-    .get(worktreesByRepo)
-    ?.get(`${worktreeId}\0${executionHostId}`)
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  const entry = worktreesByRepo && worktreeOwnerIndexCache.get(worktreesByRepo)?.get(hostKey)
+  const row = entry?.kind === 'resolved' ? worktreesByRepo?.[entry.bucket]?.[entry.position] : null
+  return row ?? null
 }
 
 export type IndexedRepoOwnerResolution =
@@ -152,6 +150,11 @@ export type IndexedWorktreeOwnerResolution =
   | { kind: 'missing' }
   | { kind: 'ambiguous' }
 
+// Where the owner is listed, so a typed caller reads its own row back without a cast.
+type IndexedWorktreeOwnerEntry =
+  | { kind: 'resolved'; owner: WorktreeOwnerRecord; bucket: string; position: number }
+  | { kind: 'ambiguous' }
+
 function worktreeOwnerIdentity(owner: WorktreeOwnerRecord): string {
   return JSON.stringify([
     owner.repoId,
@@ -161,13 +164,14 @@ function worktreeOwnerIdentity(owner: WorktreeOwnerRecord): string {
 }
 
 function addWorktreeOwnerIndexEntry(
-  index: Map<string, IndexedWorktreeOwnerResolution>,
+  index: Map<string, IndexedWorktreeOwnerEntry>,
   key: string,
-  owner: WorktreeOwnerRecord
+  owner: WorktreeOwnerRecord,
+  at: { bucket: string; position: number }
 ): void {
   const current = index.get(key)
   if (!current) {
-    index.set(key, { kind: 'resolved', owner })
+    index.set(key, { kind: 'resolved', owner, ...at })
   } else if (
     current.kind === 'resolved' &&
     worktreeOwnerIdentity(current.owner) !== worktreeOwnerIdentity(owner)
@@ -198,15 +202,15 @@ export function resolveIndexedWorktreeOwner(
   }
   let index = worktreeOwnerIndexCache.get(worktreesByRepo)
   if (!index) {
-    const next = new Map<string, IndexedWorktreeOwnerResolution>()
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      for (const worktree of worktrees) {
+    const next = new Map<string, IndexedWorktreeOwnerEntry>()
+    for (const [bucket, worktrees] of Object.entries(worktreesByRepo)) {
+      worktrees.forEach((worktree, position) => {
         const id = worktree.id
-        addWorktreeOwnerIndexEntry(next, id, worktree)
+        addWorktreeOwnerIndexEntry(next, id, worktree, { bucket, position })
         for (const hostId of worktreeOwnerHostIds(worktree)) {
-          addWorktreeOwnerIndexEntry(next, `${id}\0${hostId}`, worktree)
+          addWorktreeOwnerIndexEntry(next, `${id}\0${hostId}`, worktree, { bucket, position })
         }
-      }
+      })
     }
     index = next
     worktreeOwnerIndexCache.set(worktreesByRepo, index)

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyOutcome } from '../../shared/workspace-layout/workspace-layout-command-types'
 
 const mocks = vi.hoisted(() => ({
@@ -17,10 +18,13 @@ vi.mock('../persistence/moving-wsl-projects/wsl-move-scope-guard', () => ({
 const CLOSE = { type: 'closePane', workspace: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1' } as const
 
 function storeWith() {
-  const applyLayoutCommand = vi.fn(async (): Promise<LayoutApplyOutcome> => ({
-    ok: true,
-    result: {}
-  }))
+  // A close takes every tab it names, as main's store does for an unpinned tab.
+  const applyLayoutCommand = vi.fn(
+    async (command: WindowLayoutCommand): Promise<LayoutApplyOutcome> => ({
+      ok: true,
+      result: command.type === 'closeTabs' ? { closed: [...command.tabIds], refused: [] } : {}
+    })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the apply path reads only applyLayoutCommand.
   const store = { applyLayoutCommand } as unknown as RuntimeStore
   return { store, applyLayoutCommand }
@@ -147,6 +151,25 @@ describe('applyWindowLayoutCommand', () => {
       kind: 'tab',
       tabId: 'term-1'
     })
+  })
+
+  it('leaves the launches of a tab the close refused alone', async () => {
+    const { store, applyLayoutCommand } = storeWith()
+    applyLayoutCommand.mockResolvedValueOnce({
+      ok: true,
+      result: { closed: [], refused: [{ tabId: 'tab-1', code: 'tab_pinned' }] }
+    })
+    const close: WindowLayoutCommand = {
+      type: 'closeTabs',
+      workspace: 'wt-1',
+      tabIds: ['tab-1'],
+      refusePinned: true,
+      recordClose: 'user'
+    }
+
+    await applyWindowLayoutCommand(store, () => ['local'], close)
+
+    expect(mocks.markAgentLaunchesClosedByUser).not.toHaveBeenCalled()
   })
 
   it('leaves a cleanup close’s launches alone, and a workspace main lacks to today’s close', async () => {
@@ -325,5 +348,48 @@ describe('applyWindowLayoutCommand', () => {
       result: {}
     })
     expect(applyLayoutCommand).toHaveBeenCalledTimes(1)
+  })
+
+  it("writes one disk move's renames across workspaces, a command per partition, or refuses", async () => {
+    const renames = [{ fileId: '/a.ts', newFileId: '/b.ts' }]
+    const rename: WindowLayoutCommand = {
+      type: 'renameEditorFiles',
+      workspace: 'wt-1',
+      renames,
+      alsoIn: [{ workspace: 'wt-2', renames }]
+    }
+    const { store, applyLayoutCommand } = storeWith()
+    const applyEditorFileRenamesAcrossPartitions = vi.fn(async (): Promise<LayoutApplyOutcome> => ({
+      ok: true,
+      result: {}
+    }))
+    Object.assign(store, { applyEditorFileRenamesAcrossPartitions })
+
+    await applyWindowLayoutCommand(store, () => ['local'], rename)
+    expect(applyLayoutCommand).toHaveBeenCalledWith(rename, ['local'])
+
+    applyLayoutCommand.mockClear()
+    const hosts =
+      (other: ExecutionHostId) =>
+      (workspace: string): ExecutionHostId[] => [workspace === 'wt-2' ? other : 'local']
+    // Each partition's renames in its own command, all in one durable write.
+    expect(await applyWindowLayoutCommand(store, hosts('ssh:target-1'), rename)).toEqual({
+      ok: true,
+      result: {}
+    })
+    expect(applyEditorFileRenamesAcrossPartitions).toHaveBeenCalledWith([
+      { hostId: 'local', command: { type: 'renameEditorFiles', workspace: 'wt-1', renames } },
+      { hostId: 'ssh:target-1', command: { type: 'renameEditorFiles', workspace: 'wt-2', renames } }
+    ])
+    expect(await applyWindowLayoutCommand(store, hosts('runtime:env-1'), rename)).toEqual({
+      ok: false,
+      code: 'host_not_owned'
+    })
+    mocks.frozen.add('wt-2')
+    expect(await applyWindowLayoutCommand(store, () => ['local'], rename)).toEqual({
+      ok: false,
+      code: 'wsl_move_in_progress'
+    })
+    expect(applyLayoutCommand).not.toHaveBeenCalled()
   })
 })
