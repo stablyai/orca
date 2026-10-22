@@ -102,6 +102,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - name: Initialize the exact staging backend
         run: node dev/scripts/infra.mjs init --env staging

@@ -94,6 +94,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
@@ -134,6 +135,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm test

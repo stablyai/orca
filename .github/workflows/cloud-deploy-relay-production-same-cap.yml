@@ -99,7 +99,7 @@ jobs:
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
-        with: { node-version: 24 }
+        with: { node-version: 24, check-latest: true }
 
       - id: wave
         env:
@@ -361,7 +361,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
-        with: { node-version: 24 }
+        with: { node-version: 24, check-latest: true }
 
       # Its pace checks are what let a batch drain faster than the default; a missing artifact
       # seals UNVERIFIED, which only the default accepts. Named from the gate's normalized cell,

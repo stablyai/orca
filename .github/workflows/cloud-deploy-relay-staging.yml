@@ -167,6 +167,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - name: Require the mirrored immutable image
         run: |

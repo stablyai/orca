@@ -1,4 +1,4 @@
-FROM node:24-alpine AS build
+FROM node:24.22.1-alpine AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -11,7 +11,7 @@ COPY apps/push apps/push
 COPY packages/postgres-schema packages/postgres-schema
 RUN pnpm --filter @orca-cloud/postgres-schema build && pnpm --filter @orca-cloud/push-contract build && pnpm --filter @orca-cloud/push build
 
-FROM node:24-alpine AS runtime
+FROM node:24.22.1-alpine AS runtime
 ENV NODE_ENV=production
 ENV PORT=8080
 WORKDIR /app

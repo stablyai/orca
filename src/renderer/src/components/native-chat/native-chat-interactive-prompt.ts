@@ -18,6 +18,7 @@ import {
   type AskQuestion,
   type InteractiveQuestionParser
 } from '../../../../shared/native-chat-ask'
+import { parseOmpPlanReviewPrompt } from '../../../../shared/omp-plan-review-prompt'
 
 export {
   buildAskAnswerKeys,
@@ -69,6 +70,18 @@ export function parseApprovalFromStatus(
   interactivePrompt: string | undefined | null,
   agent?: string
 ): ChatApproval | null {
+  const planReview = parseOmpPlanReviewPrompt(interactivePrompt)
+  if (planReview) {
+    return {
+      title: translate('components.native-chat.approval.plan.reviewTitle', 'Review proposed plan'),
+      description: translate(
+        'components.native-chat.approval.plan.refineHint',
+        'Refine plan closes the review so you can send what to change.'
+      ),
+      subject: { kind: 'plan', text: planReview.plan },
+      options: planReview.options
+    }
+  }
   const envelope = parseNativeChatApprovalEnvelope(interactivePrompt, agent)
   if (!envelope) {
     return null

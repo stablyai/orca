@@ -76,6 +76,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - name: Require explicit manual mutation confirmation
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'status' }}

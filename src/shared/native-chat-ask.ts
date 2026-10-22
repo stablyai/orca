@@ -14,9 +14,29 @@ export type { AskOption, AskPrompt, AskQuestion, InteractiveQuestionParser }
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
 
+// Why: live status and transcript copies of one question shorten presentation text to different
+// budgets, so identity reads only a prefix every copy keeps.
+const ASK_DISMISS_KEY_TEXT_PREFIX = 200
+
+function askDismissKeyText(text: string | undefined): string | undefined {
+  return text?.slice(0, ASK_DISMISS_KEY_TEXT_PREFIX)
+}
+
 /** Stable cross-platform identity for one canonical question prompt. */
 export function nativeChatAskDismissKey(prompt: AskPrompt | null): string | null {
-  return prompt ? `question:${JSON.stringify(prompt.questions)}` : null
+  if (!prompt) {
+    return null
+  }
+  const questions = prompt.questions.map((question) => ({
+    ...question,
+    question: askDismissKeyText(question.question),
+    header: askDismissKeyText(question.header),
+    options: question.options.map((option) => ({
+      ...option,
+      description: askDismissKeyText(option.description)
+    }))
+  }))
+  return `question:${JSON.stringify(questions)}`
 }
 
 export function registerQuestionTool(toolName: string, parser: InteractiveQuestionParser): void {

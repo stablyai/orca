@@ -123,6 +123,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - uses: pnpm/setup@v2
         with:
@@ -346,6 +347,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - name: Recover staging C4 with a fresh identity
         env:
@@ -433,6 +435,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
 
       - uses: pnpm/setup@v2
         with:

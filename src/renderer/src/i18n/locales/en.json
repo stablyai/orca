@@ -19293,7 +19293,9 @@
         "needsAccess": "Needs access to",
         "needsNewerOrca": "This request needs a newer version of Orca.",
         "plan": {
-          "file": "Plan file"
+          "file": "Plan file",
+          "reviewTitle": "Review proposed plan",
+          "refineHint": "Refine plan closes the review so you can send what to change."
         }
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",

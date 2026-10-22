@@ -755,6 +755,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
 
       # Rebuild both pristine and patched bundles; reuse only the pinned toolchain.
@@ -1529,6 +1530,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
 
       - name: Setup pnpm

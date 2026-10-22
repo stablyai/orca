@@ -128,6 +128,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Configure git author
         run: |
@@ -902,6 +903,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: Linux terminal golden E2E uses the same native install path as
@@ -1128,6 +1130,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
 
       # Why: keep the non-blocking evidence lane on the same Linux native
@@ -1351,6 +1354,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -2377,6 +2381,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Run isolated macOS release build
         id: dispatch
@@ -2413,6 +2418,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Require the exact isolated macOS release build to succeed
         run: node config/scripts/run-release-mac-build-workflow.mjs wait
@@ -2457,6 +2463,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Verify release is still draft
         env:

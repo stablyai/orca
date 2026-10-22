@@ -147,10 +147,7 @@ export function ClientHostedBrowserPagePane({
   // Why: the tour points at controls that cannot work yet, and recording the interaction is a
   // one-way write that would burn the tour on a pane the user has not really seen.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
-  useBrowserPageFindShortcuts({
-    ...shortcutOwner,
-    setFindOpen
-  })
+  useBrowserPageFindShortcuts({ ...shortcutOwner, setFindOpen })
   useBrowserPageWebviewShortcuts({
     ...shortcutOwner,
     isActiveRef,
@@ -242,9 +239,7 @@ export function ClientHostedBrowserPagePane({
       const activeLoadFailure = activeLoadFailureRef.current
       // URL writes clear certificate challenges, so preserve them while a failure stands.
       if (!activeLoadFailure) {
-        setUrlFromGuest(browserTab.id, metadata.url, {
-          preserveLoadError: true
-        })
+        setUrlFromGuest(browserTab.id, metadata.url, { preserveLoadError: true })
       }
       updatePageStateFromGuest(browserTab.id, {
         title: metadata.title,

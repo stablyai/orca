@@ -49,7 +49,7 @@ jobs:
           node -e 'require("node:fs").writeFileSync(".build/windows-native-benchmark/job-start.json", JSON.stringify({startedAt:new Date().toISOString()}))'
       - uses: ./.github/actions/install-node-dependencies
         with:
-          node-version: '24.21.0'
+          node-version: '24.22.1'
           native-runtime: none
           cache-pnpm-store: 'false'
           cache-pnpm-verification: 'false'
