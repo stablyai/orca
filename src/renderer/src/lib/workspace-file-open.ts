@@ -1,3 +1,4 @@
+import { openMarkdownPreviewToSide } from './markdown-preview-open'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type {
@@ -44,6 +45,7 @@ export type WorkspaceFileOpenRequest =
       kind: 'link'
       file: Omit<OpenFile, 'id' | 'isDirty' | 'language' | 'mode'>
       intent?: 'default' | 'source'
+      markdownPreviewToSide?: boolean
       linkIntent: EditorOpenLinkIntent | null
       position: { line: number | null; column: number | null }
       isCurrentRequest: () => boolean
@@ -199,6 +201,24 @@ export function openWorkspaceFile(request: WorkspaceFileOpenRequest): WorkspaceF
         providesInitialSurface: true,
         executionHostId: request.executionHostId
       })
+    }
+    if (request.markdownPreviewToSide) {
+      const intent = request.linkIntent
+      const source =
+        intent?.workspaceId === worktreeId
+          ? useAppStore
+              .getState()
+              .unifiedTabsByWorktree[worktreeId]?.find(
+                (tab) =>
+                  tab.id === intent.sourceTabId && (tab.executionHostId ?? null) === intent.hostId
+              )
+          : undefined
+      return openMarkdownPreviewToSide(
+        { ...request.file, language: 'markdown' },
+        { sourceGroupId: source?.groupId }
+      )
+        ? { surface: 'preview' }
+        : { surface: 'refused' }
     }
     const opened = openLinkedFileInEditor(
       request.file,

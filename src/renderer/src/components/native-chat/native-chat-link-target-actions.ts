@@ -1,3 +1,6 @@
+import { detectLanguage } from '@/lib/language-detect'
+import { translate } from '@/i18n/i18n'
+import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
 import {
   buildHttpLinkActions,
   httpLinkActionDestinationsFor,
@@ -65,13 +68,33 @@ export function nativeChatFileLinkActions(
   target: NativeChatResolvedFileLink,
   context: NativeChatFileLinkContext
 ): FileLinkActions {
-  return buildFileLinkActions(
+  const actions = buildFileLinkActions(
     target.absolutePath,
     target.line,
     target.column,
     nativeChatFileOpenDeps(target, context),
     resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), context.worktreeId)
   )
+  if (detectLanguage(target.absolutePath) !== 'markdown' || actions.kind !== 'file') {
+    return actions
+  }
+  return {
+    ...actions,
+    secondaryActions: [
+      {
+        label: translate(
+          'auto.components.editor.EditorPanelHeader.fb8331694e',
+          'Open Preview to the Side'
+        ),
+        run: () =>
+          openDetectedFilePath(target.absolutePath, null, null, {
+            ...nativeChatFileOpenDeps(target, context),
+            markdownPreviewToSide: true
+          })
+      },
+      ...(actions.secondaryActions ?? [])
+    ]
+  }
 }
 
 /** The rows a right-clicked chat link offers: its click popover's, or null when it opens nothing. */
