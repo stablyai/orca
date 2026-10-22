@@ -136,9 +136,10 @@ describe('BrowserLoadFailureOverlay', () => {
     expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
   })
 
-  it('reloads an offline failure when the network comes back, even while it was off screen', () => {
+  it('waits while offline, then keeps re-attempting once the network is back', async () => {
+    vi.useFakeTimers()
     const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
-    const view = (active: boolean) => (
+    render(
       <BrowserLoadFailureOverlay
         loadError={{
           code: -106,
@@ -147,47 +148,23 @@ describe('BrowserLoadFailureOverlay', () => {
         }}
         currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
-        autoRetry={{ active, loading: false }}
+        autoRetry={{ active: true, loading: false }}
         {...callbacks}
       />
     )
-    const { rerender } = render(view(true))
     expect(screen.getByText("You're offline")).toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
     expect(callbacks.onRetry).not.toHaveBeenCalled()
-    act(() => {
-      window.dispatchEvent(new Event('online'))
-    })
-    expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
 
-    rerender(view(false))
+    // `online` can fire before DNS works, so one failed attempt doesn't end the wait.
     onLine.mockReturnValue(true)
-    rerender(view(true))
-    expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
-    onLine.mockRestore()
-  })
-
-  it('replays an online event that arrived while a load was still running', () => {
-    const view = (loading: boolean) => (
-      <BrowserLoadFailureOverlay
-        loadError={{
-          code: -106,
-          description: 'ERR_INTERNET_DISCONNECTED',
-          validatedUrl: 'https://example.com/'
-        }}
-        currentUrl="https://example.com/"
-        httpsRecoveryUrl={null}
-        autoRetry={{ active: true, loading }}
-        {...callbacks}
-      />
-    )
-    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
-    const { rerender } = render(view(true))
     act(() => {
       window.dispatchEvent(new Event('online'))
     })
-    expect(callbacks.onRetry).not.toHaveBeenCalled()
-    rerender(view(false))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(2)
     onLine.mockRestore()
   })
 

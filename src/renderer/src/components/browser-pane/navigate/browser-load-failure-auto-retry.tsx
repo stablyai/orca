@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useState, useSyncExternalStore } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type {
@@ -58,6 +58,15 @@ function pollWithBackoff(attempt: () => Promise<void> | null, onExhausted: () =>
   }
 }
 
+function subscribeToNetworkChanges(onChange: () => void): () => void {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+  return () => {
+    window.removeEventListener('online', onChange)
+    window.removeEventListener('offline', onChange)
+  }
+}
+
 function useBrowserLoadFailureAutoRetry({
   failureKey,
   recovery,
@@ -74,43 +83,24 @@ function useBrowserLoadFailureAutoRetry({
   const enabled = Boolean(autoRetry?.active) && recovery !== null && stoppedKey !== failureKey
   const whileWindowHidden = autoRetry?.whileWindowHidden ?? false
   const loading = autoRetry?.loading ?? false
-  // An online event that landed while a load was in flight; replayed once that load settles.
-  const missedOnlineRef = useRef(false)
+  const online = useSyncExternalStore(subscribeToNetworkChanges, () => navigator.onLine)
+  // Why: an offline failure polls once the network is back, since `online` can fire before DNS works.
+  const polling = enabled && (recovery !== 'online' || online)
   const giveUp = useEffectEvent(() => setStoppedKey(failureKey))
-  const attempt = useEffectEvent((requireVisible: boolean): Promise<void> | null => {
-    if (loading || (requireVisible && !whileWindowHidden && !isWindowVisible())) {
+  const attempt = useEffectEvent((): Promise<void> | null => {
+    if (loading || (!whileWindowHidden && !isWindowVisible())) {
       return null
     }
     return Promise.resolve(retry()).catch(() => {})
   })
 
   useEffect(() => {
-    if (!enabled) {
+    if (!polling) {
       return
     }
-    if (recovery === 'online') {
-      let pending: Promise<void> | null = null
-      const onOnline = (): void => {
-        pending ??= attempt(false)?.finally(() => (pending = null)) ?? null
-        missedOnlineRef.current = pending === null
-      }
-      // Why: the network may have come back while this page was off screen and not listening.
-      if (navigator.onLine) {
-        onOnline()
-      }
-      window.addEventListener('online', onOnline)
-      return () => window.removeEventListener('online', onOnline)
-    }
     // Why per run: coming back to a hidden tab starts again from the short delays.
-    return pollWithBackoff(() => attempt(true), giveUp)
-  }, [enabled, failureKey, recovery])
-
-  useEffect(() => {
-    if (enabled && recovery === 'online' && !loading && missedOnlineRef.current) {
-      missedOnlineRef.current = false
-      void attempt(false)
-    }
-  }, [enabled, loading, recovery])
+    return pollWithBackoff(attempt, giveUp)
+  }, [polling, failureKey])
 
   return {
     waiting: enabled,
