@@ -124,7 +124,8 @@ export function formatLoadFailureTitle(
 export function formatLoadFailureDescription(
   loadError: BrowserLoadError,
   meta: LoadFailureMeta,
-  failure: BrowserLoadFailureDescription
+  failure: BrowserLoadFailureDescription,
+  sshRouted = false
 ): string {
   if (loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
     return loadError.description
@@ -156,6 +157,15 @@ export function formatLoadFailureDescription(
       'browser.loadFailure.certificateVerificationFailed',
       "Orca couldn't verify the certificate for {{value0}}.",
       { value0: host }
+    )
+  }
+  if (sshRouted && failure.kind === 'not-running') {
+    return translate('browser.loadFailure.notRunningSshDescription', COPY.notRunningSshDescription)
+  }
+  if (sshRouted && failure.kind === 'other') {
+    return translate(
+      'browser.loadFailure.sshRoutedHint',
+      "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site."
     )
   }
   return formatLoadFailureNetworkText(loadError, failure).description
@@ -194,6 +204,10 @@ const LOAD_FAILURE_PIECES: Record<BrowserLoadFailureCopyId, (values: { host: str
     otherDescription: () =>
       translate('browser.loadFailure.otherDescription', COPY.otherDescription),
     waiting: () => translate('browser.loadFailure.waiting', COPY.waiting),
+    waitingForServer: () =>
+      translate('browser.loadFailure.waitingForServer', COPY.waitingForServer),
+    notRunningSshDescription: () =>
+      translate('browser.loadFailure.notRunningSshDescription', COPY.notRunningSshDescription),
     waitingForHost: () => translate('browser.loadFailure.waitingForHost', COPY.waitingForHost),
     waitingForNetwork: () =>
       translate('browser.loadFailure.waitingForNetwork', COPY.waitingForNetwork),

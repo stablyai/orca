@@ -19,7 +19,6 @@ import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
-import { toDisplayUrl } from '../describe-page/browser-page-url-display'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
@@ -164,7 +163,6 @@ export function RemoteBrowserPageViewport({
         <BrowserLoadFailureOverlay
           loadError={loadError}
           externalUrl={remoteFailureExternalUrl}
-          currentUrl={toDisplayUrl(remoteFailureUrl)}
           httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
           // Why: reloading the server's error page only refreshes it; re-attempt the URL that failed.
           onRetry={() => onGoto(remoteFailureUrl)}
@@ -173,7 +171,6 @@ export function RemoteBrowserPageViewport({
             loading: browserTab.loading
           }}
           onTryHttps={(url) => void onGoto(url)}
-          onCopy={(url) => void window.api.ui.writeClipboardText(url)}
           onOpenExternal={(url) => void window.api.shell.openUrl(url)}
           certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
           expectedBrowserPageId={

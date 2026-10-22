@@ -2991,11 +2991,12 @@
       "cantLoadPage": "Can't load this page",
       "dnsDescription": "Check the address for typos.",
       "dnsTitle": "Couldn't find {{host}}",
-      "notRunningDescription": "Start the dev server for this address to see the page.",
+      "notRunningDescription": "Start the dev server for this address.",
+      "notRunningSshDescription": "Start the dev server on the workspace's SSH host.",
       "notRunningTitle": "Nothing is running on {{host}} yet",
       "offlineDescription": "Check your network connection.",
       "offlineTitle": "You're offline",
-      "otherDescription": "We couldn't connect to this page.",
+      "otherDescription": "The connection failed before the page could load.",
       "refusedDescription": "The site may be down, or the address may be wrong.",
       "refusedTitle": "{{host}} refused to connect",
       "resetDescription": "The server closed the connection before the page loaded.",
@@ -3005,9 +3006,10 @@
       "stopWaiting": "Stop",
       "timeoutDescription": "The server may be busy or unreachable.",
       "timeoutTitle": "{{host}} took too long to respond",
-      "waiting": "Waiting for the server… reloads automatically",
-      "waitingForHost": "Waiting for the SSH host… reloads automatically",
-      "waitingForNetwork": "Reloads when you're back online"
+      "waiting": "Reloads when the server responds",
+      "waitingForHost": "Reloads when the SSH host reconnects",
+      "waitingForNetwork": "Reloads when you're back online",
+      "waitingForServer": "Reloads when the server starts"
     },
     "sshEgress": {
       "localChip": "This device"

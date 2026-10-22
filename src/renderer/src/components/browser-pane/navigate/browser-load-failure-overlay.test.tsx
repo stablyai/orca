@@ -9,7 +9,6 @@ import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-gu
 const callbacks = {
   onRetry: vi.fn(),
   onTryHttps: vi.fn(),
-  onCopy: vi.fn(),
   onOpenExternal: vi.fn(),
   onProceedCertificate: vi.fn()
 }
@@ -42,7 +41,6 @@ describe('BrowserLoadFailureOverlay', () => {
     const view = (loading: boolean) => (
       <BrowserLoadFailureOverlay
         loadError={refused()}
-        currentUrl="http://localhost:3000/"
         httpsRecoveryUrl={null}
         autoRetry={{ active: true, loading }}
         {...callbacks}
@@ -51,7 +49,7 @@ describe('BrowserLoadFailureOverlay', () => {
     const { rerender } = render(view(false))
     expect(screen.getByText('Nothing is running on localhost:3000 yet')).toBeInTheDocument()
     expect(screen.getByText('ERR_CONNECTION_REFUSED')).toBeInTheDocument()
-    expect(screen.getByText(/Waiting for the server/)).toBeInTheDocument()
+    expect(screen.getByText(/Reloads when the server starts/)).toBeInTheDocument()
 
     await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
@@ -69,7 +67,7 @@ describe('BrowserLoadFailureOverlay', () => {
     expect(callbacks.onRetry).toHaveBeenCalledTimes(3)
 
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-    expect(screen.queryByText(/Waiting for the server/)).toBeNull()
+    expect(screen.queryByText(/Reloads when the server starts/)).toBeNull()
     await act(() => vi.advanceTimersByTimeAsync(60_000))
     expect(callbacks.onRetry).toHaveBeenCalledTimes(3)
   })
@@ -83,7 +81,6 @@ describe('BrowserLoadFailureOverlay', () => {
           description: 'ERR_CONNECTION_REFUSED',
           validatedUrl: 'http://localhost:3000/'
         }}
-        currentUrl="http://localhost:3000/"
         httpsRecoveryUrl={null}
         autoRetry={{ active: false, loading: false }}
         {...callbacks}
@@ -96,7 +93,6 @@ describe('BrowserLoadFailureOverlay', () => {
           description: 'ERR_NAME_NOT_RESOLVED',
           validatedUrl: 'https://example.com/'
         }}
-        currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
         autoRetry={{ active: true, loading: false }}
         {...callbacks}
@@ -121,7 +117,6 @@ describe('BrowserLoadFailureOverlay', () => {
           description: 'ERR_SOCKS_CONNECTION_FAILED',
           validatedUrl: 'http://localhost:3000/'
         }}
-        currentUrl="http://localhost:3000/"
         httpsRecoveryUrl={null}
         route={{ routed: true, routeConnected: true }}
         autoRetry={{ active: true, loading: false }}
@@ -146,7 +141,6 @@ describe('BrowserLoadFailureOverlay', () => {
           description: 'ERR_INTERNET_DISCONNECTED',
           validatedUrl: 'https://example.com/'
         }}
-        currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
         autoRetry={{ active: true, loading: false }}
         {...callbacks}
@@ -179,7 +173,6 @@ describe('BrowserLoadFailureOverlay', () => {
     const { rerender } = render(
       <BrowserLoadFailureOverlay
         loadError={loadError}
-        currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
         sshRoutedHint
         onRecheckSshRoute={onRecheckSshRoute}
@@ -193,7 +186,6 @@ describe('BrowserLoadFailureOverlay', () => {
     rerender(
       <BrowserLoadFailureOverlay
         loadError={loadError}
-        currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
         sshRoutedHint
         onRecheckSshRoute={null}
@@ -212,7 +204,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3443/app'
         }}
         externalUrl="https://localhost:3443/app"
-        currentUrl="https://localhost:3443/app"
         httpsRecoveryUrl={null}
         {...callbacks}
       />
@@ -237,7 +228,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3443/'
         }}
         externalUrl={null}
-        currentUrl="https://localhost:3443/"
         httpsRecoveryUrl={null}
         {...callbacks}
       />
@@ -246,11 +236,28 @@ describe('BrowserLoadFailureOverlay', () => {
     expect(screen.getByText("The certificate doesn't match localhost:3443.")).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Proceed Anyway (Unsafe)' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Copy Address' })).toBeEnabled()
   })
 
   it('offers HTTPS recovery only for an eligible failed HTTP address', () => {
     const { rerender } = render(
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: -324,
+          description: 'ERR_EMPTY_RESPONSE',
+          validatedUrl: 'http://localhost:3000/app'
+        }}
+        externalUrl="http://localhost:3000/app"
+        httpsRecoveryUrl="https://localhost:3000/app"
+        {...callbacks}
+      />
+    )
+
+    // A TLS port spoken to in plain HTTP answers with nothing; HTTPS is worth a try there.
+    fireEvent.click(screen.getByRole('button', { name: 'Try HTTPS' }))
+    expect(callbacks.onTryHttps).toHaveBeenCalledWith('https://localhost:3000/app')
+
+    // Nothing listening fails the same way over HTTPS.
+    rerender(
       <BrowserLoadFailureOverlay
         loadError={{
           code: -102,
@@ -258,14 +265,11 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'http://localhost:3000/app'
         }}
         externalUrl="http://localhost:3000/app"
-        currentUrl="http://localhost:3000/app"
         httpsRecoveryUrl="https://localhost:3000/app"
         {...callbacks}
       />
     )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Try HTTPS' }))
-    expect(callbacks.onTryHttps).toHaveBeenCalledWith('https://localhost:3000/app')
+    expect(screen.queryByRole('button', { name: 'Try HTTPS' })).toBeNull()
 
     rerender(
       <BrowserLoadFailureOverlay
@@ -275,7 +279,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3000/app'
         }}
         externalUrl="https://localhost:3000/app"
-        currentUrl="https://localhost:3000/app"
         httpsRecoveryUrl={null}
         {...callbacks}
       />
@@ -292,7 +295,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'http://localhost:3000/app'
         }}
         externalUrl="http://localhost:3000/app"
-        currentUrl="http://localhost:3000/app"
         httpsRecoveryUrl="https://localhost:3000/app"
         {...callbacks}
       />
@@ -315,7 +317,6 @@ describe('BrowserLoadFailureOverlay', () => {
           description: 'ERR_CERT_AUTHORITY_INVALID',
           validatedUrl: 'https://localhost:3443/'
         }}
-        currentUrl="https://localhost:3443/"
         httpsRecoveryUrl={null}
         onRetry={callbacks.onRetry}
         onTryHttps={callbacks.onTryHttps}
@@ -327,7 +328,6 @@ describe('BrowserLoadFailureOverlay', () => {
     // the action is absent and the overlay still renders its other recovery UI.
     expect(screen.queryByRole('button', { name: 'Open Externally' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Copy Address' })).toBeEnabled()
   })
 
   it('does not show local-certificate guidance for a public-host failure', () => {
@@ -339,7 +339,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://example.com/'
         }}
         externalUrl="https://example.com/"
-        currentUrl="https://example.com/"
         httpsRecoveryUrl={null}
         {...callbacks}
       />
@@ -357,7 +356,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3443/app'
         }}
         externalUrl={null}
-        currentUrl="https://localhost:3443/app"
         httpsRecoveryUrl={null}
         certificateFailure={certificateFailure}
         expectedBrowserPageId="page-1"
@@ -375,7 +373,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3443/app'
         }}
         externalUrl={null}
-        currentUrl="https://localhost:3443/app"
         httpsRecoveryUrl={null}
         certificateFailure={certificateFailure}
         expectedBrowserPageId="page-1"
@@ -393,7 +390,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3444/app'
         }}
         externalUrl={null}
-        currentUrl="https://localhost:3444/app"
         httpsRecoveryUrl={null}
         certificateFailure={certificateFailure}
         expectedBrowserPageId="page-1"
@@ -410,7 +406,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3443/app'
         }}
         externalUrl={null}
-        currentUrl="https://localhost:3443/app"
         httpsRecoveryUrl={null}
         certificateFailure={certificateFailure}
         expectedBrowserPageId="other-page"
@@ -436,7 +431,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3443/app'
         }}
         externalUrl="https://localhost:3443/app"
-        currentUrl="https://localhost:3443/app"
         httpsRecoveryUrl={null}
         certificateFailure={certificateFailure}
         expectedBrowserPageId="page-1"
@@ -446,7 +440,7 @@ describe('BrowserLoadFailureOverlay', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Proceed Anyway (Unsafe)' }))
     expect(callbacks.onProceedCertificate).toHaveBeenCalledWith('challenge-1')
-    for (const name of ['Proceed Anyway (Unsafe)', 'Open Externally', 'Retry', 'Copy Address']) {
+    for (const name of ['Proceed Anyway (Unsafe)', 'Open Externally', 'Retry']) {
       expect(screen.getByRole('button', { name })).toBeDisabled()
     }
     expect(screen.queryByText('Connecting…')).toBeNull()
@@ -465,7 +459,6 @@ describe('BrowserLoadFailureOverlay', () => {
           validatedUrl: 'https://localhost:3443/app'
         }}
         externalUrl="https://localhost:3443/app"
-        currentUrl="https://localhost:3443/app"
         httpsRecoveryUrl={null}
         certificateFailure={null}
         expectedBrowserPageId="page-1"

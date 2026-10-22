@@ -35,7 +35,8 @@ export type BrowserLoadFailureRoute = { routed: false } | { routed: true; routeC
 
 export const BROWSER_LOAD_FAILURE_COPY = {
   notRunningTitle: 'Nothing is running on {{host}} yet',
-  notRunningDescription: 'Start the dev server for this address to see the page.',
+  notRunningDescription: 'Start the dev server for this address.',
+  notRunningSshDescription: "Start the dev server on the workspace's SSH host.",
   refusedTitle: '{{host}} refused to connect',
   refusedDescription: 'The site may be down, or the address may be wrong.',
   dnsTitle: "Couldn't find {{host}}",
@@ -51,9 +52,10 @@ export const BROWSER_LOAD_FAILURE_COPY = {
     "This page loads through the workspace's SSH host, which isn't connected right now.",
   otherTitle: "Can't reach {{host}}",
   otherTitleWithoutHost: "Can't load this page",
-  otherDescription: "We couldn't connect to this page.",
-  waiting: 'Waiting for the server… reloads automatically',
-  waitingForHost: 'Waiting for the SSH host… reloads automatically',
+  otherDescription: 'The connection failed before the page could load.',
+  waiting: 'Reloads when the server responds',
+  waitingForServer: 'Reloads when the server starts',
+  waitingForHost: 'Reloads when the SSH host reconnects',
   waitingForNetwork: "Reloads when you're back online",
   stopWaiting: 'Stop'
 } as const

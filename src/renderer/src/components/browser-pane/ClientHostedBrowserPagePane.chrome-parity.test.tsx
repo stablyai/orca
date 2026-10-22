@@ -292,8 +292,6 @@ describe('ClientHostedBrowserPagePane chrome parity', () => {
     cleanup()
     renderPane({ loadError, url: loaded })
 
-    act(() => screen.getByRole('button', { name: 'Copy Address' }).click())
-    expect(writeClipboardText).toHaveBeenCalledWith('javascript:alert(1)')
     // The loaded page is a localhost http URL, so keying off it would offer an HTTPS retry here.
     expect(screen.queryByRole('button', { name: 'Try HTTPS' })).toBeNull()
   })

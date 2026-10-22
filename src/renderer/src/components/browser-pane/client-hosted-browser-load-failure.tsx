@@ -28,12 +28,10 @@ export function ClientHostedBrowserLoadFailure({
   return (
     <BrowserLoadFailureOverlay
       loadError={browserTab.loadError}
-      currentUrl={toDisplayUrl(failedNavigationUrl)}
       httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
       onRetry={onRetry}
       autoRetry={{ active: isActive, loading: browserTab.loading }}
       onTryHttps={onNavigate}
-      onCopy={(url) => void window.api.ui.writeClipboardText(url)}
       onOpenExternal={(url) => void window.api.shell.openUrl(url)}
       externalUrl={getOpenableExternalUrl(failedNavigationUrl)}
       certificateFailure={certificateFailure}

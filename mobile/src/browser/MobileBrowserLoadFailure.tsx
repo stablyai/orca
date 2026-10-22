@@ -17,9 +17,11 @@ export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoad
   const text = formatBrowserLoadFailureText(loadError, failure)
   return (
     <View pointerEvents="none" style={styles.page}>
-      <Text style={styles.title}>{text.title}</Text>
-      <Text style={styles.description}>{text.description}</Text>
-      {failure.errorName ? <Text style={styles.code}>{failure.errorName}</Text> : null}
+      <View style={styles.column}>
+        <Text style={styles.title}>{text.title}</Text>
+        <Text style={styles.description}>{text.description}</Text>
+        {failure.errorName ? <Text style={styles.code}>{failure.errorName}</Text> : null}
+      </View>
     </View>
   )
 }
@@ -29,26 +31,28 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
     padding: spacing.xl,
     backgroundColor: colors.bgBase
+  },
+  column: {
+    width: '100%',
+    maxWidth: 360,
+    gap: spacing.sm
   },
   title: {
     color: colors.textPrimary,
     fontSize: typography.titleSize,
-    fontWeight: '600',
-    textAlign: 'center'
+    fontWeight: '600'
   },
   description: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
-    lineHeight: 20,
-    textAlign: 'center'
+    lineHeight: 20
   },
   code: {
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
     fontSize: typography.metaSize,
-    textAlign: 'center'
+    marginTop: spacing.xs
   }
 })

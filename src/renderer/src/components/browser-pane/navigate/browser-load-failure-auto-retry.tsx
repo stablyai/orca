@@ -130,18 +130,20 @@ export function BrowserLoadFailureAutoRetryStatus({
     return null
   }
   return (
-    <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-      <Loader2 className="size-3 animate-spin" />
+    <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Loader2 className="size-3 shrink-0 animate-spin" />
       {translateLoadFailurePiece(
         failure.recovery === 'online'
           ? 'waitingForNetwork'
           : failure.kind === 'route-down'
             ? 'waitingForHost'
-            : 'waiting'
-      )}{' '}
+            : failure.kind === 'not-running'
+              ? 'waitingForServer'
+              : 'waiting'
+      )}
       <Button type="button" variant="link" size="xs" className="h-auto" onClick={stop}>
         {translateLoadFailurePiece('stopWaiting')}
       </Button>
-    </p>
+    </div>
   )
 }
