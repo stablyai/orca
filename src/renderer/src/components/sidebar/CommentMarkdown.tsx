@@ -22,6 +22,7 @@ import {
 } from './comment-markdown-native-chat-file-links'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
 import { rehypeWordFade } from './comment-markdown-word-fade'
+import { remarkLiteralHtml } from './comment-markdown-literal-html'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
   splitMarkdownTopLevelBlocks,
@@ -81,6 +82,7 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
 const remarkPlugins = [remarkGfm, remarkGitHubCallouts, remarkBreaks]
+const literalHtmlRemarkPlugins = [...remarkPlugins, remarkLiteralHtml]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
@@ -243,6 +245,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   /** Give each word its own `data-word` element, for a stylesheet to animate as words arrive. */
   fadeWords?: boolean
   extension?: CommentMarkdownExtension
+  /** Show raw HTML as the typed text instead of rendering or stripping it. */
+  literalHtml?: boolean
 }
 
 /** One render of the pipeline; memoized so an unchanged block is not parsed again. */
@@ -283,6 +287,7 @@ const CommentMarkdown = React.memo(
       growing = false,
       fadeWords = false,
       extension,
+      literalHtml = false,
       ...rest
     },
     ref
@@ -310,12 +315,13 @@ const CommentMarkdown = React.memo(
       [extension]
     )
     const activeRemarkPlugins = React.useMemo(() => {
+      const basePlugins = literalHtml ? literalHtmlRemarkPlugins : remarkPlugins
       const plugins = fileLinkExists
-        ? [...remarkPlugins, remarkNativeChatFileLinks(fileLinkExists)]
-        : remarkPlugins
+        ? [...basePlugins, remarkNativeChatFileLinks(fileLinkExists)]
+        : basePlugins
       const withExtension = extension ? [...plugins, ...extension.remarkPlugins] : plugins
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo])
+    }, [extension, fileLinkExists, githubRepo, literalHtml])
     const blocks = useMarkdownBlocks(content, growing)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
