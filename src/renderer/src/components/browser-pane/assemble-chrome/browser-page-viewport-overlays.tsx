@@ -128,7 +128,13 @@ export function BrowserPageViewportOverlays({
           sshRoutedHint={sshRouted}
           onRecheckSshRoute={sshRouted ? recheckSshRoute : null}
           route={
-            sshRouted ? { routed: true, routeConnected: sshRouteHostConnected } : { routed: false }
+            !sshRouted
+              ? { routed: false }
+              : // Why: after "Try anyway" nothing proved the host forwards ports, so a SOCKS failure
+                // can't be read as "nothing is running".
+                recheckSshRoute
+                ? null
+                : { routed: true, routeConnected: sshRouteHostConnected }
           }
           autoRetry={{ ...autoRetry, loading: browserTab.loading }}
           expectedBrowserPageId={browserTab.id}

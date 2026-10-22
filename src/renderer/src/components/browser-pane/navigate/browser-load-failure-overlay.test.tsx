@@ -166,6 +166,31 @@ describe('BrowserLoadFailureOverlay', () => {
     onLine.mockRestore()
   })
 
+  it('replays an online event that arrived while a load was still running', () => {
+    const view = (loading: boolean) => (
+      <BrowserLoadFailureOverlay
+        loadError={{
+          code: -106,
+          description: 'ERR_INTERNET_DISCONNECTED',
+          validatedUrl: 'https://example.com/'
+        }}
+        currentUrl="https://example.com/"
+        httpsRecoveryUrl={null}
+        autoRetry={{ active: true, whileWindowHidden: false, loading }}
+        {...callbacks}
+      />
+    )
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    const { rerender } = render(view(true))
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+    expect(callbacks.onRetry).not.toHaveBeenCalled()
+    rerender(view(false))
+    expect(callbacks.onRetry).toHaveBeenCalledTimes(1)
+    onLine.mockRestore()
+  })
+
   it('offers the connection-check undo only when a routed page provides it', () => {
     const onRecheckSshRoute = vi.fn()
     const loadError = {

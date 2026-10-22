@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type {
@@ -42,6 +42,8 @@ function useBrowserLoadFailureAutoRetry({
   const enabled = Boolean(autoRetry?.active) && recovery !== null && stoppedKey !== failureKey
   const whileWindowHidden = autoRetry?.whileWindowHidden ?? false
   const loading = autoRetry?.loading ?? false
+  // An online event that landed while a load was in flight; replayed once that load settles.
+  const missedOnlineRef = useRef(false)
   const attempt = useEffectEvent((requireVisible: boolean): Promise<void> | null => {
     if (loading || (requireVisible && !whileWindowHidden && !isWindowVisible())) {
       return null
@@ -57,6 +59,7 @@ function useBrowserLoadFailureAutoRetry({
       let pending: Promise<void> | null = null
       const onOnline = (): void => {
         pending ??= attempt(false)?.finally(() => (pending = null)) ?? null
+        missedOnlineRef.current = pending === null
       }
       // Why: the network may have come back while this page was off screen and not listening.
       if (navigator.onLine) {
@@ -99,6 +102,13 @@ function useBrowserLoadFailureAutoRetry({
       }
     }
   }, [enabled, failureKey, recovery])
+
+  useEffect(() => {
+    if (enabled && recovery === 'online' && !loading && missedOnlineRef.current) {
+      missedOnlineRef.current = false
+      void attempt(false)
+    }
+  }, [enabled, loading, recovery])
 
   return {
     waiting: enabled,
