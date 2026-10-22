@@ -43,21 +43,27 @@ export function useEdgeAuthHeaders() {
   const authNormalized = useMemo(() => normalizeEndpointAuthHeaders(authRows), [authRows])
   const authChanged = authNormalized.ok && JSON.stringify(authNormalized) !== initialAuthJson
 
-  const loadAuthForHost = useCallback(async (hostId: string, endpoint: string) => {
-    const stored = await readEndpointAuthHeaders(hostId, endpoint)
-    const entries = stored ? Object.entries(stored) : []
-    const rows =
-      entries.length > 0
-        ? entries.map(([headerName, headerValue]) => ({
-            ...newEdgeAuthRow(),
-            name: headerName,
-            value: headerValue
-          }))
-        : [newEdgeAuthRow()]
-    setAuthRows(rows)
-    setInitialAuthJson(JSON.stringify(normalizeEndpointAuthHeaders(rows)))
-    setStoredAuthCount(entries.length)
-  }, [])
+  const loadAuthForHost = useCallback(
+    async (hostId: string, endpoint: string, isCurrent?: () => boolean) => {
+      const stored = await readEndpointAuthHeaders(hostId, endpoint)
+      if (isCurrent && !isCurrent()) {
+        return
+      }
+      const entries = stored ? Object.entries(stored) : []
+      const rows =
+        entries.length > 0
+          ? entries.map(([headerName, headerValue]) => ({
+              ...newEdgeAuthRow(),
+              name: headerName,
+              value: headerValue
+            }))
+          : [newEdgeAuthRow()]
+      setAuthRows(rows)
+      setInitialAuthJson(JSON.stringify(normalizeEndpointAuthHeaders(rows)))
+      setStoredAuthCount(entries.length)
+    },
+    []
+  )
 
   const persistAuthChanges = useCallback(
     async (hostId: string, headers: EndpointAuthHeaders, endpoint: string) => {

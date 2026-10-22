@@ -385,6 +385,28 @@ describe('edit host handleSave', () => {
     expect(dependencies.back).toHaveBeenCalledTimes(1)
     expect(dependencies.refreshHostClient).toHaveBeenCalledWith('host-1')
   })
+
+  it('does not start saving credentials after leaving during the metadata write', async () => {
+    let finishSave = () => {}
+    dependencies.updateHostNameAndEndpoint.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve
+        })
+    )
+    const renderer = await renderEditHostRoute()
+    setFieldValue(renderer, 'Address', 'wss://orca.example.com')
+    setFieldValue(renderer, 'Header 1 name', 'X-Token')
+    setFieldValue(renderer, 'Header 1 value', 'synthetic-secret')
+    await pressSave(renderer)
+    act(() => renderer.root.findByProps({ accessibilityLabel: 'Back' }).props.onPress())
+    await act(async () => finishSave())
+
+    expect(dependencies.writeEndpointAuthHeaders).not.toHaveBeenCalled()
+    expect(dependencies.refreshHostClient).toHaveBeenCalledWith('host-1')
+    expect(dependencies.back).toHaveBeenCalledTimes(1)
+    act(() => renderer.unmount())
+  })
 })
 
 describe('edit host load() error states', () => {
@@ -427,7 +449,7 @@ describe('edit host load() error states', () => {
     const renderer = await renderEditHostRoute()
 
     expect(findText(renderer, 'Failed to load host or edge authentication.')).toBe(true)
-    expect(renderer.root.findAllByType('TextInput')).toHaveLength(0)
+    expect(renderer.root.findAll((node) => String(node.type) === 'TextInput')).toHaveLength(0)
 
     act(() => renderer.unmount())
   })
@@ -440,10 +462,12 @@ describe('edit host load() error states', () => {
       })
     )
     const renderer = await renderEditHostRoute()
-    expect(renderer.root.findAllByType('TextInput')).toHaveLength(0)
+    expect(renderer.root.findAll((node) => String(node.type) === 'TextInput')).toHaveLength(0)
     expect(findSaveButton(renderer).props.disabled).toBe(true)
     await act(async () => resolveRead(null))
-    expect(renderer.root.findAllByType('TextInput').length).toBeGreaterThan(0)
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'TextInput').length
+    ).toBeGreaterThan(0)
     act(() => renderer.unmount())
   })
 
@@ -452,8 +476,33 @@ describe('edit host load() error states', () => {
     const renderer = await renderEditHostRoute()
     expect(findText(renderer, 'Failed to load host or edge authentication.')).toBe(true)
     expect(findText(renderer, 'secret-keychain-data')).toBe(false)
-    expect(renderer.root.findAllByType('TextInput')).toHaveLength(0)
+    expect(renderer.root.findAll((node) => String(node.type) === 'TextInput')).toHaveLength(0)
     expect(findSaveButton(renderer).props.disabled).toBe(true)
+    act(() => renderer.unmount())
+  })
+
+  it('does not replace a new route credential baseline with a stale keychain read', async () => {
+    let finishRead: (headers: Record<string, string>) => void = () => {}
+    dependencies.readEndpointAuthHeaders
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishRead = resolve
+          })
+      )
+      .mockResolvedValueOnce({ 'X-Token': 'new-host-secret' })
+    dependencies.loadHosts
+      .mockResolvedValueOnce([{ ...HOST_FIXTURE, endpoint: 'wss://old.example.com' }])
+      .mockResolvedValueOnce([{ ...HOST_FIXTURE, id: 'host-2', endpoint: 'wss://new.example.com' }])
+    const renderer = await renderEditHostRoute()
+    dependencies.hostId = 'host-2'
+    await act(async () => renderer.update(createElement(EditHostScreen)))
+    await act(async () => finishRead({ 'X-Token': 'old-host-secret' }))
+
+    const field = renderer.root
+      .findAll((node) => String(node.type) === 'TextInput')
+      .find((node) => node.props.accessibilityLabel === 'Header 1 value')
+    expect(field?.props.value).toBe('new-host-secret')
     act(() => renderer.unmount())
   })
 })
