@@ -4,8 +4,10 @@ import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import { getMaximizedFloatingTerminalBounds } from './floating-terminal-panel-bounds'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
   makeTab,
+  setFloatingKeybindings,
   setFloatingTabs,
   storeBox,
   type FloatingPanelStoreState
@@ -558,6 +560,38 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(altStopPropagation).not.toHaveBeenCalled()
     expect(altStopImmediatePropagation).not.toHaveBeenCalled()
     expect(mocks.activateTab).not.toHaveBeenCalled()
+  })
+
+  it('launches a bound agent shortcut in the floating workspace without a main worktree', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    setFloatingKeybindings({ 'tab.newAgent.claude': ['Ctrl+Alt+A'] })
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        ctrlKey: true,
+        key: 'a',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    // Why exact: an extra option such as `activate: false` would create the tab without selecting it.
+    expect(launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith({
+      requestId: expect.any(String),
+      focusIntent: expect.objectContaining({
+        request: expect.any(Function),
+        cancel: expect.any(Function)
+      }),
+      agent: 'claude',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      groupId: 'floating-group',
+      launchSource: 'shortcut'
+    })
   })
 
   it('routes focused floating workspace maximize shortcuts like the titlebar control', async () => {
