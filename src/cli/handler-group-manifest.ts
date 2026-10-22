@@ -228,6 +228,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/speech.js')).SPEECH_HANDLERS
   },
   {
+    name: 'pet',
+    keys: ['pet list', 'pet import', 'pet select', 'pet rename', 'pet rm'],
+    load: async () => (await import('./handlers/pet.js')).PET_HANDLERS
+  },
+  {
     name: 'introspection',
     keys: ['agent-context'],
     load: async () => (await import('./handlers/introspection.js')).INTROSPECTION_HANDLERS

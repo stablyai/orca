@@ -11,6 +11,7 @@ import { MAX_MANIFEST_BYTES } from './pet-import-size-limits'
 import { getPetsDir } from './pet-storage-paths'
 import { copyFileNoFollow, isSymlink } from './pet-symlink-safe-copy'
 
+/** Pet menu entry point: picks a bundle with the native dialog; null when the user cancels. */
 export async function importPetBundle(
   event: Electron.IpcMainInvokeEvent
 ): Promise<CustomPet | null> {
@@ -27,7 +28,11 @@ export async function importPetBundle(
   if (result.canceled || result.filePaths.length === 0) {
     return null
   }
-  const picked = result.filePaths[0]
+  return await importPetBundleFromPath(result.filePaths[0])
+}
+
+/** Copies a `.codex-pet` bundle (its folder or its `pet.json`) into pet storage; shared by the picker and `pet.importBundle`. */
+export async function importPetBundleFromPath(picked: string): Promise<CustomPet> {
   let bundleDir: string
   try {
     const pickedStat = await stat(picked)

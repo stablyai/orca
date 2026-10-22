@@ -38,7 +38,10 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { setAppEnvironment } from '../../shared/app-environment'
+import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { registerPetHandlers } from './pet'
+import { importPetBundleFromPath } from './pet-bundle-import'
 import type { CustomPet } from '../../shared/pet-types'
 
 describe('registerPetHandlers', () => {
@@ -58,6 +61,7 @@ describe('registerPetHandlers', () => {
     showOpenDialogMock.mockReset()
 
     appGetPathMock.mockReturnValue(userDataDir)
+    setAppEnvironment(new ElectronAppEnvironment())
     browserWindowFromWebContentsMock.mockReturnValue(null)
     browserWindowGetFocusedWindowMock.mockReturnValue(null)
     handleMock.mockImplementation((channel, handler) => {
@@ -171,5 +175,27 @@ describe('registerPetHandlers', () => {
     await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(
       'declares 1 frame durations but 2 frames'
     )
+  })
+
+  it('imports a bundle from its pet.json path without opening the picker', async () => {
+    const bundleDir = await writeSpriteBundle({ idle: { row: 0, frames: 2 } })
+
+    const result = await importPetBundleFromPath(join(bundleDir, 'pet.json'))
+
+    expect(showOpenDialogMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ kind: 'bundle', sprite: { columns: 2 } })
+    await expect(
+      readFile(join(userDataDir, 'sidekicks', 'custom', result.id, 'pet.json'), 'utf8')
+    ).resolves.toContain('"idle"')
+  })
+
+  it('deletes a stored bundle folder through pet:delete', async () => {
+    const bundleDir = await writeSpriteBundle({ idle: { row: 0, frames: 2 } })
+    const pet = await importPetBundleFromPath(bundleDir)
+    const storedDir = join(userDataDir, 'sidekicks', 'custom', pet.id)
+
+    await getHandler('pet:delete')({}, pet.id, pet.fileName, 'bundle')
+
+    await expect(readFile(join(storedDir, 'pet.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })

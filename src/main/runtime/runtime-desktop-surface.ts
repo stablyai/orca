@@ -1,4 +1,5 @@
 import type { BrowserWindow, IpcMainEvent } from 'electron'
+import type { CustomPet } from '../../shared/pet-types'
 
 /**
  * The desktop facilities `OrcaRuntimeService` uses, which a Node host does not have.
@@ -24,6 +25,8 @@ export type RuntimeDesktopSurface = {
   showNotification(input: { title: string; body: string }): boolean
   /** The renderer window with this id, or null when there is no desktop. */
   findWindowById(id: number): BrowserWindow | null
+  /** Copy a `.codex-pet` bundle into pet storage; absent where there is no pet overlay to show it. */
+  importPetBundle?(path: string): Promise<CustomPet>
   onIpc(channel: string, listener: (event: IpcMainEvent, ...args: never[]) => void): void
   removeIpcListener(channel: string, listener: (...args: never[]) => void): void
   /** Re-encodes as a PNG fitting `maxEdge`; null if undecodable. Absent on Node hosts. */

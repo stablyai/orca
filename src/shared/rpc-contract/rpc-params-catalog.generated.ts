@@ -462,6 +462,7 @@ import {
 } from './orchestration-worker-release-schemas-params'
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
+import { PetImportBundle, PetRename, PetSelector } from './pet-params'
 import {
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,
@@ -1225,6 +1226,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'pet.importBundle': PetImportBundle,
+  'pet.list': null,
+  'pet.remove': PetSelector,
+  'pet.rename': PetRename,
+  'pet.select': PetSelector,
   'plugins.consent': pluginConsentRequestSchema,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
