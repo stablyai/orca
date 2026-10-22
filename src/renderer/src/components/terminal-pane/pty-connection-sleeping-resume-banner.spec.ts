@@ -162,7 +162,8 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
           agentType: 'codex',
           launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
           tabId: 'tab-1',
-          leafId: LEAF_2
+          leafId: LEAF_2,
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
         }
       )
       expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()

@@ -188,7 +188,11 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
           session.registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
             ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
-            ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {})
+            ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+            // Why: main may drop the resume argv, and then this pane runs a new session.
+            ...(coldRestoreOverride && !spawnedPtyId.agentResumeUnavailable
+              ? { resumedProviderSession: coldRestoreOverride.resumeProviderSession }
+              : {})
           })
         }
         if (resolvedPtyId) {

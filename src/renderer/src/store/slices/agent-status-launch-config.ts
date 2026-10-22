@@ -112,13 +112,22 @@ export function getLaunchConfigForEntry(
   entry: AgentStatusEntry
 ): SleepingAgentLaunchConfig | undefined {
   const registryEntry = state.agentLaunchConfigByPaneKey[entry.paneKey]
+  // Why: capture has no hook claim to carry the token; a resume spawn's pinned session is the proof.
+  const pinnedSessionMatches =
+    registryEntry?.identity.providerSession !== undefined &&
+    entry.providerSession !== undefined &&
+    agentProviderSessionsEqual(
+      entry.agentType,
+      registryEntry.identity.providerSession,
+      entry.providerSession
+    )
   const registryLaunchConfig = registryEntryMatchesStatus({
     entry: registryEntry,
     paneKey: entry.paneKey,
     agentType: entry.agentType,
     tabId: entry.tabId ?? getTabIdFromPaneKey(entry.paneKey) ?? undefined,
     terminalHandle: entry.terminalHandle,
-    launchToken: undefined,
+    launchToken: pinnedSessionMatches ? registryEntry?.identity.launchToken : undefined,
     providerSession: entry.providerSession,
     existingProviderSession: entry.providerSession,
     providerSessionChanged: false

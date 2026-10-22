@@ -5,6 +5,7 @@ import { findLegacyNumericSleepingRecord } from '../../../../../shared/sleeping-
 import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-reset'
 import {
   agentProviderSessionsEqual,
+  type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session-resume'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
@@ -122,7 +123,11 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   }
   session.registerEffectiveLaunchConfig = (
     effectiveLaunchConfig: PtyConnectResult['launchConfig'] | undefined,
-    metadata?: { launchToken?: string; launchAgent?: TuiAgent }
+    metadata?: {
+      launchToken?: string
+      launchAgent?: TuiAgent
+      resumedProviderSession?: AgentProviderSessionMetadata
+    }
   ): void => {
     if (!effectiveLaunchConfig) {
       if (metadata?.launchAgent) {
@@ -156,7 +161,10 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         ? { launchToken: metadata?.launchToken ?? session.launchToken }
         : {}),
       tabId: session.deps.tabId,
-      leafId: session.pane.leafId
+      leafId: session.pane.leafId,
+      ...(metadata?.resumedProviderSession
+        ? { providerSession: metadata.resumedProviderSession }
+        : {})
     })
   }
   session.clearRegisteredStartupLaunchConfig = (): void => {
