@@ -183,6 +183,9 @@ export function generationActivated(
   }
 ): MobileWebShellStep {
   const cachedBuildId = session.cached?.buildId ?? null
+  if (session.state.kind !== 'activating' && session.state.kind !== 'ready') {
+    return step(session, {})
+  }
   if (
     session.state.kind === 'ready' &&
     cachedBuildId !== null &&
@@ -191,14 +194,11 @@ export function generationActivated(
   ) {
     return step(session, {})
   }
+  const activeBuildId = session.state.kind === 'ready' ? session.state.buildId : cachedBuildId
   const downloadLanded =
     (session.state.kind === 'activating' && session.state.source === 'download') ||
-    (session.requestedBuildId !== null && cachedBuildId !== null && event.buildId !== cachedBuildId)
-  const awaitingActivation =
-    session.state.kind === 'activating' || (session.state.kind === 'ready' && downloadLanded)
-  if (!awaitingActivation) {
-    return step(session, {})
-  }
+    (session.requestedBuildId !== null &&
+      (activeBuildId === null || event.buildId !== activeBuildId))
   const offered =
     downloadLanded && session.offeredRoutes !== null
       ? {
@@ -211,6 +211,7 @@ export function generationActivated(
     {
       ...CLEAR_PAGE_DOCUMENT_STATE,
       ...offered,
+      requestedBuildId: downloadLanded ? null : session.requestedBuildId,
       offeredRoutes: downloadLanded ? null : session.offeredRoutes,
       state: {
         kind: 'ready',

@@ -150,13 +150,20 @@ export function recordRetainedShellSession(args: {
     existing.session = args.session
     return
   }
-  // A child route paints its own document and must leave the parked host page in the slot.
+  // A child route paints its own document and must leave the parked host page in the slot,
+  // unless its commit replaced the host's generation directory on disk.
   if (
     existing !== null &&
     existing.hostId === args.hostId &&
     isHostRouteOf(existing.routePathname, existing.hostId) &&
     !isHostRouteOf(args.routePathname, args.hostId)
   ) {
+    if (
+      existing.session.state.kind === 'ready' &&
+      existing.session.state.buildId !== args.session.state.buildId
+    ) {
+      evictRetainedShellSession()
+    }
     return
   }
   disposeBridgeOf(existing)

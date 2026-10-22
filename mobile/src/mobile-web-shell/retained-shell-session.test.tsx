@@ -307,4 +307,43 @@ describe('single-host LRU retained shell session', () => {
     })
     await reentered.unmount()
   })
+
+  it('evicts the parked host page when a child route commits a newer generation on disk', async () => {
+    const { store } = createCachedStore()
+    const hostRoot = await mountForHost('host-1', store, '/h/host-1')
+    await act(async () => {
+      hostRoot.view().reportDocumentLoaded()
+      hostRoot.view().reportPageReady()
+      hostRoot.view().reportPagePainted()
+    })
+    await hostRoot.unmount()
+
+    const newerBuildId = 'd'.repeat(64)
+    const previousManifest = doubles.manifest
+    try {
+      doubles.manifest = { ...previousManifest, buildId: newerBuildId }
+      const { store: newerStore } = createCachedStore()
+      const accounts = await mountForHost('host-1', newerStore, '/h/host-1/accounts')
+      await act(async () => {
+        accounts.view().reportDocumentLoaded()
+        accounts.view().reportPageReady()
+        accounts.view().reportPagePainted()
+      })
+      expect(accounts.view().state).toMatchObject({
+        kind: 'ready',
+        buildId: newerBuildId
+      })
+      await accounts.unmount()
+
+      const reentered = await mountForHost('host-1', newerStore, '/h/host-1')
+      expect(reentered.firstRender.stateKind).toBe('checking')
+      expect(reentered.view().state).toMatchObject({
+        kind: 'ready',
+        buildId: newerBuildId
+      })
+      await reentered.unmount()
+    } finally {
+      doubles.manifest = previousManifest
+    }
+  })
 })
