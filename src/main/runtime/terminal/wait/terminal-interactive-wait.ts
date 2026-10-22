@@ -326,4 +326,17 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       )
     }
   }
+
+  // Why: an omitted worker-start --agent follows the Settings default, like the
+  // new-workspace picker; a disabled default is not swapped for another agent.
+  resolveDefaultOrchestrationAgent(): TuiAgent | null {
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      throw new Error('runtime_unavailable')
+    }
+    const preferred = settings.defaultTuiAgent
+    return isTuiAgent(preferred) && isTuiAgentEnabled(preferred, settings.disabledTuiAgents)
+      ? preferred
+      : null
+  }
 }
