@@ -665,7 +665,11 @@ function isNativeCacheInputPath(file) {
 }
 
 function isGlobalForcePath(file) {
-  return GLOBAL_FORCE_FILES.has(file) || matchesPrefix(file, GLOBAL_FORCE_PREFIXES)
+  return (
+    GLOBAL_FORCE_FILES.has(file) ||
+    (matchesPrefix(file, GLOBAL_FORCE_PREFIXES) &&
+      !(file.startsWith('config/scripts/') && isTestFile(file)))
+  )
 }
 
 function matchesPrefix(file, prefixes) {
