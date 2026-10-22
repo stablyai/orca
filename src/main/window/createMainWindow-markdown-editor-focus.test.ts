@@ -547,14 +547,14 @@ describe('createMainWindow', () => {
       formControlType: 'none',
       dictionarySuggestions: ['reference'],
       misspelledWord: 'refrence'
-    } as Electron.ContextMenuParams
-    const plainTextListener = vi
+    }
+    const plainTextListener: ((...args: any[]) => void) | undefined = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'editable-context-menu:plain-text-target')?.[1]
 
-    plainTextListener?.({ sender: webContents } as never)
-    windowHandlers['context-menu']({} as never, params)
-    windowHandlers['context-menu']({} as never, params)
+    plainTextListener?.({ sender: webContents })
+    windowHandlers['context-menu']({}, params)
+    windowHandlers['context-menu']({}, params)
 
     const labels = buildFromTemplateMock.mock.calls.map(([template]) =>
       template.map((item: Electron.MenuItemConstructorOptions) => item.label ?? item.role)
