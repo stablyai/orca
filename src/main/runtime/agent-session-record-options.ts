@@ -49,6 +49,24 @@ export function agentSessionOptionAdmitted(
   )
 }
 
+/** A remembered seed's values against its model's saved row, dropping ones the row no longer
+ *  admits: a launch is refused only on options its caller named for it. */
+export function seedOptionsAdmittedOnSavedListing(
+  provider: string,
+  seed: Readonly<Record<string, string>>,
+  models: AgentSessionAdmissionModels,
+  /** Keys the caller itself named this launch; their values stay as the caller picked them. */
+  explicit: ReadonlySet<string>
+): Record<string, string> | undefined {
+  const admitted = Object.fromEntries(
+    Object.entries(seed).filter(
+      ([key, value]) =>
+        explicit.has(key) || agentSessionOptionAdmitted(provider, models, seed.model, key, value)
+    )
+  )
+  return Object.keys(admitted).length > 0 ? admitted : undefined
+}
+
 /** A new chat's options must run under its model's listed row; refused through the actionable
  *  option refusal otherwise. */
 export function assertAgentSessionOptionsAdmitted(
