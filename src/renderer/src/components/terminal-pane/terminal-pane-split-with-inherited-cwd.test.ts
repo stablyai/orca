@@ -6,13 +6,17 @@ import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-in
 import { createDeferred } from './pty-connection-test-async'
 import type { splitPaneInMain } from './terminal-pane-split-in-main'
 
-const mocks = vi.hoisted(() => ({
-  layoutOwnerIsMain: false,
-  recordCreatedTerminalPaneSplit: vi.fn(),
-  resolveSplitCwd: vi.fn(),
-  splitPaneInMain: vi.fn<typeof splitPaneInMain>(),
-  splitWebRuntimeTerminal: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const settings: { terminalFocusNewSplitPane?: boolean } | null = {}
+  return {
+    layoutOwnerIsMain: false,
+    recordCreatedTerminalPaneSplit: vi.fn(),
+    resolveSplitCwd: vi.fn(),
+    splitPaneInMain: vi.fn<typeof splitPaneInMain>(),
+    splitWebRuntimeTerminal: vi.fn(),
+    settings
+  }
+})
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
@@ -35,6 +39,10 @@ vi.mock('./resolve-split-cwd', () => ({
 
 vi.mock('./terminal-pane-split-completion', () => ({
   recordCreatedTerminalPaneSplit: mocks.recordCreatedTerminalPaneSplit
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => ({ settings: mocks.settings }) }
 }))
 
 function makeManager(splitPane: ReturnType<typeof vi.fn>): PaneManager {
@@ -64,6 +72,7 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     mocks.resolveSplitCwd.mockReset()
     mocks.splitWebRuntimeTerminal.mockReset()
     mocks.splitWebRuntimeTerminal.mockReturnValue(false)
+    mocks.settings = {}
   })
 
   it.each(['keyboard', 'context_menu'] as const)(
@@ -239,6 +248,38 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     expect(staleSplitPane).not.toHaveBeenCalled()
     expect(mocks.resolveSplitCwd).not.toHaveBeenCalled()
     expect(mocks.recordCreatedTerminalPaneSplit).not.toHaveBeenCalled()
+  })
+
+  it('asks the pane manager not to focus the new pane when Focus New Split Pane is off', () => {
+    mocks.settings = { terminalFocusNewSplitPane: false }
+    const cwd = createDeferred<string>()
+    mocks.resolveSplitCwd.mockReturnValue(cwd.promise)
+    const splitPane = vi.fn()
+    const base = {
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      manager: makeManager(splitPane),
+      paneTransports: new Map<number, PtyTransport>(),
+      fallbackCwd: '/fallback',
+      pane: { id: 1, leafId: 'leaf-1' } as ManagedPane,
+      direction: 'vertical',
+      source: 'keyboard'
+    } as const
+
+    splitTerminalPaneWithInheritedCwd({
+      ...base,
+      paneCwdMap: new Map([[1, { cwd: '/cached', confirmed: true }]])
+    })
+    splitTerminalPaneWithInheritedCwd({ ...base, paneCwdMap: new Map() })
+
+    expect(splitPane).toHaveBeenNthCalledWith(1, 1, 'vertical', {
+      cwd: '/cached',
+      focusNewPane: false
+    })
+    expect(splitPane).toHaveBeenNthCalledWith(2, 1, 'vertical', {
+      cwdPromise: cwd.promise,
+      focusNewPane: false
+    })
   })
 
   it('never asks main in a window-owned build', () => {

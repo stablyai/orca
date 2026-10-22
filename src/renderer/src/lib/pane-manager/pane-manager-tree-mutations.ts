@@ -30,6 +30,7 @@ export function splitPaneOnManager(
     setActivePaneId: (id) => {
       host.setActivePaneId(id)
     },
+    getActivePaneId: () => host.getActivePaneId(),
     isDestroyed: () => host.isDestroyed()
   })
 }
@@ -58,6 +59,7 @@ export function splitPaneAroundLeafIdsOnManager(
     setActivePaneId: (id) => {
       host.setActivePaneId(id)
     },
+    getActivePaneId: () => host.getActivePaneId(),
     isDestroyed: () => host.isDestroyed()
   })
 }

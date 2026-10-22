@@ -33,6 +33,8 @@ export type PaneSpawnHints = {
 export type PaneSplitOptions = Omit<PaneSpawnHints, 'placement'> & {
   ratio?: number
   leafId?: string
+  /** Default true; false keeps the source pane active and focused. */
+  focusNewPane?: boolean
 }
 
 export type ClosedPaneInfo = {

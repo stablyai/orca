@@ -106,6 +106,8 @@ export function buildDefaultSettings(args: {
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
+    // Why: default-on preserves the long-standing behavior; existing profiles lack the key and readers treat undefined as on.
+    terminalFocusNewSplitPane: true,
     windowBackgroundBlur: false,
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.

@@ -240,6 +240,35 @@ export function TerminalInteractionSection({
         </SearchableSetting>
 
         <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalPane.focusNewSplitPane.title',
+            'Focus New Split Pane'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalPane.focusNewSplitPane.description',
+            'A new split pane takes keyboard focus as soon as it opens. Turn off to keep typing in the pane you split from.'
+          )}
+          keywords={['focus', 'split', 'pane', 'new', 'active', 'tiling']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.TerminalPane.focusNewSplitPane.title',
+              'Focus New Split Pane'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalPane.focusNewSplitPane.description',
+              'A new split pane takes keyboard focus as soon as it opens. Turn off to keep typing in the pane you split from.'
+            )}
+            checked={settings.terminalFocusNewSplitPane}
+            onChange={() =>
+              updateSettings({
+                terminalFocusNewSplitPane: !settings.terminalFocusNewSplitPane
+              })
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
           description={translate(
             'components.settings.TerminalInteraction.copyOnSelectDescription',

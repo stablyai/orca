@@ -9400,7 +9400,11 @@
           "a909136b3f": "shell",
           "1c29734248": "Shell used for new terminal panes",
           "9589abc009": "Default shell",
-          "5a5eac2f44": "Shell not found: {{value0}}"
+          "5a5eac2f44": "Shell not found: {{value0}}",
+          "focusNewSplitPane": {
+            "title": "Focus New Split Pane",
+            "description": "A new split pane takes keyboard focus as soon as it opens. Turn off to keep typing in the pane you split from."
+          }
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -11387,7 +11391,11 @@
             "454df22a5e": "fish",
             "ddd5efe113": "shell",
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
-            "1733ccd3e9": "Terminal shell"
+            "1733ccd3e9": "Terminal shell",
+            "focusNewSplitPane": {
+              "title": "Focus New Split Pane",
+              "description": "A new split pane takes keyboard focus as soon as it opens. Turn off to keep typing in the pane you split from."
+            }
           },
           "windows": {
             "search": {

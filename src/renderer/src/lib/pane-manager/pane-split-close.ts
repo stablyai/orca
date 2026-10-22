@@ -21,6 +21,7 @@ import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
+import { claimSplitPaneFocus } from './pane-split-focus-claim'
 import { releaseTerminalScrollIntentKey } from './terminal-scroll-intent-key-store'
 
 type MovedPaneSplitState = {
@@ -48,6 +49,7 @@ type SplitManagedPaneArgs = {
   ) => void
   getDragCallbacks: () => DragReorderCallbacks
   setActivePaneId: (paneId: number | null) => void
+  getActivePaneId: () => number | null
   isDestroyed: () => boolean
 }
 
@@ -65,14 +67,31 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   const isVertical = args.direction === 'vertical'
   const divider = args.createDivider(isVertical)
 
+  const activateNewPane = args.opts?.focusNewPane !== false
+  const retainedActivePaneId = activateNewPane ? newPane.id : existing.id
+  // Why: wrapInSplit reparents the source, which drops its DOM focus; restore it afterwards.
+  const sourceHeldDomFocus =
+    !activateNewPane &&
+    typeof document !== 'undefined' &&
+    document.activeElement?.matches('.xterm-helper-textarea') === true &&
+    existing.container.contains(document.activeElement)
+
   const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
 
   wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
     ratio: args.opts?.ratio,
     newPaneFirst: args.newPaneFirst
   })
-  args.setActivePaneId(newPane.id)
-  openSplitPane(args, newPane, existing.leafId, args.opts?.cwd)
+  if (activateNewPane) {
+    args.setActivePaneId(newPane.id)
+  } else if (args.getActivePaneId() !== existing.id) {
+    args.setActivePaneId(existing.id)
+  }
+  openSplitPane(args, newPane, existing.leafId, {
+    cwd: args.opts?.cwd,
+    opacityActivePaneId: retainedActivePaneId,
+    focusTarget: activateNewPane ? newPane : sourceHeldDomFocus ? existing : null
+  })
 
   for (const movedPaneState of movedPaneStates) {
     scheduleSplitScrollRestore(
@@ -141,19 +160,26 @@ function findManagedPanesInContainer(
   return movedPanes
 }
 
+type OpenSplitPaneOptions = {
+  cwd?: string
+  opacityActivePaneId: number
+  focusTarget: ManagedPaneInternal | null
+}
+
 function openSplitPane(
   args: SplitManagedPaneArgs,
   newPane: ManagedPaneInternal,
   parentLeafId: string,
-  cwd?: string
+  opts: OpenSplitPaneOptions
 ): void {
+  const { cwd } = opts
   openTerminal(newPane, {
     ligatures: args.managerOptions.terminalLigaturesEnabled?.(),
     inlineImages: args.managerOptions.terminalInlineImagesEnabled?.()
   })
-  applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  applyPaneOpacity(args.panes.values(), opts.opacityActivePaneId, args.styleOptions)
   applyDividerStyles(args.root, args.styleOptions)
-  newPane.terminal.focus()
+  opts.focusTarget?.terminal.focus()
   updateMultiPaneState(args.getDragCallbacks())
   // Why: forward one-shot spawn/adoption hints so the new pane inherits the
   // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
@@ -169,6 +195,14 @@ function openSplitPane(
     }
   })
   args.managerOptions.onLayoutChanged?.()
+  if (opts.focusTarget === newPane) {
+    // Why: registered last so its frames run after the resize and IME refocus frames queued above.
+    claimSplitPaneFocus({
+      pane: newPane,
+      getActivePaneId: args.getActivePaneId,
+      isPaneLive: () => !args.isDestroyed() && args.panes.get(newPane.id) === newPane
+    })
+  }
 }
 
 type CloseManagedPaneArgs = {
