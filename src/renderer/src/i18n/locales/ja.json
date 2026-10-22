@@ -9713,6 +9713,10 @@
               "native": "ネイティブ",
               "cleaned": "クリーン",
               "restart": "再起動"
+            },
+            "linkRoutingBackground": {
+              "background": "バックグラウンド",
+              "focus": "フォーカス"
             }
           },
           "use": {
@@ -12959,6 +12963,10 @@
           "tailscale": "Tailscale · {{address}}",
           "lan": "ローカルネットワーク · {{address}}",
           "loopback": "このコンピューター · {{address}}"
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Orca でリンクをバックグラウンドで開く",
+          "description": "Orca のブラウザで開くリンクは、切り替えずに新しいタブで読み込まれます。"
         }
       },
       "right": {

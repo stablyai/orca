@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
+import { getLinkRoutingBackgroundSearchEntry } from './browser-link-routing-background-search'
 import {
   getBrowserLinkRoutingDescription,
   getLinkRoutingModifierDescription,
@@ -298,6 +299,7 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     getBrowserUserAgentSearchEntry(),
-    getBrowserSitePermissionsSearchEntry()
+    getBrowserSitePermissionsSearchEntry(),
+    getLinkRoutingBackgroundSearchEntry()
   ]
 }

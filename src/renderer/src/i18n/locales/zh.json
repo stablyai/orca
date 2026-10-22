@@ -9676,6 +9676,10 @@
               "native": "原生",
               "cleaned": "清洁过的",
               "restart": "重新启动"
+            },
+            "linkRoutingBackground": {
+              "background": "后台",
+              "focus": "焦点"
             }
           },
           "use": {
@@ -12959,6 +12963,10 @@
           "tailscale": "Tailscale · {{address}}",
           "lan": "局域网 · {{address}}",
           "loopback": "此电脑 · {{address}}"
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "在后台用 Orca 打开链接",
+          "description": "在 Orca 浏览器中打开的链接会在新标签页中加载，不会切换到该标签页。"
         }
       },
       "right": {

@@ -9676,6 +9676,10 @@
               "native": "네이티브",
               "cleaned": "정리됨",
               "restart": "다시 시작"
+            },
+            "linkRoutingBackground": {
+              "background": "백그라운드",
+              "focus": "포커스"
             }
           },
           "use": {
@@ -12959,6 +12963,10 @@
           "tailscale": "Tailscale · {{address}}",
           "lan": "로컬 네트워크 · {{address}}",
           "loopback": "이 컴퓨터 · {{address}}"
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Orca에서 링크를 백그라운드로 열기",
+          "description": "Orca 브라우저에서 여는 링크는 새 탭에서 로드되며 해당 탭으로 전환되지 않습니다."
         }
       },
       "right": {

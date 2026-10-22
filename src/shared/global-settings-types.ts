@@ -216,6 +216,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   openLinksInAppPreferencePrompted: boolean
   /** Opt-in: Shift+modifier click inverts openLinksInApp instead of always forcing the system browser. Off keeps the historical one-way escape hatch. */
   openLinksInAppModifierInverts?: boolean
+  /** Opt-in: links routed to Orca's browser open in a new tab without switching to it. */
+  openLinksInAppInBackground?: boolean
   /** Show link actions on plain click in the terminal and chat; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
   /** Plain-click behavior for terminal links; optional for profiles saved before this setting existed. */

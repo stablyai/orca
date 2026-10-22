@@ -9686,6 +9686,10 @@
               "native": "nativo",
               "cleaned": "limpiado",
               "restart": "Reanudar"
+            },
+            "linkRoutingBackground": {
+              "background": "segundo plano",
+              "focus": "foco"
             }
           },
           "use": {
@@ -12954,6 +12958,10 @@
           "tailscale": "Tailscale · {{address}}",
           "lan": "Red local · {{address}}",
           "loopback": "Este equipo · {{address}}"
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Abrir enlaces en Orca en segundo plano",
+          "description": "Los enlaces abiertos en el navegador de Orca se cargan en una pestaña nueva sin cambiar a ella."
         }
       },
       "right": {

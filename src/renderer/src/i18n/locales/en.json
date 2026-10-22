@@ -10058,6 +10058,10 @@
               "native": "native",
               "cleaned": "cleaned",
               "restart": "restart"
+            },
+            "linkRoutingBackground": {
+              "background": "background",
+              "focus": "focus"
             }
           },
           "use": {
@@ -13291,6 +13295,10 @@
           "tailscale": "Tailscale · {{address}}",
           "lan": "Local network · {{address}}",
           "loopback": "This computer · {{address}}"
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Open links in Orca in the background",
+          "description": "Links opened in Orca's browser load in a new tab without switching to it."
         }
       },
       "right": {

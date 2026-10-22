@@ -9841,6 +9841,10 @@
               "native": "natif",
               "cleaned": "nettoyé",
               "restart": "redémarrage"
+            },
+            "linkRoutingBackground": {
+              "background": "arrière-plan",
+              "focus": "focus"
             }
           },
           "use": {
@@ -13067,6 +13071,10 @@
           "tailscale": "Tailscale · {{address}}",
           "lan": "Réseau local · {{address}}",
           "loopback": "Cet ordinateur · {{address}}"
+        },
+        "BrowserLinkRoutingBackgroundSetting": {
+          "title": "Ouvrir les liens dans Orca en arrière-plan",
+          "description": "Les liens ouverts dans le navigateur d'Orca se chargent dans un nouvel onglet sans y basculer."
         }
       },
       "right": {

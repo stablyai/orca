@@ -107,7 +107,8 @@ describe('browser link routing modifier copy', () => {
       'Remote server workspaces',
       'SSH workspaces',
       'Browser identity',
-      'Site permissions'
+      'Site permissions',
+      'Open links in Orca in the background'
     ])
   })
 

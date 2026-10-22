@@ -35,6 +35,7 @@ type StoreAccessor = () => {
       GlobalSettings,
       | 'openLinksInApp'
       | 'openLinksInAppModifierInverts'
+      | 'openLinksInAppInBackground'
       | 'activeRuntimeEnvironmentId'
       | 'localhostWorktreeLabelsEnabled'
     >
@@ -55,6 +56,8 @@ type WorkspaceHttpLinkBrowserRequest = {
   workspaceId: string
   url: string
   intent: { kind: 'url' }
+  focusOnCreate?: boolean
+  selectWorktree?: boolean
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
 }
@@ -146,6 +149,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
     (forceInApp || openLinksInApp || modifier.wantsOrca)
+  const activate = state?.settings?.openLinksInAppInBackground !== true
 
   if (
     wantsOrca &&
@@ -160,6 +164,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
         workspaceId: worktreeId,
         url,
         intent: { kind: 'url' },
+        ...(activate ? {} : { focusOnCreate: false, selectWorktree: false }),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
@@ -181,18 +186,19 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for
     // file-link jumps that genuinely switch worktrees.
-    if (!isFloatingWorkspaceId(worktreeId)) {
+    // Why: a background tab must not switch the active worktree either.
+    if (activate && !isFloatingWorkspaceId(worktreeId)) {
       // Why: the floating workspace uses a synthetic worktree id. Promoting it
       // to the global activeWorktreeId deselects the real repo workspace.
       reselectWorkspaceKeepingHost(state, worktreeId)
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {
-      state.createBrowserTab(worktreeId, url, { activate: true })
+      state.createBrowserTab(worktreeId, url, { activate })
       return
     }
     void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      state.createBrowserTab(worktreeId, labeledUrl, { activate: true })
+      state.createBrowserTab(worktreeId, labeledUrl, { activate })
     })
     return
   }

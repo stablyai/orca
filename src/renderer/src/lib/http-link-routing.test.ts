@@ -27,16 +27,21 @@ function noActiveWorkspace(): {
   return { activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
 }
 
+function noSettings():
+  | {
+      openLinksInApp?: boolean
+      openLinksInAppModifierInverts?: boolean
+      openLinksInAppInBackground?: boolean
+      openLinksInAppPreferencePrompted?: boolean
+      activeRuntimeEnvironmentId?: string | null
+      localhostWorktreeLabelsEnabled?: boolean
+    }
+  | undefined {
+  return undefined
+}
+
 const storeState = {
-  settings: undefined as
-    | {
-        openLinksInApp?: boolean
-        openLinksInAppModifierInverts?: boolean
-        openLinksInAppPreferencePrompted?: boolean
-        activeRuntimeEnvironmentId?: string | null
-        localhostWorktreeLabelsEnabled?: boolean
-      }
-    | undefined,
+  settings: noSettings(),
   setActiveWorktree: setActiveWorktreeMock,
   ...noActiveWorkspace(),
   createBrowserTab: createBrowserTabMock,
@@ -699,6 +704,102 @@ describe('openHttpLink modifier routing', () => {
     storeState.settings = { openLinksInApp: true, openLinksInAppModifierInverts: true }
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1', forceSystemBrowser: true })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('openHttpLink background opening', () => {
+  it('creates the Orca tab without activating it', () => {
+    storeState.settings = { openLinksInApp: true, openLinksInAppInBackground: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: false
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not switch the active worktree', () => {
+    storeState.settings = { openLinksInApp: true, openLinksInAppInBackground: true }
+    storeState.activeWorktreeId = 'wt-other'
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: false
+    })
+  })
+
+  it('keeps a labeled localhost tab in the background', async () => {
+    storeState.settings = {
+      openLinksInApp: true,
+      openLinksInAppInBackground: true,
+      localhostWorktreeLabelsEnabled: true
+    }
+    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
+    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
+    storeState.workspacePortScan = {
+      result: {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-main',
+              displayName: 'main',
+              path: '/repo/main',
+              confidence: 'cwd'
+            }
+          }
+        ]
+      }
+    }
+    registerLocalhostLabelMock.mockResolvedValue({ url: 'http://main.orca.localhost:60016/' })
+
+    openHttpLink('http://localhost:5180/', { worktreeId: 'wt-main' })
+
+    await vi.waitFor(() =>
+      expect(createBrowserTabMock).toHaveBeenCalledWith(
+        'wt-main',
+        'http://main.orca.localhost:60016/',
+        { activate: false }
+      )
+    )
+  })
+
+  it('asks the remote workspace browser not to take focus or switch worktrees', () => {
+    storeState.settings = { openLinksInApp: true, openLinksInAppInBackground: true }
+
+    openHttpLink('https://example.com/', {
+      allowRemoteInApp: true,
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
+    })
+
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        focusOnCreate: false,
+        selectWorktree: false,
+        expectedRuntimeEnvironmentId: 'env-1'
+      })
+    )
+  })
+
+  it('leaves system-browser links unaffected', () => {
+    storeState.settings = { openLinksInApp: false, openLinksInAppInBackground: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
