@@ -111,9 +111,14 @@ function ensureCommandTable(mod: MonacoEmacsModule): void {
 export async function installMonacoEmacsMode(
   editorInstance: monacoEditor.IStandaloneCodeEditor,
   statusBarNode: HTMLElement,
-  hooks: EmacsEditorHooks
+  hooks: EmacsEditorHooks,
+  isCancelled: () => boolean = () => false
 ): Promise<EmacsModeController> {
   const mod = await import('monaco-emacs')
+  // Why: a newer install on this editor may already own its hooks; a late dispose would remove them.
+  if (isCancelled()) {
+    return { dispose: () => {} }
+  }
   ensureCommandTable(mod)
   hooksByEditor.set(editorInstance, hooks)
   const keymapContext = editorInstance.createContextKey<boolean>(EMACS_KEYMAP_CONTEXT_KEY, true)

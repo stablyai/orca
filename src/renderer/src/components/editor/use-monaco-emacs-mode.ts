@@ -43,7 +43,7 @@ export function useMonacoEmacsMode(args: {
       },
       () => propsRef.current?.onSave(editor.getValue())
     )
-    void installMonacoEmacsMode(editor, statusNode, hooks)
+    void installMonacoEmacsMode(editor, statusNode, hooks, () => cancelled)
       .then((installed) => {
         if (cancelled) {
           installed.dispose()
