@@ -110,19 +110,6 @@ export function isWildcardBindHost(hostname: string): boolean {
   return normalized === '0.0.0.0' || normalized === '::'
 }
 
-export function toHttpsRecoveryUrl(rawUrl: string): string | null {
-  try {
-    const parsed = new URL(rawUrl)
-    if (parsed.protocol !== 'http:' || !isEligibleLocalCertificateHost(parsed.hostname)) {
-      return null
-    }
-    parsed.protocol = 'https:'
-    return parsed.toString()
-  } catch {
-    return null
-  }
-}
-
 export function toSecureCertificateEndpoint(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl)

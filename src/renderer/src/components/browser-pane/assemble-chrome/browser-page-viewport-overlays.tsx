@@ -1,6 +1,5 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
-import { toHttpsRecoveryUrl } from '../../../../../shared/browser-url'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,
@@ -31,7 +30,6 @@ export function BrowserPageViewportOverlays({
   showFailureOverlay,
   browserTab,
   failureExternalUrl,
-  failedNavigationUrl,
   onUpdatePageStateRef,
   retryGuestRecoveryRef,
   navigateToUrl,
@@ -57,7 +55,6 @@ export function BrowserPageViewportOverlays({
   showFailureOverlay: boolean
   browserTab: BrowserPageState
   failureExternalUrl: string | null
-  failedNavigationUrl: string
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   retryGuestRecoveryRef: MutableRefObject<() => void>
   navigateToUrl: (url: string) => void
@@ -95,13 +92,11 @@ export function BrowserPageViewportOverlays({
         <BrowserPageLoadFailure
           browserTab={browserTab}
           loadError={browserTab.loadError}
-          failedNavigationUrl={failedNavigationUrl}
           failureExternalUrl={failureExternalUrl}
           certificateFailure={certificateFailure}
           sshRouted={sshRouted}
           worktreeId={worktreeId}
           autoRetry={autoRetry}
-          navigateToUrl={navigateToUrl}
           onRetry={() => {
             const webview = webviewRef.current
             if (!webview) {
@@ -125,24 +120,20 @@ export function BrowserPageViewportOverlays({
 function BrowserPageLoadFailure({
   browserTab,
   loadError,
-  failedNavigationUrl,
   failureExternalUrl,
   certificateFailure,
   sshRouted,
   worktreeId,
   autoRetry,
-  navigateToUrl,
   onRetry
 }: {
   browserTab: BrowserPageState
   loadError: BrowserLoadError
-  failedNavigationUrl: string
   failureExternalUrl: string | null
   certificateFailure: BrowserCertificateFailure | null
   sshRouted: boolean
   worktreeId: string
   autoRetry: Omit<BrowserLoadFailureAutoRetry, 'loading'>
-  navigateToUrl: (url: string) => void
   onRetry: () => void
 }): React.JSX.Element {
   const ssh = useSshWorkspaceBrowserLoadFailureRoute(worktreeId)
@@ -150,9 +141,7 @@ function BrowserPageLoadFailure({
     <BrowserLoadFailureOverlay
       loadError={loadError}
       externalUrl={failureExternalUrl}
-      httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
       onRetry={onRetry}
-      onTryHttps={navigateToUrl}
       onOpenExternal={(url) => void window.api.shell.openUrl(url)}
       certificateFailure={certificateFailure}
       sshRoutedHint={sshRouted}

@@ -133,11 +133,7 @@ describe('browser notice formatting', () => {
       validatedUrl: 'http://localhost:3000'
     }
     expect(
-      formatLoadFailureDescription(
-        loadError,
-        { host: 'localhost:3000', isLocalhostLike: true },
-        describeBrowserLoadFailure(loadError, null)
-      )
+      formatLoadFailureDescription(loadError, describeBrowserLoadFailure(loadError, null))
     ).toBe('The browser page stopped unexpectedly. Retry to restore it.')
   })
 
@@ -150,7 +146,6 @@ describe('browser notice formatting', () => {
     const describeCode = (code: number) =>
       formatLoadFailureDescription(
         loadError(code),
-        { host: 'localhost:3443', isLocalhostLike: true },
         describeBrowserLoadFailure(loadError(code), null)
       )
 

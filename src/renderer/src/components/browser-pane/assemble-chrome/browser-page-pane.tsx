@@ -377,7 +377,6 @@ export function BrowserPagePane({
               showFailureOverlay={showFailureOverlay}
               browserTab={browserTab}
               failureExternalUrl={failureExternalUrl}
-              failedNavigationUrl={failedNavigationUrl}
               onUpdatePageStateRef={onUpdatePageStateRef}
               retryGuestRecoveryRef={retryGuestRecoveryRef}
               navigateToUrl={nav.navigateToUrl}

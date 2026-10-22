@@ -19,7 +19,7 @@ export function MobileBrowserLoadFailure({ loadError }: { loadError: BrowserLoad
     <View pointerEvents="none" style={styles.page}>
       <View style={styles.column}>
         <Text style={styles.title}>{text.title}</Text>
-        <Text style={styles.description}>{text.description}</Text>
+        {text.description ? <Text style={styles.description}>{text.description}</Text> : null}
         {failure.errorName ? <Text style={styles.code}>{failure.errorName}</Text> : null}
       </View>
     </View>

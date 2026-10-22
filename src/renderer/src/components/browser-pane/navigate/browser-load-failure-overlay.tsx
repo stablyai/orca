@@ -10,7 +10,6 @@ import type {
   BrowserCertificateProceedResult,
   BrowserLoadError
 } from '../../../../../shared/browser-workspace-types'
-import { isEligibleLocalCertificateHost } from '../../../../../shared/browser-url'
 import { normalizeCertificateError } from '../../../../../shared/browser-certificate-errors'
 import {
   describeBrowserLoadFailure,
@@ -19,10 +18,8 @@ import {
 import {
   formatLoadFailureDescription,
   formatLoadFailureTitle,
-  isCertificateLoadError,
-  type LoadFailureMeta
+  isCertificateLoadError
 } from './browser-notices'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 import {
   BrowserLoadFailureAutoRetryStatus,
   type BrowserLoadFailureAutoRetry,
@@ -32,9 +29,7 @@ import {
 type BrowserLoadFailureOverlayProps = {
   loadError: BrowserLoadError
   externalUrl?: string | null
-  httpsRecoveryUrl: string | null
   onRetry: BrowserLoadFailureRetry
-  onTryHttps: (url: string) => void
   onOpenExternal?: (url: string) => void
   certificateFailure?: BrowserCertificateFailure | null
   expectedBrowserPageId?: string | null
@@ -54,19 +49,6 @@ type CertificateProceedAttempt = {
   state: 'submitting' | 'failed'
   showConnecting: boolean
   reason?: BrowserCertificateProceedFailureReason | 'request-failed'
-}
-
-function getLoadErrorMetadata(loadError: BrowserLoadError): LoadFailureMeta {
-  try {
-    const parsed = new URL(loadError.validatedUrl)
-    return {
-      host: parsed.host || null,
-      isLocalhostLike:
-        parsed.hostname === '0.0.0.0' || isEligibleLocalCertificateHost(parsed.hostname)
-    }
-  } catch {
-    return { host: null, isLocalhostLike: false }
-  }
 }
 
 function getMatchingCertificateFailure(args: {
@@ -132,9 +114,7 @@ function formatCertificateProceedFailure(
 export function BrowserLoadFailureOverlay({
   loadError,
   externalUrl,
-  httpsRecoveryUrl,
   onRetry,
-  onTryHttps,
   onOpenExternal,
   certificateFailure,
   expectedBrowserPageId,
@@ -165,10 +145,9 @@ export function BrowserLoadFailureOverlay({
           description: matchingCertificateFailure.error
         }
       : loadError
-  const meta = getLoadErrorMetadata(presentationLoadError)
   const certificateError = isCertificateLoadError(presentationLoadError)
-  const guestRecoveryError = presentationLoadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
   const failure = describeBrowserLoadFailure(presentationLoadError, route)
+  const description = formatLoadFailureDescription(presentationLoadError, failure, sshRoutedHint)
   const activeProceedAttempt =
     proceedAttempt?.challengeId === matchingCertificateFailure?.challengeId ? proceedAttempt : null
   const actionsDisabled = activeProceedAttempt?.state === 'submitting'
@@ -272,13 +251,6 @@ export function BrowserLoadFailureOverlay({
       ) : null}
     </>
   )
-  // Why: refused, unresolved or offline loads fail the same way over HTTPS; only a server that
-  // answered strangely (a TLS port spoken to in plain HTTP) is worth a second scheme.
-  const offerHttps =
-    httpsRecoveryUrl !== null &&
-    !guestRecoveryError &&
-    (failure.kind === 'reset' || failure.kind === 'other')
-
   return (
     <SecuritySurface>
       <div className="scrollbar-sleek absolute inset-0 z-20 overflow-y-auto bg-background">
@@ -287,20 +259,9 @@ export function BrowserLoadFailureOverlay({
             <h2 className="text-xl font-semibold text-balance text-foreground">
               {formatLoadFailureTitle(presentationLoadError, failure)}
             </h2>
-            <p className="mt-2 text-sm text-pretty text-muted-foreground">
-              <span>
-                {formatLoadFailureDescription(presentationLoadError, meta, failure, sshRoutedHint)}
-              </span>
-              {certificateError && meta.isLocalhostLike ? (
-                <span>
-                  {' '}
-                  {translate(
-                    'browser.loadFailure.trustedCertificateGuidance',
-                    'For local development, use a trusted local certificate when possible.'
-                  )}
-                </span>
-              ) : null}
-            </p>
+            {description ? (
+              <p className="mt-2 text-sm text-pretty text-muted-foreground">{description}</p>
+            ) : null}
             {failure.errorName ? (
               <p className="mt-3 font-mono text-xs text-muted-foreground">{failure.errorName}</p>
             ) : null}
@@ -315,15 +276,6 @@ export function BrowserLoadFailureOverlay({
               ) : (
                 <>
                   {retryButton}
-                  {offerHttps ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onTryHttps(httpsRecoveryUrl)}
-                    >
-                      {translate('browser.loadFailure.tryHttps', 'Try HTTPS')}
-                    </Button>
-                  ) : null}
                   {onRecheckSshRoute ? (
                     <Button
                       size="sm"

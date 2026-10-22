@@ -1,6 +1,5 @@
 import { useEffect, useEffectEvent, useState, useSyncExternalStore } from 'react'
 import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import type {
   BrowserLoadFailureDescription,
   BrowserLoadFailureRecovery
@@ -78,15 +77,15 @@ function useBrowserLoadFailureAutoRetry({
   recovery: BrowserLoadFailureRecovery
   autoRetry: BrowserLoadFailureAutoRetry | undefined
   retry: BrowserLoadFailureRetry
-}): { waiting: boolean; stop: () => void } {
-  const [stoppedKey, setStoppedKey] = useState<string | null>(null)
-  const enabled = Boolean(autoRetry?.active) && recovery !== null && stoppedKey !== failureKey
+}): boolean {
+  const [exhaustedKey, setExhaustedKey] = useState<string | null>(null)
+  const enabled = Boolean(autoRetry?.active) && recovery !== null && exhaustedKey !== failureKey
   const whileWindowHidden = autoRetry?.whileWindowHidden ?? false
   const loading = autoRetry?.loading ?? false
   const online = useSyncExternalStore(subscribeToNetworkChanges, () => navigator.onLine)
   // Why: an offline failure polls once the network is back, since `online` can fire before DNS works.
   const polling = enabled && (recovery !== 'online' || online)
-  const giveUp = useEffectEvent(() => setStoppedKey(failureKey))
+  const giveUp = useEffectEvent(() => setExhaustedKey(failureKey))
   const attempt = useEffectEvent((): Promise<void> | null => {
     if (loading || (!whileWindowHidden && !isWindowVisible())) {
       return null
@@ -102,10 +101,7 @@ function useBrowserLoadFailureAutoRetry({
     return pollWithBackoff(attempt, giveUp)
   }, [polling, failureKey])
 
-  return {
-    waiting: enabled,
-    stop: () => setStoppedKey(failureKey)
-  }
+  return enabled
 }
 
 /** Re-attempts a failed load through the pane's own Retry while mounted, and says that it is waiting. */
@@ -120,7 +116,7 @@ export function BrowserLoadFailureAutoRetryStatus({
   autoRetry: BrowserLoadFailureAutoRetry | undefined
   retry: BrowserLoadFailureRetry
 }): React.JSX.Element | null {
-  const { waiting, stop } = useBrowserLoadFailureAutoRetry({
+  const waiting = useBrowserLoadFailureAutoRetry({
     failureKey,
     recovery: failure.recovery,
     autoRetry,
@@ -141,9 +137,6 @@ export function BrowserLoadFailureAutoRetryStatus({
               ? 'waitingForServer'
               : 'waiting'
       )}
-      <Button type="button" variant="link" size="xs" className="h-auto" onClick={stop}>
-        {translateLoadFailurePiece('stopWaiting')}
-      </Button>
     </div>
   )
 }

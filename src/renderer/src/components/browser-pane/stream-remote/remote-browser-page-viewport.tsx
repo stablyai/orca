@@ -9,10 +9,7 @@ import type {
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser'
-import {
-  resolveRemoteFailureExternalUrl,
-  toHttpsRecoveryUrl
-} from '../../../../../shared/browser-url'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
@@ -163,14 +160,12 @@ export function RemoteBrowserPageViewport({
         <BrowserLoadFailureOverlay
           loadError={loadError}
           externalUrl={remoteFailureExternalUrl}
-          httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
           // Why: reloading the server's error page only refreshes it; re-attempt the URL that failed.
           onRetry={() => onGoto(remoteFailureUrl)}
           autoRetry={{
             active: isActive,
             loading: browserTab.loading
           }}
-          onTryHttps={(url) => void onGoto(url)}
           onOpenExternal={(url) => void window.api.shell.openUrl(url)}
           certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
           expectedBrowserPageId={

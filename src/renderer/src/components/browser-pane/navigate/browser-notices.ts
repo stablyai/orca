@@ -14,11 +14,6 @@ import {
   type BrowserLoadFailureDescription
 } from '../../../../../shared/browser-load-failure'
 
-export type LoadFailureMeta = {
-  host: string | null
-  isLocalhostLike: boolean
-}
-
 type BrowserLoadErrorLike = BrowserLoadError | null
 
 // Unknown Chromium permissions keep their raw name instead of disappearing behind invented copy.
@@ -123,15 +118,14 @@ export function formatLoadFailureTitle(
 
 export function formatLoadFailureDescription(
   loadError: BrowserLoadError,
-  meta: LoadFailureMeta,
   failure: BrowserLoadFailureDescription,
   sshRouted = false
-): string {
+): string | null {
   if (loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
     return loadError.description
   }
   if (isChromiumCertificateErrorCode(loadError.code)) {
-    const host = meta.host ?? 'this address'
+    const host = failure.host ?? 'this address'
     if (loadError.code === -200) {
       return translate(
         'browser.loadFailure.certificateNameMismatch',
@@ -184,14 +178,8 @@ const LOAD_FAILURE_PIECES: Record<BrowserLoadFailureCopyId, (values: { host: str
     dnsTitle: (v) => translate('browser.loadFailure.dnsTitle', COPY.dnsTitle, v),
     dnsDescription: () => translate('browser.loadFailure.dnsDescription', COPY.dnsDescription),
     offlineTitle: () => translate('browser.loadFailure.offlineTitle', COPY.offlineTitle),
-    offlineDescription: () =>
-      translate('browser.loadFailure.offlineDescription', COPY.offlineDescription),
     timeoutTitle: (v) => translate('browser.loadFailure.timeoutTitle', COPY.timeoutTitle, v),
-    timeoutDescription: () =>
-      translate('browser.loadFailure.timeoutDescription', COPY.timeoutDescription),
     resetTitle: (v) => translate('browser.loadFailure.resetTitle', COPY.resetTitle, v),
-    resetDescription: () =>
-      translate('browser.loadFailure.resetDescription', COPY.resetDescription),
     routeDownTitle: () => translate('browser.loadFailure.routeDownTitle', COPY.routeDownTitle),
     routeDownDescription: () =>
       translate('browser.loadFailure.routeDownDescription', COPY.routeDownDescription),
@@ -201,8 +189,6 @@ const LOAD_FAILURE_PIECES: Record<BrowserLoadFailureCopyId, (values: { host: str
       }),
     otherTitleWithoutHost: () =>
       translate('browser.loadFailure.cantLoadPage', COPY.otherTitleWithoutHost),
-    otherDescription: () =>
-      translate('browser.loadFailure.otherDescription', COPY.otherDescription),
     waiting: () => translate('browser.loadFailure.waiting', COPY.waiting),
     waitingForServer: () =>
       translate('browser.loadFailure.waitingForServer', COPY.waitingForServer),
@@ -210,8 +196,7 @@ const LOAD_FAILURE_PIECES: Record<BrowserLoadFailureCopyId, (values: { host: str
       translate('browser.loadFailure.notRunningSshDescription', COPY.notRunningSshDescription),
     waitingForHost: () => translate('browser.loadFailure.waitingForHost', COPY.waitingForHost),
     waitingForNetwork: () =>
-      translate('browser.loadFailure.waitingForNetwork', COPY.waitingForNetwork),
-    stopWaiting: () => translate('browser.loadFailure.stopWaiting', COPY.stopWaiting)
+      translate('browser.loadFailure.waitingForNetwork', COPY.waitingForNetwork)
   }
 
 export function translateLoadFailurePiece(id: BrowserLoadFailureCopyId): string {

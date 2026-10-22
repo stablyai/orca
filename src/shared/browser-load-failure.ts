@@ -42,38 +42,33 @@ export const BROWSER_LOAD_FAILURE_COPY = {
   dnsTitle: "Couldn't find {{host}}",
   dnsDescription: 'Check the address for typos.',
   offlineTitle: "You're offline",
-  offlineDescription: 'Check your network connection.',
   timeoutTitle: '{{host}} took too long to respond',
-  timeoutDescription: 'The server may be busy or unreachable.',
   resetTitle: 'The connection to {{host}} was interrupted',
-  resetDescription: 'The server closed the connection before the page loaded.',
   routeDownTitle: "Can't reach the SSH host",
   routeDownDescription:
     "This page loads through the workspace's SSH host, which isn't connected right now.",
   otherTitle: "Can't reach {{host}}",
   otherTitleWithoutHost: "Can't load this page",
-  otherDescription: 'The connection failed before the page could load.',
   waiting: 'Reloads when the server responds',
   waitingForServer: 'Reloads when the server starts',
   waitingForHost: 'Reloads when the SSH host reconnects',
-  waitingForNetwork: "Reloads when you're back online",
-  stopWaiting: 'Stop'
+  waitingForNetwork: "Reloads when you're back online"
 } as const
 
 export type BrowserLoadFailureCopyId = keyof typeof BROWSER_LOAD_FAILURE_COPY
 
 const KIND_COPY: Record<
   BrowserLoadFailureKind,
-  { title: BrowserLoadFailureCopyId; description: BrowserLoadFailureCopyId }
+  { title: BrowserLoadFailureCopyId; description: BrowserLoadFailureCopyId | null }
 > = {
   'not-running': { title: 'notRunningTitle', description: 'notRunningDescription' },
   refused: { title: 'refusedTitle', description: 'refusedDescription' },
   dns: { title: 'dnsTitle', description: 'dnsDescription' },
-  offline: { title: 'offlineTitle', description: 'offlineDescription' },
-  timeout: { title: 'timeoutTitle', description: 'timeoutDescription' },
-  reset: { title: 'resetTitle', description: 'resetDescription' },
+  offline: { title: 'offlineTitle', description: null },
+  timeout: { title: 'timeoutTitle', description: null },
+  reset: { title: 'resetTitle', description: null },
   'route-down': { title: 'routeDownTitle', description: 'routeDownDescription' },
-  other: { title: 'otherTitle', description: 'otherDescription' }
+  other: { title: 'otherTitle', description: null }
 }
 
 export type BrowserLoadFailureCopyRender = (
@@ -84,12 +79,12 @@ export type BrowserLoadFailureCopyRender = (
 const renderEnglish: BrowserLoadFailureCopyRender = (id, values) =>
   BROWSER_LOAD_FAILURE_COPY[id].replace('{{host}}', values.host)
 
-/** The headline and sentence for a failure; desktop passes a translating `render`. */
+/** The headline, and a sentence only when it adds something the title doesn't; desktop translates. */
 export function formatBrowserLoadFailureText(
   loadError: BrowserLoadError,
   failure: BrowserLoadFailureDescription,
   render: BrowserLoadFailureCopyRender = renderEnglish
-): { title: string; description: string } {
+): { title: string; description: string | null } {
   const copy = KIND_COPY[failure.kind]
   const host = failure.host ?? ''
   return {
@@ -98,7 +93,10 @@ export function formatBrowserLoadFailureText(
         ? render(copy.title, { host })
         : render('otherTitleWithoutHost', { host }),
     // Why: code 0 carries Orca's own message (bad address, workspace doc, remote browser).
-    description: loadError.code === 0 ? loadError.description : render(copy.description, { host })
+    description:
+      loadError.code === 0
+        ? loadError.description
+        : copy.description && render(copy.description, { host })
   }
 }
 
