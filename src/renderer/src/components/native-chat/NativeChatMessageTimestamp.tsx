@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getIntlLocale } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
@@ -42,18 +43,26 @@ export function NativeChatMessageTimestamp({
     return null
   }
   const formatters = getTimestampFormatters()
+  const fullLabel = formatters.full.format(date)
 
   return (
-    <time
-      dateTime={date.toISOString()}
-      aria-label={formatters.full.format(date)}
-      tabIndex={focusable ? 0 : undefined}
-      className={cn(
-        'rounded-md text-xs whitespace-nowrap text-chat-foreground-faint tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        className
-      )}
-    >
-      {formatters.time.format(date)}
-    </time>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <time
+          dateTime={date.toISOString()}
+          aria-label={fullLabel}
+          tabIndex={focusable ? 0 : undefined}
+          className={cn(
+            'rounded-md text-xs whitespace-nowrap text-chat-foreground-faint tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            className
+          )}
+        >
+          {formatters.time.format(date)}
+        </time>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {fullLabel}
+      </TooltipContent>
+    </Tooltip>
   )
 }
