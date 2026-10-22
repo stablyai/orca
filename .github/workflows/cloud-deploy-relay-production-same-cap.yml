@@ -24,7 +24,7 @@ on:
       target-rehome-protocol:
         description: Exact target regional-rehome protocol
         required: true
-        default: '1'
+        default: '3'
         type: choice
         options: ['0', '1', '3']
       rollback-rehome-protocol:
