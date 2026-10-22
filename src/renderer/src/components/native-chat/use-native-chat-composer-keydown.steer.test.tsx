@@ -38,6 +38,7 @@ function setup(
       draft: composer.draft ?? '',
       hasAttachments: composer.hasAttachments ?? false,
       isComposing: () => false,
+      matchesSubmitKey: (event) => event.key === 'Enter' && !event.shiftKey,
       ...(steerQueued ? { steerQueued } : {}),
       ...callbacks
     })

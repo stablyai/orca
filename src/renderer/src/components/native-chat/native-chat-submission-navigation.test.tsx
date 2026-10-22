@@ -189,6 +189,7 @@ it('reveals a goal at the press, before the host sets it', async () => {
         draftScopeKey: scope,
         draft,
         caret: draft.length,
+        submitGesturePending: false,
         imageAttachments: [],
         disabled: false,
         sendPty: vi.fn(),

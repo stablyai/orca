@@ -10,6 +10,7 @@ import {
   sendNativeChatMessage,
   resetNativeChatPtySendQueuesForTests
 } from './native-chat-runtime-send'
+import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
 beforeEach(() => {
   vi.useFakeTimers()
@@ -105,4 +106,24 @@ it('ignores a pasted answer acknowledgment after cancellation', async () => {
   await vi.advanceTimersByTimeAsync(1000)
   expect(settled).not.toHaveBeenCalled()
   expect(io.verified).toHaveBeenCalledOnce()
+})
+
+it('submits an observed chat send with the resolved gesture bytes, not a bare CR', async () => {
+  sendNativeChatMessage('pane', 'hi', { onWriteRejected: vi.fn(), submitBytes: '\x1b\r' })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(io.verified.mock.calls.map((call) => call[1])).toEqual([
+    buildNativeChatPasteBytes('hi'),
+    '\x1b\r'
+  ])
+})
+
+it('submits an observed image send with the resolved gesture bytes, not a bare CR', async () => {
+  sendNativeChatMessageWithImageAttachments('claude', 'pane', 'look', ['/tmp/a.png'], {
+    onWriteRejected: vi.fn(),
+    submitBytes: '\x1b\r'
+  })
+  await vi.advanceTimersByTimeAsync(2000)
+  const written = io.verified.mock.calls.map((call) => call[1])
+  expect(written.at(-1)).toBe('\x1b\r')
+  expect(written).not.toContain(NATIVE_CHAT_SUBMIT)
 })

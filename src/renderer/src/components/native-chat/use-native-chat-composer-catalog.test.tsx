@@ -182,6 +182,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
         activeSuggestion,
         draft: '/',
         isComposing: () => false,
+        matchesSubmitKey: (event) => event.key === 'Enter' && !event.shiftKey,
         completePickerItem: complete,
         dispatchPickerCommand: dispatch,
         dismissPicker: vi.fn(),

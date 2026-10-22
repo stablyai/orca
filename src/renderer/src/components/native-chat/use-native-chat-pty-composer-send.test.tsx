@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatSendClassification } from '../../../../shared/native-chat-slash-commands'
 import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
 import { sendNativeChatMessage } from './native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
+import { resolveComposerSubmitBytes } from './native-chat-claude-submit-cache'
 
 const handle = vi.hoisted(() => ({ cancel: () => {}, settleAfterMs: 0 }))
 vi.mock('./native-chat-runtime-send', () => ({
@@ -20,6 +21,10 @@ vi.mock('../../store', () => ({
   useAppStore: { getState: () => ({ clearNativeChatLaunchDraft: vi.fn() }) }
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('./native-chat-claude-submit-cache', () => ({
+  primeComposerSubmitBytes: vi.fn(),
+  resolveComposerSubmitBytes: vi.fn()
+}))
 
 function send(
   agent: AgentType,
@@ -58,6 +63,7 @@ function send(
 beforeEach(() => {
   vi.mocked(sendNativeChatMessage).mockClear()
   vi.mocked(sendNativeChatMessageWithImageAttachments).mockClear()
+  vi.mocked(resolveComposerSubmitBytes).mockReset()
 })
 
 it('routes a Claude chat send outcome to its own pending echo', () => {
@@ -94,4 +100,41 @@ it.each([
 
 it('reports nothing for a blank draft', () => {
   expect(send('codex', 'chat', '   ').submitted).not.toHaveBeenCalled()
+})
+
+describe('submit gesture wiring', () => {
+  it('carries the resolved submit gesture into an image-attachment send', () => {
+    vi.mocked(resolveComposerSubmitBytes).mockReturnValue('\x1b\r')
+    send('claude', 'chat', 'hello', ['/tmp/img.png'])
+    expect(vi.mocked(sendNativeChatMessageWithImageAttachments).mock.calls[0]?.[4]).toEqual(
+      expect.objectContaining({ submitBytes: '\x1b\r' })
+    )
+  })
+
+  it('carries the resolved submit gesture into a multi-attachment send with every path', () => {
+    vi.mocked(resolveComposerSubmitBytes).mockReturnValue('\x1b\r')
+    send('claude', 'chat', 'hello', ['/tmp/a.png', '/tmp/b.png'])
+    expect(vi.mocked(sendNativeChatMessageWithImageAttachments)).toHaveBeenCalledWith(
+      'claude',
+      'pty',
+      'hello',
+      ['/tmp/a.png', '/tmp/b.png'],
+      expect.objectContaining({ submitBytes: '\x1b\r' })
+    )
+  })
+
+  it('carries the resolved submit gesture into a text send', () => {
+    vi.mocked(resolveComposerSubmitBytes).mockReturnValue('\x1b\r')
+    send('claude', 'chat', 'hello')
+    expect(vi.mocked(sendNativeChatMessage).mock.calls[0]?.[2]).toEqual(
+      expect.objectContaining({ submitBytes: '\x1b\r' })
+    )
+  })
+
+  it('leaves submit bytes unset when no gesture resolves (default CR)', () => {
+    send('claude', 'chat', 'hello', ['/tmp/img.png'])
+    expect(
+      vi.mocked(sendNativeChatMessageWithImageAttachments).mock.calls[0]?.[4]?.submitBytes
+    ).toBeUndefined()
+  })
 })

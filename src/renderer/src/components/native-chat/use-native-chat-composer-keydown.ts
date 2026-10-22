@@ -14,6 +14,7 @@ import {
   stepNativeChatPromptRecall,
   type NativeChatComposerRecall
 } from './native-chat-sent-prompt-history'
+import type { SubmitKeyEvent } from './use-claude-submit-gesture'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
@@ -25,6 +26,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   hasAttachments?: boolean
   recall?: NativeChatComposerRecall | undefined
   isComposing: () => boolean
+  matchesSubmitKey: (event: SubmitKeyEvent) => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
   dismissPicker: (triggerKey: string) => void
@@ -47,6 +49,7 @@ export function useNativeChatComposerKeyDown({
   hasAttachments = false,
   recall,
   isComposing,
+  matchesSubmitKey,
   completePickerItem,
   dispatchPickerCommand,
   dismissPicker,
@@ -132,6 +135,8 @@ export function useNativeChatComposerKeyDown({
           event.preventDefault()
           return
         }
+      }
+      if (matchesSubmitKey(event)) {
         event.preventDefault()
         send()
         return
@@ -176,6 +181,7 @@ export function useNativeChatComposerKeyDown({
       hasAttachments,
       interrupt,
       isComposing,
+      matchesSubmitKey,
       mentionFiles,
       send,
       steerQueued,

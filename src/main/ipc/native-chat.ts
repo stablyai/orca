@@ -1,5 +1,6 @@
 import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+import { readClaudeChatKeybindings } from '../native-chat/claude-chat-keybindings'
 import type {
   AgentType,
   NativeChatMessage,
@@ -328,6 +329,7 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
 }
 
 export function registerNativeChatHandlers(): void {
+  ipcMain.handle('nativeChat:readClaudeKeybindings', () => readClaudeChatKeybindings())
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
   )

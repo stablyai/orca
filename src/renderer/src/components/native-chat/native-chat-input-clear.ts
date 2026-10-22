@@ -33,6 +33,10 @@ export type NativeChatSendOptions = {
    * pasting on top of residue.
    */
   confirmCleared?: () => boolean
+  /** Bytes written to submit the message; defaults to a bare CR (Enter). The chat
+   *  composer resolves this from the user's Claude `chat:submit` keybinding so a
+   *  remapped Enter (bound to insert a newline) doesn't leave the message unsent. */
+  submitBytes?: string
 }
 
 export function clearUnsubmittedAgentInput(ptyId: string, options?: NativeChatSendOptions): void {

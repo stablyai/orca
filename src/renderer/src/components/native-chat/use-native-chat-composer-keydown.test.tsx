@@ -11,7 +11,10 @@ import {
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { useNativeChatRecallPosition } from './use-native-chat-composer-recall'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import {
+  useNativeChatComposerKeyDown,
+  type UseNativeChatComposerKeyDownArgs
+} from './use-native-chat-composer-keydown'
 
 const COMMAND = {
   kind: 'command' as const,
@@ -37,6 +40,9 @@ function picker(items = [COMMAND]): Extract<ComposerAutocomplete, { mode: 'slash
   }
 }
 
+const defaultMatchesSubmitKey: UseNativeChatComposerKeyDownArgs['matchesSubmitKey'] = (event) =>
+  event.key === 'Enter' && !event.shiftKey
+
 function setup(
   autocomplete: ComposerAutocomplete = picker(),
   composing = false,
@@ -44,8 +50,14 @@ function setup(
   {
     files = [],
     activeSuggestion = 0,
-    loading = false
-  }: { files?: readonly string[]; activeSuggestion?: number; loading?: boolean } = {}
+    loading = false,
+    matchesSubmitKey = defaultMatchesSubmitKey
+  }: {
+    files?: readonly string[]
+    activeSuggestion?: number
+    loading?: boolean
+    matchesSubmitKey?: UseNativeChatComposerKeyDownArgs['matchesSubmitKey']
+  } = {}
 ) {
   const callbacks = {
     completeMention: vi.fn(),
@@ -65,16 +77,24 @@ function setup(
       activeSuggestion,
       draft,
       isComposing: () => composing,
+      matchesSubmitKey,
       ...callbacks
     })
   )
   return { handler: hook.result.current, callbacks }
 }
 
-function keyEvent(key: string, isComposing = false) {
+function keyEvent(
+  key: string,
+  isComposing = false,
+  mods: { alt?: boolean; ctrl?: boolean; meta?: boolean; shift?: boolean } = {}
+) {
   return {
     key,
-    shiftKey: false,
+    shiftKey: mods.shift ?? false,
+    altKey: mods.alt ?? false,
+    ctrlKey: mods.ctrl ?? false,
+    metaKey: mods.meta ?? false,
     keyCode: isComposing ? 229 : 0,
     nativeEvent: { isComposing },
     preventDefault: vi.fn()
@@ -151,6 +171,19 @@ describe('useNativeChatComposerKeyDown', () => {
     const { handler, callbacks } = setup(picker([]))
     handler(keyEvent('Enter') as never)
     expect(callbacks.send).toHaveBeenCalledOnce()
+  })
+
+  it('submits on the injected gesture and treats a non-matching Enter as a newline', () => {
+    const altEnterOnly: UseNativeChatComposerKeyDownArgs['matchesSubmitKey'] = (event) =>
+      event.key === 'Enter' && event.altKey
+
+    const plainEnter = setup(picker([]), false, '/', { matchesSubmitKey: altEnterOnly })
+    plainEnter.handler(keyEvent('Enter') as never)
+    expect(plainEnter.callbacks.send).not.toHaveBeenCalled()
+
+    const altEnter = setup(picker([]), false, '/', { matchesSubmitKey: altEnterOnly })
+    altEnter.handler(keyEvent('Enter', false, { alt: true }) as never)
+    expect(altEnter.callbacks.send).toHaveBeenCalledOnce()
   })
 
   it.each(['claude', 'openclaude', 'codex', 'grok'] as const)(
@@ -237,6 +270,7 @@ describe('useNativeChatComposerKeyDown', () => {
           show: vi.fn()
         },
         isComposing: () => false,
+        matchesSubmitKey: (event) => event.key === 'Enter' && !event.shiftKey,
         completePickerItem: vi.fn(),
         dispatchPickerCommand: vi.fn(),
         dismissPicker: vi.fn(),
