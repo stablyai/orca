@@ -4,9 +4,11 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import { ZcodeAppServerRequestError } from './zcode-app-server-request-error'
 import {
   adapterFor,
+  acquireAndOpen,
   acquireInput,
   fakeZcode,
   identityFor,
+  openInput,
   PROVIDER_SESSION
 } from './zcode-structured-adapter-fixture'
 
@@ -17,13 +19,29 @@ const messageBody = (text: string): AgentJournalMessageItem => ({
 })
 
 describe('ZcodeStructuredSessionAdapter.acquire', () => {
-  it('creates a conversation and publishes the child with its snapshot id', async () => {
+  it('publishes the spawned child and mints no handle before it opens', async () => {
     const zcode = fakeZcode()
     const adapter = adapterFor(zcode)
 
     const acquisition = await adapter.acquire(acquireInput())
 
     expect(zcode.connections).toHaveLength(1)
+    expect(zcode.connections[0]!.requests).toEqual([])
+    expect(acquisition.process).toEqual({
+      hostId: 'local',
+      pid: 4321,
+      processStartTimeMs: 1_700_000_000_000,
+      spawnToken: 'spawn-9'
+    })
+    expect(acquisition.link).toBeUndefined()
+  })
+
+  it('creates a conversation when opened and answers the handle it proved', async () => {
+    const zcode = fakeZcode()
+    const adapter = adapterFor(zcode)
+
+    const { opened } = await acquireAndOpen(adapter)
+
     expect(zcode.connections[0]!.requests).toEqual([
       {
         method: 'session/create',
@@ -34,19 +52,13 @@ describe('ZcodeStructuredSessionAdapter.acquire', () => {
         params: { sessionId: PROVIDER_SESSION, deliveryKind: 'desktop-continuous' }
       }
     ])
-    expect(acquisition.process).toEqual({
-      hostId: 'local',
-      pid: 4321,
-      processStartTimeMs: 1_700_000_000_000,
-      spawnToken: 'spawn-9'
-    })
-    expect(acquisition.link?.handle).toEqual({
+    expect(opened.link?.handle).toEqual({
       transport: 'zcode-app-server',
       agent: 'zcode',
       nativeId: PROVIDER_SESSION
     })
-    expect(acquisition.link?.origin).toBe('created')
-    expect(acquisition.link?.mintedAtFence).toBe(7)
+    expect(opened.link?.origin).toBe('created')
+    expect(opened.link?.mintedAtFence).toBe(7)
   })
 
   it('reports the same process identity to onSpawned as the acquisition carries', async () => {
@@ -79,10 +91,10 @@ describe('ZcodeStructuredSessionAdapter.acquire', () => {
       })
     }
 
-    // SAFETY: the acquire path only touches `bindReadingControl` on this sink.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the acquire path only calls bindReadingControl on this sink.
+    // SAFETY: the open path only touches `bindReadingControl` on this sink.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open path only calls bindReadingControl on this sink.
     const events = sink as unknown as StructuredAgentSessionEventSink
-    await adapter.acquire(acquireInput({ events }))
+    await acquireAndOpen(adapter, acquireInput({ events }))
 
     expect(sink.bindReadingControl).toHaveBeenCalledOnce()
     expect(bound[0]).toMatchObject({ pauseReading: expect.any(Function) })
@@ -159,7 +171,7 @@ describe('ZcodeStructuredSessionAdapter.acquire', () => {
       })
     })
 
-    await adapter.acquire(acquireInput())
+    await acquireAndOpen(adapter)
 
     // The resumed conversation seeded its history: the session answer over the
     // journal names the snapshot rows, whatever shape carried the id.
@@ -180,7 +192,7 @@ describe('ZcodeStructuredSessionAdapter.acquire', () => {
       })
     })
 
-    const acquisition = await adapter.acquire(acquireInput())
+    const { opened } = await acquireAndOpen(adapter)
 
     expect(zcode.connections[0]!.requests).toEqual([
       { method: 'session/resume', params: { sessionId: PROVIDER_SESSION } },
@@ -189,8 +201,8 @@ describe('ZcodeStructuredSessionAdapter.acquire', () => {
         params: { sessionId: PROVIDER_SESSION, deliveryKind: 'desktop-continuous' }
       }
     ])
-    expect(acquisition.link?.handle.nativeId).toBe(PROVIDER_SESSION)
-    expect(acquisition.link?.origin).toBe('resumed')
+    expect(opened.link?.handle.nativeId).toBe(PROVIDER_SESSION)
+    expect(opened.link?.origin).toBe('resumed')
   })
 
   it('refuses a resume that minted a different conversation', async () => {
@@ -209,20 +221,23 @@ describe('ZcodeStructuredSessionAdapter.acquire', () => {
       })
     })
 
-    await expect(adapter.acquire(acquireInput())).rejects.toThrow(
+    const input = acquireInput()
+    const acquisition = await adapter.acquire(input)
+
+    await expect(adapter.open(openInput(input, acquisition))).rejects.toThrow(
       /resumed session sess_other when asked for/
     )
-    expect(zcode.connections[0]!.closeCount).toBe(1)
   })
 
-  it('closes the child when the create never answers', async () => {
+  it('fails the open when the create never answers', async () => {
     const zcode = fakeZcode({
       'session/create': () => new Promise<never>(() => {})
     })
     const adapter = adapterFor(zcode, [], { requestTimeoutMs: 100 })
+    const input = acquireInput()
+    const acquisition = await adapter.acquire(input)
 
-    await expect(adapter.acquire(acquireInput())).rejects.toThrow()
-    expect(zcode.connections[0]!.closeCount).toBe(1)
+    await expect(adapter.open(openInput(input, acquisition))).rejects.toThrow()
   })
 })
 
@@ -230,7 +245,7 @@ describe('ZcodeStructuredSessionAdapter.dispatch', () => {
   it('accepts a send the provider took', async () => {
     const zcode = fakeZcode()
     const adapter = adapterFor(zcode)
-    await adapter.acquire(acquireInput())
+    await acquireAndOpen(adapter)
 
     const outcome = await adapter.dispatch({
       sessionId: 'session-1',
@@ -261,7 +276,7 @@ describe('ZcodeStructuredSessionAdapter.dispatch', () => {
       }
     })
     const adapter = adapterFor(zcode)
-    await adapter.acquire(acquireInput())
+    await acquireAndOpen(adapter)
 
     const outcome = await adapter.dispatch({
       sessionId: 'session-1',
@@ -278,7 +293,7 @@ describe('ZcodeStructuredSessionAdapter.dispatch', () => {
       'session/send': () => new Promise<never>(() => {})
     })
     const adapter = adapterFor(zcode, [], { requestTimeoutMs: 50 })
-    await adapter.acquire(acquireInput())
+    await acquireAndOpen(adapter)
 
     await expect(
       adapter.dispatch({
@@ -295,7 +310,7 @@ describe('ZcodeStructuredSessionAdapter.cancelTurn', () => {
   it('stops the provider turn', async () => {
     const zcode = fakeZcode()
     const adapter = adapterFor(zcode)
-    await adapter.acquire(acquireInput())
+    await acquireAndOpen(adapter)
 
     const outcome = await adapter.cancelTurn({
       sessionId: 'session-1',
@@ -370,7 +385,7 @@ describe('ZcodeStructuredSessionAdapter close', () => {
   it('answers a setOption for the model key and refuses anything else', async () => {
     const zcode = fakeZcode()
     const adapter = adapterFor(zcode)
-    await adapter.acquire(acquireInput())
+    await acquireAndOpen(adapter)
 
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })

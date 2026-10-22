@@ -1,5 +1,6 @@
-// Makes a reservation real: spawn `zcode app-server --stdio`, open or resume the conversation,
-// seed the journal from the snapshot, and hand the acquisition to the host.
+// Makes a reservation real: spawn `zcode app-server --stdio` and hand the child to the host. The
+// conversation opens after (`openZcodeStructuredSession`): create or resume, seed the journal from
+// the snapshot, and answer the host with the provider handle once the child took a session.
 
 import { randomUUID } from 'node:crypto'
 import { zcodeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
@@ -10,6 +11,7 @@ import {
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import { openZcodeAppServerConnection } from './zcode-app-server-connection'
 import {
   readZcodeSessionEvent,
@@ -58,7 +60,6 @@ export async function acquireZcodeStructuredSession(input: {
 
   let connection: Awaited<ReturnType<typeof openZcodeAppServerConnection>> | null = null
   let translator: ZcodeJournalTranslator | null = null
-  let unbindReadingControl: (() => void) | undefined
   /** The start time read once at spawn; onSpawned's report and the acquisition must match. */
   let spawnIdentity: Promise<AgentSessionProcessIdentity> | undefined
   const identityAt = async (pid: number): Promise<AgentSessionProcessIdentity> => {
@@ -133,8 +134,7 @@ export async function acquireZcodeStructuredSession(input: {
         onExit: (error) => {
           translator?.dispose()
           deps.onExitObserved?.(error)
-        },
-        ...(acquire.onOutput ? { onOutput: acquire.onOutput } : {})
+        }
       }
     )
 
@@ -146,48 +146,11 @@ export async function acquireZcodeStructuredSession(input: {
           now
         })
       : null
-    const snapshot = await openZcodeConversation(connection, launch, resumeSessionId, deps)
-    if (!snapshot) {
-      throw new Error('zcode app-server returned no session snapshot')
-    }
-    // The server streams `session/event` only once a subscribe names a delivery kind;
-    // until then the chat would sit silent behind a running turn.
-    await connection.request(
-      'session/subscribe',
-      { sessionId: snapshot.sessionId, deliveryKind: 'desktop-continuous' },
-      { timeoutMs: deps.requestTimeoutMs ?? CREATE_OR_RESUME_TIMEOUT_MS }
-    )
-    translator?.restoreSnapshot(snapshot.messages)
-
-    // The sink couples its durable-queue pressure to this child's stream; without the
-    // binding a hard-watermark sink keeps admitting and the child's rows drop.
-    if (connection.pauseReading && connection.resumeReading) {
-      unbindReadingControl = acquire.events?.bindReadingControl?.({
-        pauseReading: connection.pauseReading,
-        resumeReading: connection.resumeReading
-      })
-    }
 
     const process = connection.pid === undefined ? null : await identityAt(connection.pid)
-    const acquisition: AgentSessionAcquisition = {
-      process: process ?? {
-        hostId: acquire.identity.hostId,
-        pid: 0,
-        processStartTimeMs: null,
-        spawnToken: acquire.spawnToken
-      },
-      link: {
-        linkId: `zcode-${acquire.fence}-${snapshot.sessionId}`.slice(0, 128),
-        handle: zcodeProviderHandle(snapshot.sessionId),
-        origin: resumeSessionId ? 'resumed' : 'created',
-        mintedAtFence: acquire.fence,
-        observedAt: now()
-      },
-      acquisitionGeneration
-    }
     const session: ZcodeStructuredSession = {
       connection,
-      providerSessionId: snapshot.sessionId,
+      providerSessionId: null,
       acquisitionGeneration,
       fence: acquire.fence,
       translator,
@@ -197,11 +160,22 @@ export async function acquireZcodeStructuredSession(input: {
       prompts: livePrompts,
       options: new Map(Object.entries(acquire.options ?? {})),
       launch,
-      ...(unbindReadingControl ? { unbindReadingControl } : {})
+      resumeSessionId,
+      ...(acquire.events ? { events: acquire.events } : {})
     }
-    return { acquisition, session }
+    return {
+      acquisition: {
+        process: process ?? {
+          hostId: acquire.identity.hostId,
+          pid: 0,
+          processStartTimeMs: null,
+          spawnToken: acquire.spawnToken
+        },
+        acquisitionGeneration
+      },
+      session
+    }
   } catch (error) {
-    unbindReadingControl?.()
     translator?.dispose()
     if (connection) {
       const proven = await connection.close().catch(() => false)
@@ -210,6 +184,56 @@ export async function acquireZcodeStructuredSession(input: {
       }
     }
     throw error
+  }
+}
+
+/** Opens the spawned child's conversation and answers the host with the handle it proved. */
+export async function openZcodeStructuredSession(input: {
+  session: ZcodeStructuredSession
+  deps: ZcodeStructuredSessionAdapterDeps
+  signal: AbortSignal
+}): Promise<StructuredAgentSessionProviderOpenResult> {
+  const { session, deps, signal } = input
+  const now = deps.now ?? Date.now
+  signal.throwIfAborted()
+
+  const snapshot = await openZcodeConversation(
+    session.connection,
+    session.launch,
+    session.resumeSessionId,
+    deps
+  )
+  if (!snapshot) {
+    throw new Error('zcode app-server returned no session snapshot')
+  }
+  // The server streams `session/event` only once a subscribe names a delivery kind;
+  // until then the chat would sit silent behind a running turn.
+  await session.connection.request(
+    'session/subscribe',
+    { sessionId: snapshot.sessionId, deliveryKind: 'desktop-continuous' },
+    { timeoutMs: deps.requestTimeoutMs ?? CREATE_OR_RESUME_TIMEOUT_MS }
+  )
+  signal.throwIfAborted()
+  session.translator?.restoreSnapshot(snapshot.messages)
+
+  // The sink couples its durable-queue pressure to this child's stream; without the
+  // binding a hard-watermark sink keeps admitting and the child's rows drop.
+  if (session.events && session.connection.pauseReading && session.connection.resumeReading) {
+    session.unbindReadingControl = session.events.bindReadingControl?.({
+      pauseReading: session.connection.pauseReading,
+      resumeReading: session.connection.resumeReading
+    })
+  }
+  session.providerSessionId = snapshot.sessionId
+  return {
+    link: {
+      linkId: `zcode-${session.fence}-${snapshot.sessionId}`.slice(0, 128),
+      handle: zcodeProviderHandle(snapshot.sessionId),
+      origin: session.resumeSessionId ? 'resumed' : 'created',
+      mintedAtFence: session.fence,
+      observedAt: now()
+    },
+    reportedOptions: {}
   }
 }
 

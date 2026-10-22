@@ -14,7 +14,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import {
   boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  JOURNAL_RUNNING_PREVIEW_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { journalReasoningBody } from '../native-chat/agent-session-journal/journal-reasoning-row'
 import type {
@@ -229,7 +229,7 @@ function zcodeStreamBody(
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }],
+    blocks: [{ type: 'text', text: boundInlineText(text, JOURNAL_RUNNING_PREVIEW_LIMITS).text }],
     ...lifecycle
   }
 }

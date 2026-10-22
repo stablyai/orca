@@ -20,7 +20,10 @@ import {
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import { acquireZcodeStructuredSession } from './zcode-structured-acquire'
+import {
+  acquireZcodeStructuredSession,
+  openZcodeStructuredSession
+} from './zcode-structured-acquire'
 import { isZcodeAppServerRequestError } from './zcode-app-server-request-error'
 import { ZcodeAppServerTimeoutError } from './zcode-app-server-connection'
 import { isZcodeStructuredOptionKey } from './zcode-structured-agent-definition'
@@ -59,6 +62,20 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     return acquisition
   }
 
+  /** Runs create or resume on the child the host already published, and answers its handle. */
+  open: NonNullable<StructuredAgentSessionAdapter['open']> = async (input) => {
+    const session = this.sessions.get(input.sessionId)
+    if (
+      !session ||
+      session.fence !== input.fence ||
+      session.acquisitionGeneration !== input.acquisitionGeneration ||
+      session.ended
+    ) {
+      throw new Error('zcode child changed before it opened')
+    }
+    return openZcodeStructuredSession({ session, deps: this.deps, signal: input.signal })
+  }
+
   async dispatch(input: {
     sessionId: string
     clientMessageId: string
@@ -72,6 +89,10 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
       return { state: 'unknown', reason: 'no live zcode session' }
     }
     await input.beforeDispatch?.()
+    const providerSessionId = session.providerSessionId
+    if (providerSessionId === null) {
+      throw new Error('the zcode conversation is still opening')
+    }
     const text = input.body.blocks
       .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
       .map((block) => block.text)
@@ -80,7 +101,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
       await session.connection.request(
         'session/send',
         {
-          sessionId: session.providerSessionId,
+          sessionId: providerSessionId,
           content: text,
           // The model takes effect per send; an unset option stays absent on the wire.
           ...(session.options.get('model') ? { model: session.options.get('model') } : {})
@@ -123,7 +144,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     fence: number
   }): Promise<AgentSessionCancelOutcome> {
     const session = this.sessions.get(input.sessionId)
-    if (!session) {
+    if (!session?.providerSessionId) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
     try {

@@ -38,7 +38,6 @@ export type FakeConnectionRoutes = Partial<{
 export function fakeZcode(routes: FakeConnectionRoutes = {}) {
   const connections: FakeConnection[] = []
   const openConnection: typeof openZcodeAppServerConnection = async (launch, handlers = {}) => {
-    let spawnReported = false
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -75,11 +74,6 @@ export function fakeZcode(routes: FakeConnectionRoutes = {}) {
               : method === 'session/subscribe'
                 ? { sessionId: payload.sessionId, eventSeq: 0, events: [] }
                 : {}
-        // The real connection reports the spawn once, before its first request lands.
-        if (!spawnReported) {
-          spawnReported = true
-          void connection.handlers.onSpawned?.(connection.pid ?? 0)
-        }
         const timeoutMs = options?.timeoutMs
         if (timeoutMs === undefined) {
           return Promise.resolve(settle)
@@ -120,6 +114,8 @@ export function fakeZcode(routes: FakeConnectionRoutes = {}) {
       }
     }
     connections.push(connection)
+    // The real connection reports the spawn once, before its first request lands.
+    await connection.handlers.onSpawned?.(connection.pid ?? 0)
     return connection
   }
   return { connections, openConnection }
@@ -191,6 +187,34 @@ export const acquireInput = (overrides: Partial<ZcodeAcquireArgs> = {}) => ({
   spawnToken: 'spawn-9',
   ...overrides
 })
+
+/** The host's start: spawn, then open the conversation on the child it published. */
+export async function acquireAndOpen(
+  adapter: ZcodeStructuredSessionAdapter,
+  input: ReturnType<typeof acquireInput> = acquireInput()
+) {
+  const acquisition = await adapter.acquire(input)
+  const opened = await adapter.open({
+    sessionId: input.identity.sessionId,
+    fence: input.fence,
+    acquisitionGeneration: acquisition.acquisitionGeneration,
+    signal: new AbortController().signal
+  })
+  return { acquisition, opened }
+}
+
+/** The open the host asks for after a plain `acquire`, for tests that only need the handshake. */
+export function openInput(
+  input: ReturnType<typeof acquireInput>,
+  acquisition: { acquisitionGeneration: string }
+): Parameters<ZcodeStructuredSessionAdapter['open']>[0] {
+  return {
+    sessionId: input.identity.sessionId,
+    fence: input.fence,
+    acquisitionGeneration: acquisition.acquisitionGeneration,
+    signal: new AbortController().signal
+  }
+}
 
 export const zcodeSnapshot = (sessionId: string, messages: unknown[]) => ({
   session: { sessionId },

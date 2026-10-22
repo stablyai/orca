@@ -4,6 +4,7 @@
 
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ZcodeAppServerConnection } from './zcode-app-server-connection-types'
 import type { openZcodeAppServerConnection } from './zcode-app-server-connection'
@@ -26,8 +27,9 @@ export type ZcodeLivePrompt = {
 
 export type ZcodeStructuredSession = {
   connection: ZcodeAppServerConnection
-  /** The ZCode session id the child minted or resumed, from the create/resume snapshot. */
-  providerSessionId: string
+  /** The ZCode session id the child minted or resumed, from the create/resume snapshot; null
+   *  until the host opens the child, which is when create or resume runs. */
+  providerSessionId: string | null
   /** The adapter's generation for this child, distinct across acquisitions of one record. */
   acquisitionGeneration: string
   /** The lease fence this child was acquired under, carried on its `ended` event. */
@@ -42,6 +44,10 @@ export type ZcodeStructuredSession = {
   /** The options the session's create carried; the child has no read-back surface. */
   options: Map<string, string>
   launch: ComposedStructuredLaunch<ZcodeStructuredLaunch>
+  /** The conversation the record proved, resumed at open instead of creating a new one. */
+  resumeSessionId: string | null
+  /** The host's sink, kept for the open's backpressure binding. */
+  events?: StructuredAgentSessionEventSink
   /** Releases the journal sink's backpressure binding; every close path calls it. */
   unbindReadingControl?: () => void
 }
