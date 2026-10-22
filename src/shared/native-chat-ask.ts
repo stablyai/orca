@@ -79,14 +79,26 @@ function parseOptions(raw: unknown): AskOption[] {
     .filter((option): option is AskOption => option !== null)
 }
 
-for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) {
+for (const name of [
+  'AskUserQuestion',
+  'ask_user_question',
+  'askUserQuestion',
+  'request_user_input'
+]) {
   QUESTION_TOOL_PARSERS.set(name, parseCanonicalQuestionsInput)
 }
 
 QUESTION_TOOL_PARSERS.set(CODEX_ASYNC_QUESTION_TOOL, parseCodexAsyncQuestionsInput)
 
+function questionToolParser(toolName: string | undefined): InteractiveQuestionParser | undefined {
+  return toolName
+    ? (QUESTION_TOOL_PARSERS.get(toolName) ??
+        QUESTION_TOOL_PARSERS.get(toolName.split('.').at(-1) ?? ''))
+    : undefined
+}
+
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
-  const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
+  const parser = questionToolParser(toolName)
   return (parser ? parser(input) : null) ?? parseCanonicalQuestionsInput(input)
 }
 
@@ -175,7 +187,7 @@ function scanPendingAsks(messages: readonly NativeChatMessage[]): {
     }
     for (const block of message.blocks) {
       if (block.type === 'tool-call') {
-        const parsed = QUESTION_TOOL_PARSERS.has(block.name)
+        const parsed = questionToolParser(block.name)
           ? parseAskFromToolInput(block.name, block.input)
           : parseToolInput(block.name, block.input)
         if (parsed?.replyAsMessage) {
