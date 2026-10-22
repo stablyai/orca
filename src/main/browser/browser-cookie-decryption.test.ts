@@ -1,6 +1,6 @@
 import { createCipheriv, createHash, randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { decryptCookieValueRaw } from './browser-cookie-decryption'
+import { buildUndecryptableWarning, decryptCookieValueRaw } from './browser-cookie-decryption'
 import type { EncryptionKeyResult } from './browser-cookie-sqlite'
 
 const HOST_KEY = '.example.com'
@@ -48,5 +48,23 @@ describe('decryptCookieValueRaw host-key hash prefix', () => {
     expect(decryptCookieValueRaw(encryptCbc(plaintext), cbcKeyResult, HOST_KEY)).toEqual(
       Buffer.from('value')
     )
+  })
+})
+
+describe('buildUndecryptableWarning', () => {
+  it('keeps the missing secret-tool guidance when it ties with another failure', () => {
+    expect(
+      buildUndecryptableWarning({
+        decryptFailed: 2,
+        appBoundFailed: 0,
+        keyringUnavailableFailed: 0,
+        secretToolMissingFailed: 1
+      })
+    ).toEqual({
+      code: 'cookies-undecryptable',
+      failedCookies: 1,
+      otherFailedCookies: 1,
+      reason: 'linux-secret-tool-missing'
+    })
   })
 })
