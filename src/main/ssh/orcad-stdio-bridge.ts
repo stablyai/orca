@@ -24,7 +24,7 @@ export type OrcadStdioBridge = {
   wrapCommand: boolean
 }
 
-export const ORCAD_STDIO_BRIDGE_CHECK_TIMEOUT_MS = 20_000
+const ORCAD_STDIO_BRIDGE_CHECK_TIMEOUT_MS = 20_000
 const MAX_STDERR_TAIL_CHARS = 2_000
 // POSIX shells and cmd.exe report a command they cannot find with these.
 const COMMAND_NOT_FOUND_EXITS: ReadonlySet<number | null> = new Set([127, 9009])
@@ -33,6 +33,10 @@ export async function resolveOrcadStdioBridge(
   conn: OrcadHostTransport,
   port: number
 ): Promise<OrcadStdioBridge> {
+  // A WSL distro is always a POSIX host, and its deploy already proved Linux: skip the round trip.
+  if (isWslOrcadHostTarget(conn.getTarget())) {
+    return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
+  }
   const host = await detectRemoteHostPlatform(conn)
   if (!host) {
     throw new OrcadHostUnsupportedError('Orca’s server doesn’t support this SSH host’s platform.')
@@ -41,10 +45,6 @@ export async function resolveOrcadStdioBridge(
     return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
   }
   const target = conn.getTarget()
-  // A WSL distro is a Linux host, so a Windows answer from it is not one this path can serve.
-  if (isWslOrcadHostTarget(target)) {
-    throw new OrcadHostUnsupportedError('This WSL distro reported a Windows host platform.')
-  }
   // Stages this client's pinned node.exe and host script, which an app update may have changed.
   const context = await resolveOrcadRemoteContext(target, conn, undefined, host)
   return {

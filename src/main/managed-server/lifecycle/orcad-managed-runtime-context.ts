@@ -10,8 +10,11 @@ import { computeLocalOrcadBuildHash } from '../../ssh/orcad-local-build-hash'
 import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
 import type { OrcadHostTarget } from '../../ssh/orcad-host-transport'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
-import { refuseOrcadHostDowngrade } from '../../ssh/orcad-host-version-admission'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import { admitOrcadRecordForIntent, type OrcadUpdateIntent } from './orcad-managed-update-decision'
+import {
+  type OrcadTerminalCensus,
+  UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
+} from '../../../shared/orcad-terminal-census'
 import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
@@ -21,11 +24,11 @@ import {
   getSshTargetRegistryStore
 } from '../../ssh/targets/ssh-target-registry'
 
-export const ORCAD_BIND_HOST = '127.0.0.1'
+const ORCAD_BIND_HOST = '127.0.0.1'
 
 // Why empty: managed slots always carry their pinned runtime marker, so a marker-less slot
 // fails to launch instead of silently running on whatever Node the host has.
-export const MANAGED_ORCAD_LEGACY_NODE_PATH = ''
+const MANAGED_ORCAD_LEGACY_NODE_PATH = ''
 
 export function requireManagedOrcadInfrastructure() {
   const targetStore = requireManagedOrcadTargetStore()
@@ -126,30 +129,29 @@ export function probeManagedOrcadReadiness(
 export function managedOrcadDeployPolicy(
   context: Pick<OrcadRemoteContext<OrcadHostTarget>, 'activationRecord'>,
   appVersion: string,
-  force?: boolean
+  intent: OrcadUpdateIntent
 ): {
   census: OrcadTerminalCensus
   recountCensus: () => Promise<OrcadTerminalCensus>
+  releaseIncumbentAdmission: () => Promise<void>
   censusRecord: OrcadActivationRecord
   admitRecord: (record: OrcadActivationRecord, candidateVersion: string) => string | null
 } {
   // Why unknown when a version is active: only the daemon can count its sessions, and
   // a deploy that guessed zero would restart over live terminals.
   const census: OrcadTerminalCensus = context.activationRecord.active
-    ? { liveSessions: null, startedSinceActivation: null, daemonProtocolVersion: null }
+    ? UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
     : { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
   return {
     census,
     recountCensus: async () => census,
+    // Nothing was fenced: this recount never asks the server.
+    releaseIncumbentAdmission: async () => {},
     censusRecord: context.activationRecord,
-    // Why: a host another desktop stopped may hold state its newer build migrated, and this
-    // path has no linked record to check first, so only the fenced read can refuse it.
-    // An explicit force runs this version anyway, as `environment update --force` does.
-    admitRecord: (record, candidateVersion) =>
-      !force && refuseOrcadHostDowngrade(record, candidateVersion, appVersion)
-        ? `Orca ${record.activeAppVersion} last ran this host's server, newer than this ` +
-          `Orca (${appVersion}). Update Orca to start it.`
-        : null
+    // Why the intent's plan: a host another desktop stopped may hold state its newer build
+    // migrated, and a build the host rolled back from must not return on a connect; this path has
+    // no linked record to check first, so only the fenced read can refuse.
+    admitRecord: admitOrcadRecordForIntent(intent, appVersion)
   }
 }
 

@@ -56,6 +56,7 @@ export async function proveManagedOrcadCell(
       target: context.serverTarget,
       census: EMPTY_CENSUS,
       recountCensus: async () => EMPTY_CENSUS,
+      releaseIncumbentAdmission: async () => {},
       ...(desktop ? { runtimeCacheRoot: desktop.cacheRoot } : {})
     }).finally(() => desktop?.restore())
     if (expected.outcome === 'unavailable') {

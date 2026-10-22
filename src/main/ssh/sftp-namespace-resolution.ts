@@ -210,7 +210,7 @@ export async function resolveSftpTransferPath(
   return shellAbsolutePath
 }
 
-export type SftpTransferPathOptions = {
+type SftpTransferPathOptions = {
   hostPlatform?: RemoteHostPlatform
   sftpNamespace?: SftpNamespacePathMapping
 }

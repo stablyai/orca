@@ -12,6 +12,7 @@ import { describePairedServerHosts } from '../../../../shared/paired-server-host
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */
 export function readWindowPairedServerRows(
@@ -48,7 +49,7 @@ export function readWindowPairedServerRows(
   for (const worktree of getAllWorktreesFromState(state)) {
     add(worktree, 'git')
   }
-  for (const folder of state.folderWorkspaces ?? []) {
+  for (const folder of selectFolderWorkspaces(state) ?? []) {
     add(folderWorkspaceToWorktree(folder), 'folder')
   }
   return rows

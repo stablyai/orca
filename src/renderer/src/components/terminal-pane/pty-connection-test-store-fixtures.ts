@@ -12,6 +12,8 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     ptyIdsByTabId: {
       'tab-1': ['tab-pty']
     },
+    terminalPaneStartsByPaneKey: {},
+    terminalPaneResumeOutcomesByPaneKey: {},
     terminalLayoutsByTabId: {
       'tab-1': {
         root: { type: 'leaf', leafId: LEAF_1 },
@@ -92,7 +94,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     }),
     markTerminalBell: vi.fn(),
     markAgentAttentionUnread: vi.fn()
-  } as StoreState
+  }
 }
 
 export function buildReattachPaneTitleState(current: StoreState, title: string): StoreState {
@@ -104,7 +106,7 @@ export function buildReattachPaneTitleState(current: StoreState, title: string):
     runtimePaneTitlesByTabId: {
       'tab-1': { 1: title }
     }
-  } as StoreState
+  }
 }
 
 // Why: activeRuntimeEnvironmentId exercises the remote-runtime path where the renderer still owns OSC 9999 status.

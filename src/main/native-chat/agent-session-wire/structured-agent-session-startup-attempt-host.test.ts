@@ -101,6 +101,7 @@ async function startHost(): Promise<void> {
       setOption
     },
     modelCatalog: {
+      peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
       recordLiveListing,
       retainedLiveModelIds: vi.fn(async () => []),

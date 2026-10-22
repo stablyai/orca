@@ -11,6 +11,7 @@ const { Platform } = require('app-builder-lib')
 const { PlatformPackager } = require('app-builder-lib/out/platformPackager')
 const { ArchiveTarget } = require('app-builder-lib/out/targets/ArchiveTarget')
 const { DmgTarget } = require('dmg-builder/out/dmg')
+const { computeArchToTargetNamesMap } = require('app-builder-lib/out/targets/targetFactory')
 const { AsyncTaskManager } = require('builder-util')
 const { CancellationToken } = require('builder-util-runtime')
 const workflow = (name) => parse(readFileSync(`.github/workflows/${name}-mac-build.yml`, 'utf8'))
@@ -60,6 +61,25 @@ it('the pinned builder reaches both signed slices before either real archive tar
   expect(events.filter((event) => event.startsWith('pass:'))).toHaveLength(4)
 })
 
+it('explicit archive targets keep the configured dual-architecture defaults out of each matrix job', () => {
+  const packager = {
+    platformSpecificBuildOptions: {
+      target: [
+        { target: 'dmg', arch: ['x64', 'arm64'] },
+        { target: 'zip', arch: ['x64', 'arm64'] }
+      ]
+    }
+  }
+  for (const arch of [1, 3]) {
+    const targets = computeArchToTargetNamesMap(
+      new Map([[arch, ['dmg', 'zip']]]),
+      packager,
+      Platform.MAC
+    )
+    expect([...targets]).toEqual([[arch, ['dmg', 'zip']]])
+  }
+})
+
 describe('macOS build workflow policy', () => {
   it.each(['release', 'adhoc', 'daily', 'hourly'])(
     '%s uses the guarded builder, preserving the serial fallback for older source refs',
@@ -74,13 +94,20 @@ describe('macOS build workflow policy', () => {
         step.with?.command?.includes('electron-builder --config')
       )
       const command = step.with.command
-      expect(command).toContain('if [ -f config/scripts/build-mac-notarization-overlap.mjs ]')
-      expect(command).toContain(
-        `ORCA_MAC_${channel.toUpperCase()}=1 node config/scripts/build-mac-notarization-overlap.mjs`
-      )
-      expect(command).toContain(
-        `else ORCA_MAC_${channel.toUpperCase()}=1 pnpm exec electron-builder`
-      )
+      if (channel === 'adhoc') {
+        expect(job.strategy).toEqual({ 'fail-fast': false, matrix: { arch: ['x64', 'arm64'] } })
+        expect(command).toContain('--mac dmg zip --${{ matrix.arch }} --publish never')
+        expect(command).toContain('ORCA_MAC_ADHOC=1 pnpm exec electron-builder')
+        expect(command).not.toContain('build-mac-notarization-overlap.mjs')
+      } else {
+        expect(command).toContain('if [ -f config/scripts/build-mac-notarization-overlap.mjs ]')
+        expect(command).toContain(
+          `ORCA_MAC_${channel.toUpperCase()}=1 node config/scripts/build-mac-notarization-overlap.mjs`
+        )
+        expect(command).toContain(
+          `else ORCA_MAC_${channel.toUpperCase()}=1 pnpm exec electron-builder`
+        )
+      }
       expect(step.with.max_attempts).toBeGreaterThan(1)
       for (const key of [
         'CSC_LINK',
@@ -104,9 +131,11 @@ describe('macOS build workflow policy', () => {
     })
     expect(source.jobs['qualification-template'].if).toBe('inputs.qualification_only')
     expect(source.jobs['qualification-template'].with).toEqual({
-      ref: '${{ github.sha }}',
-      build_template: true
+      ref: '${{ github.sha }}'
     })
+    expect(source.jobs['qualification-template'].uses).toBe(
+      './.github/workflows/qualified-orcad-template.yml'
+    )
     const job = source.jobs['build-mac']
     expect(job.needs).toBe('qualification-template')
     expect(job.if).toContain('!cancelled()')

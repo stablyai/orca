@@ -10,6 +10,7 @@ import {
 } from './SshHostKeepServerVersionDialog'
 import { SshHostDeltaMoveDialog } from './SshHostDeltaMoveDialog'
 import { SshHostNodeMirrorAction } from './SshHostNodeMirrorAction'
+import { OpenPlainSshTerminalButton } from '../plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { canMoveSshHostAnyway, SshHostMoveAnywayDialog } from './SshHostMoveAnywayAction'
 import { canRestartSshHostServer, SshHostRestartServerDialog } from './SshHostRestartServerAction'
 import { getManagedOrcadApi } from './use-managed-server-catalog'
@@ -48,6 +49,11 @@ export function SshTargetServerStatusLine({
       {line.hint ? <p className="px-1 text-xs text-muted-foreground">{line.hint}</p> : null}
       {/* Why inline, not in the menu: it is the way out of this failure. */}
       <SshHostNodeMirrorAction targetId={target.id} status={state?.managedServer} />
+      <OpenPlainSshTerminalButton
+        targetId={target.id}
+        targetLabel={target.label}
+        status={state?.managedServer}
+      />
     </div>
   )
 }

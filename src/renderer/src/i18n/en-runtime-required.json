@@ -602,6 +602,10 @@
           }
         }
       },
+      "hostPicker": {
+        "moreHosts_one": "{{count}} more host. Search by name to find it.",
+        "moreHosts_other": "{{count}} more hosts. Search by name to find one."
+      },
       "linear-issue-attribute-filter-dropdowns": {
         "optionsFromTeam": "Options from {{team}}"
       },
@@ -836,6 +840,7 @@
             "15b7f210d7": "Review the prompt before starting an agent.",
             "1f7119f604": "Base",
             "2830dd64a2": "deleted",
+            "2f609a2e7c": "Delete all untracked",
             "3636d0f686": "ready",
             "383cf92c73": "tree",
             "3a231c845b": "unknown",
@@ -1256,7 +1261,8 @@
           "show": "Show"
         },
         "GitPane": {
-          "f35007e6e8": "git-username"
+          "f35007e6e8": "git-username",
+          "untrackedFirst": "Untracked first"
         },
         "GrokAccountsSection": {
           "c3d4e5f6a7": "Signed in. Orca only reads that file on disk — run grok login again if usage fails.",
@@ -1904,7 +1910,6 @@
           "outcome": {
             "activeServer": "Not done: this server is the default host for new projects. Choose another one in Advanced before stopping it."
           },
-          "row": {},
           "title": "Orca on your SSH hosts"
         },
         "mobile": {
@@ -1936,7 +1941,6 @@
             }
           }
         },
-        "serverList": {},
         "settingOwnership": {
           "clientDefaultProjectScopes": "Client default + project scopes",
           "terminalQuickCommands": "Commands are saved on this client, then scoped globally or to a project setup so they run from the selected terminal context."
@@ -2523,7 +2527,11 @@
             "connectedHostCount_other": "{{count}} hosts",
             "d09ec41831": "Remote Hosts",
             "fbb3f9f05e": "conflict",
-            "fd9a3c600e": "error"
+            "fd9a3c600e": "error",
+            "moreSshHostMatches_one": "{{count}} more match. Keep typing to narrow it down.",
+            "moreSshHostMatches_other": "{{count}} more matches. Keep typing to narrow them down.",
+            "moreSshHosts_one": "Find {{count}} more SSH host…",
+            "moreSshHosts_other": "Find among {{count}} more SSH hosts…"
           },
           "StatusBar": {
             "06741a2f3d": "Open MiniMax usage details",
@@ -3029,7 +3037,8 @@
       },
       "composer": {
         "effort": "Effort",
-        "imageUnsupported": "Image paste is not supported for this agent."
+        "imageUnsupported": "Image paste is not supported for this agent.",
+        "placeholder": "Ask anything, @ to mention files, / for commands"
       },
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
@@ -3067,7 +3076,7 @@
         "claudeManagedNotSignedIn": "This Claude account isn't signed in. Sign in again in Claude Accounts settings.",
         "claudeSystemNotSignedIn": "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
-        "codexCliTooOld": "Codex {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
+        "cliTooOld": "{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "commandAfterAnswer": "Answer the agent's question or approval, then run /{{command}}.",
@@ -3139,6 +3148,8 @@
       "notices": {
         "compaction": "Context compacted",
         "contextCleared": "Context cleared",
+        "continuedOutside": "Continued outside this chat.",
+        "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "plan": "Plan"
@@ -3262,8 +3273,8 @@
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneCommand": "The command didn't run.",
         "notDoneGoal": "The goal wasn't changed.",
-        "notDoneQueuedEdit": "Your edit wasn't saved.",
         "notDoneOption": "The setting wasn't changed.",
+        "notDoneQueuedEdit": "Your edit wasn't saved.",
         "notDoneReadHistory": "This chat's history couldn't be loaded.",
         "notDoneSend": "Your message was not sent.",
         "notDoneStop": "The agent wasn't stopped.",
@@ -3340,6 +3351,16 @@
           "readyManyOne": "{{value0}} workspaces found, with 1 cleanup suggestion.",
           "readyOneMany": "1 workspace found, with {{value0}} cleanup suggestions.",
           "readyOneOne": "1 workspace found, with 1 cleanup suggestion."
+        }
+      },
+      "delete": {
+        "unsavedEdits": {
+          "blocked_one": "Save or close {{count}} unsaved file in {{name}} first",
+          "blocked_other": "Save or close {{count}} unsaved files in {{name}} first",
+          "closedToast_one": "Closed {{count}} file with unsaved edits from {{workspace}}",
+          "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
+          "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
+          "discarded_other": "Unsaved edits in {{count}} files will be discarded:"
         }
       }
     }

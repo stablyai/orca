@@ -276,12 +276,9 @@ export function placeContentTab(
   context: LayoutContext
 ): { model: WorkspaceLayoutModel; refused: RefusedClose[] } {
   const workspace = workspaceOrEmpty(model, key)
-  const anchor = placement.afterTabId
-  // A named group this copy lacks falls back to the anchor's.
+  // A host's open names no group; a window's names one from main's own frame.
   const group =
-    workspace.groups.find((entry) => entry.id === placement.groupId) ??
-    (anchor ? workspace.groups.find((entry) => entry.tabOrder.includes(anchor)) : undefined) ??
-    workspace.groups[0]
+    workspace.groups.find((entry) => entry.id === placement.groupId) ?? workspace.groups[0]
   const preview = tab.isPreview
     ? workspace.tabs.find(
         (entry) =>

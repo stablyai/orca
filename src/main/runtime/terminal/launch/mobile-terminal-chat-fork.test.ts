@@ -5,6 +5,8 @@ import { prepareStructuredChatCliFork } from '../../../ai-vault/structured-chat-
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
 import '../../orca-runtime-test-lifecycle.spec'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 vi.mock('../../../ai-vault/structured-chat-cli-fork', () => ({
   prepareStructuredChatCliFork: vi.fn(),
   isStructuredChatCliForkSourceCurrent: vi.fn(() => true)
@@ -200,6 +202,11 @@ it.each([true, false])(
       expect(fixture.getSession().unifiedTabs?.[wt]).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: canonical, entityId: source })])
       )
+    } else if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Main placed the published chat's tab itself, so the fork opens beside it.
+      expect(admit.mock.calls[0]?.[0]).toMatchObject({
+        afterTabId: structuredAgentSessionTabId(source)
+      })
     } else {
       expect(admit.mock.calls[0]?.[0]).not.toHaveProperty('afterTabId')
       expect(reveal.mock.calls[0]?.[1]).not.toHaveProperty('afterTabId')

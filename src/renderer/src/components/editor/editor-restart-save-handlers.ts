@@ -12,13 +12,13 @@ import type {
 type EditorRestartSaveHandlerOptions = {
   store: AppStoreApi
   queueSave: EditorSaveQueue['queueSave']
-  quiesceFileSave: EditorSaveQueue['quiesceFileSave']
+  settleFileSaves: EditorSaveQueue['settleFileSaves']
 }
 
 export function createEditorRestartSaveHandlers({
   store,
   queueSave,
-  quiesceFileSave
+  settleFileSaves
 }: EditorRestartSaveHandlerOptions): {
   handleSaveDirtyFiles: (event: Event) => Promise<void>
   handlePrepareHotExit: (event: Event) => Promise<void>
@@ -86,7 +86,7 @@ export function createEditorRestartSaveHandlers({
       detail.claim()
 
       const initiallyDirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
-      await Promise.all(initiallyDirtyFiles.map((file) => quiesceFileSave(file.id)))
+      await Promise.all(initiallyDirtyFiles.map((file) => settleFileSaves(file.id)))
 
       const state = store.getState()
       const dirtyFiles = state.openFiles.filter((file) => file.isDirty)

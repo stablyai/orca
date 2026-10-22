@@ -3,10 +3,16 @@ import type { FolderWorkspace } from '../folder-workspace-types'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import {
-  buildWorkspaceRows,
+  buildWorkspaceRows as buildKeyedWorkspaceRows,
   listGitWorkspaceRowKeys,
-  WorkspaceRowsSnapshotSchema
+  WorkspaceRowsSnapshotSchema,
+  type WorkspaceRow
 } from './workspace-rows'
+
+/** The rows under their keys' text, so a test can name a key as a literal. */
+const buildWorkspaceRows = (
+  catalog: Parameters<typeof buildKeyedWorkspaceRows>[0]
+): Map<string, WorkspaceRow> => new Map(buildKeyedWorkspaceRows(catalog))
 
 const localRepo: Repo = {
   id: 'repo-1',

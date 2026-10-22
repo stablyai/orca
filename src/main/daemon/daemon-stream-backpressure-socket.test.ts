@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { setImmediate as nextTurn, setTimeout as delay } from 'node:timers/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it } from 'vitest'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser } from './ndjson'
@@ -20,8 +20,6 @@ describe('daemon stream backpressure with a stalled Socket reader', () => {
   ])(
     'bounds $chunkSize-character writes (hidden=$hidden) and resumes',
     async ({ chunkSize, hidden }) => {
-      // Why: the daemon stream runs over a Unix socket or named pipe. Linux TCP loopback autotunes its
-      // kernel buffers to several MiB, enough to absorb the flood before the 4 MiB high-water mark.
       // A fixed POSIX root keeps the full Unix socket path below the kernel's byte limit.
       const dir = mkdtempSync(join(process.platform === 'win32' ? tmpdir() : '/tmp', 'orca-dsbp-'))
       const socketPath =
@@ -103,6 +101,7 @@ describe('daemon stream backpressure with a stalled Socket reader', () => {
         reader.pause()
 
         const chunk = 'x'.repeat(chunkSize)
+        // Keep write callbacks pending until the pause assertion, independent of kernel buffer capacity.
         while (!paused && produced < 8 * MiB) {
           batcher.enqueue('client', 'flood', chunk, {
             flushImmediately: chunkSize <= 1024,
@@ -110,9 +109,6 @@ describe('daemon stream backpressure with a stalled Socket reader', () => {
           })
           batcher.flush('client')
           produced += chunkSize
-          if (produced % MiB === 0) {
-            await nextTurn()
-          }
         }
         expect(paused).toBe(!hidden)
         expect(writer.writableLength + 2 * batcher.queuedCharsForClient('client')).toBeLessThan(

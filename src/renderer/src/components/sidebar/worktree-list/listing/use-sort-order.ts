@@ -16,6 +16,7 @@ import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // ── Stable sort order ──────────────────────────────────────────
 // Why sortEpoch (not selection): selection side-effects (clearing isUnread, PR-cache refresh) must not reorder the sidebar under the user.
@@ -93,7 +94,7 @@ function useStampSidebarWorktreeSortOrder(args: {
   sortBy: SortBy
 }): string[] {
   const { repoMap, sortBy } = args
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const ranked = useMemo(
     () =>
       rankWorktreesForSort({

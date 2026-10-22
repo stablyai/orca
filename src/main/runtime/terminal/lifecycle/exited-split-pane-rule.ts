@@ -3,6 +3,7 @@
 
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import type { TerminalRunFactsRegister } from '../../terminal-run-facts'
+import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal-exit-cause'
 
 export type ExitedSplitPaneFacts = {
   exitCode: number
@@ -48,7 +49,8 @@ export function exitedSplitPaneFacts(
 ): ExitedSplitPaneFacts {
   const run = runs.read(ptyId, pty?.incarnationId)
   return {
-    exitCode,
+    // node-pty can report no code at all (its socket closed): that is lost contact, not a finish.
+    exitCode: Number.isFinite(exitCode) ? exitCode : UNVERIFIED_PROCESS_EXIT_CODE,
     freshSpawn: run.freshSpawn,
     inputSeen: run.firstUserInputAt !== null || runs.readLastInputAt(ptyId) !== null,
     outputSeen: pty?.lastOutputAt != null,

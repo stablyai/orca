@@ -70,6 +70,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   catalog: AgentSessionOptionCatalog | null
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
+  pendingId?: string | null
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
   const current = support?.modes.find((mode) => mode === state.permissionMode)
@@ -78,7 +79,8 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   }
   const offered = offeredChatPermissionModes(
     support,
-    current === 'auto' || currentModelSupportsAutoMode(state.catalog, state.record)
+    current === 'auto' ||
+      (state.pendingId !== 'model' && currentModelSupportsAutoMode(state.catalog, state.record))
   )
   return {
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,

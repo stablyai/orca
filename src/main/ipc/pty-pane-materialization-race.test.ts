@@ -574,7 +574,6 @@ describe('registerPtyHandlers', () => {
         cols: 120,
         rows: 40,
         cwd: '/a',
-        cwdFallback: 'worktree',
         command: 'claude --resume provider-session',
         launchAgent: 'claude',
         worktreeId,

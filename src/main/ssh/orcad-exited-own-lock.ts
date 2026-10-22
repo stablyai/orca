@@ -37,7 +37,7 @@ import { isWindowsRemoteHost, joinRemotePath } from './ssh-remote-platform'
 const MAX_WINDOWS_CANDIDATES = 16
 
 /** `baseDir` is `~/.orca-remote`; `guardsStateMutation` means a live state mutation there keeps the lock. */
-export type ExitedOwnLockScope = { baseDir: string; guardsStateMutation: boolean }
+type ExitedOwnLockScope = { baseDir: string; guardsStateMutation: boolean }
 
 export function exitedOwnLockProof(
   target: OrcadRemoteExecTarget,

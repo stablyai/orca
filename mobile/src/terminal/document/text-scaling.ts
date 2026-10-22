@@ -50,7 +50,7 @@ export function isIOSWebView() {
 // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
 // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
 const TERMINAL_FONT_FALLBACKS =
-  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace'
+  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", monospace'
 
 // Why: change the real font size, then resize the grid to fit the viewport at
 // the new cell metrics so the text shows at its true size immediately. RN's

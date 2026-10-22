@@ -593,15 +593,33 @@ function makeRuntimeStoreWithWorkspaceSession(
         hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession(),
       setWorkspaceSession: vi.fn(setSession),
       // Main's `layout.apply` on this partition, as the Store applies it (switch-on writes).
-      applyLayoutCommand: vi.fn(async (command: LayoutCommand, hostIds?: readonly string[]) => {
-        const change = applyCommandToSession(
-          resolveHostId(hostIds?.[0] ?? ownerHostId),
-          session,
-          command
-        )
-        session = change.session ?? session
-        return change.value
-      }),
+      applyLayoutCommand: vi.fn(
+        async (
+          command: LayoutCommand,
+          hostIds?: readonly string[],
+          run: NonNullable<Parameters<Store['applyLayoutCommand']>[2]> = {}
+        ) => {
+          const change = applyCommandToSession(
+            resolveHostId(hostIds?.[0] ?? ownerHostId),
+            session,
+            command,
+            undefined,
+            run.live
+          )
+          if (
+            change.value.ok &&
+            change.effects?.stopPtyIds.length &&
+            run.stopBeforeWrite?.(change.effects.stopPtyIds) === false
+          ) {
+            return { ok: false, code: 'pane_already_bound' } as const
+          }
+          session = change.session ?? session
+          if (change.value.ok && change.effects) {
+            run.onEffects?.(change.effects)
+          }
+          return change.value
+        }
+      ),
       // Headless close is a durable transaction; keep the in-memory fixture's
       // persistence contract equivalent to the production store.
       flushOrThrow: vi.fn(),

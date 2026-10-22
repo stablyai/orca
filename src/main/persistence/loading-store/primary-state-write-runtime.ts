@@ -25,6 +25,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'writesFrozen'
   | 'workspaceSessionWriteListeners'
   | 'workspaceSessionOperationListeners'
+  | 'layoutEditorViews'
 >
 
 export function markPrimaryStateWriteDurable(

@@ -8,7 +8,7 @@ import {
   beginWebRuntimeWakeTerminalRespawn,
   endWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { toast } from 'sonner'
@@ -35,7 +35,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
-      : runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     return
   }

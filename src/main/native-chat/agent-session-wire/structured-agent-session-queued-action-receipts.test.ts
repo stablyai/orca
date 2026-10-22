@@ -12,6 +12,7 @@ import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-se
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
+  eventually,
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
@@ -654,3 +655,28 @@ describe('source-bound ordinary Continue', () => {
     }
   })
 })
+
+it.each(['send-now', 'automatic'] as const)(
+  'clears Sleep on queued submission only: %s',
+  async (mode) => {
+    await rig.workingSend()
+    const draftId = await queuedDraft('retained through Sleep')
+    expect(await rig.host.sleepWorkspace('workspace-1', true)).toEqual({
+      stoppedSessionIds: [SESSION]
+    })
+    const sleptAt = rig.store.getRecord(SESSION)?.sleptAt
+    expect(sleptAt).toEqual(expect.any(Number))
+    await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(rig.store.getRecord(SESSION)?.sleptAt).toBe(sleptAt)
+    const release = rig.holdNextStart()
+    try {
+      expect(await (mode === 'send-now' ? rig.sendNow(draftId) : rig.resume())).toMatchObject({
+        ok: true
+      })
+      await eventually(() => expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined())
+      expect(await rig.handoff(draftId)).toBeDefined()
+    } finally {
+      release()
+    }
+  }
+)

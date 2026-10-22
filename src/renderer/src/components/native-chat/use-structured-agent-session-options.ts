@@ -1,9 +1,6 @@
 import { toast } from 'sonner'
-import { useCallback, useMemo } from 'react'
-import type {
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
-} from '../../../../shared/agent-session-wire'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import type { AgentSessionOptionResult } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
@@ -12,13 +9,10 @@ import {
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   lockedStructuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionPicks,
-  structuredAgentSessionOptionSnapshot,
-  type StructuredAgentSessionOptionState
+  structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
+import { useRememberSessionOptionPicks } from './use-structured-agent-session-option-picks'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/structured-agent-session-option-codec'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
@@ -65,7 +59,6 @@ export function useStructuredAgentSessionOptions(args: {
   const launchSeedOptions = launch?.seedOptions
   const held = launch?.heldOptions ?? NO_HELD_OPTIONS
   // Published but not attached: the launch no longer holds picks and there is no fence to send one.
-  const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
   const optionCatalog = useMemo(() => structuredAgentSessionSeedCatalog(agent), [agent])
   const {
     optionView,
@@ -76,8 +69,9 @@ export function useStructuredAgentSessionOptions(args: {
     pendingOptionsRef,
     optionMutationGeneration,
     updateOptionState,
-    applyOptionsAnswer,
-    rereadOptions,
+    receiveCatalog,
+    beginOptionWrite,
+    isCurrentContext,
     conversationSupport
   } = useStructuredAgentSessionOptionState({
     agent,
@@ -99,6 +93,11 @@ export function useStructuredAgentSessionOptions(args: {
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
+  const awaitingOptions =
+    conversationSupport?.sessionId === sessionId && conversationSupport.fence !== fence
+  const acceptsPicks =
+    (!transportEnabled || fence !== null) && launch?.seedPending !== true && !awaitingOptions
+
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,
     sessionId,
@@ -115,25 +114,18 @@ export function useStructuredAgentSessionOptions(args: {
     ...(args.providerRunning ? { providerRunning: true } : {}),
     activeOptionRecordRef,
     updateOptionState,
-    onListingLanded: rereadOptions
+    receiveCatalog
   })
 
-  // What a settled pick must remember so the next launch starts where the user left off.
-  const rememberOptionPicks = useCallback(
-    (view: StructuredAgentSessionOptionState, committed: Readonly<Record<string, string>>) => {
-      const picks = structuredAgentSessionOptionPicks(view, committed)
-      if (picks.length > 0) {
-        void enqueueSessionOptionSettingsWrite(target, { type: 'apply-picks', agent, picks })
-      }
-    },
-    [agent, target]
-  )
+  const rememberOptionPicks = useRememberSessionOptionPicks(target, agent)
   const sendStructuredOption = useCallback(
     async (id: string, encoded: string): Promise<boolean> => {
       const currentState = optionStateRef.current
       const targetRecord = currentState.record
+      const finishWrite = beginOptionWrite(id)
       const mutationGeneration = ++optionMutationGeneration.current
-      const sameRecord = (): boolean => activeOptionRecordRef.current === targetRecord
+      const sameRecord = (): boolean =>
+        isCurrentContext() && activeOptionRecordRef.current === targetRecord
       const isCurrent = (): boolean =>
         sameRecord() && optionMutationGeneration.current === mutationGeneration
       const currentPick = (): boolean => isCurrent() || pendingOptionsRef.current[id] === encoded
@@ -173,22 +165,6 @@ export function useStructuredAgentSessionOptions(args: {
         if (sameRecord() && pendingOptionsRef.current[id] === encoded) {
           delete pendingOptionsRef.current[id]
         }
-        // A settled write, or a shown one that failed, reads back what the host now holds.
-        if (isCurrent() && (result || shownAtOnce)) {
-          void callStructuredAgentSession<AgentSessionOptionsResult>(
-            target,
-            'agentSession.options',
-            { sessionId }
-          )
-            .then((refreshed) => {
-              if (isCurrent()) {
-                updateOptionState((latest) =>
-                  latest.record === targetRecord ? applyOptionsAnswer(latest, refreshed) : latest
-                )
-              }
-            })
-            .catch(() => {})
-        }
         if (isCurrent()) {
           updateOptionState((current) =>
             current.record === targetRecord && current.pendingId === id
@@ -196,11 +172,13 @@ export function useStructuredAgentSessionOptions(args: {
               : current
           )
         }
+        finishWrite(isCurrent() && Boolean(result || shownAtOnce))
       }
     },
     [
       activeOptionRecordRef,
-      applyOptionsAnswer,
+      beginOptionWrite,
+      isCurrentContext,
       launchSeedOptions,
       mutate,
       optionMutationGeneration,
@@ -209,8 +187,6 @@ export function useStructuredAgentSessionOptions(args: {
       pendingOptionsRef,
       providerStarting,
       rememberOptionPicks,
-      sessionId,
-      target,
       updateOptionState
     ]
   )
@@ -227,12 +203,17 @@ export function useStructuredAgentSessionOptions(args: {
     },
     [launchSeedOptions, optionStateRef, optionView, rememberOptionPicks]
   )
-  const optionSnapshot = useMemo(() => {
-    const snapshot = structuredAgentSessionOptionSnapshot(
-      optionView(optionState, launchSeedOptions, held)
-    )
-    return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
-  }, [acceptsPicks, held, launchSeedOptions, optionState, optionView])
+  const lockSnapshotRef = useRef(
+    (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) => snapshot
+  )
+  const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionOptionSnapshot>) =>
+    !acceptsPicks ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
+  useLayoutEffect(() => {
+    lockSnapshotRef.current = lockSnapshot
+  })
+  const optionSnapshot = lockSnapshot(
+    structuredAgentSessionOptionSnapshot(optionView(optionState, launchSeedOptions, held))
+  )
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
       const view = optionView(optionStateRef.current, launchSeedOptions, held)
@@ -242,9 +223,15 @@ export function useStructuredAgentSessionOptions(args: {
       }
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
       if (
+        !isCurrentContext() ||
         !optionCatalog ||
         encoded === null ||
-        !canSetStructuredAgentSessionOption(pickState, id, value)
+        !canSetStructuredAgentSessionOption(
+          pickState,
+          id,
+          value,
+          lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view))
+        )
       ) {
         return false
       }
@@ -261,6 +248,7 @@ export function useStructuredAgentSessionOptions(args: {
       held,
       launchSeedOptions,
       optionCatalog,
+      isCurrentContext,
       optionStateRef,
       optionView,
       pendingOptionsRef,
@@ -277,8 +265,10 @@ export function useStructuredAgentSessionOptions(args: {
       // Read, not rendered: a pick the launch just took is not in this render's props yet.
       const currentHeld = getStructuredAgentSessionLaunchSelection(sessionId)?.held
       return {
-        snapshot: structuredAgentSessionOptionSnapshot(
-          optionView(optionStateRef.current, launchSeedOptions, currentHeld ?? NO_HELD_OPTIONS)
+        snapshot: lockSnapshotRef.current(
+          structuredAgentSessionOptionSnapshot(
+            optionView(optionStateRef.current, launchSeedOptions, currentHeld ?? NO_HELD_OPTIONS)
+          )
         )
       }
     },
@@ -287,11 +277,12 @@ export function useStructuredAgentSessionOptions(args: {
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
+      demandModelCatalog: hostCatalog.demandModelCatalog,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [setOption, optionSnapshot]
+    [setOption, optionSnapshot, hostCatalog.demandModelCatalog]
   )
 
   const support =

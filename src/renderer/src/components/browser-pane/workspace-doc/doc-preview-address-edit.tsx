@@ -132,6 +132,7 @@ export function DocPreviewAddressEdit({
       }}
     >
       <BrowserAddressBar
+        pageId={previewId}
         value={value}
         onChange={setValue}
         onSubmit={submit}

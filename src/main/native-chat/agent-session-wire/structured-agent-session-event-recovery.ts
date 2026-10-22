@@ -95,22 +95,28 @@ export class StructuredAgentSessionEventRecovery {
     endExitedStructuredAgentSessionChildUnderSerialize(this.exitContext, sessionId, child, exit)
 
   recoverAfterSinkFailure(sessionId: string, error: unknown): void {
-    if (this.sinkFailures.has(sessionId)) {
+    const child = this.context.sessions.get(sessionId)?.child
+    const heldAtFailure = new Set(child?.heldSends?.())
+    if (!child || this.sinkFailures.has(sessionId)) {
       return
     }
     this.sinkFailures.add(sessionId)
     void this.context
       .serialize(sessionId, async () => {
-        const child = this.context.sessions.get(sessionId)?.child
         const stop =
           this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
-        if (!child || !stop || !(await stopAgentSessionProviderRoot(() => stop(sessionId)))) {
+        if (
+          this.context.sessions.get(sessionId)?.child !== child ||
+          !stop ||
+          !(await stopAgentSessionProviderRoot(() => stop(sessionId)))
+        ) {
           return
         }
         // Ended in the same step as the stop, so no report of that close can end it first as a
         // quiet rest: Orca stopped the provider because its own journal failed.
         await this.endExitedChildUnderSerialize(sessionId, child, {
           expected: false,
+          heldSends: heldAtFailure,
           reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
           failure: agentSessionFailureFact('hostFault')
         })

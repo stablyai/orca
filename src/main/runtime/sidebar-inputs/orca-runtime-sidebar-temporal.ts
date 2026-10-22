@@ -1,11 +1,11 @@
+import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
-import { OrcaRuntimeWithWorkspaceReviewFacts } from './orca-runtime-workspace-review-facts'
+import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './orca-runtime-detected-checkouts-live-content'
 import type { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
 import {
   getConnectionExecutionHostId,
-  getRepoExecutionHostId,
   isLocalExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -36,7 +36,7 @@ import {
  * Feeds main's sleeping retention, and owns the host's sort stamps: clients sort by those, so main
  * keeps no order of its own.
  */
-export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWorkspaceReviewFacts {
+export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDetectedCheckoutsAndLiveContent {
   private readonly sidebarTemporal = new SidebarRetentionOwner(this.sidebarClock, {
     // The durable file keeps the hide form; the window reads it the same way at hydration.
     showSleepingWorkspaces: () =>
@@ -85,7 +85,9 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
       isWslMoveProjectBlocked(this.store ?? undefined, wslMoveProjectRefForWorkspace(worktreeId))
   })
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithWorkspaceReviewFacts>) {
+  constructor(
+    ...args: ConstructorParameters<typeof OrcaRuntimeWithDetectedCheckoutsAndLiveContent>
+  ) {
     super(...args)
     this.workspaceActivityFacts.revision.onChange(() => this.sidebarTemporal.noteActivityChange())
     this.store?.onUIChanged?.(() => this.sidebarTemporal.noteViewChange())
@@ -200,12 +202,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
       return false
     }
     const repoId = getRepoIdFromWorktreeId(worktreeId)
-    const hosts = new Set(
-      (this.store?.getRepos() ?? [])
-        .filter((repo) => repo.id === repoId)
-        .map(getRepoExecutionHostId)
-    )
-    return hosts.size > 1
+    return getRepoRegistrationHostIds(this.store?.getRepos() ?? [], repoId).size > 1
   }
 
   private workspaceHostId(worktreeId: string): ExecutionHostId | null {
@@ -245,7 +242,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
   private readSidebarRetentionCandidates(): SidebarRetentionCandidates {
     const { facts } = this.workspaceActivityFacts.snapshot()
     return {
-      ids: Object.keys(facts),
       isActive: (worktreeId) => worktreeId in facts,
       isUnverifiableGap: (worktreeId) =>
         !anySleepKeyNames(this.terminalSleepByHostWorktree.keys(), worktreeId) &&

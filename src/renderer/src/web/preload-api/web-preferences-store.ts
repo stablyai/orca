@@ -18,7 +18,7 @@ import {
 } from '../../../../shared/pr-bot-author-overrides'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
-import { normalizeUiLanguage } from '../../../../shared/ui-language'
+import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,
@@ -33,8 +33,7 @@ import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web
 export type WebSettingsApi = NonNullable<PreloadApi['settings']>
 
 export function getStoredSettings(): GlobalSettings {
-  webRuntimeState.activeEnvironment =
-    webRuntimeState.activeEnvironment ?? readStoredWebRuntimeEnvironment()
+  webRuntimeState.activeEnvironment ??= readStoredWebRuntimeEnvironment()
   const defaults = getDefaultSettings('~')
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
@@ -44,7 +43,7 @@ export function getStoredSettings(): GlobalSettings {
     ...normalizeTerminalCursorStyleDefault(stored),
     ...normalizeOsc52ClipboardDefaultOn(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
-    uiLanguage: normalizeUiLanguage(stored.uiLanguage)
+    ...migratePortugueseUiLanguageOnLoad(stored)
   }
   if (
     rawStoredSettings &&
@@ -60,7 +59,8 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
         migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
-      stored.uiLanguage !== migratedStored.uiLanguage)
+      stored.uiLanguage !== migratedStored.uiLanguage ||
+      stored.uiLanguagePortugueseMigrationApplied !== true)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown

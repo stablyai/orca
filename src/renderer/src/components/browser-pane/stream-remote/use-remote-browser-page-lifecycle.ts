@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
@@ -237,10 +237,7 @@ export function useRemoteBrowserPageLifecycle({
         return
       }
       const state = useAppStore.getState()
-      const currentEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        state,
-        worktreeId
-      )
+      const currentEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       const pageStillExists = browserPageExists(browserTab.id)
       if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
         return

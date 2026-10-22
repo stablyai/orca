@@ -125,7 +125,8 @@ describe('a new Claude chat seeded from a remembered model the saved listing no 
     expect(read).toHaveBeenCalledWith({
       agent: 'claude',
       workspacePath: '/repo/wt',
-      savedOnly: true
+      savedOnly: true,
+      verifiedOnly: true
     })
   })
 })

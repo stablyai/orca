@@ -1,6 +1,7 @@
 /**
  * Deploy failures that mean managed orcad can't run on this host at all, as opposed to failures
- * a later connect may not hit again. Only these send a host back to the pinned-relay ladder.
+ * a later connect may not hit again. Only these are recorded (per app version, except host-fixable
+ * ones), so later connects skip setup.
  */
 
 /** No orcad build exists for this host's platform or target. */

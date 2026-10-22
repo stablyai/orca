@@ -17,7 +17,7 @@ import {
 import {
   extractAttachmentContentIdsFromHtml,
   selectPreferredAttachmentIds
-} from './attachment-discovery'
+} from './attachments/discovery'
 import { mapUser } from './jira-issue-mapping'
 import {
   flushMediaResolutionWarn,

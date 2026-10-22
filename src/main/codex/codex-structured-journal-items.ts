@@ -53,7 +53,7 @@ export class CodexJournalItems {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'now'
+      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'now' | 'historyImport'
     > & { attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void,
@@ -227,12 +227,20 @@ export class CodexJournalItems {
     turnId: string | null,
     item: Parameters<typeof codexItemIdentity>[0]['item']
   ): AgentJournalItemIdentity {
-    const key = codexStructuredItemKey(threadId, item.id)
+    const key = this.deps.historyImport
+      ? JSON.stringify([threadId, turnId, item.id])
+      : codexStructuredItemKey(threadId, item.id)
     const existing = this.identities.get(key)
     if (existing) {
       return existing
     }
-    const identity = codexItemIdentity({ threadId, turnId, item, ordinals: this.ordinals })
+    const identity = codexItemIdentity({
+      threadId,
+      turnId,
+      item,
+      ordinals: this.ordinals,
+      historyImport: this.deps.historyImport
+    })
     this.identities.set(key, identity)
     while (this.identities.size > MAX_CODEX_IDENTITY_ENTRIES) {
       const oldest = this.identities.keys().next().value

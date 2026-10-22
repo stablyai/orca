@@ -73,7 +73,15 @@ export function windowsPrebuildCacheIdentity({
   }
   const digest = createHash('sha256').update(JSON.stringify({ slot, imageOS, imageVersion }))
   for (const file of WINDOWS_PREBUILD_CACHE_INPUTS) {
-    digest.update(`\0${file}\0`).update(readFileSync(join(repository, file)))
+    const bytes = readFileSync(join(repository, file))
+    if (file === 'package.json') {
+      const manifest = JSON.parse(bytes.toString('utf8'))
+      // App versions do not affect the separately versioned node-pty binary.
+      delete manifest.version
+      digest.update(`\0${file}\0`).update(JSON.stringify(manifest))
+    } else {
+      digest.update(`\0${file}\0`).update(bytes)
+    }
   }
   return {
     slot,

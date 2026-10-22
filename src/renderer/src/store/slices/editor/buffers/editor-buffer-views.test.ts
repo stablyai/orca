@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore } from 'zustand'
 import { useAppStore } from '@/store'
+import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
 import {
   assertEditorBufferInvariant,
   assertEditorBufferRecordsMatchViews,
@@ -19,6 +20,17 @@ import {
   reconcileEditorBufferViewIndex,
   type EditorBufferViewIndex
 } from './editor-buffer-views'
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -58,9 +70,12 @@ describe('editor buffer view index', () => {
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
-  it('maps each tab to its own record through open, rekey and close', () => {
+  it('maps each tab to its own record through open, rekey and close', async () => {
+    // Layout-owner builds: main answers the rename and its frame shows it; a no-op otherwise.
+    const main = await drawTabsFromMain(useAppStore)
     const a = openEditTab('/repo/a.ts')
     const b = openEditTab('/repo/a.ts', 'wt-2')
+    await main.settle()
     let state = useAppStore.getState()
     expect(state.editorBufferIdOf).toEqual({ [a]: a, [b]: b })
     expect(state.editorBufferViews).toEqual({ [a]: [a], [b]: [b] })
@@ -76,11 +91,14 @@ describe('editor buffer view index', () => {
         }
       ]
     })
+    await main.settle()
     state = useAppStore.getState()
     expect(state.editorBufferIdOf).toEqual({ '/repo/z.ts': '/repo/z.ts', [b]: b })
 
     state.closeFile(b)
     state.closeFile('/repo/z.ts')
+    await main.settle()
+    main.close()
     expect(useAppStore.getState().editorBufferIdOf).toEqual({})
     expect(useAppStore.getState().editorBufferViews).toEqual({})
   })

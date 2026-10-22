@@ -67,7 +67,7 @@ function pruneLayoutNodeForGroups(
 export function buildHydratedTabState(
   session: WorkspaceSessionState,
   validWorktreeIds: Set<string>,
-  /** A diff, conflict or check tab whose record the caller still holds, as a frame rebuild does. */
+  /** A diff, conflict or check tab a frame build keeps: its frame carries the tab's view. */
   keepsTransientTab: (worktreeId: string, entityId: string) => boolean = () => false
 ): HydratedTabState {
   const tabsByWorktree: Record<string, Tab[]> = {}

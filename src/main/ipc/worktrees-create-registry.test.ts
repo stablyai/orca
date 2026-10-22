@@ -87,10 +87,10 @@ vi.mock('./pty/provider/state-cleanup', async () =>
 )
 
 function creationsOf(stub: WorktreeRuntimeStub): Record<string, unknown> {
-  if (!stub.workspaceCreations) {
+  if (!stub.workspaceLifecycle) {
     throw new Error('the switch is mocked on')
   }
-  return stub.workspaceCreations.snapshot().creations
+  return stub.workspaceLifecycle.creationsSnapshot().creations
 }
 
 describe('worktree create registry', () => {

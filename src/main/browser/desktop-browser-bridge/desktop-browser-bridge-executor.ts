@@ -6,6 +6,8 @@
  */
 import {
   DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,
+  DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL,
+  DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL,
   DESKTOP_BROWSER_BRIDGE_SCOPE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
@@ -142,7 +144,7 @@ async function scopeRequest(
   if (!deps.isHostBrowsingRouted()) {
     throw new BridgeRefusal(
       DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
-      "This host's browser tabs browse from your desktop's own network, so its orca CLI cannot use them. Turn SSH browser routing back on for this host to allow it."
+      `This host's browser tabs browse from your desktop's own network, so its orca CLI cannot use them. Set ${DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL} to "SSH host" and, if this host is listed under "${DESKTOP_BROWSER_BRIDGE_ROUTING_OPT_OUT_LABEL}", click "Use SSH host".`
     )
   }
   const params: Record<string, unknown> = { ...request.params }

@@ -43,6 +43,10 @@ import {
   BeginClaudeSignInParams,
   ConsumeCodexResetCreditParams,
   FinishClaudeSignInParams,
+  HostAccountSignInCodeParams,
+  HostAccountSignInFlowParams,
+  HostAccountSignInStartParams,
+  HostAccountSignInWaitParams,
   ListAccountsParams,
   RemoveAccountParams,
   RemoveDataAccountParams,
@@ -620,6 +624,7 @@ import {
 import {
   WorkspacePortKillHostParams,
   WorkspacePortKillParams,
+  WorkspacePortProbePageParams,
   WorkspacePortScanHostParams,
   WorkspacePortScanParams
 } from './workspace-ports-params'
@@ -674,6 +679,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.cancelClaudeSignIn': FinishClaudeSignInParams,
   'accounts.consumeCodexResetCredit': ConsumeCodexResetCreditParams,
   'accounts.finishClaudeSignIn': FinishClaudeSignInParams,
+  'accounts.hostSignInCancel': HostAccountSignInFlowParams,
+  'accounts.hostSignInStart': HostAccountSignInStartParams,
+  'accounts.hostSignInSubmitCode': HostAccountSignInCodeParams,
+  'accounts.hostSignInWait': HostAccountSignInWaitParams,
   'accounts.list': ListAccountsParams,
   'accounts.listData': null,
   'accounts.minimaxClearApiKey': null,
@@ -1395,6 +1404,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.install': null,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
+  'workspacePorts.probePage': WorkspacePortProbePageParams,
   'workspacePorts.scan': WorkspacePortScanParams,
   'workspacePorts.scanHost': WorkspacePortScanHostParams,
   'worktree.activate': WorktreeActivate,

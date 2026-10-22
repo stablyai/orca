@@ -136,20 +136,18 @@ function DiffCardRows({
 export function MobileNativeChatDiffCard({
   file,
   fontScale,
-  defaultExpanded = false,
   disclosureKey,
   rootIdentity,
   onOpenFile
 }: {
   file: NativeChatEditFile
   fontScale: number
-  defaultExpanded?: boolean
   /** Identity this card's open state is remembered under while it is unmounted. */
   disclosureKey?: string
   rootIdentity?: string
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, defaultExpanded)
+  const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const type = toolType(fontScale)

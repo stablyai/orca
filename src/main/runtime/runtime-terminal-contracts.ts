@@ -114,6 +114,9 @@ export type TerminalCreateOptions = {
   keepPaneOnStartFailure?: true
   /** With `keepPaneOnStartFailure`: a start already known to fail; only its pane is written. */
   startFailure?: Error
+  /** Layout-owner build: main's start wakes the pane's sleeping record in place of the window's
+   *  own restore, so it publishes whether the agent came back. */
+  resumesSleepingRecord?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string
@@ -200,7 +203,14 @@ export type RuntimeTerminalProgramStatusFacetEvent = {
 
 export type HookLiveAgentRow = Pick<
   RuntimeAgentRowSnapshot,
-  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId' | 'programStatus'
+  | 'payload'
+  | 'updatedAt'
+  | 'evidenceObservedAt'
+  | 'stateStartedAt'
+  | 'turnEndedAt'
+  | 'turnEndDisposition'
+  | 'worktreeId'
+  | 'programStatus'
 >
 
 export type TerminalHandleRecord = {

@@ -52,7 +52,7 @@ import {
   useMobileNativeChatDisclosure
 } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-import { mobileNativeChatMemberId } from './MobileNativeChatScrollHold'
+import { mobileNativeChatMemberId } from './mobile-native-chat-reading-place'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
@@ -205,8 +205,6 @@ function ToolRunMembers({
  *  opens to the individual tool lines. */
 export function ToolRun({
   blocks,
-  defaultExpanded,
-  expandChildren,
   disclosureId,
   asides,
   activeTurnIsWorking,
@@ -217,10 +215,8 @@ export function ToolRun({
   fontScale = 1,
   onOpenFile
 }: MobileNativeChatToolRunProps): React.JSX.Element {
-  // A reader's choice belongs to the default it deviated from, so toggling the Tools
-  // default back restores it.
-  const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}:${defaultExpanded}`
-  const [open, setOpen] = useMobileNativeChatDisclosure(runKey, defaultExpanded)
+  const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}`
+  const [open, setOpen] = useMobileNativeChatDisclosure(runKey, false)
   // Rows drawn among the calls count as work too: a reader at the end follows them arriving.
   const asideCount = asides
     ? asides.after.length +
@@ -306,7 +302,6 @@ export function ToolRun({
             blocks={blocks}
             previousTodoWrite={previousTodoWrite}
             previousUpdatePlan={previousUpdatePlan}
-            expandChildren={expandChildren}
             disclosureId={disclosureId}
             asides={asides}
             fontScale={fontScale}
@@ -326,7 +321,6 @@ function ToolRunMemberList({
   asides,
   previousTodoWrite,
   previousUpdatePlan,
-  expandChildren,
   fontScale,
   onOpenFile
 }: {
@@ -335,7 +329,6 @@ function ToolRunMemberList({
   asides?: MobileNativeChatToolRunAsides
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
-  expandChildren: boolean
   fontScale: number
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
@@ -350,7 +343,7 @@ function ToolRunMemberList({
   const { editCards, consumedResults } = useMemo(() => buildEditCards(blocks), [blocks])
   const { resultByCall, pairedResults } = useMemo(() => pairNativeChatToolResults(blocks), [blocks])
   const seen = new Map<string, number>()
-  // Each drawn member's line identity: the page's place-hold finds it by this, and a card keyed by
+  // Each drawn member's line identity: the page finds the reader's line by this, and a card keyed by
   // it keeps its state when older calls join the run above it.
   const memberSeen = new Map<string, number>()
   const memberIdentity = (block: NativeChatBlock) =>
@@ -379,11 +372,8 @@ function ToolRunMemberList({
               key={`${id}:${fileIndex}`}
               file={file}
               rootIdentity={`diff:${id}:${fileIndex}`}
-              defaultExpanded={expandChildren}
               disclosureKey={
-                disclosureId === undefined
-                  ? undefined
-                  : `diff:${disclosureId}:${expandChildren}:${id}:${fileIndex}`
+                disclosureId === undefined ? undefined : `diff:${disclosureId}:${id}:${fileIndex}`
               }
               fontScale={fontScale}
               onOpenFile={onOpenFile}
@@ -408,11 +398,8 @@ function ToolRunMemberList({
         memberId={mobileNativeChatMemberId(memberIdentity(block))}
         block={block}
         result={block.type === 'tool-call' ? resultByCall.get(block) : undefined}
-        defaultExpanded={expandChildren}
         disclosureKey={
-          disclosureId === undefined
-            ? undefined
-            : `line:${disclosureId}:${expandChildren}:${lineIdentity}`
+          disclosureId === undefined ? undefined : `line:${disclosureId}:${lineIdentity}`
         }
         fontScale={fontScale}
         onOpenFile={onOpenFile}

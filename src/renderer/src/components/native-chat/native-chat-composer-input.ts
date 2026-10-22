@@ -33,3 +33,14 @@ export function insertNativeChatPastedText(
   input.insertText(text)
   return true
 }
+
+/** Text and caret in one synchronous write, then focus, so the next native key lands after them. */
+export function writeNativeChatComposerText(
+  input: NativeChatComposerInput,
+  text: string,
+  caret: number
+): void {
+  input.value = text
+  input.setSelectionRange(caret, caret)
+  input.focus()
+}

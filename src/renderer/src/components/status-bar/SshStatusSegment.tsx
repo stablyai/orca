@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -24,7 +24,13 @@ import {
   runtimePairingRepairRoute
 } from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
-import { connectedHostCountLabel, connectingHostsLabel } from './ssh-status-segment-copy'
+import {
+  connectedHostCountLabel,
+  connectingHostsLabel,
+  moreSshHostsLabel
+} from './ssh-status-segment-copy'
+import { SshHostFindPopover } from './SshHostFindPopover'
+import { splitSshStatusMenuRows } from './ssh-status-menu-rows'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
 import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync'
 import { connectRuntimeHostAndReloadProjects } from './runtime-environment-explicit-connect'
@@ -51,6 +57,7 @@ export function SshStatusSegment({
 }): React.JSX.Element | null {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
@@ -60,8 +67,14 @@ export function SshStatusSegment({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [findOpen, setFindOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const [repairTarget, setRepairTarget] = useState<{ id: string; label: string } | null>(null)
 
+  const projectHostIds = useMemo(
+    () => new Set(repos.flatMap((repo) => (repo.connectionId ? [repo.connectionId] : []))),
+    [repos]
+  )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const userManagedEnvironments = runtimeEnvironments.filter(isListedRemoteServer)
   // Why the registry: a managed server and its SSH host are one machine, shown on its active route.
@@ -128,8 +141,11 @@ export function SshStatusSegment({
   const inactiveRuntimeHosts = runtimeHostRows.filter(
     (host) => !isConnectedRuntimeHostState(host.state)
   )
-  const connectedTargets = targets.filter((target) => target.status === 'connected')
-  const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
+  const {
+    connected: connectedTargets,
+    inactive: disconnectedTargets,
+    hiddenIdleCount
+  } = splitSshStatusMenuRows(targets, { projectHostIds })
   const connectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
       if (await connectRuntimeHostAndReloadProjects(environmentId)) {
@@ -188,6 +204,7 @@ export function SshStatusSegment({
     >
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
           aria-label={translate(
@@ -244,6 +261,12 @@ export function SshStatusSegment({
         align="start"
         sideOffset={8}
         className="w-[min(20rem,calc(100vw-1rem))]"
+        onCloseAutoFocus={(event) => {
+          // Why: the host search takes focus as the menu closes; the trigger must not take it back.
+          if (findOpen) {
+            event.preventDefault()
+          }
+        }}
       >
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           {translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}
@@ -280,6 +303,12 @@ export function SshStatusSegment({
         {disconnectedTargets.map((t) => (
           <SshTargetStatusRow key={t.id} targetId={t.id} label={t.label} status={t.status} />
         ))}
+        {hiddenIdleCount > 0 ? (
+          // Why a search and not a Settings link: web clients connect hosts here but have no SSH pane.
+          <DropdownMenuItem onSelect={() => setFindOpen(true)}>
+            {moreSshHostsLabel(hiddenIdleCount)}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
@@ -294,6 +323,12 @@ export function SshStatusSegment({
           )}
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <SshHostFindPopover
+        open={findOpen}
+        onOpenChange={setFindOpen}
+        targets={targets}
+        anchorRef={triggerRef}
+      />
       {repairTarget && (
         <RuntimeRepairDialog
           open

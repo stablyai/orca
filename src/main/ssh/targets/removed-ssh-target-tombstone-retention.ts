@@ -47,7 +47,7 @@ export function collectAutomationReferencedSshTargetIds(
 }
 
 /** Desktop SSH target id the persisted Automations host filter still names, if any. */
-export function persistedAutomationHostFilterSshTargetId(
+function persistedAutomationHostFilterSshTargetId(
   filter: PersistedAutomationHostFilter | undefined
 ): string | null {
   if (filter?.kind !== 'host') {
@@ -59,7 +59,7 @@ export function persistedAutomationHostFilterSshTargetId(
     : null
 }
 
-export type SshTargetRemovalEvidenceDependents = {
+type SshTargetRemovalEvidenceDependents = {
   automations: readonly {
     executionTargetType: string
     executionTargetId: string

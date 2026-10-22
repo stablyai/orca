@@ -1,7 +1,5 @@
-import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '../types'
 import {
-  applyGeneratedTabTitleUpdates,
   getTabIdFromPaneKey,
   type GeneratedTabTitleUpdate
 } from '../slices/terminal-tab-title-batch'
@@ -12,7 +10,7 @@ import {
   type TabChange
 } from './tab-change-through-layout-owner'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
-import { sendGeneratedTabTitles } from '@/runtime/generated-tab-titles-send'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 
 type RoutedActions = Pick<
   TerminalSlice,
@@ -27,34 +25,6 @@ type RoutedActions = Pick<
 function terminalTab(state: AppState, tabId: string) {
   const owner = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
   return owner ? state.tabsByWorktree[owner]?.find((tab) => tab.id === tabId) : undefined
-}
-
-type GeneratedTitleChange = {
-  tabId: string
-  title: string | null
-  updates: GeneratedTabTitleUpdate[]
-}
-
-/** Each tab's generated title the window would give it now, with the updates that give it. */
-function generatedTitleChanges(
-  state: AppState,
-  updates: readonly GeneratedTabTitleUpdate[]
-): GeneratedTitleChange[] {
-  const patched = applyGeneratedTabTitleUpdates(state, updates).patch?.tabsByWorktree ?? {}
-  return Object.values(patched)
-    .flat()
-    .flatMap((tab) => {
-      const title = tab.generatedTitle ?? null
-      return title === (terminalTab(state, tab.id)?.generatedTitle ?? null)
-        ? []
-        : [
-            {
-              tabId: tab.id,
-              title,
-              updates: updates.filter((u) => getTabIdFromPaneKey(u.paneKey) === tab.id)
-            }
-          ]
-    })
 }
 
 /**
@@ -73,60 +43,21 @@ export function routeTerminalTabChangesThroughLayoutOwner(
   const recordTabsInteraction = (): void => {
     void get().recordFeatureInteraction?.('terminal-tabs')
   }
-  /** Tabs whose generated title main has and the window does not yet: the window keeps a first title. */
-  const generatedTitleSent = new Map<string, object>()
-  // Why one send: a status batch's titles are one write and one frame in main, and one store update.
+  // Why: main derives the generated titles of the tabs it holds from the agent status it owns, so
+  // the window titles only a tab main has no tab-bar entry for or a paired server holds.
   const routeGeneratedTitles = (updates: readonly GeneratedTabTitleUpdate[]): void => {
-    const unsent = updates.filter(
-      (update) =>
-        update.options?.replaceExistingGeneratedTitle === true ||
-        !generatedTitleSent.has(getTabIdFromPaneKey(update.paneKey) ?? '')
-    )
     const state = get()
-    const toMain: (GeneratedTitleChange & { tab: Tab })[] = []
-    // Main is not asked for a tab it has no tab-bar entry for, nor one a paired server owns.
-    const local: GeneratedTabTitleUpdate[] = []
-    for (const change of generatedTitleChanges(state, unsent)) {
-      const tab = findRenamableUnifiedTab(state.unifiedTabsByWorktree, change.tabId)
-      if (tab) {
-        toMain.push({ ...change, tab })
-      } else {
-        local.push(...change.updates)
+    const local = updates.filter((update) => {
+      const tab = findRenamableUnifiedTab(
+        state.unifiedTabsByWorktree,
+        getTabIdFromPaneKey(update.paneKey) ?? ''
+      )
+      if (!tab) {
+        return true
       }
-    }
-    const entry = {}
-    const sent = sendGeneratedTabTitles(
-      state,
-      toMain.map(({ tab, title, updates: given }) => ({
-        worktreeId: tab.worktreeId,
-        tabId: tab.id,
-        title,
-        // Main keeps a tab's first generated title, as the window does, unless the update replaces it.
-        ...(given.some((update) => update.options?.replaceExistingGeneratedTitle === true)
-          ? { replaceExisting: true as const }
-          : {})
-      })),
-      (outcomes) => {
-        for (const { tabId } of toMain) {
-          if (generatedTitleSent.get(tabId) === entry) {
-            generatedTitleSent.delete(tabId)
-          }
-        }
-        // Main's frame drew the titles it gave; the window shows only those left to it as today.
-        const asToday = toMain.flatMap((change, index) =>
-          outcomes[index] === 'asToday' ? change.updates : []
-        )
-        if (asToday.length > 0) {
-          actions.setGeneratedTabTitlesFromAgentPrompts(asToday)
-        }
-      }
-    )
-    toMain.forEach((change, index) => {
-      if (sent[index]) {
-        generatedTitleSent.set(change.tabId, entry)
-      } else {
-        local.push(...change.updates)
-      }
+      // A twin (an owner the window cannot resolve) main refuses, so the window titles it as before.
+      const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: tab.worktreeId })
+      return owner.kind !== 'resolved' || owner.environmentId !== null
     })
     if (local.length > 0) {
       actions.setGeneratedTabTitlesFromAgentPrompts(local)

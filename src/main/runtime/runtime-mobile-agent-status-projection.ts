@@ -2,6 +2,7 @@ import {
   AGENT_STATUS_HYDRATE_MAX_AGE_MS,
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusAuthorityObservedAt,
+  pickHostTurnEnd,
   pickParsedAgentStatusPayload,
   type AgentStatusEntry,
   type AgentStatusIpcPayload
@@ -194,6 +195,7 @@ function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
     updatedAt: row.receivedAt,
     ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
     stateStartedAt: row.stateStartedAt ?? row.receivedAt,
+    ...pickHostTurnEnd(row),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
     ...(row.programStatus ? { programStatus: row.programStatus } : {})
   }

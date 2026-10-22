@@ -29,6 +29,7 @@ export function useMobileNativeChatFileSearch(args: {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sequenceRef = useRef(0)
   const queryCacheRef = useRef(new Map<string, string[]>())
+  const queryCacheGenerationRef = useRef<number | null>(null)
   const searchSupportedRef = useRef<boolean | null>(null)
   const inventory = useRef(
     new GenerationScopedRequestOwner<WorkspaceInventoryParameters, string[]>()
@@ -45,6 +46,7 @@ export function useMobileNativeChatFileSearch(args: {
   useEffect(() => {
     sequenceRef.current++
     queryCacheRef.current.clear()
+    queryCacheGenerationRef.current = null
     searchSupportedRef.current = null
     setNativeChatFilePaths([])
     return () => {
@@ -62,6 +64,13 @@ export function useMobileNativeChatFileSearch(args: {
     (query: string) => {
       if (!client) {
         return
+      }
+      const generation = client.getGeneration?.() ?? 0
+      if (queryCacheGenerationRef.current !== generation) {
+        queryCacheGenerationRef.current = generation
+        queryCacheRef.current.clear()
+        searchSupportedRef.current = null
+        inventory.reset()
       }
       const normalizedQuery = query.trim().toLowerCase().slice(0, 256)
       const cached = queryCacheRef.current.get(normalizedQuery)
@@ -83,8 +92,12 @@ export function useMobileNativeChatFileSearch(args: {
       setNativeChatFilePaths([])
       timerRef.current = setTimeout(() => {
         timerRef.current = null
+        const isCurrentRequest = (): boolean =>
+          mountedRef.current &&
+          sequenceRef.current === sequence &&
+          (client.getGeneration?.() ?? 0) === generation
         const applyPaths = (paths: string[]): void => {
-          if (sequenceRef.current !== sequence) {
+          if (!isCurrentRequest()) {
             return
           }
           queryCacheRef.current.set(normalizedQuery, paths)
@@ -105,7 +118,7 @@ export function useMobileNativeChatFileSearch(args: {
           // reconnect to the same host leaves the files on disk alone, so the physical session
           // epoch is deliberately not in it. Read once, so a cutover between the two calls below
           // cannot put one attempt in two scopes.
-          const inventoryScope: RequestScope = [client, worktreeId, client.getGeneration?.() ?? 0]
+          const inventoryScope: RequestScope = [client, worktreeId, generation]
           const held = inventory.read(inventoryScope, WHOLE_WORKSPACE)
           if (held) {
             applyPaths(rankSuggestions(held, normalizedQuery, FILE_SEARCH_RESULT_LIMIT))
@@ -126,6 +139,9 @@ export function useMobileNativeChatFileSearch(args: {
           applyPaths(rankSuggestions(loaded.value, normalizedQuery, FILE_SEARCH_RESULT_LIMIT))
         }
         void (async () => {
+          if (!isCurrentRequest()) {
+            return
+          }
           if (searchSupportedRef.current === false) {
             await loadLegacyPaths()
             return
@@ -136,6 +152,9 @@ export function useMobileNativeChatFileSearch(args: {
             limit: FILE_SEARCH_RESULT_LIMIT
           })
           const accepted = nativeChatFileSearchRead.interpret(response)
+          if (!isCurrentRequest()) {
+            return
+          }
           if (accepted.accepted) {
             searchSupportedRef.current = true
             applyPaths(accepted.value)

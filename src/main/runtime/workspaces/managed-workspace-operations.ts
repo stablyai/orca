@@ -1,6 +1,8 @@
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../session-tabs/structured-session-tab-restoration'
 import { DEFAULT_WORKTREE_LIST_LIMIT } from '../orca-runtime-postlude'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreeTerminalSleepResult
@@ -220,10 +222,12 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
 
   async sleepManagedWorktree(worktreeSelector: string): Promise<{ worktreeId: string }> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    // Switch point: main sleeps a workspace it owns itself, window or not; the window draws it.
+    const mainSleeps = ORCA_LAYOUT_OWNER_IS_MAIN && mainListsEveryPane(this, worktree.id)
     // Why: sleep is renderer-initiated on desktop (it tears down tab state
     // before killing PTYs). The notifier tells the renderer to run its own
     // sleep flow so all cleanup happens in the correct order.
-    if (this.notifier) {
+    if (this.notifier && !mainSleeps) {
       this.notifier.sleepWorktree(worktree.id)
     } else if (teardownStops('sleep', 'pty')) {
       // No renderer (headless serve, or the window is gone): the host sleeps its own terminals.

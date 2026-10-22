@@ -1,5 +1,6 @@
 import { BrowserGrabSessionController } from './browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
+import type { BrowserSiteDisplayController } from './browser-site-display-controller'
 import {
   createPageInitiatedTabBudget,
   type PageInitiatedTabBudget
@@ -153,6 +154,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null
+  protected siteDisplayController: BrowserSiteDisplayController | null = null
   protected shouldForwardDictationShortcut: (() => boolean) | null = null
   protected readonly pendingLoadFailuresByGuestId = new Map<
     number,
@@ -174,6 +176,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   setCertificateTrustController(controller: BrowserCertificateTrustController): void {
     this.certificateTrustController = controller
+  }
+
+  setSiteDisplayController(controller: BrowserSiteDisplayController): void {
+    this.siteDisplayController = controller
   }
 
   installCertificateRequestGuard(session: Electron.Session): void {

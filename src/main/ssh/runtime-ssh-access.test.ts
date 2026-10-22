@@ -34,11 +34,8 @@ vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
 vi.mock('./runtime-ssh-access-verification', () => ({
   verifyRuntimeEnvironmentSshTunnel: mocks.verify
 }))
-import {
-  fingerprintRuntimeSshTarget,
-  linkRuntimeSshAccess,
-  unlinkRuntimeSshAccess
-} from './runtime-ssh-access'
+import { linkRuntimeSshAccess, unlinkRuntimeSshAccess } from './runtime-ssh-access'
+import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
 
 const pairing = {
   v: 2 as const,

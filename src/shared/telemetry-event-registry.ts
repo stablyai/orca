@@ -1,3 +1,8 @@
+import {
+  onboardingLanguagePickerOpenedSchema,
+  onboardingLanguageChangedSchema,
+  onboardingLanguageRequestedSchema
+} from './telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './telemetry-agent-token-usage-schema'
 import {
   agentErrorSchema,
@@ -93,7 +98,6 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
-import { tabsDirectionalCloseRequestedSchema } from './telemetry-tab-event-schemas'
 import {
   sshHostServerConversionSchema,
   sshHostServerDecidedSchema,
@@ -170,6 +174,9 @@ export const eventSchemas = {
   feature_wall_feature_selected: featureWallFeatureSelectedSchema,
   feature_wall_docs_clicked: featureWallDocsClickedSchema,
 
+  onboarding_language_picker_opened: onboardingLanguagePickerOpenedSchema,
+  onboarding_language_changed: onboardingLanguageChangedSchema,
+  onboarding_language_requested: onboardingLanguageRequestedSchema,
   onboarding_started: onboardingStartedSchema,
   onboarding_step_viewed: onboardingStepViewedSchema,
   onboarding_step_completed: onboardingStepCompletedSchema,
@@ -197,7 +204,6 @@ export const eventSchemas = {
   setup_guide_closed: setupGuideClosedSchema,
   setup_guide_step_completed: setupGuideStepCompletedSchema,
   terminal_pane_split: terminalPaneSplitSchema,
-  tabs_directional_close_requested: tabsDirectionalCloseRequestedSchema,
 
   editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,

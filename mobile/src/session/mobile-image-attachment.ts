@@ -1,6 +1,6 @@
 import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
 import {
-  buildMobileImagePastePayload,
+  buildMobileTerminalImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
@@ -54,7 +54,7 @@ export async function attachMobileImageToTerminal(
   // next keystroke would otherwise glue onto the path (`…pngadd`). Unlike native
   // chat there is no batch to look ahead in, and a trailing space is inert.
   const payload = separateImagePasteFromFollowingText(
-    buildMobileImagePastePayload(imagePath, agent),
+    buildMobileTerminalImagePastePayload(imagePath, agent),
     true
   )
   if (beforeTerminalSend && !(await beforeTerminalSend(terminal))) {

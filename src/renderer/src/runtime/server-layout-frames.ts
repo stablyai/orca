@@ -16,6 +16,10 @@ import {
   runtimeHostConnectionStateForEntry
 } from './runtime-host-connection-state'
 import { createServerLayoutFrameTranslator } from './server-layout-frame-ids'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import { serverHeldPanes, showServerLayoutHeldPanes } from './server-held-panes'
 import { createServerViewReport, onServerControlConnected } from './server-layout-view-report'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
@@ -265,8 +269,8 @@ export function installServerLayoutFrames(store: FramesStore): () => void {
 function routingInputs(state: AppState): unknown[] {
   return [
     state.repos,
-    state.worktreesByRepo,
-    state.detectedWorktreesByRepo,
+    selectWorktreesByRepo(state),
+    selectDetectedWorktreesByRepo(state),
     state.projectGroups,
     state.restoredRuntimeHostIdByWorkspaceSessionKey,
     state.runtimeEnvironments,

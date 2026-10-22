@@ -36,6 +36,17 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toast } }))
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: mocks.activate
 }))
+// Switch-on, main opens the chat's tab and its frame draws it.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -62,6 +73,8 @@ import { buildHydratedTabState } from '@/store/slices/tabs-hydration'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '@/store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { runCliChatResume } from './cli-chat-resume-run'
 import {
   resetStructuredAgentLaunchRegistryForTests,
@@ -75,6 +88,10 @@ import {
 } from '@/runtime/web-session-focus-intent'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import { registerSessionTabIpcBridge } from '@/hooks/ipc-events/session-tab-ipc-bridge'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 const SOURCE: CliChatResumeSource = {
   tabId: 'tab-1',
@@ -85,7 +102,12 @@ const SOURCE: CliChatResumeSource = {
   executionHostId: 'local'
 }
 const tabs = () => useAppStore.getState().unifiedTabsByWorktree['wt-1'] ?? []
-afterEach(() => vi.unstubAllGlobals())
+let main: TabsDrawnFromMain | undefined
+afterEach(() => {
+  vi.unstubAllGlobals()
+  main?.close()
+  main = undefined
+})
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
   const promise = new Promise<T>((done) => {
@@ -102,7 +124,7 @@ function refuse(reason: 'transcriptNotFound' | 'transcriptUnreadable'): AgentSes
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
   resetLocalStructuredSessionVersionForTests()
   resetWebSessionTabsSnapshotFreshnessForTests()
@@ -122,6 +144,7 @@ beforeEach(() => {
       return { ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } }
     }
   )
+  main = await drawTabsFromMain(useAppStore)
 })
 
 function snapshot(sessionId?: string): RuntimeMobileSessionTabsResult {
@@ -147,10 +170,18 @@ function snapshot(sessionId?: string): RuntimeMobileSessionTabsResult {
   }
 }
 
-function seedTabs() {
-  return ['E', 'S', 'B'].map((id) =>
+/** Main takes the store's current layout, as after a restart; seeding after it is invisible to main. */
+async function redrawFromMain(): Promise<void> {
+  main?.close()
+  main = await drawTabsFromMain(useAppStore)
+}
+
+async function seedTabs() {
+  const seeded = ['E', 'S', 'B'].map((id) =>
     useAppStore.getState().createUnifiedTab('wt-1', 'editor', { id, entityId: id })
   )
+  await redrawFromMain()
+  return seeded
 }
 
 describe('CLI identity resume through the existing launch owner', () => {
@@ -325,7 +356,7 @@ describe('CLI identity resume through the existing launch owner', () => {
   ])(
     'keeps canonical membership through registered IPC (%s first, move %s to %s)',
     async (first, mover, requested, expected) => {
-      const [e, source, browser] = seedTabs()
+      const [e, source, browser] = await seedTabs()
       let move: Parameters<typeof window.api.ui.onMoveSessionTab>[0] = () => {}
       vi.stubGlobal('api', {
         ...window.api,
@@ -352,6 +383,7 @@ describe('CLI identity resume through the existing launch owner', () => {
       const later = useAppStore
         .getState()
         .createUnifiedTab('wt-1', 'editor', { id: 'R', entityId: 'R' })
+      await redrawFromMain()
       const beforeNoop = useAppStore.getState()
       move({
         kind: 'reorder',
@@ -379,6 +411,7 @@ describe('CLI identity resume through the existing launch owner', () => {
         entityId: 'other',
         split: { splitDirection: 'right', sourceGroupId: e.groupId }
       })
+      await redrawFromMain()
       clearWebSessionFocusIntent(structuredAgentSessionFocusOwner({ kind: 'local' }), 'wt-1')
       if (first === 'inventory') {
         applyStructuredSessionTabSnapshots([snapshot(sessionId)])
@@ -398,10 +431,26 @@ describe('CLI identity resume through the existing launch owner', () => {
     }
   )
 
+  // Main's publish of a window's create places nothing switch-on, so the resume's own open must.
+  it('opens a resumed chat once, through main, after the tab before its hidden slot', async () => {
+    const [, , browser] = await seedTabs()
+    await runCliChatResume(SOURCE)
+    await main?.settle()
+    const sessionId: string = mocks.call.mock.calls[0][2].envelope.sessionId
+    const slotId = `structured-agent-session-${sessionId}`
+    expect(tabs().find((tab) => tab.entityId === sessionId)?.id).toBe(slotId)
+    expect(useAppStore.getState().groupsByWorktree['wt-1'][0].tabOrder.at(-1)).toBe(slotId)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(layoutApplyTestTransport.sentOfType('openAgentSessionTab')).toEqual([
+        expect.objectContaining({ tabId: slotId, sessionId, afterTabId: browser.id })
+      ])
+    }
+  })
+
   it.each([false, true])(
     'keeps overlapping requests in their canonical order (second finishes first: %s)',
     async (reverse) => {
-      const initial = seedTabs()
+      const initial = await seedTabs()
       const replies = [deferred<unknown>(), deferred<unknown>()]
       mocks.call
         .mockImplementationOnce(() => replies[0].promise)
@@ -424,7 +473,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     }
   )
 
-  it('restores a pending-only group as unknown without sending create or restoring focus', () => {
+  it('restores a pending-only group as unknown without sending create or restoring focus', async () => {
     const record = {
       sessionId: 'reload-pending',
       executionHostId: 'local' as const,
@@ -461,9 +510,11 @@ describe('CLI identity resume through the existing launch owner', () => {
       ...buildHydratedTabState(session, new Set(['wt-1'])),
       worktreesByRepo: { repo: [makeWorktree({ id: 'wt-1', repoId: 'repo', hostId: 'local' })] }
     })
+    await redrawFromMain()
     restoreStructuredLaunchSurfaces()
     restoreStructuredLaunchSurfaces()
     applyStructuredSessionTabSnapshots([snapshot()])
+    await main?.settle()
     expect(mocks.call).not.toHaveBeenCalled()
     expect(
       peekWebSessionFocusIntent(structuredAgentSessionFocusOwner({ kind: 'local' }), 'wt-1')

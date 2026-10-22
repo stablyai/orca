@@ -3,6 +3,7 @@ import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   detectedAgentsSchema,
   markdownTabDocumentSchema,
+  refreshedAgentsSchema,
   runtimeRepoListSchema,
   sessionForwardedReplySchema,
   sessionTerminalInventorySchema,
@@ -87,6 +88,16 @@ export const preflightDetectAgentsRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('detected-agents', detectedAgentsSchema)
+  })
+)
+
+export const preflightRefreshAgentsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'preflight.refresh-agents',
+    method: 'preflight.refreshAgents',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('refreshed-agents', refreshedAgentsSchema)
   })
 )
 

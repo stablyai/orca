@@ -329,7 +329,9 @@ it('builds server glibc slots on glibc 2.28 and the compat slot on glibc 2.17 (d
 
   const compat = workflow.jobs.linux_glibc217_compat
   expect(compat.needs).toBe('changes')
-  expect(compat.if).toContain(floor.if.slice(0, -3))
+  expect(compat.if).toContain(
+    floor.if.replace("needs.mobile_web_bundle.result == 'success' && ", '').slice(0, -3)
+  )
   expect(compat.if).toContain("needs.changes.outputs.native_compatibility != 'false'")
   expect(compat.if).toContain(
     "github.event_name != 'pull_request' || inputs.build_template || inputs.ref != ''"

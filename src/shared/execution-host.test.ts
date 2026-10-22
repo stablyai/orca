@@ -5,10 +5,10 @@ import {
   getConnectionExecutionHostId,
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
+  getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   getSettingsFocusedExecutionHostId,
-  getSshTargetIdForExecutionHost,
   getWorktreeExecutionHostId,
   isOwnedSshTargetId,
   isRepoOnCatalogHost,
@@ -136,14 +136,18 @@ describe('execution host identity', () => {
   it('distinguishes the SSH target holding a row from the connection this client may dial', () => {
     // Legacy spelling: `connectionId` alone *is* the host, so both answers agree.
     expect(getRepoSshConnectionId({ connectionId: 'openclaw' })).toBe('openclaw')
-    expect(getSshTargetIdForExecutionHost('ssh:openclaw')).toBe('openclaw')
+    expect(getRepoDialableSshTargetId({ connectionId: 'openclaw' })).toBe('openclaw')
     // Unified spelling, no legacy field.
     expect(getRepoSshConnectionId({ executionHostId: 'ssh:m4air' })).toBe('m4air')
+    expect(getRepoDialableSshTargetId({ executionHostId: 'ssh:m4air' })).toBe('m4air')
 
     // A row declaring itself local hands out no SSH connection, whatever the legacy field says:
     // `local` has no SSH namespace to nest in, so the two spellings are contradicting each other.
     expect(
       getRepoSshConnectionId({ executionHostId: 'local', connectionId: 'openclaw' })
+    ).toBeNull()
+    expect(
+      getRepoDialableSshTargetId({ executionHostId: 'local', connectionId: 'openclaw' })
     ).toBeNull()
 
     // A runtime host does have its own namespace, and a nested target appears only in this field.
@@ -153,7 +157,9 @@ describe('execution host identity', () => {
       getRepoSshConnectionId({ executionHostId: 'runtime:env-a', connectionId: 'ssh-nested' })
     ).toBe('ssh-nested')
     // ...but that id is not dialable from this client alone, so the routing answer stays null.
-    expect(getSshTargetIdForExecutionHost('runtime:env-a')).toBeNull()
+    expect(
+      getRepoDialableSshTargetId({ executionHostId: 'runtime:env-a', connectionId: 'ssh-nested' })
+    ).toBeNull()
     // A runtime host with no nested target is simply not on SSH.
     expect(getRepoSshConnectionId({ executionHostId: 'runtime:env-a' })).toBeNull()
 

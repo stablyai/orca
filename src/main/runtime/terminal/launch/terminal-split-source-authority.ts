@@ -1,5 +1,5 @@
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
+import { OrcaRuntimeWithSplitPaneInMain } from './terminal-split-in-main'
 import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
@@ -15,7 +15,7 @@ import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { SPLIT_PANE_WAIT_TIMEOUT_MESSAGE } from './terminal-split-wait-timeout'
 
-export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPtyBackedTerminal {
+export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPaneInMain {
   abstract getTerminalHandleForPaneKey(
     ...args: Parameters<
       OrcaRuntimeWithPruneMobileSessionTabGroupLayout['getTerminalHandleForPaneKey']

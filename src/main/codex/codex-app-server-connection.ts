@@ -38,7 +38,7 @@ export type CodexAppServerLaunch = ProviderProcessLaunch
 // Why: calls made after the start run in the session's queue, which a Stop or a close waits behind,
 // so their deadline is what frees it from a Codex that never answers. Temporary: it goes once a
 // Stop or close can end the child without queueing behind its request.
-const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+export const DEFAULT_CODEX_REQUEST_TIMEOUT_MS = 30_000
 
 /** Builds the transport so an owner can record its process before initialization. */
 async function connectCodexAppServer(
@@ -164,7 +164,7 @@ async function connectCodexAppServer(
     }
     const id = nextRequestId++
     const timeoutMs =
-      options.timeoutMs === undefined ? DEFAULT_REQUEST_TIMEOUT_MS : options.timeoutMs
+      options.timeoutMs === undefined ? DEFAULT_CODEX_REQUEST_TIMEOUT_MS : options.timeoutMs
     return new Promise<unknown>((resolve, reject) => {
       // Null requests are bounded by their caller; timed requests belong to this call.
       const timer =

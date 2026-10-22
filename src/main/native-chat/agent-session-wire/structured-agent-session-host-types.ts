@@ -13,6 +13,7 @@ import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-re
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
 import type {
   StructuredAgentSessionAdapter,
@@ -80,6 +81,7 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly permissionMode?: AgentChatPermissionMode
   /** The adapter's `heldSends` for this conversation, read at each decision. */
   readonly heldSends?: () => ReadonlySet<string> | undefined
+  readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
   close?: StructuredAgentSessionChildClose
 }
 

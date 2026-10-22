@@ -21,6 +21,7 @@ import {
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type SuccessorState = Pick<
   AppState,
@@ -47,11 +48,11 @@ function findListedRow(
   hostId: ExecutionHostId | null
 ) {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const rows = state.worktreesByRepo[repoId] ?? []
+  const rows = selectWorktreesByRepo(state)[repoId] ?? []
   if (!hostId) {
     return rows.find((row) => row.id === worktreeId)
   }
-  return findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, hostId)
+  return findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, hostId)
 }
 
 // Why: a per-workspace-env's runtime-owned SSH target is torn down with its workspace, so a sibling
@@ -84,7 +85,7 @@ export function pickActiveWorktreeSuccessor(
   removed: RemovedActiveRow
 ): Worktree | null {
   const repoById = getRepoMapFromState(state)
-  const siblings = (state.worktreesByRepo[removed.repoId] ?? []).filter(
+  const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
     (worktree) =>
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
@@ -168,7 +169,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
     if (
       next.activeWorktreeId === prev.activeWorktreeId &&
       next.activeWorkspaceExecutionHostId === prev.activeWorkspaceExecutionHostId &&
-      next.worktreesByRepo === prev.worktreesByRepo &&
+      selectWorktreesByRepo(next) === selectWorktreesByRepo(prev) &&
       next.activeView === prev.activeView &&
       next.activePendingCreationId === prev.activePendingCreationId
     ) {

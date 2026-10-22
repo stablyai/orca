@@ -8,6 +8,7 @@ import { namedHostForOwnerRef } from '@/lib/resolve-owner'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectWorktreesByRepo } from './workspace-record-selectors'
 
 const EMPTY_DIFF_COMMENTS = Object.freeze([]) as unknown as DiffComment[]
 
@@ -81,7 +82,7 @@ export function findDiffCommentRows(
   worktreeId: string,
   hint: { twin?: DiffCommentTwin; hostId?: ExecutionHostId; commentIds?: ReadonlySet<string> } = {}
 ): DiffCommentRows | null {
-  const rows = (state.worktreesByRepo[getRepoIdFromWorktreeId(worktreeId)] ?? []).filter(
+  const rows = (selectWorktreesByRepo(state)[getRepoIdFromWorktreeId(worktreeId)] ?? []).filter(
     (row) => row.id === worktreeId
   )
   const { twin: captured, commentIds } = hint
@@ -127,7 +128,7 @@ export function findDiffCommentRows(
     const named = namedHostForOwnerRef(state, { workspaceId: worktreeId })
     const holdsNamedNotes = rows.some((row) => row.diffComments?.some((c) => commentIds?.has(c.id)))
     const owner = named
-      ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, named)
+      ? findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, named)
       : null
     if (named && twin.hostId && !holdsNamedNotes && !rows.some((row) => row === owner)) {
       return null
@@ -142,7 +143,7 @@ export function findDiffCommentRows(
   }
   const named = namedHostForOwnerRef(state, { workspaceId: worktreeId })
   const owner = named
-    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, named)
+    ? findIndexedWorktreeOwnerForHost(selectWorktreesByRepo(state), worktreeId, named)
     : null
   return pickTwin(
     rows.find((row) => row === owner),
@@ -170,7 +171,7 @@ export function readQueuedDiffComments(
   worktreeId: string,
   chain: { twin?: DiffCommentTwin; hostId?: ExecutionHostId; latest: DiffComment[] | undefined }
 ): { list: DiffComment[] | undefined } | null {
-  const rows = state.worktreesByRepo[getRepoIdFromWorktreeId(worktreeId)] ?? []
+  const rows = selectWorktreesByRepo(state)[getRepoIdFromWorktreeId(worktreeId)] ?? []
   if (
     chain.latest &&
     rows.some((row) => row.id === worktreeId && row.diffComments === chain.latest)
@@ -218,7 +219,7 @@ export function selectWorktreeDiffComments(
     : null
   return open
     ? diffCommentRowNotes(open)
-    : getIndexedWorktreeById(state.worktreesByRepo, worktreeId)?.diffComments
+    : getIndexedWorktreeById(selectWorktreesByRepo(state), worktreeId)?.diffComments
 }
 
 export function selectWorktreeDiffCommentsOrEmpty(

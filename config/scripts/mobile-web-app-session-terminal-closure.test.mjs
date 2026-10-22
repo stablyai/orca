@@ -8,11 +8,11 @@ import {
   editableHostFontSizeOffenders,
   editableHostsIn,
   unresolvedEditableHostStyles
-} from './mobile-web-app-editable-host-font-size.mjs'
+} from './mobile-web-app/platform-seams/mobile-web-app-editable-host-font-size.mjs'
 import {
   textInputFontSizeOffenders,
   unresolvedTextInputStyles
-} from './mobile-web-app-text-input-font-size-seam.mjs'
+} from './mobile-web-app/platform-seams/mobile-web-app-text-input-font-size-seam.mjs'
 
 /**
  * What putting the terminal on the page costs the session route's closure.

@@ -5,7 +5,7 @@ import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { activateWebRuntimeSessionTab } from '../../runtime/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session-environment'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
@@ -38,7 +38,7 @@ export function useTabGroupActivationCommands({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
         useAppStore.getState(),
         worktreeId
       )
@@ -117,7 +117,7 @@ export function useTabGroupActivationCommands({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
+      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
         useAppStore.getState(),
         worktreeId
       )

@@ -169,14 +169,13 @@ jobs:
           repositories: orca-hourly
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
+        uses: ./.github/actions/setup-pnpm
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml

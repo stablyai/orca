@@ -5,7 +5,8 @@ import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
-import { Settings as SettingsIcon, SquareTerminal } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
+import { AgentTerminalLaunchButton } from '@/components/agent/AgentTerminalLaunchButton'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -329,13 +330,10 @@ function ChatRow({
       }}
     >
       {children}
-      <button
+      <AgentTerminalLaunchButton
         ref={cliButton}
-        type="button"
-        tabIndex={-1}
         title={cliTitle}
-        aria-label={cliTitle}
-        className="-my-0.5 grid size-6 place-items-center rounded-md opacity-0 outline-none hover:bg-accent focus-visible:bg-accent focus-visible:opacity-100 [[data-highlighted]_&]:opacity-100"
+        className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
         onKeyDown={(event) => {
           // Stopped so the row's own Enter handling does not start a chat instead.
           if (event.key === 'Enter' || event.key === ' ') {
@@ -353,9 +351,7 @@ function ChatRow({
             }
           }
         }}
-      >
-        <SquareTerminal />
-      </button>
+      />
     </DropdownMenuItem>
   )
 }

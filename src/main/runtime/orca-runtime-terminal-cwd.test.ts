@@ -73,10 +73,18 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
     )
   })
 
-  it('reveals main-spawned terminals with their nested startup cwd', async () => {
+  it.each([false, true])('reveals the saved cwd with fallback=%s', async (fallback) => {
     const runtime = new OrcaRuntimeService()
     stubLaunchScope(runtime)
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })
+    const spawn = vi.fn().mockResolvedValue({
+      id: 'pty-1',
+      ...(fallback
+        ? {
+            startupCwdFallback: { kind: 'worktree', cwd: '/repo/app' },
+            savedStartupCwd: '/repo/app/packages/web'
+          }
+        : {})
+    })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-1' })
     runtime.setPtyController({
       spawn,
@@ -107,7 +115,11 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
     )
   })
 
-  it('materializes restored headless mobile tabs in the persisted startup cwd', async () => {
+  // A folder deleted since the tab was saved starts at the root, says so once, and heals the tab.
+  it.each([
+    { name: 'the persisted startup cwd', fallback: false, savedCwd: '/repo/app/packages/web' },
+    { name: 'the workspace root once that folder is gone', fallback: true, savedCwd: undefined }
+  ])('materializes restored headless mobile tabs in $name', async (c) => {
     const store = {
       // wt-1 is a worktree id, not a registered repo, so getRepo returns undefined.
       getRepo: () => undefined,
@@ -136,7 +148,15 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
     }
     const runtime = new OrcaRuntimeService(store as never)
     stubLaunchScope(runtime)
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })
+    const spawn = vi.fn().mockResolvedValue({
+      id: 'pty-1',
+      ...(c.fallback
+        ? {
+            startupCwdFallback: { kind: 'worktree' as const, cwd: '/repo/app' },
+            savedStartupCwd: '/repo/app'
+          }
+        : {})
+    })
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -148,7 +168,7 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
     const tab = listed.tabs.find((candidate) => candidate.type === 'terminal')
     expect(tab).toMatchObject({ startupCwd: '/repo/app/packages/web' })
 
-    await runtime.activateMobileSessionTab('id:wt-1', tab!.id)
+    const activated = await runtime.activateMobileSessionTab('id:wt-1', tab!.id)
 
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -156,5 +176,10 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
         worktreeId: 'wt-1'
       })
     )
+    expect(activated.startupCwdFallback).toBe(c.fallback ? 'workspace-root' : undefined)
+    const restored = (await runtime.listMobileSessionTabs('id:wt-1')).tabs.find(
+      (candidate) => candidate.type === 'terminal'
+    )
+    expect(restored?.type === 'terminal' && restored.startupCwd).toBe(c.savedCwd)
   })
 })

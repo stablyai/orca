@@ -1,9 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Terminal, type ITheme } from '@xterm/xterm'
+import type { ITheme, Terminal } from '@xterm/xterm'
 import { useShallow } from 'zustand/react/shallow'
-import '@xterm/xterm/css/xterm.css'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
@@ -15,21 +12,17 @@ import {
   previewAdvertisesKittyKeyboard
 } from './preview-terminal-options'
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
-import { installPreviewTerminalCompatibility } from './preview-terminal-compatibility'
-import { createPreviewClipboardPaster } from './preview-terminal-paste'
-import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { installPreviewTerminalKeyHandler } from './preview-terminal-key-handler'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { createPreviewBoxFit } from './preview-terminal-box-fit'
-import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
-import { installPreviewTerminalRightClickPaste } from './preview-terminal-right-click-paste'
-import { installTerminalNativeCopyGutterTrim } from '@/components/terminal-pane/terminal-native-copy-gutter'
-import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import {
+  openStandaloneTerminal,
+  type StandaloneTerminal
+} from '../standalone-terminal/open-standalone-terminal'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 import { terminalPreviewApiFor } from './terminal-preview-api'
 
@@ -110,13 +103,9 @@ export function AgentTerminalPreview({
       return
     }
     let disposed = false
+    let standalone: StandaloneTerminal | null = null
     let terminal: Terminal | null = null
     let offData: (() => void) | null = null
-    let userInputDisposable: { dispose: () => void } | null = null
-    let imeBridge: PreviewImeBridge | null = null
-    let disposeKeyHandler: (() => void) | null = null
-    let disposeNativeCopyGutterTrim: (() => void) | null = null
-    let disposeTerminalCompatibility: (() => void) | null = null
     const previewApi = terminalPreviewApiFor(ptyId)
     // Why one read: the xterm's advertisement and its mirror must never disagree.
     const mountTerminalInput = terminalInputRef.current
@@ -150,20 +139,13 @@ export function AgentTerminalPreview({
     }
     boxResizeObserver?.observe(container)
 
-    let replayDepth = 0
     const writeReplayed = (chunk: string, onDone?: () => void, live = false): void => {
-      // Why: a redelivered snapshot repeats the TUI's one-time kitty push, so
-      // replayed bytes must apply as idempotent sets (see the tracker's docs).
-      if (live) {
-        kittyKeyboardModes.scan(chunk)
-      } else {
-        kittyKeyboardModes.scanReplay(chunk)
-      }
-      replayDepth++
-      terminal?.write(chunk, () => {
-        replayDepth--
-        boxFit.schedule()
-        onDone?.()
+      standalone?.write(chunk, {
+        live,
+        onDone: () => {
+          boxFit.schedule()
+          onDone?.()
+        }
       })
     }
 
@@ -183,72 +165,6 @@ export function AgentTerminalPreview({
       )
     }
 
-    const pasteClipboardText = createPreviewClipboardPaster({
-      ptyId,
-      container,
-      getTerminal: () => terminal,
-      getTerminalInput: () => terminalInputRef.current,
-      isDisposed: () => disposed
-    })
-
-    const disposeImeNativeTextBridge = (): void => {
-      imeBridge?.dispose()
-      imeBridge = null
-    }
-
-    const installImeNativeTextBridge = (): void => {
-      if (terminal) {
-        // Why a live getter: kitty state can change between keydown and commit,
-        // and the tracker outlives every reconnect inside this effect.
-        imeBridge = installPreviewImeBridge(terminal, {
-          getKittyKeyboardFlags: () => kittyKeyboardModes.flags
-        })
-      }
-    }
-
-    const installKeyHandler = (): void => {
-      if (!terminal) {
-        return
-      }
-      disposeKeyHandler = installPreviewTerminalKeyHandler({
-        terminal,
-        claimImeKeyEvent: (event) => imeBridge?.claimKeyEvent(event) ?? false,
-        pasteClipboardText: (activeElement, source) =>
-          void pasteClipboardText(activeElement, source),
-        // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.
-        sendInput: (data) => terminal?.input(data),
-        getShortcutContext: () => ({
-          clientPlatform: getShortcutPlatform(),
-          macOptionAsAlt: macOptionAsAltRef.current,
-          keybindings: useAppStore.getState().keybindings,
-          terminalInput: terminalInputRef.current,
-          getKittyKeyboardFlags: () => kittyKeyboardModes.flags,
-          terminalShortcutPolicy: settingsRef.current?.terminalShortcutPolicy
-        })
-      })
-    }
-
-    const installInputRouting = (): void => {
-      if (!terminal) {
-        return
-      }
-      let pendingUserInputSignals = 0
-      userInputDisposable = subscribeToTerminalUserInput(terminal, () => {
-        pendingUserInputSignals = Math.min(32, pendingUserInputSignals + 1)
-      })
-      terminal.onData((data) => {
-        const signaledUserInput = pendingUserInputSignals > 0
-        if (signaledUserInput) {
-          pendingUserInputSignals--
-        }
-        // Why: core's signal distinguishes real input from parser replies, so typing survives live replay without forwarding synthetic CPR/DA bytes.
-        if (userInputDisposable ? !signaledUserInput : replayDepth > 0) {
-          return
-        }
-        void previewApi.input(ptyId, data)
-      })
-    }
-
     const replayConnection = (
       connection: Awaited<ReturnType<typeof previewApi.connect>>,
       replaceExisting: boolean,
@@ -256,8 +172,9 @@ export function AgentTerminalPreview({
     ): void => {
       const snap = connection.snapshot!
       if (!terminal) {
-        terminal = new Terminal(
-          buildPreviewTerminalOptions({
+        standalone = openStandaloneTerminal({
+          container,
+          options: buildPreviewTerminalOptions({
             settings: settingsRef.current,
             terminalInput: mountTerminalInput,
             macOptionIsMeta: macOptionAsAltRef.current === 'true',
@@ -266,23 +183,20 @@ export function AgentTerminalPreview({
             cols: clamp(snap.cols ?? FALLBACK_COLS, 2, 500),
             rows: clamp(snap.rows ?? FALLBACK_ROWS, 2, 200),
             scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
-          })
-        )
-        try {
-          terminal.open(container)
-        } catch {
-          terminal.dispose()
-          terminal = null
+          }),
+          kittyKeyboardModes,
+          sessionKey: ptyId,
+          sendInput: (data) => previewApi.input(ptyId, data),
+          answersQueries: false,
+          getSettings: () => settingsRef.current,
+          getMacOptionAsAlt: () => macOptionAsAltRef.current,
+          getTerminalInput: () => terminalInputRef.current
+        })
+        if (!standalone) {
           return
         }
+        terminal = standalone.terminal
         terminalRef.current = terminal
-        disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
-          getSettings: () => settingsRef.current
-        })
-        disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
-        installInputRouting()
-        installImeNativeTextBridge()
-        installKeyHandler()
       } else if (replaceExisting) {
         // Why: keep the old frame visible during capture, then atomically replace it once the authoritative snapshot arrives.
         terminal.resize(
@@ -325,16 +239,8 @@ export function AgentTerminalPreview({
     const releaseTerminal = (): void => {
       offData?.()
       offData = null
-      userInputDisposable?.dispose()
-      userInputDisposable = null
-      disposeImeNativeTextBridge()
-      disposeTerminalCompatibility?.()
-      disposeTerminalCompatibility = null
-      disposeKeyHandler?.()
-      disposeKeyHandler = null
-      disposeNativeCopyGutterTrim?.()
-      disposeNativeCopyGutterTrim = null
-      terminal?.dispose()
+      standalone?.dispose()
+      standalone = null
       terminal = null
       terminalRef.current = null
       void previewApi.unsubscribe(ptyId)
@@ -367,20 +273,6 @@ export function AgentTerminalPreview({
       replayConnection(connection, replaceExisting, () => void setup(true))
     }
 
-    const disposeAppMenuClipboard = installPreviewTerminalAppMenuClipboard({
-      container,
-      getTerminal: () => terminal,
-      pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source)
-    })
-    const disposeRightClickPaste = installPreviewTerminalRightClickPaste({
-      container,
-      getTerminal: () => terminal,
-      // Same default as the pane: Windows users expect terminal-style right-click.
-      isRightClickToPasteEnabled: () =>
-        settingsRef.current?.terminalRightClickToPaste ?? isWindowsUserAgent(),
-      pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source)
-    })
-
     offData = previewApi.onData((payload) => {
       if (payload.ptyId !== ptyId) {
         return
@@ -402,8 +294,6 @@ export function AgentTerminalPreview({
       }
       gridClaim.dispose()
       boxResizeObserver?.disconnect()
-      disposeAppMenuClipboard()
-      disposeRightClickPaste()
       releaseTerminal()
     }
   }, [

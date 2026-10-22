@@ -17,6 +17,9 @@ export const SESSION_TABS_CREATE_TERMINAL_SHELL_RUNTIME_CAPABILITY =
   'session-tabs.create-terminal-shell.v1' as const
 
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
+// Why: an older host drops session.tabs.close's `force` and refuses a pinned tab, so a client sends
+// a confirmed pinned close's force only when advertised. Not behind a build switch: both builds honour it.
+export const SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY = 'session-tabs.close-force.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
 // Why: a client advertising this retains every terminal retirement proof it receives until the
@@ -35,6 +38,7 @@ export const AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY =
 export const SESSION_TABS_RUNTIME_CAPABILITIES = [
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY,

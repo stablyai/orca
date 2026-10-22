@@ -81,6 +81,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       leafId,
       persistHostSessionBinding: true,
       placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
+      // Layout-owner build: views mounting the pane from main's frame attach, never spawn.
+      ...this.paneStartStatusArgs({}),
       ...(sourceAuthority.persisted
         ? {
             expectedSourceBinding: {

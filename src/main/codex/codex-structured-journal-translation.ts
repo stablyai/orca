@@ -109,6 +109,7 @@ export function createCodexJournalTranslator(
       return restoreCodexJournalThread({
         threadId,
         thread,
+        historyImport: deps.historyImport,
         currentTurnIds: activeTurns.byThread,
         ordinals: items.ordinals,
         handleItem: (event) =>

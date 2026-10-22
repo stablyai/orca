@@ -80,10 +80,10 @@ async function readCurrent(settings: unknown) {
 
 describe('Claude model before the first turn', () => {
   it.each([
-    ['nothing overrides the default', SETTINGS.noOverride, 'opus[1m]', 'medium'],
-    ['settings name a model', SETTINGS.settingsHaiku, 'haiku', undefined],
-    ['the env names a model', SETTINGS.envSonnet, 'sonnet', 'high'],
-    ['the env overrides the settings', SETTINGS.settingsHaikuEnvSonnet, 'sonnet', 'high']
+    ['nothing overrides the default', SETTINGS.noOverride, 'claude-opus-5-5[1m]', 'medium'],
+    ['settings name a model', SETTINGS.settingsHaiku, 'claude-haiku-4-5-20251001', undefined],
+    ['the env names a model', SETTINGS.envSonnet, 'claude-sonnet-5', 'high'],
+    ['the env overrides the settings', SETTINGS.settingsHaikuEnvSonnet, 'claude-sonnet-5', 'high']
   ])(
     'names what Claude will apply when %s, unconfirmed',
     async (_case, settings, model, effort) => {
@@ -97,10 +97,10 @@ describe('Claude model before the first turn', () => {
     }
   )
 
-  it('falls back to the listing default only when the CLI reports no applied model', async () => {
+  it('marks an unknown applied model as defaulted for the host to resolve', async () => {
     const current = await readCurrent({ effective: {}, sources: [] })
 
-    expect(current.model).toBe('opus[1m]')
+    expect(current.defaulted).toEqual(['model'])
     expect(current.effort).toBeUndefined()
   })
 
@@ -118,7 +118,7 @@ describe('Claude model before the first turn', () => {
     })
 
     const { current } = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-    expect(current.model).toBe('sonnet')
+    expect(current.model).toBe('claude-sonnet-5')
     expect(current.confirmed).toContain('model')
   })
 

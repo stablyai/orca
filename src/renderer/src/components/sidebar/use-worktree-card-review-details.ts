@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useState } from 'react'
 import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'
 import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 import { getWorkspaceAttachmentSourceContext } from './workspace-attachment-source-result'
@@ -11,6 +11,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-iden
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { areTaskSourceContextsEqual } from '../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,
@@ -87,10 +88,12 @@ export function useWorktreeCardReviewDetails({
         )
       : ''
   // Saved workspace bindings keep equal Linear identifiers separate.
-  const linearSourceContext = useMemo(
-    () => getWorkspaceAttachmentSourceContext('linear', repo, worktree),
-    [repo, worktree]
-  )
+  const nextLinearSourceContext = getWorkspaceAttachmentSourceContext('linear', repo, worktree)
+  // Why: every workspace write rebuilds this object; holding it while equal keeps the card's Linear fetch effects from re-running.
+  const [linearSourceContext, setLinearSourceContext] = useState(nextLinearSourceContext)
+  if (!areTaskSourceContextsEqual(linearSourceContext, nextLinearSourceContext)) {
+    setLinearSourceContext(nextLinearSourceContext)
+  }
   const linearWorkspaceId = getWorkspaceReferenceLinearWorkspaceId(
     worktree.linkedLinearIssueWorkspaceId,
     linearSourceContext

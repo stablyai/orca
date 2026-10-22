@@ -114,10 +114,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           throw new Error('client_disconnected')
         }
         try {
-          launchOpts.onPtySpawnDispatched?.({
-            launchConfig: effectiveLaunchConfig,
-            launchAgent: launchOpts.launchAgent
-          })
+          const { launchAgent } = launchOpts
+          launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
           result = await dependencies.spawnInAdmittedPane(this.store, ptyController, {
             ...initialSize,
             cwd,
@@ -203,6 +201,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           reportPtySpawnCommitted()
         }
         restoreHint.consume()
+        const savedStartupCwd = result.savedStartupCwd ?? cwd
         // Why here: refused before a handle, snapshot or reveal could pose the live PTY as new.
         const adoptedStablePane = dependencies.admitStablePaneAdoption(result, launchOpts)
         if (result.agentSessionEnsure) {
@@ -268,7 +267,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
             activate: presentation === 'focused',
             selectIfNoActiveTab: presentation !== 'background',
             ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-            ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
+            ...(savedStartupCwd !== workspace.path ? { startupCwd: savedStartupCwd } : {})
           })
         }
         const reveal = revealCreatedTerminal({
@@ -276,7 +275,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           workspace,
           ptyId: result.id,
           handle,
-          cwd,
+          cwd: savedStartupCwd,
           launchOpts,
           effectiveLaunchConfig,
           launchToken,
@@ -286,8 +285,10 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           leafId
         })
         const { surface, warning } = reveal instanceof Promise ? await reveal : reveal
+        const agentSessionDisposition = result.agentSessionEnsure?.disposition
         return {
           handle,
+          savedStartupCwd,
           tabId,
           paneKey,
           ptyId: result.id,
@@ -296,10 +297,9 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ...this.getPtyExecutionHostMetadata(result.id),
           surface,
           ...(result.pid ? { processId: result.pid } : {}),
-          ...(result.agentSessionEnsure
-            ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
-            : {}),
+          ...(result.agentSessionEnsure ? { agentSessionDisposition } : {}),
           ...(adoptedStablePane ? { isReattach: true as const } : {}),
+          ...(result.startupCwdFallback ? { startupCwdFallback: result.startupCwdFallback } : {}),
           ...(warning ? { warning } : {})
         }
       } finally {

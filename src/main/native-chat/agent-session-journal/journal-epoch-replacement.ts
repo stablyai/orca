@@ -1,10 +1,19 @@
+import {
+  journalItemEchoFields,
+  journalItemEchoRestatement,
+  type JournalItemEcho
+} from './journal-item-echo'
 // Republishing a live item set into a fresh epoch.
 //
 // One transaction: discard the old epoch's rows, insert the epoch row plus the
 // replacement items, and move the session projection.
 
+import { sameJournalConversation } from './journal-history-origin'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session-journal-item-key'
 
 import type {
   AgentJournalCursor,
@@ -45,6 +54,7 @@ import { assertJournalFence } from './journal-write-guards'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
+  echoOf?: JournalItemEcho['echoOf']
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   observedAt?: number
@@ -76,10 +86,21 @@ export function replaceJournalEpoch(input: {
 }): void {
   const epoch = input.mintEpoch()
   const state = createJournalReducerState(input.identity.sessionId, epoch)
+  const providerHandle = agentSessionJournalProviderHandle(input.identity)
+  const previousOrigin = input.previous?.historyOrigin
+  const restate =
+    input.reason !== 'legacy_import' &&
+    input.reason !== 'session_created' &&
+    previousOrigin &&
+    sameJournalConversation(previousOrigin.providerHandle, providerHandle)
   const epochRow: JournalRow = {
     kind: 'epoch',
-    reason: input.reason,
-    providerHandle: agentSessionJournalProviderHandle(input.identity),
+    reason:
+      input.reason === 'legacy_import' && input.items.length === 0
+        ? 'session_created'
+        : input.reason,
+    providerHandle,
+    ...(restate ? { historyOrigin: previousOrigin.raw } : {}),
     ...journalRowBase(epoch, 1, input.fence, input.now())
   }
   const rows: JournalRow[] = [epochRow]
@@ -89,6 +110,14 @@ export function replaceJournalEpoch(input: {
       state,
       identity: item.identity,
       body: item.body,
+      ...journalItemEchoFields(item),
+      ...(input.previous && input.reason !== 'legacy_import' && input.reason !== 'session_created'
+        ? journalItemEchoRestatement(
+            input.previous.itemEchoes,
+            input.previous.aliases.get(agentJournalItemKey(item.identity)) ??
+              agentJournalItemKey(item.identity)
+          )
+        : {}),
       seq: state.lastSequence + 1,
       fence: input.fence,
       ownerFence: item.ownerFence,

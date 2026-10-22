@@ -6,7 +6,6 @@ import {
   list,
   pressSend,
   render,
-  renderedRow,
   root,
   scrollAwayFromTail,
   scrollToEnd,
@@ -311,8 +310,7 @@ describe('MobileNativeChatView: tail-follow', () => {
   })
 
   // The view stays mounted across chat tabs, so the reader's place in one must not carry over.
-  it('opens another chat at its newest message, following, keeping the Tools toggle', async () => {
-    // The Tools pill only shows for a chat with tool runs.
+  it('opens another chat at its newest message, following', async () => {
     const toolTurn = (id: string): ReturnType<typeof assistantTurn> => ({
       ...assistantTurn(id, ''),
       blocks: [{ type: 'tool-call', name: 'Bash', callId: id, input: { command: 'ls' } }]
@@ -320,7 +318,6 @@ describe('MobileNativeChatView: tail-follow', () => {
     await render({ folded: [assistantTurn('a1', 'Chat A'), toolTurn('a2')] })
     await scrollAwayFromTail()
     const control = (label: string) => root().findAllByProps({ accessibilityLabel: label })
-    act(() => control('Expand tool runs')[0].props.onPress())
     expect(control('Scroll to latest')).toHaveLength(1)
     scrollToEnd.mockClear()
 
@@ -333,22 +330,19 @@ describe('MobileNativeChatView: tail-follow', () => {
     expect(control('Scroll to latest')).toHaveLength(0)
     act(() => list().props.onContentSizeChange(320, 900))
     expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 900 })
-    expect(control('Collapse tool runs')).toHaveLength(1)
   })
 
-  it('starts an initially empty switched-to native chat following, preserving Tools', async () => {
+  it('starts an initially empty switched-to native chat following', async () => {
     const toolTurn = (id: string): ReturnType<typeof assistantTurn> => ({
       ...assistantTurn(id, ''),
       blocks: [{ type: 'tool-call', name: 'Bash', callId: id, input: { command: 'ls' } }]
     })
     await render({ folded: [toolTurn('a')] })
-    act(() => root().findAllByProps({ accessibilityLabel: 'Expand tool runs' })[0].props.onPress())
     await scrollAwayFromTail()
     await update({ sendSurfaceId: 'tab-b', folded: [] })
     await update({ sendSurfaceId: 'tab-b', folded: [toolTurn('b')] })
     act(() => list().props.onContentSizeChange(320, 1300))
     expect(scrollToOffset).toHaveBeenLastCalledWith({ animated: false, offset: 1300 })
-    expect(renderedRow('b').props.toolsExpanded).toBe(true)
   })
 
   it('repins after a keyboard-driven viewport layout only while following', async () => {

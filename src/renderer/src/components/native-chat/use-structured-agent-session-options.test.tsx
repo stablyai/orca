@@ -270,24 +270,34 @@ describe('useStructuredAgentSessionOptions', () => {
     }
   })
 
-  it('lets the live options result win over a later host catalog answer', async () => {
-    let settleCatalog!: (value: unknown) => void
+  it('refreshes inventory after a live answer while keeping the chat choice', async () => {
+    let settleCatalog: ((value: unknown) => void) | undefined
     answer({
-      options: () => Promise.resolve(LIVE_OPTIONS),
+      options: () =>
+        Promise.resolve(
+          settleCatalog
+            ? { ...LIVE_OPTIONS, models: [...HOST_CATALOG.models, ...LIVE_OPTIONS.models] }
+            : LIVE_OPTIONS
+        ),
       modelCatalog: () => new Promise((resolve) => (settleCatalog = resolve))
     })
     const { result, unmount } = renderOptions(ATTACHED, mutateWith(async () => null).mutate)
     await waitFor(() =>
       expect(currentValue(result.current.optionSnapshot, 'model')).toBe('gpt-5.5')
     )
-    settleCatalog(HOST_CATALOG)
-    await tick()
+    await act(async () => {
+      if (!settleCatalog) {
+        throw new Error('Host catalog request has not started')
+      }
+      settleCatalog(HOST_CATALOG)
+      await tick()
+    })
     const model = descriptor(result.current.optionSnapshot, 'model')
     expect(model?.kind.type === 'select' ? model.kind.currentValue : null).toBe('gpt-5.5')
     expect(
       model?.kind.type === 'select' &&
         model.kind.choices.some((choice) => choice.value === 'gpt-hosted')
-    ).toBe(false)
+    ).toBe(true)
     unmount()
   })
 
@@ -499,7 +509,7 @@ describe('useStructuredAgentSessionOptions', () => {
         await result.current.setStructuredOption('model', 'gpt-5.6-luna')
       })
       expect(setOptionCalls(calls)).toEqual([{ key: 'model', value: 'gpt-5.6-luna' }])
-      expect(mocks.hold).toHaveBeenCalledTimes(1)
+      expect(mocks.hold).not.toHaveBeenCalled()
       unmount()
     })
   })
@@ -507,6 +517,7 @@ describe('useStructuredAgentSessionOptions', () => {
   describe('before the provider starts', () => {
     it('keeps a picked effort visible after a model pick during startup', async () => {
       answer({
+        modelCatalog: async () => ({ origin: 'unknown' }),
         options: async () => ({
           models: ['opus', 'sonnet'].map((id) => ({
             id,

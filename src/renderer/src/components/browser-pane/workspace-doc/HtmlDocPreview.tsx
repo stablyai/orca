@@ -315,7 +315,6 @@ export function HtmlDocPreview({
         previewId={previewId}
         worktreeId={worktreeId}
         history={historyWithConversionCrossings}
-        loading={state === 'loading' && failureReason === null}
         onReload={handleReload}
         onHardReload={handleHardReload}
         onCopyPath={() => void window.api.ui.writeClipboardText(identity.absolutePath)}

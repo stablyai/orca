@@ -123,8 +123,8 @@ export function refreshManagedOrcadPairing(
       'This server is not managed over SSH.'
     )
   }
-  // Why skip: orcad keeps its pairing state across versions, so an unchanged offer needs no
-  // rewrite, and every rewrite re-binds the sidecar entry.
+  // Why skip: orcad keeps its device registry across versions and callers pass the enrolled grant,
+  // so an unchanged offer needs no rewrite, and every rewrite re-binds the sidecar entry.
   if (samePairing(getPreferredPairingOffer(current), offer)) {
     return current
   }

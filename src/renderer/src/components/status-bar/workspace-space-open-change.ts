@@ -9,7 +9,7 @@ import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { openUncommittedEntry } from '../right-sidebar/source-control/listing/open-uncommitted-entry'
+import { openWorkspaceFile } from '@/lib/workspace-file-open'
 import { translate } from '@/i18n/i18n'
 
 export function openWorkspaceSpaceChange(
@@ -77,9 +77,16 @@ export async function revealWorkspaceSpaceChange(
     if (activated === false) {
       return
     }
-    openUncommittedEntry(useAppStore.getState(), worktreeId, worktree.path, entry, {
-      preview: true,
-      runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null
+    openWorkspaceFile({
+      kind: 'uncommitted',
+      intent: 'diff',
+      worktreeId,
+      worktreePath: worktree.path,
+      entry,
+      options: {
+        preview: true,
+        runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null
+      }
     })
   } catch (error) {
     toast.error(translate('workspaceSpace.changes.openFailed', 'Could not open changes'), {

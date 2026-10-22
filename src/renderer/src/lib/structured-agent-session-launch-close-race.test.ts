@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type * as RecoveryModule from '@/lib/structured-agent-session-launch-recovery'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 const mocks = vi.hoisted(() => ({
   abandonIntent: vi.fn(),
@@ -180,13 +181,31 @@ describe('a close that races a structured launch', () => {
     startStructuredAgentLaunch(worktreeId, 'codex', { requestId: 'request-1' })
     await vi.waitFor(() => expect(refreshLocalStructuredSessionTabs).toHaveBeenCalledOnce())
     expect(cancelStructuredAgentLaunch(worktreeId, intent.sessionId)).toBe(true)
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)).toBe(
-      true
-    )
     const persistedTombstones =
       localStorage.getItem('orca:structuredAgentLaunchCancelledSessions:v1') ?? ''
-    expect(persistedTombstones).toContain(JSON.stringify(intent.sessionId))
-    expect(persistedTombstones).not.toContain(worktreeId)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // This machine's main hears the cancel at once and fences the chat; the window keeps none.
+      expect(
+        hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)
+      ).toBe(false)
+      expect(persistedTombstones).not.toContain(JSON.stringify(intent.sessionId))
+      expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'agentSession.close',
+        { sessionId: intent.sessionId }
+      )
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'session.tabs.close',
+        expect.objectContaining({ tabId: `agent-session:${intent.sessionId}` })
+      )
+    } else {
+      expect(
+        hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, intent.sessionId)
+      ).toBe(true)
+      expect(persistedTombstones).toContain(JSON.stringify(intent.sessionId))
+      expect(persistedTombstones).not.toContain(worktreeId)
+    }
     resolveRefresh([])
     await flushLaunchSettlement()
 
@@ -221,8 +240,11 @@ describe('a close that races a structured launch', () => {
     resolveRefresh([])
     await flushLaunchSettlement()
 
-    // Neither sent nor given back to the closed chat's composer.
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    // Neither sent nor given back to the closed chat's composer; a layout-owner build's only call
+    // retires the chat on this machine's main.
+    expect(mocks.callRuntimeRpc.mock.calls.map(([, method]) => method)).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN ? ['session.tabs.close'] : []
+    )
     expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(intent.sessionId))).toBe('')
   })
 

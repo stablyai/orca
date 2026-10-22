@@ -55,7 +55,11 @@ async function namedFeed() {
     failure = next
     feed.publishConversationName('session')
   }
-  return { feed, events, sessions, name, fail }
+  const sleep = (sleptAt: number | undefined) => {
+    record = { ...record, sleptAt }
+    feed.publishRecordNotes('session')
+  }
+  return { feed, events, sessions, name, fail, sleep }
 }
 
 function lastName(events: readonly AgentSessionStatusEvent[]): string | undefined {
@@ -100,19 +104,30 @@ it('publishes naming activity without needing a chat summary', async () => {
   const count = events.length
   feed.publishConversationName('unknown-session')
   expect(events).toHaveLength(count + 1)
+  expect(events.at(-1)).toEqual({ type: 'snapshot', sessions: [], namingActiveSessionIds: [] })
 })
 
 it('shows a closed chat its naming failure only while it keeps the name that failed', async () => {
-  const { feed, events, sessions, name, fail } = await namedFeed()
+  const { feed, events, sessions, name, fail, sleep } = await namedFeed()
   name('Explain the parser')
   feed.revokeLive('session')
   sessions.clear()
+  sleep(5)
+  expect(events.at(-1)).toMatchObject({ session: { sleptAt: 5 } })
   fail({ message: 'Agent failed', failedAt: 5, forName: 'Explain the parser' })
   expect(events.at(-1)).toMatchObject({
     type: 'status',
-    session: { conversationName: 'Explain the parser', namingError: { message: 'Agent failed' } }
+    session: {
+      conversationName: 'Explain the parser',
+      namingError: { message: 'Agent failed' },
+      sleptAt: 5
+    }
   })
   name('parser/explain')
   expect(events.at(-1)).toMatchObject({ session: { conversationName: 'parser/explain' } })
   expect(events.at(-1)).not.toHaveProperty('session.namingError')
+  expect(events.at(-1)).toMatchObject({ session: { sleptAt: 5 } })
+  sleep(undefined)
+  expect(events.at(-1)).not.toHaveProperty('session.sleptAt')
+  expect(lastName(events)).toBe('parser/explain')
 })

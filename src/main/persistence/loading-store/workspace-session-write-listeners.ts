@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { StoreRuntimeState } from './store-runtime-state'
+import { refileEditorViews } from './layout-editor-views'
 
 /** Gets the one partition a write changed, or null when any partition may have changed. */
 export type WorkspaceSessionWriteListener = (hostId: ExecutionHostId | null) => void
@@ -18,13 +19,18 @@ const WORKSPACE_SESSION_DOMAINS: readonly string[] = [
  * `hostId` names the only partition the write changed; without it every partition is suspect.
  */
 export function notifyWorkspaceSessionWritten(
-  runtime: Pick<StoreRuntimeState, 'workspaceSessionWriteListeners'>,
+  runtime: Pick<
+    StoreRuntimeState,
+    'workspaceSessionWriteListeners' | 'layoutEditorViews' | 'state'
+  >,
   dirtyDomains?: readonly string[],
   hostId?: ExecutionHostId
 ): void {
   if (dirtyDomains && !dirtyDomains.some((domain) => WORKSPACE_SESSION_DOMAINS.includes(domain))) {
     return
   }
+  // Before the listeners: the projection reads the views each write leaves.
+  refileEditorViews(runtime)
   for (const listener of runtime.workspaceSessionWriteListeners) {
     listener(hostId ?? null)
   }
@@ -37,7 +43,10 @@ export function notifyWorkspaceSessionWritten(
 export function notifyWorkspaceSessionOperationEnded(
   runtime: Pick<
     StoreRuntimeState,
-    'workspaceSessionWriteListeners' | 'workspaceSessionOperationListeners'
+    | 'workspaceSessionWriteListeners'
+    | 'workspaceSessionOperationListeners'
+    | 'layoutEditorViews'
+    | 'state'
   >,
   hostIds: readonly ExecutionHostId[] | null
 ): void {

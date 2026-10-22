@@ -12,6 +12,7 @@ import {
 } from './rich-markdown-image-context'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import { notifyStaleViewEditRejected, staleViewEditEpoch } from './editor-stale-view-edit'
 
 type RichMarkdownProgrammaticSyncOptions = {
   codec: RichMarkdownEditorCodec
@@ -23,11 +24,15 @@ type RichMarkdownProgrammaticSyncOptions = {
   externalSshTargetId?: string
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   lastCommittedMarkdownRef: MutableRefObject<string>
+  onContentChangeRef: MutableRefObject<(content: string) => void>
   originalSourceRef: MutableRefObject<string>
   baseCanonicalRef: MutableRefObject<string>
   markdownDocuments?: MarkdownDocument[]
   rootRef: MutableRefObject<HTMLDivElement | null>
   runtimeTarget: RuntimeClientTarget | null
+  /** Pending debounced commit, based on the text this view last synced. */
+  serializeTimerRef: MutableRefObject<number | null>
+  pendingEditEpochRef: MutableRefObject<number>
   slashMenuSetter: Dispatch<SetStateAction<SlashMenuState | null>>
   worktreeId: string
   worktreeRoot: string | null
@@ -49,11 +54,14 @@ export function useRichMarkdownProgrammaticSync({
   externalSshTargetId,
   isApplyingProgrammaticUpdateRef,
   lastCommittedMarkdownRef,
+  onContentChangeRef,
   originalSourceRef,
   baseCanonicalRef,
   markdownDocuments,
   rootRef,
   runtimeTarget,
+  serializeTimerRef,
+  pendingEditEpochRef,
   slashMenuSetter,
   worktreeId,
   worktreeRoot
@@ -105,17 +113,28 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
-    if (content === lastCommittedMarkdownRef.current) {
+    const editEpoch = pendingEditEpochRef.current
+    const discarded = staleViewEditEpoch(fileId) !== editEpoch
+    const pendingTimer = serializeTimerRef.current
+    if (content === lastCommittedMarkdownRef.current && !(pendingTimer !== null && discarded)) {
       return
     }
-    if (editor.getMarkdown() === content) {
-      // Why: disk bytes changed but already render-equal to the current doc (e.g.
-      // an external tool canonicalized byte-level style). Skip the disruptive
-      // reload, but adopt the new bytes as the reconciliation baseline so the next
-      // edit patches onto the fresh source, not the stale pre-change source.
+    const matchesSharedText = editor.getMarkdown() === content
+    if (pendingTimer !== null) {
+      window.clearTimeout(pendingTimer)
+      serializeTimerRef.current = null
+      if (!discarded && !matchesSharedText) {
+        notifyStaleViewEditRejected(fileId, editEpoch)
+      }
+    }
+    if (matchesSharedText) {
+      // Adopt fresh source bytes without replacing an already matching document.
       lastCommittedMarkdownRef.current = content
       originalSourceRef.current = content
       baseCanonicalRef.current = content
+      if (pendingTimer !== null) {
+        onContentChangeRef.current(content)
+      }
       return
     }
     isApplyingProgrammaticUpdateRef.current = true
@@ -131,6 +150,10 @@ export function useRichMarkdownProgrammaticSync({
     } finally {
       isApplyingProgrammaticUpdateRef.current = false
     }
+    if (pendingTimer !== null) {
+      // Why: republishing the shared text recomputes the dirty flag this view's typing raised.
+      onContentChangeRef.current(content)
+    }
     syncSlashMenu(editor, rootRef.current, slashMenuSetter)
     syncDocLinkMenu(editor, rootRef.current, docLinkMenuSetter)
   }, [
@@ -141,9 +164,12 @@ export function useRichMarkdownProgrammaticSync({
     fileId,
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
+    onContentChangeRef,
+    pendingEditEpochRef,
     originalSourceRef,
     baseCanonicalRef,
     rootRef,
+    serializeTimerRef,
     slashMenuSetter
   ])
 }

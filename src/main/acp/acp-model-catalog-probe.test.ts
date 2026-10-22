@@ -140,7 +140,7 @@ function scriptedOpenCode2(canDelete: boolean): {
     deps: {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
       resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async (_launch, supports) => supports('2.0.29'),
+      probeVersion: async () => ({ version: '2.0.29' }),
       homePath: '/home/user',
       dataDirectory: '/orca-data',
       runListing: vi.fn<NonNullable<AcpModelCatalogProbeDeps['runListing']>>(),
@@ -229,7 +229,7 @@ describe('ACP model catalog probes', () => {
       resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
       dataDirectory: '/orca-data',
       resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async (_launch, supports) => supports('1.18.35'),
+      probeVersion: async () => ({ version: '1.18.35' }),
       homePath: '/home/user',
       runListing,
       connect
@@ -297,7 +297,7 @@ describe('ACP model catalog probes', () => {
         ...deps,
         dataDirectory,
         resolveCommand: () => '/opt/omp/bin/omp',
-        probeVersion: async (_launch, supports) => supports('18.12.2')
+        probeVersion: async () => ({ version: '18.12.2' })
       })(
         { variable: 'PI_CODING_AGENT_DIR', path: '/homes/omp' },
         { workspacePath: '/work/project' }
@@ -387,7 +387,7 @@ describe('ACP model catalog probes', () => {
       resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
       dataDirectory: '/orca-data',
       resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion: async () => false,
+      probeVersion: async () => ({ version: '1.0.0' }),
       runListing
     })
     await expect(
@@ -401,7 +401,7 @@ describe('ACP model catalog probes', () => {
 
   // The binary may be 2.x, which lists only in a chat's folder; nothing is spawned to find out.
   it('asks `opencode` nothing, not even its version, without a chat folder', async () => {
-    const probeVersion = vi.fn(async () => true)
+    const probeVersion = vi.fn(async () => ({ version: '1.18.35' }))
     const probe = createAcpModelCatalogProbe(OPENCODE, {
       resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
       dataDirectory: '/orca-data',

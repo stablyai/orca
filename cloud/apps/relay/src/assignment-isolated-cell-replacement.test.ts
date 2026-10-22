@@ -934,4 +934,37 @@ describe('classifying a reconnect whose home is isolated for a roll', () => {
     expect(counter.sql.filter((sql) => sql.includes('FROM relay_assignments'))).toHaveLength(1)
     expect(counter.count('relay_cell_admission')).toBe(1)
   })
+
+  it('still treats a host its draining cell already released as a drain return', async () => {
+    // A drain releases the host's control lease before it tells the host, so the redial
+    // finds no activity: the stamp, not a live lease, has to carry the classification.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { store, database, isolateForRoll } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+    await store.activateControl(IDENTITY, {
+      cellId: first.cellId,
+      assignmentEpoch: first.assignmentEpoch,
+      generation: 1
+    })
+    await isolateForRoll(first.cellId)
+    expect(await store.releaseActivity(IDENTITY, `control:${first.cellId}:1`)).toBe(true)
+    expect(
+      await database.query(
+        `SELECT activity_id FROM relay_assignment_activity_leases WHERE user_id = ?`,
+        [IDENTITY.userId]
+      )
+    ).toEqual([])
+
+    expect(await store.resolve(IDENTITY, classify)).toMatchObject({
+      cellId: first.cellId,
+      homeCellRollIsolated: true
+    })
+    warn.mockClear()
+    const moved = await store.assign(IDENTITY, 'us-central1')
+    expect(moved.cellId).not.toBe(first.cellId)
+    expect(moved.assignmentEpoch).toBe(first.assignmentEpoch + 1)
+    expect(jsonEvents(warn, 'orca_relay_sticky_replaced_off_isolated_cell')).toMatchObject([
+      { fromCellId: first.cellId, toCellId: moved.cellId }
+    ])
+  })
 })

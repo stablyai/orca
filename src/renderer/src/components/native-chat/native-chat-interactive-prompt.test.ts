@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { i18n } from '@/i18n/i18n'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
@@ -107,6 +108,39 @@ describe('parseApprovalFromStatus', () => {
     const approval = parseApprovalFromStatus(JSON.stringify({ approval: { tool: 'Edit' } }))
     expect(approval?.title).toBe('Allow Edit?')
     expect(approval?.detail).toBeUndefined()
+  })
+
+  it('omits detail for an empty or non-string summary', () => {
+    for (const summary of ['', 42, null]) {
+      const approval = parseApprovalFromStatus(
+        JSON.stringify({ approval: { tool: 'Edit', summary } })
+      )
+      expect(approval?.title).toBe('Allow Edit?')
+      expect(approval?.detail).toBeUndefined()
+    }
+  })
+
+  describe('translated labels', () => {
+    afterEach(async () => {
+      await i18n.changeLanguage('en')
+    })
+
+    it('translates the title and buttons but keeps the tool, summary and keys', async () => {
+      await i18n.changeLanguage('ko')
+      expect(
+        parseApprovalFromStatus(
+          JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } }),
+          'opencode'
+        )
+      ).toEqual({
+        title: 'Bash을(를) 허용하시겠습니까?',
+        detail: 'rm -rf build',
+        options: [
+          { label: '허용', send: '\r' },
+          { label: '거부', send: ESC }
+        ]
+      })
+    })
   })
 })
 

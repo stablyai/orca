@@ -1,9 +1,6 @@
+import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import type { AgentPaneWorkspace } from '../../agent-hooks/agent-transition-detector'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type {
   SmartStampFields,
@@ -70,13 +67,7 @@ function localTwinHostId(
   store: Pick<WorkspaceRecordStore<unknown, never>, 'getRepos'>,
   worktreeId: string
 ): ExecutionHostId | null {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const hosts = new Set(
-    store
-      .getRepos()
-      .filter((repo) => repo.id === repoId)
-      .map(getRepoExecutionHostId)
-  )
+  const hosts = getRepoRegistrationHostIds(store.getRepos(), getRepoIdFromWorktreeId(worktreeId))
   return hosts.size > 1 && hosts.has(LOCAL_EXECUTION_HOST_ID) ? LOCAL_EXECUTION_HOST_ID : null
 }
 

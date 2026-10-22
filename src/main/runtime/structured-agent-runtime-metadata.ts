@@ -31,11 +31,11 @@ export type StructuredAgentRuntimeCatalogEntry =
   | { kind: 'acp'; metadata: StructuredAgentRuntimeMetadata; spec: AcpLaunchSpec }
 
 function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
-  const { supportsVersion } = spec
+  const { minimumVersions } = spec
   return {
     definition: acpStructuredAgentDefinition(spec),
     supportsLocation: (location) => supportsAcpStructuredLocation(spec, location),
-    ...(supportsVersion
+    ...(minimumVersions
       ? {
           launchCheck: {
             resolveLaunch: (shellEnv, commandSettings) => {
@@ -46,7 +46,7 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
               })
               return { command, env }
             },
-            supportsVersion
+            minimumVersions
           }
         }
       : {}),

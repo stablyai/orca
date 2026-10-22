@@ -165,6 +165,32 @@ describe('a frame that changes only panes’ terminal bindings', () => {
     expect(shown.terminalLayoutsByTabId['tab-shell']!.ptyIdsByLeafId?.[leafId]).toBe(ptyId)
   })
 
+  it('shows a resume outcome alone without touching any pane tree or binding', async () => {
+    const { store, sync, first, send } = await boot()
+    const layouts = store.getState().terminalLayoutsByTabId
+    const ptyId = layouts['tab-shell']!.ptyIdsByLeafId?.[leaf(1)]
+    expect(ptyId).toBeDefined()
+    const next = structuredClone(first)
+    const pane = next.tabs
+      .find((tab) => tab.entityId === 'tab-shell')!
+      .terminal!.panes.find((candidate) => candidate.leafId === leaf(1))!
+    pane.resumeOutcome = 'restored'
+
+    await send(next)
+
+    // Same layouts object: no view rebinds, remounts or reattaches for an outcome.
+    expect(store.getState().terminalLayoutsByTabId).toBe(layouts)
+    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
+    expect(store.getState().terminalPaneResumeOutcomesByPaneKey).toEqual({
+      [`tab-shell:${leaf(1)}`]: {
+        ptyId,
+        ...(pane.ptyGeneration !== undefined ? { ptyGeneration: pane.ptyGeneration } : {}),
+        outcome: 'restored'
+      }
+    })
+    sync.close()
+  })
+
   it('writes nothing to the store when the store already shows those bindings', async () => {
     const { store, sync, first, send } = await boot()
     const layout = store.getState().terminalLayoutsByTabId['tab-shell']!
@@ -250,6 +276,71 @@ describe('a frame that changes only panes’ terminal bindings', () => {
     expect(
       store.getState().tabsByWorktree[GIT_KEY]!.find((tab) => tab.id === 'tab-shell')
     ).toMatchObject({ customTitle: 'renamed' })
+    sync.close()
+  })
+})
+
+/** The frame with one pane's start status set, or cleared when `status` is absent. */
+function started(
+  layout: PublishedWorkspaceLayout,
+  leafId: string,
+  status?: 'starting' | 'failed',
+  reason?: string
+): PublishedWorkspaceLayout {
+  const next = structuredClone(layout)
+  const pane = next.tabs
+    .find((tab) => tab.entityId === 'tab-shell')!
+    .terminal!.panes.find((candidate) => candidate.leafId === leafId)!
+  delete pane.status
+  delete pane.statusReason
+  if (status) {
+    pane.status = status
+  }
+  if (reason) {
+    pane.statusReason = reason
+  }
+  return next
+}
+
+describe('a frame that changes only a pane’s start status', () => {
+  it('shows the status for that one pane, with no build and the pane tree untouched', async () => {
+    const { store, sync, first, send } = await boot()
+    const layoutsBefore = store.getState().terminalLayoutsByTabId
+    const unbound = rebound(first, 'tab-shell', leaf(1), undefined)
+    await send(unbound)
+    const layouts = store.getState().terminalLayoutsByTabId
+    check.forgetBuilds()
+
+    await send(started(unbound, leaf(1), 'starting'))
+    expect(store.getState().terminalPaneStartsByPaneKey).toEqual({
+      [`tab-shell:${leaf(1)}`]: { status: 'starting' }
+    })
+    await send(started(unbound, leaf(1), 'failed', 'shell not found'))
+
+    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
+    // Same tree objects: the pane's view is not remounted.
+    expect(store.getState().terminalLayoutsByTabId).toBe(layouts)
+    expect(layouts['tab-shell']!.root).toBe(layoutsBefore['tab-shell']!.root)
+    expect(store.getState().terminalPaneStartsByPaneKey).toEqual({
+      [`tab-shell:${leaf(1)}`]: { status: 'failed', reason: 'shell not found' }
+    })
+    sync.close()
+  })
+
+  it('drops the status once main binds the pane', async () => {
+    const { store, sync, first, send } = await boot()
+    const unbound = rebound(first, 'tab-shell', leaf(1), undefined)
+    await send(started(unbound, leaf(1), 'starting'))
+    expect(Object.keys(store.getState().terminalPaneStartsByPaneKey)).toEqual([
+      `tab-shell:${leaf(1)}`
+    ])
+
+    await send(rebound(unbound, 'tab-shell', leaf(1), 'pty-fresh'))
+
+    expect(store.getState().terminalPaneStartsByPaneKey).toEqual({})
+    expect(store.getState().terminalLayoutsByTabId['tab-shell']!.ptyIdsByLeafId?.[leaf(1)]).toBe(
+      'pty-fresh'
+    )
     sync.close()
   })
 })

@@ -14,8 +14,12 @@ export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMark
     ptyId: string,
     clientId: string,
     previousFloor?: DriverState,
-    isCurrent: () => boolean = () => true
+    isCurrent?: () => boolean
   ): Promise<void> {
+    if (!isCurrent) {
+      await this.beginMobileInputFloor(ptyId, clientId)?.commit()
+      return
+    }
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
     const softLeaver = this.pendingSoftLeavers.get(ptyId)
@@ -39,9 +43,12 @@ export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMark
       }
       await this.applyMobileDisplayMode(ptyId)
     }
-    // Why: display changes are async; a later PTY write must keep the floor
-    // when an older phone-fit operation eventually completes.
-    if (!isCurrent()) {
+    // Newer input or disconnect can supersede an asynchronous phone-fit.
+    if (
+      !isCurrent() ||
+      (!this.mobileSubscribers.get(ptyId)?.has(clientId) &&
+        this.pendingSoftLeavers.get(ptyId)?.clientId !== clientId)
+    ) {
       return
     }
     this.setDriver(ptyId, { kind: 'mobile', clientId })

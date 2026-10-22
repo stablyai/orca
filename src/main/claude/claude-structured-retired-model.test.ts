@@ -1,8 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AgentModelCatalogStore,
-  type AgentModelCatalogLiveListing
-} from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { retireClaudeLaunchedModel } from './claude-structured-retired-model'
 import {
   adapterFor,
@@ -65,7 +61,7 @@ describe("the CLI's word that a launched model does not exist", () => {
   })
 })
 
-describe("the account catalog facts a child's listing hands the host", () => {
+describe("a child's listing ownership", () => {
   async function listingOfChildLaunchedWith(model: string) {
     const claude = fakeClaude({
       initModels: [NATIVE_OPUS, LAUNCHED_ROW],
@@ -85,38 +81,8 @@ describe("the account catalog facts a child's listing hands the host", () => {
     return catalogListing
   }
 
-  function savedIds(cached: string[] | null, listing: AgentModelCatalogLiveListing) {
-    const store = new AgentModelCatalogStore()
-    if (cached) {
-      store.recordSuccess(
-        'fp',
-        'claude',
-        {
-          models: cached.map((id) => ({ id, label: id, isDefault: false, efforts: [] })),
-          origin: 'probe'
-        },
-        'discovery'
-      )
-    }
-    store.recordSuccess('fp', 'claude', { ...listing, origin: 'live-session' }, 'live')
-    return store.get('fp')?.models.map((model) => model.id)
-  }
-
-  it('marks the row the launch added for its own model, which the account catalog leaves out', async () => {
-    const listing = await listingOfChildLaunchedWith(RETIRED)
-    expect(listing?.launchOnlyModelId).toBe(RETIRED)
-    expect(savedIds(null, listing!)).toEqual(['opus'])
-  })
-
-  it('keeps that row when the account already listed the model', async () => {
-    const listing = await listingOfChildLaunchedWith(RETIRED)
-    expect(savedIds([RETIRED], listing!)).toEqual(['opus', RETIRED])
-  })
-
-  it('marks nothing for a launched native model, which carries its own display name', async () => {
-    const listing = await listingOfChildLaunchedWith('opus')
-    expect(listing?.launchOnlyModelId).toBeUndefined()
-    expect(savedIds(null, listing!)).toEqual(['opus', RETIRED])
+  it('keeps a child listing local to its session', async () => {
+    expect(await listingOfChildLaunchedWith(RETIRED)).toBeUndefined()
   })
 })
 

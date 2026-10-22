@@ -11,7 +11,7 @@ vi.mock('../../store', () => ({
   useAppStore: { getState: () => storeState.value }
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
   rememberLiveBrowserUrl: vi.fn()

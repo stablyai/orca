@@ -10,6 +10,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type WatchTargetRowState = Pick<
   AppState,
@@ -43,7 +44,7 @@ export function resolveEditorExternalWatchTargetRows(
   hostId: ExecutionHostId | null
 ): EditorExternalWatchTargetRows | null {
   const worktree = pickHostRow(
-    getIndexedWorktreesById(state.worktreesByRepo, worktreeId),
+    getIndexedWorktreesById(selectWorktreesByRepo(state), worktreeId),
     hostId,
     (row) =>
       row.hostId ??
@@ -55,7 +56,7 @@ export function resolveEditorExternalWatchTargetRows(
   const folderWorkspace =
     workspaceScope?.type === 'folder'
       ? pickHostRow(
-          state.folderWorkspaces.filter(
+          selectFolderWorkspaces(state).filter(
             (workspace) => workspace.id === workspaceScope.folderWorkspaceId
           ),
           hostId,

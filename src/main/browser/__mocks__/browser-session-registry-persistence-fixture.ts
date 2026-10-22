@@ -12,6 +12,7 @@ type RegistryMock = ReturnType<typeof vi.fn>
 export const USER_DATA = '/user-data'
 export const META_PATH = `${USER_DATA}/browser-session-meta.json`
 export const IDENTITY_RECORD_PATH = `${USER_DATA}/browser-identity-mode.json`
+export const SITE_PERMISSIONS_PATH = `${USER_DATA}/browser-site-permissions.json`
 export const CLEAN_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Safari/537.36'
 
@@ -28,6 +29,12 @@ export function seedMeta(fsState: FsState, meta: unknown): void {
   const raw = JSON.stringify(meta)
   fsState.files.set(META_PATH, raw)
   fsState.present.add(META_PATH)
+}
+
+/** Remembered site answers, by browser profile id then origin. */
+export function seedSitePermissions(fsState: FsState, profiles: unknown): void {
+  fsState.files.set(SITE_PERMISSIONS_PATH, JSON.stringify({ version: 1, profiles }))
+  fsState.present.add(SITE_PERMISSIONS_PATH)
 }
 
 /** Annotated rather than inferred: vitest's inferred mock type cannot be named across a module boundary. */
@@ -138,7 +145,9 @@ export function installModuleMocks(
       notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
       handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,
       installCertificateRequestGuard: vi.fn(),
-      removeCertificateRequestGuard: vi.fn()
+      removeCertificateRequestGuard: vi.fn(),
+      // No window here, so a site's first request is refused without asking.
+      resolvePagePromptTarget: vi.fn(() => null)
     }
   }))
   vi.doMock('../browser-media-access', () => ({

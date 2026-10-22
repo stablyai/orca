@@ -6,7 +6,10 @@ import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shar
 export type EditorModelOwner = { environmentId: string | null; hostId: string | null }
 
 export function resolveEditorModelOwner(
-  file: OpenFile,
+  file: Pick<
+    OpenFile,
+    'worktreeId' | 'runtimeEnvironmentId' | 'externalSshTargetId' | 'operationProvenance'
+  >,
   state: WorktreeOperationRouteState
 ): EditorModelOwner {
   const captured = file.operationProvenance?.generation.route
@@ -36,13 +39,22 @@ export function resolveEditorModelOwner(
   return { environmentId, hostId }
 }
 
-export function getEditorModelOwnerKey(file: OpenFile, state: WorktreeOperationRouteState): string {
-  const { environmentId, hostId } = resolveEditorModelOwner(file, state)
-  if (hostId === 'local' && !environmentId) {
-    return ''
+/** The owner key of a resolved owner; null while its host is unknown. */
+export function resolvedEditorModelOwnerKey({
+  environmentId,
+  hostId
+}: EditorModelOwner): string | null {
+  if (!hostId) {
+    return null
   }
+  return hostId === 'local' && !environmentId ? '' : JSON.stringify([environmentId, hostId])
+}
+
+export function getEditorModelOwnerKey(file: OpenFile, state: WorktreeOperationRouteState): string {
+  const owner = resolveEditorModelOwner(file, state)
   // Unresolved owners must not borrow another host's retained text.
-  return JSON.stringify(
-    hostId ? [environmentId, hostId] : [environmentId, 'unresolved', file.worktreeId, file.id]
+  return (
+    resolvedEditorModelOwnerKey(owner) ??
+    JSON.stringify([owner.environmentId, 'unresolved', file.worktreeId, file.id])
   )
 }

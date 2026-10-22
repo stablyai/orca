@@ -15,14 +15,11 @@ export type MobileNativeChatToolRunProps = {
   /** The last plan each task-list tool wrote before this run, so an update reads as its changes. */
   previousTodoWrite?: NativeChatToolCallBlock
   previousUpdatePlan?: NativeChatToolCallBlock
-  defaultExpanded: boolean
   /** The row this run belongs to. The list recycles rows, so what the reader opened is
    *  remembered somewhere that outlives the row. */
   disclosureId?: string
   /** Rows drawn among the run's lines, each before the block it is keyed by, or after the last. */
   asides?: MobileNativeChatToolRunAsides
-  /** Every line's default: open under the Tools toggle. */
-  expandChildren: boolean
   /** Structured lifecycle state; keeps an orphaned running call from spinning. */
   activeTurnIsWorking?: boolean
   /** Whether this run is the working turn's last. Only that run is live. */

@@ -4,7 +4,10 @@ import {
   readPaneIdentitySnapshot,
   resolveActiveTabId
 } from './terminal-pane-identity'
-import { REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT } from '../../../src/renderer/src/constants/terminal'
+import {
+  REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT,
+  REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT
+} from '../../../src/renderer/src/constants/terminal'
 
 export async function readTerminalPaneDomLeafOrder(page: Page): Promise<string[]> {
   const snapshot = await readPaneIdentitySnapshot(page)
@@ -99,25 +102,16 @@ export async function splitActiveTerminalPane(
     throw new Error('splitActiveTerminalPane: no active terminal tab')
   }
   await page.evaluate(
-    ({ tabId, direction }) => {
-      const paneManagers = window.__paneManagers
-      if (!paneManagers) {
-        throw new Error('splitActiveTerminalPane: terminal store/manager unavailable')
-      }
-
-      const manager = paneManagers.get(tabId)
-      const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      if (!manager?.splitPane || !activePane) {
+    ({ tabId, direction, splitEvent }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      if (!manager?.getActivePane?.() && !manager?.getPanes?.()[0]) {
         throw new Error('splitActiveTerminalPane: active pane manager not ready')
       }
-
-      // Why: Electron key delivery to the terminal pane layer is flaky in E2E
-      // even when the visible pane tree is mounted. Driving the active
-      // PaneManager directly still exercises the real split/layout/PTY path
-      // without depending on window-focus timing.
-      manager.splitPane(activePane.id, direction)
+      // Why: Electron key delivery to the terminal pane layer is flaky in E2E. The pane menu's
+      // split request takes the user's split path, which a layout-owner build sends to main.
+      window.dispatchEvent(new CustomEvent(splitEvent, { detail: { tabId, direction } }))
     },
-    { tabId, direction }
+    { tabId, direction, splitEvent: REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT }
   )
 }
 

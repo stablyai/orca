@@ -70,7 +70,7 @@ export function orcadSnapshotSpaceCommand(
 }
 
 /** `availableKb` counts `reclaimKb`: room the capture's own prune frees before it writes. */
-export type OrcadSnapshotSpace = { neededKb: number; availableKb: number; reclaimKb: number }
+type OrcadSnapshotSpace = { neededKb: number; availableKb: number; reclaimKb: number }
 
 /** Null when the answer is missing or unreadable: the capture itself still decides. */
 export function parseOrcadSnapshotSpace(output: string): OrcadSnapshotSpace | null {

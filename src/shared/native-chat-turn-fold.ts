@@ -8,6 +8,7 @@
 
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from './agent-session-compaction'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from './agent-session-orca-stop'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-notice'
 import { nativeChatRowRendersContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from './native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from './native-chat-trailing-run'
@@ -37,9 +38,9 @@ export type NativeChatTurnFoldRow = {
   /** Whether a system row reports a failure. It competes with prose to be the
    *  turn's answer, so a turn that failed shows the error as its end. */
   reportsFailure: boolean
-  /** Whether the row explains what became of the turn: a compaction's result, or
-   *  that the response was interrupted. It never folds: hiding it would leave the
-   *  turn's status as the only trace of it. */
+  /** Whether the row explains what became of the turn: a compaction's result, that
+   *  the response was interrupted, or a `turn-notice` row. It never folds: hiding
+   *  it would leave the turn's status as the only trace of it. */
   explainsTurn: boolean
 }
 
@@ -74,7 +75,8 @@ export function nativeChatTurnFoldRow(
         block.type === 'text' &&
         (block.presentation === 'compaction' ||
           block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
-          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION)
+          block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
+          block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION)
     )
   }
 }

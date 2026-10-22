@@ -41,10 +41,6 @@ export const testingTargets = new Set<string>()
 export const testConnectionProbes = new Set<Promise<unknown>>()
 const testConnectionProbesByTarget = new Map<string, Set<Promise<unknown>>>()
 
-export function hasSshTestConnectionProbes(targetId: string): boolean {
-  return (testConnectionProbesByTarget.get(targetId)?.size ?? 0) > 0
-}
-
 export function runSshTestConnectionProbe<T>(
   targetId: string,
   operation: () => Promise<T>
@@ -68,15 +64,4 @@ export function runSshTestConnectionProbe<T>(
   testConnectionProbes.add(probe)
   testingTargets.add(targetId)
   return probe
-}
-
-/** Reserve target admission before joining; failed probes still own cleanup until settled. */
-export async function awaitSshTestConnectionProbes(targetId: string): Promise<void> {
-  while (true) {
-    const probes = testConnectionProbesByTarget.get(targetId)
-    if (!probes?.size) {
-      return
-    }
-    await Promise.allSettled(probes)
-  }
 }

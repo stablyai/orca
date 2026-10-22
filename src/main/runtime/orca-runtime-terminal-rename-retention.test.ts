@@ -1,11 +1,13 @@
 import './orca-runtime-test-lifecycle.spec'
 import type { RuntimeStore } from './runtime-store-contract'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
 import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
+  TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
@@ -92,6 +94,104 @@ describe('terminal rename before renderer graph hydration', () => {
   })
 })
 
+// The name is display only (#20626): every reader that shows the terminal still shows it.
+describe('terminal rename display', () => {
+  it('reveals a renamed background terminal under its name', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: 'background-pty' })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const notifier = createMobileCreateTestNotifier(vi.fn())
+    runtime.setNotifier(notifier)
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      presentation: 'background'
+    })
+    runtime.onPtyData('background-pty', '\x1b]0;bash\x07', Date.now())
+
+    await runtime.renameTerminal(created.handle, 'Review worker')
+    await runtime.focusTerminal(created.handle)
+
+    expect(notifier.revealTerminalSession.mock.calls.at(-1)?.[1]).toMatchObject({
+      title: 'Review worker'
+    })
+  })
+
+  it('shows an orphan terminal under its new name', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.registerPty('orphan-pty', TEST_WORKTREE_ID)
+    runtime.onPtyData('orphan-pty', '\x1b]0;bash\x07', Date.now())
+    const orphan = (await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals.find(
+      (terminal) => terminal.ptyId === 'orphan-pty'
+    )
+    if (!orphan?.orphaned) {
+      throw new Error('expected an orphan terminal')
+    }
+
+    await runtime.renameTerminal(orphan.handle, 'Recovered worker')
+
+    await expect(runtime.showTerminal(orphan.handle)).resolves.toMatchObject({
+      title: 'Recovered worker'
+    })
+  })
+
+  it('keeps an orphan terminal name once a tab adopts it', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'orphan-pty',
+          incarnationId: 'orphan-incarnation',
+          terminalHandle: 'term_orphan',
+          title: 'bash',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          wslDistro: null
+        }
+      ]
+    })
+    const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    runtime.onPtyData('orphan-pty', '\x1b]0;bash\x07', Date.now())
+    await runtime.renameTerminal('term_orphan', 'Recovered worker')
+
+    const adopted = await runtime.adoptTerminalOrphans({
+      worktree: `id:${TEST_WORKTREE_ID}`,
+      expectedTopologyRevision: before.topologyRevisions?.[TEST_WORKTREE_ID] ?? 0,
+      claims: [
+        {
+          terminal: 'term_orphan',
+          ptyId: 'orphan-pty',
+          incarnationId: 'orphan-incarnation',
+          tabId: 'recovered-tab',
+          leafId: HEADLESS_LEAF_ID
+        }
+      ]
+    })
+
+    await expect(runtime.showTerminal('term_orphan')).resolves.toMatchObject({
+      title: 'Recovered worker'
+    })
+    expect(
+      adopted.snapshot.tabs.find(
+        (tab) => tab.type === 'terminal' && tab.parentTabId === 'recovered-tab'
+      )
+    ).toMatchObject({ title: 'Recovered worker' })
+  })
+})
+
 describe('terminal view rename characterization', () => {
   function notifier(renameTerminal: RuntimeNotifier['renameTerminal']): RuntimeNotifier {
     return {
@@ -131,8 +231,7 @@ describe('terminal view rename characterization', () => {
     runtime['touchMobileSessionSnapshotsForPty'] = function (this: OrcaRuntimeService, ptyId) {
       receivers.push(this)
       expect(ptyId).toBe('rename-pty')
-      expect(pty.title).toBe('Pinned')
-      expect(pty.titleUpdatedAt).toBeGreaterThan(0)
+      expect(pty.title).toBeNull()
       events.push('touch')
     }
     await expect(runtime.renameTerminal(handle, 'Pinned')).resolves.toEqual({

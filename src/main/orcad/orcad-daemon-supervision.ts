@@ -22,7 +22,7 @@ import { errorMessage } from '../../shared/error-message'
 
 const WINDOWS_DAEMON_STARTUP_TIMEOUT_MS = 30_000
 
-export type OrcadDaemonStartup =
+type OrcadDaemonStartup =
   | { state: 'live'; pid: number | null }
   | { state: 'degraded'; reason: string }
   | { state: 'unavailable'; reason: string }

@@ -12,6 +12,7 @@ import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-err
 import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD
 } from '../../shared/file-write-disk-precondition'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
@@ -28,7 +29,7 @@ vi.mock('./files/chat-scratch-file-root', async (importOriginal) => ({
 
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
-const { TEST_WORKTREE_ID, makeRuntimeStoreWithWorkspaceSession } =
+const { TEST_REPO_ID, TEST_WORKTREE_ID, makeRuntimeStoreWithWorkspaceSession, store } =
   await import('./orca-runtime-test-fixtures.spec')
 
 type Runtime = InstanceType<typeof OrcaRuntimeService>
@@ -96,7 +97,8 @@ async function runtimeOnHost(
 
 const CURRENT_SERVER = [
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
-  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY
+  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
 ]
 /** A server from before #30605: it advertises no disk check and serves no `files.writeIfUnchanged`. */
 const PRE_DISK_CHECK_SERVER = [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
@@ -271,6 +273,42 @@ describe("a phone's Markdown tab on a paired server's workspace", () => {
     expect(await readFile(readme, 'utf8')).toBe('# Changed on the server\n')
   })
 
+  it('saves on a server too old to check the disk when its changed disk already holds the text', async () => {
+    const { desktop, call, serverCalls } = await desktopOnServer('local', PRE_DISK_CHECK_SERVER)
+    const forward = call.getMockImplementation()!
+    call.mockImplementation(async (environmentId, method, params, ...rest) => {
+      if (method === 'status.get') {
+        await writeFile(readme, '# Phone\n')
+      }
+      return forward(environmentId, method, params, ...rest)
+    })
+
+    await expect(
+      desktop.saveMobileMarkdownTab(
+        `id:${TEST_WORKTREE_ID}`,
+        readme,
+        hashMarkdownContent('# Notes\n'),
+        '# Phone\n'
+      )
+    ).resolves.toMatchObject({ content: '# Phone\n', isDirty: false })
+    expect(serverCalls).toEqual(['files.read', 'status.get', 'files.read'])
+  })
+
+  it('sends a phone save straight to a v1 server guard, without reading first', async () => {
+    const { desktop, serverCalls } = await desktopOnServer('local', [
+      FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
+      FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY
+    ])
+    await desktop.saveMobileMarkdownTab(
+      `id:${TEST_WORKTREE_ID}`,
+      readme,
+      hashMarkdownContent('# Notes\n'),
+      '# Phone\n'
+    )
+    expect(serverCalls).toEqual(['files.read', 'status.get', 'files.writeIfUnchanged'])
+    expect(await readFile(readme, 'utf8')).toBe('# Phone\n')
+  })
+
   it('refuses a save whose server was re-paired after its first read, writing nothing', async () => {
     const { desktop, call, serverCalls, pairing } = await desktopOnServer()
     const forward = call.getMockImplementation()!
@@ -310,6 +348,64 @@ describe("a phone's Markdown tab on a paired server's workspace", () => {
       )
     ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
     expect(await readFile(readme, 'utf8')).toBe('# Notes\n')
+  })
+})
+
+/** The workspace moves to `to` right after the save's first route lookup. */
+function moveWorkspaceAfterFirstLookup(runtime: Runtime, to: ExecutionHostId): void {
+  const resolve = vi.mocked(runtime.resolveRuntimeFileTarget)
+  const before = resolve.getMockImplementation()!
+  resolve.mockImplementation(async (selector) => {
+    const target = await before(selector)
+    return resolve.mock.calls.length > 1 ? { ...target, executionHostId: to } : target
+  })
+}
+
+describe("a phone's Markdown save whose workspace moves host mid-save", () => {
+  it('still writes on the server it started on, pinned, never on local disk', async () => {
+    const { desktop, call, serverCalls, pins } = await desktopOnServer()
+    const forward = call.getMockImplementation()!
+    // The server accepts the write without touching the shared temp disk, so any change there is local.
+    call.mockImplementation(async (environmentId, method, params, timeout, envelope, internal) => {
+      if (method !== FILE_WRITE_IF_UNCHANGED_METHOD) {
+        return forward(environmentId, method, params, timeout, envelope, internal)
+      }
+      serverCalls.push(method)
+      pins.push(internal?.expectedEnvironmentPairingRevision)
+      return { ok: true }
+    })
+    moveWorkspaceAfterFirstLookup(desktop, 'local')
+
+    await expect(
+      desktop.saveMobileMarkdownTab(
+        `id:${TEST_WORKTREE_ID}`,
+        readme,
+        hashMarkdownContent('# Notes\n'),
+        '# Phone\n'
+      )
+    ).resolves.toMatchObject({ content: '# Phone\n', isDirty: false })
+    expect(serverCalls).toEqual(['files.read', 'status.get', FILE_WRITE_IF_UNCHANGED_METHOD])
+    expect(pins).toEqual([PAIRING_REVISION, PAIRING_REVISION, PAIRING_REVISION])
+    expect(await readFile(readme, 'utf8')).toBe('# Notes\n')
+  })
+
+  it('still writes on local disk when it started local, never on a server', async () => {
+    const runtime = await runtimeOnHost('local')
+    const forwards = vi
+      .spyOn(runtime, 'callOrchestrationWorkerServer')
+      .mockRejectedValue(new Error('no server'))
+    moveWorkspaceAfterFirstLookup(runtime, 'runtime:env-a')
+
+    await expect(
+      runtime.saveMobileMarkdownTab(
+        `id:${TEST_WORKTREE_ID}`,
+        readme,
+        hashMarkdownContent('# Notes\n'),
+        '# Phone\n'
+      )
+    ).resolves.toMatchObject({ content: '# Phone\n', isDirty: false })
+    expect(await readFile(readme, 'utf8')).toBe('# Phone\n')
+    expect(forwards).not.toHaveBeenCalled()
   })
 })
 
@@ -358,7 +454,7 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
   ): RuntimeMobileSessionMarkdownTab {
     return {
       type: 'markdown',
-      id: 'tab-readme',
+      id: readme,
       title: 'README.md',
       filePath: readme,
       relativePath: 'README.md',
@@ -374,12 +470,52 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
     }
   }
 
+  /** As the window saves it: each open editor also holds its unified tab (id = path) and group. */
+  function withSavedEditorTabs(session: WorkspaceSessionState): WorkspaceSessionState {
+    const files = session.openFilesByWorktree?.[TEST_WORKTREE_ID] ?? []
+    const tabs = files.map((file, sortOrder) => ({
+      id: file.filePath,
+      entityId: file.filePath,
+      groupId: 'group-1',
+      worktreeId: TEST_WORKTREE_ID,
+      contentType: 'editor' as const,
+      label: file.relativePath,
+      customLabel: null,
+      color: null,
+      sortOrder,
+      createdAt: 1
+    }))
+    return {
+      ...session,
+      unifiedTabs: { [TEST_WORKTREE_ID]: tabs },
+      tabGroups: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'group-1',
+            worktreeId: TEST_WORKTREE_ID,
+            activeTabId: tabs[0]?.id ?? null,
+            tabOrder: tabs.map((tab) => tab.id)
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [TEST_WORKTREE_ID]: 'group-1' }
+    }
+  }
+
+  // Why the host ids: like the real Store, the fixture lists its partitions, which main's layout reads.
   function runtimeWithWindowTabs(
     tabs: RuntimeMobileSessionMarkdownTab[],
-    session = sessionWithReadme()
+    session = sessionWithReadme(),
+    ownerHostId: 'local' | 'ssh:ssh-1' = 'local'
   ): Runtime {
-    const harness = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(harness.runtimeStore)
+    const harness = makeRuntimeStoreWithWorkspaceSession(withSavedEditorTabs(session), ownerHostId)
+    const repo = { ...store.getRepos()[0]!, executionHostId: ownerHostId }
+    const runtime = new OrcaRuntimeService({
+      ...harness.runtimeStore,
+      getRepos: () => [repo],
+      getRepo: (id: string) => (id === TEST_REPO_ID ? repo : undefined),
+      getWorkspaceSessionHostIds: () => [ownerHostId]
+    })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [],
@@ -403,9 +539,9 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
     const runtime = runtimeWithWindowTabs([windowTab({ isDirty: true })])
 
     await expect(
-      runtime.readMobileMarkdownTab(`id:${TEST_WORKTREE_ID}`, 'tab-readme')
+      runtime.readMobileMarkdownTab(`id:${TEST_WORKTREE_ID}`, readme)
     ).resolves.toMatchObject({
-      tabId: 'tab-readme',
+      tabId: readme,
       content: '# Notes\n',
       isDirty: true,
       source: 'file',
@@ -465,9 +601,11 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
 
   it('reads an untitled tab read-only and never saves it', async () => {
     const runtime = runtimeWithWindowTabs([windowTab({ isUntitled: true, isDirty: true })])
+    // The phone lists the workspace before it reads a tab.
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
     await expect(
-      runtime.readMobileMarkdownTab(`id:${TEST_WORKTREE_ID}`, 'tab-readme')
+      runtime.readMobileMarkdownTab(`id:${TEST_WORKTREE_ID}`, readme)
     ).resolves.toMatchObject({
       content: '# Notes\n',
       isDirty: true,
@@ -477,7 +615,7 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
     await expect(
       runtime.saveMobileMarkdownTab(
         `id:${TEST_WORKTREE_ID}`,
-        'tab-readme',
+        readme,
         hashMarkdownContent('# Notes\n'),
         '# Phone\n'
       )
@@ -514,6 +652,25 @@ describe("a phone's Markdown tab with a desktop window attached", () => {
       )
     ).rejects.toThrow('unsupported_untitled')
     expect(existsSync(untitled)).toBe(false)
+  })
+  it('keeps an SSH-hosted untitled tab read-only, refusing the save before reaching the host', async () => {
+    const runtime = runtimeWithWindowTabs(
+      [windowTab({ isUntitled: true, isDirty: true })],
+      sessionWithReadme(),
+      'ssh:ssh-1'
+    )
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(listed.tabs.find((tab) => tab.id === readme)).toMatchObject({ isUntitled: true })
+    await expect(
+      runtime.saveMobileMarkdownTab(
+        `id:${TEST_WORKTREE_ID}`,
+        readme,
+        hashMarkdownContent('# Notes\n'),
+        '# Phone\n'
+      )
+    ).rejects.toThrow('unsupported_untitled')
+    expect(await readFile(readme, 'utf8')).toBe('# Notes\n')
   })
 })
 

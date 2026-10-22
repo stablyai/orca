@@ -2,7 +2,11 @@ import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '..
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem, worktreeIdentityKey } from '../../../shared/worktree/id'
 import { branchSelectorMatches, runtimePathsEqual } from '../runtime-worktree-path-identity'
-import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId,
+  getWorktreeExecutionHostId
+} from '../../../shared/execution-host'
 import {
   runtimeRepoSelectorHostId,
   runtimeRepoSelectorText,
@@ -69,7 +73,7 @@ export abstract class RuntimeWorkspaceSelectors extends OrcaRuntimeWithResolveBr
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
         const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
         const fallback =
-          repo?.connectionId && this.store?.getWorktreeMeta(worktreeId)
+          repo && getRepoRoutingConnectionId(repo) && this.store?.getWorktreeMeta(worktreeId)
             ? this.buildResolvedWorktreeFromId(worktreeId)
             : null
         if (fallback !== null) {

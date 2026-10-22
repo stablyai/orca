@@ -11,8 +11,10 @@ import {
   diskConflictFromReadFailure,
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IF_UNCHANGED_METHOD,
+  hostEnforcesPrecondition,
+  FILE_WRITE_UNCHANGED,
   parseFileWriteResult,
-  type FileWriteDiskConflict,
+  type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../shared/file-write-disk-precondition'
@@ -50,8 +52,16 @@ export type MarkdownTabDiskRuntime = RuntimeLocalFileHost &
     environmentPairingRevision(environmentId: string): number | undefined
   }
 
+/** One workspace's file route; `pairingRevision` is the pairing a save captured, unset for a read. */
+type MarkdownFileRoute =
+  | { environmentId: string; pairingRevision: number | undefined }
+  | { environmentId: null; target: ResolvedRuntimeFileTarget }
+
 export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): MarkdownTabDiskHost {
-  const routeOf = async (worktreeId: string, file: MarkdownFileAddress) => {
+  const routeOf = async (
+    worktreeId: string,
+    file: MarkdownFileAddress
+  ): Promise<MarkdownFileRoute> => {
     // Why: a file outside the workspace on an SSH host is that host's; no process here serves it.
     if (file.externalSshTargetId) {
       throw new SshHostNotServedError(file.externalSshTargetId)
@@ -59,22 +69,23 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
     const target = await runtime.resolveRuntimeFileTarget(`id:${worktreeId}`)
     const host = parseExecutionHostId(target.executionHostId)
     if (host?.kind === 'runtime') {
-      return { environmentId: host.environmentId, target }
+      return { environmentId: host.environmentId, pairingRevision: undefined }
     }
     requireLocalRuntimeFileRoute(target)
     return { environmentId: null, target }
   }
-  // `pairingRevision` is the pairing a save captured before its first call; a phone read leaves it unset.
-  const fileIo = (pairingRevision: number | undefined): MarkdownFileIo => ({
+  const fileIo = (
+    routeFor: (worktreeId: string, file: MarkdownFileAddress) => Promise<MarkdownFileRoute>
+  ): MarkdownFileIo => ({
     readFile: async (worktreeId, file, maxBytes) => {
-      const { environmentId } = await routeOf(worktreeId, file)
-      if (environmentId) {
+      const route = await routeFor(worktreeId, file)
+      if (route.environmentId !== null) {
         return readFileOnEnvironment(
           runtime.callEnvironment,
-          environmentId,
+          route.environmentId,
           worktreeId,
           file,
-          pairingRevision
+          route.pairingRevision
         )
       }
       const { bytes, size } = await readLocalRuntimeFilePrefix(
@@ -88,19 +99,19 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
       return { content: bytes.toString('utf8'), byteLength: size }
     },
     writeFileIfUnchanged: async (worktreeId, file, content, precondition) => {
-      const { environmentId, target } = await routeOf(worktreeId, file)
-      if (environmentId) {
+      const route = await routeFor(worktreeId, file)
+      if (route.environmentId !== null) {
         return writeFileOnEnvironment(
           runtime.callEnvironment,
-          environmentId,
-          pairingRevision,
+          route.environmentId,
+          route.pairingRevision,
           worktreeId,
           file,
           content,
           precondition
         )
       }
-      return requireRuntimeFileProvider(target, runtime).writeFileWithDiskPrecondition(
+      return requireRuntimeFileProvider(route.target, runtime).writeFileWithDiskPrecondition(
         file.filePath,
         content,
         precondition
@@ -110,10 +121,15 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
   return {
     getWorkspaceSessionForWorktree: (worktreeId) =>
       runtime.getWorkspaceSessionForWorktree(worktreeId),
-    readFile: fileIo(undefined).readFile,
+    readFile: fileIo(routeOf).readFile,
     forSave: async (worktreeId, file) => {
-      const { environmentId } = await routeOf(worktreeId, file)
-      return fileIo(environmentId ? pairingRevisionOf(runtime, environmentId) : undefined)
+      const found = await routeOf(worktreeId, file)
+      // Why: a workspace that moves host mid-save must not take the write somewhere unpinned.
+      const route: MarkdownFileRoute =
+        found.environmentId !== null
+          ? { ...found, pairingRevision: pairingRevisionOf(runtime, found.environmentId) }
+          : found
+      return fileIo(async () => route)
     }
   }
 }
@@ -209,35 +225,42 @@ async function writeFileOnEnvironment(
     // Why `local`: the server writes only a workspace it runs itself, so the write never hops on.
     expectedExecutionHostId: 'local'
   }
-  if (capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)) {
+  if (hostEnforcesPrecondition(capabilities, diskPrecondition)) {
     return parseFileWriteResult(
       await pinned(FILE_WRITE_IF_UNCHANGED_METHOD, { ...params, diskPrecondition })
     )
   }
   const diskConflict = await diskConflictOnServer(pinned, params, diskPrecondition)
+  if (diskConflict === 'identical') {
+    return FILE_WRITE_UNCHANGED
+  }
   if (diskConflict) {
     return { ok: false, diskConflict }
   }
-  return parseFileWriteResult(await pinned('files.write', params))
+  return parseFileWriteResult(
+    capabilities.includes(FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY)
+      ? await pinned(FILE_WRITE_IF_UNCHANGED_METHOD, { ...params, diskPrecondition })
+      : await pinned('files.write', params)
+  )
 }
 
 /** For a server that would write unguarded: a read that cannot prove the disk fails the save. */
 async function diskConflictOnServer(
   pinned: (method: string, params: unknown) => Promise<unknown>,
-  address: { worktree: string; relativePath: string },
+  write: { worktree: string; relativePath: string; content: string },
   precondition: FileWriteDiskPrecondition
-): Promise<FileWriteDiskConflict | null> {
+): Promise<FileWriteDiskComparison> {
   let read: unknown
   try {
     read = await pinned('files.read', {
-      worktree: address.worktree,
-      relativePath: address.relativePath
+      worktree: write.worktree,
+      relativePath: write.relativePath
     })
   } catch (error) {
     return diskConflictFromReadFailure(precondition, error)
   }
   if (!isRecord(read) || typeof read.content !== 'string' || read.truncated === true) {
-    return compareDiskWritePrecondition(precondition, undefined)
+    return compareDiskWritePrecondition(precondition, undefined, write.content)
   }
-  return compareDiskWritePrecondition(precondition, read.content)
+  return compareDiskWritePrecondition(precondition, read.content, write.content)
 }

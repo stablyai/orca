@@ -114,6 +114,7 @@ describe('codex model catalog probe', () => {
         )
     })
     const success = await probe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    expect(success.complete).toBe(false)
     expect(configReadTimeouts).toEqual([3_000])
     expect(configReadFailures).toEqual([
       expect.objectContaining({
@@ -313,4 +314,32 @@ describe('Codex catalog probe reads the home a launch would', () => {
     expect((await probe({ variable: 'CODEX_HOME', path: '/homes/mirror' })).models).toHaveLength(1)
     expect(order).toEqual(['prepare /homes/mirror', 'spawn'])
   })
+})
+
+it('keeps unknown or unsupported configuration incomplete and observes genuine empty config', async () => {
+  for (const config of [undefined, [], { model: 42 }, {}]) {
+    const probe = createCodexModelCatalogProbe({
+      resolveEnvironment: async () => ({ PATH: '/bin' }),
+      resolveCommand: () => '/bin/codex',
+      runSession: async (_invocation, body) =>
+        body({
+          notify: () => {},
+          request: async (method) => {
+            if (method === 'model/list') {
+              return { data: [MODEL_ROW], nextCursor: null }
+            }
+            if (method === 'config/read') {
+              if (config === undefined) {
+                throw new Error('method not found')
+              }
+              return { config }
+            }
+            return {}
+          }
+        })
+    })
+    expect((await probe({ variable: 'CODEX_HOME', path: '/account' })).complete).toBe(
+      config !== undefined && !Array.isArray(config) && !('model' in config)
+    )
+  }
 })

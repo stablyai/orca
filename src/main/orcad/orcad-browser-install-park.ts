@@ -8,14 +8,14 @@ const PARK_POLL_MS = 1_000
 const RESTART_RETRY_MIN_MS = 5_000
 const RESTART_RETRY_MAX_MS = 5 * 60_000
 
-export type OrcadBrowserHelper = {
+type OrcadBrowserHelper = {
   /** The running helper's pid, or null when none runs. */
   pid: () => number | null
   start: (signal: AbortSignal) => Promise<void>
   stop: () => Promise<void>
 }
 
-export type OrcadBrowserInstallPark = { close: () => Promise<void> }
+type OrcadBrowserInstallPark = { close: () => Promise<void> }
 
 /**
  * The browser helper runs from the installed Orca.app, so macOS cannot replace that bundle while it

@@ -54,13 +54,17 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
     }
   },
   getSession: (partition) => session.fromPartition(partition),
-  setupPolicies: ({ partition, browserProfileId, profileMetadata }) =>
-    profileMetadata
-      ? installBrowserRoutePartitionPolicies(
-          { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null },
-          partition
-        )
-      : browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId),
+  setupPolicies: ({ partition, browserProfileId, profileMetadata }) => {
+    // Why: the server omits metadata for its default profile, so a missing one still means its page.
+    const profile = profileMetadata
+      ? { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null }
+      : browserSessionRegistry.getProfile(browserProfileId)
+    if (!profile) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    // Why: its profile ids collide with this computer's, and settings here cannot list them.
+    return installBrowserRoutePartitionPolicies(profile, partition, { sitePermissions: 'session' })
+  },
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
   },

@@ -4,6 +4,7 @@
  * booted: the guest's wall clock can jump after a host sleep (microsoft/WSL#4179, #10006), and
  * a wall-clock start time would then mistake a live process for a new one, or the reverse.
  */
+import type { OrcadProcessIncarnation } from '../orcad/orcad-process-start-time'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
 
@@ -66,6 +67,15 @@ export function parseWslGuestIdentity(output: string): WslGuestIdentity | null {
     distroInstance: `${bootId.toLowerCase()}:${initTicks}`,
     orcad: orcadPid && orcadTicks ? `${orcadPid}:${orcadTicks}` : null
   }
+}
+
+/** The asked-for PID's identity in the form orcad's instance lock records; null when it is gone. */
+export function wslGuestOrcadIncarnation(
+  identity: WslGuestIdentity
+): OrcadProcessIncarnation | null {
+  const linuxStartTicks = identity.orcad?.split(':')[1]
+  const bootId = identity.distroInstance.split(':')[0]
+  return linuxStartTicks && bootId ? { linuxStartTicks, bootId } : null
 }
 
 /** null when the guest could not answer: that is unverifiable, never evidence of an exit. */

@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 // The options read surface: what a session reports about itself, and the
 // host's stored model catalog behind the picker.
 //
@@ -72,6 +73,10 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           : await requireInstalledStructuredHost(ctx, params.sessionId)
       const record =
         params.sessionId === undefined ? null : host.deps.store.getRecord(params.sessionId)
+      const coherent =
+        ctx.clientKind === undefined ||
+        ctx.clientCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
+      const scope = coherent ? {} : { legacy: true }
       const read = async (): Promise<AgentSessionModelCatalogResult> => {
         const catalog = host.deps.modelCatalog
         if (!catalog) {
@@ -80,21 +85,22 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         // A floating chat runs in the folder it was created in, not the floating setting's current one.
         const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
         if (launchDirectory) {
-          return catalog.read({ ...params, workspacePath: launchDirectory })
+          return catalog.read({ ...params, ...scope, workspacePath: launchDirectory })
         }
         if (worktree === undefined) {
-          return catalog.read(params)
+          return catalog.read({ ...params, ...scope })
         }
         const workspacePath = await ctx.runtime
           .resolveStructuredAgentSessionLocalWorkspacePath(worktree)
           .catch(() => null)
-        return catalog.read({ ...params, workspacePath })
+        return catalog.read({ ...params, ...scope, workspacePath })
       }
       const listing = await read()
       const own = record?.provider === params.agent ? record : null
       // A reopened chat's own model stays a row, so a client that replaces an unlisted one keeps
       // it. Not a new chat's read (it names a worktree): that answer seeds the next new chat's list.
-      return own &&
+      return !coherent &&
+        own &&
         worktree === undefined &&
         finishedListingIds(listing) &&
         listing.origin !== 'unknown'

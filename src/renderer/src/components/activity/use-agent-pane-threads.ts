@@ -23,6 +23,11 @@ import {
   buildActivityThreadGroups,
   isActivitySearchQueryTooLarge
 } from './activity-thread-grouping'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import type {
   ActivityGroupBy,
   ActivityThreadGroup,
@@ -124,10 +129,10 @@ export function useAgentPaneThreads(args: {
         return projected
       })(),
       repos: s.repos,
-      worktreesByRepo: s.worktreesByRepo,
-      folderWorkspaces: s.folderWorkspaces,
+      worktreesByRepo: selectWorktreesByRepo(s),
+      folderWorkspaces: selectFolderWorkspaces(s),
       floatingWorkspacePath: s.floatingWorkspacePath,
-      detectedWorktreesByRepo: s.detectedWorktreesByRepo,
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
       getKnownWorktreeById: s.getKnownWorktreeById,
       worktreeMap: getWorktreeMapFromState(s),
       repoMap: getRepoMapFromState(s),

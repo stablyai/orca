@@ -18,6 +18,7 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
@@ -92,6 +93,7 @@ export function buildFullWorktreePurgeState(
   forgetAmbiguousOwnerWarnings(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
+  noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, worktreeIdSet, doomed)
   const {
     omitByWorktree,

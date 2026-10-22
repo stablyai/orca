@@ -34,10 +34,13 @@ import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
+/** Which surface the user picked for one launch: the agent's chat, or its CLI in a terminal. */
+export type AgentLaunchSurface = 'chat' | 'terminal'
+
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   /** The user action this launch serves, minted where that action is handled. */
   requestId: AgentLaunchRequestId
-  requestedSurface?: 'chat' | 'terminal'
+  requestedSurface?: AgentLaunchSurface
   selectedExecutionHostId?: ExecutionHostId
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
@@ -52,7 +55,7 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
  */
 export type AgentSessionLaunchVerdict = {
   route: AgentLaunchRoute
-  requestedSurface?: 'chat' | 'terminal'
+  requestedSurface?: AgentLaunchSurface
   /** The user action this launch serves; a re-entry with this verdict is that same action. */
   requestId: AgentLaunchRequestId
   agent: TuiAgent

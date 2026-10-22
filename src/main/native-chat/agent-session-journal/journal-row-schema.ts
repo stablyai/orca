@@ -1,3 +1,4 @@
+import type { JournalItemEcho } from './journal-item-echo'
 // Persisted journal row shapes plus read-time upcasting.
 //
 // The journal is append-only, so migration is upcasting on read and never an
@@ -69,6 +70,8 @@ export type JournalEpochRow = JournalRowBase & {
   kind: 'epoch'
   reason: AgentJournalEpochReason
   providerHandle: AgentSessionJournalProviderHandle
+  /** Original adoption, restated atomically when a same-conversation replacement retires it. */
+  historyOrigin?: unknown
 }
 
 export const AGENT_JOURNAL_EPOCH_REASONS = [
@@ -93,7 +96,8 @@ type JournalItemProvenance = {
 }
 
 export type JournalItemRow = JournalRowBase &
-  JournalItemProvenance & {
+  JournalItemProvenance &
+  JournalItemEcho & {
     kind: 'item'
     itemId: string
     revision: number
@@ -216,7 +220,8 @@ export type JournalDispatchRow = JournalRowBase & {
  *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
   | (AgentJournalProducerLinkage &
-      JournalItemProvenance & {
+      JournalItemProvenance &
+      JournalItemEcho & {
         kind: 'item'
         itemId: string
         revision: number

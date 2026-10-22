@@ -1,3 +1,4 @@
+import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,
@@ -14,6 +15,8 @@ export type AgentModelCatalogSuccess = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
+  complete?: boolean
+  configured?: { model?: string; effort?: string }
   /** A row only this session's launch added (its own `--model`): kept only once the account's
    *  catalog already lists that model. */
   launchOnlyModelId?: string
@@ -27,6 +30,7 @@ export type AgentModelCatalogListing = {
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
   at: number
+  complete?: boolean
 }
 
 /** What a running session listed, as its adapter hands it to the host. Kept here, apart from the
@@ -124,16 +128,17 @@ export type AgentModelCatalogEntry = {
 export function agentModelCatalogResultFromEntry(
   entry: AgentModelCatalogEntry,
   namesDefault: boolean,
-  listingNamesConfiguredModel: boolean
+  listingNamesConfiguredModel: boolean,
+  useConfigured = true
 ): Exclude<AgentSessionModelCatalogResult, { origin: 'unknown' }> {
   // A CLI-resolved default names the configured model even where the listing names none.
-  const namesConfigured = listingNamesConfiguredModel || entry.configured !== null
+  const namesConfigured =
+    listingNamesConfiguredModel || (useConfigured && entry.configured !== null)
+  const models = useConfigured ? entry.models : (entry.discovered?.models ?? entry.models)
   return {
     origin: entry.origin,
     // Without a default the picker names nothing until the chat reports its model.
-    models: entry.models.map((model) =>
-      namesDefault ? { ...model } : { ...model, isDefault: false }
-    ),
+    models: models.map((model) => (namesDefault ? { ...model } : { ...model, isDefault: false })),
     ...(entry.fastModeSupport ? { fastModeSupport: entry.fastModeSupport } : {}),
     fetchedAt: entry.fetchedAt,
     listingNamesConfiguredModel: namesDefault && namesConfigured
@@ -202,7 +207,11 @@ export function agentModelCatalogEntry(
     discovered,
     live,
     configured,
-    models: mergedModels(discovered, live, configured),
+    models: mergedModels(discovered, live, configured).map((model) =>
+      independentAgentModelCatalog(agent) && discovered?.complete !== true
+        ? { ...model, isDefault: false }
+        : model
+    ),
     ...(fastModeSupport ? { fastModeSupport } : {}),
     origin: newer.origin,
     fetchedAt: newer.at
@@ -228,6 +237,39 @@ export function agentModelCatalogEntryWithSuccess(
   source: AgentModelCatalogSource,
   at: number
 ): AgentModelCatalogEntry | null {
+  if (independentAgentModelCatalog(identity.agent)) {
+    if (source !== 'discovery' || success.models.length === 0) {
+      return null
+    }
+    if (success.complete !== true && previous?.discovered?.complete === true) {
+      return previous
+    }
+    const configuredModel = success.complete === true ? success.configured?.model : undefined
+    const configuredRow = configuredModel
+      ? success.models.find(
+          (row) => row.id === configuredModel || row.resolvedModel === configuredModel
+        )
+      : undefined
+    return agentModelCatalogEntry(
+      identity.agent,
+      identity.fingerprint,
+      {
+        models: success.models.map((row) => ({ ...row })),
+        origin: success.origin,
+        at,
+        complete: success.complete === true,
+        ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {})
+      },
+      null,
+      configuredModel
+        ? {
+            modelId: configuredRow?.id ?? configuredModel,
+            at,
+            ...(success.configured?.effort ? { effort: success.configured.effort } : {})
+          }
+        : null
+    )
+  }
   const models = retainedAgentModelCatalogModels(previous, success)
   if (models.length === 0) {
     // An empty list identifies no model; it is doubt, not a catalog.
@@ -274,6 +316,9 @@ export function entryWithConfiguredDefault(
   choice: AgentModelCatalogConfiguredChoice | null,
   at: number
 ): AgentModelCatalogEntry | null {
+  if (independentAgentModelCatalog(entry.agent)) {
+    return null
+  }
   const next = configuredDefaultFacts(choice, entry.configured)
   if (JSON.stringify(next) === JSON.stringify(configuredDefaultFacts(entry.configured))) {
     return null
@@ -290,7 +335,12 @@ export function entryWithConfiguredDefault(
 /** What a saved entry says, without its clocks: an unchanged key needs no write to disk. */
 export function agentModelCatalogListingKey(entry: AgentModelCatalogEntry): string {
   const facts = (listing: AgentModelCatalogListing | null): unknown =>
-    listing && [listing.origin, listing.models, listing.fastModeSupport ?? null]
+    listing && [
+      listing.origin,
+      listing.models,
+      listing.fastModeSupport ?? null,
+      listing.complete ?? null
+    ]
   return JSON.stringify([
     facts(entry.discovered),
     facts(entry.live),

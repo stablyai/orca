@@ -87,16 +87,23 @@ function ChoiceRow({
       accessibilityState={{ checked: selected, disabled }}
       style={[
         styles.row,
-        selected && styles.rowSelected,
         grouped && styles.rowGrouped,
-        divided && styles.rowDivided,
-        disabled && styles.rowDisabled
+        selected && styles.rowSelected,
+        divided && styles.rowDivided
       ]}
       onPress={onPress}
       disabled={disabled}
     >
       <View style={styles.rowBody}>
-        <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
+        <Text
+          style={[
+            styles.rowLabel,
+            disabled && !selected && styles.labelDisabled,
+            labelColor ? { color: labelColor } : null
+          ]}
+        >
+          {label}
+        </Text>
         {description ? (
           <Text style={styles.rowDescription} numberOfLines={2}>
             {description}
@@ -125,9 +132,9 @@ function ToggleRow({
   onToggle: (next: boolean) => void
 }): React.JSX.Element {
   return (
-    <View style={[styles.row, grouped && styles.rowGrouped, disabled && styles.rowDisabled]}>
+    <View style={[styles.row, grouped && styles.rowGrouped]}>
       <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
       </View>
       {marker ? (
         <Text style={styles.rowMarker}>{marker === 'default' ? 'Default' : 'Not reported'}</Text>
@@ -159,12 +166,12 @@ function ActionRow({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      style={[styles.row, grouped && styles.rowGrouped, disabled && styles.rowDisabled]}
+      style={[styles.row, grouped && styles.rowGrouped]}
       onPress={onPress}
       disabled={disabled}
     >
       <View style={styles.rowBody}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, disabled && styles.labelDisabled]}>{label}</Text>
       </View>
     </Pressable>
   )
@@ -208,13 +215,12 @@ export function SessionOptionSummaryRow({
       style={({ pressed }) => [
         styles.summaryRow,
         divided && styles.rowDivided,
-        pressed && !disabled && styles.pressed,
-        disabled && styles.rowDisabled
+        pressed && !disabled && styles.pressed
       ]}
       onPress={onPress}
       disabled={disabled}
     >
-      <Text style={styles.summaryLabel}>{label}</Text>
+      <Text style={[styles.summaryLabel, disabled && styles.labelDisabled]}>{label}</Text>
       <Text
         style={[styles.summaryValue, valueColor ? { color: valueColor } : null]}
         numberOfLines={1}
@@ -351,7 +357,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs
   },
   rowSelected: {
-    borderColor: colors.textSecondary
+    borderColor: colors.textSecondary,
+    backgroundColor: colors.composerControl
   },
   rowGrouped: {
     marginBottom: 0,
@@ -363,8 +370,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.composerBorder
   },
-  rowDisabled: {
-    opacity: 0.5
+  labelDisabled: {
+    color: colors.textSecondary
   },
   rowBody: {
     flex: 1,

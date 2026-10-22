@@ -2,6 +2,7 @@ import type { IBufferLine } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
+import { buildEdgeWrappedHttpLogicalLineCandidates } from './edge-wrapped-terminal-http-links'
 
 const COLS = 40
 const WIDE_GLYPH = '界'
@@ -51,6 +52,15 @@ function makeBufferLineFromCells(
 }
 
 describe('edge-wrapped terminal HTTP links', () => {
+  it('bounds deep-indentation scans and skips cell translation for non-link rows', () => {
+    const line = makeBufferLine(`${' '.repeat(39)}x`, 80)
+    const translate = vi.spyOn(line, 'translateToString')
+    const getLine = vi.fn(() => line)
+    expect(buildEdgeWrappedHttpLogicalLineCandidates({ getLine }, 5_000)).toEqual([])
+    expect(getLine.mock.calls.length).toBeLessThan(120)
+    expect(translate.mock.calls.every((args) => args.length === 1)).toBe(true)
+  })
+
   beforeEach(() => {
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
     registerHttpLinkStoreAccessor(() => ({
@@ -64,6 +74,29 @@ describe('edge-wrapped terminal HTTP links', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
+
+  it.each([1, 2])(
+    'opens both rows of a URL hard-wrapped inside %i-column TUI padding',
+    (padding) => {
+      const url = 'https://example.com/example-project/pull/1234567890'
+      const width = COLS - padding * 2
+      const margin = ' '.repeat(padding)
+      const rows = [
+        makeBufferLine(`${margin}${url.slice(0, width)}${margin}`),
+        makeBufferLine(`${margin}${url.slice(width)}${margin}`)
+      ]
+      for (const y of [1, 2]) {
+        openUrlMock.mockReset()
+        expect(
+          openHttpLinkAtBufferPosition({ getLine: (y) => rows[y] }, { x: padding + 2, y }, COLS, {
+            worktreeId: 'wt-1',
+            modifierHeld: true
+          })
+        ).toBe(true)
+        expect(openUrlMock).toHaveBeenCalledExactlyOnceWith(url)
+      }
+    }
+  )
 
   it('opens a URL when a wide glyph starts the continuation row', () => {
     const prefix = 'https://example.com/wide/'

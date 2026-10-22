@@ -54,7 +54,7 @@ it('omits an unverified stop superseded by a newer send while retaining a siblin
   vi.spyOn(host['lifetime'], 'closeForWorkspaceSleep').mockImplementation(async (...args) => {
     if (args[0] === sibling) {
       await slowSibling
-      return { fence: siblingRecord.lease.runtimeFence, stopped: true }
+      return { fence: siblingRecord.lease.runtimeFence, stopped: true, admittedSends: 0 }
     }
     const result = await close(...args)
     failedStopDone()
@@ -173,6 +173,73 @@ it('keeps a send admitted after the host Sleep close alive', async () => {
   expect(host.hasSession('session-alpha')).toBe(true)
 })
 
+it('keeps Sleep through history reopen and replay, and clears it atomically with a new send', async () => {
+  const { host, store, dispatch, root } = hostTestState()
+  await attach()
+  const send = async (text: string) => {
+    const body = hostTestMessage(text)
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+    expect(await host.send(CALLER, params)).toMatchObject({ ok: true })
+    return params
+  }
+  // A stop that did not ask (a project move) marks nothing.
+  expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: ['session-alpha'] })
+  expect(store.getRecord('session-alpha')?.sleptAt).toBeUndefined()
+  const previous = await send('after the move')
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+  await host.sleepWorkspace('workspace-1')
+  expect(host.hasSession(SESSION)).toBe(false)
+  const close = host['lifetime'].closeForWorkspaceSleep
+  vi.spyOn(host['lifetime'], 'closeForWorkspaceSleep').mockImplementation(async (...args) => {
+    const stopped = await close(...args)
+    expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
+      ok: true
+    })
+    return stopped
+  })
+  expect(await host.sleepWorkspace('workspace-1', true)).toEqual({
+    stoppedSessionIds: ['session-alpha']
+  })
+  const sleptAt = store.getRecord('session-alpha')?.sleptAt
+  expect(sleptAt).toEqual(expect.any(Number))
+  expect(await host.send(CALLER, previous)).toMatchObject({ ok: true, replayed: true })
+  expect(store.getRecord('session-alpha')?.sleptAt).toBe(sleptAt)
+
+  const outcomeReceipt = store.operationOutcomeReceipt.bind(store)
+  let stagedAwake = false
+  vi.spyOn(store, 'operationOutcomeReceipt').mockImplementationOnce((args) => {
+    const receipt = outcomeReceipt(args)
+    return {
+      ...receipt,
+      write: (db, row) => {
+        receipt.write(db, row)
+        stagedAwake =
+          db.isTransaction &&
+          db
+            .prepare(
+              "SELECT json_extract(record_json, '$.sleptAt') AS sleptAt FROM agent_session_records WHERE session_id = ?"
+            )
+            .get(SESSION)?.sleptAt === null
+        throw new Error('transaction failed before commit')
+      }
+    }
+  })
+  const body = hostTestMessage('rolled back send')
+  const rolledBack = { envelope: envelope('agentSession.send', { body }), body }
+  expect(await host.send(CALLER, rolledBack)).toMatchObject({ ok: false })
+  expect(stagedAwake).toBe(true)
+  expect((await openTestAgentSessionRecordStore(root)).getRecord(SESSION)?.sleptAt).toBe(sleptAt)
+  expect(
+    host['sessions']
+      .get(SESSION)
+      ?.journal.submissions()
+      .some((send) => send.clientMessageId === rolledBack.envelope.clientOperationId)
+  ).toBe(false)
+
+  await send('wake up')
+  expect((await openTestAgentSessionRecordStore(root)).getRecord(SESSION)?.sleptAt).toBeUndefined()
+})
+
 it('returns the receipt for a stopped child whose provider reports its own end', async () => {
   const { host, store } = hostTestState()
   await attach()
@@ -206,29 +273,41 @@ it('omits an unproven workspace child from the stop receipt', async () => {
   await attach()
   host.deps.adapter.closeSession = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true)
 
-  expect(await host.sleepWorkspace('workspace-1')).toEqual({
+  expect(await host.sleepWorkspace('workspace-1', true)).toEqual({
     stoppedSessionIds: [],
     failures: [{ sessionId: SESSION, reason: 'stop-unverifiable' }]
   })
   expect(store.getRecord(SESSION)).not.toBeNull()
+  expect(store.getRecord(SESSION)?.sleptAt).toBeUndefined()
 })
 
-it('does not count a chat whose send was accepted after the stop as stopped', async () => {
-  const { host } = hostTestState()
+it.each(['running', 'failed'] as const)('keeps a newer %s send awake', async (state) => {
+  const { host, acquire, store } = hostTestState()
   await attach()
   host.deps.adapter.closeSession = vi.fn(async () => true)
   await vi.waitFor(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
   const close = host['lifetime'].closeForWorkspaceSleep
   vi.spyOn(host['lifetime'], 'closeForWorkspaceSleep').mockImplementation(async (...args) => {
     const result = await close(...args)
+    if (state === 'failed') {
+      acquire.mockRejectedValueOnce(new Error('provider unavailable'))
+    }
     const body = hostTestMessage('newer send')
     // The later work exists once the send is accepted, not merely once it is queued.
     const sent = host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
     expect(await sent).toMatchObject({ ok: true })
+    if (state === 'failed') {
+      await vi.waitFor(() => {
+        expect(host['runtimeState'].startFlights.has(SESSION)).toBe(false)
+        expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false)
+        expect(host['sessions'].get(SESSION)?.journal.pendingSubmissions()).toEqual([])
+      })
+    }
     return result
   })
 
-  expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [] })
+  expect(await host.sleepWorkspace('workspace-1', true)).toEqual({ stoppedSessionIds: [] })
+  expect(store.getRecord(SESSION)?.sleptAt).toBeUndefined()
 })
 
 // A start runs outside the chat's lane, so Sleep reaches it through the start's own abort.
@@ -261,7 +340,7 @@ it('stops an agent that is still starting', async () => {
 
 // Before the adapter owns a process, the aborted start leaves the chat at rest: that is stopped.
 it('stops an agent whose process is still being acquired', async () => {
-  const { host, acquire } = hostTestState()
+  const { host, acquire, store } = hostTestState()
   await attach()
   expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
   let acquiring = false
@@ -277,7 +356,8 @@ it('stops an agent whose process is still being acquired', async () => {
   ).toMatchObject({ ok: true })
   await vi.waitFor(() => expect(acquiring).toBe(true))
 
-  expect(await host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
+  expect(await host.sleepWorkspace('workspace-1', true)).toEqual({ stoppedSessionIds: [SESSION] })
+  expect(store.getRecord(SESSION)?.sleptAt).toEqual(expect.any(Number))
   expect(host['runtimeState'].startFlights.has(SESSION)).toBe(false)
   expect(host['sessions'].get(SESSION)?.child ?? null).toBeNull()
 })
@@ -291,7 +371,9 @@ it('sleeps only proven ended chats after idle eviction or restart', async () => 
       expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
       expect(rig.host.hasSession(SESSION)).toBe(false)
     })
+    expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined()
     expect(await rig.host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })
+    expect(rig.store.getRecord(SESSION)?.sleptAt).toBeUndefined()
     await rig.restart()
     await rig.host.restoreReadableSessions()
     expect(await rig.host.sleepWorkspace('workspace-1')).toEqual({ stoppedSessionIds: [SESSION] })

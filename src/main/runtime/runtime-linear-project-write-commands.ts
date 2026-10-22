@@ -1,13 +1,13 @@
 import {
   LINEAR_SEARCH_MAX_LIMIT,
   isLinearUuid,
-  linearError,
   getLinearProject,
   listLinearProjectsByExactName,
   listLinearProjectTeams,
   listLinearProjects,
   getLinearViewerForWorkspaceOrThrow
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import type { LinearProjectSummary } from './runtime-linear-command-dependencies'
 import { RuntimeLinearTeamWriteCommands } from './runtime-linear-team-write-commands'
 

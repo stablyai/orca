@@ -1,3 +1,4 @@
+import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
   AgentJournalSubmission,
   AgentJournalItemBody,
@@ -54,6 +55,7 @@ export function journalItemRowBuilder(
   address: AgentJournalItemIdentity | string,
   body: AgentJournalItemBody,
   options: AgentJournalRowAttribution & {
+    echoOf?: JournalItemEcho['echoOf']
     fence: number
     ownerFence?: number
     executionOwner?: number
@@ -67,6 +69,7 @@ export function journalItemRowBuilder(
       state: state(),
       ...(typeof address === 'string' ? { itemId: address } : { identity: address }),
       body,
+      ...journalItemEchoFields(options),
       seq,
       fence: options.fence,
       ownerFence: options.ownerFence,
@@ -237,6 +240,7 @@ export function journalRowBase(
 
 export function buildJournalItemRow(
   input: JournalItemAddress & {
+    echoOf?: JournalItemEcho['echoOf']
     state: JournalReducerState
     body: AgentJournalItemBody
     seq: number
@@ -259,6 +263,7 @@ export function buildJournalItemRow(
   const body = turnEndAfterStop(input.state, resolved, input.body)
   return {
     kind: 'item',
+    ...journalItemEchoFields(input),
     itemId,
     revision,
     body,

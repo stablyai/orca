@@ -4,8 +4,8 @@ import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import {
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
+  getRepoRoutingConnectionId,
+  LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { WorktreePushTargetStore } from '../ipc/worktree-push-target-cleanup'
@@ -31,8 +31,7 @@ export function triggerTerminalSpawnPushTargetMaterialization(
   if (
     !pushTarget?.remoteUrl ||
     pushTarget.remoteCreated ||
-    repo?.connectionId ||
-    parseExecutionHostId(hostId)?.kind === 'ssh'
+    (repo && getRepoRoutingConnectionId(repo))
   ) {
     return
   }

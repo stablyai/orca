@@ -1,6 +1,8 @@
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 import { getRelativePathInsideRoot } from '@/lib/path'
+import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { toast } from 'sonner'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { openDocPreviewSource } from '../workspace-doc/doc-preview-document-actions'
@@ -18,13 +20,33 @@ export function canOpenBrowserFileInWorkspaceEditor(state: AppState, worktreeId:
 }
 
 /** Opens the file behind a local browser page as its editable source, as a document preview does. */
-export function openBrowserFileSource(worktreeId: string, filePath: string): void {
-  const worktreeRoot = useAppStore.getState().getKnownWorktreeById(worktreeId)?.path ?? null
-  openDocPreviewSource({
-    filePath,
-    relativePath: getRelativePathInsideRoot(filePath, worktreeRoot) ?? filePath,
-    worktreeId,
-    runtimeEnvironmentId: null,
-    externalSshTargetId: null
-  })
+export async function openBrowserFileSource(worktreeId: string, filePath: string): Promise<void> {
+  const state = useAppStore.getState()
+  if (!canOpenBrowserFileInWorkspaceEditor(state, worktreeId)) {
+    return
+  }
+  const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
+  try {
+    const stat = await statUserOpenedPath(
+      { target: { kind: 'local' }, worktreeId, worktreePath: worktreeRoot },
+      filePath
+    )
+    if (
+      stat.isDirectory ||
+      !canOpenBrowserFileInWorkspaceEditor(useAppStore.getState(), worktreeId)
+    ) {
+      return
+    }
+    openDocPreviewSource({
+      filePath,
+      relativePath: stat.escapesWorktree
+        ? filePath
+        : (getRelativePathInsideRoot(filePath, worktreeRoot) ?? filePath),
+      worktreeId,
+      runtimeEnvironmentId: null,
+      externalSshTargetId: null
+    })
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : String(error))
+  }
 }

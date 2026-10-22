@@ -1,3 +1,6 @@
+import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
+import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
+import { useLanguageReadiness } from '../i18n/language-readiness'
 import { NotificationCardStack } from '../components/NotificationCardStack'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
@@ -93,30 +96,6 @@ const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
 // Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
 const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 
-type BoundaryProps = {
-  boundaryId: string
-  resetKey?: string | number | boolean | null
-  title?: string
-  description?: string
-  children: React.ReactNode
-}
-
-function ModalBoundary({ children, ...props }: BoundaryProps): React.JSX.Element {
-  return (
-    <RecoverableRenderErrorBoundary surface="modal" compact {...props}>
-      {children}
-    </RecoverableRenderErrorBoundary>
-  )
-}
-
-function OverlayBoundary({ children, ...props }: BoundaryProps): React.JSX.Element {
-  return (
-    <RecoverableRenderErrorBoundary surface="overlay" compact {...props}>
-      {children}
-    </RecoverableRenderErrorBoundary>
-  )
-}
-
 function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
   if (status.state === 'idle') {
     return false
@@ -136,6 +115,7 @@ export function AppRootSurfaces(props: {
   onboardingGate: OnboardingGate
 }): React.JSX.Element {
   const { floatingWorkspace, onboardingGate } = props
+  const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
   const activeView = useAppStore((s) => s.activeView)
@@ -382,10 +362,14 @@ export function AppRootSurfaces(props: {
               'Retry onboarding or close it and continue in the app.'
             )}
           >
-            <OnboardingFlow
-              onboarding={onboardingGate.onboarding}
-              onOnboardingChange={onboardingGate.setOnboarding}
-            />
+            {languageReady ? (
+              <OnboardingFlow
+                onboarding={onboardingGate.onboarding}
+                onOnboardingChange={onboardingGate.setOnboarding}
+              />
+            ) : (
+              <OnboardingLanguageLoading />
+            )}
           </RecoverableRenderErrorBoundary>
         </Suspense>
       ) : null}

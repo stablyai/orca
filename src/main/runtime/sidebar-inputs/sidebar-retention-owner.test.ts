@@ -56,7 +56,6 @@ function harness(worktrees: Worktree[]) {
       return rows.map(getWorktreeHostIdentity)
     },
     retentionCandidates: () => ({
-      ids: world.active,
       isActive: (id) => world.active.has(id),
       isUnverifiableGap: (id) => world.tabsOpen.has(id)
     })
@@ -141,7 +140,7 @@ describe('SidebarRetentionOwner', () => {
     expect(owner.snapshot().retention?.retainedIds).toEqual([getWorktreeHostIdentity(remote)])
   })
 
-  it('retains every host’s row of a same-id pair, as activity is by bare id', async () => {
+  it('retains every host’s row of a same-id pair, as this host’s session is by bare id', async () => {
     const local = worktree('a', { hostId: 'local' })
     const remote = worktree('a', { hostId: 'ssh:box' })
     const { world, owner } = harness([local, remote])
@@ -153,5 +152,22 @@ describe('SidebarRetentionOwner', () => {
     world.active = new Set()
     owner.noteActivityChange()
     expect(owner.snapshot().retention?.retainedIds).toEqual(['local|a', 'ssh:box|a'])
+  })
+
+  it('gives each host’s row of a same-id pair its own grace window', async () => {
+    const local = worktree('a', { hostId: 'local' })
+    const { world, owner } = harness([local])
+    owner.beginSession('s1')
+    await flush()
+    world.active = new Set(['a'])
+    world.tabsOpen = new Set(['a'])
+    owner.noteActivityChange()
+    world.active = new Set()
+    owner.noteActivityChange()
+    // A twin listed only after the id went idle was never seen live, so it earns no grace.
+    world.worktrees = [local, worktree('a', { hostId: 'ssh:box' })]
+    owner.noteCatalogChange()
+    await flush()
+    expect(owner.snapshot().retention?.retainedIds).toEqual(['local|a'])
   })
 })

@@ -14,10 +14,14 @@ import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 
 export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<PtyGrid> {
   const args = ctx.args
+  const startupCwd = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
+    ? (ctx.correctStartupCwd ?? ctx.requestedCwd)
+    : ctx.requestedCwd
 
   const committedSize = resolveCommittedPtySize({
     result: ctx.result,
@@ -39,7 +43,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<P
         leafId: ctx.validatedLeafId,
         ptyId: ctx.result.id,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-        ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
+        ...(startupCwd ? { startupCwd } : {}),
         ...(placement ? { placement } : {}),
         ...(ctx.paneSpawnOperation?.mustExist ? { mayCreate: false } : {}),
         origin: spawnCommitBindingOrigin(ctx.result)

@@ -41,6 +41,16 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
     translate(
       'components.native-chat.notices.historyItemTooLarge',
       HOST_STATUS_COPY['history-item-too-large']
+    ),
+  'continued-outside': () =>
+    translate(
+      'components.native-chat.notices.continuedOutside',
+      HOST_STATUS_COPY['continued-outside']
+    ),
+  'continued-outside-rewound': () =>
+    translate(
+      'components.native-chat.notices.continuedOutsideRewound',
+      HOST_STATUS_COPY['continued-outside-rewound']
     )
 }
 

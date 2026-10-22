@@ -7,16 +7,17 @@ import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type AiVaultLogSession = Pick<AiVaultSession, 'filePath' | 'executionHostId'>
 
 function worktreeStillExists(state: AppState, worktreeId: string): boolean {
-  if (findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)) {
+  if (findWorktreeById(selectWorktreesByRepo(state) ?? {}, worktreeId)) {
     return true
   }
   // Why: the AI Vault panel can be active inside a folder workspace, whose id is
   // keyed differently from repo worktrees.
-  return (state.folderWorkspaces ?? []).some(
+  return (selectFolderWorkspaces(state) ?? []).some(
     (workspace) => folderWorkspaceKey(workspace.id) === worktreeId
   )
 }

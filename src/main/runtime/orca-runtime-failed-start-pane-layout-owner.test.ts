@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { collectLeafIds } from '../../shared/terminal-pane-layout-tree'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../shared/newer-daemon-hold'
 import { setupLayoutOwnerRuntime, WORKTREE_ID } from './orca-runtime-layout-owner-start-fixture'
+import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -61,6 +62,18 @@ describe('layout-owner build: a start main could not make keeps its pane, showin
     })
   })
 
+  it('shows no failure when another owner won the pane, whose terminal the window attaches to', async () => {
+    const { runtime, spawn } = setupLayoutOwnerRuntime()
+    spawn.mockRejectedValueOnce(new PaneOwnerContentionError())
+
+    await expect(
+      runtime.createTerminal(`id:${WORKTREE_ID}`, { keepPaneOnStartFailure: true })
+    ).rejects.toThrow('terminal_pane_owner_changed')
+
+    const { tabId, leafId } = spawn.mock.calls[0]![0]
+    expect(runtime.startStatusOf(`${tabId}:${leafId}`)).toBeNull()
+  })
+
   it('still takes back the pane of a start that did not ask to keep it', async () => {
     const { runtime, spawn, session } = setupLayoutOwnerRuntime()
     spawn.mockRejectedValueOnce(new Error('shell not found'))
@@ -87,5 +100,32 @@ describe('layout-owner build: a start main could not make keeps its pane, showin
     ).rejects.toThrow('shell not found')
 
     expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
+  })
+
+  it('shows every pane main starts as starting from before the pane is written, then clears it', async () => {
+    const { runtime, spawn, session } = setupLayoutOwnerRuntime()
+    const seen: unknown[] = []
+    spawn.mockImplementationOnce(async ({ tabId, leafId }) => {
+      // The pane is written by now: no frame shows it unbound without a status.
+      expect(session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([tabId])
+      seen.push(runtime.startStatusOf(`${tabId}:${leafId}`))
+      return { id: 'pty-1' }
+    })
+
+    await runtime.createTerminal(`id:${WORKTREE_ID}`)
+
+    expect(seen).toEqual([{ status: 'starting' }])
+    const { tabId, leafId } = spawn.mock.calls[0]![0]
+    expect(runtime.startStatusOf(`${tabId}:${leafId}`)).toBeNull()
+  })
+
+  it('clears the status of a start whose pane it took back', async () => {
+    const { runtime, spawn } = setupLayoutOwnerRuntime()
+    spawn.mockRejectedValueOnce(new Error('shell not found'))
+
+    await expect(runtime.createTerminal(`id:${WORKTREE_ID}`)).rejects.toThrow('shell not found')
+
+    const { tabId, leafId } = spawn.mock.calls[0]![0]
+    expect(runtime.startStatusOf(`${tabId}:${leafId}`)).toBeNull()
   })
 })

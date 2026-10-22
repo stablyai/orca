@@ -112,6 +112,8 @@ function referenceAgentStatusProjection(map: AppState['agentStatusByPaneKey']): 
         updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
         turnStartedAt: entry.turnStartedAt ?? null,
+        turnEndedAt: entry.turnEndedAt ?? null,
+        turnEndDisposition: entry.turnEndDisposition ?? null,
         agentType: entry.agentType ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({

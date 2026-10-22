@@ -17,13 +17,13 @@ const CONTENT_TYPE_BY_EXTENSION = {
   js: 'text/javascript; charset=utf-8',
   png: 'image/png',
   // The app bundle emits images as same-origin assets rather than data: URLs, so each one is
-  // content-hashed and served from here. Fonts are absent by design: the policy sets
-  // font-src 'none'.
+  // content-hashed and served from here, including the terminal's licensed symbol font.
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   gif: 'image/gif',
   webp: 'image/webp',
-  svg: 'image/svg+xml'
+  svg: 'image/svg+xml',
+  woff2: 'font/woff2'
 }
 
 /**

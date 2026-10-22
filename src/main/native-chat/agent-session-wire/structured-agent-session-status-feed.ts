@@ -153,16 +153,17 @@ export class StructuredAgentSessionStatusFeed {
       firstInputSubmissionKey: publication?.firstInputSubmissionKey ?? null
     })
     this.sink(retained)
-    this.broadcast({
-      type: 'status',
-      session: retained
-    })
+    this.broadcast({ type: 'status', session: retained })
   }
 
-  /** The record's name, or its naming failure, changed outside the journal. A closed chat's
-   *  retained row follows it too, so every list still showing it learns the name without a tab. */
+  /** Naming activity is published even when the chat has no retained status row. */
   publishConversationName(sessionId: string): void {
     this.broadcast(structuredAgentSessionNamingSnapshot(this.deps))
+    this.publishRecordNotes(sessionId)
+  }
+
+  /** Record annotations update held and retained rows without opening a journal. */
+  publishRecordNotes(sessionId: string): void {
     if (this.deps.sessions.has(sessionId)) {
       this.publish(sessionId)
       return

@@ -12,9 +12,6 @@ vi.mock('../crash-reporting/durable-crash-breadcrumb', async (importOriginal) =>
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
@@ -33,7 +30,7 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
 import { createMainWindow } from './createMainWindow'
 import {
   browserWindowMock,
-  isMock,
+  appMock,
   powerMonitorOnMock,
   resetMainWindowMocks
 } from './createMainWindow-test-harness'
@@ -404,7 +401,7 @@ describe('renderer recovery reload watchdog', () => {
   it('gives the dev server a longer budget than a packaged load', () => {
     const onRecoveryReloadOutcome = vi.fn()
     const { browserWindowInstance, consoleError, crashRenderer } = createHarness()
-    isMock.dev = true
+    appMock.isPackaged = false
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
 
     try {

@@ -33,7 +33,7 @@ export async function recheckFencedManagedServer(
   return managedResultAfterUpdate(environmentId, serving, update)
 }
 
-export type FenceRecheckLoop = {
+type FenceRecheckLoop = {
   /** False once the host disconnected, or another connect replaced this one's status. */
   stillCurrent: () => boolean
   recheck: () => Promise<ManagedResult>

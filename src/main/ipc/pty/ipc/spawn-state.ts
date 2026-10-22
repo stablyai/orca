@@ -1,3 +1,4 @@
+import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type {
@@ -28,7 +29,9 @@ export type PtyIpcSpawnState = {
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   cwd: string | undefined
   prevalidatedCwd: string | undefined
-  startupCwdFallback: { kind: 'worktree'; cwd: string } | undefined
+  requestedCwd: string | undefined
+  correctStartupCwd?: string
+  startupCwdFallback: StartupCwdFallback | undefined
   earlyStablePaneOwner: StablePaneOwner | null
   earlyWorktreeId: string | undefined
   paneSpawnReservationKey: string | null
@@ -112,6 +115,7 @@ export function createPtyIpcSpawnState(
     reattachedCodexHomeRoutes: new Map(),
     cwd: undefined,
     prevalidatedCwd: undefined,
+    requestedCwd: undefined,
     startupCwdFallback: undefined,
     earlyStablePaneOwner: null,
     earlyWorktreeId: undefined,

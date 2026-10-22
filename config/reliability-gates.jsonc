@@ -944,13 +944,13 @@
       "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails are the last capped run of raw output bytes with any leading partial UTF-8 sequence dropped, and success or failure releases capture storage without recapturing late output.",
       "oracle": "Compare byte-bounded tails against the old per-chunk model and an independent code-point model across compaction, growth, oversized chunks and mid-character splits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB moved through the capture for 4 MiB of output with zero encoding, collectible backing buffers after close and error, zero late capture work with preserved callbacks, one decode per stream, unchanged tails on forced cancellation or synchronous kill-close, and every capture limit clamped to a bounded byte count.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm/recipe-runner.test.ts"
       ],
       "testFiles": [
         "src/shared/ephemeral-vm-recipe-process.test.ts",
         "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
         "src/packages/process-host/src/growing-byte-buffer.test.ts",
-        "src/main/ephemeral-vm-recipe-runner.test.ts"
+        "src/main/ephemeral-vm/recipe-runner.test.ts"
       ],
       "assertionRefs": [
         {
@@ -981,7 +981,8 @@
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
           "result": "passed",
           "durationSeconds": 0.48,
-          "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases."
+          "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases.",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/packages/process-host/src/growing-byte-buffer.test.ts src/main/ephemeral-vm/recipe-runner.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -3239,7 +3240,7 @@
       "oracle": "Write one ordinary schema-v1 runtime and one provisioned-root runtime. Require the exact pre-#14352 reader to return both, run the old destroy lifecycle against the projected provisioned record, then require the candidate to retain the cleaned state while restoring schema-v2 and checkout-mode metadata. The same old reader must reject affected-main and fix-reverted bytes. Malformed, oversized, unknown-record, and future-version feature sidecars must leave rollback-compatible records accessible and must not be overwritten during compatible lifecycle mutations. Require destroy to have no implicit deadline, stop a hung destroy through the public desktop action, require cleanup_failed plus a fresh successful retry, prove provider or project-host rollback failure retains every ownership record required to retry, and prove missing recipe context cannot leave an unremovable hidden SSH registration. Supply the source ref's captured commit to create, reject a provisioned checkout on the wrong branch/ref, and reject a resume that changes connection mode or SSH ownership.",
       "commands": [
         "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm-runtime-service.test.ts src/main/ephemeral-vm-resume-integrity.test.ts src/main/ephemeral-vm-recipe-runner.test.ts src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "pnpm exec playwright test tests/e2e/ephemeral-vm-cleanup-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -3248,10 +3249,10 @@
         "src/shared/ephemeral-vm-runtime-store-rollback.test.ts",
         "src/shared/ephemeral-vm-runtime-store.test.ts",
         "src/shared/ephemeral-vm-recipe-process.test.ts",
-        "src/main/ephemeral-vm-runtime-service.test.ts",
-        "src/main/ephemeral-vm-recipe-runner.test.ts",
-        "src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts",
-        "src/main/ephemeral-vm-resume-integrity.test.ts",
+        "src/main/ephemeral-vm/runtime-service.test.ts",
+        "src/main/ephemeral-vm/recipe-runner.test.ts",
+        "src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts",
+        "src/main/ephemeral-vm/resume-integrity.test.ts",
         "src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts",
         "src/main/ipc/ephemeral-vm-provision-cancel.test.ts",
         "src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts",
@@ -3285,7 +3286,7 @@
           ]
         },
         {
-          "file": "src/main/ephemeral-vm-runtime-service.test.ts",
+          "file": "src/main/ephemeral-vm/runtime-service.test.ts",
           "assertions": [
             "an unreadable companion rejects checkout-mode recipes before their create command runs",
             "post-create persistence failure destroys the provider resource when possible",
@@ -3349,7 +3350,7 @@
           ]
         },
         {
-          "file": "src/main/ephemeral-vm-resume-integrity.test.ts",
+          "file": "src/main/ephemeral-vm/resume-integrity.test.ts",
           "assertions": [
             "resume allows host and port rotation",
             "resume rejects connection-mode and stable SSH ownership drift"
@@ -3379,7 +3380,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm-runtime-service.test.ts src/main/ephemeral-vm-resume-integrity.test.ts src/main/ephemeral-vm-recipe-runner.test.ts src/main/ephemeral-vm-runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
           "result": "passed",
           "durationSeconds": 3,
-          "summary": "One hundred twenty-two focused store, recipe-process, lifecycle, cleanup-handler, rendered stop-action, retry-context, source-ref, adoption-integrity, resume-integrity, and provisioning-recovery tests passed."
+          "summary": "One hundred twenty-two focused store, recipe-process, lifecycle, cleanup-handler, rendered stop-action, retry-context, source-ref, adoption-integrity, resume-integrity, and provisioning-recovery tests passed.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts"
         }
       ],
       "runtimeBudget": {

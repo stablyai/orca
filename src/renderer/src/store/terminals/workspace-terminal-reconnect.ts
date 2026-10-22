@@ -2,6 +2,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,
@@ -35,7 +36,7 @@ export function createWorkspaceTerminalReconnectActions(
       let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
       // Why indexed: the loop neither sets state nor awaits, so one index over the
       // whole store snapshot serves every iteration.
-      const worktreeById = buildWorktreeByIdIndex(get().worktreesByRepo)
+      const worktreeById = buildWorktreeByIdIndex(selectWorktreesByRepo(get()))
       const repoById = buildByIdIndex(get().repos)
       for (const worktreeId of ids) {
         const tabs = tabsByWorktree[worktreeId] ?? []

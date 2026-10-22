@@ -22,6 +22,8 @@ const appState = vi.hoisted(() => {
   return holder
 })
 
+vi.mock('./MobileBrowserLoadProgress', () => ({ MobileBrowserLoadProgress: () => null }))
+
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   AppState: {

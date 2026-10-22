@@ -7,45 +7,57 @@ import i18next, {
 import { initReactI18next } from 'react-i18next'
 
 import enRuntimeRequired from './en-runtime-required.json'
+import esCatalogUrl from './locales/es.json?url'
+import frCatalogUrl from './locales/fr.json?url'
+import jaCatalogUrl from './locales/ja.json?url'
+import koCatalogUrl from './locales/ko.json?url'
+import ptCatalogUrl from './locales/pt.json?url'
+import zhCatalogUrl from './locales/zh.json?url'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { advanceTranslationResourceVersion } from './translation-resource-version'
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
 import type { SupportedUiLocale } from '../../../shared/ui-locale'
 import { isPluginUiLanguage, type UiLanguage } from '../../../shared/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 export const i18n: I18nInstance = i18next.createInstance()
 
-// Why: only the English catalog is bundled eagerly. The other four locales add
-// ~2MB to the renderer's startup chunk (parsed on every launch) even though the
-// app always boots in English and only switches after the persisted UI language
-// loads. A lazy backend fetches each non-English catalog on demand, so any
-// changeLanguage() call (UI switch or test) transparently loads its bundle
-// instead of paying the parse cost at cold start.
-const NON_DEFAULT_LOCALE_LOADERS: Record<
-  Exclude<SupportedUiLocale, 'en'>,
-  () => Promise<{ default: Record<string, unknown> }>
-> = {
-  es: () => import('./locales/es.json'),
-  fr: () => import('./locales/fr.json'),
-  ja: () => import('./locales/ja.json'),
-  ko: () => import('./locales/ko.json'),
-  zh: () => import('./locales/zh.json')
+// Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
+const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
+  es: esCatalogUrl,
+  fr: frCatalogUrl,
+  ja: jaCatalogUrl,
+  ko: koCatalogUrl,
+  pt: ptCatalogUrl,
+  zh: zhCatalogUrl
+}
+
+function localeCatalogUrl(language: string): string | undefined {
+  return Object.entries(NON_DEFAULT_LOCALE_URLS).find(([name]) => name === language)?.[1]
+}
+
+async function loadLocaleCatalog(url: string): Promise<Record<string, unknown>> {
+  const response = await fetch(url, { cache: 'no-cache' })
+  if (!response.ok) {
+    throw new Error(`Language catalog request failed: ${response.status}`)
+  }
+  return response.json()
 }
 
 const lazyLocaleBackend: BackendModule = {
   type: 'backend',
   init: () => {},
   read: (language: string, _namespace: string, callback: ReadCallback) => {
-    const loader = NON_DEFAULT_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
-    if (!loader) {
+    const url = localeCatalogUrl(language)
+    if (!url) {
       // English (and unknown locales) are served from bundled resources; signal
       // "nothing to load" so i18next falls back to the in-memory catalog.
       callback(null, false)
       return
     }
-    loader().then(
-      (mod) => callback(null, mod.default),
+    loadLocaleCatalog(url).then(
+      (catalog) => callback(null, catalog),
       (error) => callback(error instanceof Error ? error : new Error(String(error)), false)
     )
   }
@@ -92,16 +104,27 @@ export function translate(key: string, fallback: string, options?: TOptions): st
   return isPseudoLocalizationLocale(i18n.language) ? pseudoLocalizeString(value) : value
 }
 
-export async function setRendererUiLanguage(language: UiLanguage): Promise<void> {
+export async function loadRendererUiLanguage(language: UiLanguage): Promise<string> {
   const resolved = resolveUiLocale(language)
   const resourceLanguage = resolveRendererResourceLanguage(resolved)
   const locale =
     isPluginUiLanguage(language) && resourceLanguage === resolved
       ? DEFAULT_LOCALE
       : resourceLanguage
+  const url = localeCatalogUrl(locale)
+  if (url && !i18n.hasResourceBundle(locale, 'translation')) {
+    const catalog = await withTimeout(loadLocaleCatalog(url), 5000, null)
+    if (catalog === null) {
+      throw new Error('Language catalog unavailable')
+    }
+    i18n.addResourceBundle(locale, 'translation', catalog, true, true)
+  }
+  return locale
+}
+
+export async function setRendererUiLanguage(language: UiLanguage): Promise<void> {
+  const locale = await loadRendererUiLanguage(language)
   if (i18n.language !== locale) {
-    // changeLanguage triggers the lazy backend load for non-English locales and
-    // resolves once the catalog is in memory.
     await i18n.changeLanguage(locale)
   }
 }

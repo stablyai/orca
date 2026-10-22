@@ -48,6 +48,7 @@ vi.mock('@xterm/xterm', () => ({
     return {
       options: {},
       loadAddon: vi.fn(),
+      registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
       open: vi.fn(),
       parser: {
         registerCsiHandler: vi.fn(

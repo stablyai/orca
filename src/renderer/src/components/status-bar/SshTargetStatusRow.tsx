@@ -16,6 +16,26 @@ import {
 } from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
+/** One connect attempt from the hosts menu: a row's Connect button or a pick in its host search. */
+export async function connectSshTargetFromStatusMenu(targetId: string): Promise<void> {
+  if (isSshConnectInFlight(targetId)) {
+    return
+  }
+  beginSshConnect(targetId)
+  try {
+    await window.api.ssh.connect({ targetId })
+    useAppStore.getState().recordFeatureInteraction('ssh')
+  } catch (err) {
+    toastSshConnectFailure(
+      targetId,
+      err,
+      translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
+    )
+  } finally {
+    endSshConnect(targetId)
+  }
+}
+
 export function SshTargetStatusRow({
   targetId,
   label,
@@ -33,27 +53,15 @@ export function SshTargetStatusRow({
   const connectInFlight = useSshConnectInFlight(targetId)
 
   const handleConnect = useCallback(async () => {
-    if (isSshConnectInFlight(targetId)) {
-      return
-    }
-    beginSshConnect(targetId)
     setBusy(true)
     try {
-      await window.api.ssh.connect({ targetId })
-      recordFeatureInteraction('ssh')
-    } catch (err) {
-      toastSshConnectFailure(
-        targetId,
-        err,
-        translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
-      )
+      await connectSshTargetFromStatusMenu(targetId)
     } finally {
-      endSshConnect(targetId)
       if (mountedRef.current) {
         setBusy(false)
       }
     }
-  }, [mountedRef, recordFeatureInteraction, targetId])
+  }, [mountedRef, targetId])
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)

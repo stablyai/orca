@@ -54,6 +54,9 @@ export function applyPtyBinding(
   const tabs = session.tabsByWorktree?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
   if (tab) {
+    if (args.correctStartupCwd !== undefined) {
+      tab.startupCwd = args.correctStartupCwd
+    }
     tab.ptyId = tabRowPtyIdAfterLeafBinding(
       tab,
       session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId,

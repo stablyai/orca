@@ -82,7 +82,7 @@ const LISTING = `${JSON.stringify({
       ]
     }
   }
-})}\n`
+})}\n${JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: 'orca-model-settings', response: { applied: { model: 'claude-opus-5-5[1m]' } } } })}\n`
 
 let dir: string
 let release: () => void
@@ -216,8 +216,8 @@ describe('Approve for me on a new Claude chat', () => {
     const first = await hostCatalog(Promise.resolve())
     await mocks.rpc(undefined, 'agentSession.modelCatalog', { waitForListing: true })
     await first.persistence.flush()
-    // A restarted host loads the saved file: the chat opens warm.
-    await hostCatalog(new Promise(() => {}))
+    // A restarted host retains the rows and revalidates its configured default before naming it.
+    await hostCatalog(Promise.resolve())
     const { result, unmount } = openNewChat()
     await waitFor(() => expect(offered(result.current.optionSnapshot)).toContain('auto'))
     unmount()

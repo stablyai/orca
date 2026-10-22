@@ -11,6 +11,7 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { TerminalWorkspaceLaunchScope } from '../runtime/runtime-legacy-worker-terminal-recovery-types'
 import {
   IDENTITY_ENV_KEYS,
+  launchWorkspaceId,
   type LaunchWorkspace
 } from '../../shared/launch-parity-window-request.test-fixture'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
@@ -183,7 +184,10 @@ export function startParityLanes(
       throw args.spawnError
     }
     // A fresh id per spawn, so one case's hidden mark never reads into the next.
-    return { id: options.sessionId ?? `remote-pty-${++remoteSpawns}` }
+    return {
+      id: options.sessionId ?? `remote-pty-${++remoteSpawns}`,
+      startupCwdSource: 'request' as const
+    }
   })
   suite.installDaemonTestProvider({ spawn: provider })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handlers read the window, runtime, settings and store members these fakes define.
@@ -261,4 +265,19 @@ export async function providerFacts(provider: Mock): Promise<Record<string, unkn
 
 export function recordOf(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? { ...value } : {}
+}
+
+export async function spawnBoth(
+  lanes: ParityLanes,
+  workspace: LaunchWorkspace,
+  window: Record<string, unknown>,
+  host: Record<string, unknown> = {}
+): Promise<Record<'window' | 'host', Record<string, unknown>>> {
+  const worktreeId = launchWorkspaceId(workspace)
+  const result = recordOf(
+    await lanes.spawnWindow({ cols: 80, rows: 24, cwd: workspace.path, worktreeId, ...window })
+  )
+  const windowFacts = { ...(await providerFacts(lanes.provider)), result }
+  const created = recordOf(await lanes.runtime.createTerminal(`id:${worktreeId}`, host))
+  return { window: windowFacts, host: { ...(await providerFacts(lanes.provider)), created } }
 }

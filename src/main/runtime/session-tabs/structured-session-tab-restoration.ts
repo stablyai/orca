@@ -6,6 +6,7 @@ import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { seedStructuredAgentSessionTabIndex } from '../structured-agent-session-tab-index-seed'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTabsSnapshot,
@@ -102,6 +103,8 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     notify?: boolean
     /** The host tab id a create reserved; a session that already has a tab keeps its own. */
     tabId?: string
+    /** This machine's window made the create; its own open places the tab. */
+    placedByWindow?: boolean
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
@@ -117,7 +120,10 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
           })
         })
     }
-    this.saveWindowlessAgentSessionTab(input.workspaceId, input)
+    // Switch point: main leaves a window's chat to the window's open, the one placement decision.
+    if (!(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)) {
+      this.saveWindowlessAgentSessionTab(input.workspaceId, input)
+    }
     this.projectStructuredAgentSessionTab(input)
   }
 

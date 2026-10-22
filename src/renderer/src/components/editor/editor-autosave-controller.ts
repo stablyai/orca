@@ -1,5 +1,4 @@
 import {
-  getOpenFilesForExternalFileChange,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
@@ -8,6 +7,8 @@ import {
   type EditorSaveFileDetail,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
+import { editorFileHoldKey, pathMutationHoldKeys } from './editor-autosave-holds'
+import type { OpenFile } from '@/store/slices/editor'
 import { flushPendingEditorBuffer } from './editor-pending-flush'
 import {
   autosaveSubscriberInputsEqual,
@@ -26,20 +27,15 @@ const NOT_SAVED_MESSAGE = "The file wasn't saved. Try saving again."
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const saveQueue = createEditorSaveQueue(store)
-  const { queueSave, quiesceFileSave, clearAutoSaveTimer, bumpSaveGeneration, syncAutoSave } =
-    saveQueue
+  const { queueSave, settleFileSaves, holdAutoSave, syncAutoSave } = saveQueue
 
   const { handleSaveDirtyFiles, handlePrepareHotExit } = createEditorRestartSaveHandlers({
     store,
     queueSave,
-    quiesceFileSave
+    settleFileSaves
   })
 
-  const handleExternalFileChange = createEditorExternalChangeTabReset({
-    store,
-    clearAutoSaveTimer,
-    bumpSaveGeneration
-  })
+  const handleExternalFileChange = createEditorExternalChangeTabReset(store)
 
   const handleSaveAndClose = async (event: Event): Promise<void> => {
     if (!(event instanceof CustomEvent)) {
@@ -113,12 +109,34 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     }
     detail.claim()
 
-    const matchingFiles =
-      'fileId' in detail
-        ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
-        : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
-
-    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
+    let release: (() => void) | undefined
+    try {
+      const state = store.getState()
+      let matchingFiles: OpenFile[]
+      const discard = 'fileId' in detail && detail.discard === true
+      if ('fileId' in detail) {
+        matchingFiles = state.openFiles.filter((file) => file.id === detail.fileId)
+        // Why: a view may republish the dropped text while saves drain; no autosave may write it.
+        if (discard) {
+          release = holdAutoSave(new Set(matchingFiles.map((f) => editorFileHoldKey(state, f))))
+        }
+      } else {
+        // Why: a git discard rewrites the file under every workspace showing it, and the guarded
+        // write's compare fallback (older hosts) can't refuse a save that read disk just before git.
+        const keys = pathMutationHoldKeys(state, detail)
+        release = holdAutoSave(keys)
+        matchingFiles = state.openFiles.filter((file) => keys.has(editorFileHoldKey(state, file)))
+      }
+      await Promise.all(matchingFiles.map((file) => settleFileSaves(file.id, !discard)))
+    } catch (error) {
+      // Why: a failed settle (e.g. an unresolved CSV cell) must stop the discard, not strand its hold.
+      release?.()
+      detail.reject?.(error instanceof Error ? error.message : String(error))
+      return
+    }
+    if (release) {
+      detail.onHold?.(release)
+    }
     detail.resolve()
   }
 

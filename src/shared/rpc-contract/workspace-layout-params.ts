@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { isTerminalLeafId } from '../stable-pane-id'
-import { SleepCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
+import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
+import { EditorFileRecord, EditorViewRecord } from './workspace-layout-editor-file-params'
 import { SetGroupRatiosCommand, SetPaneRatiosCommand } from './workspace-layout-ratio-params'
 import {
   ApplyDefaultTabsCommand,
@@ -79,7 +80,10 @@ const MoveTabCommand = z.object({
   type: z.literal('moveTab'),
   ...OnTab,
   toGroupId: z.string().min(1),
-  index: z.number().int().nonnegative()
+  index: z.number().int().nonnegative(),
+  // Optional so an older main still takes the move; it places by `index`.
+  afterTabId: z.union([z.string().min(1), z.null()]).optional(),
+  isPinned: z.boolean().optional()
 })
 
 /** Main mints the new group's id, or moves a lone tab's group whole. */
@@ -101,19 +105,8 @@ const CloseTabsCommand = z.object({
   recordClose: z.enum(['user', 'cleanup']).optional()
 })
 
-/** An edit-mode file's restorable record, as the window saves it. */
-const EditorFileRecord = z.object({
-  filePath: z.string().min(1),
-  relativePath: z.string(),
-  language: z.string(),
-  runtimeEnvironmentId: z.string().nullable().optional(),
-  externalSshTargetId: z.string().min(1).optional(),
-  readOnly: z.literal(true).optional(),
-  liveTail: z.literal(true).optional()
-})
-
 /**
- * An editor tab under the id the window drew it with: its callers act on the tab at once. Main
+ * An editor tab under the id the window proposes; main refuses an id another tab holds. Main
  * places it and replaces the group's preview by the same rules as the window.
  */
 const OpenEditorTabCommand = z.object({
@@ -122,7 +115,10 @@ const OpenEditorTabCommand = z.object({
   fileId: z.string().min(1),
   contentType: z.enum(['editor', 'diff', 'conflict-review', 'check-details']),
   file: EditorFileRecord.optional(),
+  view: EditorViewRecord.optional(),
   groupId: z.string().min(1).optional(),
+  /** Where in the group a reopened tab goes back to. */
+  index: z.number().int().nonnegative().optional(),
   preview: z.literal(true).optional(),
   createdAt: z.number().int().nonnegative().optional(),
   split: NewGroupSplit
@@ -255,8 +251,8 @@ const OpenSimulatorTabCommand = z.object({
 })
 
 /**
- * Restored editor tabs the window moved to the workspace that owns their file (F42): the window
- * resolved that owner. Main refuses it when the two workspaces are in different partitions.
+ * Restored editor tabs the window asks main to move to the workspace that owns their file (F42),
+ * under the ids it proposes: the window resolved that owner.
  */
 const MoveTabToWorkspaceCommand = z.object({
   type: z.literal('moveTabToWorkspace'),
@@ -267,7 +263,8 @@ const MoveTabToWorkspaceCommand = z.object({
       z.object({
         tabId: z.string().min(1),
         newTabId: z.string().min(1),
-        newEntityId: z.string().min(1)
+        newEntityId: z.string().min(1),
+        view: EditorViewRecord.optional()
       })
     )
     .min(1),
@@ -276,21 +273,29 @@ const MoveTabToWorkspaceCommand = z.object({
 })
 
 /**
- * Open files the window renamed or moved on disk, under the ids the window gave them; an edit-mode
- * file's record moves from its old path.
+ * Open files renamed or moved on disk, under the ids the window proposes; an edit-mode file's record
+ * moves from its old path, and a non-plain tab's view takes its new path.
  */
+const EditorFileRenames = z
+  .array(
+    z.object({
+      fileId: z.string().min(1),
+      newFileId: z.string().min(1),
+      record: z.object({ fromFilePath: z.string().min(1), file: EditorFileRecord }).optional(),
+      view: EditorViewRecord.optional()
+    })
+  )
+  .min(1)
+
 const RenameEditorFilesCommand = z.object({
   type: z.literal('renameEditorFiles'),
   workspace: OnPane.workspace,
-  renames: z
-    .array(
-      z.object({
-        fileId: z.string().min(1),
-        newFileId: z.string().min(1),
-        record: z.object({ fromFilePath: z.string().min(1), file: EditorFileRecord }).optional()
-      })
-    )
+  renames: EditorFileRenames,
+  /** Other workspaces' renames of the same disk move: all are applied, or none. */
+  alsoIn: z
+    .array(z.object({ workspace: OnPane.workspace, renames: EditorFileRenames }))
     .min(1)
+    .optional()
 })
 
 /**
@@ -332,6 +337,7 @@ export const LayoutApplyParams = z.object({
     RenameEditorFilesCommand,
     SleepCommand,
     WakeCommand,
+    StartPaneCommand,
     SetDefaultTabsAppliedCommand,
     ApplyDefaultTabsCommand
   ])

@@ -571,11 +571,11 @@ it('keeps every platform job and runs them when detection is skipped or fails', 
   expect(workflow.jobs.persistence.strategy.matrix.os).toContain('needs.changes.outputs.runners')
   for (const jobName of ['linux_glibc_floor', 'linux_musl']) {
     const job = workflow.jobs[jobName]
-    expect(job.needs).toBe('changes')
+    expect(job.needs).toEqual(['changes', 'mobile_web_bundle'])
     // The containers never install mobile/, and orcad refuses to build without the page.
     expect(job.steps.some((step) => step.with?.name === 'orcad-mobile-web-bundle')).toBe(true)
     expect(job.steps.some((step) => step.name === 'Wait for the qualified mobile bundle')).toBe(
-      true
+      false
     )
     expect(job.if).not.toContain('needs.persistence')
     expect(job.if).toContain("needs.changes.outputs.qualification != 'false'")

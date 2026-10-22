@@ -19,7 +19,7 @@ import {
   execOrcadRemote,
   type OrcadRemoteExecTarget
 } from '../install/orcad-remote-runtime-control'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTarget, OrcadHostTransport } from '../../ssh/orcad-host-transport'
 
 export type OrcadTunnelPortInput = {
   environment: KnownRuntimeEnvironment
@@ -52,25 +52,11 @@ async function readManagedOrcadSlotReadiness(
   return parsed.state === 'ready' ? parsed.readiness : null
 }
 
-async function readSlotBoundPort(
-  target: OrcadRemoteExecTarget & { remoteInstallDir: string }
-): Promise<number | null> {
-  const readiness = await readManagedOrcadSlotReadiness(target)
-  return readiness ? orcadBoundPort(readiness) : null
-}
-
-/** Falls back to the preferred port only when the slot published no endpoint (older builds). */
-export async function readManagedOrcadBoundPort(
-  target: OrcadRemoteExecTarget & { remoteInstallDir: string },
-  preferredPort: number
-): Promise<number> {
-  return (await readSlotBoundPort(target)) ?? preferredPort
-}
-
-/** What the active slot publishes now, read over SSH; null when none is active or ready. */
-export async function readActiveManagedOrcadReadiness(
-  input: Pick<OrcadTunnelPortInput, 'target' | 'connection'>
-): Promise<ServeReadiness | null> {
+/** What the active slot publishes now, over SSH or WSL; null when none is active or ready. */
+export async function readActiveManagedOrcadReadiness(input: {
+  target: OrcadHostTarget
+  connection: OrcadHostTransport
+}): Promise<ServeReadiness | null> {
   const context = await resolveOrcadRemoteContext(input.target, input.connection)
   const active = context.activationRecord.active
   if (!active) {

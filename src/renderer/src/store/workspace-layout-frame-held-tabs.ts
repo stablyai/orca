@@ -1,9 +1,10 @@
 // Builds frame slices only and never calls set: the store patch applies what it returns.
 // Slices rebuilt from a frame, with each tab the window's own command still holds put back as the
 // store shows it (present, gone, or where the window placed it), and the rest as main has it. A
-// group's order keeps main's for the tabs nothing holds.
+// group's order keeps main's for the tabs nothing holds, and the window's hidden chat launch slots.
 
 import type { Tab, TabGroup } from '../../../shared/tab-types'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-type'
 import type { LayoutFrameSlices } from './workspace-layout-frame-slices'
 import type { LayoutFrameStoreState } from './workspace-layout-frame-store-patch'
@@ -97,6 +98,24 @@ function heldGroups(
   ]
 }
 
+/** A chat's place the window reserves until its launch answers: in a group's order, with no row. */
+function launchSlotIds(
+  state: LayoutFrameStoreState,
+  built: LayoutFrameSlices,
+  key: string
+): string[] {
+  const rows = new Set(
+    [...(state.unifiedTabsByWorktree[key] ?? []), ...(built.unifiedTabsByWorktree[key] ?? [])].map(
+      idOf
+    )
+  )
+  return (state.groupsByWorktree[key] ?? []).flatMap((group) =>
+    group.tabOrder.filter((id) => id.startsWith(LAUNCH_SLOT_ID_PREFIX) && !rows.has(id))
+  )
+}
+
+const LAUNCH_SLOT_ID_PREFIX = structuredAgentSessionTabId('')
+
 function entityIds(tabs: readonly Tab[], kind: (tab: Tab) => boolean): Set<string> {
   return new Set(tabs.filter(kind).map((tab) => tab.entityId))
 }
@@ -117,10 +136,11 @@ export function withHeldTabsAsDrawn(
       ...(built.unifiedTabsByWorktree[key] ?? [])
     ].filter(isHeld)
     const layoutHeld = held.isGroupLayoutHeld(key)
-    if (heldTabs.length === 0 && !layoutHeld) {
+    const slots = launchSlotIds(state, built, key)
+    if (heldTabs.length === 0 && slots.length === 0 && !layoutHeld) {
       continue
     }
-    const heldIds = new Set(heldTabs.map((tab) => tab.id))
+    const heldIds = new Set([...heldTabs.map((tab) => tab.id), ...slots])
     const groups = heldGroups(
       state.groupsByWorktree[key] ?? [],
       next.groupsByWorktree[key] ?? [],

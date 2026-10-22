@@ -257,6 +257,17 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
+    // A reconnect the host cannot image must still bring an idle full-screen program up to date (#26887).
+    id: 'ssh.orcad-reconnect-idle-frame',
+    specs: ['tests/e2e/ssh-orcad-terminal-reconnect-idle-frame.spec.ts'],
+    matches: (file) =>
+      MANAGED_SSH_HARNESS.test(file) ||
+      (isProductSource(file) &&
+        /^src\/(?:renderer\/src\/components\/terminal-pane\/(?:remote-runtime-|pty-connection\/(?:remote-program-redraw|hidden-output-restore-|park-reveal-snapshot-verdict))|main\/runtime\/rpc\/methods\/terminal\/terminal-(?:multiplex-initial-snapshot|snapshot-publication)\.ts$)/.test(
+          file
+        ))
+  },
+  {
     // Unsaved drafts stay on the desktop and are renamed to the server when a move commits.
     id: 'ssh.orcad-editor-drafts-migration',
     specs: ['tests/e2e/ssh-orcad-editor-drafts-migration.spec.ts'],

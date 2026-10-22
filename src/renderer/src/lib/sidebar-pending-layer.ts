@@ -277,10 +277,10 @@ function patch<Row extends Partial<Pick<WorkspaceRow, RowWriteField>>>(
   return patched
 }
 
-function withMissing<Row>(
-  rows: ReadonlyMap<string, Row>,
-  added: ReadonlyMap<string, Row>
-): Map<string, Row> {
+function withMissing<Key, Row>(
+  rows: ReadonlyMap<Key, Row>,
+  added: ReadonlyMap<Key, Row>
+): Map<Key, Row> {
   const merged = new Map(rows)
   for (const [key, row] of added) {
     if (!merged.has(key)) {

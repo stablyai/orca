@@ -106,6 +106,19 @@ describe('release desktop timing evidence', () => {
     expect(report.windowsPhases.artifactHandoff.seconds).toBe(20)
   })
 
+  it('includes parallel Mac packaging before the final publication job', () => {
+    const input = run([job('build-adhoc-win / build-win', 20, 80)], 90, 100)
+    input.jobs[1].name = 'orcad-template / qualify / desktop_template'
+    input.jobs.push(job('build-adhoc-mac-arch (x64)', 15, 85, 25))
+    input.jobs.push(job('build-adhoc-mac-arch (arm64)', 15, 90, 30))
+    const report = summarizeReleaseDesktopTiming(input)
+    expect(report.measuredSeconds.macJob).toBe(75)
+    expect(report.measuredSeconds.desktopJobOverlap).toBe(55)
+    expect(report.desktopJobs).toHaveLength(4)
+    input.jobs.at(-1).conclusion = 'failure'
+    expect(() => summarizeReleaseDesktopTiming(input)).toThrow('Desktop or template job failed')
+  })
+
   it('rejects incomplete runs, failed desktop jobs, and missing timing evidence', () => {
     const input = run([job('build-adhoc-win / build-win', 100, 160)])
     expect(() => summarizeReleaseDesktopTiming({ ...input, status: 'in_progress' })).toThrow(

@@ -239,7 +239,7 @@ describe('mobile relay host catalog', () => {
       'worktree.ps',
       // The phone's full-catalog limit: the server's default page would silently truncate.
       { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
-      { timeoutMs: 5_000, expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
+      { expected: { pairingRevision: 1, runtimeId: 'runtime-a' } }
     )
   })
 
@@ -330,7 +330,6 @@ describe('mobile relay host catalog', () => {
     const next = hostCatalog.worktrees('runtime:env')
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(call).toHaveBeenLastCalledWith(expect.anything(), 'worktree.ps', expect.anything(), {
-      timeoutMs: 5_000,
       expected: { pairingRevision: 2, runtimeId: 'runtime-a' }
     })
     await expect(next).resolves.toMatchObject({ worktrees: [{ worktreeId: 'new-server-row' }] })
@@ -395,7 +394,6 @@ describe('mobile relay host catalog', () => {
       worktrees: [{ worktreeId: 'w' }]
     })
     expect(call).toHaveBeenCalledWith(expect.anything(), 'worktree.ps', expect.anything(), {
-      timeoutMs: 5_000,
       expected: { pairingRevision: 1, runtimeId: null }
     })
   })

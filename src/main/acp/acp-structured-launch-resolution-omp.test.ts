@@ -43,7 +43,7 @@ function resolver(
     resolveLaunchEnv: () => options.launchEnv ?? {},
     resolveCommand: (command) => `/resolved/${command}`,
     inheritedEnv: {},
-    probeVersion: options.probeVersion ?? (async (_input, supports) => supports('17.0.5'))
+    probeVersion: options.probeVersion ?? (async () => ({ version: '17.0.5' }))
   })
 }
 
@@ -100,32 +100,15 @@ describe('OMP ACP launch resolution', () => {
     ).rejects.toThrow(/pin PI_CODING_AGENT_DIR/)
   })
 
-  it.each(['17.0.5', '17.2.12', '18.4.5'])('admits OMP %s', async (version) => {
-    const launch = resolver(ompRecord(), {
-      probeVersion: async (_input, supports) => supports(version)
-    })
+  it.each(['17.0.5', '17.2.12', '18.4.5', '18.0.0-beta.1'])('admits OMP %s', async (version) => {
+    const launch = resolver(ompRecord(), { probeVersion: async () => ({ version }) })
     await expect(launch({ identity })).resolves.toMatchObject({ args: ['acp'] })
   })
 
-  it.each(['17.0.4', '16.9.0', '18.0.0-beta.1'])(
-    'refuses OMP %s before spawning it, as a host that cannot run the chat',
-    async (version) => {
-      const launch = resolver(ompRecord(), {
-        probeVersion: async (_input, supports) => supports(version)
-      })
-      await expect(launch({ identity })).rejects.toMatchObject({
-        refusal: {
-          code: 'structured_agent_session_unsupported',
-          details: { reason: 'hostUnsupported' }
-        }
-      })
-    }
-  )
-
-  it('refuses when the version cannot be read', async () => {
-    const launch = resolver(ompRecord(), { probeVersion: async () => false })
+  it.each(['17.0.4', '16.9.0'])('refuses OMP %s before spawning it as too old', async (version) => {
+    const launch = resolver(ompRecord(), { probeVersion: async () => ({ version }) })
     await expect(launch({ identity })).rejects.toMatchObject({
-      refusal: { code: 'structured_agent_session_unsupported' }
+      installation: { agent: 'omp', installedVersion: version, minimumVersion: '17.0.5' }
     })
   })
 
@@ -134,7 +117,7 @@ describe('OMP ACP launch resolution', () => {
       NonNullable<Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']>
     >[0][] = []
     const launch = await resolver(ompRecord(), {
-      probeVersion: async (input, supports) => (asked.push(input), supports('17.0.5'))
+      probeVersion: async (input) => (asked.push(input), { version: '17.0.5' })
     })({ identity })
     expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
   })

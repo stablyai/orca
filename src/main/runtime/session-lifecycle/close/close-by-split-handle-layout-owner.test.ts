@@ -116,8 +116,16 @@ function windowGraph(
 /** What the window's list holds for main's new pane when it lands, after main's own. */
 type WindowListing = 'pane-without-terminal' | 'no-new-pane'
 
-function setup(listing: WindowListing) {
+function setup(listing: WindowListing, pinned = false) {
   let session = persistedSession()
+  if (pinned) {
+    session = {
+      ...session,
+      tabsByWorktree: {
+        [WORKTREE_ID]: [{ ...session.tabsByWorktree[WORKTREE_ID]![0]!, isPinned: true }]
+      }
+    }
+  }
   // The Store tells its write listeners after each write, as main's terminal list relies on.
   const written = new Set<(hostId: string | null) => void>()
   const write = (next: WorkspaceSessionState): void => {
@@ -275,5 +283,24 @@ describe("a tab close by a main-side split's handle while the window's list lags
     dropPane(split.leafId!)
 
     await expect(runtime.closeTerminalTab(split.handle)).rejects.toThrow('terminal_handle_stale')
+  })
+})
+
+describe('a CLI close of a pinned tab main owns, in a layout-owner build', () => {
+  it('refuses the tab close and keeps the tab, as the window-era close did', async () => {
+    const { runtime, handle } = setup('no-new-pane', true)
+
+    await expect(runtime.closeTerminalTab(handle)).rejects.toThrow('terminal_tab_pinned')
+    await expect(runtime.closeTerminal(handle)).rejects.toThrow('terminal_tab_pinned')
+    expect(
+      runtime.getWorkspaceSessionForWorktree(WORKTREE_ID)?.tabsByWorktree[WORKTREE_ID]
+    ).toHaveLength(1)
+  })
+
+  it('still closes one pane of a pinned split tab', async () => {
+    const { runtime, handle } = setup('no-new-pane', true)
+    const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
+
+    await expect(runtime.closeTerminal(split.handle)).resolves.toMatchObject({ tabId: TAB_ID })
   })
 })

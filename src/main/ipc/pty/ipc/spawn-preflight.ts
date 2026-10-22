@@ -81,16 +81,14 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     shellOverride: args.shellOverride,
     plannedPty: ctx.paneAgentLaunch?.launchRuntime?.pty,
     projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
-    // Why: reattach needs exact cwd, and successful stable-pane adoption needs no launch preflight.
-    missingCwdFallback:
-      !ctx.preAdoptedStablePane && !args.sessionId && args.cwdFallback === 'worktree'
-        ? { directoryExists: ctx.deps.localStartupCwdDirectoryExists }
-        : undefined,
+    preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
   })
   ctx.cwd = target.cwd
   ctx.prevalidatedCwd = target.prevalidatedCwd
+  ctx.requestedCwd = target.requestedCwd
+  ctx.correctStartupCwd = target.correctStartupCwd
   ctx.startupCwdFallback = target.startupCwdFallback
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.expectedWslDistro = target.expectedWslDistro

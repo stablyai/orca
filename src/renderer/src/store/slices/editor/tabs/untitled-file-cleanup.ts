@@ -9,6 +9,7 @@ import {
   deleteRuntimeRelativePath
 } from '@/runtime/runtime-file-mutation-client'
 import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
 
 export function deleteUntouchedUntitledFile(getState: () => AppState, file: OpenFile): void {
   const hasRetainedView = () =>
@@ -17,7 +18,7 @@ export function deleteUntouchedUntitledFile(getState: () => AppState, file: Open
     return
   }
   const state = getState()
-  const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
+  const worktree = findWorktreeById(selectWorktreesByRepo(state), file.worktreeId)
   const owningRuntimeEnvironmentId = file.runtimeEnvironmentId?.trim()
   let context: ReturnType<typeof getEditorFileOperationContext>
   try {

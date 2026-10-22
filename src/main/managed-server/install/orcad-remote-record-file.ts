@@ -21,7 +21,7 @@ import {
 } from '../host-state/orcad-windows-host-script'
 
 /** `present` carries raw bytes; schema checks belong to the caller that owns the format. */
-export type OrcadRemoteRecordRead = { state: 'absent' } | { state: 'present'; raw: string }
+type OrcadRemoteRecordRead = { state: 'absent' } | { state: 'present'; raw: string }
 
 /** `~/.orca-remote`, where the host script and the pinned runtime live. */
 function windowsBaseDir(target: OrcadRemoteExecTarget): string {
