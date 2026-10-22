@@ -16,17 +16,21 @@ const driver = vi.hoisted(() => ({
   cancelWslMove: vi.fn(() => true)
 }))
 vi.mock('../persistence/moving-wsl-projects/wsl-move-driver', () => driver)
+const track = vi.hoisted(() => vi.fn())
+vi.mock('../telemetry/client', () => ({ track }))
 
 import { registerWslMoveHandlers } from './wsl-move-handlers'
 
 const MAIN_WINDOW_ID = 7
-const deps = vi.fn(() => ({}))
+const progress = vi.fn()
+const deps = vi.fn(() => ({ now: () => new Date(0), progress }))
 const invoke = (channel: string, request?: unknown, senderId = MAIN_WINDOW_ID) =>
   handlers.get(channel)?.({ sender: { id: senderId } }, request)
 
 beforeEach(() => {
   vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
   deps.mockClear()
+  track.mockClear()
   for (const fn of Object.values(driver)) {
     fn.mockClear()
   }
@@ -46,7 +50,12 @@ describe('WSL move driver IPC', () => {
     })
     expect(await invoke('wslMove:start', { distro: 'Ubuntu' })).toEqual({ outcome: 'moved' })
     expect(invoke('wslMove:cancel', 'Ubuntu')).toBe(true)
-    expect(driver.moveProjectsToWslHost).toHaveBeenCalledWith({}, { distro: 'Ubuntu' })
+    expect(driver.moveProjectsToWslHost).toHaveBeenCalledWith(
+      expect.objectContaining({ now: expect.any(Function) }),
+      { distro: 'Ubuntu' }
+    )
+    // The move's start and outcome are reported (R43).
+    expect(track.mock.calls.map(([, props]) => props.outcome)).toEqual(['started', 'finished'])
   })
 
   it('is unreachable with the internal WSL hosts gate closed: nothing is built or run', async () => {

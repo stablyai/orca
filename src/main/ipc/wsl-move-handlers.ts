@@ -26,6 +26,7 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-driver'
 import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/wsl-move-driver-ports'
 import { listUnfinishedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
+import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 
 export const WSL_MOVE_HANDLER_CHANNELS = [
@@ -111,7 +112,9 @@ function registerWslMoveDriverHandlers(
       const parsed = parseWslMoveRequest(request)
       return (
         refuseUnlessOpen(event) ??
-        (parsed && driverDeps ? moveProjectsToWslHost(driverDeps(), parsed) : invalidRequest())
+        (parsed && driverDeps
+          ? runTrackedWslMove(driverDeps(), (deps) => moveProjectsToWslHost(deps, parsed))
+          : invalidRequest())
       )
     }
   )

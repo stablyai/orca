@@ -101,6 +101,7 @@ import {
   sshHostServerMoveSchema,
   sshHostServerLegacyRelayBridgeSchema
 } from './telemetry-ssh-host-server-event-schemas'
+import { wslMoveSchema } from './telemetry-wsl-move-event-schemas'
 
 // ── Event registry: the one record the validator consumes ───────────────
 // Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
@@ -207,5 +208,7 @@ export const eventSchemas = {
   ssh_host_server_conversion: sshHostServerConversionSchema,
   ssh_host_server_deploy_failed: sshHostServerDeployFailedSchema,
   ssh_host_server_move: sshHostServerMoveSchema,
-  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema
+  ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema,
+
+  wsl_move: wslMoveSchema
 } as const
