@@ -57,6 +57,49 @@ describe('PTY mailbox reservation cleanup', () => {
     }
   })
 
+  it('preserves only unread bare terminal attempts while cleaning the same PTY managed mail', () => {
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const seed = db.db.prepare(`INSERT INTO messages
+        (id, from_handle, to_handle, subject, read, pointer_enter_pending,
+         pointer_pty_id, pointer_process_incarnation)
+        VALUES (?, 'sender', ?, 'test', ?, ?, 'target', 'inc-1')`)
+      for (const recipient of ['term_receiver', 'run:owner', 'dispatch:worker']) {
+        for (const phase of [1, 2, 3]) {
+          for (const read of [0, 1]) {
+            seed.run(`${recipient}-${phase}-${read}`, recipient, read, phase)
+          }
+        }
+      }
+      db.releasePendingMailboxPointerForPty('target', { preserveBareTerminalAttempts: true })
+      for (const recipient of ['term_receiver', 'run:owner', 'dispatch:worker']) {
+        for (const phase of [1, 2, 3]) {
+          for (const read of [0, 1]) {
+            const id = `${recipient}-${phase}-${read}`
+            const preserved = recipient === 'term_receiver' && read === 0 && phase > 1
+            expect(db.getMessageById(id)).toMatchObject({
+              pointer_enter_pending: preserved ? phase : 0,
+              pointer_pty_id: preserved ? 'target' : null,
+              pointer_process_incarnation: preserved ? 'inc-1' : null
+            })
+          }
+        }
+      }
+      const ids = ['term_receiver-2-0', 'term_receiver-3-0']
+      db.releaseMailboxPointerEnter(
+        ids,
+        { ptyId: 'target', processIncarnation: 'inc-other' },
+        [2, 3]
+      )
+      expect(db.getMessageById(ids[0])?.pointer_enter_pending).toBe(2)
+      db.releaseMailboxPointerEnter(ids, { ptyId: 'target', processIncarnation: 'inc-1' }, [2, 3])
+      expect(db.getMessageById(ids[0])?.pointer_enter_pending).toBe(0)
+      expect(db.getMessageById(ids[1])?.pointer_enter_pending).toBe(0)
+    } finally {
+      db.close()
+    }
+  })
+
   it.each(['current', 'before-pointer-columns'])(
     'installs the lookup on first open of an existing %s database',
     (version) => {

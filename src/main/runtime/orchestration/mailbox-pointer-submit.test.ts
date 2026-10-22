@@ -10,6 +10,8 @@ import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
 import { settledWriteStub, stubWriteSettlement } from '../../providers/settled-pty-write-stub'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
+import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 
 describe('orchestration mailbox pointer submit', () => {
   it('does not settle a replacement reservation after an old Enter write resolves', async () => {
@@ -331,6 +333,64 @@ describe('orchestration mailbox pointer submit', () => {
       { ptyId: 'pty-b', processIncarnation: 'inc-b' },
       [MAILBOX_POINTER_RESERVED, MAILBOX_POINTER_WRITE_ATTEMPTED, MAILBOX_POINTER_ENTER_ATTEMPTED]
     )
+  })
+
+  it('keeps a direct attempted reservation when the host target is unverifiable', () => {
+    const db = new OrchestrationDb(':memory:')
+    const releaseMailboxPointerEnter = vi.spyOn(db, 'releaseMailboxPointerEnter')
+    const leaf = {
+      tabId: 'tab-old',
+      leafId: 'leaf-old',
+      ptyId: 'pty-old',
+      writable: true,
+      lastAgentStatus: 'idle' as const,
+      lastAgentStatusObservedLive: true,
+      lastOscTitle: 'Codex done'
+    }
+    const deps: PointerDeliveryDependencies<OrchestrationMessageWaiter> = {
+      mailboxOwner: { resolve: () => 'term_recipient' },
+      deliveryTarget: {
+        resolveTerminalHandle: () => null,
+        deferForAbsenceProbe: () => false
+      },
+      getDb: () => db,
+      getLeaf: () => leaf,
+      getLeafKey: () => 'tab-old:leaf-old',
+      getLiveLeafForHandle: () => leaf,
+      isAgentSettledForDelivery: () => true,
+      getMessageWaiters: () => undefined,
+      getTabTitle: () => null,
+      getCliCommand: () => 'orca',
+      getTerminalHandleForLeafKey: () => 'term_recipient',
+      resolveSubmitTarget: () => null,
+      isLeafPtyProvenAbsent: async () => false,
+      redriveMailbox: vi.fn(),
+      writePty: vi.fn(settledWriteStub())
+    }
+    const resumed = resumePendingOrchestrationMailboxPointer({
+      deps,
+      state: new OrchestrationMailboxPointerState(),
+      leaf,
+      mailboxHandle: 'term_recipient',
+      messages: [
+        {
+          id: 'msg-old',
+          type: 'status',
+          sequence: 1,
+          pointer_enter_pending: MAILBOX_POINTER_WRITE_ATTEMPTED,
+          pointer_pty_id: 'pty-old',
+          pointer_process_incarnation: 'inc-old'
+        }
+      ],
+      enterDelayMs: 0,
+      leafKey: 'tab:leaf',
+      settle: vi.fn(),
+      redrive: vi.fn()
+    })
+
+    expect(resumed).toBe(true)
+    expect(releaseMailboxPointerEnter).not.toHaveBeenCalled()
+    db.close()
   })
 
   it('does not submit after the parked PTY incarnation is replaced', async () => {

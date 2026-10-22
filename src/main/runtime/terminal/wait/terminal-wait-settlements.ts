@@ -156,7 +156,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       this.clearDeliveryRecheck(leafKey)
       return true
     }
-    this.armDeliveryRecheck(leafKey)
+    this.armDeliveryRecheck(leafKey, `${leaf.tabId}:${leaf.leafId}`)
     return false
   }
 
@@ -168,20 +168,44 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
   }
 
-  private armDeliveryRecheck(leafKey: string): void {
+  private armDeliveryRecheck(leafKey: string, paneKey: string): void {
     if (this.deliveryRecheckTimersByLeafKey.has(leafKey)) {
       return
     }
     const live = this.leaves.get(leafKey)
+    const subscriptionHandle = !live
+      ? this.terminalMailboxSubscriptions.handleForPane(paneKey)
+      : undefined
+    const subscriptionGeneration = subscriptionHandle
+      ? this.terminalMailboxSubscriptions.generation(subscriptionHandle)
+      : undefined
+    const target =
+      !live && subscriptionHandle
+        ? this.resolveTerminalMailboxSubscriptionTarget(subscriptionHandle)
+        : null
+    const tracked = target?.leaf.ptyId ? this.ptysById.get(target.leaf.ptyId) : null
     // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
     // stream to go quiet, so wake just after the window could have elapsed. A pane that is
     // still producing output re-arms from its own fresher timestamp rather than spinning.
-    const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
+    const lastOutputAt = live?.lastOutputAt ?? tracked?.lastOutputAt
+    const elapsed = lastOutputAt ? Date.now() - lastOutputAt : 0
     const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
+      if (
+        subscriptionHandle &&
+        this.terminalMailboxSubscriptions.generation(subscriptionHandle) !== subscriptionGeneration
+      ) {
+        return
+      }
       const current = this.leaves.get(leafKey)
       if (!current) {
+        if (subscriptionHandle) {
+          const latest = this.resolveTerminalMailboxSubscriptionTarget(subscriptionHandle)
+          if (latest && this.checkDeliverySettledAndArmRecheck(latest.leaf)) {
+            this.deliverPendingMessagesForHandle(subscriptionHandle)
+          }
+        }
         return
       }
       // Why the gate again here: delivery sites gate at the CALL, not inside
@@ -207,7 +231,10 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
     const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
     if (!live) {
-      return false
+      const handle = this.terminalMailboxSubscriptions.handleForPane(`${leaf.tabId}:${leaf.leafId}`)
+      const target = handle ? this.resolveTerminalMailboxSubscriptionTarget(handle) : null
+      const pty = target?.leaf.ptyId ? this.ptysById.get(target.leaf.ptyId) : null
+      return Boolean(pty && isTuiIdleReadyVerdict(this.evaluateTuiIdleForPty(pty)))
     }
     const evidence = leafTuiIdleEvidence(this.tuiIdleEvidenceSource, live, () =>
       buildTerminalWaitText(live.tailBuffer, live.tailPartialLine, live.preview)

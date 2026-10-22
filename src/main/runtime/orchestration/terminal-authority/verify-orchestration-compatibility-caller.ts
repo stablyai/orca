@@ -8,6 +8,7 @@ import type {
   OrchestrationCompatibilitySshTerminal,
   OrchestrationCompatibilityTerminalAuthority
 } from '../../runtime-terminal-contracts'
+import { orchestrationCompatibilityHostScopesEqual } from '../../orchestration-compatibility-host-scope'
 import { createHash } from 'node:crypto'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -161,16 +162,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
     left: OrchestrationCompatibilityTerminalAuthority['hostScope'],
     right: OrchestrationCompatibilityTerminalAuthority['hostScope']
   ): boolean {
-    if (left.kind !== right.kind) {
-      return false
-    }
-    if (left.kind === 'local' && right.kind === 'local') {
-      return left.hostId === right.hostId
-    }
-    if (left.kind === 'wsl' && right.kind === 'wsl') {
-      return left.hostId === right.hostId && left.distro === right.distro
-    }
-    return left.kind === 'ssh' && right.kind === 'ssh' && left.targetId === right.targetId
+    return orchestrationCompatibilityHostScopesEqual(left, right)
   }
 
   protected getOrchestrationCompatibilityHostScope(

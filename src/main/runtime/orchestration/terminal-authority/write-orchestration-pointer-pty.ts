@@ -12,7 +12,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../../../shared/published-pane-agent-identity'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { getLatestLeafTitle } from '../../runtime-worktree-status-projection'
+import { getLatestLeafTitle, getLatestPtyTitle } from '../../runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import type { OrchestrationMailboxLeaf } from '../mailbox-owner'
@@ -71,7 +71,27 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       return null
     }
     const processIncarnation = this.getTerminalProcessIncarnation(terminalHandle)
-    return processIncarnation ? { leaf, terminalHandle, processIncarnation } : null
+    if (!processIncarnation) {
+      return null
+    }
+    const title = currentLeaf
+      ? getLatestLeafTitle(currentLeaf, this.tabs.get(currentLeaf.tabId)?.title ?? null)
+      : pty
+        ? getLatestPtyTitle(pty)
+        : null
+    const paneKey = isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null
+    const { agentIdentity } = this.resolvePaneAgentIdentityField(
+      pty?.launchAgent,
+      pty?.foregroundAgent,
+      title,
+      paneKey
+    )
+    return {
+      leaf,
+      terminalHandle,
+      processIncarnation,
+      ...(isTuiAgent(agentIdentity) ? { agentIdentity } : {})
+    }
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {
