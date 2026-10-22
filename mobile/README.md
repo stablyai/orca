@@ -54,12 +54,20 @@ pnpm exec expo run:ios
 pnpm start --dev-client
 ```
 
+Android edge authentication requires a rebuilt development client; Expo Go and older clients refuse to send these credentials. Android builds React Native from source so the WebSocket redirect protection in `patches/react-native@0.83.10.patch` reaches the app. Keep `android.buildReactNativeFromSource` enabled in `app.json`; this increases native build time.
+
+Mobile dependencies use short package-directory names because Android's Prefab tool misreads `=` in pnpm's patched-package paths. Run `pnpm install` in `mobile/` after pulling this configuration change.
+
 ## Pair With Desktop Orca
 
 1. Open Orca desktop.
 2. Go to Settings > Mobile.
 3. Scan the pairing QR code from the mobile app.
 4. Confirm the mobile host endpoint is `ws://<desktop-ip>:6768`.
+
+For a Cloudflare Access-protected `wss://` address, open the pairing link in the native app and enter the optional edge-authentication headers before confirming. If scanning or pasting cannot connect, choose **Configure edge authentication** on the error screen. Use your Access policy's service-token credentials; keep them out of the pairing link. Ordinary LAN and Relay scans still pair automatically.
+
+The app verifies and saves the host before saving the headers in the phone's keychain. If that save fails, **Retry saving credentials** retries storage without replaying the pairing link. Leaving the screen keeps the paired host; enter credentials later through **Edit host**. Browser builds use their browser login and cannot supply service-token headers.
 
 For the Android emulator, use `ws://10.0.2.2:6768`. For a physical phone, use the desktop LAN IP, for example `ws://192.168.0.179:6768`.
 

@@ -156,8 +156,7 @@ async function setItemAtGeneration(key: string, value: string, generation: numbe
   }
 }
 
-export async function readPairingKeychainItem(key: string): Promise<string | null> {
-  await keychainMutation
+async function readPairingKeychainItemImpl(key: string): Promise<string | null> {
   const presenceGeneration = await loadPresenceGeneration(key)
   if (presenceGeneration !== null) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration))
@@ -180,6 +179,11 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
     }
   }
   return null
+}
+
+export async function readPairingKeychainItem(key: string): Promise<string | null> {
+  await keychainMutation
+  return readPairingKeychainItemImpl(key)
 }
 
 async function writePairingKeychainItemImpl(key: string, value: string): Promise<void> {
@@ -228,8 +232,37 @@ function isAndroidEncryptionFailure(error: unknown): boolean {
   return typeof message === 'string' && message.includes('Could not encrypt the value for key')
 }
 
-export function writePairingKeychainItem(key: string, value: string): Promise<void> {
-  return enqueueKeychainMutation(() => writePairingKeychainItemImpl(key, value))
+export function writePairingKeychainItem(
+  key: string,
+  value: string,
+  isCurrent?: () => boolean
+): Promise<void> {
+  return enqueueKeychainMutation(async () => {
+    if (!isCurrent) {
+      return writePairingKeychainItemImpl(key, value)
+    }
+    const assertCurrent = () => {
+      if (!isCurrent()) {
+        throw new Error('Credential save cancelled')
+      }
+    }
+    assertCurrent()
+    const previous = await readPairingKeychainItemImpl(key)
+    assertCurrent()
+    try {
+      await writePairingKeychainItemImpl(key, value)
+    } finally {
+      if (!isCurrent()) {
+        // Restore before the queue lets a newer write or host removal proceed.
+        if (previous === null) {
+          await deletePairingKeychainItemImpl(key)
+        } else {
+          await writePairingKeychainItemImpl(key, previous)
+        }
+        assertCurrent()
+      }
+    }
+  })
 }
 
 async function deletePairingKeychainItemImpl(key: string): Promise<void> {

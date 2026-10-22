@@ -1,5 +1,6 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
+import type { EndpointAuthHeaders } from './endpoint-auth-headers'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
@@ -60,6 +61,7 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
 }
 
 export type ConnectOptions = {
+  edgeAuthHeaders?: EndpointAuthHeaders | null
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
 }

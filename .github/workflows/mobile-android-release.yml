@@ -22,6 +22,10 @@ on:
 jobs:
   android-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
 
     # Why: the "Create GitHub Release" step below uses the default GITHUB_TOKEN
     # to call `gh release create`, which requires contents:write. Without this,
@@ -73,7 +77,8 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Build Android release APK
-        run: cd android && ./gradlew assembleRelease
+        # Compiling patched React Native exceeds Expo's default 512 MiB metaspace.
+        run: cd android && ./gradlew --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=2g -XX:+HeapDumpOnOutOfMemoryError' --stacktrace assembleRelease
 
       # Why: an install that fails with a missing certificate or a package-parse error is
       # usually a download that died near the end, and the signature block sits in the last

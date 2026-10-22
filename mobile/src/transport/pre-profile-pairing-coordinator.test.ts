@@ -413,12 +413,18 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     const attempt = startPreProfilePairing({
-      offer: relayOffer,
+      offer: { ...relayOffer, endpoint: 'wss://orca.example' },
+      connectOptions: { edgeAuthHeaders: { 'X-Token': 'synthetic-secret' } },
       timeoutMs: 5_000,
       dependencies: deps
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
+    expect(deps.connectDirect.mock.calls[0]?.[3]).toMatchObject({
+      edgeAuthHeaders: { 'X-Token': 'synthetic-secret' }
+    })
+    expect(deps.connectRelay.mock.calls[0]?.[0]).not.toHaveProperty('edgeAuthHeaders')
+    expect(JSON.stringify(deps.connectRelay.mock.calls)).not.toContain('synthetic-secret')
     expect(direct.close).toHaveBeenCalled()
     expect(relay.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {
       reqId: journal!.metadata.installReqId,
