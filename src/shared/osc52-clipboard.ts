@@ -1,6 +1,6 @@
 // OSC 52 — "Manipulate Selection Data". xterm.js does not implement this
 // handler itself; applications register it to let TUIs (Zellij, tmux, Neovim,
-// fzf, Grok) copy to the host clipboard over SSH or through the PTY.
+// fzf, Grok) copy to the viewing device's clipboard over SSH or through the PTY.
 //
 // Wire format (xterm.js strips the leading `\x1b]52;` and trailing BEL/ST
 // before handing us the payload string):
@@ -19,8 +19,9 @@
 //
 // Safety: OSC 52 is a classic clipboard-overwrite vector — piping an
 // attacker-controlled log into the terminal could silently replace the user's
-// clipboard. Callers gate on `terminalAllowOsc52Clipboard` (default on; query
-// stays blocked, so nothing is exfiltrated; payload size is capped).
+// clipboard. Desktop gates on `terminalAllowOsc52Clipboard`; mobile has no toggle
+// yet and follows its default (on). Query stays blocked, so nothing is
+// exfiltrated; payload size is capped.
 //
 // Accepted residual risk of default-on: the decoded text is written verbatim,
 // newlines and all, so a hostile PTY can stage an execute-on-paste payload.
@@ -88,7 +89,7 @@ export function createOsc52OscHandler(deps: {
   getSettingEnabled: () => boolean | null | undefined
   getReplaying: () => boolean
   writeClipboardText: (text: string) => Promise<void>
-  showBlockedWriteToast: () => void
+  showBlockedWriteToast?: () => void
   showWriteFailedToast?: () => void
 }): (data: string) => boolean {
   // Why coalesce: each sequence is only ~15 bytes, so one hostile chunk can fire a
