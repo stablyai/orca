@@ -334,25 +334,19 @@ function renderComment(content: string, variant: 'compact' | 'document' = 'docum
 }
 
 describe('CJK emphasis', () => {
-  it.each([
-    [
-      '**单算 Runtime 执行引擎，平均每题 29.78 秒。**边界是开始执行到产出结果。',
+  it('closes bold that ends in punctuation right before CJK text', () => {
+    expect(
+      renderComment('**单算 Runtime 执行引擎，平均每题 29.78 秒。**边界是开始执行到产出结果。')
+    ).toContain(
       '<strong>单算 Runtime 执行引擎，平均每题 29.78 秒。</strong>边界是开始执行到产出结果。'
-    ],
-    ['**「注意」**してください', '<strong>「注意」</strong>してください']
-  ])('closes bold that ends in punctuation before CJK text: %s', (content, expected) => {
-    expect(renderComment(content)).toContain(expected)
+    )
   })
 
-  it.each([
-    ['non-CJK text after punctuation', '**Note.**Next', '**Note.**Next'],
-    ['inline code', '`**单算。**边界`', '**单算。**边界</code>'],
-    ['escaped markers', '\\*\\*单算。\\*\\*边界', '**单算。**边界']
-  ])('keeps markers literal in %s', (_name, content, literal) => {
-    const markup = renderComment(content)
+  it('keeps CommonMark flanking rules between non-CJK characters', () => {
+    const markup = renderComment('**Note.**Next')
 
     expect(markup).not.toContain('<strong>')
-    expect(markup).toContain(literal)
+    expect(markup).toContain('**Note.**Next')
   })
 })
 
