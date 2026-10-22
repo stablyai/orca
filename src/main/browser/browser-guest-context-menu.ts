@@ -4,6 +4,8 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../shared/browser-url'
+import type { BrowserContextMenuRequestedEvent } from '../../shared/browser-guest-events'
+import { readContextMenuSpelling } from '../window/editable-context-menu'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 
@@ -39,8 +41,23 @@ export function setupGuestContextMenu(args: {
       linkUrl,
       // Why: forward the native selection so the renderer can Copy it directly, bypassing pages that suppress copy via oncopy handlers.
       selectionText: params.selectionText ?? '',
-      ...navigationState
-    })
+      ...navigationState,
+      editable: params.isEditable
+        ? {
+            canUndo: params.editFlags.canUndo,
+            canRedo: params.editFlags.canRedo,
+            canCut: params.editFlags.canCut,
+            canCopy: params.editFlags.canCopy,
+            canPaste: params.editFlags.canPaste,
+            canSelectAll: params.editFlags.canSelectAll,
+            spelling: readContextMenuSpelling(params)
+          }
+        : null,
+      image:
+        params.mediaType === 'image' && params.srcURL
+          ? { url: params.srcURL, canCopy: params.hasImageContents }
+          : null
+    } satisfies BrowserContextMenuRequestedEvent)
   }
 
   // Why: before-mouse-event fires on every move/scroll; install the dismiss listener only while a menu is open to avoid per-event IPC.

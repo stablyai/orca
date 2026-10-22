@@ -1,6 +1,7 @@
 import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser-guest-events'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
@@ -25,9 +26,13 @@ export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 export type BrowserPageContextMenuState = {
   x: number
   y: number
+  /** Where the click landed in the guest's own viewport, for inspect and copy-image. */
+  pagePoint: { x: number; y: number }
   linkUrl: string | null
   pageUrl: string
   selectionText: string
+  editable: BrowserContextMenuRequestedEvent['editable']
+  image: BrowserContextMenuRequestedEvent['image']
 }
 
 export type BrowserPageGrabToastState = {
