@@ -464,6 +464,57 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().setTabLabel).not.toHaveBeenCalled()
   })
 
+  it('opens a page under the id its caller allocated', async () => {
+    const { store, main } = await createTestStoreDrawnFromMain()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    await main.settle()
+
+    const page = store.getState().createBrowserPage(tab.id, 'https://example.com/b', {
+      browserPageId: 'page-asked'
+    })
+    await main.settle()
+
+    expect(page?.id).toBe('page-asked')
+    expect(store.getState().browserPagesByWorkspace[tab.id]?.map((entry) => entry.id)).toContain(
+      'page-asked'
+    )
+  })
+
+  it('refuses a page id its tab already holds, so a retried create adds no second copy', async () => {
+    const { store, main } = await createTestStoreDrawnFromMain()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    await main.settle()
+    store.getState().createBrowserPage(tab.id, 'https://example.com/b', {
+      browserPageId: 'page-asked'
+    })
+    await main.settle()
+
+    expect(() =>
+      store.getState().createBrowserPage(tab.id, 'https://example.com/b', {
+        browserPageId: 'page-asked'
+      })
+    ).toThrow('Browser page page-asked already exists')
+    await main.settle()
+    expect(
+      store.getState().browserPagesByWorkspace[tab.id]?.filter((entry) => entry.id === 'page-asked')
+    ).toHaveLength(1)
+  })
+
+  it("refuses a page id another tab holds, so the create never answers with that tab's page", async () => {
+    const { store, main } = await createTestStoreDrawnFromMain()
+    const first = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const second = store.getState().createBrowserTab('wt-1', 'https://example.com/other')
+    await main.settle()
+    const otherPageId = store.getState().browserPagesByWorkspace[second.id]![0]!.id
+
+    expect(() =>
+      store.getState().createBrowserPage(first.id, 'https://example.com/b', {
+        browserPageId: otherPageId
+      })
+    ).toThrow(`Browser page ${otherPageId} already exists`)
+    expect(store.getState().browserPagesByWorkspace[first.id]).toHaveLength(1)
+  })
+
   it('updates inactive browser pages without relabeling or rebuilding the workspace map', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {

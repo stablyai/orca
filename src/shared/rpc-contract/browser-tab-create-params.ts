@@ -14,7 +14,9 @@ export const BrowserTabCreateParams = z.object({
   // Absent, a paired caller means 'caller' — one device's create must not steer every other UI.
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
   targetGroupId: OptionalString,
-  placement: BrowserPageCreationPlacement.optional()
+  placement: BrowserPageCreationPlacement.optional(),
+  /** The unified tab an existing tab's new page joins; absent, the page gets a new tab. */
+  browserTabId: OptionalString
 })
 
 export const BrowserOpenUrlParams = z.object({

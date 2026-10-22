@@ -189,6 +189,23 @@ export function findWorkspace(
   return workspaceById.get(workspaceId) ?? null
 }
 
+/** A caller-allocated page id must name no tab or page yet: a reused one would alias that page. */
+export function assertBrowserPageIdUnused(
+  state: {
+    browserTabsByWorktree: Record<string, BrowserWorkspace[]>
+    browserPagesByWorkspace: Record<string, BrowserPage[]>
+  },
+  browserPageId: string | undefined
+): void {
+  if (
+    browserPageId &&
+    (findWorkspace(state.browserTabsByWorktree, browserPageId) ||
+      findPage(state.browserPagesByWorkspace, browserPageId))
+  ) {
+    throw new Error(`Browser page ${browserPageId} already exists`)
+  }
+}
+
 export function findPage(
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
   pageId: string

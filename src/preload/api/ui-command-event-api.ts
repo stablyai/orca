@@ -113,6 +113,7 @@ export type UiCommandEventApi = {
       url: string
       worktreeId?: string
       browserPageId?: string
+      browserTabId?: string
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean

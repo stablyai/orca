@@ -11,6 +11,7 @@ import { waitForTabRegistration } from '../../ipc/browser-tab-registration-wait'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import { createBrowserClientPage, openBrowserUrlOnClient } from './browser-client-page-opening'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 export class RuntimeBrowserTabCreation {
   constructor(
@@ -45,6 +46,7 @@ export class RuntimeBrowserTabCreation {
       navigation?: RuntimeNavigationTarget
       targetGroupId?: string
       placement?: BrowserPageCreationPlacement
+      browserTabId?: string
     },
     caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
   ): Promise<{ browserPageId: string }> {
@@ -97,7 +99,8 @@ export class RuntimeBrowserTabCreation {
           url,
           title: '',
           ...(params.profileId ? { profileId: params.profileId } : {}),
-          ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
+          ...(params.targetGroupId ? { groupId: params.targetGroupId } : {}),
+          ...(params.browserTabId ? { browserTabId: params.browserTabId } : {})
         })
       }
       publishCreatedBrowserSessionTab(this.host, {
@@ -117,7 +120,9 @@ export class RuntimeBrowserTabCreation {
       params.profileId,
       params.profileId ? sessionPartition : undefined,
       focus.focusesHost,
-      params.page
+      params.page,
+      // Switch point: a window's page joins the tab a paired desktop named, as a headless host's does.
+      ORCA_LAYOUT_OWNER_IS_MAIN ? params.browserTabId : undefined
     )
 
     // Why: the webview must mount and register before the tab is operable, so wait here (returning the ID anyway on timeout).

@@ -145,6 +145,12 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     session: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
     hostId: (worktreeId) => this.getWorkspaceSessionHostIdForWorktree(worktreeId),
     save: (worktreeId, session) => this.setWorkspaceSessionForWorktree(worktreeId, session),
+    closeRunningPage: (worktreeId, pageId) => {
+      void this.offscreenBrowserBackend
+        ?.closeTab(pageId)
+        .catch(() => {})
+        .then(() => this.retireRuntimeOwnedBrowserSessionTab(worktreeId, pageId))
+    },
     // Switch point: a layout-owner build writes served tabs through `layout.apply`.
     ...(ORCA_LAYOUT_OWNER_IS_MAIN
       ? {

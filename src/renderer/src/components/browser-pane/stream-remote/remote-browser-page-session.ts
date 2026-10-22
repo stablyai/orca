@@ -3,6 +3,7 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import type { FrameDrawnServerBrowserTab } from './frame-drawn-server-browser-tab'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserOperationTokens
@@ -24,6 +25,8 @@ export type RemoteBrowserPageSessionDeps = {
   tokens: RemoteBrowserOperationTokens
   callRpc: RemoteBrowserRpcCall
   getWorktreeSelector(): string
+  /** The server tab this page belongs to when the server's frames draw its workspace, else null. */
+  getFrameDrawnServerTab(environmentId: string): FrameDrawnServerBrowserTab | null
   getCurrentUrl(): string
   readStoredHandle(): RemoteBrowserPageHandle | null
   writeStoredHandle(handle: RemoteBrowserPageHandle): void
@@ -161,10 +164,24 @@ export class RemoteBrowserPageSession {
     const currentUrl = this.deps.getCurrentUrl()
     const initialUrl =
       currentUrl === ORCA_BROWSER_BLANK_URL ? 'about:blank' : currentUrl || 'about:blank'
+    // Switch point: a page the server's frames draw joins its tab there, under this page's id, so
+    // the next frame does not show it as a second tab.
+    const joining = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? this.deps.getFrameDrawnServerTab(token.environmentId)
+      : null
     const created = await this.deps.callRpc<{ browserPageId: string }>(
       target,
       'browser.tabCreate',
-      { worktree, url: initialUrl },
+      {
+        worktree,
+        url: initialUrl,
+        ...(joining
+          ? {
+              browserTabId: joining.browserTabId,
+              ...(joining.hostKnowsPageIds ? { page: token.tabId } : {})
+            }
+          : {})
+      },
       { timeoutMs: 30_000, suppressFeatureInteraction: true }
     )
     if (!this.deps.tokens.isCurrent(token)) {

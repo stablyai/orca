@@ -55,6 +55,8 @@ export type CreateBrowserTabOptions = {
 
 export type CreateBrowserPageOptions = {
   activate?: boolean
+  /** A page id the caller allocated (a paired desktop's page); minted when absent. */
+  browserPageId?: string
   title?: string
   browserRuntimeEnvironmentId?: string | null
   /** Creates a page that shows a workspace document instead of a URL. */

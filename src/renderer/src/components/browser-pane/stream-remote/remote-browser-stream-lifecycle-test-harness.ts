@@ -174,6 +174,7 @@ export function createHarness() {
     callRpc,
     subscribeScreencast,
     getWorktreeSelector: () => 'worktree:wt-1',
+    getFrameDrawnServerTab: () => null,
     getCurrentUrl: () => 'https://example.test/',
     readStoredHandle: () => storedHandle,
     writeStoredHandle: (handle) => {

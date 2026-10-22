@@ -56,6 +56,25 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           })
           return
         }
+        // A paired desktop's page joins the tab it named (main sends one only with the switch on).
+        const joinedTab = data.browserTabId
+          ? (store.browserTabsByWorktree[worktreeId] ?? []).find(
+              (tab) => tab.id === data.browserTabId
+            )
+          : undefined
+        const joinedPage = joinedTab
+          ? store.createBrowserPage(joinedTab.id, data.url, {
+              title: data.url,
+              browserPageId: data.browserPageId,
+              browserRuntimeEnvironmentId: null,
+              activate: data.activate === true
+            })
+          : null
+        if (joinedPage) {
+          acquireBrowserAutomationBootstrapLease(worktreeId, joinedPage.id)
+          window.api.ui.replyTabCreate({ requestId: data.requestId, browserPageId: joinedPage.id })
+          return
+        }
         // Why: CLI-created tabs should land in the active browser tab's group, not the terminal's UI-active group.
         const activeBrowserTabId = store.activeBrowserTabIdByWorktree[worktreeId]
         const activeBrowserUnifiedTab = activeBrowserTabId

@@ -6,6 +6,7 @@ type CreateRequest = {
   worktreeId?: string
   url: string
   browserPageId?: string
+  browserTabId?: string
 }
 type CloseRequest = { requestId: string; tabId?: string | null; worktreeId?: string }
 type ScopeRequest = {
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => {
     replyTabClose: vi.fn(),
     replyRemoteCliBrowserScope: vi.fn(),
     createBrowserTab: vi.fn(),
+    createBrowserPage: vi.fn(),
     closeBrowserTab: vi.fn()
   }
 })
@@ -81,6 +83,11 @@ function storeState(activeWorktreeId: string) {
     activeBrowserTabIdByWorktree: {},
     unifiedTabsByWorktree: {},
     createBrowserTab: mocks.createBrowserTab.mockImplementation(() => ({ id: 'ws-new' })),
+    createBrowserPage: mocks.createBrowserPage.mockImplementation(
+      (_tabId: string, _url: string, options: { browserPageId?: string }) => ({
+        id: options.browserPageId ?? 'page-minted'
+      })
+    ),
     closeBrowserTab: mocks.closeBrowserTab,
     closeBrowserPage: vi.fn()
   }
@@ -149,6 +156,47 @@ describe('browser requests from this desktop follow the workspace owner (#22275)
       requestId: 'r5',
       browserPageId: 'page-asked'
     })
+  })
+
+  it('adds a paired desktop page to the tab it names instead of opening a new tab', () => {
+    mocks.getState.mockReturnValue(storeState(LOCAL_WT))
+
+    mocks.createListener?.({
+      requestId: 'j1',
+      worktreeId: LOCAL_WT,
+      url: 'https://b.test',
+      browserPageId: 'page-asked',
+      browserTabId: 'ws-local'
+    })
+
+    expect(mocks.createBrowserPage).toHaveBeenCalledWith(
+      'ws-local',
+      'https://b.test',
+      expect.objectContaining({ browserPageId: 'page-asked', browserRuntimeEnvironmentId: null })
+    )
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.replyTabCreate).toHaveBeenCalledWith({
+      requestId: 'j1',
+      browserPageId: 'page-asked'
+    })
+  })
+
+  it('opens a new tab when the named tab is not in the workspace', () => {
+    mocks.getState.mockReturnValue(storeState(LOCAL_WT))
+
+    mocks.createListener?.({
+      requestId: 'j2',
+      worktreeId: LOCAL_WT,
+      url: 'https://b.test',
+      browserTabId: 'ws-remote'
+    })
+
+    expect(mocks.createBrowserPage).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      LOCAL_WT,
+      'https://b.test',
+      expect.anything()
+    )
   })
 
   it("renders a page named in a managed host's workspace on this desktop (#29145)", () => {

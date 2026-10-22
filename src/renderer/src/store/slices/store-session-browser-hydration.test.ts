@@ -595,6 +595,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
       } as never,
       callRpc: deps.callRpc,
       getWorktreeSelector: () => WT,
+      getFrameDrawnServerTab: () => null,
       getCurrentUrl: () => deps.currentUrl,
       readStoredHandle: () => store.getState().remoteBrowserPageHandlesByPageId['page-1'] ?? null,
       writeStoredHandle: (handle) => store.getState().setRemoteBrowserPageHandle('page-1', handle),

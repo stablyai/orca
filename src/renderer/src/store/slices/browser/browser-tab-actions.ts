@@ -11,10 +11,9 @@ import {
   getClientCreationActionPolicy
 } from '@/lib/client-creation-action-policy'
 import {
+  assertBrowserPageIdUnused,
   buildBrowserPage,
-  buildWorkspaceFromPage,
-  findPage,
-  findWorkspace
+  buildWorkspaceFromPage
 } from '../browser-page-records'
 import { getBrowserSessionProfileHostId } from './browser-host-state'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
@@ -48,13 +47,7 @@ export function createBrowserTabActions(
       assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
       const workspaceId = createBrowserUuid()
       const browserPageId = options?.browserPageId
-      if (
-        browserPageId &&
-        (findWorkspace(get().browserTabsByWorktree, browserPageId) ||
-          findPage(get().browserPagesByWorkspace, browserPageId))
-      ) {
-        throw new Error(`Browser page ${browserPageId} already exists`)
-      }
+      assertBrowserPageIdUnused(get(), browserPageId)
       const page = buildBrowserPage(
         workspaceId,
         worktreeId,

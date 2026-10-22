@@ -5,6 +5,7 @@ import {
   type RemoteBrowserRpcCall
 } from './remote-browser-page-session'
 import { RemoteBrowserOperationTokens } from './remote-browser-stream-tokens'
+import type { FrameDrawnServerBrowserTab } from './frame-drawn-server-browser-tab'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../../../../shared/layout-owner-switch', () => ({
@@ -20,7 +21,12 @@ function rpcError(code: string): Error {
   return Object.assign(new Error(code), { code })
 }
 
-function setup(args: { show: ShowReply; switchOn?: boolean; onShow?: () => void }) {
+function setup(args: {
+  show: ShowReply
+  switchOn?: boolean
+  onShow?: () => void
+  serverTab?: FrameDrawnServerBrowserTab
+}) {
   layoutOwner.isMain = args.switchOn ?? true
   const tokens = new RemoteBrowserOperationTokens({
     isMounted: () => true,
@@ -55,6 +61,7 @@ function setup(args: { show: ShowReply; switchOn?: boolean; onShow?: () => void 
     tokens,
     callRpc,
     getWorktreeSelector: () => 'id:wt-1',
+    getFrameDrawnServerTab: () => args.serverTab ?? null,
     getCurrentUrl: () => 'about:blank',
     readStoredHandle: () => stored,
     writeStoredHandle: (handle) => {
@@ -72,6 +79,7 @@ function setup(args: { show: ShowReply; switchOn?: boolean; onShow?: () => void 
     closedMissing,
     stored: () => stored,
     ensure: () => session.ensureRemotePage(tokens.createOperationToken()!),
+    createParams: () => calls.find((call) => call.method === 'browser.tabCreate')?.params,
     methods: () => calls.map((call) => call.method)
   }
 }
@@ -129,5 +137,58 @@ describe('RemoteBrowserPageSession.ensureRemotePage without a stored handle', ()
     await expect(harness.ensure()).resolves.toBe('created-page')
 
     expect(harness.methods()).toEqual(['browser.tabCreate'])
+  })
+})
+
+describe('RemoteBrowserPageSession.ensureRemotePage for a page of a server tab the frames draw', () => {
+  it('joins the server tab under this page id when the host keeps page ids', async () => {
+    const harness = setup({
+      show: 'not-found',
+      serverTab: { browserTabId: 'server-tab-1', hostKnowsPageIds: true }
+    })
+
+    await harness.ensure()
+
+    expect(harness.createParams()).toEqual({
+      worktree: 'id:wt-1',
+      url: 'about:blank',
+      browserTabId: 'server-tab-1',
+      page: 'host-page-1'
+    })
+  })
+
+  it('joins the server tab without a page id when the host would drop it', async () => {
+    const harness = setup({
+      show: 'not-found',
+      serverTab: { browserTabId: 'server-tab-1', hostKnowsPageIds: false }
+    })
+
+    await harness.ensure()
+
+    expect(harness.createParams()).toEqual({
+      worktree: 'id:wt-1',
+      url: 'about:blank',
+      browserTabId: 'server-tab-1'
+    })
+  })
+
+  it('names no tab or page for a workspace the frames do not draw', async () => {
+    const harness = setup({ show: 'not-found' })
+
+    await harness.ensure()
+
+    expect(harness.createParams()).toEqual({ worktree: 'id:wt-1', url: 'about:blank' })
+  })
+
+  it('names no tab or page with the layout-owner switch off', async () => {
+    const harness = setup({
+      show: 'runs',
+      switchOn: false,
+      serverTab: { browserTabId: 'server-tab-1', hostKnowsPageIds: true }
+    })
+
+    await harness.ensure()
+
+    expect(harness.createParams()).toEqual({ worktree: 'id:wt-1', url: 'about:blank' })
   })
 })

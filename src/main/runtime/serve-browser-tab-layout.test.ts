@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { workspaceSessionStateSchema } from '../../shared/workspace-session-schema'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -8,6 +8,17 @@ import {
   withOpenedServeBrowserTab,
   withServeBrowserPageState
 } from './serve-browser-tab-layout'
+
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+
+afterEach(() => {
+  layoutOwner.isMain = false
+})
 
 const WT = 'repo-1::/repo'
 const HOST = 'local'
@@ -156,5 +167,51 @@ describe('a browser tab a host with no window saves', () => {
         title: 'Example'
       })
     ).toBeNull()
+  })
+
+  describe('a host tab a second page joined (no active page recorded)', () => {
+    function joined(): WorkspaceSessionState {
+      const session = opened(sessionWithTerminal())
+      return {
+        ...session,
+        browserTabsByWorktree: {
+          [WT]: [{ ...session.browserTabsByWorktree![WT]![0]!, pageIds: ['page-1', 'page-2'] }]
+        },
+        browserPagesByWorkspace: {
+          'page-1': [
+            ...session.browserPagesByWorkspace!['page-1']!,
+            { ...session.browserPagesByWorkspace!['page-1']![0]!, id: 'page-2', url: 'https://b/' }
+          ]
+        }
+      }
+    }
+    const navigate = (session: WorkspaceSessionState, pageId: string) =>
+      withServeBrowserPageState(session, {
+        worktreeId: WT,
+        pageId,
+        url: `https://${pageId}/next`,
+        title: pageId
+      })!
+
+    it('keeps the tab on its first page when the joined page navigates', () => {
+      layoutOwner.isMain = true
+
+      const saved = navigate(joined(), 'page-2')
+
+      expect(findSavedBrowserPage(saved, WT, 'page-2')?.page.url).toBe('https://page-2/next')
+      expect(saved.browserTabsByWorktree?.[WT]?.[0]).toMatchObject({
+        url: 'https://example.com/',
+        title: 'Example'
+      })
+      expect(navigate(joined(), 'page-1').browserTabsByWorktree?.[WT]?.[0]?.url).toBe(
+        'https://page-1/next'
+      )
+    })
+
+    it('mirrors any page onto the tab with the switch off, as before', () => {
+      const saved = navigate(joined(), 'page-2')
+
+      expect(saved.browserTabsByWorktree?.[WT]?.[0]?.url).toBe('https://page-2/next')
+    })
   })
 })

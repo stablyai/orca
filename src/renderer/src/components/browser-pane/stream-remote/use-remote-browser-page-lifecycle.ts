@@ -23,6 +23,7 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/runtime-environment-pairing-refresh'
+import { frameDrawnServerBrowserTab } from './frame-drawn-server-browser-tab'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -62,6 +63,7 @@ export function useRemoteBrowserPageLifecycle({
   const isActiveRef = useRef(isActive)
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
+  const currentBrowserTabOwnerRef = useRef({ worktreeId, browserTabId: browserTab.workspaceId })
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
   const runtimeWorktreeRef = useRef(runtimeWorktree)
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(activeRuntimeEnvironmentId)
@@ -75,10 +77,19 @@ export function useRemoteBrowserPageLifecycle({
   useLayoutEffect(() => {
     currentBrowserTabIdRef.current = browserTab.id
     currentBrowserTabUrlRef.current = browserTab.url
+    currentBrowserTabOwnerRef.current = { worktreeId, browserTabId: browserTab.workspaceId }
     activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
     isActiveRef.current = isActive
     runtimeWorktreeRef.current = runtimeWorktree
-  }, [activeRuntimeEnvironmentId, browserTab.id, browserTab.url, isActive, runtimeWorktree])
+  }, [
+    activeRuntimeEnvironmentId,
+    browserTab.id,
+    browserTab.url,
+    browserTab.workspaceId,
+    isActive,
+    runtimeWorktree,
+    worktreeId
+  ])
 
   if (!lifecycleRef.current) {
     lifecycleRef.current = new RemoteBrowserStreamLifecycle({
@@ -92,6 +103,14 @@ export function useRemoteBrowserPageLifecycle({
       callRpc: callRuntimeRpc,
       subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
+      getFrameDrawnServerTab: (environmentId) =>
+        frameDrawnServerBrowserTab({
+          environmentId,
+          ...currentBrowserTabOwnerRef.current,
+          capabilities:
+            useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status
+              ?.capabilities ?? []
+        }),
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
       readStoredHandle: () =>
         useAppStore.getState().remoteBrowserPageHandlesByPageId[currentBrowserTabIdRef.current] ??
