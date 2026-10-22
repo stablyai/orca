@@ -24,16 +24,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     const owner = row.agentPresence
     if (sender && owner?.process && !owner.ended && !isSameAgentProcess(sender, owner.process)) {
       const paneKey = this.resolvePaneKeyAlias(row.paneKey)
-      const challenges = this.ownerChallengesByLiveSender
-      challenges.set(paneKey, (challenges.get(paneKey) ?? 0) + 1)
-      void this.checkAgentPresence(paneKey).finally(() => {
-        const remaining = (challenges.get(paneKey) ?? 1) - 1
-        if (remaining > 0) {
-          challenges.set(paneKey, remaining)
-        } else {
-          challenges.delete(paneKey)
-        }
-      })
+      void this.checkAgentPresence(paneKey, true)
     }
   }
 
@@ -95,8 +86,21 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     return exit !== undefined && exit.at >= exitedSince ? 'exited' : null
   }
 
-  checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
+  /** A live sender challenges an old process without declaring the whole pane exited. */
+  checkAgentPresence(paneKey: string, liveSender = false): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
+    if (liveSender) {
+      const challenges = this.ownerChallengesByLiveSender
+      challenges.set(resolved, (challenges.get(resolved) ?? 0) + 1)
+      return this.checkAgentPresence(resolved).finally(() => {
+        const remaining = (challenges.get(resolved) ?? 1) - 1
+        if (remaining > 0) {
+          challenges.set(resolved, remaining)
+        } else {
+          challenges.delete(resolved)
+        }
+      })
+    }
     const row = this.state.lastStatusByPaneKey.get(resolved)
     // Why: an ended owner already published its exit, and an owner no hook identified cannot be checked.
     if (!row?.agentPresence?.process || row.agentPresence.ended) {

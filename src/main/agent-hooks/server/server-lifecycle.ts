@@ -138,7 +138,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         await checkHookOwnerPresence(this.state, source, aliasedBody, this.env, (paneKey) =>
-          this.checkAgentPresence(paneKey)
+          this.checkAgentPresence(paneKey, true)
         )
         if (!isStatusCurrent()) {
           res.writeHead(204)

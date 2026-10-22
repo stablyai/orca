@@ -1,7 +1,7 @@
 import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
 import type { AgentHookSource } from './agent-hook-relay'
-import { hasOtherAgentProcessOwner } from './agent-process-presence'
+import { hasOtherAgentProcessOwner, readAgentProcessIdentity } from './agent-process-presence'
 import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
 
 /** Confirm an old owner's exit on its execution host before accepting a replacement. */
@@ -26,7 +26,11 @@ export function checkHookOwnerPresence(
       { connectionId: previous.connectionId ?? null, worktreeId: previous.worktreeId },
       { connectionId: null, worktreeId: envelope.worktreeId }
     ) &&
-    hasOtherAgentProcessOwner(presence && { ...presence, suspended: undefined }, source)
+    hasOtherAgentProcessOwner(
+      presence && { ...presence, suspended: undefined },
+      source,
+      readAgentProcessIdentity(envelope.record.agentProcess)
+    )
   ) {
     return check(envelope.paneKey)
   }

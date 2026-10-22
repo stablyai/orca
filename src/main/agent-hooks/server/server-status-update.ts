@@ -45,6 +45,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     return super.commitStatusRowMutation(before, after, emit)
   }
 
+  /** Admits status on its execution host while preserving the pane owner's identity and turn. */
   protected applyNormalizedStatus(
     incoming: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
@@ -120,6 +121,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             }
           : undefined,
       incoming: terminalOwnedPayload.payload.agentType,
+      incomingProcess: incoming.agentPresence?.process,
       now
     })
     if (

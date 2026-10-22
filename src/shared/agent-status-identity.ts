@@ -4,7 +4,11 @@ import {
   type AgentStatusState,
   type AgentType
 } from './agent-status-types'
-import { hasOtherAgentProcessOwner, type AgentProcessPresence } from './agent-process-presence'
+import {
+  hasOtherAgentProcessOwner,
+  type AgentProcessIdentity,
+  type AgentProcessPresence
+} from './agent-process-presence'
 import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
 import type { TuiAgent } from './tui-agent'
 
@@ -43,9 +47,11 @@ function isActiveExistingIdentity(
   return isFreshNonDoneAgentStatus(existing, now, staleAfterMs)
 }
 
+/** Keeps a held process's identity until its execution host admits a replacement. */
 export function resolveAgentStatusIdentity(args: {
   existing?: ExistingAgentIdentity
   incoming?: AgentType
+  incomingProcess?: AgentProcessIdentity
   now: number
   staleAfterMs?: number
 }): AgentIdentityResolution {
@@ -59,7 +65,16 @@ export function resolveAgentStatusIdentity(args: {
       inheritedFromActivePane: false
     }
   }
-  if (!args.existing || !existingAgentType || existingAgentType === incomingAgentType) {
+  const otherProcessOwnsPane = hasOtherAgentProcessOwner(
+    args.existing?.agentPresence,
+    incomingAgentType,
+    args.incomingProcess
+  )
+  if (
+    !args.existing ||
+    !existingAgentType ||
+    (existingAgentType === incomingAgentType && !otherProcessOwnsPane)
+  ) {
     return {
       agentType: incomingAgentType,
       inheritedFromActivePane: false
@@ -72,8 +87,7 @@ export function resolveAgentStatusIdentity(args: {
   })
   if (
     !args.existing.agentPresence?.suspended &&
-    (hasOtherAgentProcessOwner(args.existing.agentPresence, incomingAgentType) ||
-      isActiveExistingIdentity(args.existing, args.now, staleAfterMs))
+    (otherProcessOwnsPane || isActiveExistingIdentity(args.existing, args.now, staleAfterMs))
   ) {
     return {
       // Why: child agent CLIs inherit ORCA_PANE_KEY from their parent terminal.
