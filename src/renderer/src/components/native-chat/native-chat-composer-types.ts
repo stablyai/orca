@@ -81,6 +81,7 @@ export type NativeChatOptimisticSendOutcome = {
 }
 
 export type NativeChatComposerProps = {
+  queueMessage?: (text: string, imagePaths: string[]) => Promise<boolean> | null
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */

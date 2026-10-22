@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} from './native-chat-composer-draft-store'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatSendClassification } from '../../../../shared/native-chat-slash-commands'
@@ -25,11 +29,16 @@ function send(
   agent: AgentType,
   classification: NativeChatSendClassification,
   draft: string,
-  imagePaths: string[] = []
+  imagePaths: string[] = [],
+  queue?: {
+    queueMessage: (text: string, imagePaths: string[]) => Promise<boolean> | null
+    draftScopeKey: string
+  }
 ) {
   const callbacks = { rejected: vi.fn(), unconfirmed: vi.fn(), submitted: vi.fn() }
   const { result } = renderHook(() =>
     useNativeChatPtyComposerSend({
+      ...queue,
       agent,
       draft,
       imageAttachments: imagePaths.map((path) => ({ path })),
@@ -94,4 +103,31 @@ it.each([
 
 it('reports nothing for a blank draft', () => {
   expect(send('codex', 'chat', '   ').submitted).not.toHaveBeenCalled()
+})
+
+it('keeps queued text until its durable save finishes and preserves later typing', async () => {
+  const scope = 'queue-save-test'
+  updateNativeChatComposerDraft(scope, { text: 'First draft', images: [] }, 'immediate')
+  let finish: (saved: boolean) => void = () => {}
+  const saved = new Promise<boolean>((resolve) => {
+    finish = resolve
+  })
+  send('codex', 'chat', 'First draft', [], { draftScopeKey: scope, queueMessage: () => saved })
+  expect(readNativeChatComposerDraft(scope).text).toBe('First draft')
+  expect(sendNativeChatMessage).not.toHaveBeenCalled()
+  updateNativeChatComposerDraft(scope, { text: 'New typing' }, 'immediate')
+  await act(async () => finish(true))
+  expect(readNativeChatComposerDraft(scope).text).toBe('New typing')
+})
+
+it('clears the original queued composer draft only after persistence accepts it', async () => {
+  const scope = 'queue-save-confirmed'
+  updateNativeChatComposerDraft(scope, { text: 'Follow up', images: [] }, 'immediate')
+  send('codex', 'chat', 'Follow up', [], {
+    draftScopeKey: scope,
+    queueMessage: () => Promise.resolve(true)
+  })
+  await act(async () => {})
+  expect(readNativeChatComposerDraft(scope).text).toBe('')
+  expect(sendNativeChatMessage).not.toHaveBeenCalled()
 })

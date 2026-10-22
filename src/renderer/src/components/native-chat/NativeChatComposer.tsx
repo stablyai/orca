@@ -69,6 +69,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       launchSeed,
       structuredTransport,
       steerQueued,
+      queueMessage,
       recallSource,
       inputOwnedByCard = false,
       notices: chatNotices
@@ -279,6 +280,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       setNotice
     }
     const sendPty = useNativeChatPtyComposerSend({
+      queueMessage,
+      draftScopeKey,
       ...ptyCommandRouting,
       draft,
       imageAttachments,

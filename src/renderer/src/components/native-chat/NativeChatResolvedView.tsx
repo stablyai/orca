@@ -1,3 +1,5 @@
+import { useNativeChatPaneQueue } from './use-native-chat-pane-queue'
+import { NativeChatTerminalPromptCards } from './NativeChatTerminalPromptCards'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
@@ -18,11 +20,8 @@ import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
-import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
-import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat-agent-support'
 import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
 import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
-import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
@@ -82,13 +81,14 @@ export function NativeChatResolvedView({
   const selectOwner = useMemo(() => createNativeChatRuntimeSelector(terminalTabId), [terminalTabId])
   const runtimeEnvironmentId = useAppStore(selectOwner)
   const keybindings = useAppStore((s) => s.keybindings)
+  const [queuePresent, setQueuePresent] = useState(false)
   const session = useNativeChatRetainedSession({
     paneKey,
     agent,
     sessionId,
     transcriptPath,
     runtimeEnvironmentId,
-    enabled: isVisible
+    enabled: isVisible || queuePresent
   })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
@@ -218,8 +218,7 @@ export function NativeChatResolvedView({
     canSend,
     transcriptSettled: session.readPhase === 'ready'
   })
-  const { card: shownPromptCard, collapsedCard } = promptCardPresentation
-  const mountedPromptCard = shownPromptCard ?? collapsedCard
+  const { card: shownPromptCard } = promptCardPresentation
   const rootInput = useNativeChatRootInputRouting({
     tabId: terminalTabId,
     rootRef,
@@ -301,14 +300,19 @@ export function NativeChatResolvedView({
   const turnTiming = useNativeChatTerminalTurnTiming(paneKey, session.messages, turnActive)
   useRecheckNativeChatFileLinksWhenTurnEnds(turnActive)
 
-  const stopAgent = useCallback(() => {
-    setWorkingInterrupted(true)
-    // Why: Stop after a submitted turn drops the delayed-write handle once it
-    // settles, so cancelPendingSends no longer sees the optimistic id. Clear
-    // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
-    clear()
-    interactiveSend.cancel()
-  }, [interactiveSend, clear])
+  const queued = useNativeChatPaneQueue(session, setQueuePresent, {
+    ...commandMarkerScope,
+    terminalTabId,
+    runtimeEnvironmentId,
+    canSend,
+    composerRef,
+    ptyId: targetPtyId,
+    worktreeId: fileLinkContext?.worktreeId ?? null,
+    promptOpen: promptCard !== null || session.hookAwaitingInput === true,
+    onSend: onOptimisticSend,
+    outcome: delivery,
+    stop: { clear, setWorkingInterrupted, interactiveSend }
+  })
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
     rootRef,
@@ -396,25 +400,17 @@ export function NativeChatResolvedView({
           />
         )}
       </div>
-      {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}
-      {mountedPromptCard ? (
-        <div hidden={collapsedCard !== null} inert={collapsedCard !== null} className="contents">
-          <NativeChatInteractiveCard
-            key={promptCardPresentation.occurrenceKey ?? 'prompt'}
-            card={mountedPromptCard}
-            send={interactiveSend}
-            requiresTerminal={nativeChatAskRequiresTerminal(agent)}
-            onAnswerInTerminal={onSwitchToTerminal}
-            onDismiss={promptCardPresentation.dismiss}
-            onCollapse={promptCardPresentation.collapse}
-            shouldFocus={shownPromptCard !== null && isVisible && isFocusedGroup}
-            answerInputRef={questionAnswerInputRef}
-          />
-        </div>
-      ) : null}
-      {collapsedCard ? (
-        <NativeChatPromptStrip card={collapsedCard} onExpand={promptCardPresentation.expand} />
-      ) : null}
+      {queued.list}
+      <NativeChatTerminalPromptCards
+        presentation={promptCardPresentation}
+        cardProps={{
+          send: interactiveSend,
+          agent,
+          onAnswerInTerminal: onSwitchToTerminal,
+          shouldFocus: shownPromptCard !== null && isVisible && isFocusedGroup,
+          answerInputRef: questionAnswerInputRef
+        }}
+      />
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). Under a card it stays mounted but hidden, so its state survives;
@@ -429,7 +425,9 @@ export function NativeChatResolvedView({
           agent={agent}
           canSend={canSend}
           isWorking={isWorking}
-          onStop={stopAgent}
+          queueMessage={queued.enqueue}
+          steerQueued={queued.controller.steerNewest}
+          onStop={queued.stop}
           onOptimisticSend={onOptimisticSend}
           onOptimisticSendCanceled={delivery.cancel}
           optimisticSendOutcome={delivery}

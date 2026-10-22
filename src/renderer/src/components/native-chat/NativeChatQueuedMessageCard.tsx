@@ -50,6 +50,11 @@ export function queuedMessageCardCaption(
   statedFailures: readonly AgentSessionFailureFact[] = []
 ): string | null {
   switch (card.hold) {
+    case 'unconfirmed':
+      return translate(
+        'components.native-chat.terminalQueue.deliveryUnknown',
+        'Delivery is unconfirmed. Check the conversation before deleting this draft; it will not be sent again automatically.'
+      )
     case 'returned': {
       // Read exactly as a rejected submission: the typed fact decides, the reason is the fallback.
       const reason = card.returnedReason ?? null
