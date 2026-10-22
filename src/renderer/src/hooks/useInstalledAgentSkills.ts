@@ -15,6 +15,7 @@ import {
   getSkillDiscoveryTargetKey,
   resetSkillDiscoveryCacheForTests
 } from './installed-agent-skill-discovery'
+import { isClaudeDesktopSyncedSkill } from './claude-desktop-synced-skills'
 import {
   getInstalledAgentSkillVerdict,
   type InstalledAgentSkillScan
@@ -90,6 +91,9 @@ export function hasInstalledAgentSkillNamed(
       return false
     }
     if (options.sourceKinds && !options.sourceKinds.includes(skill.sourceKind)) {
+      return false
+    }
+    if (isClaudeDesktopSyncedSkill(skill)) {
       return false
     }
     return (
