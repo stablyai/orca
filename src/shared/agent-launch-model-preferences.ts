@@ -65,7 +65,8 @@ export function checkAgentLaunchModelPreferences(args: {
         : undefined)
     if (
       option?.kind.type !== 'select' ||
-      !option.kind.choices.some((choice) => choice.value === args.effort)
+      (!option.kind.validateOnAgentLaunch &&
+        !option.kind.choices.some((choice) => choice.value === args.effort))
     ) {
       return refuse(
         'invalid_argument',

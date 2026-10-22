@@ -1,6 +1,6 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { resolveStructuredWorkerAuthority } from '../../structured-worker-authority'
-import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
+import { OrcaRuntimeWithDshModelLaunchSupport } from '../launch/terminal-dsh-model-launch-support'
 import type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalInteractiveWait,
@@ -39,7 +39,7 @@ import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-reco
 
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
-export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
+export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithDshModelLaunchSupport {
   protected abstract getTerminalAgentStatusPtyId(handle: string): string
 
   protected abstract getTerminalWaitPermissionInputs(

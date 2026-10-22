@@ -1,5 +1,11 @@
-import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
-import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
+import {
+  assertWorkerDshModelLaunchSupport,
+  probeWorkerOpenCodeModelLaunchSupport
+} from './worker-opencode-model-preflight'
+import {
+  resolveLocalWorkerLaunchTarget,
+  resolveWorkerConfiguredAgentParams
+} from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
@@ -56,21 +62,15 @@ export async function startLocalWorker(args: {
   const chat = terminal ? chatAssigneeOf(terminal) : null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
-    const parent = createsWorktree
-      ? await runtime.showManagedWorktree(`id:${callerWorkspaceId}`)
-      : undefined
-    return createsWorktree
-      ? { repo: params.repo ?? parent?.repoId }
-      : {
-          worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
-        }
-  })
+  const resolveLaunchTarget = () => resolveLocalWorkerLaunchTarget(runtime, params, callerSession)
+  const launchParams = await resolveWorkerConfiguredAgentParams(
+    runtime,
+    params,
+    resolveLaunchTarget
+  )
+  if (launchParams.agent === 'dsh' && launchParams.model) {
+    await assertWorkerDshModelLaunchSupport(runtime, launchParams, await resolveLaunchTarget())
+  }
   let openCodeModelLaunchSupported = false
   if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
     const callerWorkspaceId = await resolveDispatchCallerWorktreeId(

@@ -21,7 +21,7 @@ when an older CLI rejects the flag. A nested worker must respect
 
 ## Launch preferences
 
-For a fresh Claude, Codex, Cursor, Antigravity, or Muse terminal, `--model`
+For a fresh Claude, Codex, Cursor, Antigravity, Muse, or supported DSH terminal, `--model`
 accepts an opaque provider model ID. Pass it only when the user named a model;
 otherwise omit it so the worker inherits the user's configured agent default.
 Add `--effort` only when that model supports it:
@@ -37,6 +37,13 @@ OpenCode model override is unsupported; use `--worktree current` or an existing
 worktree selector, or omit `--model`. OpenCode effort is unsupported. Omit the
 model to inherit its configuration; unsupported or unknown hosts refuse the
 override explicitly.
+
+DSH accepts `--model <provider/model>` and `--effort <native-level>` only when
+the execution host's DSH-TUI advertises both native session flags. DSH validates
+the selected provider, model, and model-specific effort before the first task.
+The flags affect only that session. Older DSH-TUI builds, wrapper commands, and
+unverified SSH/WSL launch paths refuse overrides; omit them to keep the agent's
+configured defaults. A federated host performs its own check, never the client.
 
 `--effort` requires `--model`; neither option combines with `--terminal`. A
 connected worker server must advertise launch-preference support before Orca

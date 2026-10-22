@@ -5,6 +5,20 @@ import {
 import type { prepareFederationAttachmentWorkerStart } from './worker-start-validation'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
+export async function assertWorkerDshModelLaunchSupport(
+  runtime: OrcaRuntimeService,
+  params: { agent?: string; model?: string; effort?: string },
+  target: { worktree?: string; repo?: string }
+): Promise<void> {
+  if (params.agent === 'dsh' && params.model) {
+    await runtime.assertOrchestrationDshModelLaunchSupport({
+      ...target,
+      model: params.model,
+      ...(params.effort ? { effort: params.effort } : {})
+    })
+  }
+}
+
 export async function probeWorkerOpenCodeModelLaunchSupport(
   runtime: OrcaRuntimeService,
   params: { agent?: string; model?: string },
@@ -32,5 +46,10 @@ export async function prepareFederationWorkerLaunchOnHost(
     (await probeWorkerOpenCodeModelLaunchSupport(args.runtime, params, {
       worktree: params.worktree
     }))
+  await assertWorkerDshModelLaunchSupport(
+    args.runtime,
+    params,
+    args.createsWorktree ? { repo: params.repo } : { worktree: params.worktree }
+  )
   return prepareFederationConfiguredWorkerStart({ ...args, params, openCodeModelLaunchSupported })
 }

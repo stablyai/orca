@@ -39,6 +39,8 @@ export type CatalogOption = {
         defaultValue: string
         /** The provider's listing states `defaultValue` is what its CLI runs when no value is sent. */
         defaultIsCliDefault?: true
+        /** Opaque launch-only values are validated by the agent's configured provider. */
+        validateOnAgentLaunch?: true
       }
     | { type: 'boolean'; defaultValue: boolean }
   apply: CatalogOptionApply
