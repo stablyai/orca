@@ -9,7 +9,10 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatComposerRecall } from './use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
-import type { NativeChatResolvedTarget } from './native-chat-composer-target'
+import {
+  nativeChatComposerTargetKey,
+  type NativeChatResolvedTarget
+} from './native-chat-composer-target'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
@@ -53,6 +56,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       targetPtyId,
       agent,
       canSend = true,
+      isVisible = true,
       unavailableHint,
       isWorking = false,
       isStopping = false,
@@ -197,21 +201,19 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         setNotice
       })
 
-    const handlePasteEvent = useNativeChatComposerHandle(ref, {
+    const composerTargetKey = nativeChatComposerTargetKey(paneKey, targetPtyId, structuredTransport)
+
+    const { handlePasteEvent, addressPreviews } = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
       textareaRef,
+      draft,
       isComposing: imeEnterGesture.isComposing,
       caret,
       setDraft,
       setCaret,
+      addressPreviewsEnabled: isVisible && !inputOwnedByCard && !disabled,
       setActiveSuggestion,
-      targetKey: JSON.stringify([
-        paneKey,
-        targetPtyId,
-        structuredTransport?.sessionId,
-        structuredTransport?.worktreeId,
-        structuredTransport?.runtimeEnvironmentId
-      ]),
+      targetKey: composerTargetKey,
       agent,
       disabled,
       resolveAttachmentOwner,
@@ -369,6 +371,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         activeSuggestion={activeSuggestion}
         notices={notices}
         imageAttachments={imageAttachments}
+        addressPreviews={addressPreviews}
         numberImages={Boolean(structuredTransport)}
         attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
         sendButtonDisabled={sendButtonDisabled}

@@ -26,6 +26,8 @@ import type { NativeChatComposerGoalMode } from './use-native-chat-composer-subm
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 
+import { NativeChatAddressPreviews } from './NativeChatAddressPreviews'
+import type { NativeChatAddressPreviewsState } from './use-native-chat-address-previews'
 export type NativeChatComposerFieldProps = {
   /** Pane identity published to the drop pipeline so a native file drop lands
    *  only in the composer it was dropped on. */
@@ -42,6 +44,7 @@ export type NativeChatComposerFieldProps = {
   activeSuggestion: number
   notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
+  addressPreviews?: NativeChatAddressPreviewsState
   /** A structured chat numbers its images, as its chips in the prompt read. */
   numberImages?: boolean
   /** The paired server a structured chat runs on, which reads back files stored there. */
@@ -134,6 +137,7 @@ export function NativeChatComposerField({
   activeSuggestion,
   notices,
   imageAttachments,
+  addressPreviews,
   numberImages = false,
   attachmentEnvironmentId,
   sendButtonDisabled,
@@ -266,6 +270,7 @@ export function NativeChatComposerField({
               '[contain:paint]'
             )}
           >
+            {addressPreviews && <NativeChatAddressPreviews {...addressPreviews} />}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (

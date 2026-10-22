@@ -39,6 +39,10 @@ import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
 } from '../../shared/native-file-drop-preparation'
+import type {
+  ChatAddressPreviewRequest,
+  ChatAddressPreviewResult
+} from '../../shared/chat-address-preview'
 
 export type ExportApi = {
   htmlToPdf: (args: {
@@ -52,6 +56,9 @@ export type ExportApi = {
 export type FilesystemApi = {
   fs: {
     getPathForFile?: (file: File) => string
+    /** Desktop-only: pasted paths always name files on this client, never a paired server. */
+    previewAddress?: (args: ChatAddressPreviewRequest) => Promise<ChatAddressPreviewResult>
+    releaseAddressPreview?: (args: { id: string }) => Promise<void>
     prepareDroppedPaths: (args: PrepareDroppedPathsRequest) => Promise<PreparedDroppedPaths>
     readFileChunk: (args: {
       filePath: string
