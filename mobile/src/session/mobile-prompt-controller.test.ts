@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { buildAskAnswerKeys, type AskPrompt } from '../../../src/shared/native-chat-ask'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask'
+import { buildAskAnswerKeys } from '../../../src/shared/native-chat-ask-keystrokes'
 import {
   visible,
   handleRef,

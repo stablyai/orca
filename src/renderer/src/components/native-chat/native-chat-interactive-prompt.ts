@@ -5,19 +5,21 @@ import type {
   AgentJournalApprovalSubject
 } from '../../../../shared/agent-session-journal-types'
 import {
-  buildAskAnswerKeys,
-  buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseAskFromStatus,
   registerQuestionTool,
-  type AskAnswerKeyGroup,
   type AskAnswerSelection,
   type AskOption,
   type AskPrompt,
   type AskQuestion,
   type InteractiveQuestionParser
 } from '../../../../shared/native-chat-ask'
+import {
+  buildAskAnswerKeys,
+  buildCodexAskAnswerKeys,
+  type AskAnswerKeyGroup
+} from '../../../../shared/native-chat-ask-keystrokes'
 import { parseOmpPlanReviewPrompt } from '../../../../shared/omp-plan-review-prompt'
 
 export {
