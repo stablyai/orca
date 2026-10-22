@@ -42,4 +42,4 @@ export type RichMarkdownContextMenuTableTarget = {
 export const richMarkdownContextMenuCommandChannel = 'rich-markdown:context-command'
 export const richMarkdownContextMenuTargetChannel = 'rich-markdown:context-target'
 // A contenteditable that is not a rich Markdown editor, such as the chat composer.
-export const plainTextContextMenuTargetChannel = 'rich-markdown:plain-text-context-target'
+export const plainTextContextMenuTargetChannel = 'editable-context-menu:plain-text-target'

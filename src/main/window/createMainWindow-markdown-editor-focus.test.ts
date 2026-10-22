@@ -550,7 +550,7 @@ describe('createMainWindow', () => {
     } as Electron.ContextMenuParams
     const plainTextListener = vi
       .mocked(ipcMain.on)
-      .mock.calls.find(([channel]) => channel === 'rich-markdown:plain-text-context-target')?.[1]
+      .mock.calls.find(([channel]) => channel === 'editable-context-menu:plain-text-target')?.[1]
 
     plainTextListener?.({ sender: webContents } as never)
     windowHandlers['context-menu']({} as never, params)

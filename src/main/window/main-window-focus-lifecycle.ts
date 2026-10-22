@@ -105,7 +105,7 @@ export function installMainWindowFocusLifecycle(args: {
     pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
   }
   ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
-  // Why: the renderer sends this on the same channel just before Chromium reports the menu, so it pairs with the next one.
+  // Why: the renderer sends this over the same frame IPC pipe just before Chromium reports the menu, so it pairs with the next one.
   let pendingPlainTextContextMenuTarget = false
   const onPlainTextContextMenuTarget = (event: Electron.IpcMainEvent): void => {
     if (event.sender === mainWindow.webContents) {
