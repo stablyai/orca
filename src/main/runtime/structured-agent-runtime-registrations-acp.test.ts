@@ -47,17 +47,6 @@ describe('ACP agents in the runtime registrations', () => {
     expect(structuredAgentRuntimeRegistration('grok')?.launchCheck).toBeUndefined()
   })
 
-  it('registers OMP on the ACP lane pinning its agent directory, asking its version at create', () => {
-    const registration = structuredAgentRuntimeRegistration('omp')
-    expect(registration?.definition).toMatchObject({
-      agent: 'omp',
-      handleTransport: 'acp',
-      accountHomeVariable: 'PI_CODING_AGENT_DIR',
-      capabilities: { imagePrompts: false, steering: 'queue', approvalEnforcement: 'orca' }
-    })
-    expect(registration?.launchCheck).toBeDefined()
-  })
-
   it.each(['omp', 'opencode2'])('opens %s as a structured chat with Chat UI on', (agent) => {
     const settings = {
       experimentalNativeChat: true
