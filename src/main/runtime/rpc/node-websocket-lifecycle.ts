@@ -15,7 +15,9 @@ export type WebSocketMessageHandler = {
 export type WebSocketConnectionCloseHandler = (
   clientId: string | null,
   ws: WebSocket,
-  hasOtherConnections: boolean
+  hasOtherConnections: boolean,
+  // Absent when cleanup ran without a 'close' event (an error path).
+  closeCode?: number
 ) => void
 
 // Why: WS connections are long-lived and multiplex many RPCs by `id`; auth and dispatch are delegated to the message handler.
@@ -49,7 +51,7 @@ export function attachNodeWebSocketLifecycle(args: {
       ws
     )
   }
-  const finalize = (): void => {
+  const finalize = (closeCode?: number): void => {
     if (finalized) {
       return
     }
@@ -67,7 +69,7 @@ export function attachNodeWebSocketLifecycle(args: {
     args.clientIds.delete(ws)
     const hasOtherConnections =
       clientId !== null && Array.from(args.clientIds.values()).includes(clientId)
-    args.getConnectionCloseHandler()?.(clientId, ws, hasOtherConnections)
+    args.getConnectionCloseHandler()?.(clientId, ws, hasOtherConnections, closeCode)
   }
   const onError = (): void => {
     // Why: close isn't guaranteed after every error path; finalize here too so pre-auth E2EE state and connection ids can't leak.

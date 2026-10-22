@@ -16,6 +16,7 @@ import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import { mobileClientTraces } from '../rpc/mobile-client-trace'
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -128,6 +129,13 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       reply(JSON.stringify(this.buildError(request.id, 'bad_request', 'Missing RPC method')))
       return
     }
+    // Why here: every phone request, including ones relayed to a server, passes this one point.
+    reply = mobileClientTraces.traceReply(
+      authenticatedSocket?.connectionId,
+      request.method,
+      (method) => this.dispatcher.methodKind(method),
+      reply
+    )
 
     const requestToken =
       typeof (request as Record<string, unknown>).deviceToken === 'string'

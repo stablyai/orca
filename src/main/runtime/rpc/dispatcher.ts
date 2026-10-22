@@ -92,6 +92,15 @@ export class RpcDispatcher {
     }
   }
 
+  /** Whether `name` is registered, and if so whether it streams (may stay open with no reply). */
+  methodKind(name: string): 'unary' | 'streaming' | undefined {
+    const method = this.registry.get(name)
+    if (method === undefined) {
+      return undefined
+    }
+    return isStreamingMethod(method) ? 'streaming' : 'unary'
+  }
+
   // Why: streaming dispatch sends multiple responses through the reply callback instead of a Promise.
   async dispatchStreaming(
     rawRequest: RpcRequest,
