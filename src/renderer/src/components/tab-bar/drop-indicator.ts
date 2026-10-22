@@ -28,9 +28,10 @@ export const ACTIVE_TAB_INDICATOR_CLASSES =
   'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-foreground z-20'
 
 export function getTabRootStateClasses(isActive: boolean): string {
+  // Why: the tab-strip-tab hooks let interface glass clear the card fill (main.css).
   return isActive
-    ? 'bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] text-foreground'
-    : 'bg-card text-muted-foreground hover:text-foreground'
+    ? 'tab-strip-tab-active bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] text-foreground'
+    : 'tab-strip-tab bg-card text-muted-foreground hover:text-foreground'
 }
 
 export function getTabStripBorderClasses(

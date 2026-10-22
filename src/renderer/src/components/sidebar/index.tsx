@@ -164,7 +164,7 @@ function Sidebar({
     <TooltipProvider delayDuration={400}>
       <div
         ref={sidebarRef}
-        className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        className="worktree-sidebar-panel relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
         style={leftSidebarStyle}
         {...dropHandlers}
       >

@@ -9,6 +9,12 @@ import { SearchableSetting } from './SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import {
+  backgroundOpacityDescription,
+  getGlassCopyPlatform,
+  windowBlurDescription
+} from './terminal-window-glass-copy'
+import { MacWindowGlassSettings } from './MacWindowGlassSettings'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
@@ -31,6 +37,8 @@ export function TerminalWindowSection({
   const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
   const [relaunchingBlur, setRelaunchingBlur] = useState(false)
   const mountedRef = useMountedRef()
+  const glassPlatform = getGlassCopyPlatform()
+  const showMacGlassControls = glassPlatform === 'mac'
 
   const handleRelaunch = async (): Promise<void> => {
     if (relaunchingBlur) {
@@ -77,10 +85,7 @@ export function TerminalWindowSection({
               'auto.components.settings.TerminalWindowSection.ea7b1a158e',
               'Background Opacity'
             )}
-            description={translate(
-              'auto.components.settings.TerminalWindowSection.809f37738d',
-              'Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.'
-            )}
+            description={backgroundOpacityDescription(glassPlatform)}
             value={settings.terminalBackgroundOpacity ?? 1}
             defaultValue={1}
             min={0}
@@ -99,8 +104,8 @@ export function TerminalWindowSection({
             'Window Blur'
           )}
           description={translate(
-            'auto.components.settings.TerminalWindowSection.97950bb087',
-            'Apply background blur to the terminal window. Requires restart.'
+            'auto.components.settings.TerminalWindowSection.glass.blurSummary',
+            'See-through, blurred window behind terminals and the chat UI (macOS). Requires restart.'
           )}
           keywords={['window', 'blur', 'background', 'transparency', 'vibrancy']}
           className="space-y-3 py-2"
@@ -114,10 +119,7 @@ export function TerminalWindowSection({
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.TerminalWindowSection.97950bb087',
-                  'Apply background blur to the terminal window. Requires restart.'
-                )}
+                {windowBlurDescription(glassPlatform)}
               </p>
             </div>
             <Switch
@@ -125,7 +127,9 @@ export function TerminalWindowSection({
                 'auto.components.settings.TerminalWindowSection.2b82242f43',
                 'Window Blur'
               )}
-              checked={settings.windowBackgroundBlur ?? false}
+              // Why: Linux can't create a glass window, so a value saved elsewhere must not read as on.
+              checked={glassPlatform !== 'linux' && (settings.windowBackgroundBlur ?? false)}
+              disabled={glassPlatform === 'linux'}
               onCheckedChange={(checked) => updateSettings({ windowBackgroundBlur: checked })}
             />
           </div>
@@ -167,6 +171,10 @@ export function TerminalWindowSection({
             </div>
           ) : null}
         </SearchableSetting>
+
+        {showMacGlassControls ? (
+          <MacWindowGlassSettings settings={settings} updateSettings={updateSettings} />
+        ) : null}
 
         <SearchableSetting
           title={translate(
