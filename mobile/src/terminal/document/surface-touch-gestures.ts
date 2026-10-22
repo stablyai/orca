@@ -1,9 +1,10 @@
 import { getCellHeight, getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
-import { scheduleDocumentFrame } from './document-frame-registry'
+import { cancelDocumentFrame, scheduleDocumentFrame } from './document-frame-registry'
 import { touchesInRoot } from './document-host-seams'
 import { clampPan } from './fit-scale'
 import { notify } from './host-notify'
+import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
@@ -30,6 +31,7 @@ type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: bo
 
 /** The live touch gesture: the last point, the velocity, and the pinch it may be in. */
 export type TerminalTouchState = {
+  active: boolean
   lastX: number
   lastY: number
   lastTime: number
@@ -107,7 +109,7 @@ export function attachSurfaceEventHandlers(
         return
       }
       if (scope.touchGesture.momentumId) {
-        cancelAnimationFrame(scope.touchGesture.momentumId)
+        cancelDocumentFrame(scope, scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
         // Why: this touch stopped a coast; lifting it must not also tap.
         scope.tapCandidate = null
@@ -131,6 +133,7 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
       }
+      scope.touchGesture.active = touches.length > 0
     },
     { capture: true, passive: true }
   )
@@ -141,7 +144,7 @@ export function attachSurfaceEventHandlers(
       if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
-      if (!scope.term) {
+      if (!scope.term || !scope.touchGesture.active) {
         return
       }
       e.preventDefault()
@@ -222,7 +225,7 @@ export function attachSurfaceEventHandlers(
       if (targetSurface !== scope.surface || dispatcherShouldBlockSurface(scope)) {
         return
       }
-      if (!scope.term) {
+      if (!scope.term || !scope.touchGesture.active) {
         return
       }
 
@@ -255,6 +258,7 @@ export function attachSurfaceEventHandlers(
       }
 
       if (touches.length === 0) {
+        scope.touchGesture.active = false
         // Why: velY is the speed of the last move; a finger that then rested has none to launch.
         const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
         let vel = rested ? 0 : scope.touchGesture.velY
@@ -314,11 +318,22 @@ export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
 
 /** Ruling 21: the momentum loop, which would keep scrolling into the terminal that replaced it. */
 export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
+  const interruptedPinch = scope.touchGesture.isPinching
+  scope.touchGesture.active = false
   if (scope.touchGesture.momentumId !== null) {
-    cancelAnimationFrame(scope.touchGesture.momentumId)
+    cancelDocumentFrame(scope, scope.touchGesture.momentumId)
     scope.touchGesture.momentumId = null
   }
   scope.touchGesture.velY = 0
   scope.touchGesture.accumDelta = 0
   scope.touchGesture.isPinching = false
+  if (interruptedPinch) {
+    scope.userScale = 1
+    scope.panX = 0
+    scope.panY = 0
+    if (scope.surface) {
+      updateTransform(scope)
+    }
+    emitKeyboardAvoidanceMetrics(scope)
+  }
 }

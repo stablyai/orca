@@ -98,6 +98,7 @@ export type TerminalWebViewProps = {
   textScale?: number
   // Why: only a view shown when it mounts builds its terminal before ready (one WebGL context each).
   shownAtMount?: boolean
+  interactionActive?: boolean
   onWebReady?: () => void
   onEngineError?: (message: string) => void
 } & TerminalSelectionEvents

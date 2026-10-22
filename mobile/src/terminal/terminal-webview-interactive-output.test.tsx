@@ -18,7 +18,7 @@ vi.mock('./terminal-webview-engine-error-state', () => ({
 
 let root: ReactTestRenderer | undefined
 
-function mountController() {
+function mountController(interactionActive = true) {
   const post = vi.fn<TerminalWebViewTransport['post']>()
   const onTerminalInput = vi.fn()
   const exposed: { current: ReturnType<typeof useTerminalWebViewController> | null } = {
@@ -26,7 +26,10 @@ function mountController() {
   }
   const transport = { post, pingsOnForegroundRecovery: () => false }
   function Probe() {
-    exposed.current = useTerminalWebViewController({ onTerminalInput }, transport)
+    exposed.current = useTerminalWebViewController(
+      { onTerminalInput, interactionActive },
+      transport
+    )
     return null
   }
   act(() => {
@@ -72,6 +75,19 @@ describe('terminal scroll response batching', () => {
     controller.handle.write('pending')
     controller.receive({ type: 'terminal-input', bytes })
     vi.advanceTimersByTime(16)
+    expect(writes()).toEqual(['first'])
+    vi.advanceTimersByTime(32)
+    expect(writes()).toEqual(['first', 'pending'])
+  })
+
+  it('rejects inactive gesture notifications without changing output batching', () => {
+    vi.useFakeTimers()
+    const { controller, onTerminalInput, writes } = mountController(false)
+    controller.handle.write('first')
+    controller.handle.write('pending')
+    controller.receive({ type: 'terminal-input', bytes: '\x1b[A' })
+    vi.advanceTimersByTime(16)
+    expect(onTerminalInput).not.toHaveBeenCalled()
     expect(writes()).toEqual(['first'])
     vi.advanceTimersByTime(32)
     expect(writes()).toEqual(['first', 'pending'])
