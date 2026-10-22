@@ -1,5 +1,8 @@
 import { useEffect, type RefObject } from 'react'
 
+// Why: split views mount several mirrors; only the container that reported focus may clear it.
+let focusOwner: HTMLElement | null = null
+
 /**
  * Mirrors "an editor-first keymap has keyboard focus" to the main process, which resolves app
  * shortcuts in before-input-event before any renderer handler runs. Covers the whole editor
@@ -15,6 +18,10 @@ export function useEditorKeymapFocusMirror(
       return
     }
     const report = (focused: boolean): void => {
+      if (!focused && focusOwner !== container) {
+        return
+      }
+      focusOwner = focused ? container : null
       window.api.ui.setEditorKeymapFocused(focused)
     }
     const onFocusIn = (): void => report(true)
