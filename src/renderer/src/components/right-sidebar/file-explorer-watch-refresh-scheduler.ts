@@ -2,8 +2,6 @@ import type { FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
 
-type SchedulerTimer = ReturnType<typeof setTimeout>
-
 export type FileExplorerWatchRefreshScheduler = {
   requestFullRefresh: () => void
   requestDirRefresh: (dirPath: string) => void
@@ -17,59 +15,43 @@ export type CreateFileExplorerWatchRefreshSchedulerParams = {
   /** Dirs a full tree refresh already re-reads; the scheduler has no view of `expanded`. */
   isCoveredByFullRefresh: (dirPath: string) => boolean
   dirConcurrency: number
-  trailingMs: number
-  maxWaitMs: number
-  schedule?: (callback: () => void, delayMs: number) => SchedulerTimer
-  clear?: (timer: SchedulerTimer) => void
 }
 
 /**
- * Coalesces watcher-driven File Explorer refreshes into one debounced run.
+ * Coalesces watcher-driven File Explorer refreshes into one run on the next tick, one run at a time.
  *
  * Why: an overflow storm otherwise issues K × (1 + N_expanded) readDirectory
  * round trips on the same SSH mux that carries PTY output. Transport-agnostic on
  * purpose — it sits above both the Electron fs:changed bus and the runtime-RPC
  * file-change subscription.
+ * Why no debounce window: every producer already flushes on the shared watch batch window
+ * (filesystem-watcher for local/SSH, createFileWatchEventBatcher for runtime files.watch), so a
+ * second window here only adds latency. A new transport must batch at the producer before joining.
  */
 export function createFileExplorerWatchRefreshScheduler({
   refreshTree,
   refreshDir,
   isCoveredByFullRefresh,
-  dirConcurrency,
-  trailingMs,
-  maxWaitMs,
-  schedule = setTimeout,
-  clear = clearTimeout
+  dirConcurrency
 }: CreateFileExplorerWatchRefreshSchedulerParams): FileExplorerWatchRefreshScheduler {
   let pendingFull = false
   const pendingDirs = new Map<string, string>()
-  let firstRequestAt: number | null = null
-  let timer: SchedulerTimer | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
   let inFlight: Promise<void> | null = null
   let disposed = false
 
-  function clearTimer(): void {
+  function arm(): void {
     if (timer !== null) {
-      clear(timer)
-      timer = null
+      return
     }
-  }
-
-  function arm(delayMs: number): void {
-    clearTimer()
-    timer = schedule(() => {
+    timer = setTimeout(() => {
       timer = null
       // Why: a run started here would race the in-flight one; the settle
       // handler re-arms instead, so nothing pending is dropped.
       if (inFlight === null) {
         run()
       }
-    }, delayMs)
-  }
-
-  function armForRequest(): void {
-    firstRequestAt ??= Date.now()
-    arm(Math.max(0, Math.min(trailingMs, firstRequestAt + maxWaitMs - Date.now())))
+    }, 0)
   }
 
   function run(): void {
@@ -77,7 +59,6 @@ export function createFileExplorerWatchRefreshScheduler({
     const dirs = Array.from(pendingDirs.values())
     pendingFull = false
     pendingDirs.clear()
-    firstRequestAt = null
 
     const started = (async () => {
       // Why: isCoveredByFullRefresh reads a live `expanded` ref, so resolve it
@@ -114,7 +95,7 @@ export function createFileExplorerWatchRefreshScheduler({
           inFlight = null
         }
         if (!disposed && (pendingFull || pendingDirs.size > 0)) {
-          arm(trailingMs)
+          arm()
         }
       })
   }
@@ -129,23 +110,25 @@ export function createFileExplorerWatchRefreshScheduler({
       // superset of what refreshTree re-reads; subsuming them would strand a
       // stale listing for a collapsed-but-cached dir.
       pendingFull = true
-      armForRequest()
+      arm()
     },
     requestDirRefresh: (dirPath: string) => {
       if (disposed) {
         return
       }
       pendingDirs.set(normalizeRuntimePathForComparison(dirPath), dirPath)
-      armForRequest()
+      arm()
     },
     cancel: () => {
       const discardedWork =
         pendingFull || pendingDirs.size > 0 || timer !== null || inFlight !== null
       disposed = true
-      clearTimer()
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
       pendingFull = false
       pendingDirs.clear()
-      firstRequestAt = null
       return discardedWork
     }
   }

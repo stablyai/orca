@@ -133,7 +133,7 @@ export type WorktreeApi = {
     parentWorktreeId?: string
     noParent?: boolean
   }) => Promise<WorktreeLineage | null>
-  persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
+  persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Full CLI output of the last branch auto-rename generation failure, held
    *  in main memory only — null after a restart or once the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>

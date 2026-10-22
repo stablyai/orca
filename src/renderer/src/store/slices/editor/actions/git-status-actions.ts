@@ -10,7 +10,7 @@ import {
   createLoadingBranchCompareSummary,
   getKnownGitHead
 } from '../git/branch-compare-state'
-import { recordDroppedEditorFilesInLayoutOwner } from '../tabs/editor-tab-layout-owner'
+import { closeDroppedEditorFileTabsThroughLayoutOwner } from '../tabs/editor-tab-close-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 export function createGitStatusActions(
@@ -248,9 +248,9 @@ export function createGitStatusActions(
           gitBranchChangesByWorktree: nextBranchChanges
         }
       })
-      // A resolved deleted-side conflict drops its placeholder record; main closes its tab.
+      // A resolved deleted-side conflict drops its placeholder record; main closes its tab, and its frame drops it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && filesBefore && filesBefore !== get().openFiles) {
-        recordDroppedEditorFilesInLayoutOwner(get(), filesBefore, worktreeId)
+        closeDroppedEditorFileTabsThroughLayoutOwner(get(), filesBefore, worktreeId)
       }
     },
     setConflictOperation: (worktreeId, operation) =>

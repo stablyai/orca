@@ -4,7 +4,7 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 // discovered path, so an uncapped list ships one row per transcript file in the
 // tree over IPC. Local and remote scans share the bound — the failure shape is
 // the same and both feed the same panel.
-const SCAN_ISSUE_LIMIT = 500
+export const SCAN_ISSUE_LIMIT = 500
 
 /** Append a scan issue, collapsing everything past the cap into one notice. */
 export function recordSessionScanIssue(issues: AiVaultScanIssue[], issue: AiVaultScanIssue): void {

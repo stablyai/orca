@@ -85,7 +85,8 @@ export function fakeClaude(providerSession: string) {
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
       },
-      send: async (message) => {
+      send: async (message, beforeDispatch) => {
+        await beforeDispatch?.()
         connection.sent.push(message)
         if (message.type === 'user') {
           handlers.onMessage?.({ ...message, uuid: 'user-1' })

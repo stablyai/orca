@@ -26,6 +26,7 @@ import type {
 } from '../../../../shared/source-control-ai-actions'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export {
   buildCheckRunDetailsFixBasePrompt,
@@ -130,7 +131,7 @@ export function useCheckRunDetailsFixWithAI(args: {
     if (!args.worktreeId) {
       return null
     }
-    return findWorktreeById(useAppStore.getState().worktreesByRepo, args.worktreeId)
+    return findWorktreeById(selectWorktreesByRepo(useAppStore.getState()), args.worktreeId)
   }, [args.worktreeId])
   const canFixWithAI = isCheckRunDetailsFixCandidate(args.check, args.details)
   const disabledReason = getCheckRunDetailsFixDisabledReason(args.worktreeId)

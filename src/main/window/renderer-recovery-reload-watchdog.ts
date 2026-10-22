@@ -1,4 +1,4 @@
-import { is } from '@electron-toolkit/utils'
+import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { isSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import type { LowCommitOomVerdict } from '../crash-reporting/low-commit-oom-recovery-gate'
@@ -108,7 +108,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
   }
   // Match loadMainWindow's dev/prod branch.
   const timeoutMs = (): number =>
-    is.dev && process.env.ELECTRON_RENDERER_URL
+    !app.isPackaged && process.env.ELECTRON_RENDERER_URL
       ? RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS
       : RENDERER_RECOVERY_LOAD_TIMEOUT_MS
 

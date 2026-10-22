@@ -9,6 +9,9 @@ This package is a **self-contained Next.js app**. It is intentionally **not** a 
 
 ## Local development
 
+Use Node.js 24 and the pnpm version pinned in `package.json`. CI reads the
+Node.js version from this package's `engines.node` field.
+
 ```bash
 cd docs/site
 pnpm install
@@ -105,7 +108,8 @@ deployment needs `basePath`, first move the route tree to an unprefixed
    invokes Vercel from `docs/site`, so that directory is already the deployment
    root; setting it again would resolve `docs/site/docs/site`. Leave automatic
    Git deployments disabled so this workflow remains the only deployment path.
-2. Framework preset: Next.js. `vercel.json` pins install (`pnpm install --frozen-lockfile`) and build (`pnpm build`) over the dashboard settings; this package has its own lockfile beside the root workspace.
+2. Framework preset: Next.js. This package's `engines.node` selects Node.js 24 for
+   Vercel builds and functions. `vercel.json` pins install (`pnpm install --frozen-lockfile`) and build (`pnpm build`) over the dashboard settings; this package has its own lockfile beside the root workspace.
 3. Set GitHub Actions secrets (required by the production deploy job):
    - `VERCEL_TOKEN`
    - `VERCEL_ORG_ID`

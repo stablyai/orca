@@ -10,6 +10,11 @@ const ABORTED_CHANNEL_CLOSE_GRACE_MS = 5_000
 const SESSION_LIMIT_OPEN_RETRIES = 4
 const SESSION_LIMIT_OPEN_RETRY_DELAY_MS = 150
 
+/** The host never answered a channel open: contact, not the host, is what failed. */
+export function sshChannelOpenTimeoutError(message: string): Error {
+  return Object.assign(new Error(message), { name: 'SshChannelOpenTimeoutError' })
+}
+
 export async function openSshSessionChannelWithRetry<T>(
   open: () => Promise<T>,
   signal?: AbortSignal
@@ -87,7 +92,9 @@ export function waitForSshChannelOpen<T>(
       cleanup()
       reject(
         markOpenUnconfirmed(
-          abortRequested ? createSshOperationAbortError() : new Error(timeoutMessage)
+          abortRequested
+            ? createSshOperationAbortError()
+            : sshChannelOpenTimeoutError(timeoutMessage)
         )
       )
     }, CONNECT_TIMEOUT_MS)

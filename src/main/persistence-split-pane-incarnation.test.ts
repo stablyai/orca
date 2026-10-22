@@ -1,8 +1,9 @@
 import {
   closeTestStores,
-  testState,
   createStore,
-  makeTerminalTab
+  makeTerminalTab,
+  registerWorkspaceRepos,
+  testState
 } from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -290,6 +291,7 @@ describe('Store', () => {
     'preserves a reconciled incarnation across a renderer snapshot ($label)',
     async ({ hostId }) => {
       const store = await createStore()
+      registerWorkspaceRepos(store, 'wt1')
       const paneKey = `tab1:${TEST_LEAF_1}`
       store.setWorkspaceSession(
         {

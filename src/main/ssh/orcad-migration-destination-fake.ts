@@ -66,6 +66,18 @@ export function fakeOrcadMigrationDestination(): FakeOrcadMigrationDestination {
       }
       return { ...view(manifest), aborted, ...(aborted ? {} : { durableAbsent: true as const }) }
     }),
+    abortByReference: vi.fn<Catalog['abortByReference']>(async (manifest) => {
+      const identity = {
+        migrationId: manifest.migrationId,
+        manifestSha256: manifest.manifestSha256
+      }
+      if (stateOf(manifest) === 'committed') {
+        return { ...identity, state: 'committed', aborted: false }
+      }
+      const aborted = stateOf(manifest) === 'staged'
+      states.delete(manifest.migrationId)
+      return { ...identity, state: 'absent', aborted, durableAbsent: true }
+    }),
     stageChunk: vi.fn<Catalog['stageChunk']>()
   }
   return destination

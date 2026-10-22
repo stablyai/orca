@@ -2,11 +2,21 @@
 // each with the Loader rule that causes it. Shared by every parity test that compares a window
 // built from the Loader's result with the window restored from disk.
 
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { sweepUnattachedTerminalRows } from '../../../shared/workspace-layout/unattached-terminal-row-sweep'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+
 export const GIT = 'repo-1::/Users/dev/orca'
-const terminal = (tabId: string) =>
-  ['phone and CLI title', 'panes', 'focused pane', 'reattaches'].map(
-    (field) => `${GIT} terminal ${tabId} ${field}`
-  )
+
+/** Main's startup sweep in a layout-owner build; a paired server's partition passes through. */
+export function sweptAtStartup(
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState
+): WorkspaceSessionState {
+  return parseExecutionHostId(hostId)?.kind === 'runtime'
+    ? session
+    : sweepUnattachedTerminalRows(session)
+}
 
 export type KnownDifference = {
   fixture: string
@@ -17,13 +27,7 @@ export type KnownDifference = {
 }
 
 /** Differences to fix. Entries may only be removed: fix the rule, then delete its entry. */
-export const KNOWN_DIFFERENCES: readonly KnownDifference[] = [
-  {
-    fixture: 'row without a tab-bar entry or a terminal',
-    rule: 'ghost tab: the Loader gives every row a tab-bar entry; the window adopts only rows it can reattach',
-    paths: [`${GIT} group 0 tabs`, `${GIT} tab tab-b`, ...terminal('tab-b')]
-  }
-]
+export const KNOWN_DIFFERENCES: readonly KnownDifference[] = []
 
 export type AcceptedDifference = Omit<KnownDifference, 'paths'> & {
   reason: string

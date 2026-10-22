@@ -24,11 +24,11 @@ import {
 } from './orcad-daemon-slot-pins'
 
 /** The in-use slot plus the two most recent others (the newest three when none is in use). */
-export const ORCAD_ARTIFACT_CACHE_KEEP = 3
+const ORCAD_ARTIFACT_CACHE_KEEP = 3
 
 const REPAIR_SUFFIX = /\.repair-\d+$/u
 
-export type OrcadArtifactCachePruneOptions = {
+type OrcadArtifactCachePruneOptions = {
   keep?: number
   /** Slot versions to keep whatever their age. */
   inUseVersions?: ReadonlySet<string>

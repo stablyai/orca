@@ -23,6 +23,10 @@ vi.mock('lucide-react-native', () => ({
 const { writeText, alert } = vi.hoisted(() => ({ writeText: vi.fn(), alert: vi.fn() }))
 vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 
+vi.mock('./MobileMarkdownPreviewImage', () => ({
+  MobileMarkdownPreviewImage: 'MobileMarkdownPreviewImage'
+}))
+
 vi.mock('../components/MobileMarkdown', () => ({
   MobileMarkdown: 'MobileMarkdown'
 }))
@@ -157,6 +161,21 @@ describe('MobileFileMarkdownPreview', () => {
     ).toBe(false)
     await selectMode(renderer, 'Copy Markdown source')
     expect(writeText.mock.calls).toEqual([[source], [source]])
+  })
+
+  it('opens file links from the rendered document', async () => {
+    const onOpenFile = vi.fn()
+    renderer = await renderPreview({
+      relativePath: 'docs/notes.md',
+      content: '[Details](details.md)',
+      truncated: false,
+      byteLength: 21,
+      onOpenFile
+    })
+    await act(async () => {
+      renderer?.root.findByType('MobileMarkdown').props.onOpenFile('details.md')
+    })
+    expect(onOpenFile).toHaveBeenCalledWith('details.md')
   })
 
   it('resets the selected mode for a new file or line target without remounting the preview', async () => {

@@ -39,8 +39,6 @@ function withPlannedLaunch(
     launchAgent: _agent,
     startupCommandDelivery: _delivery,
     telemetry: _telemetry,
-    // TEMPORARY parity (follow-up 2): a missing folder fails as the host's launch did, never the root.
-    cwdFallback: _fallback,
     ...pane
   } = args
   const launchToken = agentLaunchTokenFor(

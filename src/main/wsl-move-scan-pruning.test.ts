@@ -16,6 +16,7 @@ import {
   resetWslMoveFenceForTests
 } from './persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { pruneLineageForMissingRepoWorktrees } from './worktree-lineage-pruning'
+import { hostWorktreeTargetForRepo } from './persistence/host-qualified-worktree-meta'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import { listFolderWorkspaces } from './ipc/worktrees/listing/folder-workspace-catalog'
 import { getFolderWorkspaceRootId } from './ipc/worktrees/folder-workspace-model'
@@ -72,7 +73,10 @@ afterEach(async () => {
 describe('lineage pruning under a WSL move', () => {
   const pruneMissingChild = (target: Repo): WorktreeLineage | undefined => {
     const childId = `${target.id}::/ws/${target.id}/gone`
-    store.setWorktreeLineage(childId, lineage(childId, `${target.id}::${target.path}`))
+    store.setWorktreeLineage(
+      hostWorktreeTargetForRepo(childId, target),
+      lineage(childId, `${target.id}::${target.path}`)
+    )
     pruneLineageForMissingRepoWorktrees(store, target, [gitRow(target.path)])
     return store.getWorktreeLineage(childId)
   }
@@ -94,7 +98,7 @@ describe('authoritative metadata pruning under a WSL move', () => {
   const pruneMissingRow = async (repoId: string): Promise<string[]> => {
     const target = repo(repoId)
     const goneId = `${repoId}::/ws/${repoId}/gone`
-    store.setWorktreeMeta(goneId, { displayName: 'gone' })
+    store.setWorktreeMeta(hostWorktreeTargetForRepo(goneId, target), { displayName: 'gone' })
     const result = await pruneMetadataMissingFromAuthoritativeLocalScan({
       store,
       repo: target,
@@ -198,7 +202,6 @@ describe('inferred lineage hydration under a WSL move', () => {
     ])
     const controller = new RuntimeWorktreeLineageController({
       getStore: () => store,
-      getCachedWorktrees: () => null,
       getDb: () => null,
       resolveWorktree: async () => {
         throw new Error('unused')

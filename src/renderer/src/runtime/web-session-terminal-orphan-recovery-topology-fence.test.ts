@@ -12,7 +12,7 @@ import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
-import { toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
 describe('web session terminal orphan recovery topology fence', () => {
   beforeEach(() => clearWebSessionTerminalOrphanRecoveryForTests())

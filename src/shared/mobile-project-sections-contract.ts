@@ -10,7 +10,12 @@ export const MOBILE_PROJECT_SECTIONS_METHOD = 'mobileRelay.projectSections'
 
 /** A sidebar repo as Project sections read it; never its hooks, credentials or AI settings. */
 export type MobileProjectSectionRepo = Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'> &
-  Partial<Pick<Repo, 'addedAt' | 'connectionId' | 'executionHostId'>> & { repoIcon?: RepoIcon }
+  Partial<
+    Pick<
+      Repo,
+      'addedAt' | 'connectionId' | 'executionHostId' | 'projectGroupId' | 'projectGroupOrder'
+    >
+  > & { repoIcon?: RepoIcon }
 
 export type MobileProjectSectionCatalog = {
   /** Every repo the sidebar holds, across hosts, in its header order. */
@@ -34,6 +39,11 @@ function sectionRepo(repo: Repo): MobileProjectSectionRepo {
     addedAt: repo.addedAt,
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
     ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {}),
+    // Why: the phone's list files a project under its group, in the group's order.
+    ...(repo.projectGroupId ? { projectGroupId: repo.projectGroupId } : {}),
+    ...(typeof repo.projectGroupOrder === 'number'
+      ? { projectGroupOrder: repo.projectGroupOrder }
+      : {}),
     // Why not uploaded icons: a data URL can be hundreds of KB per repo on every read.
     ...(repo.repoIcon && !(repo.repoIcon.type === 'image' && repo.repoIcon.src.startsWith('data:'))
       ? { repoIcon: repo.repoIcon }

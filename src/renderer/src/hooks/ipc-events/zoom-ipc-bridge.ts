@@ -5,7 +5,8 @@ import { zoomLevelToPercent } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
 import { useAppStore } from '../../store'
-import { resolveZoomTarget } from '../resolve-zoom-target'
+import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
+import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
 import { requestPdfZoom } from '@/components/editor/pdf-zoom-request'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
@@ -27,6 +28,13 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
         return
       }
       if (target === 'terminal') {
+        return
+      }
+      if (target === 'browser') {
+        const browserPageId = focusedBrowserPageId(document.activeElement)
+        if (browserPageId) {
+          dispatchBrowserPageZoom({ browserPageId, direction })
+        }
         return
       }
       if (target === 'editor') {

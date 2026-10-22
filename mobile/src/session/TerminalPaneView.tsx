@@ -5,6 +5,7 @@ import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
+  TerminalPointerInput,
   TerminalWebViewHandle
 } from '../terminal/terminal-webview-contract'
 
@@ -22,7 +23,7 @@ type TerminalPaneViewProps = {
   onModesChanged: (handle: string, modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics: (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput: (handle: string, bytes: string) => void
+  onTerminalInput: (handle: string, bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply: (handle: string, bytes: string) => void
   onTerminalTap: (handle: string) => void
   onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
@@ -84,7 +85,7 @@ export function TerminalPaneView({
         onModesChanged={(m) => onModesChanged(handle, m)}
         onKeyboardAvoidanceMetrics={(m) => onKeyboardAvoidanceMetrics(handle, m)}
         onHaptic={onHaptic}
-        onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
+        onTerminalInput={(bytes, input) => onTerminalInput(handle, bytes, input)}
         onTerminalQueryReply={(bytes) => onTerminalQueryReply(handle, bytes)}
         onTerminalTap={() => onTerminalTap(handle)}
         onFileTap={(pathText, line, column) => onFileTap(handle, pathText, line, column)}

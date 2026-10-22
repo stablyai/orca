@@ -15,3 +15,9 @@ export const OrcadMigrationCommitCatalogParams = OrcadMigrationCatalogParams.ext
     .max(MAX_ORCAD_MIGRATION_BLOBS)
     .optional()
 })
+
+// The manifest's identity alone, for a request the whole manifest would overflow.
+export const OrcadMigrationCatalogReferenceParams = z.object({
+  migrationId: z.string().min(1).max(256),
+  manifestSha256: z.string().regex(/^[a-f0-9]{64}$/)
+})

@@ -49,6 +49,8 @@ export async function runHeadlessAutomationDispatch(
     })
   }
   let launch: HeadlessAutomationDispatchLaunch
+  // Before the agent is picked or prompted: its turn can end before the launch returns.
+  const dispatchedAt = Date.now()
   try {
     launch = await ctx.dispatcher({ automation, run, target })
   } catch (error) {
@@ -70,6 +72,7 @@ export async function runHeadlessAutomationDispatch(
   const updated = runs.updateRun({
     runId: run.id,
     status: 'dispatched',
+    dispatchedAt,
     ...launchRunTarget,
     // Kept here: a watched run's completion is written without it.
     ...(precheckResult ? { precheckResult } : {}),
@@ -77,7 +80,13 @@ export async function runHeadlessAutomationDispatch(
   })
   // Observe the launched agent even while persistence is stalled or rejects its acknowledgement.
   if (!launch.completion) {
-    ctx.watchRun({ ...run, ...launchRunTarget, status: 'dispatched', error: null })
+    ctx.watchRun({
+      ...run,
+      ...launchRunTarget,
+      status: 'dispatched',
+      dispatchedAt,
+      error: null
+    })
   } else {
     void launch.completion
       .then(

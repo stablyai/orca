@@ -18,11 +18,15 @@ import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {
+  attachAiVaultScopeCwdAliases,
+  resolveAiVaultScopeRealPaths
+} from './session-scope-real-paths'
+import {
   startLocalAiVaultScanProgress,
   type LocalAiVaultScanProgressHandle
 } from './ai-vault-local-scan-progress'
 import {
-  aiVaultSessionDepthCovers,
+  aiVaultCachedDepthServes,
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
@@ -119,7 +123,7 @@ export async function listAiVaultSessions(
     args?.force !== true &&
     cachedList?.key === key &&
     cachedList.expiresAt > now &&
-    aiVaultSessionDepthCovers(cachedList.depth, depth)
+    aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
   ) {
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
@@ -143,18 +147,19 @@ export async function listAiVaultSessions(
       if (!scanProgress) {
         throw new Error('Local scan progress was not created.')
       }
+      const scope = await resolveAiVaultScopeRealPaths(args?.scopePaths ?? [])
       const scanned = await scanAiVaultSessionsInBackground(
         {
           includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
           limit: args?.limit,
           unlimited: args?.unlimited,
-          scopePaths: args?.scopePaths,
+          scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
           ...(await localAiVaultScanRoots())
         },
         scanSignal,
         scanProgress
       )
-      const result = { ...scanned, scanId }
+      const result = { ...attachAiVaultScopeCwdAliases(scanned, scope), scanId }
       // A delete (or other invalidation) landed while this scan was running:
       // its result predates the delete, so caching it would resurrect the
       // deleted session for the TTL. Return it to this caller but don't cache.
@@ -164,7 +169,7 @@ export async function listAiVaultSessions(
           args?.force === true ||
           current?.key !== key ||
           current.expiresAt <= Date.now() ||
-          !aiVaultSessionDepthCovers(current.depth, depth)
+          !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
           cachedList = {
             key,

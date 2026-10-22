@@ -32,7 +32,7 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 
-  it('writes a native-chat composer paste into the paste folder, where its draft can find it', async () => {
+  it('writes a terminal-backed composer paste into the never-swept paste folder', async () => {
     const savedPath = await saveClipboardImageBufferAsTempFile(Buffer.from([1, 2, 3]), {
       forNativeChatDraft: true
     })

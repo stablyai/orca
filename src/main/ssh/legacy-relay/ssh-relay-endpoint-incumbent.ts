@@ -34,13 +34,9 @@ import { filesystemTypeIsLocalDisk } from '../../orcad/orcad-data-root-locality'
 
 type RelayEndpointVerdict = 'live' | 'unverifiable' | 'exited'
 
-export type RelayEndpointEvidence =
-  | 'accepted-connection'
-  | 'holder-process'
-  | 'no-holder'
-  | 'inconclusive'
+type RelayEndpointEvidence = 'accepted-connection' | 'holder-process' | 'no-holder' | 'inconclusive'
 
-export type RelayEndpointHolder = {
+type RelayEndpointHolder = {
   pid: number
   /** The holder's argv names relay.js AND this exact socket path. */
   matchesRelayArgv: boolean
@@ -94,7 +90,7 @@ const DARWIN_MOUNT_TYPE_AWK =
 // Only these macOS filesystems live on a disk this machine owns.
 const DARWIN_LOCAL_FILESYSTEM_NAMES = new Set(['apfs', 'hfs'])
 
-export class RelayProbeCleanupUnconfirmedError extends Error {
+class RelayProbeCleanupUnconfirmedError extends Error {
   readonly name = 'RelayProbeCleanupUnconfirmedError'
   constructor() {
     super('Remote relay probe cleanup is unverifiable; refusing to race a replacement launch')

@@ -15,12 +15,15 @@ import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import {
   importLegacyTranscriptIntoJournal,
-  prepareLegacyTranscriptImport
+  prepareLegacyTranscriptImport,
+  LEGACY_IMPORT_BLOCK_LIMITS
 } from './journal-legacy-import'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
-import { openTestJournalHostDatabase } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -45,6 +48,7 @@ const CODEX_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 let root: string
 let clock = 1_000
+const journals = createTrackedJournalOpener()
 
 function tick(): number {
   clock += 1
@@ -77,13 +81,15 @@ async function open(
   sessionId: string,
   overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}
 ): Promise<AgentSessionJournal> {
-  return openAgentSessionJournal({
-    identity: identity(agent, sessionId),
-    database: openTestJournalHostDatabase(root),
-    now: tick,
-    mintEpoch: () => `epoch-${clock}`,
-    ...overrides
-  })
+  return journals.track(
+    await openAgentSessionJournal({
+      identity: identity(agent, sessionId),
+      database: openTestJournalHostDatabase(root),
+      now: tick,
+      mintEpoch: () => `epoch-${clock}`,
+      ...overrides
+    })
+  )
 }
 
 function legacyKey(recordId: string): string {
@@ -210,6 +216,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   decodedClaudeOverride.message = null
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -430,7 +437,7 @@ describe('payload bounds on import', () => {
       agent: 'claude',
       sessionId: CLAUDE_SESSION,
       fence: 1,
-      options: { filePath, limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1_024 } }
+      options: { filePath, limits: { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 1_024 } }
     })
 
     const item = journal.snapshot().items[0]
@@ -559,7 +566,7 @@ describe('import failures', () => {
 
   it('bounds oversized legacy tool-call input before journal publication', async () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
+    const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
     const journal = await open('claude', CLAUDE_SESSION, {
       database: openTestJournalHostDatabase(journalDir)
     })
@@ -670,7 +677,7 @@ describe('import failures', () => {
 // row that also has text, and omp's execution cells always pair the invocation
 // with its output — so the multi-block path carries untrusted tool input too.
 describe('multi-block legacy messages', () => {
-  const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
+  const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
   const oversized = 'x'.repeat(10_000)
 
   /** The tool-call block of the first imported multi-block message. */

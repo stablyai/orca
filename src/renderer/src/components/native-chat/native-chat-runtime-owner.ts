@@ -1,4 +1,4 @@
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import type { AppState } from '@/store/types'
 import {
@@ -26,14 +26,18 @@ export function selectNativeChatRuntimeEnvironmentId(
   state: NativeChatRuntimeOwnerState,
   terminalTabId: string
 ): string | null {
-  const worktreeId = findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
-  return worktreeId ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId) : null
+  return runtimeEnvironmentIdOrLocalUnlessTwin(
+    state,
+    findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
+  )
 }
 
 export function createNativeChatRuntimeSelector(terminalTabId: string) {
   const selectOwner = createNativeChatTabOwnerSelector(terminalTabId)
   return (state: NativeChatRuntimeOwnerState): string | null => {
-    const worktreeId = selectOwner({ tabsByWorktree: state.tabsByWorktree })
-    return worktreeId ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId) : null
+    return runtimeEnvironmentIdOrLocalUnlessTwin(
+      state,
+      selectOwner({ tabsByWorktree: state.tabsByWorktree })
+    )
   }
 }

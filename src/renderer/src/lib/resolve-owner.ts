@@ -1,6 +1,5 @@
 /**
- * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone. It never reads
- * the "Active Server" focus setting.
+ * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
 import {
   getRepoSshConnectionId,
@@ -23,7 +22,7 @@ import {
 import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
 import {
   getFloatingWorkspaceOperationRoute,
-  resolveStrictWorktreeOperationRouteResultForHost,
+  resolveWorktreeOperationRouteResultForHost,
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
@@ -91,7 +90,7 @@ export function namedHostForOwnerRef(
   )
 }
 
-function resolveRoute(
+export function resolveOwner(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
@@ -107,7 +106,7 @@ function resolveRoute(
   // Why strict: rival servers proxying the same `ssh:t` must not read as a directly dialed target.
   const match = toOwnerMatch(
     hostId
-      ? resolveStrictWorktreeOperationRouteResultForHost(state, ref.workspaceId, hostId)
+      ? resolveWorktreeOperationRouteResultForHost(state, ref.workspaceId, hostId)
       : resolveWorktreeOperationRouteResult(state, ref.workspaceId)
   )
   return match.kind === 'resolved'
@@ -148,34 +147,12 @@ function nestedRepoTargetId(
   return repo ? getRepoSshConnectionId(repo) : null
 }
 
-export function resolveOwner(
+/** Two hosts publish this workspace (or contest it), so no host-routed action may pick one. */
+export function isTwinWorkspace(
   state: WorktreeOperationRouteState,
-  ref: WorkspaceOwnerRef
-): ExecutionHostOwnerMatch<HostAuthority> {
-  return resolveRoute(focusFreeRouteState(state), ref)
-}
-
-/**
- * Only the fields the route resolvers read, so per-row selectors do not copy the whole store.
- * Focus is the only settings field they read; blanking it makes this focus-free.
- */
-function focusFreeRouteState(state: WorktreeOperationRouteState): {
-  [K in keyof Required<WorktreeOperationRouteState>]: WorktreeOperationRouteState[K]
-} {
-  return {
-    settings: null,
-    runtimeEnvironments: state.runtimeEnvironments,
-    folderWorkspaces: state.folderWorkspaces,
-    projectGroups: state.projectGroups,
-    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
-    activeWorktreeId: state.activeWorktreeId,
-    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
-    repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
-    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
-  }
+  workspaceId: string | null | undefined
+): boolean {
+  return !!workspaceId && resolveOwner(state, { workspaceId }).kind === 'ambiguous'
 }
 
 /** Transport to the workspace's owner, or `null` when the rows name none or disagree. */
@@ -270,13 +247,27 @@ export function isUnprovenServerSshRoute(
   ) {
     return false
   }
-  const repoId = getRepoIdFromWorktreeId(workspaceId)
-  const namesServer = (row: { id: string; hostId?: string; runtimeOwnerEnvironmentId?: string }) =>
-    row.id === workspaceId &&
-    parseExecutionHostId(row.hostId)?.id === at &&
-    row.runtimeOwnerEnvironmentId?.trim() === endpoint.environmentId
-  return !(
-    state.worktreesByRepo?.[repoId]?.some(namesServer) ||
-    state.detectedWorktreesByRepo?.[repoId]?.worktrees.some(namesServer)
+  return !someWorktreeCopy(
+    state,
+    workspaceId,
+    (row) =>
+      parseExecutionHostId(row.hostId)?.id === at &&
+      row.runtimeOwnerEnvironmentId?.trim() === endpoint.environmentId
+  )
+}
+
+type WorktreeCopy = { hostId?: string; runtimeOwnerEnvironmentId?: string }
+
+/** Whether a listed or detected row with this worktree id satisfies `matches`. */
+export function someWorktreeCopy(
+  state: Pick<WorktreeOperationRouteState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  worktreeId: string,
+  matches: (row: WorktreeCopy) => boolean
+): boolean {
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const copyMatches = (row: WorktreeCopy & { id: string }) => row.id === worktreeId && matches(row)
+  return Boolean(
+    state.worktreesByRepo?.[repoId]?.some(copyMatches) ||
+    state.detectedWorktreesByRepo?.[repoId]?.worktrees.some(copyMatches)
   )
 }

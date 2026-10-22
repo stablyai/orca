@@ -1,5 +1,6 @@
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { setDesktopBrowserBridgeHostEnabled } from '../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
 import { startOrcadBrowserProvider } from './orcad-browser-startup'
 import { OrcadRuntimeLifetime, type OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 import type { OrcadManagedStopInstance } from '../../shared/orcad-stop-request'
@@ -8,6 +9,7 @@ import { ORCAD_BUNDLED_LAUNCHER_ENV } from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-stop-deadlines'
+import { holdOrcadTerminalAdmissionUntilExit } from './orcad-stop-terminal-admission'
 import {
   acquireProfileStateRuntimeAdmission,
   type ProfileStateRuntimeAdmission
@@ -23,8 +25,6 @@ function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promi
     return completion
   }
 }
-
-export { ORCAD_SHUTDOWN_DEADLINE_MS }
 
 /**
  * True when this call began the stop; false when another source already owns it.
@@ -66,6 +66,7 @@ export function installOrcadShutdownSignals(
       return false
     }
     stopping = true
+    holdOrcadTerminalAdmissionUntilExit()
     exitCode = stoppedExitCode
     retractClean = onFailed
     setTimeout(() => {
@@ -144,8 +145,9 @@ export async function startOrcadWithHost<T extends object>(
       admission = acquireProfileStateRuntimeAdmission(userDataPath)
       // Why not awaited: a desktop sidecar's authorization UI must not hold RPC readiness hostage.
       browserProvider = startOrcadBrowserProvider({ userDataPath })
-      // Why: orcad has no desktop browser, so an opted-in desktop may serve this host's CLI.
-      setDesktopBrowserBridgeHostEnabled(true)
+      // Why managed only: a desktop opts in per SSH host, so a server the user started has no
+      // bridge to wait for; its CLI's browser commands go to the paired desktop hosting its pages.
+      setDesktopBrowserBridgeHostEnabled(Boolean(process.env[ORCAD_MANAGED_ACTIVATION_ROOT_ENV]))
       return { ...(await start(registerCleanup)), instance }
     },
     async (runtimeCleanupSucceeded) => {

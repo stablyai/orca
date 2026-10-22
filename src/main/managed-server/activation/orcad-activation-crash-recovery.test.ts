@@ -45,7 +45,7 @@ import { deployOrcad } from '../../ssh/orcad-remote-deploy'
 import { rollbackOrcad } from '../install/orcad-remote-rollback'
 import { recoverInterruptedOrcadActivation } from './orcad-activation-recovery'
 import { wakeStoppedManagedOrcad } from '../lifecycle/orcad-managed-wake'
-import { planManagedOrcadAutoUpdate } from '../lifecycle/orcad-managed-auto-update'
+import { planManagedOrcadAutoUpdate } from '../lifecycle/orcad-managed-update-decision'
 import { parseOrcadActivationRecord } from './orcad-activation-record'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
@@ -82,7 +82,9 @@ const deploy = (): Promise<unknown> =>
     ...slot,
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc',
-    census
+    census,
+    recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {}
   })
 const deployFromNewerApp = (): Promise<unknown> =>
   deployOrcad({
@@ -90,6 +92,8 @@ const deployFromNewerApp = (): Promise<unknown> =>
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc',
     census,
+    recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {},
     appVersion: '1.9.0'
   })
 const rollback = (): Promise<unknown> =>
@@ -97,6 +101,12 @@ const rollback = (): Promise<unknown> =>
     ...slot,
     record: FakeOrcadHost.newRecord(),
     census,
+    recountCensus: async () => ({
+      liveSessions: 0,
+      startedSinceActivation: 0,
+      daemonProtocolVersion: 3
+    }),
+    releaseIncumbentAdmission: async () => {},
     targetBuildHash: BUILD_HASH,
     targetDaemonProtocol: {
       protocolVersion: 3,
@@ -142,7 +152,10 @@ function expectExactlyTheRecordedSlot(): void {
 
 /** Unconfirmed termination never deletes a slot directory or a snapshot. */
 function expectNoSlotOrSnapshotRemoved(): void {
-  const removals = host.commands.filter((command) => /\brm -r?f\b/u.test(command))
+  const removals = host.commands
+    .filter((command) => /\brm -r?f\b/u.test(command))
+    // A failed capture's own partial archive was never a snapshot.
+    .map((command) => command.replace(/rm -f '[^']*\/state\.tar'\.partial/gu, ''))
   for (const command of removals) {
     // A file inside a slot (a consumed stop request) may go; the slot directory never does.
     expect(command).not.toMatch(/rm -r?f '[^']*\/orcad-\d[^'/]*\/?'/u)

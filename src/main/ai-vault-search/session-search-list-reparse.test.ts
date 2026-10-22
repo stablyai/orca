@@ -121,3 +121,19 @@ it('still indexes new appended messages', () => {
   })
   expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 4 })
 })
+
+it('keeps the index current when a second fold appends a span it already holds', () => {
+  // Pi and OMP fold one shared transcript apart, so the same append reaches the index twice.
+  replayTranscriptRead({ messages })
+  const append = {
+    candidate: syntheticCandidate({ sizeBytes: 5000 }),
+    mode: 'append' as const,
+    previousByteOffset: 4096,
+    messages,
+    outcome: { byteOffset: 5000 }
+  }
+  replayTranscriptRead(append)
+  replayTranscriptRead(append)
+  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 4 })
+  expect(index.db.prepare('SELECT state FROM files').get()).toEqual({ state: 'current' })
+})

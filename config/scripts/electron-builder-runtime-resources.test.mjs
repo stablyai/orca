@@ -561,11 +561,15 @@ async function seedPackagedServePayload(resourcesDir) {
   const entry = join(resourcesDir, 'app.asar.unpacked', 'out', ...SERVE_SELECTION_ENTRY.split('/'))
   await mkdir(dirname(entry), { recursive: true })
   await writeFile(entry, '')
-  const webDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'web')
+  const webDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'renderer')
   await mkdir(join(webDir, 'assets'), { recursive: true })
   await mkdir(join(resourcesDir, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
   await writeFile(join(webDir, 'web-index.html'), '<script src="./assets/web.js"></script>')
   await writeFile(join(webDir, 'assets', 'web.js'), '')
+  await writeFile(
+    join(webDir, '.orca-web-client-files.json'),
+    JSON.stringify(['web-index.html', 'assets/web.js'])
+  )
 }
 
 async function seedBundledRipgrep(resourcesDir) {

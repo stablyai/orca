@@ -1,4 +1,4 @@
-import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -163,11 +163,7 @@ export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
   return groups.map((g) => (g.id === updated.id ? updated : g))
 }
 
-export function isTransientEditorContentType(contentType: TabContentType): boolean {
-  return (
-    contentType === 'diff' || contentType === 'conflict-review' || contentType === 'check-details'
-  )
-}
+export { isTransientEditorContentType } from '../../../../shared/workspace-layout/saved-editor-tab-restore'
 
 export function getPersistedEditFileIdsByWorktree(
   session: WorkspaceSessionState

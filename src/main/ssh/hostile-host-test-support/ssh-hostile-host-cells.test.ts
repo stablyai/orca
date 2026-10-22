@@ -44,6 +44,7 @@ describe('hostile-host cells', () => {
       ['ubuntu2204-noexec-home', 'linux-x64-glibc', 'unavailable'],
       ['centos7-glibc217', 'linux-x64-glibc217', 'activated'],
       ['debian10-no-egress', 'linux-x64-glibc', 'activated'],
+      ['almalinux8-desktop-no-egress', 'linux-x64-glibc', 'activated'],
       ['macos-arm64-local-sshd', 'darwin-arm64', 'activated'],
       ['macos-x64-local-sshd', 'darwin-x64', 'activated']
     ])

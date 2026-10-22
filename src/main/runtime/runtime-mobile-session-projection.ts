@@ -11,6 +11,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
@@ -20,6 +21,7 @@ import {
   buildProjectedMobileTerminalClientTab,
   finalizeRuntimeMobileSessionTabsResult
 } from './runtime-mobile-session-result-finalization'
+import { withStructuredChatStatus } from './runtime-mobile-structured-tab-status'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import { resolveManualTerminalTitle } from './manual-terminal-title'
 import {
@@ -108,8 +110,12 @@ export function projectRuntimeMobileSessionTabs(
       })
       continue
     }
-    if (tab.type === 'markdown' || tab.type === 'file' || tab.type === 'agent-session') {
+    if (tab.type === 'markdown' || tab.type === 'file') {
       tabs.push(tab)
+      continue
+    }
+    if (tab.type === 'agent-session') {
+      tabs.push(withStructuredChatStatus(tab, snapshot.worktree, getHookRowsForPane))
       continue
     }
     const syncedTab = host.tabs.get(tab.parentTabId)
@@ -187,7 +193,14 @@ export function projectRuntimeMobileSessionTabs(
       ownerAgent,
       ownerOptions
     )
-    const title = manualTitle ?? normalizedLiveTitle
+    // Why: the desktop's ranking over main's fresher live title; the window sends a generated
+    // name only while the desktop shows it, so it is passed as enabled.
+    const desktopTitle = resolveTerminalTabTitle(
+      { ...tab, title: normalizedLiveTitle },
+      true,
+      normalizedLiveTitle
+    )
+    const title = manualTitle ?? desktopTitle
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
     const rendererStatusAgent =

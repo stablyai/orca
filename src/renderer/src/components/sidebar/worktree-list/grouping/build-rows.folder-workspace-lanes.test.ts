@@ -3,6 +3,7 @@ import { buildRows } from './build-rows.test-fixture'
 import { getFolderWorkspaceLaneKey } from '../../../../../../shared/sidebar-list/folder-workspace-lanes'
 import { getPRLaneKey } from '../../../../../../shared/sidebar-list/group-keys'
 import { getPRGroupKey } from './pr-group-key'
+import { getRenderRowKey } from '../listing/render-row'
 import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
@@ -95,7 +96,24 @@ describe('folder workspaces render under every Group by mode', () => {
 
   it('does not duplicate the row under repo grouping', () => {
     const rows = buildSidebarRows({ groupBy: 'repo' })
-    expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:fw-1'])
+    expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:local|folder:fw-1'])
+  })
+
+  it('keys the same folder id on two hosts apart, as the desktop draws them', () => {
+    const folders = [
+      makeFolderWorkspace(),
+      makeFolderWorkspace({ executionHostId: 'runtime:env-1', connectionId: null }),
+      makeFolderWorkspace({ connectionId: 'gpu-vm' })
+    ]
+    const rows = folderRows(buildSidebarRows({ groupBy: 'none', folderWorkspaces: folders }))
+    expect(new Set(rows.map((row) => row.key))).toEqual(
+      new Set([
+        'folder-workspace:local|folder:fw-1',
+        'folder-workspace:runtime:env-1|folder:fw-1',
+        'folder-workspace:ssh:gpu-vm|folder:fw-1'
+      ])
+    )
+    expect(rows.map(getRenderRowKey)).toEqual(rows.map((row) => row.key))
   })
 })
 

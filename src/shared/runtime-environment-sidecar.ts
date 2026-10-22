@@ -61,7 +61,6 @@ const SidecarEnvelopeSchema = z.object({
 })
 
 export type RuntimeEnvironmentSidecarEntry = z.infer<typeof SidecarEntrySchema>
-export type RuntimeEnvironmentSidecarSshAccess = z.infer<typeof SidecarSshAccessSchema>
 type RuntimeEnvironmentSidecar = z.infer<typeof SidecarSchema> & {
   /** Entries this build cannot read, kept verbatim; their environments must not be used. */
   unreadable: Record<string, unknown>

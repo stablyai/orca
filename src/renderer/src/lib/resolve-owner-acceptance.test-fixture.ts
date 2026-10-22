@@ -1,5 +1,5 @@
-/** Hand-reviewed owner per matrix case for `resolveOwnerWithLegacyFallback` (round-3 design §5). */
-export const LEGACY_FALLBACK_OWNER_ACCEPTANCE: Record<string, string> = {
+/** Hand-reviewed owner per matrix case for `resolveOwnerOrLocal` (round-3 design §5). */
+export const OWNER_OR_LOCAL_ACCEPTANCE: Record<string, string> = {
   'focused | global-floating-terminal': 'self@local',
   'focused | local-repo::wt': 'self@local',
   'focused | legacy-repo::wt': 'self@local',
@@ -46,7 +46,7 @@ export const LEGACY_FALLBACK_OWNER_ACCEPTANCE: Record<string, string> = {
   'no focus | folder:missing-folder': 'self@local',
   'single focus | global-floating-terminal': 'self@local',
   'single focus | local-repo::wt': 'self@local',
-  'single focus | legacy-repo::wt': 'env:focused-env@local',
+  'single focus | legacy-repo::wt': 'self@local',
   'single focus | runtime-repo::wt': 'env:owner-env@local',
   'single focus | ssh-repo::wt': 'self@ssh:box',
   'single focus | hub-repo::wt': 'env:hub-env@ssh:box',
@@ -63,9 +63,9 @@ export const LEGACY_FALLBACK_OWNER_ACCEPTANCE: Record<string, string> = {
   'single focus | folder:ssh-folder': 'self@ssh:box',
   'single focus | folder:twin-folder': 'ambiguous',
   'single focus | folder:group-twin-folder': 'ambiguous',
-  'single focus | folder:unstamped-folder': 'env:focused-env@local',
+  'single focus | folder:unstamped-folder': 'self@local',
   'single focus | folder:restored-folder': 'env:owner-env@local',
-  'single focus | folder:missing-folder': 'env:focused-env@local',
+  'single focus | folder:missing-folder': 'self@local',
   'active local | twin-repo::wt': 'self@local',
   'active ssh:box | twin-repo::wt': 'self@ssh:box',
   'active local | rival-repo::wt': 'self@local',

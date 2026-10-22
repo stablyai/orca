@@ -2,10 +2,7 @@ import { agentSessionAccountHome } from '../../shared/agent-session-account-home
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
-import {
-  acpLaunchVersionSupported,
-  resolveAcpLaunchCommand
-} from '../acp/acp-structured-launch-resolution'
+import { resolveAcpLaunchCommand } from '../acp/acp-structured-launch-resolution'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
@@ -34,10 +31,11 @@ export type StructuredAgentRuntimeCatalogEntry =
   | { kind: 'acp'; metadata: StructuredAgentRuntimeMetadata; spec: AcpLaunchSpec }
 
 function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
+  const { minimumVersions } = spec
   return {
     definition: acpStructuredAgentDefinition(spec),
     supportsLocation: (location) => supportsAcpStructuredLocation(spec, location),
-    ...(spec.supportsVersion
+    ...(minimumVersions
       ? {
           launchCheck: {
             resolveLaunch: (shellEnv, commandSettings) => {
@@ -48,7 +46,7 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
               })
               return { command, env }
             },
-            supportsVersion: (launch) => acpLaunchVersionSupported(spec, launch)
+            minimumVersions
           }
         }
       : {}),

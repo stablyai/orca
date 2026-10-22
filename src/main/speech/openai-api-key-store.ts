@@ -52,6 +52,22 @@ export function hasOpenAiSpeechApiKey(): boolean {
   return existsSync(getOpenAiKeyPath())
 }
 
+/**
+ * Whether the stored key decrypts on this host. Why orcad needs it: a key the desktop sealed with
+ * Electron's safeStorage exists on disk but orcad's own secret store cannot open it.
+ */
+export function canReadOpenAiSpeechApiKey(): boolean {
+  if (!hasOpenAiSpeechApiKey()) {
+    return false
+  }
+  try {
+    readOpenAiSpeechApiKey()
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** How the stored speech key sits on disk, or null when none is stored. */
 export function getOpenAiSpeechApiKeyProtection(): SecretAtRestProtection | null {
   // The legacy JSON wrapper only ever held base64 ciphertext, so it is sealed by shape.
@@ -98,11 +114,19 @@ export function readOpenAiSpeechApiKey(): string {
     }
     cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
       ? decryptOrLegacyPlaintext(raw)
-      : raw.toString('utf8')
+      : plaintextOnly(raw)
     return cachedOpenAiSpeechApiKey
   } catch {
     throw new Error('OpenAI API key could not be decrypted')
   }
+}
+
+// Why: with no sealing here, sealed bytes are another store's ciphertext, never a usable key.
+function plaintextOnly(raw: Buffer): string {
+  if (classifyUnenvelopedCredential(raw) !== 'plaintext') {
+    throw new Error('sealed by another secret store')
+  }
+  return raw.toString('utf8')
 }
 
 // Why: a key saved before sealing became available stays plaintext until it is migrated or re-saved.

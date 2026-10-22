@@ -5,7 +5,7 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 export type StructuredAgentSessionProviderOpenInput = {
   sessionId: string
   fence: number
-  acquisitionGeneration: string | null
+  acquisitionGeneration: string
   signal: AbortSignal
 }
 

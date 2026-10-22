@@ -2,14 +2,15 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { resolveOwner } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { isTwinWorkspace } from '@/lib/resolve-owner'
 import { detectLanguage } from '@/lib/language-detect'
 import {
   buildWorkspaceFileContextForFile,
   canClientOsOpenWorkspaceFile
 } from '@/lib/workspace-file-host-routing'
 import { useAppStore } from '@/store'
+import { openWorkspaceFile } from '@/lib/workspace-file-open'
 import { downloadAndOpenRemoteTerminalFile } from '@/components/terminal-pane/terminal-remote-file-download-open'
 
 export type DocPreviewDocument = {
@@ -30,16 +31,22 @@ export type DocPreviewDocument = {
  * preview keeps its own id, so the reader can leave the rendered page where it was.
  */
 export function openDocPreviewSource(document: DocPreviewDocument): void {
-  useAppStore.getState().openFile({
-    filePath: document.filePath,
-    relativePath: document.relativePath,
-    worktreeId: document.worktreeId,
-    // Why not the preview tab's language: it is pinned to 'html' for the preview itself, and the
-    // source tab needs the editor's own detection to pick a highlighter.
-    language: detectLanguage(document.filePath),
-    runtimeEnvironmentId: document.runtimeEnvironmentId,
-    ...(document.externalSshTargetId ? { externalSshTargetId: document.externalSshTargetId } : {}),
-    mode: 'edit'
+  openWorkspaceFile({
+    kind: 'file',
+    intent: 'source',
+    file: {
+      filePath: document.filePath,
+      relativePath: document.relativePath,
+      worktreeId: document.worktreeId,
+      // Why not the preview tab's language: it is pinned to 'html' for the preview itself, and the
+      // source tab needs the editor's own detection to pick a highlighter.
+      language: detectLanguage(document.filePath),
+      runtimeEnvironmentId: document.runtimeEnvironmentId,
+      ...(document.externalSshTargetId
+        ? { externalSshTargetId: document.externalSshTargetId }
+        : {}),
+      mode: 'edit'
+    }
   })
 }
 
@@ -64,7 +71,7 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
   // renders through was minted against the worktree's owner at render time, and a tab opened or
   // restored before that owner was known still carries null — which reads as local.
   const runtimeEnvironmentId =
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, document.worktreeId) ??
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, document.worktreeId) ??
     document.runtimeEnvironmentId
   const fileContext = buildWorkspaceFileContextForFile(
     document.worktreeId,
@@ -81,7 +88,7 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
     runtimeEnvironmentId === null &&
     worktreeRoot !== null &&
     // Why: a twin reads as "no server", which is not proof this machine holds the file.
-    resolveOwner(state, { workspaceId: document.worktreeId }).kind !== 'ambiguous'
+    !isTwinWorkspace(state, document.worktreeId)
   if (ownedByThisMachine && canClientOsOpenWorkspaceFile(fileContext)) {
     void window.api.shell.openFilePath(document.filePath, LOCAL_EXECUTION_HOST_ID)
     return

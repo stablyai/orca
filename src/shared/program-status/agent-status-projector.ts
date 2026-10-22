@@ -1,10 +1,7 @@
 // Projects OSC 7501 records onto agent-status payloads so they ride the OSC 9999 terminal-status ingress.
 import type { AgentStatusState, ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentSubagentSnapshot, AgentSubagentState } from '../agent-status-subagent-snapshot'
-import {
-  AGENT_STATUS_MAX_SUBAGENTS,
-  AGENT_SUBAGENT_ID_MAX_LENGTH
-} from '../agent-status-subagent-snapshot'
+import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status-subagent-snapshot'
 import type { AgentTurnOutcome } from '../agent-turn-outcome'
 import { createProgramStatusOscScanner } from './osc-scanner'
 import {
@@ -160,7 +157,7 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
         childStartedAt.delete(id)
       }
     }
-    return children.slice(-AGENT_STATUS_MAX_SUBAGENTS)
+    return children
   }
 
   const project = (): ParsedAgentStatusPayload | null => {

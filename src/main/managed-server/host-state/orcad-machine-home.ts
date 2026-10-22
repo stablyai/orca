@@ -56,7 +56,7 @@ const LOCAL_FILESYSTEM_TYPES = new Set([
   'hfsplus'
 ])
 
-export type OrcadMachineIdentity = {
+type OrcadMachineIdentity = {
   /** Short, path-safe hash; the raw identity never lands on disk. */
   key: string
   /** What the data root's profile-state owners record, to recognise another machine's. */
@@ -64,7 +64,7 @@ export type OrcadMachineIdentity = {
   hostname: string | null
 }
 
-export type OrcadMachineClaimRead =
+type OrcadMachineClaimRead =
   | { state: 'absent' }
   | { state: 'present'; machineKey: string }
   | { state: 'unreadable'; reason: string }
@@ -86,7 +86,7 @@ export type OrcadMachineHomeProbe = {
   homeOnLocalDisk: boolean
 }
 
-export type OrcadMachineHomeDecision =
+type OrcadMachineHomeDecision =
   | { kind: 'login-home' }
   | { kind: 'claim'; machineKey: string }
   | { kind: 'machine-home'; machineKey: string }
@@ -94,7 +94,7 @@ export type OrcadMachineHomeDecision =
   | { kind: 'unresolved'; machineKey: string; cause: OrcadMachineOwnershipUnresolvedCause }
 
 /** A stopped install left no owner; an older orcad's owner recorded no machine identity. */
-export type OrcadMachineOwnershipUnresolvedCause = 'stopped-install' | 'unattributed-owner'
+type OrcadMachineOwnershipUnresolvedCause = 'stopped-install' | 'unattributed-owner'
 
 /**
  * Reads the login home, this machine's identity, the claim, and who holds the shared data root,

@@ -18,6 +18,8 @@ export type RelayRuntimeCounts = {
   splices: number
   pendingSplices: number
   queuedBytes: number
+  // Step 6: resume audit rows a memory cell dropped since boot; the watcher pages on any.
+  resumeAuditDropped?: number
 }
 
 export function observedRelayRequests(counts: RelayRuntimeCounts): number {
@@ -105,6 +107,12 @@ export interface RelayRuntimeObserver {
   recordSpliceClose?(trigger: string): void
   recordClientAcceptAbandoned?(stage: RelayClientAcceptStage, elapsedMs: number): void
   recordClientAcceptCompleted?(sample: RelayClientAcceptSample): void
+  // Step 6: every phone refusal by close code, and the phone-path failures the watcher reads.
+  recordPhoneRejection?(code: number): void
+  recordPhoneAttachDeadline?(): void
+  recordPhoneAcceptDatabaseError?(): void
+  recordResumeConfirmFailure?(code: string): void
+  recordResumeRenewalFailure?(): void
   recordControlRtt?(rttMs: number): void
   recordHostPreAuth?(path: HostPreAuthPath, outcome: HostPreAuthOutcome, durationMs: number): void
 }
@@ -163,6 +171,7 @@ export const RELAY_CLIENT_ACCEPT_TIMED_STAGES = [
 export type RelayClientAcceptSample = {
   totalMs: number
   stageMs: Record<RelayClientAcceptTimedStage, number>
+  phonePath?: 'db' | 'memory'
 }
 
 type RelayMetricDeltas = {
@@ -207,6 +216,12 @@ type RelayMetricDeltas = {
   clientAcceptAbandonedMsMax: number
   clientAcceptTotalsMs: number[]
   clientAcceptStageSamplesMs: Record<RelayClientAcceptTimedStage, number[]>
+  clientAcceptsByPhonePath: Record<string, number>
+  phoneRejectionsByCode: Record<string, number>
+  phoneAttachDeadlines: number
+  phoneAcceptDatabaseErrors: number
+  resumeConfirmFailuresByCode: Record<string, number>
+  resumeRenewalFailures: number
   controlRttSamplesMs: number[]
   controlRttObserved: number
   controlRenewalLatenciesMs: number[]
@@ -302,6 +317,12 @@ const emptyDeltas = (): RelayMetricDeltas => ({
     attach: [],
     basis: []
   },
+  clientAcceptsByPhonePath: {},
+  phoneRejectionsByCode: {},
+  phoneAttachDeadlines: 0,
+  phoneAcceptDatabaseErrors: 0,
+  resumeConfirmFailuresByCode: {},
+  resumeRenewalFailures: 0,
   controlRttSamplesMs: [],
   controlRttObserved: 0,
   controlRenewalLatenciesMs: [],
@@ -550,10 +571,31 @@ export class RelayObservability implements RelayRuntimeObserver {
   }
 
   recordClientAcceptCompleted(sample: RelayClientAcceptSample): void {
+    if (sample.phonePath) increment(this.deltas.clientAcceptsByPhonePath, sample.phonePath)
     this.deltas.clientAcceptTotalsMs.push(sample.totalMs)
     for (const stage of RELAY_CLIENT_ACCEPT_TIMED_STAGES) {
       this.deltas.clientAcceptStageSamplesMs[stage].push(sample.stageMs[stage])
     }
+  }
+
+  recordPhoneRejection(code: number): void {
+    increment(this.deltas.phoneRejectionsByCode, String(code))
+  }
+
+  recordPhoneAttachDeadline(): void {
+    this.deltas.phoneAttachDeadlines += 1
+  }
+
+  recordPhoneAcceptDatabaseError(): void {
+    this.deltas.phoneAcceptDatabaseErrors += 1
+  }
+
+  recordResumeConfirmFailure(code: string): void {
+    increment(this.deltas.resumeConfirmFailuresByCode, code)
+  }
+
+  recordResumeRenewalFailure(): void {
+    this.deltas.resumeRenewalFailures += 1
   }
 
   recordControlRtt(rttMs: number): void {
@@ -683,6 +725,13 @@ export class RelayObservability implements RelayRuntimeObserver {
       clientAcceptsAbandonedByStageDelta: deltas.clientAcceptsAbandonedByStage,
       clientAcceptAbandonedMsMax: roundMs(deltas.clientAcceptAbandonedMsMax),
       clientAcceptCompletedDelta: deltas.clientAcceptTotalsMs.length,
+      clientAcceptsByPhonePathDelta: deltas.clientAcceptsByPhonePath,
+      // Phone refusals by close code; attach deadlines are the 4404s sent with the control still up.
+      phoneRejectionsByCodeDelta: deltas.phoneRejectionsByCode,
+      phoneAttachDeadlinesDelta: deltas.phoneAttachDeadlines,
+      phoneAcceptDatabaseErrorsDelta: deltas.phoneAcceptDatabaseErrors,
+      resumeConfirmFailuresByCodeDelta: deltas.resumeConfirmFailuresByCode,
+      resumeRenewalFailuresDelta: deltas.resumeRenewalFailures,
       // Accepts are sparse: publishing a zero percentile for every empty window
       // would pin the p50 at 0 forever and collapse the p95 at low accept rates.
       ...(deltas.clientAcceptTotalsMs.length === 0

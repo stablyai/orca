@@ -1,75 +1,142 @@
 import { translate } from '@/i18n/i18n'
-import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
+import { isConnectedRuntimeHostState } from '@/runtime/runtime-host-connection-state'
+import type {
+  RemoteServerUpdateEntry,
+  RemoteServerUpdatePhase
+} from '@/runtime/remote-server-update-coordinator'
 import {
   getRuntimeServerConnectionLabel,
-  getRuntimeServerDotClass,
   type RuntimeServerConnectionState
 } from './runtime-environment-host-details'
+import { getRemoteServerUpdatePhaseLabel } from './RemoteServerUpdateStatus'
+import type { ServerRowStatus } from './runtime-server-list-row'
 
-export type RuntimeServerStatusIndicator = {
-  label: string
-  labelClassName: string
-  dotClassName: string
+const UPDATING_PHASES: ReadonlySet<RemoteServerUpdatePhase> = new Set([
+  'queued',
+  'checking-update',
+  'downloading',
+  'restarting'
+])
+
+export function isRemoteServerUpdateInFlight(entry: RemoteServerUpdateEntry | undefined): boolean {
+  return entry !== undefined && UPDATING_PHASES.has(entry.phase)
 }
 
-export function getRuntimeServerStatusIndicator(
-  connectionState: RuntimeServerConnectionState,
+export type RuntimeServerStatusInput = {
+  connectionState: RuntimeServerConnectionState
   accessRevoked: boolean
-): RuntimeServerStatusIndicator {
+  compatibilityBlocked: boolean
+  /** The latest probe failed with an error rather than being a user disconnect. */
+  probeFailed: boolean
+  connecting: boolean
+  disconnecting: boolean
+  remoteUpdate: RemoteServerUpdateEntry | undefined
+  /** A managed server whose loaded status has no active version. */
+  managedNotRunning?: boolean
+}
+
+/** One status per row; it replaces the old stack of "Disconnected", "Offline" and "Status unavailable". */
+export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput): ServerRowStatus {
   // Why: the host answered and refused our token, so "Disconnected" would misstate a reachable host.
-  if (accessRevoked) {
+  if (input.accessRevoked) {
     return {
       label: translate(
         'auto.components.settings.RuntimeEnvironmentsPane.serverAccessRevoked',
         'Access revoked'
       ),
-      labelClassName: 'text-destructive',
-      dotClassName: 'bg-destructive'
+      tone: 'destructive'
     }
   }
-  return {
-    label: getRuntimeServerConnectionLabel(connectionState),
-    labelClassName: 'text-muted-foreground',
-    dotClassName: getRuntimeServerDotClass(connectionState)
+  if (input.remoteUpdate && isRemoteServerUpdateInFlight(input.remoteUpdate)) {
+    return {
+      label: getRemoteServerUpdatePhaseLabel(input.remoteUpdate.phase),
+      tone: 'muted',
+      busy: true
+    }
   }
-}
-
-export type RuntimeServerVersionFooter = {
-  text: string
-  showUpdateStatus: boolean
-}
-
-export function getRuntimeServerVersionFooter(
-  entry: RemoteServerUpdateEntry,
-  options: { accessRevoked: boolean; lastKnownVersion: string | null | undefined }
-): RuntimeServerVersionFooter | null {
-  // Why: a revoked host refuses the version probe; "Offline" would contradict the revoked verdict.
-  if (options.accessRevoked && entry.phase === 'offline') {
-    const lastKnownVersion = options.lastKnownVersion?.trim()
-    return lastKnownVersion
-      ? {
-          text: translate(
-            'auto.components.settings.RuntimeEnvironmentsPane.orcaVersionLastSeen',
-            'Orca v{{value0}} (last seen)',
-            { value0: lastKnownVersion }
-          ),
-          showUpdateStatus: false
-        }
-      : null
+  if (input.connecting) {
+    return {
+      label: translate('auto.components.settings.serverList.connecting', 'Connecting…'),
+      tone: 'muted',
+      busy: true
+    }
   }
-  return {
-    text: entry.currentVersion
-      ? translate(
-          'auto.components.settings.RuntimeEnvironmentsPane.orcaVersion',
-          'Orca v{{value0}}',
-          {
-            value0: entry.currentVersion
+  if (input.disconnecting) {
+    return {
+      label: translate('auto.components.settings.serverList.disconnecting', 'Disconnecting…'),
+      tone: 'muted',
+      busy: true
+    }
+  }
+  if (input.compatibilityBlocked) {
+    return {
+      label: translate('auto.components.settings.serverList.needsUpdate', 'Needs update'),
+      tone: 'destructive'
+    }
+  }
+  // Why after the states above: revoked, updating, connecting or incompatible say more than this.
+  if (input.managedNotRunning && !isConnectedRuntimeHostState(input.connectionState)) {
+    return {
+      label: translate('auto.components.settings.managedServers.row.notRunning', 'Not running'),
+      tone: 'muted'
+    }
+  }
+  const label = getRuntimeServerConnectionLabel(input.connectionState)
+  switch (input.connectionState) {
+    case 'connected':
+      return { label, tone: 'success' }
+    case 'checking':
+      return { label, tone: 'muted', busy: true }
+    case 'reconnecting':
+      return { label, tone: 'warning', busy: true }
+    case 'runtime-unavailable':
+    case 'workspace-window-closed':
+      return { label, tone: 'warning' }
+    case 'disconnected':
+      // Why "Unreachable": a probe that got no answer doesn't prove the host is down.
+      return input.probeFailed
+        ? {
+            label: translate('auto.components.settings.serverList.unreachable', 'Unreachable'),
+            tone: 'muted'
           }
-        )
-      : translate(
-          'auto.components.settings.RuntimeEnvironmentsPane.versionUnavailable',
-          'Orca version unavailable'
-        ),
-    showUpdateStatus: true
+        : { label, tone: 'muted' }
+  }
+}
+
+/** The version part of the meta line; null when no version was ever verified. */
+export function getRuntimeServerVersionText(
+  entry: RemoteServerUpdateEntry | undefined,
+  lastKnownVersion: string | null | undefined
+): string | null {
+  const version = entry?.currentVersion?.trim() || lastKnownVersion?.trim()
+  return version
+    ? translate('auto.components.settings.serverList.version', 'v{{version}}', {
+        version
+      })
+    : null
+}
+
+export function getRuntimeServerAvailableUpdateText(
+  entry: RemoteServerUpdateEntry | undefined
+): string | null {
+  if (entry?.phase !== 'available') {
+    return null
+  }
+  return entry.targetVersion
+    ? translate('auto.components.settings.serverList.updateAvailable', 'v{{version}} available', {
+        version: entry.targetVersion
+      })
+    : translate('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
+}
+
+/** host:port of a ws:// endpoint; the raw string when it isn't a URL. */
+export function formatRuntimeEndpointAddress(endpoint: string | undefined): string | null {
+  if (!endpoint) {
+    return null
+  }
+  try {
+    return new URL(endpoint).host || endpoint
+  } catch {
+    return endpoint
   }
 }

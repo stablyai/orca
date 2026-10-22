@@ -2,6 +2,8 @@ import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecy
 import { normalizeQoderEvent } from './providers/qoder-events'
 import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
+import { readHostTurnSignals } from '../agent-hook-turn-end-timing'
+import type { AgentHookEventPayload } from './listener-event'
 import { readLastCommandCodeUserPromptEntryFromTranscript } from './command-code-transcript'
 import { readGrokHomeEnvelope } from './grok-result-discovery'
 import { readFirstString } from './interactive-tool'
@@ -38,6 +40,7 @@ export type ProviderDispatchResult = {
   hasTranscriptPromptEvidence: boolean
   /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
   eventName: unknown
+  hostTurnSignals: Pick<AgentHookEventPayload, 'stopHookActive' | 'nativeTurnKey'>
 }
 
 /** Exhaustive provider routing with provider-specific transcript locality and attribution. */
@@ -223,6 +226,7 @@ export function normalizeProviderEvent(input: {
     resolvedPromptText,
     promptInteractionKey,
     hasTranscriptPromptEvidence,
-    eventName
+    eventName,
+    hostTurnSignals: readHostTurnSignals(source, hookPayload, promptInteractionKey)
   }
 }

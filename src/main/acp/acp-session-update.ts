@@ -1,8 +1,4 @@
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { acpWindowUsage } from './acp-context-usage'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
 import type { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
@@ -80,15 +76,12 @@ export function acpSessionUpdate(
           body: {
             kind: 'status',
             presentation: 'plan-document',
-            text: boundInlineText(
-              update.entries
-                .map(
-                  (entry) =>
-                    `- [${entry.status === 'completed' ? 'x' : entry.status === 'in_progress' ? '~' : ' '}] ${entry.content}`
-                )
-                .join('\n'),
-              DEFAULT_JOURNAL_PAYLOAD_LIMITS
-            ).text
+            text: update.entries
+              .map(
+                (entry) =>
+                  `- [${entry.status === 'completed' ? 'x' : entry.status === 'in_progress' ? '~' : ' '}] ${entry.content}`
+              )
+              .join('\n')
           },
           ...join
         }

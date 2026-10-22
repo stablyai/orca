@@ -10,10 +10,8 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo, DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import {
-  readWorktreeMetaForRepo,
-  writeWorktreeMetaForHost
-} from '../../../persistence/host-qualified-worktree-meta'
+import { readWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
 import {
   buildKnownOrcaWorkspaceLayouts,
@@ -117,7 +115,10 @@ export function listDisconnectedSshWorktrees(
         ? { ...candidate.meta, ...ownershipUpdates }
         : candidate.meta
     if (Object.keys(ownershipUpdates).length > 0) {
-      writeWorktreeMetaForHost(store, candidate.id, expectedHostId, ownershipUpdates)
+      store.setWorktreeMeta(
+        hostWorktreeTarget({ id: candidate.id, hostId: expectedHostId }),
+        ownershipUpdates
+      )
     }
     // Why: synthesized rows carry no branch, so the title would fall through to the DESKTOP's basename()
     // applied to a REMOTE path — a Windows remote then renders its whole C:\... path as the name. Rows must

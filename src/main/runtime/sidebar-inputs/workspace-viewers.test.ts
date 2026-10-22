@@ -50,4 +50,13 @@ describe('WorkspaceViewers', () => {
     second()
     expect(v.isViewing(WT, PANE)).toBe(false)
   })
+
+  it('counts everything as seen while an older desktop that raises the flag itself is connected', () => {
+    const { viewers: v } = viewers()
+    v.noteSelfRaisingClient('old-desktop')
+    expect(v.isViewing(WT, PANE)).toBe(true)
+    expect(v.isViewing('repo-1::/tmp/b', null)).toBe(true)
+    v.dropClient('old-desktop')
+    expect(v.isViewing(WT, PANE)).toBe(false)
+  })
 })

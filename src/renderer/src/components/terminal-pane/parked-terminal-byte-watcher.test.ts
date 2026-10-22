@@ -34,6 +34,7 @@ type MockStoreState = {
   setCacheTimerStartedAt: ReturnType<typeof vi.fn>
   observeTerminalGitHubPullRequestLink: ReturnType<typeof vi.fn>
   agentStatusByPaneKey: Record<string, { state: string; prompt: string; agentType?: string }>
+  paneForegroundAgentByPaneKey: Record<string, { agent: string | null }>
 }
 
 const dispatchTerminalNotification = vi.fn()
@@ -81,7 +82,8 @@ function createMockStoreState(): MockStoreState {
     markTerminalBell: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
-    agentStatusByPaneKey: {}
+    agentStatusByPaneKey: {},
+    paneForegroundAgentByPaneKey: {}
   }
 }
 

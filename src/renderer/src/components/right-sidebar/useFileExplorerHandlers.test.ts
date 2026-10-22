@@ -35,7 +35,7 @@ describe('activateFileExplorerNode', () => {
     await activateFileExplorerNode({
       node: directoryNode,
       activeWorktreeId: 'wt-1',
-      openFile: vi.fn(),
+      openWorkspaceFile: vi.fn(),
       toggleDir,
       canToggleDirectories: false,
       loadDir: vi.fn(),
@@ -52,12 +52,12 @@ describe('activateFileExplorerNode', () => {
     const loadDir = vi.fn().mockResolvedValue(true)
     const markPathAsDirectory = vi.fn()
     const toggleDir = vi.fn()
-    const openFile = vi.fn()
+    const openWorkspaceFile = vi.fn()
 
     await activateFileExplorerNode({
       node: symlinkNode,
       activeWorktreeId: 'wt-1',
-      openFile,
+      openWorkspaceFile,
       toggleDir,
       loadDir,
       statPath: vi.fn().mockResolvedValue({ isDirectory: true }),
@@ -72,17 +72,17 @@ describe('activateFileExplorerNode', () => {
     })
     expect(markPathAsDirectory).toHaveBeenCalledWith('/repo/linked-docs')
     expect(toggleDir).toHaveBeenCalledWith('wt-1', '/repo/linked-docs')
-    expect(openFile).not.toHaveBeenCalled()
+    expect(openWorkspaceFile).not.toHaveBeenCalled()
   })
 
   it('does not follow a folder link that leads out of the project', async () => {
     const loadDir = vi.fn()
-    const openFile = vi.fn()
+    const openWorkspaceFile = vi.fn()
 
     await activateFileExplorerNode({
       node: { ...symlinkNode, operationOwner: { kind: 'local' } },
       activeWorktreeId: 'wt-1',
-      openFile,
+      openWorkspaceFile,
       toggleDir: vi.fn(),
       loadDir,
       statPath: vi.fn().mockResolvedValue({ isDirectory: true, escapesWorktree: true }),
@@ -91,14 +91,14 @@ describe('activateFileExplorerNode', () => {
     })
 
     expect(loadDir).not.toHaveBeenCalled()
-    expect(openFile).not.toHaveBeenCalled()
+    expect(openWorkspaceFile).not.toHaveBeenCalled()
     expect(toastError).toHaveBeenCalledWith(
       "This folder links outside the project, so it can't be opened here."
     )
   })
 
   it('opens a file link that leads out of the project by its absolute path', async () => {
-    const openFile = vi.fn()
+    const openWorkspaceFile = vi.fn()
     useAppStore.setState({
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
@@ -109,7 +109,7 @@ describe('activateFileExplorerNode', () => {
       node: { ...symlinkNode, operationOwner: { kind: 'local' } },
       activeWorktreeId: 'wt-1',
       runtimeEnvironmentId: null,
-      openFile,
+      openWorkspaceFile,
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn().mockResolvedValue({ isDirectory: false, escapesWorktree: true }),
@@ -118,18 +118,21 @@ describe('activateFileExplorerNode', () => {
     })
 
     // The absolute relativePath marks the tab as user-named, which survives a restart.
-    expect(openFile).toHaveBeenCalledWith(
+    expect(openWorkspaceFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        filePath: '/repo/linked-docs',
-        relativePath: '/repo/linked-docs',
-        worktreeId: 'wt-1'
-      }),
-      expect.anything()
+        kind: 'file',
+        file: expect.objectContaining({
+          filePath: '/repo/linked-docs',
+          relativePath: '/repo/linked-docs',
+          worktreeId: 'wt-1'
+        }),
+        options: expect.anything()
+      })
     )
   })
 
   it('opens a symlink as a file when target stat fails', async () => {
-    const openFile = vi.fn()
+    const openWorkspaceFile = vi.fn()
     useAppStore.setState({
       worktreesByRepo: {
         'repo-1': [
@@ -147,7 +150,7 @@ describe('activateFileExplorerNode', () => {
       node: symlinkNode,
       activeWorktreeId: 'wt-1',
       runtimeEnvironmentId: 'runtime-env-1',
-      openFile,
+      openWorkspaceFile,
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn().mockRejectedValue(new Error('stat failed')),
@@ -155,16 +158,19 @@ describe('activateFileExplorerNode', () => {
       setSelectedPath: vi.fn()
     })
 
-    expect(openFile).toHaveBeenCalledWith(
-      {
-        filePath: '/repo/linked-docs',
-        relativePath: 'linked-docs',
-        worktreeId: 'wt-1',
-        runtimeEnvironmentId: 'runtime-env-1',
-        language: expect.any(String),
-        mode: 'edit'
-      },
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: false }
+    expect(openWorkspaceFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'file',
+        file: {
+          filePath: '/repo/linked-docs',
+          relativePath: 'linked-docs',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: 'runtime-env-1',
+          language: expect.any(String),
+          mode: 'edit'
+        },
+        options: { preview: true, focusEditor: true, suppressActiveRuntimeFallback: false }
+      })
     )
   })
 
@@ -177,7 +183,7 @@ describe('activateFileExplorerNode', () => {
       depth: 0,
       operationOwner: { kind: 'local' }
     }
-    const openFile = vi.fn()
+    const openWorkspaceFile = vi.fn()
     useAppStore.setState({
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' } as never]
@@ -188,7 +194,7 @@ describe('activateFileExplorerNode', () => {
       node: fileNode,
       activeWorktreeId: 'wt-1',
       runtimeEnvironmentId: null,
-      openFile,
+      openWorkspaceFile,
       toggleDir: vi.fn(),
       loadDir: vi.fn(),
       statPath: vi.fn(),
@@ -196,12 +202,15 @@ describe('activateFileExplorerNode', () => {
       setSelectedPath: vi.fn()
     })
 
-    expect(openFile).toHaveBeenCalledWith(
+    expect(openWorkspaceFile).toHaveBeenCalledWith(
       expect.objectContaining({
-        filePath: '/repo/README.md',
-        runtimeEnvironmentId: undefined
-      }),
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
+        kind: 'file',
+        file: expect.objectContaining({
+          filePath: '/repo/README.md',
+          runtimeEnvironmentId: undefined
+        }),
+        options: { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
+      })
     )
   })
 })

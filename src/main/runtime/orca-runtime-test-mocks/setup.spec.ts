@@ -87,11 +87,8 @@ const electronMocks = vi.hoisted(() => {
 })
 
 const closeLocalWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
-const closeRemoteWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
 const restoreLocalWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
-const restoreRemoteWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
 const forgetLocalWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
-const forgetRemoteWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
 const scanLocalRepoWorktreesForResolutionMock: TestMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
@@ -100,11 +97,8 @@ vi.mock('electron', () => electronMocks)
 // would silently pass against the inert default. Same mocks, same expectations.
 setWorktreeWatcherRemoval({
   closeLocal: closeLocalWatcherForWorktreePathMock,
-  closeRemote: closeRemoteWatcherForWorktreePathMock,
   restoreLocal: restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemote: restoreRemoteWatcherAfterFailedRemovalMock,
-  forgetLocal: forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemote: forgetRemoteWatcherRemovalSnapshotMock
+  forgetLocal: forgetLocalWatcherRemovalSnapshotMock
 })
 
 const {
@@ -531,11 +525,8 @@ export {
   findExistingWorktreeSymlinkPathsMock,
   resolveLocalGitUsernameMock,
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   scanLocalRepoWorktreesForResolutionMock,
   MOCK_GIT_WORKTREES,
   addSparseWorktreeMock,

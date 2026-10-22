@@ -27,7 +27,7 @@ export type SentPaneLayout = {
   titlesByLeafId?: Record<string, string>
 }
 
-/** `expandedLeafId` is view state and `intent` a retired gesture tag: neither is read. */
+/** `expandedLeafId` is view state, so it is not read. */
 export function translateUpdatePaneLayout(
   workspaceKey: string,
   workspace: WorkspaceLayout,

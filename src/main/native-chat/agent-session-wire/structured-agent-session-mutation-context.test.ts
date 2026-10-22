@@ -214,7 +214,7 @@ it.each([false, true])(
         }
       }))
     }
-    const ensureAgent = vi.spyOn(ctx, 'ensureAgent')
+    const startAgent = vi.spyOn(ctx, 'claimAgent')
     const error = new Error('receipt read failed')
     const warn = vi.spyOn(ctx.deps.logger, 'warn')
     vi.spyOn(rig.store, 'readCommandReceipt').mockImplementationOnce(() => {
@@ -234,7 +234,7 @@ it.each([false, true])(
     )
     expect(rig.host['sessions'].get(SESSION)?.journal.submissions()).toHaveLength(0)
     expect(ctx.wakeDelivery).not.toHaveBeenCalled()
-    expect(ensureAgent).not.toHaveBeenCalled()
+    expect(startAgent).not.toHaveBeenCalled()
   }
 )
 

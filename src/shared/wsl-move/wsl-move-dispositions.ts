@@ -113,6 +113,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   workspaceDocHistory: moveDisposition(30),
   activeConnectionIdsAtShutdown: notApplicableDisposition(60),
   clientHostedBrowserCloseIntentsByEnvironment: moveDisposition(29),
+  pairedTerminalTabCloseIntentsByEnvironment: notApplicableDisposition(
+    60,
+    'Closes owed to a paired runtime host, not to a local or WSL project.'
+  ),
   tabsByWorktree: moveDisposition(22),
   openFilesByWorktree: moveDisposition(26),
   activeFileIdByWorktree: moveDisposition(27),

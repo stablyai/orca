@@ -5,6 +5,8 @@ import {
   prepareNativeBrowserPopup
 } from './browser-popup-native-window'
 import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
+import { describeCommittedPopupOrigin } from './popup-committed-origin'
+export { describePopupOrigin } from './popup-origin-description'
 
 // Why: Electron passes the pre-created popup WebContents through the
 // createWindow options (present at runtime, absent from the published d.ts).
@@ -27,37 +29,6 @@ export const POPUP_ORIGIN_BAR_HEIGHT = 34
 
 const DEFAULT_POPUP_CONTENT_WIDTH = 800
 const DEFAULT_POPUP_CONTENT_HEIGHT = 600
-
-// Why: http on loopback is a secure context (local OAuth callback servers are
-// common); only flag plain http to a real remote host.
-function isLoopbackHost(hostname: string): boolean {
-  return (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]'
-  )
-}
-
-// Why: the bar must show only the origin — popup URLs routinely carry OAuth
-// codes and one-time tokens in path/query that must never reach UI surfaces.
-export function describePopupOrigin(rawUrl: string): { label: string; insecure: boolean } {
-  try {
-    const parsed = new URL(rawUrl)
-    if (parsed.origin !== 'null') {
-      return {
-        label: parsed.origin,
-        insecure: parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)
-      }
-    }
-    if (parsed.protocol === 'about:') {
-      return { label: 'about:blank', insecure: false }
-    }
-    return { label: parsed.protocol, insecure: false }
-  } catch {
-    return { label: 'unknown', insecure: true }
-  }
-}
 
 // Colors mirror the canonical tokens in src/renderer/src/assets/main.css
 // (--background/--foreground/--border/--destructive); a data: URL page cannot
@@ -149,10 +120,9 @@ export function openPopupWithOriginBar(
   prepareContent?: (contents: Electron.WebContents) => boolean
 ): PopupOriginBarWindow {
   if (options.nativeWindow) {
-    return prepareNativeBrowserPopup(options.nativeWindow, initialUrl, prepareContent)
+    return prepareNativeBrowserPopup(options.nativeWindow, prepareContent)
   }
   const { width, height } = clampPopupContentSize(options)
-  const initialOrigin = describePopupOrigin(initialUrl)
   const window = new BaseWindow({
     width,
     height: height + POPUP_ORIGIN_BAR_HEIGHT,
@@ -164,7 +134,7 @@ export function openPopupWithOriginBar(
       : {}),
     minWidth: MIN_POPUP_CONTENT_WIDTH,
     minHeight: MIN_POPUP_CONTENT_HEIGHT + POPUP_ORIGIN_BAR_HEIGHT,
-    title: initialOrigin.label,
+    title: 'about:blank',
     // Why: Windows/Linux attach Orca's app menu to every window, including web popups.
     autoHideMenuBar: true,
     show:
@@ -215,9 +185,8 @@ export function openPopupWithOriginBar(
   ) {
     return closeUnpreparedPopup(window, contentWebContents, originBarWebContents)
   }
-  let currentUrl = initialUrl
   const renderOrigin = (): void => {
-    const { label, insecure } = describePopupOrigin(currentUrl)
+    const { label, insecure } = describeCommittedPopupOrigin(contentWebContents)
     // Why: origin is the title only until the page supplies one — the bar
     // below stays the trust surface, so the native title bar can show the
     // page title (Chrome popup behavior) instead of doubling the origin.
@@ -239,21 +208,47 @@ export function openPopupWithOriginBar(
     `data:text/html;charset=utf-8,${encodeURIComponent(ORIGIN_BAR_HTML)}`
   )
 
-  const handleDidNavigate = (_event: Electron.Event, url: string): void => {
-    currentUrl = url
+  contentWebContents.on('did-navigate', renderOrigin)
+  const handleInPageNavigate = (
+    _event: Electron.Event,
+    _url: string,
+    isMainFrame: boolean
+  ): void => {
+    if (isMainFrame) {
+      renderOrigin()
+    }
+  }
+  contentWebContents.on('did-navigate-in-page', handleInPageNavigate)
+  const handleLoadFailure = (
+    _event: Electron.Event,
+    _errorCode: number,
+    _errorDescription: string,
+    _url: string,
+    isMainFrame: boolean
+  ): void => {
+    if (!isMainFrame) {
+      return
+    }
+    // Error documents omit did-navigate; read the committed frame, never the failed target.
     renderOrigin()
   }
-  contentWebContents.on('did-navigate', handleDidNavigate)
+  contentWebContents.on('did-fail-load', handleLoadFailure)
   // Why: origin writes fail silently if the bar is mid-load; re-asserting at
   // load completion means a dropped write can never leave a stale origin up
   // for the lifetime of the page.
   contentWebContents.on('did-finish-load', renderOrigin)
-  const handlePageTitleUpdated = (_event: Electron.Event, title: string): void => {
-    if (!window.isDestroyed() && title) {
+  const handlePageTitleUpdated = (event: Electron.Event, title: string): void => {
+    event.preventDefault()
+    if (
+      !window.isDestroyed() &&
+      title &&
+      describeCommittedPopupOrigin(contentWebContents).label !== 'about:blank'
+    ) {
       window.setTitle(title)
     }
   }
   contentWebContents.on('page-title-updated', handlePageTitleUpdated)
+  renderOrigin()
 
   if (options.loadInitialUrl && !options.webContents) {
     void contentWebContents.loadURL(initialUrl).catch(() => {})
@@ -269,7 +264,9 @@ export function openPopupWithOriginBar(
   window.once('closed', () => {
     if (!contentWebContents.isDestroyed()) {
       contentWebContents.off('destroyed', handleContentDestroyed)
-      contentWebContents.off('did-navigate', handleDidNavigate)
+      contentWebContents.off('did-navigate', renderOrigin)
+      contentWebContents.off('did-navigate-in-page', handleInPageNavigate)
+      contentWebContents.off('did-fail-load', handleLoadFailure)
       contentWebContents.off('did-finish-load', renderOrigin)
       contentWebContents.off('page-title-updated', handlePageTitleUpdated)
       // Why: close() (not destroy) so the page's unload handlers run — OAuth

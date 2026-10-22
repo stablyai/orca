@@ -272,7 +272,11 @@ async function releaseActivationFence(
  * Each piece is renamed aside first and kept only if it is ours, else put straight back: a release
  * that stalls after its token check can then never delete a successor's journal or lock.
  */
-function posixReleaseFenceCommand(fence: OrcadFence, journal: string, lockRoot: string): string {
+export function posixReleaseFenceCommand(
+  fence: OrcadFence,
+  journal: string,
+  lockRoot: string
+): string {
   const lock = quotePosixShell(fence.lockDir)
   const journalPath = quotePosixShell(journal)
   const stamp = quotePosixShell(journalFenceStamp(fence.token))

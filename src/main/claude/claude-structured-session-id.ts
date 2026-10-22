@@ -5,9 +5,19 @@ export function claudeSessionIdForOrcaSession(
   sessionId: string,
   clearOperationId?: string
 ): string {
-  const identity = clearOperationId
-    ? `orca-claude:${sessionId}:context-clear:${clearOperationId}`
-    : `orca-claude:${sessionId}`
+  return stableUuid(
+    clearOperationId
+      ? `orca-claude:${sessionId}:context-clear:${clearOperationId}`
+      : `orca-claude:${sessionId}`
+  )
+}
+
+/** The Claude conversation a rewind continues the chat in; stable, so a retried rewind names it again. */
+export function claudeSessionIdForRewind(sessionId: string, rewindOperationId: string): string {
+  return stableUuid(`orca-claude:${sessionId}:rewind:${rewindOperationId}`)
+}
+
+function stableUuid(identity: string): string {
   const bytes = createHash('sha256').update(identity).digest().subarray(0, 16)
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80

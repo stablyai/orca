@@ -12,9 +12,13 @@ const { pruneLineageMock, pruneMetadataMock } = vi.hoisted(() => ({
 vi.mock('../worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: pruneLineageMock
 }))
-vi.mock('../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning', () => ({
-  pruneMetadataMissingFromAuthoritativeLocalScan: pruneMetadataMock
-}))
+vi.mock(
+  '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    pruneMetadataMissingFromAuthoritativeLocalScan: pruneMetadataMock
+  })
+)
 const { hiddenHostIds } = vi.hoisted(() => ({ hiddenHostIds: new Set<string>() }))
 vi.mock('./runtime-visible-catalog', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -32,6 +36,7 @@ import {
   getLocalWorktreeScanGeneration,
   resetLocalWorktreeScanGenerationsForTests
 } from '../local-worktree-scan-generation'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const settings = {
   workspaceDir: '/worktrees',
@@ -139,12 +144,13 @@ describe('RuntimeManagedWorktreeQueries.listDetected', () => {
 
   it('omits host-owned source defaults for clients that do not support them', async () => {
     const repo = folderRepo({ path: '/source/app' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial store mock; the code under test reads only the members it defines.
     const store = {
       getRepos: () => [repo],
       getRepo: () => repo,
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined,
-      setWorktreeMeta: vi.fn((_id, updates) => metadata(updates)),
+      setWorktreeMeta: vi.fn((_target: HostWorktreeTarget, updates) => metadata(updates)),
       getAllWorktreeLineage: () => ({}),
       getSettings: () => ({
         ...settings,
@@ -351,6 +357,8 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     const expectations: unknown[] = []
     const generations: number[] = []
     const store = gitStore({
+      pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(() => []),
+      getProfileStorageDirectory: () => '/profile',
       captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(() => {
         const expectation = { repo, metadata: [] }
         expectations.push(expectation)

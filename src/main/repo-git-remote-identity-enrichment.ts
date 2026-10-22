@@ -5,6 +5,7 @@ import {
   type ExecutionHostId
 } from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
+import type { RepoHostTarget } from '../shared/repo-host-identity'
 import { githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
 import { isUnresolvedSshHostAlias } from '../shared/git-remote-host-alias'
 import { getProjectProviderIdentity } from '../shared/project-host-setup-projection'
@@ -28,9 +29,8 @@ type RepoIdentityStore = {
   getRepos(): Repo[]
   getRepo?(id: string, hostId?: ExecutionHostId): Repo | undefined
   updateRepo(
-    id: string,
-    updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>,
-    hostId?: ExecutionHostId
+    target: RepoHostTarget,
+    updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>
   ): Repo | null
 }
 
@@ -145,11 +145,10 @@ function writeIdentity(
   const icon = gitRemoteIdentity
     ? getAutomaticGitHubIconRefresh(current, gitRemoteIdentity)
     : undefined
-  // The row's own host, not the probe's: the store matches this argument against the row's stamp,
-  // so a `runtime:` row probed locally is only addressable here under that stamp.
-  const storeHostId = getRepoExecutionHostId(snapshot)
+  // The row's own identity, not the probe's host: a `runtime:` row probed locally is only
+  // addressable under its own stamp.
   const update = (updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>): Repo | null => {
-    return store.updateRepo(snapshot.id, updates, storeHostId)
+    return store.updateRepo(snapshot, updates)
   }
   if (icon) {
     return !!update({ ...(writeRemote ? { gitRemoteIdentity } : {}), repoIcon: icon })

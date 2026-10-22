@@ -53,7 +53,7 @@ function createWorld(): ObservedWorld {
   const server = new AgentHookServer()
   const observed = new AgentStatusObservedPaneIdentities()
   server.subscribeEnrichedStatus((entry) =>
-    recordObservedAgentStatusPaneIdentity(observed, entry.paneKey, identity)
+    recordObservedAgentStatusPaneIdentity(observed, entry, identity)
   )
   const host = {
     ...identity,

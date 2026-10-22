@@ -31,6 +31,8 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         stateStartedAt: entry.stateStartedAt,
         // A new turn can keep the state (child work held it open); its stamp alone must republish.
         turnStartedAt: entry.turnStartedAt ?? null,
+        turnEndedAt: entry.turnEndedAt ?? null,
+        turnEndDisposition: entry.turnEndDisposition ?? null,
         agentType: entry.agentType ?? null,
         terminalTitle: entry.terminalTitle ?? null,
         stateHistory: entry.stateHistory.map((history) => ({

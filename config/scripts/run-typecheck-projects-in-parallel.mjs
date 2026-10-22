@@ -138,21 +138,27 @@ export function typecheckBatches(projects, { compiler, bunConcurrency, memoryByt
   )
 }
 
+export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }) {
+  const installedCompiler = resolveProjectCompilerInfo(config, root)
+  if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
+    throw new Error(
+      `Bun CI compiler targets TypeScript ${BUN_TYPESCRIPT_VERSION}, but ${config} resolves ${installedCompiler.version}`
+    )
+  }
+  return {
+    program: compiler === 'bun' ? bunExecutable : process.execPath,
+    args:
+      compiler === 'bun'
+        ? ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all']
+        : [installedCompiler.program, '--noEmit', '-p', config],
+    cwd: root
+  }
+}
+
 function checkProject(config, { compiler, bunExecutable, bunThreads, root, spawnCompiler }) {
   return new Promise((resolve, reject) => {
-    const installedCompiler = resolveProjectCompilerInfo(config, root)
-    if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
-      throw new Error(
-        `Bun CI compiler targets TypeScript ${BUN_TYPESCRIPT_VERSION}, but ${config} resolves ${installedCompiler.version}`
-      )
-    }
     const child = spawnCompiler({
-      program: compiler === 'bun' ? bunExecutable : process.execPath,
-      args:
-        compiler === 'bun'
-          ? ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all']
-          : [installedCompiler.program, '--noEmit', '-p', config],
-      cwd: root,
+      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }),
       stdio: 'inherit'
     })
     child.on('error', reject)

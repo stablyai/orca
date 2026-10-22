@@ -1,10 +1,11 @@
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DurableFileWrite from '../durable-file-write'
 import { JIRA_IMAGE_SCHEME } from '../../shared/jira-attachment-image'
 
+const ORIGINAL_PLATFORM = process.platform
 const ORCA_PROFILE_ID = 'local-default'
 const RETIRED_PROFILE_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -12,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   // Assigned in beforeAll; the factories below read them lazily, so real directories exist by the
   // time ready composition resolves the canonical userData path and the active profile directory.
   userDataPath: '',
+  isPackaged: false,
+  setAppUserModelId: vi.fn(),
   profileDirectory: '',
   state: {
     devInstanceIdentity: { appUserModelId: 'app.id', appName: 'Orca' },
@@ -50,7 +53,10 @@ vi.mock('electron', () => ({
     setName: vi.fn(),
     getPath: vi.fn(() => mocks.userDataPath),
     getVersion: vi.fn(() => '1.0.0'),
-    isPackaged: false
+    get isPackaged() {
+      return mocks.isPackaged
+    },
+    setAppUserModelId: mocks.setAppUserModelId
   },
   session: {
     defaultSession: {},
@@ -65,10 +71,6 @@ vi.mock('electron', () => ({
     }))
   }
 }))
-vi.mock('@electron-toolkit/utils', () => ({
-  electronApp: { setAppUserModelId: vi.fn() },
-  is: { dev: false }
-}))
 vi.mock('./main-process-state', () => ({ mainProcessState: mocks.state }))
 vi.mock('../persistence', () => ({
   Store: class {
@@ -76,6 +78,10 @@ vi.mock('../persistence', () => ({
       return {}
     }
     onSettingsChanged() {}
+    getUI() {
+      return {}
+    }
+    onUIChanged() {}
     getSshTargets() {
       return []
     }
@@ -87,6 +93,8 @@ vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
     store: {
       getSettings: () => ({}),
       onSettingsChanged: () => {},
+      getUI: () => ({}),
+      onUIChanged: () => {},
       getSshTargets: () => []
     }
   })
@@ -119,7 +127,8 @@ vi.mock('../browser/browser-manager', () => ({
     installCertificateRequestGuard: vi.fn(),
     removeCertificateRequestGuard: vi.fn(),
     notifyPermissionDenied: vi.fn(),
-    handleGuestWillDownload: vi.fn()
+    handleGuestWillDownload: vi.fn(),
+    setSiteDisplayController: vi.fn()
   }
 }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
@@ -138,6 +147,7 @@ vi.mock('../pty/legacy-terminal-shim-dir', () => ({ neutralizeLegacyTerminalShim
 vi.mock('./windows-shell-path-hydration', () => ({
   createWindowsShellPathHydration: () => ({
     configure: vi.fn(),
+    hydrate: vi.fn(async () => {}),
     whenReady: Promise.resolve()
   })
 }))
@@ -205,6 +215,7 @@ vi.mock('../crash-reporting/durable-crash-breadcrumb', () => ({
 vi.mock('./main-window-actions', () => ({ syncMacMenuBarIcon: vi.fn() }))
 vi.mock('./gpu-lifecycle', () => ({ updateGpuAccelerationAboutPanel: vi.fn() }))
 vi.mock('../cli/wsl-cli-registration-reconciliation', () => ({
+  logWslCliReconciliationResults: vi.fn(),
   reconcileManagedWslCliRegistrations: vi.fn(async () => [])
 }))
 vi.mock('./wsl-cli-reconciliation-startup-barrier', () => ({
@@ -306,12 +317,40 @@ describe('ready-phase browser identity authority', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    mocks.isPackaged = false
+    mocks.setAppUserModelId.mockClear()
     mocks.openMainWindow.mockClear()
     mocks.handleProtocol.mockClear()
     mocks.runtimeRpcStart.mockClear()
     mocks.writeFileDurableSync.mockClear()
     mocks.state.isServeMode = false
   })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM })
+  })
+
+  it.each([
+    { platform: 'win32', isPackaged: true, appId: 'app.id' },
+    { platform: 'win32', isPackaged: false, appId: process.execPath },
+    { platform: 'darwin', isPackaged: true, appId: null },
+    { platform: 'linux', isPackaged: true, appId: null }
+  ])(
+    'sets Windows app identity on $platform (packaged=$isPackaged)',
+    async ({ platform, isPackaged, appId }) => {
+      seedIdentityRecord('clean', true)
+      mocks.isPackaged = isPackaged
+      Object.defineProperty(process, 'platform', { value: platform })
+
+      await runReady()
+
+      if (appId === null) {
+        expect(mocks.setAppUserModelId).not.toHaveBeenCalled()
+      } else {
+        expect(mocks.setAppUserModelId).toHaveBeenCalledExactlyOnceWith(appId)
+      }
+    }
+  )
 
   // The bug: ready used to mirror a retired per-profile setting into the root record, so switching
   // from a native profile to a clean one started the clean profile in native. The root record read

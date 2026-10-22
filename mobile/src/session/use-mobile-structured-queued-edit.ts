@@ -6,8 +6,8 @@ import type {
 import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
 import {
   queuedMessageEditableText,
-  queuedMessageWithEditedText
-} from '../../../src/shared/queued-message-text-edit'
+  queuedMessageWithEdit
+} from '../../../src/shared/queued-message-edit'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   startMobileQueuedEditLease,
@@ -137,7 +137,12 @@ export function useMobileStructuredQueuedEdit(args: {
   )
   const save = useCallback(async (): Promise<boolean> => {
     const edit = active.current
-    if (!edit || edit.saving || !sessionId || !queuedMessageWithEditedText(edit.body, edit.text)) {
+    if (
+      !edit ||
+      edit.saving ||
+      !sessionId ||
+      !queuedMessageWithEdit(edit.body, { text: edit.text }).ok
+    ) {
       return false
     }
     if (edit.text === queuedMessageEditableText(edit.body)) {
@@ -216,7 +221,7 @@ export function useMobileStructuredQueuedEdit(args: {
           messageId: shown.messageId,
           text: shown.text,
           saving: shown.saving,
-          canSave: queuedMessageWithEditedText(shown.body, shown.text) !== null,
+          canSave: queuedMessageWithEdit(shown.body, { text: shown.text }).ok,
           change,
           save,
           cancel: () => {

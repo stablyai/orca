@@ -13,7 +13,8 @@ import {
   REMOTE_NODE_RUNTIME_READY,
   REMOTE_NODE_RUNTIME_VERIFIED_MARKER
 } from '../../ssh/orcad-remote-node-runtime-report'
-import { posixNodeRuntimeExecutable, remoteSha256Command } from './orcad-remote-node-runtime'
+import { posixNodeRuntimeExecutable } from './orcad-remote-node-runtime'
+import { remoteSha256Command } from './remote-sha256-command'
 
 /** Beside `.verified`; store GC removes it with its runtime directory. */
 export const REMOTE_NODE_RUNTIME_HASHED_STAT_FILENAME = '.verified-stat'

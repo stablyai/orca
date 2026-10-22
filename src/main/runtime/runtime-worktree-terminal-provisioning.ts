@@ -3,14 +3,20 @@ import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
 import { buildObservedSetupCommand } from './orchestration/setup-completion-signal'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import type { DefaultTerminalTab } from '../../shared/workspace-layout/workspace-layout-command-types'
 
 type TerminalResult = { handle: string }
 export type WorktreeProvisionTerminalOptions = {
+  /** The pane main already wrote (layout-owner build): the terminal starts in it. */
+  tabId?: string
+  leafId?: string
   title?: string
   command?: string
   env?: Record<string, string>
   activate?: boolean
   surfaceOwner?: false
+  keepPaneOnStartFailure?: true
 }
 
 export type WorktreeTerminalProvisioningHost = {
@@ -23,6 +29,13 @@ export type WorktreeTerminalProvisioningHost = {
   // The title is the tab's own, as the window's setTabCustomTitle sets it, never the pane's title.
   setTabTitle: (handle: string, title: string) => Promise<void>
   setTabColor: (handle: string, color: string) => Promise<void>
+  /** Layout-owner build: main writes the tabs, titles, colours and mark in one command. False
+   *  when it refused them. */
+  /** The tabs main made; none when the workspace already had them; null when main refused. */
+  applyDefaultTabs?: (
+    worktreeId: string,
+    tabs: DefaultTerminalTab[]
+  ) => Promise<readonly { tabId: string }[] | null>
   getPtyId: (handle: string) => string | undefined
   recordSetupCompletionToken: (ptyId: string, token: string) => void
 }
@@ -62,6 +75,15 @@ export async function createWorktreeDefaultTabTerminals(
   if (startupHandle && first) {
     await dressAsDefaultTab(host, worktreeId, startupHandle, first)
   }
+  // Switch point: main writes the tabs first, then starts each terminal in its pane.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && host.applyDefaultTabs) {
+    return startDefaultTabsInLayout(
+      host,
+      host.applyDefaultTabs,
+      { selector, worktreeId, defaultTabs, surfacing },
+      startupHandle ? rest : defaultTabs.tabs
+    )
+  }
   const handles: string[] = []
   for (const template of startupHandle ? rest : defaultTabs.tabs) {
     try {
@@ -75,6 +97,60 @@ export async function createWorktreeDefaultTabTerminals(
       await dressAsDefaultTab(host, worktreeId, terminal.handle, template)
     } catch (error) {
       console.warn(`[worktree-create] Failed to create default tab for ${worktreeId}:`, error)
+    }
+  }
+  return handles
+}
+
+async function startDefaultTabsInLayout(
+  host: WorktreeTerminalProvisioningHost,
+  applyDefaultTabs: NonNullable<WorktreeTerminalProvisioningHost['applyDefaultTabs']>,
+  {
+    selector,
+    worktreeId,
+    defaultTabs,
+    surfacing
+  }: {
+    selector: string
+    worktreeId: string
+    defaultTabs: NonNullable<CreateWorktreeResult['defaultTabs']>
+    surfacing: { surfaceOwner?: false }
+  },
+  templates: NonNullable<CreateWorktreeResult['defaultTabs']>['tabs']
+): Promise<string[]> {
+  const panes = templates.map((template) => ({
+    template,
+    tab: {
+      tabId: randomUUID(),
+      leafId: randomUUID(),
+      ...(template.title ? { title: template.title } : {}),
+      ...(template.color ? { color: template.color } : {})
+    }
+  }))
+  const createdTabs = await applyDefaultTabs(
+    worktreeId,
+    panes.map(({ tab }) => tab)
+  )
+  if (!createdTabs) {
+    console.warn(`[worktree-create] Main refused the default tabs for ${worktreeId}`)
+    return []
+  }
+  // A workspace already given its default tabs gets none again, so only the ones made start.
+  const created = new Set(createdTabs.map(({ tabId }) => tabId))
+  const handles: string[] = []
+  for (const { template, tab } of panes.filter(({ tab }) => created.has(tab.tabId))) {
+    const command = template.command?.trim()
+    try {
+      const terminal = await host.createTerminal(selector, {
+        tabId: tab.tabId,
+        leafId: tab.leafId,
+        ...(template.title ? { title: template.title } : {}),
+        ...(command && defaultTabs.runCommands ? { command } : {}),
+        ...surfacing
+      })
+      handles.push(terminal.handle)
+    } catch (error) {
+      console.warn(`[worktree-create] Failed to start a default tab for ${worktreeId}:`, error)
     }
   }
   return handles
@@ -163,6 +239,8 @@ export async function provisionWorktreeTerminals(
         title: 'Setup',
         command,
         env,
+        // Switch point: a setup main could not start stays in its pane, showing why.
+        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...surfacing
       })
       setupTerminalHandle = setupTerminal.handle

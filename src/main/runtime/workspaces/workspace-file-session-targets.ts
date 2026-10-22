@@ -20,6 +20,15 @@ import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-opt
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import { getLatestLeafTitle, getLeafDisplayRecord } from '../runtime-worktree-status-projection'
+import {
+  readMarkdownTabFromDisk,
+  saveMarkdownTabToDisk,
+  type ListedMarkdownTab,
+  type MarkdownTabDiskHost
+} from '../markdown-tab-disk-documents'
+import { createMarkdownTabDiskHost } from '../markdown-tab-disk-host'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+
 export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends RuntimeWorkspaceSessionCustomTitles {
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract resolveMobileMarkdownWorktreeId(
@@ -92,32 +101,47 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
         return tab
       })
     }
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    if (session && this.store?.setWorkspaceSession) {
+    this.updateHeadlessWorkspaceContent(worktreeId, (session) => {
       const tabs = session.tabsByWorktree[worktreeId]
-      if (tabs?.some((tab) => tab.id === tabId)) {
-        this.setWorkspaceSessionForWorktree(worktreeId, {
-          ...session,
-          tabsByWorktree: {
-            ...session.tabsByWorktree,
-            [worktreeId]: tabs.map((tab) =>
-              tab.id === tabId
-                ? {
-                    ...tab,
-                    customTitle: normalizedTitle,
-                    ...(normalizedTitle === null && fallbackTitle !== null
-                      ? { title: fallbackTitle }
-                      : {})
-                  }
-                : tab
-            )
-          }
-        })
+      if (!tabs?.some((tab) => tab.id === tabId)) {
+        return null
       }
-    }
+      return {
+        ...session,
+        tabsByWorktree: {
+          ...session.tabsByWorktree,
+          [worktreeId]: tabs.map((tab) =>
+            tab.id === tabId
+              ? {
+                  ...tab,
+                  customTitle: normalizedTitle,
+                  ...(normalizedTitle === null && fallbackTitle !== null
+                    ? { title: fallbackTitle }
+                    : {})
+                }
+              : tab
+          )
+        }
+      }
+    })
     const sessionId = this.resolveSessionIdForTab(tabId)
     if (sessionId) {
       this.setSessionCustomTitle(sessionId, normalizedTitle)
+    }
+  }
+
+  private updateHeadlessWorkspaceContent(
+    worktreeId: string,
+    update: (session: WorkspaceSessionState) => WorkspaceSessionState | null
+  ): void {
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const write = this.setWorkspaceSessionForWorktree.bind(this)
+    const next = update(session)
+    if (next) {
+      write(worktreeId, next)
     }
   }
 
@@ -224,10 +248,11 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     tabId: string
   ): Promise<RuntimeMarkdownReadTabResult> {
     const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
-    if (!this.notifier?.readMobileMarkdownTab) {
-      throw new Error('renderer_unavailable')
-    }
-    return await this.notifier.readMobileMarkdownTab(worktreeId, tabId)
+    return await readMarkdownTabFromDisk(
+      this.markdownTabDiskHost(),
+      worktreeId,
+      this.listedMarkdownTab(worktreeId, tabId)
+    )
   }
 
   async saveMobileMarkdownTab(
@@ -237,10 +262,45 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult> {
     const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
-    if (!this.notifier?.saveMobileMarkdownTab) {
-      throw new Error('renderer_unavailable')
+    return await saveMarkdownTabToDisk(
+      this.markdownTabDiskHost(),
+      worktreeId,
+      this.listedMarkdownTab(worktreeId, tabId),
+      baseVersion,
+      content
+    )
+  }
+
+  private listedMarkdownTab(worktreeId: string, tabId: string): ListedMarkdownTab {
+    const tab = this.mobileSessionTabsByWorktree
+      .get(worktreeId)
+      ?.tabs.find((candidate) => candidate.type === 'markdown' && candidate.id === tabId)
+    if (tab?.type !== 'markdown') {
+      throw new Error('tab_not_found')
     }
-    return await this.notifier.saveMobileMarkdownTab(worktreeId, tabId, baseVersion, content)
+    return tab
+  }
+
+  private markdownTabDiskHost(): MarkdownTabDiskHost {
+    return createMarkdownTabDiskHost({
+      requireStore: () => this.requireStore(),
+      getWorkspaceSessionForWorktree: (worktreeId) =>
+        this.getWorkspaceSessionForWorktree(worktreeId),
+      resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+      callEnvironment: (environmentId, method, params, expectedPairingRevision) =>
+        this.callOrchestrationWorkerServer(
+          environmentId,
+          method,
+          params,
+          undefined,
+          undefined,
+          expectedPairingRevision === undefined
+            ? undefined
+            : { expectedEnvironmentPairingRevision: expectedPairingRevision }
+        ),
+      environmentPairingRevision: (environmentId) =>
+        this.resolveOrchestrationWorkerServer(environmentId).pairingRevision
+    })
   }
 
   // Why: `getRepo(id)` is host-blind and never read `worktree.hostId`, which outranks every repo

@@ -1,3 +1,11 @@
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { PersistPtyBindingArgs } from '../persistence/loading-store/pty-binding-persistence'
+import { ptyBindingIsRefused } from '../persistence/loading-store/pty-binding-refusals'
+import { applyPtyBinding } from '../persistence/loading-store/pty-binding-session-update'
+import {
+  withRuntimePaneAdmission,
+  withDurableRuntimeStore
+} from '../runtime/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../runtime/worktree-terminals-sleeping-error'
@@ -69,9 +77,21 @@ export function launchRacePane(tag: string, leafId: string) {
 export function createLaunchRaceRuntime<T extends object = Record<never, never>>(
   overrides?: T
 ): LaunchRaceRuntimeBase & T {
+  let owner:
+    | {
+        ptyId: string
+        worktreeId: string
+        tabId: string
+        leafId: string
+        handle: string
+      }
+    | undefined
   const base: LaunchRaceRuntimeBase = {
     setPtyController: vi.fn(),
     resolveTerminalPane: vi.fn((): unknown => {
+      if (owner) {
+        return owner
+      }
       throw new Error('terminal_not_found')
     }),
     createPreAllocatedTerminalHandle: vi.fn(() => 'term-launch-race'),
@@ -80,7 +100,16 @@ export function createLaunchRaceRuntime<T extends object = Record<never, never>>
     beginPtyRegistration: vi.fn(),
     cancelPendingPtyRegistration: vi.fn(),
     assertPtyRegistrationAllowed: vi.fn(),
-    registerPty: vi.fn(),
+    registerPty: vi.fn(
+      (
+        ptyId: string,
+        worktreeId: string,
+        _connection: unknown,
+        binding: { tabId: string; leafId: string }
+      ) => {
+        owner = { ptyId, worktreeId, ...binding, handle: 'term-launch-race' }
+      }
+    ),
     noteTerminalSpawnCommand: vi.fn(),
     noteTerminalSpawnCommit: vi.fn(),
     reflowHeadlessTerminalToPtyGrid: vi.fn(),
@@ -141,7 +170,7 @@ export function sleptWorktreeLock() {
     refuse = resolve
   })
   const acquireWorktreeTerminalSpawn = vi.fn(
-    async (_worktreeId?: string, opts?: { refuseSleptWorktree?: boolean }) => {
+    async (_target?: unknown, opts?: { refuseSleptWorktree?: boolean }) => {
       if (opts?.refuseSleptWorktree) {
         await refusal
         throw new Error(WORKTREE_TERMINALS_SLEEPING_ERROR)
@@ -150,4 +179,36 @@ export function sleptWorktreeLock() {
     }
   )
   return { acquireWorktreeTerminalSpawn, refuse }
+}
+
+/** Evaluates the same queued binding input against mutable topology, recording admitted arguments. */
+export function createPaneBindingStore() {
+  let session = getDefaultWorkspaceSession()
+  const bindingWrites = vi.fn((_binding: PersistPtyBindingArgs) => true)
+  const store = withDurableRuntimeStore(
+    withRuntimePaneAdmission({
+      flushOrThrow: () => {},
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: (next: typeof session) => {
+        session = next
+      },
+      persistPtyBinding: vi.fn(
+        async (input: PersistPtyBindingArgs | (() => PersistPtyBindingArgs | null)) => {
+          const binding = typeof input === 'function' ? input() : input
+          if (!binding) {
+            return false
+          }
+          const accepted = bindingWrites(binding)
+          const paneKey = makePaneKey(binding.tabId, binding.leafId)
+          const workspace = binding.expectedSourceBinding?.worktreeId ?? binding.worktreeId
+          if (!accepted || ptyBindingIsRefused(binding, session, workspace, paneKey, [])) {
+            return false
+          }
+          applyPtyBinding(binding, session, workspace, paneKey)
+          return true
+        }
+      )
+    })
+  )
+  return { ...store, bindingWrites }
 }

@@ -37,7 +37,6 @@ export async function checkManagedServerUpdate(
   deps: ManagedServerUpdateDeps,
   onUpdating: () => void
 ): Promise<HostServerUpdateOnConnect> {
-  const failure = deps.recordedUpdateFailure(target)
   let result: ManagedOrcadAutoUpdateOutcome
   try {
     result = await deps.autoUpdate(environmentId, {
@@ -58,8 +57,9 @@ export async function checkManagedServerUpdate(
     }
   }
   // Why clear on current too: a Managed servers update may have landed the build since.
+  // Why read after: an overlapping check may have recorded a failure while this one waited.
   if (
-    failure !== null &&
+    deps.recordedUpdateFailure(target) !== null &&
     (result.outcome === 'updated' || (result.outcome === 'skipped' && result.reason === 'current'))
   ) {
     deps.clearUpdateFailure(target)

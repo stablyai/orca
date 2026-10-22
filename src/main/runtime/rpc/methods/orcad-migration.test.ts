@@ -31,6 +31,7 @@ const MIGRATION_METHOD_NAMES = [
   'orcad.migration.stageSnapshotChunk',
   'orcad.migration.stageBlobChunk',
   'orcad.migration.abortCatalog',
+  'orcad.migration.abortCatalogByReference',
   'orcad.migration.catalogState'
 ] as const
 
@@ -126,7 +127,9 @@ describe('orcad migration RPC', () => {
                 ? 'stageOrcadMigrationBlobChunk'
                 : name === 'orcad.migration.abortCatalog'
                   ? 'abortStagedOrcadMigrationCatalog'
-                  : 'getOrcadMigrationCatalogState'
+                  : name === 'orcad.migration.abortCatalogByReference'
+                    ? 'abortStagedOrcadMigrationCatalogByReference'
+                    : 'getOrcadMigrationCatalogState'
 
       await expect(
         method.handler(
@@ -263,6 +266,9 @@ function migrationMethodInput(name: (typeof MIGRATION_METHOD_NAMES)[number]) {
   const input = manifest()
   if (name === 'orcad.migration.stageBlobChunk') {
     return migrationBlobRequest(input)
+  }
+  if (name === 'orcad.migration.abortCatalogByReference') {
+    return { migrationId: input.migrationId, manifestSha256: input.manifestSha256 }
   }
   return name === 'orcad.migration.stageSnapshotChunk'
     ? migrationSnapshotRequest(input)

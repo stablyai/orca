@@ -37,3 +37,6 @@ export const ORCAD_STATE_MUTATION_DEADLINE = 'STATE_MUTATION_DEADLINE'
 
 /** Windows keeps the snapshot as a directory copy, where POSIX keeps `state.tar`. */
 export const ORCAD_WINDOWS_SNAPSHOT_STATE_DIRNAME = 'state'
+
+/** Prefixes the line a failed POSIX capture prints, ahead of `FAILED`, saying why. */
+export const ORCAD_SNAPSHOT_FAILURE = 'SNAPSHOT_FAILURE'

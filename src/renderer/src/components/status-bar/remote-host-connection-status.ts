@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
+import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
 import {
   describeRuntimeCompatBlock,
   type RuntimeCompatVerdict
@@ -81,7 +82,8 @@ export type RuntimeHostBlockedCopy = {
 
 export function runtimeHostBlockedCopy(
   reason: RuntimeHostBlockedReason,
-  compatibility?: RuntimeCompatVerdict
+  compatibility?: RuntimeCompatVerdict,
+  repairRoute: RuntimePairingRepairRoute = 'access-link'
 ): RuntimeHostBlockedCopy {
   if (reason === 'access-revoked') {
     return {
@@ -93,10 +95,22 @@ export function runtimeHostBlockedCopy(
         'auto.components.status.bar.RuntimeHostStatusRow.access_revoked_summary',
         'This server revoked access for this computer'
       ),
-      explanation: translate(
-        'auto.components.status.bar.RuntimeHostStatusRow.access_revoked_explanation',
-        'Re-pair with a new pairing link from the server to reconnect.'
-      )
+      // Why: Orca pairs a managed server over SSH by itself; it reaches here only when that failed.
+      explanation:
+        repairRoute === 'access-link'
+          ? translate(
+              'auto.components.status.bar.RuntimeHostStatusRow.access_revoked_explanation',
+              'Re-pair with a new pairing link from the server to reconnect.'
+            )
+          : repairRoute === 'ssh'
+            ? translate(
+                'auto.components.status.bar.RuntimeHostStatusRow.managed_access_revoked_explanation',
+                "Orca couldn't pair with it again over SSH. Connect to try again."
+              )
+            : translate(
+                'auto.components.status.bar.RuntimeHostStatusRow.connect_access_revoked_explanation',
+                'Connect to try again.'
+              )
     }
   }
   return {

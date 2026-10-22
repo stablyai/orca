@@ -125,7 +125,9 @@ describe("the phone chat composer's placeholder", () => {
   })
 
   it('reads as usual otherwise', () => {
-    expect(mobileNativeChatComposerPlaceholder(null, undefined)).toBe('Message, @files, /commands')
+    expect(mobileNativeChatComposerPlaceholder(null, undefined)).toBe(
+      'Ask anything, @ to mention files, / for commands'
+    )
   })
 
   it('says why the composer is locked first', () => {

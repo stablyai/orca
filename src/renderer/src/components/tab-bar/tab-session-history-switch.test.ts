@@ -530,14 +530,14 @@ describe('resolveTabSessionSwitch', () => {
     structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
   })
 
-  it('offers Resume in New CLI on a chat tab whose row can fork', () => {
+  it('offers Switch to Terminal on a chat tab whose row can fork', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toEqual({
       action: 'resume-in-new-cli',
       worktreeId: WORKTREE_ID
     })
   })
 
-  it('hides Resume in New CLI for an empty or unresumable chat', () => {
+  it('hides Switch to Terminal for an empty or unresumable chat', () => {
     expect(
       resolveTabSessionSwitch(
         makeState(),
@@ -549,7 +549,7 @@ describe('resolveTabSessionSwitch', () => {
     expect(resolveTabSessionSwitch(makeState(), chatRow, chatSubject)).toBeNull()
   })
 
-  it('offers Resume in New Native Chat where the row is eligible, in the workspace it names', () => {
+  it('offers Switch to Chat where the row is eligible, in the workspace it names', () => {
     mocks.resumeInChat.mockReturnValue({
       available: true,
       workspaceId: WORKTREE_ID

@@ -1,3 +1,4 @@
+import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import { extractTerminalFileLinkCandidates, extractTerminalFileLinks } from '@/lib/terminal-links'
@@ -5,13 +6,10 @@ import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlappin
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   buildCandidateLogicalLinesForBufferPosition,
-  dedupeLogicalLines,
   openFilePathLinkAtBufferPosition
 } from './terminal-file-link-hit-testing'
-import {
-  isHtmlFilePath,
-  shouldOpenTerminalFileWithSystemDefault
-} from './terminal-file-open-routing'
+import { isHtmlFilePath } from '../../../../shared/html-file-url'
+import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
 import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-link-target'
 import {
   buildHardWrappedPathLogicalLineCandidates,

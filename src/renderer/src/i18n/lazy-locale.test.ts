@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_PORTUGUESE,
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from './i18n'
@@ -36,6 +37,39 @@ describe('renderer i18n lazy locale loading', () => {
     await i18n.changeLanguage(UI_LANGUAGE_CHINESE)
     expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
   })
+
+  it('lazy-loads Portuguese via setRendererUiLanguage before it resolves', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_PORTUGUESE)
+    expect(i18n.language).toBe('pt')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+  })
+
+  it.each(['network', 'http', 'invalid-json'] as const)(
+    'retries a rejected %s catalog load with a fresh request',
+    async (failure) => {
+      i18n.removeResourceBundle('ja', 'translation')
+      const request = vi.spyOn(globalThis, 'fetch')
+      if (failure === 'network') {
+        request.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      } else {
+        request.mockResolvedValueOnce(
+          failure === 'http' ? new Response('', { status: 503 }) : new Response('{')
+        )
+      }
+      try {
+        await expect(setRendererUiLanguage('ja')).rejects.toThrow('Language catalog unavailable')
+        expect(i18n.language).toBe('en')
+        expect(i18n.hasResourceBundle('ja', 'translation')).toBe(false)
+
+        await setRendererUiLanguage('ja')
+        expect(i18n.language).toBe('ja')
+        expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('ファイル')
+        expect(request).toHaveBeenCalledTimes(2)
+      } finally {
+        request.mockRestore()
+      }
+    }
+  )
 
   it('uses the inline English default when a target catalog omits a key', async () => {
     await setRendererUiLanguage(UI_LANGUAGE_SPANISH)

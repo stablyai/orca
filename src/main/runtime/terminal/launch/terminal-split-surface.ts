@@ -81,6 +81,8 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       leafId,
       persistHostSessionBinding: true,
       placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
+      // Layout-owner build: views mounting the pane from main's frame attach, never spawn.
+      ...this.paneStartStatusArgs({}),
       ...(sourceAuthority.persisted
         ? {
             expectedSourceBinding: {
@@ -188,7 +190,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         }
       }
       try {
-        this.ptyController.retireRejectedPty?.(result.id, stopped)
+        this.ptyController.retireRejectedPty?.(result.id, stopped, result.incarnationId)
       } catch {
         // Best-effort cleanup; preserve the original split authority error.
       }

@@ -1,6 +1,5 @@
 import type { AppState } from '../types'
 import {
-  applyGeneratedTabTitleUpdates,
   getTabIdFromPaneKey,
   type GeneratedTabTitleUpdate
 } from '../slices/terminal-tab-title-batch'
@@ -10,6 +9,8 @@ import {
   sendRenamableTabChangeToLayoutOwner,
   type TabChange
 } from './tab-change-through-layout-owner'
+import { findRenamableUnifiedTab } from './renamable-unified-tab'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 
 type RoutedActions = Pick<
   TerminalSlice,
@@ -26,66 +27,40 @@ function terminalTab(state: AppState, tabId: string) {
   return owner ? state.tabsByWorktree[owner]?.find((tab) => tab.id === tabId) : undefined
 }
 
-/** Each tab's generated title the window would give it now, with the updates that give it. */
-function generatedTitleChanges(state: AppState, updates: readonly GeneratedTabTitleUpdate[]) {
-  const patched = applyGeneratedTabTitleUpdates(state, updates).patch?.tabsByWorktree ?? {}
-  return Object.values(patched)
-    .flat()
-    .flatMap((tab) => {
-      const title = tab.generatedTitle ?? null
-      return title === (terminalTab(state, tab.id)?.generatedTitle ?? null)
-        ? []
-        : [
-            {
-              tabId: tab.id,
-              title,
-              updates: updates.filter((u) => getTabIdFromPaneKey(u.paneKey) === tab.id)
-            }
-          ]
-    })
-}
-
 /**
  * A layout-owner build's terminal tab changes from any caller (CLI rename, templates, agent
- * titles, an ended launch agent): main changes its copy first, then the window's own action shows
- * the same change. Before this, only the tab bar's rename and color reached main; the rest reached
- * it only through the window's session save.
+ * titles, an ended launch agent): main changes its copy and its frame draws the change. The
+ * window's own action runs only for a tab main is not asked about or a paired server holds.
  */
 export function routeTerminalTabChangesThroughLayoutOwner(
   actions: RoutedActions,
   get: TerminalStoreGet
 ): RoutedActions {
-  const route = (tabId: string, change: TabChange, local: () => void): void => {
-    sendRenamableTabChangeToLayoutOwner(get(), tabId, change, local)
+  const route = (tabId: string, change: TabChange, local: () => void, shown?: () => void): void => {
+    sendRenamableTabChangeToLayoutOwner(get(), tabId, change, local, { shown })
   }
-  /** Tabs whose generated title main has and the window does not yet: the window keeps a first title. */
-  const generatedTitleSent = new Map<string, object>()
+  // The tab bar's own rename and color count as a use of terminal tabs, as the window's action does.
+  const recordTabsInteraction = (): void => {
+    void get().recordFeatureInteraction?.('terminal-tabs')
+  }
+  // Why: main derives the generated titles of the tabs it holds from the agent status it owns, so
+  // the window titles only a tab main has no tab-bar entry for or a paired server holds.
   const routeGeneratedTitles = (updates: readonly GeneratedTabTitleUpdate[]): void => {
-    const unsent = updates.filter(
-      (update) =>
-        update.options?.replaceExistingGeneratedTitle === true ||
-        !generatedTitleSent.has(getTabIdFromPaneKey(update.paneKey) ?? '')
-    )
-    for (const { tabId, title, updates: ofTab } of generatedTitleChanges(get(), unsent)) {
-      const entry = {}
-      const settle = (): void => {
-        if (generatedTitleSent.get(tabId) === entry) {
-          generatedTitleSent.delete(tabId)
-        }
-      }
-      const sent = sendRenamableTabChangeToLayoutOwner(
-        get(),
-        tabId,
-        (id) => ({ type: 'renameTab', tabId: id, kind: 'generated', title }),
-        () => {
-          settle()
-          actions.setGeneratedTabTitlesFromAgentPrompts(ofTab)
-        },
-        settle
+    const state = get()
+    const local = updates.filter((update) => {
+      const tab = findRenamableUnifiedTab(
+        state.unifiedTabsByWorktree,
+        getTabIdFromPaneKey(update.paneKey) ?? ''
       )
-      if (sent) {
-        generatedTitleSent.set(tabId, entry)
+      if (!tab) {
+        return true
       }
+      // A twin (an owner the window cannot resolve) main refuses, so the window titles it as before.
+      const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: tab.worktreeId })
+      return owner.kind !== 'resolved' || owner.environmentId !== null
+    })
+    if (local.length > 0) {
+      actions.setGeneratedTabTitlesFromAgentPrompts(local)
     }
   }
   return {
@@ -93,13 +68,15 @@ export function routeTerminalTabChangesThroughLayoutOwner(
       route(
         tabId,
         (id) => ({ type: 'renameTab', tabId: id, kind: 'custom', title }),
-        () => actions.setTabCustomTitle(tabId, title, opts)
+        () => actions.setTabCustomTitle(tabId, title, opts),
+        opts?.recordInteraction === false ? undefined : recordTabsInteraction
       ),
-    setTabColor: (tabId, color) =>
+    setTabColor: (tabId, color, opts) =>
       route(
         tabId,
         (id) => ({ type: 'setTabProps', tabId: id, color }),
-        () => actions.setTabColor(tabId, color)
+        () => actions.setTabColor(tabId, color, opts),
+        opts?.recordInteraction === false ? undefined : recordTabsInteraction
       ),
     setAiVaultTabTitle: (tabId, title) => {
       const current = terminalTab(get(), tabId)?.aiVaultTitle ?? null

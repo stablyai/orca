@@ -34,9 +34,9 @@ import type { OrcadIdleStopRecord } from '../../shared/orcad-idle-exit'
  *   separately rather than folded into `ok`, because claiming a PTY round trip we did not
  *   perform is the failure mode this surface exists to prevent.
  */
-export type PtySelfTestCoverage = 'pty-spawn' | 'handshake'
+type PtySelfTestCoverage = 'pty-spawn' | 'handshake'
 
-export type PtySelfTest = {
+type PtySelfTest = {
   ok: boolean
   coverage: PtySelfTestCoverage
   /** The daemon's own verdict word, so a failure is diagnosable without re-probing. */
@@ -115,7 +115,7 @@ export function computeOrcadBuildHash(entryPath = process.argv[1]): string {
  * `healthy`; a wedged one times out to `unreachable`, and one whose node-pty or login session
  * is broken answers `pty-spawn-unhealthy`.
  */
-export async function runTerminalDaemonSelfTest(
+async function runTerminalDaemonSelfTest(
   now: () => number = () => Date.now()
 ): Promise<PtySelfTest> {
   const startedAt = now()

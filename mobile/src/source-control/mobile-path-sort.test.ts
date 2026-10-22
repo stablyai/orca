@@ -44,11 +44,13 @@ describe('mobile path sort collation', () => {
   it('preserves numeric ties, Unicode equivalence, conflict rank, and section order', () => {
     const original = [...entries]
     const sections = buildMobileSourceControlSections(entries)
-    expect(sections.map((section) => section.area)).toEqual(['unstaged', 'untracked', 'staged'])
+    expect(sections.map((section) => section.area)).toEqual(['unstaged', 'staged'])
     for (const section of sections) {
       expect(section.data).toEqual(
         entries
-          .filter((entry) => entry.area === section.area)
+          .filter((entry) =>
+            section.area === 'staged' ? entry.area === 'staged' : entry.area !== 'staged'
+          )
           .sort((a, b) => conflictRank(a) - conflictRank(b) || comparePath(a.path, b.path))
       )
     }

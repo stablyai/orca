@@ -30,7 +30,7 @@ const ServerProjectGroupsSchema = z.object({
     z.object({
       id: z.string().min(1),
       parentGroupId: z.string().nullish(),
-      connectionId: z.string().nullish()
+      ...HostFields
     })
   )
 })

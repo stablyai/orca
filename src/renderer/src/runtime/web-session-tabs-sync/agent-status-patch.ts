@@ -1,7 +1,5 @@
-import {
-  agentStatusAuthorityObservedAt,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
@@ -32,33 +30,6 @@ import {
   isMirroredCommandCodeTurnBump,
   writableWebSessionTabsRecord
 } from './state-equality-core'
-
-/**
- * Stamp this replica's own receipt clock on a row mirrored from another host.
- *
- * The host's `updatedAt` / `evidenceObservedAt` are its wall clock, so decaying a mirrored row
- * against `rendererNow - hostClock` is off by the two machines' skew: a host running fast keeps
- * every remote row permanently fresh, a host running slow decays them on arrival. Both sides of
- * the subtraction have to come from one machine, and the receipt is the only clock the replica
- * owns. See THE DECAY RULE in shared/agent-status-observation.ts.
- *
- * A snapshot that repeats an observation already seen is a repaint, not new evidence, so the
- * first receipt is carried forward — otherwise the window would restart on every publish and
- * a quiet pane would never decay. Only a row this renderer stamped itself is comparable, so
- * the carry-forward requires a previous stamp rather than trusting a cross-machine timestamp.
- */
-function withMirroredEvidenceReceipt(
-  entry: AgentStatusEntry,
-  existing: AgentStatusEntry | undefined,
-  now: number
-): AgentStatusEntry {
-  const receivedAt =
-    existing?.mirroredEvidenceReceivedAt !== undefined &&
-    agentStatusAuthorityObservedAt(existing) === agentStatusAuthorityObservedAt(entry)
-      ? existing.mirroredEvidenceReceivedAt
-      : now
-  return { ...entry, mirroredEvidenceReceivedAt: receivedAt }
-}
 
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,

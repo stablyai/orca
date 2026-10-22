@@ -128,6 +128,14 @@ export function canReplacePreviewContentType(
 
 export type TabOrderMove = { tabId: string; index: number }
 
+/**
+ * A `moveTab` anchor for slot `index` of the order the window drew: the tab before it, or null
+ * for first. Main places by it, so a tab only main holds cannot shift the move (ledger L193).
+ */
+export function tabOrderAnchor(order: readonly string[], index: number): string | null | undefined {
+  return index <= 0 ? null : order[index - 1]
+}
+
 const sameOrder = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((id, index) => id === b[index])
 
