@@ -1,3 +1,4 @@
+import { useEffect, useId, useState } from 'react'
 import type React from 'react'
 import {
   ChevronDown,
@@ -38,6 +39,9 @@ const HOVER_ACTION_GROUP_REVEALED =
   'group-hover/session-row:max-w-none group-hover/session-row:ml-0 group-hover/session-row:overflow-visible group-hover/session-row:opacity-100 group-focus-within/session-row:max-w-none group-focus-within/session-row:ml-0 group-focus-within/session-row:overflow-visible group-focus-within/session-row:opacity-100'
 
 const HOVER_ACTION_GROUP_CLASS = `${HOVER_ACTION_GROUP_BASE} ${HOVER_ACTION_GROUP_COLLAPSED} ${HOVER_ACTION_GROUP_REVEALED}`
+
+// Why: each row owns its own Radix menu, which cannot see a sibling row's menu opening.
+const menuOpenedListeners = new Set<(openedMenuId: string) => void>()
 
 export function SessionRowTrailingActions({
   session,
@@ -96,17 +100,33 @@ export function SessionRowTrailingActions({
   actionsHidden?: boolean
 }) {
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
+  const menuId = useId()
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const closeIfOther = (openedMenuId: string): void => {
+      if (openedMenuId !== menuId) {
+        setMenuOpen(false)
+      }
+    }
+    menuOpenedListeners.add(closeIfOther)
+    return () => {
+      menuOpenedListeners.delete(closeIfOther)
+    }
+  }, [menuId])
+
+  const handleMenuOpenChange = (open: boolean): void => {
+    setMenuOpen(open)
+    if (open) {
+      menuOpenedListeners.forEach((listener) => listener(menuId))
+    }
+  }
 
   return (
     <div
       className="flex shrink-0 items-center gap-1"
       data-ai-vault-session-actions="true"
-      onPointerDown={(event) => {
-        // Why: a mouse pointerdown must reach the document so an open sibling row menu dismisses.
-        if (event.pointerType !== 'mouse') {
-          event.stopPropagation()
-        }
-      }}
+      onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
       {actionsHidden ? null : (
@@ -243,7 +263,7 @@ export function SessionRowTrailingActions({
         </TooltipContent>
       </Tooltip>
       {actionsHidden ? null : (
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
