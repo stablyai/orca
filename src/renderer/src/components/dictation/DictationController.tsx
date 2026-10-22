@@ -15,6 +15,7 @@ import { showDictationStartErrorToast } from './dictation-start-error-toast'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import { publishDictationMeter } from './dictation-meter-store'
+import { useDictationAutoSend } from './use-dictation-auto-send'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
@@ -47,6 +48,7 @@ export function DictationController() {
   // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
+  const { trackInsertion, startAfterSession: startAutoSend } = useDictationAutoSend()
 
   const drainStoppedSession = useCallback((sessionId: string) => {
     void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
@@ -65,6 +67,11 @@ export function DictationController() {
       // Main stop completion can precede renderer final-text IPC; wait for this session’s stopped event before accepting the next run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
       const sessionErrored = erroredSessionIdsRef.current.delete(sessionId)
+      const finishedSession = {
+        finalTranscriptReceived: finalTranscriptReceivedRef.current,
+        sessionErrored,
+        target: insertionTargetRef.current
+      }
       if (!sessionErrored && !finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
         toast.message(
           translate(
@@ -84,8 +91,9 @@ export function DictationController() {
       dictationStateRef.current = 'idle'
       setDictationState('idle')
       setPartialTranscript('')
+      startAutoSend(finishedSession)
     },
-    [setDictationState, setPartialTranscript, stopCapture, getCapturedChunkCount]
+    [setDictationState, setPartialTranscript, stopCapture, getCapturedChunkCount, startAutoSend]
   )
 
   const startDictation = useCallback(async () => {
@@ -356,7 +364,7 @@ export function DictationController() {
           data.text,
           insertedFinalTranscriptRef.current
         )
-        insertText(textToInsert, target)
+        trackInsertion(insertText(textToInsert, target))
         insertedFinalTranscriptRef.current += textToInsert
       } else if (!intentionalTargetCancellationRef.current) {
         toast.message(
@@ -411,7 +419,7 @@ export function DictationController() {
       cleanupStopped()
       cleanupError()
     }
-  }, [setPartialTranscript, setDictationState, stopCapture, discardBufferedAudio])
+  }, [setPartialTranscript, setDictationState, stopCapture, discardBufferedAudio, trackInsertion])
 
   return <DictationIndicator />
 }
