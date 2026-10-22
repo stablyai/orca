@@ -109,6 +109,18 @@ describe('Windows secure files through the native ACL addon', () => {
       expect(reports.filter((entry) => entry.stage === 'addon')).toHaveLength(1)
     })
 
+    it('preserves an existing file when strict staged restriction is unavailable', () => {
+      setWindowsSecurityForTests(null)
+      const dir = tempDir()
+      const targetPath = join(dir, 'secret.json')
+      writeFileSync(targetPath, 'previous')
+      expect(() => writeSecureFile(targetPath, 'replacement', { requireRestricted: true })).toThrow(
+        'Secure file permissions could not be restricted'
+      )
+      expect(readFileSync(targetPath, 'utf8')).toBe('previous')
+      expect(readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([])
+    })
+
     // Never a truncating plain write of the secret: a failed create surfaces like any fs failure.
     it('throws a failed restricted create and leaves no temp file', () => {
       const dir = tempDir()

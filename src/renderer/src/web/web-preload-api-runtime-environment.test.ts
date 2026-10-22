@@ -17,6 +17,23 @@ describe('web runtime environment identity', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('refuses native service headers without storing them in the browser', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const before = globals.storage.getItem('orca.web.runtimeEnvironment.v1')
+    await expect(
+      globals.window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
+        name: 'Protected server',
+        pairingCode: encodePairingCode(),
+        edgeAuthHeaders: [{ name: 'CF-Access-Client-Secret', value: 'synthetic-secret' }]
+      })
+    ).resolves.toMatchObject({ ok: false })
+    expect(globals.storage.getItem('orca.web.runtimeEnvironment.v1')).toBe(before)
+    expect(globals.window.api.runtimeEnvironments.saveEdgeAuth).toBeUndefined()
+    expect(globals.window.api.runtimeEnvironments.getEdgeAuthStatus).toBeUndefined()
+  })
+
   it('does not resolve an old server selector through a differently keyed server', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')

@@ -1,3 +1,4 @@
+import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import type { ManagedOrcadDeploymentSummary } from '../../../shared/managed-orcad-execution-host'
 import type { PairingOffer } from '../../../shared/pairing'
 import type { RuntimeEnvironmentSource } from '../../../shared/runtime-environments'
@@ -12,6 +13,7 @@ export type MobileDesktopRelayHost = {
   fence: string
   // The desktop's own runtime-scope pairing; the relay swaps in a phone's delegated token.
   pairing: PairingOffer
+  edgeAuth?: PairedRuntimeConnection['edgeAuth']
 }
 
 /** A configured server as the desktop's sidebar sees it, without contacting it. */

@@ -17,6 +17,8 @@ export type RemotePairingFailure = {
   ok: false
   kind: RemotePairingFailureKind
   message: string
+  savedEnvironmentId?: string
+  savedEnvironmentPairingRevision?: number
 }
 
 export type VerifyAndAddRuntimeEnvironmentResult =

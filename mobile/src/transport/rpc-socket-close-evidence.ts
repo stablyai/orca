@@ -3,6 +3,7 @@ import type { ConnectionState } from './types'
 
 type SocketCloseLogOptions = {
   event: unknown
+  omitNativeErrorDetails?: boolean
   state: ConnectionState
   attempt: number
   intentionallyClosed: boolean
@@ -51,11 +52,11 @@ export function logRpcSocketClose(options: SocketCloseLogOptions): number | unde
   const event = options.event as { code?: number; reason?: string; wasClean?: boolean } | undefined
   const closeAt = Date.now()
   const constructToCloseMs = closeAt - options.constructedAt
-  const closeEvent = describeSocketEvent(options.event)
+  const closeEvent = options.omitNativeErrorDetails ? null : describeSocketEvent(options.event)
   console.log('[net] ws.onclose', {
-    code: event?.code,
-    reason: event?.reason,
-    wasClean: event?.wasClean,
+    code: typeof event?.code === 'number' ? event.code : undefined,
+    reason: options.omitNativeErrorDetails ? undefined : event?.reason,
+    wasClean: typeof event?.wasClean === 'boolean' ? event.wasClean : undefined,
     state: options.state,
     attempt: options.attempt,
     intentionallyClosed: options.intentionallyClosed,
@@ -63,8 +64,8 @@ export function logRpcSocketClose(options: SocketCloseLogOptions): number | unde
     constructToCloseMs,
     aliveMs: options.authenticated ? constructToCloseMs : null,
     inboundIdleMs: options.lastInboundAt != null ? closeAt - options.lastInboundAt : null,
-    eventKeys: closeEvent.keys,
-    eventStr: closeEvent.json
+    eventKeys: closeEvent?.keys,
+    eventStr: closeEvent?.json
   })
   return event?.code
 }

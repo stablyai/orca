@@ -1,3 +1,4 @@
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   requestDesktopBrowserBridgeReconcile,
   resetDesktopBrowserBridgeEnvironment
@@ -20,4 +21,18 @@ export function clearRuntimeEnvironmentManualDisconnect(environmentId: string): 
 
 export function isRuntimeEnvironmentManuallyDisconnected(environmentId: string): boolean {
   return manuallyDisconnectedEnvironmentIds.has(environmentId)
+}
+
+export function manuallyDisconnectedResponse(environment: {
+  runtimeId: string | null
+}): RuntimeRpcResponse<never> {
+  return {
+    id: 'runtime.manualDisconnect',
+    ok: false,
+    error: {
+      code: 'runtime_manually_disconnected',
+      message: RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
+    },
+    _meta: { runtimeId: environment.runtimeId }
+  }
 }

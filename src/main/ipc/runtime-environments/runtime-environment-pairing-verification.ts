@@ -1,3 +1,14 @@
+import {
+  normalizeEndpointAuthHeaders,
+  endpointAuthOrigin,
+  type EndpointAuthHeaders
+} from '../../../shared/network/endpoint-auth-headers'
+import type { RuntimeEdgeAuthHeader } from '../../../shared/runtime-edge-auth-types'
+import {
+  readRuntimeEdgeAuth,
+  writeRuntimeEdgeAuth
+} from '../../credentials/runtime-edge-auth-store'
+import { remoteRuntimeConnectOptions } from '../../../shared/remote-runtime-connect-bound'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import {
   addOrUpdateEnvironmentFromPairingCode,
@@ -28,6 +39,7 @@ type VerifyAndAddRuntimeEnvironmentArgs = {
   name: string
   pairingCode: string
   allowLoopback?: boolean
+  edgeAuthHeaders?: RuntimeEdgeAuthHeader[]
 }
 
 type VerifiedPairingCode = {
@@ -39,7 +51,9 @@ type VerifiedPairingCode = {
 /** Proves a pairing link reaches a compatible host that accepts it, without saving anything. */
 async function verifyPairingCode(
   pairingCode: string,
-  allowLoopback: boolean | undefined
+  allowLoopback: boolean | undefined,
+  headers: EndpointAuthHeaders = {},
+  savedAuth?: ReturnType<typeof readRuntimeEdgeAuth>
 ): Promise<VerifiedPairingCode | RemotePairingFailure> {
   const parsed = parseHostAccessLink(pairingCode)
   if (!parsed.ok) {
@@ -53,8 +67,17 @@ async function verifyPairingCode(
     }
   }
   try {
+    const connection = pairedRuntimeConnectionFromOffer(parsed.value.pairing)
+    const origin = endpointAuthOrigin(connection.endpoint)
+    const edgeAuth =
+      savedAuth ??
+      (Object.keys(headers).length > 0
+        ? { origin: origin ?? '', hostPublicKeyB64: connection.hostPublicKeyB64, headers }
+        : undefined)
+    const authenticated = edgeAuth ? { ...connection, edgeAuth } : connection
+    remoteRuntimeConnectOptions(undefined, undefined, authenticated)
     const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
-      pairedRuntimeConnectionFromOffer(parsed.value.pairing),
+      authenticated,
       'status.get',
       undefined,
       15_000,
@@ -87,7 +110,15 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   userDataPath: string,
   args: VerifyAndAddRuntimeEnvironmentArgs
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
-  const verified = await verifyPairingCode(args.pairingCode, args.allowLoopback)
+  const normalized = normalizeEndpointAuthHeaders(args.edgeAuthHeaders ?? [])
+  if (!normalized.ok) {
+    return {
+      ok: false,
+      kind: 'access-link-invalid',
+      message: 'Enter valid edge authentication headers.'
+    }
+  }
+  const verified = await verifyPairingCode(args.pairingCode, args.allowLoopback, normalized.headers)
   if (!verified.ok) {
     return verified
   }
@@ -109,6 +140,21 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
         error instanceof RuntimeEnvironmentStoreError && error.code === 'invalid_argument'
           ? error.message
           : 'Orca verified the host but could not save it. Check local settings storage and try again.'
+    }
+  }
+  if (Object.keys(normalized.headers).length > 0) {
+    try {
+      writeRuntimeEdgeAuth(userDataPath, outcome.environment, normalized.headers)
+    } catch {
+      return {
+        ok: false,
+        kind: 'environment-save-failed',
+        savedEnvironmentId: outcome.environment.id,
+        savedEnvironmentPairingRevision:
+          outcome.environment.pairingRevision ?? outcome.environment.createdAt,
+        message:
+          'The server was paired, but its edge credentials could not be saved. Retry saving credentials or configure them from the server menu.'
+      }
     }
   }
   return {
@@ -137,9 +183,24 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
     }
   }
   // Why: a tunnel-backed server is legitimately re-paired with a loopback link.
+  let savedEdgeAuth: ReturnType<typeof readRuntimeEdgeAuth> = null
+  if (!existing.connectionDependency && !existing.orcadDeployment && !existing.sshAccess) {
+    try {
+      savedEdgeAuth = readRuntimeEdgeAuth(userDataPath, existing)
+    } catch {
+      return {
+        ok: false,
+        kind: 'connection-interrupted',
+        message:
+          'Could not read edge authentication. Unlock protected storage or update the saved credentials.'
+      }
+    }
+  }
   const verified = await verifyPairingCode(
     args.pairingCode,
-    existing.connectionDependency === 'ssh-tunnel'
+    existing.connectionDependency === 'ssh-tunnel',
+    {},
+    savedEdgeAuth
   )
   if (!verified.ok) {
     return verified

@@ -251,3 +251,13 @@ Do not use a wildcard address or `127.0.0.1` for a remote client.
 - Compare every run mode in [Ways to run Orca](/docs/ways-to-run).
 - Use [SSH worktrees](/docs/ssh) when the laptop should own the Orca runtime.
 - See the [Orca CLI reference](/docs/cli/reference) for `orca serve` flags and automation commands.
+
+## Protected tunnel credentials
+
+For a direct `wss://` server protected by Cloudflare Access or another HTTP authentication layer, add its handshake headers in the native desktop **Add server** form. For Cloudflare service tokens, use `CF-Access-Client-Id` and `CF-Access-Client-Secret`. Orca verifies its paired host identity before saving those values in protected desktop storage. If pairing succeeds but storage fails, **Save credentials** retries storage without pairing again.
+
+For an existing direct secure server, use its **⋯ → Edge authentication…** action to replace or explicitly clear credentials. Saved values are not shown again. Changing the secure origin or host identity refuses reuse; clear an unreadable or mismatched credential before replacing it. Saving or clearing retires existing connections so reconnect uses the current values. SSH and WSL routes do not receive these headers.
+
+Protected storage must be available; Orca does not fall back to plaintext when a keychain is locked or a Linux keyring backend provides no protection. Authenticated connections refuse HTTP redirects: configure the final secure tunnel URL. Pairing grants, host identity verification and Orca encryption still apply after the tunnel admits the connection.
+
+Standalone clients use the [CLI's private credential file](/docs/cli/reference#authenticated-secure-tunnels). Browser clients use their browser login/session cookie under a compatible Access policy and do not accept service-token secrets in this form.

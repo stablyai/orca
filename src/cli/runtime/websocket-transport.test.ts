@@ -1,6 +1,13 @@
 import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from '../../shared/skill-install-capability'
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { createServer as createHttpsServer } from 'node:https'
+import { getCACertificates, setDefaultCACertificates } from 'node:tls'
+import {
+  LOCAL_HTTPS_TEST_CERTIFICATE,
+  LOCAL_HTTPS_TEST_PRIVATE_KEY
+} from '../../main/browser/browser-local-https-test-certificate'
+import { writeSecureFile } from '../../shared/secure-file'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -44,6 +51,7 @@ type TestRuntime = {
   endpoint: string
   publicKeyB64: string
   deviceToken: string
+  observedHeaders: Record<string, string | string[] | undefined>[]
   authFrames: Record<string, unknown>[]
   requestMethods: string[]
   connectionCount: () => number
@@ -54,6 +62,7 @@ describe('CLI remote WebSocket transport', () => {
   const servers: TestRuntime[] = []
 
   afterEach(async () => {
+    vi.unstubAllEnvs()
     vi.mocked(launchOrcaApp).mockClear()
     await Promise.all(servers.splice(0).map((server) => server.close()))
   })
@@ -94,6 +103,53 @@ describe('CLI remote WebSocket transport', () => {
       })
     )
   })
+
+  it.each(['pairing code', 'saved environment'])(
+    'uses private-file headers for a TLS %s connection without adding them to Orca auth frames',
+    async (mode) => {
+      const previousCAs = getCACertificates('default')
+      setDefaultCACertificates([...previousCAs, LOCAL_HTTPS_TEST_CERTIFICATE])
+      const directory = mkdtempSync(join(tmpdir(), 'orca-cli-edge-tls-'))
+      try {
+        const runtime = await startTestRuntime('runtime-edge', { secure: true })
+        servers.push(runtime)
+        const code = encodePairingOffer({
+          v: 2,
+          endpoint: runtime.endpoint,
+          deviceToken: runtime.deviceToken,
+          publicKeyB64: runtime.publicKeyB64
+        })
+        const path = join(directory, 'edge.json')
+        writeSecureFile(
+          path,
+          JSON.stringify({
+            v: 1,
+            origin: new URL(runtime.endpoint).origin,
+            hostPublicKeyB64: runtime.publicKeyB64,
+            headers: [{ name: 'CF-Access-Client-Secret', value: 'synthetic-edge-secret' }]
+          })
+        )
+        vi.stubEnv('ORCA_REMOTE_AUTH_FILE', path)
+        if (mode === 'saved environment') {
+          addEnvironmentFromPairingCode(directory, { name: 'edge', pairingCode: code })
+        }
+        const client = new RuntimeClient(
+          directory,
+          5000,
+          mode === 'pairing code' ? code : null,
+          mode === 'saved environment' ? 'edge' : null
+        )
+        expect((await client.getCliStatus()).result.runtime.runtimeId).toBe('runtime-edge')
+        expect(runtime.observedHeaders[0]?.['cf-access-client-secret']).toBe(
+          'synthetic-edge-secret'
+        )
+        expect(JSON.stringify(runtime.authFrames)).not.toContain('synthetic-edge-secret')
+      } finally {
+        setDefaultCACertificates(previousCAs)
+        rmSync(directory, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('rejects malformed remote pairing codes before local runtime lookup', () => {
     expect(() => new RuntimeClient('/tmp/unused', 5_000, 'not-a-pairing-code')).toThrow(
@@ -260,6 +316,7 @@ describe('CLI remote WebSocket transport', () => {
 async function startTestRuntime(
   runtimeId: string,
   statusOverrides: {
+    secure?: boolean
     runtimeProtocolVersion?: number
     minCompatibleRuntimeClientVersion?: number
     desktopWindowStatus?: 'available' | 'openable' | 'initializing' | 'blocked'
@@ -275,13 +332,17 @@ async function startTestRuntime(
 ): Promise<TestRuntime> {
   const serverKeyPair = generateKeyPair()
   const deviceToken = `token-${runtimeId}`
-  const httpServer = createServer()
+  const httpServer = statusOverrides.secure
+    ? createHttpsServer({ key: LOCAL_HTTPS_TEST_PRIVATE_KEY, cert: LOCAL_HTTPS_TEST_CERTIFICATE })
+    : createServer()
   const wss = new WebSocketServer({ server: httpServer })
+  const observedHeaders: Record<string, string | string[] | undefined>[] = []
   const authFrames: Record<string, unknown>[] = []
   const requestMethods: string[] = []
   let connectionCount = 0
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, request) => {
+    observedHeaders.push(request.headers)
     connectionCount += 1
     let sharedKey: Uint8Array | null = null
     let authenticated = false
@@ -364,9 +425,10 @@ async function startTestRuntime(
   }
 
   return {
-    endpoint: `ws://127.0.0.1:${address.port}`,
+    endpoint: `${statusOverrides.secure ? 'wss' : 'ws'}://127.0.0.1:${address.port}`,
     publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey),
     deviceToken,
+    observedHeaders,
     authFrames,
     requestMethods,
     connectionCount: () => connectionCount,

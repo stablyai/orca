@@ -108,6 +108,7 @@ export function RuntimeEnvironmentsPane({
   })
   const {
     isSaving,
+    credentialsPending,
     removingId,
     removeError,
     setRemoveError,
@@ -262,6 +263,7 @@ export function RuntimeEnvironmentsPane({
         name={name}
         accessLink={pairingCode}
         busy={isBusy}
+        retryCredentials={credentialsPending}
         failure={addServerFailure}
         onNameChange={setName}
         onAccessLinkChange={(value) => {
@@ -269,7 +271,7 @@ export function RuntimeEnvironmentsPane({
           setAddServerFailure(null)
         }}
         onClose={closeAddServerForm}
-        onSubmit={(allowLoopback) => void addEnvironment(allowLoopback)}
+        onSubmit={(allowLoopback, headers) => void addEnvironment(allowLoopback, headers)}
       />
 
       {managedCatalog.api ? (

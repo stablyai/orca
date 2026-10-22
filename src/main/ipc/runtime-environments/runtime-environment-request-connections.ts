@@ -1,6 +1,7 @@
+import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
@@ -66,12 +67,13 @@ export function getRuntimeEnvironmentStatusOwner(
     if (cached) {
       closeRemoteRuntimeRequestConnection(environment.id)
     }
+    const connection = () => resolveRuntimeEnvironmentConnection(userDataPath, environment)
     const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, {
       isReady: () => getRemoteRuntimeSharedControlDiagnostics(environment.id)?.state === 'ready',
       request: (signal) =>
         sendRemoteRuntimeSharedControlRequest<RuntimeStatus>(
           environment.id,
-          pairedConnection,
+          connection(),
           'status.get',
           undefined,
           15_000,
@@ -79,7 +81,7 @@ export function getRuntimeEnvironmentStatusOwner(
           signal
         ),
       establish: () => {
-        ensureRemoteRuntimeSharedControlConnection(environment.id, pairedConnection)
+        ensureRemoteRuntimeSharedControlConnection(environment.id, connection())
         reconnectRemoteRuntimeSharedControlConnection(environment.id)
       },
       pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
@@ -320,10 +322,6 @@ function getSharedControlConnection(
   return cached.connection
 }
 
-function getPairingKey(pairedConnection: PairedRuntimeConnection): string {
-  return [
-    pairedConnection.endpoint,
-    pairedConnection.credential.deviceToken,
-    pairedConnection.hostPublicKeyB64
-  ].join('\0')
+function getPairingKey(paired: PairedRuntimeConnection): string {
+  return [paired.endpoint, paired.credential.deviceToken, paired.hostPublicKeyB64].join('\0')
 }

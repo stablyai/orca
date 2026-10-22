@@ -1,3 +1,4 @@
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import { BrowserWindow } from 'electron'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
@@ -101,7 +102,7 @@ export function createRuntimeEnvironmentStatusOwner(
           'supported'
           ? transport.request(signal)
           : sendRemoteRuntimeRequest<RuntimeStatus>(
-              connection,
+              resolveRuntimeEnvironmentConnection(userDataPath, environment),
               'status.get',
               undefined,
               15_000,

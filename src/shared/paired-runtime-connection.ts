@@ -1,3 +1,4 @@
+import type { EndpointAuthHeaders } from './network/endpoint-auth-headers'
 import type { PairedE2EEAuthCredential } from './paired-e2ee-client-handshake'
 import type { PairingOffer } from './pairing'
 
@@ -8,6 +9,7 @@ export type PairedRuntimeConnection = {
   hostPublicKeyB64: string
   credential: PairedE2EEAuthCredential
   pairedDeviceId?: string
+  edgeAuth?: { origin: string; hostPublicKeyB64: string; headers: EndpointAuthHeaders }
 }
 
 type OfferConnectionFields = Pick<

@@ -417,3 +417,23 @@ orca agent hooks off --json
 - Read terminal state before sending input unless the next input is obvious.
 - Use worktree comments for progress checkpoints. See [Worktree checkpoints](/docs/cli/worktree-checkpoints).
 - Use [Orchestration](/docs/cli/orchestration) for tracked multi-agent dispatches instead of ad hoc terminal prompts.
+
+## Authenticated secure tunnels
+
+For a user-managed tunnel that requires HTTP handshake headers, set `ORCA_REMOTE_AUTH_FILE` to a local credential-file path before using `--pairing-code` or `--environment`. The variable contains the path, not credentials. The CLI reads the file once per invocation and sends its headers only to the matching WSS origin and paired host identity. Redirects are refused. Orca pairing and encryption are still required.
+
+```json
+{
+  "v": 1,
+  "origin": "wss://orca.example.com",
+  "hostPublicKeyB64": "<public key from this host's pairing offer>",
+  "headers": [
+    { "name": "CF-Access-Client-Id", "value": "<service token id>" },
+    { "name": "CF-Access-Client-Secret", "value": "<service token secret>" }
+  ]
+}
+```
+
+Create this file with a trusted local editor. On macOS and Linux, keep it owned by your account and remove group/other access with `chmod 600 /path/to/edge-auth.json`. On Windows, use the file's **Properties → Security → Advanced** settings to disable inherited permissions, remove access for other accounts/groups, and grant your account full control; SYSTEM and local Administrators may retain access. Windows requires Orca's bundled security module to verify the DACL; unavailable verification refuses the file. These checks do not change the input file.
+
+Use the exact secure origin, including a nondefault public port, and the public key from the same verified pairing offer. A different host, port or key requires a matching credential file. Maximum file size is 32 KiB, with at most eight printable-ASCII headers. Keep the file out of source control and pairing links. Browser clients use browser login/session cookies rather than this file.

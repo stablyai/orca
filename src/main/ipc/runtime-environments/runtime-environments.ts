@@ -1,3 +1,5 @@
+import { registerRuntimeEnvironmentEdgeAuthHandlers } from './runtime-environment-edge-auth-handlers'
+import { forgetRuntimeEdgeAuth } from '../../credentials/runtime-edge-auth-store'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -80,6 +82,7 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
 }
 /** Returns once the environment's client-hosted browser pages have been released. */
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
+  forgetRuntimeEdgeAuth(environmentId)
   // Why: a same-id re-pair must retire every transport that still authenticates as the old peer.
   advanceRuntimeEnvironmentCapabilityIncarnation(environmentId)
   advanceRuntimeEnvironmentTransportGeneration(environmentId)
@@ -146,6 +149,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   })
   registerRuntimeEnvironmentRecoveryHandler()
   registerRuntimeEnvironmentRepairHandler({
+    getUserDataPath,
+    invalidateTransport: invalidateRuntimeEnvironmentTransport
+  })
+  registerRuntimeEnvironmentEdgeAuthHandlers({
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })

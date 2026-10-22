@@ -1,4 +1,8 @@
-import { useState, type MutableRefObject } from 'react'
+import type {
+  RuntimeEdgeAuthHeader,
+  RuntimeEdgeAuthMutation
+} from '../../../../shared/runtime-edge-auth-types'
+import { useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -33,8 +37,21 @@ export function useRuntimeEnvironmentMutationActions({
   const [isSaving, setIsSaving] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [pairingCode, setPairingCode] = useState('')
+  const revision = useRef(0)
+  const savingRef = useRef(false)
+  const [pendingCredentials, setPendingCredentials] = useState<RuntimeEdgeAuthMutation | null>(null)
+  const [name, updateName] = useState('')
+  const [pairingCode, updatePairingCode] = useState('')
+  const setName = (value: string) => {
+    revision.current += 1
+    setPendingCredentials(null)
+    updateName(value)
+  }
+  const setPairingCode = (value: string) => {
+    revision.current += 1
+    setPendingCredentials(null)
+    updatePairingCode(value)
+  }
   const [addServerFailure, setAddServerFailure] = useState<RuntimeHostAccessFailure | null>(null)
 
   const closeAddServerForm = (): void => {
@@ -47,7 +64,14 @@ export function useRuntimeEnvironmentMutationActions({
     setAddServerFailure(null)
   }
 
-  const addEnvironment = async (allowLoopback: boolean): Promise<void> => {
+  const addEnvironment = async (
+    allowLoopback: boolean,
+    headers?: RuntimeEdgeAuthHeader[]
+  ): Promise<void> => {
+    if (savingRef.current) {
+      return
+    }
+    const submission = revision.current
     const trimmedPairingCode = pairingCode.trim()
     const trimmedName =
       name.trim() ||
@@ -62,16 +86,43 @@ export function useRuntimeEnvironmentMutationActions({
       return
     }
     setAddServerFailure(null)
+    savingRef.current = true
     setIsSaving(true)
     try {
+      if (pendingCredentials) {
+        const save = window.api.runtimeEnvironments.saveEdgeAuth
+        if (!save || !headers) {
+          throw new Error('Could not save edge authentication.')
+        }
+        await save({ ...pendingCredentials, headers })
+        if (submission !== revision.current || !mountedRef.current) {
+          return
+        }
+        setPendingCredentials(null)
+        await loadEnvironments()
+        setAddServerFormOpen(false)
+        setName('')
+        setPairingCode('')
+        return
+      }
       // Why main judges a taken name: a code for that same saved server refreshes it instead.
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
-        allowLoopback
+        allowLoopback,
+        ...(headers ? { edgeAuthHeaders: headers } : {})
       })
+      if (submission !== revision.current || !mountedRef.current) {
+        return
+      }
       if (!result.ok) {
         if (mountedRef.current) {
+          if (result.savedEnvironmentId && result.savedEnvironmentPairingRevision !== undefined) {
+            setPendingCredentials({
+              environmentId: result.savedEnvironmentId,
+              expectedPairingRevision: result.savedEnvironmentPairingRevision
+            })
+          }
           setAddServerFailure({ kind: result.kind, message: result.message })
         }
         return
@@ -127,6 +178,7 @@ export function useRuntimeEnvironmentMutationActions({
         )
       }
     } finally {
+      savingRef.current = false
       if (mountedRef.current) {
         setIsSaving(false)
       }
@@ -180,6 +232,7 @@ export function useRuntimeEnvironmentMutationActions({
 
   return {
     isSaving,
+    credentialsPending: pendingCredentials !== null,
     removingId,
     removeError,
     setRemoveError,

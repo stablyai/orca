@@ -54,6 +54,10 @@ pnpm exec expo run:ios
 pnpm start --dev-client
 ```
 
+Android edge authentication requires a rebuilt development client; Expo Go and older clients refuse to send these credentials. Android builds React Native from source so the WebSocket redirect protection in `patches/react-native@0.83.10.patch` reaches the app. Keep `android.buildReactNativeFromSource` enabled in `app.json`; this increases native build time.
+
+Mobile dependencies use short package-directory names because Android's Prefab tool misreads `=` in pnpm's patched-package paths. Run `pnpm install` in `mobile/` after pulling this configuration change.
+
 ## Pair With Desktop Orca
 
 1. Open Orca desktop.

@@ -19,6 +19,11 @@ vi.mock('../mobile-web-shell/removed-host-shell-cache', () => ({
 }))
 
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
+import {
+  cacheEndpointAuthSnapshot,
+  endpointAuthMutationEpoch,
+  peekEndpointAuthHeaders
+} from './endpoint-auth-headers'
 
 describe('host removal lifecycle', () => {
   beforeEach(() => {
@@ -46,6 +51,28 @@ describe('host removal lifecycle', () => {
       'storage unavailable'
     )
     expect(closeHostClient).not.toHaveBeenCalled()
+  })
+
+  it('clears cached edge credentials and invalidates in-flight reads after removal commits', async () => {
+    const before = endpointAuthMutationEpoch('host-1')
+    cacheEndpointAuthSnapshot('host-1', { 'X-Token': 'secret' }, 'wss://orca.example.com')
+    removeHostMock.mockResolvedValue(undefined)
+
+    await removeHostAndCloseClient('host-1', vi.fn())
+
+    expect(peekEndpointAuthHeaders('host-1', 'wss://orca.example.com')).toBeNull()
+    expect(endpointAuthMutationEpoch('host-1')).toBeGreaterThan(before)
+  })
+
+  it('retains edge credentials if metadata removal fails', async () => {
+    cacheEndpointAuthSnapshot('host-1', { 'X-Token': 'secret' }, 'wss://orca.example.com')
+    removeHostMock.mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(removeHostAndCloseClient('host-1', vi.fn())).rejects.toThrow()
+
+    expect(peekEndpointAuthHeaders('host-1', 'wss://orca.example.com')).toEqual({
+      'X-Token': 'secret'
+    })
   })
 
   it('drops the gateway push registration before the credentials it needs are gone', async () => {

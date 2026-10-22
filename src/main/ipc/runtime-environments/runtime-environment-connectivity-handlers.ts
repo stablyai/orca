@@ -1,3 +1,5 @@
+import type { RuntimeEdgeAuthHeader } from '../../../shared/runtime-edge-auth-types'
+import { clearRuntimeEdgeAuth } from '../../credentials/runtime-edge-auth-store'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -30,7 +32,7 @@ import {
 import {
   clearRuntimeEnvironmentManualDisconnect,
   isRuntimeEnvironmentManuallyDisconnected,
-  RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
+  manuallyDisconnectedResponse
 } from './runtime-environment-manual-disconnect'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
@@ -48,20 +50,6 @@ import {
   wslOrcadHostSupports
 } from '../../wsl/wsl-orcad-host-environments'
 import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/wsl-host-gate'
-
-function manuallyDisconnectedResponse(
-  environment: ReturnType<typeof resolveEnvironment>
-): RuntimeRpcResponse<never> {
-  return {
-    id: 'runtime.manualDisconnect',
-    ok: false,
-    error: {
-      code: 'runtime_manually_disconnected',
-      message: RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-    },
-    _meta: { runtimeId: environment.runtimeId }
-  }
-}
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 
@@ -100,7 +88,15 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
+    async (
+      _event,
+      args: {
+        name: string
+        pairingCode: string
+        allowLoopback?: boolean
+        edgeAuthHeaders?: RuntimeEdgeAuthHeader[]
+      }
+    ) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
         await publishVerifiedPairing(
@@ -108,6 +104,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           result,
           result.updatedExisting ? { invalidateTransport } : null
         )
+      }
+      if (!result.ok && result.savedEnvironmentId) {
+        await invalidateTransport(result.savedEnvironmentId)
       }
       return result
     }
@@ -138,6 +137,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, store)
       closeLegacySelectorTransport(args.selector, removed.id)
+      clearRuntimeEdgeAuth(getUserDataPath(), removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )

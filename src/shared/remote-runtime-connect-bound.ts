@@ -1,4 +1,6 @@
 import type { ClientOptions } from 'ws'
+import type { PairedRuntimeConnection } from './paired-runtime-connection'
+import { endpointAuthOrigin, normalizeEndpointAuthHeaders } from './network/endpoint-auth-headers'
 
 /**
  * Connect-phase bound for the Node-side remote-runtime WebSocket transports.
@@ -42,13 +44,16 @@ export const REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE = 'Could not connect to the r
 
 export function remoteRuntimeConnectOptions<TOptions extends ClientOptions>(
   options?: TOptions,
-  connectTimeoutMs?: number
+  connectTimeoutMs?: number,
+  connection?: PairedRuntimeConnection
 ): TOptions & { handshakeTimeout: number } {
+  const edgeHeaders = connection?.edgeAuth ? boundEdgeHeaders(connection) : null
   return {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the empty default stands in for an absent TOptions; every property it could carry is optional, and the spread below is the only use.
     ...(options ?? ({} as TOptions)),
     // Why: `ws` and `net` both gate on a truthy timeout, so 0 (or a non-finite value)
     // would silently leave the connect unbounded — the defect this module exists to fix.
+    ...(edgeHeaders ? { headers: edgeHeaders, followRedirects: false } : {}),
     handshakeTimeout:
       typeof connectTimeoutMs === 'number' &&
       Number.isFinite(connectTimeoutMs) &&
@@ -56,6 +61,30 @@ export function remoteRuntimeConnectOptions<TOptions extends ClientOptions>(
         ? connectTimeoutMs
         : REMOTE_RUNTIME_CONNECT_TIMEOUT_MS
   }
+}
+
+function boundEdgeHeaders(connection: PairedRuntimeConnection) {
+  const auth = connection.edgeAuth
+  const origin = endpointAuthOrigin(connection.endpoint)
+  const normalized = normalizeEndpointAuthHeaders(
+    auth && typeof auth.headers === 'object' && auth.headers !== null
+      ? Object.entries(auth.headers).map(([name, value]) => ({ name, value }))
+      : null
+  )
+  if (
+    !auth ||
+    !connection.endpoint.toLowerCase().startsWith('wss://') ||
+    !origin ||
+    auth.origin !== origin ||
+    auth.hostPublicKeyB64 !== connection.hostPublicKeyB64 ||
+    !normalized.ok ||
+    Object.keys(normalized.headers).length === 0
+  ) {
+    throw new Error(
+      'Invalid edge authentication. Check the secure origin, host identity and headers.'
+    )
+  }
+  return normalized.headers
 }
 
 /**

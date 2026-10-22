@@ -1,3 +1,4 @@
+import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
 import { app } from 'electron'
 import { pairedRuntimeBrowserClientHostsPage } from '../../browser/paired-runtime-browser-client-host-runtime'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
@@ -101,7 +102,9 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         return null
       }
       const environment = await resolveManagedRuntimeEnvironment(userDataPath, environmentId)
+      const { edgeAuth } = resolveRuntimeEnvironmentConnection(userDataPath, environment)
       return {
+        ...(edgeAuth ? { edgeAuth } : {}),
         environmentId,
         fence: relayHostFence(environment),
         pairing: getPreferredPairingOffer(environment)
