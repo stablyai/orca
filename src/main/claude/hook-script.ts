@@ -4,6 +4,10 @@ import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
  *  mirroring the same split under src/main/cursor/. */
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
+import {
+  buildPosixScrubSafeEnvRestoreLines,
+  buildWindowsScrubSafeEnvRestoreLines
+} from '../../shared/agent-hook-scrub-safe-env'
 import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   buildPosixCursorReplayGuardLines,
@@ -43,6 +47,7 @@ export function getManagedScript(
       'setlocal',
       // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
       'echo {}',
+      ...buildWindowsScrubSafeEnvRestoreLines(),
       // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
@@ -69,6 +74,10 @@ export function getManagedScript(
     '#!/bin/sh',
     // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
     'printf "{}\\n"',
+    // Why before anything reads pane identity: a harness that scrubs KEY/TOKEN-named env
+    // drops ORCA_PANE_KEY, and a hook with no pane to attribute to exits without posting
+    // (see agent-hook-scrub-safe-env.ts).
+    ...buildPosixScrubSafeEnvRestoreLines(),
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenGrokImportsClaude ? buildPosixGrokReplayGuardLines() : []),
     ...(options.skipWhenCursorImportsClaude ? buildPosixCursorReplayGuardLines() : []),
