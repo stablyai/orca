@@ -26,8 +26,7 @@ export function getFolderWorkspaceSurfaceOpeningTag(
   return (
     markup.match(
       new RegExp(
-        `<div[^>]*id="worktree-list-option-[^"]*%3A${escapeRegex(folderWorkspaceId)}"[^>]*>` +
-          `[\\s\\S]*?<div class="relative"[^>]*>`
+        `<div[^>]*id="worktree-list-option-[^"]*%3A${escapeRegex(folderWorkspaceId)}"[^>]*>`
       )
     )?.[0] ?? ''
   )
