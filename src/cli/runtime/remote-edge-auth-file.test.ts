@@ -1,4 +1,5 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -11,10 +12,10 @@ import { resolveRemoteConnection } from './runtime-remote-pairing'
 import { readRemoteEdgeAuthFile } from './remote-edge-auth-file'
 
 const directories: string[] = []
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllEnvs()
   for (const dir of directories.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
+    await removeTree(dir)
   }
 })
 const paired: PairedRuntimeConnection = {

@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { removeTree } from '../../../shared/windows-transient-lock-removal'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -44,7 +45,7 @@ beforeEach(() => {
     }
   })
 })
-afterEach(() => rmSync(directory, { recursive: true, force: true }))
+afterEach(() => removeTree(directory))
 describe('verified desktop pairing edge credentials', () => {
   it('uses transient headers during verification and stores only after the host commits', async () => {
     mocks.write.mockImplementation(() => {
