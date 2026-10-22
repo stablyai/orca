@@ -69,57 +69,62 @@ describe('Codex turn completion without Stop', () => {
     rmSync(directory, { recursive: true, force: true })
   })
 
-  it('settles a /review from its child rollout and leaves later turns working', async () => {
-    await startHost(false)
-    const childPath = join(directory, 'review-child.jsonl')
-    writeFileSync(childPath, `${reviewRecords[0]}\n`)
-    // Real review hooks carry the root session ID and child turn/path, with no agent_id or Stop.
-    const review = { transcript_path: childPath, turn_id: 'child-turn' }
-    await hook({ ...review, hook_event_name: 'UserPromptSubmit', prompt: 'Review changes' })
-    for (const hookEventName of ['PreToolUse', 'PostToolUse', 'PreToolUse', 'PostToolUse']) {
-      await hook({ ...review, hook_event_name: hookEventName, tool_name: 'Bash' })
+  it.each([false, true])(
+    'settles a /review and preserves completion across compaction (relayed=%s)',
+    async (relayed) => {
+      await startHost(relayed)
+      const childPath = join(directory, 'review-child.jsonl')
+      writeFileSync(childPath, `${reviewRecords[0]}\n`)
+      // Real review hooks carry the root session ID and child turn/path, with no agent_id or Stop.
+      const review = { transcript_path: childPath, turn_id: 'child-turn' }
+      await hook({ ...review, hook_event_name: 'UserPromptSubmit', prompt: 'Review changes' })
+      for (const hookEventName of ['PreToolUse', 'PostToolUse', 'PreToolUse', 'PostToolUse']) {
+        await hook({ ...review, hook_event_name: hookEventName, tool_name: 'Bash' })
+      }
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        providerSession: { id: 'root-session', transcriptPath: childPath }
+      })
+
+      appendFileSync(childPath, `${reviewRecords[1]}\n`)
+      await vi.waitFor(
+        () =>
+          expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+            state: 'done',
+            mainAgent: { state: 'done' }
+          }),
+        { timeout: 3_000 }
+      )
+      // Desktops that predate host-owned turn verdicts still recognize a labelled Stop.
+      expect(published.at(-1)).toBe('Stop')
+
+      // Neither a compaction queued before the next prompt nor a newer turn replays the review's end.
+      await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
+      await settle()
+      expect(published.at(-1)).toBe('Stop')
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+      appendFileSync(childPath, event({ type: 'task_started', turn_id: 'next-turn' }))
+      await hook({
+        ...review,
+        turn_id: 'next-turn',
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'Next'
+      })
+      await settle()
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
+      // A delayed hook from the review's ended turn does not end the newer turn.
+      await hook({ ...review, hook_event_name: 'PostToolUse', tool_name: 'Bash' })
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
+
+      // A real Stop that lands before its rollout end, then a compaction, never rearms that turn.
+      await hook({ ...review, turn_id: 'next-turn', hook_event_name: 'Stop' })
+      await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
+      appendFileSync(childPath, event({ type: 'task_complete', turn_id: 'next-turn' }))
+      await settle()
+      expect(published.at(-1)).toBe('Stop')
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
     }
-    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      providerSession: { id: 'root-session', transcriptPath: childPath }
-    })
-
-    appendFileSync(childPath, `${reviewRecords[1]}\n`)
-    await vi.waitFor(
-      () =>
-        expect(desktop.getStatusSnapshot()[0]).toMatchObject({
-          state: 'done',
-          mainAgent: { state: 'done' }
-        }),
-      { timeout: 3_000 }
-    )
-    // Desktops that predate host-owned turn verdicts still recognize a labelled Stop.
-    expect(published.at(-1)).toBe('Stop')
-
-    // Neither a compaction queued before the next prompt nor a newer turn replays the review's end.
-    await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
-    await settle()
-    expect(published.at(-1)).toBe('SessionStart')
-    appendFileSync(childPath, event({ type: 'task_started', turn_id: 'next-turn' }))
-    await hook({
-      ...review,
-      turn_id: 'next-turn',
-      hook_event_name: 'UserPromptSubmit',
-      prompt: 'Next'
-    })
-    await settle()
-    expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
-    // A delayed hook from the review's ended turn does not end the newer turn.
-    await hook({ ...review, hook_event_name: 'PostToolUse', tool_name: 'Bash' })
-    expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
-
-    // A real Stop that lands before its rollout end, then a compaction, never rearms that turn.
-    await hook({ ...review, turn_id: 'next-turn', hook_event_name: 'Stop' })
-    await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
-    appendFileSync(childPath, event({ type: 'task_complete', turn_id: 'next-turn' }))
-    await settle()
-    expect(published.slice(-2)).toEqual(['Stop', 'SessionStart'])
-  })
+  )
 
   it.each([
     ['locally', 'in an earlier poll', false, true],
