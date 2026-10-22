@@ -1,3 +1,5 @@
+vi.mock('./endpoint-auth-headers-store', () => ({ primeEndpointAuthHeaders: async () => null }))
+
 vi.mock('../notifications/push-registration', () => ({
   attachPushRegistration: () => () => {}
 }))

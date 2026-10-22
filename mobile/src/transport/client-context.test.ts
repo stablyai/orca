@@ -6,6 +6,8 @@ import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
+vi.mock('./endpoint-auth-headers-store', () => ({ primeEndpointAuthHeaders: async () => null }))
+
 vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
 
 // Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.

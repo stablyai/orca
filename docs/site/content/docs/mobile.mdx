@@ -44,6 +44,10 @@ The mobile app is intentionally not a full editor — it's a remote control for 
 
 Closing the desktop app drops a direct/LAN session until you reopen it. Relay-backed pairing follows the desktop Relay connection — reopen desktop if the host goes offline.
 
+### Cloudflare Access authentication
+
+For an already paired phone, enter the secure tunnel address and service-token headers together under **Edit host → Edge authentication**. First pair over LAN or Orca Relay: initial pairing cannot supply these headers. Use the final `wss://` address; authenticated connections do not follow redirects. An interactive Access login page cannot authenticate a native WebSocket. Keep the existing Access policy and Orca device authentication and encryption enabled.
+
 ## Chat UI
 
 For chat-capable agents (Claude, Codex, and others Orca recognizes), mobile can open the session in **Chat UI** instead of the raw terminal — the same idea as desktop's [Chat UI](/docs/agents/native-chat): a readable transcript, composer, permissions/questions, and image attachments.
@@ -85,6 +89,8 @@ On the hosts list, tap the host card's **⋯** button (or long-press the card) a
 
 - **Name** — display name on this phone only.
 - **Address** — IP, `host:port`, or `ws://` / `wss://`. Missing port keeps the current port (or defaults to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable at a different path (for example home LAN vs Tailscale).
+
+- **Edge authentication** — optional native-app WebSocket handshake headers, stored in this phone's keychain and sent only to a `wss://` endpoint. For Cloudflare Access service tokens, add `CF-Access-Client-Id` and `CF-Access-Client-Secret` using credentials issued for your tunnel's Access policy. Values must use printable ASCII and stay out of pairing links and connection logs. Credentials are bound to the secure host and port: after changing either, save the address, reopen this form, and enter credentials for the new endpoint. Unbound credentials from an earlier development build are never sent. These controls are unavailable in browser builds. Clear all rows to remove the saved headers; removing the host also removes its credentials.
 
 Saving an address change reconnects to the new endpoint. Pairing token stays the same.
 

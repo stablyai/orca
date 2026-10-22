@@ -7,6 +7,7 @@ import {
 } from './persisted-connection-log-store'
 import { loadHosts } from './host-store'
 import { openHostLogicalClient } from './host-logical-client'
+import { primeEndpointAuthHeaders } from './endpoint-auth-headers-store'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import type { RpcClient } from './rpc-client'
@@ -106,6 +107,10 @@ export async function openHostClientEntry(
 
     let client: RpcClient
     try {
+      await primeEndpointAuthHeaders(hostId, host.endpoint, isCurrent)
+      if (!isCurrent() || !isWanted() || state.store.has(hostId)) {
+        return state.store.get(hostId) ?? null
+      }
       recordConnectionClientSessionStart(hostId)
       client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
     } catch {

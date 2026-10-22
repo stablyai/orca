@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TextInput,
-  StyleSheet,
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,13 +12,20 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/host-client-hooks'
 import type { HostProfile } from '../../../src/transport/types'
 import { hostOs } from '../../../src/platform/host-os'
+import {
+  EdgeAuthHeadersSection,
+  useEdgeAuthHeaders,
+  type EdgeAuthScrollTarget
+} from '../../../src/components/edge-auth-headers-section'
+import { hostEditStyles as styles } from '../../../src/components/host-edit-styles'
+import { checkEdgeAuthEndpoint } from '../../../src/transport/endpoint-auth-headers'
 
 export default function EditHostScreen() {
   const router = useRouter()
@@ -27,6 +33,9 @@ export default function EditHostScreen() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const primeHosts = usePrimeHosts()
   const refreshHostClient = useRefreshHostClient()
+  const edgeAuth = useEdgeAuthHeaders()
+  const { authNormalized, authChanged, loadAuthForHost } = edgeAuth
+  const authScrollTarget = useRef<EdgeAuthScrollTarget | null>(null)
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -60,20 +69,24 @@ export default function EditHostScreen() {
           setHost(null)
           return
         }
+        await loadAuthForHost(found.id, found.endpoint, () => revision === routeRevision.current)
+        if (revision !== routeRevision.current) {
+          return
+        }
         setHost(found)
         // The field edits the phone's override; an empty field means "use the desktop's name".
         setName(found.personalName ?? '')
         setAddress(displayHostEndpoint(found.endpoint))
         setLoadError(null)
-      } catch (err) {
+      } catch {
         if (revision !== routeRevision.current) {
           return
         }
-        setLoadError(err instanceof Error ? err.message : 'Failed to load host.')
+        setLoadError('Failed to load host or edge authentication.')
         setHost(null)
       }
     },
-    [hostId]
+    [hostId, loadAuthForHost]
   )
 
   useEffect(() => {
@@ -96,11 +109,17 @@ export default function EditHostScreen() {
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed !== (host.personalName ?? '')
   const endpointChanged = endpointEdit?.kind === 'changed'
+  const authEndpointCheck = checkEdgeAuthEndpoint(
+    authNormalized.ok && authChanged ? authNormalized.headers : null,
+    endpointEdit?.kind !== 'invalid' ? endpointEdit?.endpoint : undefined
+  )
   const canSave =
     host != null &&
     endpointEdit != null &&
     endpointEdit.kind !== 'invalid' &&
-    (nameChanged || endpointChanged) &&
+    authNormalized.ok &&
+    !authEndpointCheck.blocked &&
+    (nameChanged || endpointChanged || authChanged) &&
     !saving
 
   async function handleSave() {
@@ -112,11 +131,15 @@ export default function EditHostScreen() {
       setSaveError(endpointEdit.error)
       return
     }
+    if (!authNormalized.ok || authEndpointCheck.blocked) {
+      setSaveError(authNormalized.ok ? authEndpointCheck.error : authNormalized.error)
+      return
+    }
 
     const willRename = nextName !== (host.personalName ?? '')
     const nextEndpoint = endpointEdit.kind === 'changed' ? endpointEdit.endpoint : undefined
-    if (!willRename && nextEndpoint === undefined) {
-      router.back()
+    if (!willRename && nextEndpoint === undefined && !authChanged) {
+      leave()
       return
     }
 
@@ -141,15 +164,35 @@ export default function EditHostScreen() {
       return
     }
 
-    try {
-      // Why: the write already committed above; a re-prime failure here
-      // must not be reported as a save failure — the next loadHosts() call
-      // elsewhere in the app picks up the fresh state regardless.
-      const hosts = await loadHosts()
-      primeHosts(hosts)
-    } catch {
-      // best-effort re-prime; persisted data is unaffected
+    if (revision !== routeRevision.current) {
+      await reprimeHosts()
+      if (nextEndpoint !== undefined) {
+        refreshHostClient(host.id)
+      }
+      return
     }
+
+    // Retrying after a keychain failure must compare against the committed address.
+    setHost({ ...host, personalName: nextName || undefined, endpoint: endpointEdit.endpoint })
+
+    if (authChanged) {
+      try {
+        await edgeAuth.persistAuthChanges(host.id, authNormalized.headers, endpointEdit.endpoint)
+      } catch {
+        if (revision === routeRevision.current) {
+          setSaveError('Could not save edge authentication.')
+          savingRef.current = false
+          setSaving(false)
+        }
+        await reprimeHosts()
+        if (nextEndpoint !== undefined) {
+          refreshHostClient(host.id)
+        }
+        return
+      }
+    }
+
+    await reprimeHosts()
 
     if (revision === routeRevision.current) {
       savingRef.current = false
@@ -157,9 +200,17 @@ export default function EditHostScreen() {
       leave()
     }
 
-    if (nextEndpoint !== undefined) {
+    if (nextEndpoint !== undefined || authChanged) {
       // Why: the live client, even one riding the relay, and its primed profile hold the old address.
       refreshHostClient(host.id)
+    }
+  }
+
+  async function reprimeHosts() {
+    try {
+      primeHosts(await loadHosts())
+    } catch {
+      // The write already committed; another load can recover the cache.
     }
   }
 
@@ -210,6 +261,9 @@ export default function EditHostScreen() {
           behavior={hostOs() === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            ref={(node) => {
+              authScrollTarget.current = node
+            }}
             contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}
             keyboardShouldPersistTaps="handled"
           >
@@ -271,6 +325,16 @@ export default function EditHostScreen() {
               <Text style={styles.previewError}>{endpointEdit.error}</Text>
             ) : null}
 
+            {Platform.OS !== 'web' ? (
+              <EdgeAuthHeadersSection
+                rows={edgeAuth.authRows}
+                storedCount={edgeAuth.storedAuthCount}
+                error={authNormalized.ok ? authEndpointCheck.error : authNormalized.error}
+                onRowsChange={edgeAuth.setAuthRows}
+                scrollViewRef={authScrollTarget}
+              />
+            ) : null}
+
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
           </ScrollView>
         </KeyboardAvoidingView>
@@ -278,121 +342,3 @@ export default function EditHostScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  flex: {
-    flex: 1
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  heading: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '700'
-  },
-  saveButton: {
-    minWidth: 64,
-    height: 34,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
-    backgroundColor: colors.surfaceBright,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  saveButtonDisabled: {
-    opacity: 0.4
-  },
-  saveButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  form: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm
-  },
-  help: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    marginBottom: spacing.sm
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '500',
-    marginTop: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
-  },
-  input: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 10
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: 16
-  },
-  preview: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : typography.monoFamily
-  },
-  previewError: {
-    marginTop: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    marginTop: spacing.md
-  },
-  errorState: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    gap: spacing.md
-  },
-  loadingState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  secondaryButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  secondaryButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  }
-})

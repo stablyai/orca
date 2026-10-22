@@ -81,6 +81,7 @@ export class DirectRpcClient implements RpcClient {
     })
     this.socketFactory = new RpcClientSocketFactory({
       endpoint,
+      edgeAuthHeaders: options.edgeAuthHeaders,
       deviceToken,
       serverPublicKeyB64,
       getCurrentSocket: () => this.socketSession?.socket ?? null,
