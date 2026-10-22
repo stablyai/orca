@@ -35,17 +35,23 @@ function runtimeDirname(pathValue: string): string {
   return normalized.slice(0, index)
 }
 
+export type WorktreeCommonGitDirectory = {
+  path: string
+  /** The repo's own checkout is this common dir's main worktree, not a linked one. */
+  checkoutIsMain: boolean
+}
+
 export async function resolveWorktreeCommonGitDirectory(
   repo: Repo,
   access: GitDirectoryAccess = {}
-): Promise<string | null> {
+): Promise<WorktreeCommonGitDirectory | null> {
   const dotGitPath = resolveRuntimePath(repo.path, '.git')
   const statPath = access.stat ?? stat
   const readText = access.readFile ?? ((path: string) => readFile(path, 'utf8'))
   try {
     const dotGitStat = await statPath(dotGitPath)
     if (isDirectoryStat(dotGitStat)) {
-      return dotGitPath
+      return { path: dotGitPath, checkoutIsMain: true }
     }
     if (!isFileStat(dotGitStat)) {
       return null
@@ -57,8 +63,8 @@ export async function resolveWorktreeCommonGitDirectory(
     }
     const resolvedGitDir = resolveRuntimePath(repo.path, gitDir)
     return getRuntimePathBasename(runtimeDirname(resolvedGitDir)) === 'worktrees'
-      ? runtimeDirname(runtimeDirname(resolvedGitDir))
-      : resolvedGitDir
+      ? { path: runtimeDirname(runtimeDirname(resolvedGitDir)), checkoutIsMain: false }
+      : { path: resolvedGitDir, checkoutIsMain: true }
   } catch (error) {
     console.warn(`[worktree-base-watcher] cannot resolve git common dir for ${repo.id}:`, error)
     return null

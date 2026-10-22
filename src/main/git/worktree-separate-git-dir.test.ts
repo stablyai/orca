@@ -27,6 +27,9 @@ vi.mock('./runner', async () => {
 
 // Imported after vi.mock so worktree.ts binds to the spied runner.
 const { listWorktrees } = await import('./worktree')
+const { resolveWorktreeCommonGitDirectory } = await import('../ipc/worktree-common-git-directory')
+const { readGitCommonHeadIdentities } = await import('../ipc/worktree-head-identity-reader')
+const { PRIMARY_HEAD_IDENTITY_SCOPE } = await import('../ipc/worktree-head-identity-scope')
 
 const tempRoots: string[] = []
 
@@ -118,6 +121,42 @@ describe('git worktree separate git dir paths', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'lists a core.worktree checkout as the main worktree and keys its head updates to it',
+    async () => {
+      // #30726: Git lists the main entry at the metadata repo's folder and ignores core.worktree.
+      const root = await realpath(await mkdtemp(path.join(tmpdir(), 'orca-core-worktree-')))
+      tempRoots.push(root)
+      const metadataRepo = await createCommittedRepo(root, 'metadata')
+      const checkout = path.join(root, 'vault')
+      await mkdir(checkout)
+      git(metadataRepo, ['config', 'core.worktree', checkout])
+      await writeFile(path.join(checkout, '.git'), `gitdir: ${path.join(metadataRepo, '.git')}\n`)
+
+      const mainWorktree = (await listWorktrees(checkout)).find((w) => w.isMainWorktree)
+      expect(mainWorktree?.path).toBe(checkout)
+
+      const repo = { id: 'r', path: checkout, displayName: 'vault', badgeColor: '', addedAt: 0 }
+      const commonDir = await resolveWorktreeCommonGitDirectory(repo)
+      expect(commonDir).toEqual({ path: path.join(metadataRepo, '.git'), checkoutIsMain: true })
+      // A commit moves HEAD through logs/HEAD only, the update path that never relists worktrees.
+      git(checkout, ['commit', '--quiet', '--allow-empty', '-m', 'second'])
+      const { identities } = await readGitCommonHeadIdentities(
+        path.join(metadataRepo, '.git'),
+        undefined,
+        PRIMARY_HEAD_IDENTITY_SCOPE,
+        checkout
+      )
+      expect(identities).toEqual([
+        {
+          worktreePath: checkout,
+          head: git(checkout, ['rev-parse', 'HEAD']).trim(),
+          branch: 'refs/heads/main'
+        }
+      ])
+    }
+  )
+
   it.skipIf(process.platform === 'win32')('leaves a normal repo main path unchanged', async () => {
     const repoPath = await createNormalRepo()
 
@@ -133,9 +172,9 @@ describe('git worktree separate git dir paths', () => {
   it.skipIf(process.platform === 'win32')(
     'leaves an ordinary repo reached via a symlinked path unchanged',
     async () => {
-      // A symlink alias of the checkout root defeats the path-string gate
-      // (git reports the realpath toplevel), so the git-common-dir gate must
-      // still skip the rewrite since the main entry is a real working root.
+      // A symlink alias of the checkout root defeats the path-string check, but
+      // git reports the realpath toplevel, which already equals the main entry,
+      // so the row keeps its real-path identity.
       const repoPath = await createNormalRepo()
       const linkRoot = await mkdtemp(path.join(tmpdir(), 'orca-symlink-worktree-'))
       tempRoots.push(linkRoot)
@@ -155,11 +194,9 @@ describe('git worktree separate git dir paths', () => {
   it.skipIf(process.platform === 'win32')(
     'leaves the main entry unchanged when scanned via a linked worktree',
     async () => {
-      // A linked worktree has a `.git` *pointer file* just like a
-      // separate-git-dir checkout, but its porcelain main entry is the real
-      // main working root — never the Git directory. The git-common-dir gate
-      // must skip the rewrite so the main entry is not overwritten with the
-      // linked worktree's own toplevel (which would collide / drop the main).
+      // A linked worktree has a `.git` pointer file like a separate-git-dir
+      // checkout, but its git dir is not the common dir, so the rewrite must
+      // skip: its toplevel is its own folder and would collide with its row.
       const repoPath = await createNormalRepo()
       const linkedWorktreePath = path.join(path.dirname(repoPath), 'linked')
       git(repoPath, ['worktree', 'add', '--quiet', linkedWorktreePath, '-b', 'feature'])

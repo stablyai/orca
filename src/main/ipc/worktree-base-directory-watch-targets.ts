@@ -184,8 +184,13 @@ async function maybeAddBaseTarget(
         }
       : undefined
   )
-  if (commonDir && !isWslUncPath(commonDir)) {
-    await addTarget(targets, 'git-common', commonDir, config, connectionId)
+  if (commonDir && !isWslUncPath(commonDir.path)) {
+    // Why: only local git-common watches read head identities, so remote repos skip the realpath round trip.
+    const commonConfig =
+      commonDir.checkoutIsMain && !connectionId
+        ? { ...config, mainCheckoutPath: await canonicalizeExistingPath(repo.path, undefined) }
+        : config
+    await addTarget(targets, 'git-common', commonDir.path, commonConfig, connectionId)
   }
 }
 

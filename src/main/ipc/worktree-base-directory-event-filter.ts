@@ -38,6 +38,8 @@ export type WorktreeBaseRepoWatchConfig = {
   repoId: string
   repoName: string
   nestWorkspaces: boolean
+  /** Git-common targets only: the repo's checkout when it is this common dir's main worktree. */
+  mainCheckoutPath?: string
 }
 
 export type WorktreeBaseWatchTarget = {

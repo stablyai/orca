@@ -189,14 +189,13 @@ async function normalizeMainWorktreePath(
     return worktrees
   }
 
-  // Why: only a separate-git-dir/submodule main worktree reports git-common-dir as its path; gate on
-  // that equality so we don't overwrite a linked worktree's real working root with its own toplevel.
-  if (!areWorktreePathsEqual(mainWorktree.path, location.commonDir)) {
-    return worktrees
-  }
-  // Why: a linked worktree of a bare/separate-git-dir repo passes the gate above too, but its toplevel
-  // is its own folder; relabelling would give the main row that folder's path and repeat it (#23631).
-  if (!areWorktreePathsEqual(location.gitDir, location.commonDir)) {
+  // Why: Git lists the main worktree at its common dir minus `/.git`, ignoring core.worktree and
+  // separate git dirs. When the scanned folder is the main checkout, its toplevel is authoritative.
+  // A linked worktree's toplevel is its own folder, so relabelling would repeat that row (#23631).
+  if (
+    !areWorktreePathsEqual(location.gitDir, location.commonDir) ||
+    areWorktreePathsEqual(mainWorktree.path, location.topLevel)
+  ) {
     return worktrees
   }
 

@@ -693,7 +693,8 @@ describe('worktree base directory watcher', () => {
     expect(readGitCommonHeadIdentities).toHaveBeenCalledWith(
       PROJECT_GIT_COMMON_DIR,
       expect.anything(),
-      { listing: false, primary: false, all: false, entryNames: new Set(['external-5104']) }
+      { listing: false, primary: false, all: false, entryNames: new Set(['external-5104']) },
+      PROJECT_ROOT
     )
   })
 
@@ -717,7 +718,8 @@ describe('worktree base directory watcher', () => {
         primary: true,
         all: true,
         entryNames: new Set()
-      }
+      },
+      PROJECT_ROOT
     )
   })
 

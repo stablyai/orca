@@ -267,22 +267,30 @@ function applyResolvedRefOids(cache: WorktreeHeadIdentityCache, resolved: Resolv
 export async function readGitCommonHeadIdentities(
   commonDirPath: string,
   cache: WorktreeHeadIdentityCache = createWorktreeHeadIdentityCache(),
-  scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE
+  scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE,
+  mainCheckoutPath?: string
 ): Promise<GitCommonHeadIdentityRead> {
   let packedRefsPromise: Promise<Map<string, string> | Unreadable> | null = null
   const packedRefs = (): Promise<Map<string, string> | Unreadable> =>
     (packedRefsPromise ??= readPackedRefs(commonDirPath))
   const resolved: ResolvedRefOids = new Map()
 
-  // Only the standard `<checkout>/.git` layout maps a common dir back to its
-  // primary checkout path; bare/custom GIT_DIR layouts have no primary row.
-  if (basename(commonDirPath) !== '.git') {
+  // Why: core.worktree and separate git dirs put the main checkout elsewhere, so a registered
+  // main checkout wins; otherwise only `<checkout>/.git` maps back, and bare layouts have no primary.
+  const primaryPath =
+    mainCheckoutPath ?? (basename(commonDirPath) === '.git' ? dirname(commonDirPath) : null)
+  if (primaryPath === null) {
     cache.primary = null
-  } else if (scope.all || scope.primary || cache.primary === null || cache.primaryUnverified) {
+  } else if (
+    scope.all ||
+    scope.primary ||
+    cache.primary?.worktreePath !== primaryPath ||
+    cache.primaryUnverified
+  ) {
     const primary = await readHeadIdentity(
       commonDirPath,
       join(commonDirPath, 'HEAD'),
-      dirname(commonDirPath),
+      primaryPath,
       packedRefs,
       resolved
     )

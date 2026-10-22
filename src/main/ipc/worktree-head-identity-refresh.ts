@@ -15,7 +15,7 @@ import {
 
 type HeadIdentityWatchHost = {
   path: string
-  repos: ReadonlyMap<string, unknown>
+  repos: ReadonlyMap<string, { mainCheckoutPath?: string }>
   mainWindow: BrowserWindow
   disposed: boolean
 }
@@ -102,6 +102,19 @@ function resolveScope(
     : scope
 }
 
+// Why: repos sharing a common dir that name different main checkouts prove none of them.
+function agreedMainCheckoutPath(
+  repos: ReadonlyMap<string, { mainCheckoutPath?: string }>
+): string | undefined {
+  const paths = new Set<string>()
+  for (const config of repos.values()) {
+    if (config.mainCheckoutPath) {
+      paths.add(config.mainCheckoutPath)
+    }
+  }
+  return paths.size === 1 ? [...paths][0] : undefined
+}
+
 /** Diffs metadata-file head reads against the previous baseline and notifies
  *  only actual head moves, so status-only churn (index rewrites from external
  *  `git status`) stays silent and never re-enters structural fanout. Passing
@@ -159,7 +172,8 @@ export async function refreshWorktreeHeadIdentities(
     const { identities, complete } = await readGitCommonHeadIdentities(
       host.path,
       state.cache,
-      effectiveScope
+      effectiveScope,
+      agreedMainCheckoutPath(host.repos)
     )
     if (host.disposed || host.mainWindow.isDestroyed()) {
       return
