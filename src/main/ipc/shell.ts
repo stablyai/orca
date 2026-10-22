@@ -1,4 +1,5 @@
 import { validatePathExistenceBatch } from '../../shared/path-existence-batch'
+import { isExternalEditorFileDeepLink } from '../../shared/external-editor-uri-schemes'
 import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
@@ -158,7 +159,11 @@ export function registerShellHandlers(
       return
     }
 
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    if (
+      parsed.protocol !== 'https:' &&
+      parsed.protocol !== 'http:' &&
+      !isExternalEditorFileDeepLink(parsed)
+    ) {
       return
     }
 

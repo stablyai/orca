@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 const {
   getSpawnArgsForWindowsMock,
   handleMock,
+  openExternalMock,
   openPathMock,
   resolveCliCommandMock,
   showItemInFolderMock,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
+  openExternalMock: vi.fn(),
   openPathMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
   showItemInFolderMock: vi.fn(),
@@ -28,7 +30,7 @@ vi.mock('electron', () => ({
   },
   shell: {
     showItemInFolder: showItemInFolderMock,
-    openExternal: vi.fn(),
+    openExternal: openExternalMock,
     openPath: openPathMock
   },
   dialog: {
@@ -111,6 +113,7 @@ describe('registerShellHandlers', () => {
   beforeEach(() => {
     handleMock.mockReset()
     getSpawnArgsForWindowsMock.mockReset()
+    openExternalMock.mockReset()
     openPathMock.mockReset()
     resolveCliCommandMock.mockReset()
     showItemInFolderMock.mockReset()
@@ -176,6 +179,35 @@ describe('registerShellHandlers', () => {
       defaultPath: '/Users/kaylee',
       properties: ['openDirectory']
     })
+  })
+
+  it('opens https and vscode editor links via the OS, but rejects other schemes', async () => {
+    const handler = getHandler('shell:openUrl')
+
+    await handler({}, 'https://example.com')
+    expect(openExternalMock).toHaveBeenCalledWith('https://example.com/')
+
+    await handler({}, 'vscode://file/D:/src/project/Example.cs:120')
+    expect(openExternalMock).toHaveBeenCalledWith('vscode://file/D:/src/project/Example.cs:120')
+
+    await handler({}, 'vscode-insiders://file/D:/src/project/Example.cs:120')
+    expect(openExternalMock).toHaveBeenCalledWith(
+      'vscode-insiders://file/D:/src/project/Example.cs:120'
+    )
+
+    openExternalMock.mockClear()
+    await handler({}, 'file:///tmp/example.md')
+    expect(openExternalMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects vscode editor links that target an extension handler instead of a file', async () => {
+    const handler = getHandler('shell:openUrl')
+
+    await handler({}, 'vscode://some-extension-id/do-something')
+    expect(openExternalMock).not.toHaveBeenCalled()
+
+    await handler({}, 'vscode-insiders://some-extension-id/do-something')
+    expect(openExternalMock).not.toHaveBeenCalled()
   })
 
   it('picks several attachment files in one native dialog', async () => {

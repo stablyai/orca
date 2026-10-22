@@ -11,6 +11,7 @@ import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-targe
 import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
+import { isExternalEditorFileDeepLink } from '../../../../shared/external-editor-uri-schemes'
 import { resolveMarkdownLinkTarget } from './markdown-internal-links'
 import {
   fileUrlToAbsolutePath,
@@ -101,6 +102,11 @@ export async function handleMarkdownPreviewLinkClick({
       target.toString(),
       resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId, sourceOwner)
     )
+    return
+  }
+
+  if (isExternalEditorFileDeepLink(target)) {
+    void window.api.shell.openUrl(target.toString())
     return
   }
 
