@@ -3,6 +3,7 @@
 // JSON-RPC request handlers over the relay's stdio channel — so the host
 // installs hook configs/scripts into the distro without per-file wsl.exe
 // spawns (load-sensitive, see docs/agent-status-over-wsl.md).
+import { resolveSystemClaudeHookTarget } from '../main/claude/claude-hook-target'
 import { promises as fs } from 'node:fs'
 import { posix } from 'node:path'
 
@@ -25,12 +26,8 @@ export function registerWslHookFsHandlers(
   // (port fallback) ride it so the host can breadcrumb them.
   linkStatus?: () => Record<string, unknown>
 ): void {
-  // Why: the bridge exists solely to write agent hook configs into the guest
-  // user's home. Refusing paths outside it bounds the blast radius of a
-  // compromised host-side caller to what hook installation touches anyway.
-  // The bound is lexical (symlinks inside home are followed) — acceptable
-  // because the only caller is the host-owned stdio channel, never an
-  // agent-reachable surface.
+  // The guest derives the only extra root; a caller cannot expand this scope.
+  // Like HOME, this boundary is lexical on the trusted host-owned stdio channel.
   const homeRoot = posix.resolve(home)
   const resolveRaw = (rawPath: unknown): string => {
     if (typeof rawPath !== 'string' || rawPath.length === 0) {
@@ -38,23 +35,20 @@ export function registerWslHookFsHandlers(
     }
     return posix.resolve(rawPath)
   }
-  const scoped = (rawPath: unknown): string => {
+  const contains = (root: string, path: string): boolean =>
+    path === root || path.startsWith(`${root}/`)
+  const ancestor = (root: string, path: string): boolean => path === '/' || contains(path, root)
+  const scoped = async (rawPath: unknown, allowAncestors = false): Promise<string> => {
     const resolved = resolveRaw(rawPath)
-    if (resolved !== homeRoot && !resolved.startsWith(`${homeRoot}/`)) {
-      throw Object.assign(new Error(`path outside home: ${resolved}`), { code: 'EACCES' })
-    }
-    return resolved
-  }
-  // Why: the installers' mkdir-p walks top-down from `/`, probing every
-  // ancestor of home with readdir before it ever creates a dir. Allow
-  // read-only existence probes on those ancestors; everything else stays
-  // home-scoped.
-  const scopedProbe = (rawPath: unknown): string => {
-    const resolved = resolveRaw(rawPath)
-    if (resolved === '/' || homeRoot === resolved || homeRoot.startsWith(`${resolved}/`)) {
+    if (contains(homeRoot, resolved) || (allowAncestors && ancestor(homeRoot, resolved))) {
       return resolved
     }
-    return scoped(rawPath)
+    const target = await resolveSystemClaudeHookTarget()
+    const root = posix.resolve(target.configDir)
+    if (contains(root, resolved) || (allowAncestors && ancestor(root, resolved))) {
+      return resolved
+    }
+    throw Object.assign(new Error(`path outside hook roots: ${resolved}`), { code: 'EACCES' })
   }
 
   dispatcher.onRequest(
@@ -68,7 +62,7 @@ export function registerWslHookFsHandlers(
     WSL_HOOK_FS_METHODS.readFile,
     async (params): Promise<WslFsResult<{ content: string }>> => {
       try {
-        const content = await fs.readFile(scoped(params.path), 'utf8')
+        const content = await fs.readFile(await scoped(params.path), 'utf8')
         return { ok: true, content }
       } catch (err) {
         return failure(err)
@@ -79,7 +73,7 @@ export function registerWslHookFsHandlers(
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.writeFile, async (params): Promise<WslFsResult> => {
     try {
       const mode = typeof params.mode === 'number' ? params.mode : undefined
-      await fs.writeFile(scoped(params.path), String(params.content ?? ''), {
+      await fs.writeFile(await scoped(params.path), String(params.content ?? ''), {
         encoding: 'utf8',
         mode
       })
@@ -93,7 +87,7 @@ export function registerWslHookFsHandlers(
     WSL_HOOK_FS_METHODS.stat,
     async (params): Promise<WslFsResult<{ mode: number }>> => {
       try {
-        const stats = await fs.stat(scoped(params.path))
+        const stats = await fs.stat(await scoped(params.path))
         return { ok: true, mode: stats.mode }
       } catch (err) {
         return failure(err)
@@ -105,7 +99,7 @@ export function registerWslHookFsHandlers(
     try {
       // Why: POSIX rename overwrites atomically — exactly the OpenSSH
       // overwrite-rename semantics the installers prefer.
-      await fs.rename(scoped(params.src), scoped(params.dst))
+      await fs.rename(await scoped(params.src), await scoped(params.dst))
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -114,7 +108,7 @@ export function registerWslHookFsHandlers(
 
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.unlink, async (params): Promise<WslFsResult> => {
     try {
-      await fs.unlink(scoped(params.path))
+      await fs.unlink(await scoped(params.path))
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -123,7 +117,7 @@ export function registerWslHookFsHandlers(
 
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.chmod, async (params): Promise<WslFsResult> => {
     try {
-      await fs.chmod(scoped(params.path), Number(params.mode))
+      await fs.chmod(await scoped(params.path), Number(params.mode))
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -134,7 +128,7 @@ export function registerWslHookFsHandlers(
     WSL_HOOK_FS_METHODS.readdir,
     async (params): Promise<WslFsResult<{ entries: { filename: string }[] }>> => {
       try {
-        const names = await fs.readdir(scopedProbe(params.path))
+        const names = await fs.readdir(await scoped(params.path, true))
         return { ok: true, entries: names.map((filename) => ({ filename })) }
       } catch (err) {
         return failure(err)
@@ -144,7 +138,8 @@ export function registerWslHookFsHandlers(
 
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.mkdir, async (params): Promise<WslFsResult> => {
     try {
-      await fs.mkdir(scoped(params.path))
+      // The shared installer creates missing parents on the way to a scoped root.
+      await fs.mkdir(await scoped(params.path, true))
       return { ok: true }
     } catch (err) {
       return failure(err)

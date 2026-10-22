@@ -14,10 +14,12 @@ vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 import {
   describeClaudeProfile,
   prepareClaudeProfileDirectory,
-  readClaudeProfileObject,
+  readClaudeProfileObject
+} from './claude-profile-paths'
+import {
   readUserClaudeConfigDir,
   readUserClaudeConfigDirAsSet
-} from './claude-profile-paths'
+} from '../../shared/claude-user-config'
 
 // Case-only aliases exist only on a case-insensitive filesystem (default APFS, NTFS).
 const caseInsensitive = (() => {

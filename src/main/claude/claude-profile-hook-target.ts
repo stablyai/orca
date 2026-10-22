@@ -1,3 +1,4 @@
+import { systemClaudeHookTarget, type ClaudeHookTarget } from './claude-hook-target'
 import { statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -22,14 +23,19 @@ function sameFile(left: string, right: string): boolean {
 /** A profile destination that is, or links into, the default home would edit System Default's hooks. */
 export function refuseProfileAtDefaultHome(
   service: { agent: AgentHookInstallStatus['agent']; settings: ClaudeCompatibleHookSettings },
-  configDir: string | undefined
+  target: ClaudeHookTarget | undefined
 ): AgentHookInstallStatus | null {
-  if (configDir === undefined) {
+  if (target?.kind !== 'profile') {
     return null
   }
+  const { configDir } = target
+  const systemDefaultConfigDir = target.systemDefaultConfigDir ?? systemClaudeHookTarget().configDir
   const configPath = getConfigPath(service.settings, configDir)
-  const defaultSettings = getConfigPath(service.settings)
-  if (!sameFile(configDir, dirname(defaultSettings)) && !sameFile(configPath, defaultSettings)) {
+  const defaults = [
+    getConfigPath(service.settings),
+    getConfigPath(service.settings, systemDefaultConfigDir)
+  ]
+  if (!defaults.some((file) => sameFile(configDir, dirname(file)) || sameFile(configPath, file))) {
     return null
   }
   return {

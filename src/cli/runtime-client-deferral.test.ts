@@ -133,10 +133,11 @@ describe('RuntimeClient module-graph deferral', () => {
         expect(
           applyAgentStatusHooksEnabledMock,
           `${argv.join(' ')} hook application`
-        ).toHaveBeenCalledExactlyOnceWith(false, {
-          agentCmdOverrides: {},
-          disabledTuiAgents: []
-        })
+        ).toHaveBeenCalledExactlyOnceWith(
+          false,
+          { agentCmdOverrides: {}, disabledTuiAgents: [] },
+          {}
+        )
       } else {
         expect(
           applyAgentStatusHooksEnabledMock,

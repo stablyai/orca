@@ -1,3 +1,4 @@
+import { posix } from 'node:path'
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import {
   extractExecutableToken,
@@ -49,9 +50,10 @@ export function detectedManagedHookAgents(values: unknown): AgentHookTarget[] {
 export function readManagedHookDetectionResult(value: unknown): {
   agents: AgentHookTarget[]
   claudeVersion: string | null
+  claudeConfigDir: string | null
 } {
   if (value === null || typeof value !== 'object') {
-    return { agents: [], claudeVersion: null }
+    return { agents: [], claudeVersion: null, claudeConfigDir: null }
   }
   const agents = detectedManagedHookAgents('agents' in value ? value.agents : null)
   const versions = 'versions' in value ? value.versions : null
@@ -59,8 +61,13 @@ export function readManagedHookDetectionResult(value: unknown): {
     versions !== null && typeof versions === 'object' && 'claude' in versions
       ? versions.claude
       : null
+  const configDir = 'claudeConfigDir' in value ? value.claudeConfigDir : null
   return {
     agents,
+    claudeConfigDir:
+      typeof configDir === 'string' && posix.isAbsolute(configDir) && !configDir.includes('\0')
+        ? configDir
+        : null,
     claudeVersion: parseClaudeCliVersion(
       typeof rawClaudeVersion === 'string' ? rawClaudeVersion : null
     )

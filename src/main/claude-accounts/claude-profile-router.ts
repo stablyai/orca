@@ -16,11 +16,13 @@ import { resolveClaudeCommand } from '../codex-cli/command'
 import {
   claudeProfileMarkerPath,
   describeClaudeProfile,
-  type ClaudeProfileDescriptor,
+  type ClaudeProfileDescriptor
+} from './claude-profile-paths'
+import {
   readUserClaudeConfigDir,
   readUserClaudeConfigDirAsSet,
   resolveClaudeDefaultHome
-} from './claude-profile-paths'
+} from '../../shared/claude-user-config'
 import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 import { runClaudeProfileSetupInWorker } from './claude-profile-setup-worker'
 import type { ClaudeEnvPatch } from './environment'

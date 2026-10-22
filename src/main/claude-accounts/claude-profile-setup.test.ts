@@ -24,12 +24,15 @@ import { provisionClaudeAccountProfile } from './claude-profile-setup'
 
 const roots: string[] = []
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
 const local = { runtime: 'host', executionHostId: 'local' } as const
 function fixture() {
+  vi.stubEnv('CLAUDE_CONFIG_DIR', '')
+  vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'claude-profile-setup-')))
   roots.push(root)
   state.home = join(root, 'home')
@@ -39,7 +42,7 @@ function fixture() {
   mkdirSync(dataRoot)
   const service = new ClaudeHookService()
   const installHooks = (target: { configDir: string }) =>
-    service.install({ claudeVersion: '2.1.261', ...target })
+    service.install({ claudeVersion: '2.1.261', target: { kind: 'profile', ...target } })
   const setup = () =>
     provisionClaudeAccountProfile({
       dataRoot,

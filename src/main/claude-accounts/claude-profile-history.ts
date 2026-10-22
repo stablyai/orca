@@ -9,7 +9,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
-import { resolveClaudeDefaultHome } from './claude-profile-paths'
+import { resolveClaudeDefaultHome } from '../../shared/claude-user-config'
 import {
   ClaudeProfileSurfaceError,
   createClaudeProfileReport,

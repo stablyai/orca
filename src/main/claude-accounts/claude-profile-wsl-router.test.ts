@@ -75,13 +75,14 @@ function fixture() {
     agentStatusHooksEnabled: false,
     disabledTuiAgents: []
   }
-  const setup = { calls: 0, fail: false, gate: Promise.resolve() }
+  const setup = { calls: 0, hooks: new Array<boolean>(), fail: false, gate: Promise.resolve() }
   const router = new ClaudeWslProfileRouter({
     getSettings: () => settings,
     dataRoot: join(root, 'orca-dev'),
     // Like the guest helper, marks the folder only once it finishes.
-    runSetup: async () => {
+    runSetup: async (_distro, _home, _accountId, hooks) => {
       setup.calls += 1
+      setup.hooks.push(hooks)
       await setup.gate
       if (setup.fail) {
         throw new Error('refused')
@@ -209,6 +210,12 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     const home = await f.router.prepareAccount('Ubuntu', 'b')
     expect(home).toBe(join(guest.home, '.local/share/orca/claude-profiles/b/home'))
     expect(f.setup.calls).toBe(1)
+    expect(f.setup.hooks).toEqual([false])
+    f.settings.agentStatusHooksEnabled = true
+    await f.router.prepareAccount('Ubuntu', 'b')
+    f.settings.disabledTuiAgents = ['claude']
+    await f.router.prepareAccount('Ubuntu', 'b')
+    expect(f.setup.hooks).toEqual([false, true, false])
     mkdirSync(home, { recursive: true })
     symlinkSync(sharedHistory, join(home, 'projects'))
 
@@ -352,6 +359,11 @@ it.skipIf(!posixHost)(
     mkdirSync(join(home, '.claude', 'projects'), { recursive: true })
     const profileHome = join(home, '.local/share/orca/claude-profiles/a/home')
     mkdirSync(profileHome, { recursive: true })
+    const bin = join(home, '.local/bin')
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'claude'), '#!/bin/sh\nprintf "2.1.261 (Claude Code)\\n"\n', {
+      mode: 0o755
+    })
     const helper = join(root, 'claude-profile-wsl.cjs')
     await build({
       entryPoints: [resolve('src/main/claude-accounts/claude-profile-wsl-entry.ts')],
@@ -359,14 +371,36 @@ it.skipIf(!posixHost)(
       bundle: true,
       platform: 'node',
       format: 'cjs',
-      external: ['electron'],
       logLevel: 'silent'
     })
     const run = (accountId: string) =>
-      spawnSync(process.execPath, [helper, home, 'Ubuntu', accountId], { encoding: 'utf8' })
+      spawnSync(process.execPath, [helper, home, 'Ubuntu', accountId, 'true'], {
+        encoding: 'utf8',
+        env: {
+          HOME: home,
+          USERPROFILE: home,
+          XDG_CONFIG_HOME: join(home, '.config'),
+          XDG_DATA_HOME: join(home, '.local/share'),
+          XDG_STATE_HOME: join(home, '.local/state'),
+          XDG_CACHE_HOME: join(home, '.cache'),
+          XDG_RUNTIME_DIR: join(home, '.run'),
+          CLAUDE_CONFIG_DIR: '',
+          CODEX_HOME: join(home, '.codex'),
+          ORCA_E2E_USER_DATA_DIR: join(home, 'orca-data'),
+          ORCA_E2E_HOME_DIR: home,
+          ORCA_BACKGROUND_LAUNCH: '1',
+          ORCA_DISABLE_MACOS_LOGIN_SHELL: '1',
+          SHELL: '/bin/sh',
+          PATH: `${bin}:/usr/bin:/bin`
+        }
+      })
 
     expect(run('a').status).toBe(0)
     expect(existsSync(join(profileHome, '..', 'profile.json'))).toBe(true)
+    const settings = JSON.parse(readFileSync(join(profileHome, 'settings.json'), 'utf8'))
+    expect(settings.hooks.StopFailure).toBeDefined()
+    expect(settings.statusLine).toBeUndefined()
+    expect(existsSync(join(home, '.orca/agent-hooks/claude-hook.sh'))).toBe(true)
     // History is a Linux link into the guest's own ~/.claude.
     expect(lstatSync(join(profileHome, 'projects')).isSymbolicLink()).toBe(true)
     expect(run('../escape').status).not.toBe(0)

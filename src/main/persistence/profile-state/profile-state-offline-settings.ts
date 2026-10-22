@@ -28,11 +28,11 @@ export type ProfileStateOfflineLocation = {
 
 export type AgentHookSettings = Pick<
   GlobalSettings,
-  'agentStatusHooksEnabled' | 'disabledTuiAgents'
+  'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'agentCmdOverrides'
 >
 
 export type AgentHookSettingsUpdate = {
-  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  settings: Pick<GlobalSettings, 'agentCmdOverrides'> & { disabledTuiAgents: string[] }
   settingsPath: string
 }
 
@@ -131,9 +131,10 @@ export function assertOfflineProfileStateMutationRuntime(): void {
   }
 }
 
-function projectAgentHookSettings(
-  settings: AgentHookSettingsUpdate['settings']
-): AgentHookSettingsUpdate['settings'] {
+function projectAgentHookSettings(settings: {
+  agentCmdOverrides?: unknown
+  disabledTuiAgents?: unknown
+}): AgentHookSettingsUpdate['settings'] {
   return {
     agentCmdOverrides: isRecord(settings.agentCmdOverrides)
       ? Object.fromEntries(
@@ -189,6 +190,7 @@ function readAgentHookSettingsFromSettingsValue(value: unknown): AgentHookSettin
   const settings = isRecord(value) ? value : {}
   return {
     agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+    ...projectAgentHookSettings(settings),
     disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   }
 }

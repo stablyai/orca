@@ -9,7 +9,8 @@ import {
 import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
 import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
 import { CLAUDE_PROFILE_HISTORY_DIRS } from './claude-profile-history'
-import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
+import { readClaudeProfileObject } from './claude-profile-paths'
+import { resolveClaudeDefaultHome } from '../../shared/claude-user-config'
 import { lstatIfPresent } from './claude-profile-prompt-history'
 import {
   ClaudeProfileSurfaceError,

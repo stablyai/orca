@@ -25,6 +25,13 @@ vi.mock('child_process', () => {
   return { execFile: execFileWithPromisify }
 })
 
+vi.mock('../main/claude/claude-hook-target', () => ({
+  resolveSystemClaudeHookTarget: async () => ({
+    kind: 'system-default',
+    configDir: '/srv/claude-settings'
+  })
+}))
+
 vi.mock('../main/pwsh', () => ({ isPwshAvailableAsync: isPwshAvailableAsyncMock }))
 vi.mock('../main/wsl', () => ({
   isWslAvailableAsync: isWslAvailableAsyncMock,
@@ -215,7 +222,8 @@ describe('PreflightHandler', () => {
       })
     ).resolves.toEqual({
       agents: ['claude'],
-      versions: { claude: '2.1.261 (Claude Code)' }
+      versions: { claude: '2.1.261 (Claude Code)' },
+      claudeConfigDir: '/srv/claude-settings'
     })
     expect(runProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -296,7 +304,7 @@ describe('PreflightHandler', () => {
             { id: 'claude', cmd: 'claude' }
           ]
         })
-      ).resolves.toEqual({ agents: ['claude'] })
+      ).resolves.toEqual({ agents: ['claude'], claudeConfigDir: '/srv/claude-settings' })
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,

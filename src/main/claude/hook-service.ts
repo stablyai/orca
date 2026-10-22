@@ -26,6 +26,12 @@ import {
 
 export { getManagedScript }
 import { getManagedStatusLineCommand, getManagedStatusLineScript } from './statusline-script'
+import { removeClaudeHookSettings } from './claude-hook-removal'
+import {
+  systemClaudeHookTarget,
+  type ClaudeHookTarget,
+  type SystemClaudeHookTarget
+} from './claude-hook-target'
 import { refuseProfileAtDefaultHome } from './claude-profile-hook-target'
 import {
   applyManagedHooks,
@@ -43,7 +49,6 @@ import {
   getStatusLineScriptPath,
   getStatusLineSlotState,
   findManagedEventHookForms,
-  removeManagedHooks,
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
@@ -67,8 +72,7 @@ type ClaudeHookInstallOptions = {
 }
 
 type ClaudeHookTargetOptions = ClaudeHookInstallOptions & {
-  /** An account profile on this host; omitted for the default home. */
-  configDir?: string
+  target?: ClaudeHookTarget
 }
 
 const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
@@ -106,11 +110,13 @@ export class ClaudeHookService {
   }
 
   getStatus(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
-    const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
+    const target =
+      options.target ?? (this.options.agent === 'claude' ? systemClaudeHookTarget() : undefined)
+    const refused = refuseProfileAtDefaultHome(this.options, target)
     if (refused) {
       return refused
     }
-    const configPath = getConfigPath(this.options.settings, options.configDir)
+    const configPath = getConfigPath(this.options.settings, target?.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
@@ -166,11 +172,13 @@ export class ClaudeHookService {
   }
 
   install(options: ClaudeHookTargetOptions = {}): AgentHookInstallStatus {
-    const refused = refuseProfileAtDefaultHome(this.options, options.configDir)
+    const target =
+      options.target ?? (this.options.agent === 'claude' ? systemClaudeHookTarget() : undefined)
+    const refused = refuseProfileAtDefaultHome(this.options, target)
     if (refused) {
       return refused
     }
-    const configPath = getConfigPath(this.options.settings, options.configDir)
+    const configPath = getConfigPath(this.options.settings, target?.configDir)
     const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
@@ -198,9 +206,9 @@ export class ClaudeHookService {
       writeManagedScript(scriptPath, payload)
     }
     // Why: a profile's statusLine arrives with the settings copy from the default home.
-    if (options.configDir === undefined && plan.statusLine === 'install') {
+    if (target?.kind !== 'profile' && plan.statusLine === 'install') {
       nextConfig = this.installManagedStatusLine(nextConfig)
-    } else if (options.configDir === undefined && plan.statusLine === 'retire') {
+    } else if (target?.kind !== 'profile' && plan.statusLine === 'retire') {
       nextConfig = this.retireManagedStatusLine(nextConfig)
     }
     writeHooksJson(configPath, nextConfig)
@@ -252,10 +260,12 @@ export class ClaudeHookService {
   async installRemote(
     sftp: SFTPWrapper,
     remoteHome: string,
-    options: ClaudeHookInstallOptions = {}
+    options: ClaudeHookInstallOptions & { configDir?: string } = {}
   ): Promise<AgentHookInstallStatus> {
     // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
-    const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
+    const remoteConfigPath = options.configDir
+      ? `${options.configDir.replace(/\/$/, '')}/settings.json`
+      : getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
     // Why: surface fallible SFTP installs as structured errors.
@@ -306,29 +316,18 @@ export class ClaudeHookService {
     }
   }
 
-  remove(): AgentHookInstallStatus {
-    const configPath = getConfigPath(this.options.settings)
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: this.options.agent,
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: `Could not parse ${this.options.displayName} settings.json`
-      }
+  remove(options: { target?: SystemClaudeHookTarget } = {}): AgentHookInstallStatus {
+    const target =
+      options.target ?? (this.options.agent === 'claude' ? systemClaudeHookTarget() : undefined)
+    const configPath = getConfigPath(this.options.settings, target?.configDir)
+    const paths = new Set([configPath])
+    if (this.options.agent === 'claude') {
+      paths.add(getConfigPath(this.options.settings))
     }
-    const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
-      config,
-      getManagedScriptFileName(this.options.settings)
-    )
-    const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
-      hooksRemoved,
-      getStatusLineScriptFileName(this.options.settings)
-    )
-    if (hooksChanged || statusLineChanged) {
-      writeHooksJson(configPath, nextConfig)
-    }
+    const errors = [...paths].flatMap((path) => {
+      const error = removeClaudeHookSettings(this.options.settings, path)
+      return error ? [error] : []
+    })
     if (this.options.agent === 'claude') {
       try {
         // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
@@ -337,7 +336,8 @@ export class ClaudeHookService {
         // ignore — marker cleanup is best-effort
       }
     }
-    return this.getStatus()
+    const status = this.getStatus({ target })
+    return errors.length ? { ...status, state: 'error', detail: errors.join('; ') } : status
   }
 }
 

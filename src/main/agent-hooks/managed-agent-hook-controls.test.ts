@@ -78,6 +78,18 @@ describe('managed agent hook controls', () => {
     mocks.probeClaudeVersion.mockResolvedValue(null)
   })
 
+  it('keeps a CLI invocation root through off and disabled-agent cleanup without touching other agents', async () => {
+    const env = { CLAUDE_CONFIG_DIR: '/cli/claude' }
+    const options = { env, agents: ['claude'] as const }
+    await applyAgentStatusHooksEnabled(false, null, options)
+    expect(mocks.removeClaude).toHaveBeenLastCalledWith(options)
+    expect(mocks.removeCodex).not.toHaveBeenCalled()
+    mocks.detect.mockResolvedValue({})
+    await applyAgentStatusHooksEnabled(true, { disabledTuiAgents: ['claude', 'codex'] }, options)
+    expect(mocks.removeClaude).toHaveBeenLastCalledWith(options)
+    expect(mocks.removeCodex).not.toHaveBeenCalled()
+  })
+
   it('installs only agents with positively detected CLIs', async () => {
     mocks.detect.mockResolvedValue({
       claude: { state: 'missing' },

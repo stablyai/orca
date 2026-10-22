@@ -1,4 +1,5 @@
 import { parentPort, workerData } from 'node:worker_threads'
+import { resolveClaudeDefaultHome } from '../../shared/claude-user-config'
 import { ClaudeHookService } from '../claude/hook-service'
 import { provisionClaudeAccountProfile } from './claude-profile-setup'
 import type { ClaudeProfileSetupJob } from './claude-profile-setup-worker'
@@ -17,7 +18,14 @@ void provisionClaudeAccountProfile({
   userConfigDir: job.userConfigDir,
   installHooks: job.hooks
     ? ({ configDir }) =>
-        new ClaudeHookService().install({ configDir, claudeVersion: job.claudeVersion })
+        new ClaudeHookService().install({
+          target: {
+            kind: 'profile',
+            configDir,
+            systemDefaultConfigDir: resolveClaudeDefaultHome(job.userHome, job.userConfigDir)
+          },
+          claudeVersion: job.claudeVersion
+        })
     : null
 })
   .then(

@@ -6,8 +6,11 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { vi, describe, expect, it } from 'vitest'
+import { vi, describe, expect, it, beforeEach, afterEach } from 'vitest'
 import type * as GitBashModule from '../git-bash'
+
+beforeEach(() => vi.stubEnv('CLAUDE_CONFIG_DIR', ''))
+afterEach(() => vi.unstubAllEnvs())
 
 vi.mock('electron', () => ({
   app: {
@@ -729,14 +732,17 @@ describe('backgrounded-session pane guard (#9236)', () => {
 })
 
 describe('ClaudeHookService.installRemote', () => {
-  it('writes Claude settings + managed script under the remote $HOME', async () => {
+  it('writes custom remote settings while keeping the managed script under remote HOME', async () => {
     const svc = new ClaudeHookService()
     const { sftp, fs } = createFakeSftp()
-    const status = await svc.installRemote(sftp, '/home/dev', CURRENT_CLAUDE)
+    const status = await svc.installRemote(sftp, '/home/dev', {
+      ...CURRENT_CLAUDE,
+      configDir: '/srv/custom-claude'
+    })
     expect(status.state).toBe('installed')
-    expect(status.configPath).toBe('/home/dev/.claude/settings.json')
-    const settings = fs.files.get('/home/dev/.claude/settings.json')
-    expect(settings).toBeTruthy()
+    expect(status.configPath).toBe('/srv/custom-claude/settings.json')
+    const settings = fs.files.get('/srv/custom-claude/settings.json')
+    expect(fs.files.has('/home/dev/.claude/settings.json')).toBe(false)
     const parsed = JSON.parse(settings!)
     // Why: Claude silently rejects drifted hook shapes, so assert every load-bearing event.
     for (const event of [
