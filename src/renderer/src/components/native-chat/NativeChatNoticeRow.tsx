@@ -1,3 +1,4 @@
+import { NativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -199,6 +200,10 @@ export function NativeChatNoticeRow({
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : usageLimitContinue ? (
           <NativeChatInterruptedContinueButton
+            label={translate(
+              'components.native-chat.usageLimitActions.continueNow',
+              'Continue Now'
+            )}
             onContinue={orcaStopView.continueUsageLimit}
             disabled={orcaStopView.usageLimitContinueDisabled}
             explanation={translate(
@@ -208,6 +213,7 @@ export function NativeChatNoticeRow({
           />
         ) : null}
       </div>
+      {usageLimitContinue ? <NativeChatUsageLimitActions /> : null}
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button
           type="button"

@@ -18937,6 +18937,13 @@
       },
       "claudeSignIn": {
         "signingIn": "Connexion…"
+      },
+      "usageLimitActions": {
+        "continueNow": "Continuer maintenant",
+        "leadIn": "Continuez cette conversation sans attendre :",
+        "switchAccount": "Changer de compte",
+        "addAccount": "Ajouter un compte…",
+        "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
       }
     },
     "tab": {

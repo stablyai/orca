@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { resolveClaudeStructuredInvocation } from '../claude/claude-structured-launch-resolution'
 import { resolveClaudeStructuredLaunchHome } from '../claude/claude-structured-launch-home'
@@ -14,6 +14,7 @@ import { ClaudeProfileRouter, type ClaudeProfileRouterSettings } from './claude-
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { claudeStructuredAuthPolicyForSettings } from './claude-structured-auth-policy'
 import { applyClaudeEnvPatch } from './environment'
+import { withoutInheritedClaudeConfigDir } from '../claude/claude-config-dir-pin'
 
 const roots: string[] = []
 afterEach(() => {
@@ -99,7 +100,27 @@ describe('one router decision for every Claude launch', () => {
       usage: f.systemHome,
       inactiveUsage: f.systemHome
     })
+    const prepare = vi.spyOn(f.router, 'prepareLaunch')
+    const inherited = withoutInheritedClaudeConfigDir({ CLAUDE_CONFIG_DIR: '/inherited' })
+    expect(await f.router.accountSelectionHomes(inherited)).toEqual([f.systemHome, f.systemHome])
+    const overlay = { ...inherited, CLAUDE_CONFIG_DIR: join(f.systemHome, 'explicit') }
+    expect(await f.router.accountSelectionHomes(overlay)).toEqual([
+      overlay.CLAUDE_CONFIG_DIR,
+      overlay.CLAUDE_CONFIG_DIR
+    ])
+    expect(prepare).not.toHaveBeenCalled()
+    expect(await resolveClaudeStructuredLaunchHome(f.router, { ...overlay }, '/recorded')).toBe(
+      overlay.CLAUDE_CONFIG_DIR
+    )
     signIn(f.accountHome, 'a@example.test')
+    expect(await f.router.accountSelectionHomes(overlay)).toEqual([
+      overlay.CLAUDE_CONFIG_DIR,
+      f.accountHome
+    ])
+    expect(await resolveClaudeStructuredLaunchHome(f.router, { ...overlay }, '/recorded')).toBe(
+      f.accountHome
+    )
+    prepare.mockRestore()
     expect(await launchHomes(f)).toEqual({
       terminal: f.accountHome,
       terminalEnv: f.accountHome,

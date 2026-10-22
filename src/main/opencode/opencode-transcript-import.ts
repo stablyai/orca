@@ -31,6 +31,7 @@ function accountDatabase(
 }
 
 export const OPENCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
+  readableContext: { kind: 'container' },
   // The account's store is its exact database, which is the only one its chat can load from.
   conversationStore: ({ accountHome, launchEnv }) => accountDatabase(accountHome, launchEnv),
   admitTranscriptPath: async ({ store: dbPath, transcriptPath }) => {

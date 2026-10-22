@@ -19,19 +19,22 @@ vi.mock('@/lib/launch-agent-session-continuation', () => ({
   launchAgentSessionContinuation: mocks.launchContinuation
 }))
 vi.mock('@/lib/agent-catalog', () => ({
-  getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }],
+  getAgentCatalog: () => ['claude', 'claude-agent-teams', 'codex'].map((id) => ({ id, label: id })),
   getAgentLabel: () => 'Codex'
 }))
 vi.mock('@/components/agent/AgentCombobox', () => ({
   default: ({
     value,
-    allowBlankTerminal
+    allowBlankTerminal,
+    agents
   }: {
     value: string | null
     allowBlankTerminal?: boolean
+    agents: { id: string }[]
   }) =>
     React.createElement('div', {
       'data-agent': value ?? '',
+      'data-options': agents.map((agent) => agent.id).join(','),
       'data-allow-blank': String(allowBlankTerminal === true)
     })
 }))
@@ -79,6 +82,7 @@ describe('AgentSessionContinuationDialog', () => {
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
+    mocks.settings.defaultTuiAgent = 'codex'
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -88,6 +92,73 @@ describe('AgentSessionContinuationDialog', () => {
     act(() => root.unmount())
     container.remove()
   })
+
+  it('cannot start with only the source agent available', async () => {
+    mocks.detectAgents.mockResolvedValue(['codex'])
+    await act(async () => {
+      root.render(
+        <AgentSessionContinuationDialog
+          open
+          request={{ ...request('wt'), avoidSourceAgent: true }}
+          onOpenChange={vi.fn()}
+        />
+      )
+    })
+    const start = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Start New Session'
+    )
+    expect(start?.disabled).toBe(true)
+    start?.click()
+    expect(mocks.launchContinuation).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['claude', true, true],
+    ['claude-agent-teams', true, true],
+    ['claude', true, false],
+    ['claude', false, true]
+  ] as const)(
+    'recovers from %s with family exclusion=%s and alternative=%s',
+    async (sourceAgent, avoidSourceAgent, hasAlternative) => {
+      mocks.settings.defaultTuiAgent = 'claude-agent-teams'
+      mocks.detectAgents.mockResolvedValue(
+        hasAlternative
+          ? ['claude', 'claude-agent-teams', 'codex']
+          : ['claude', 'claude-agent-teams']
+      )
+      await act(async () => {
+        root.render(
+          <AgentSessionContinuationDialog
+            open
+            request={{
+              ...request('wt'),
+              source: { sourceAgent, capturedText: 'Continue the review' },
+              avoidSourceAgent
+            }}
+            onOpenChange={vi.fn()}
+          />
+        )
+      })
+      const selected = avoidSourceAgent ? (hasAlternative ? 'codex' : '') : sourceAgent
+      const picker = container.querySelector('[data-agent]')
+      expect(picker?.getAttribute('data-options')).toBe(
+        avoidSourceAgent ? (hasAlternative ? 'codex' : '') : 'claude,claude-agent-teams,codex'
+      )
+      expect(picker?.getAttribute('data-agent')).toBe(selected)
+      const start = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent === 'Start New Session'
+      )
+      expect(start?.disabled).toBe(!selected)
+      await act(async () => start?.click())
+      if (selected) {
+        expect(mocks.launchContinuation).toHaveBeenCalledWith(
+          expect.objectContaining({ agent: selected, worktreeId: 'wt' })
+        )
+      } else {
+        expect(mocks.launchContinuation).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('clears a prior detection failure while detecting a new request', async () => {
     let resolveSecond: (agents: ['codex']) => void = () => {}

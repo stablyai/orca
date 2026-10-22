@@ -19165,6 +19165,13 @@
         "launchRefused": "Orca did not start a {{value0}} chat",
         "outdatedHost": "This host runs an older Orca that ignores chat permissions, so {{value0}} would run here without asking. Update Orca on this host to use {{value1}}.",
         "unverified": "Orca couldn't confirm this host applies chat permissions. Reconnect to it to send."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continue Now",
+        "leadIn": "Continue this chat without waiting:",
+        "switchAccount": "Switch Account",
+        "addAccount": "Add Account…",
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
       }
     },
     "tab": {

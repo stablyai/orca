@@ -200,3 +200,17 @@ export function resolveClaudeStatusAccountState(
   }
   return getClaudeStatusAccountsFromSettings(settings, runtimeState) ?? runtimeState
 }
+
+export function signedInClaudeAccountCount(state: ClaudeRateLimitAccountsState): number {
+  const signedIn = state.accounts.filter(
+    (account) =>
+      account.managedAuthRuntime !== 'wsl' && !account.needsSignIn && !account.runsOnSystemDefault
+  )
+  return (
+    signedIn.length +
+    (state.systemDefaultEmail &&
+    !signedIn.some((account) => account.email === state.systemDefaultEmail)
+      ? 1
+      : 0)
+  )
+}

@@ -3156,6 +3156,13 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continue Now",
+        "leadIn": "Continue this chat without waiting:",
+        "switchAccount": "Switch Account",
+        "addAccount": "Add Account…",
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
       }
     },
     "onboarding": {

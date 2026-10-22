@@ -1,19 +1,20 @@
+import { useProviderAccountList } from './use-provider-account-list'
+import { providerChatAccountControl, type ChatAccountAction } from './ProviderAccountChatButton'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
-import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
-  fetchProviderAccountsSnapshot,
-  selectClaudeProviderAccount
+  selectClaudeProviderAccount,
+  emptyClaudeAccountsState
 } from '@/runtime/runtime-provider-accounts-client'
 import { toast } from 'sonner'
 import { getClaudeAccountErrorDescription } from '../settings/accounts-pane-action-errors'
@@ -32,6 +33,7 @@ import {
 } from './status-bar-runtime-targets'
 import {
   buildClaudeStatusSwitchGroups,
+  signedInClaudeAccountCount,
   getClaudeStatusActiveId,
   normalizeClaudeStatusRuntimeTarget,
   resolveClaudeStatusAccountState
@@ -48,32 +50,27 @@ import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 
-// Exported so its account-switch/reset logic is preserved for row drill-in even
-// though the footer now opens the consolidated UsageRosterPanel first.
+// Exported for account switching from chat rows; the footer opens UsageRosterPanel.
 export function ClaudeSwitcherMenu({
   claude,
   compact,
   iconOnly,
   asSubmenu = false,
-  triggerContent
+  triggerContent,
+  chatAction
 }: {
-  claude: ProviderRateLimits
+  claude: ProviderRateLimits | null
   compact: boolean
   iconOnly: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
-}): React.JSX.Element {
+  chatAction?: ChatAccountAction
+}): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
-  const [accounts, setAccounts] = useState<ClaudeRateLimitAccountsState>({
-    accounts: [],
-    activeAccountId: null,
-    activeAccountIdsByRuntime: { host: null, wsl: {} }
-  })
   const [isSwitching, setIsSwitching] = useState(false)
   const [signingInId, setSigningInId] = useState<string | null>(null)
   const signingInRef = useRef(false)
-  const mountedRef = useRef(true)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -85,7 +82,9 @@ export function ClaudeSwitcherMenu({
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   // Why: no host picker; the focused workspace's owner, else the default scope host.
-  const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
+  const owner = useActiveAccountOwner(defaultScopeHost(settings))
+  const runtimeTarget = chatAction?.target ?? owner.target
+  const wslHostDistro = chatAction ? null : owner.wslHostDistro
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
@@ -100,37 +99,19 @@ export function ClaudeSwitcherMenu({
     runtimeTarget
   )
   const claudeAccountSyncKey = useAppStore((s) => getClaudeAccountSyncKey(s.settings))
+  const { accounts, setAccounts, accountsLoaded, loadAccounts, mountedRef } =
+    useProviderAccountList(
+      'claude',
+      runtimeTarget,
+      claudeAccountSyncKey,
+      emptyClaudeAccountsState(),
+      !!chatAction
+    )
   const accountState = resolveClaudeStatusAccountState(
     settings,
     accounts,
     activeRuntimeEnvironmentId
   )
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
-  // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
-  const loadAccounts = useCallback(async () => {
-    const snapshot = await fetchProviderAccountsSnapshot(runtimeTarget)
-    // Why: a failed Claude half is a substituted empty roster; keep prior state.
-    if (snapshot.failedProviders?.includes('claude')) {
-      console.error('Claude account list failed; keeping previous status bar state.')
-      return
-    }
-    if (mountedRef.current) {
-      setAccounts(snapshot.claude)
-    }
-  }, [runtimeTarget])
-
-  useEffect(() => {
-    void loadAccounts().catch((error) => {
-      console.error('Failed to load Claude accounts for status bar:', error)
-    })
-  }, [loadAccounts, claudeAccountSyncKey])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean): void => {
@@ -138,6 +119,9 @@ export function ClaudeSwitcherMenu({
       if (!nextOpen) {
         setAccountsExpanded(false)
         return
+      }
+      if (chatAction) {
+        setAccountsExpanded(true)
       }
       // Why: an account that needs a sign-in is the reason to open; show its inline Sign in.
       if (accounts.accounts.some((account) => account.needsSignIn)) {
@@ -151,7 +135,13 @@ export function ClaudeSwitcherMenu({
         console.error('Failed to load Claude accounts for status bar:', error)
       })
     },
-    [accounts.accounts, fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment, loadAccounts]
+    [
+      accounts.accounts,
+      fetchInactiveClaudeAccountUsage,
+      hasActiveRuntimeEnvironment,
+      loadAccounts,
+      chatAction
+    ]
   )
 
   // Why: fetch inactive-account usage only on switcher expansion; remote-owned accounts have no local cache to fill.
@@ -173,6 +163,15 @@ export function ClaudeSwitcherMenu({
     const previousActiveAccountId = getClaudeStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
+      if (chatAction && !(await chatAction.canSwitch())) {
+        toast.error(
+          translate(
+            'components.native-chat.usageLimitActions.accountUnavailable',
+            'This chat cannot move to another account. Hand it off to another agent instead.'
+          )
+        )
+        return
+      }
       const next = await selectClaudeProviderAccount(runtimeTarget, {
         accountId,
         runtime: target.runtime,
@@ -190,7 +189,7 @@ export function ClaudeSwitcherMenu({
         setAccountsExpanded(false)
       }
       const nextActiveAccountId = getClaudeStatusActiveId(next, target)
-      if (previousActiveAccountId !== nextActiveAccountId) {
+      if (!chatAction && previousActiveAccountId !== nextActiveAccountId) {
         void handleRunningClaudeSessionsAfterSwitch({
           owner: runtimeTarget,
           target,
@@ -266,9 +265,20 @@ export function ClaudeSwitcherMenu({
       hostLabel: providerAccountHostLabel
     }
   )
-  const selectedGroup =
-    switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
-  const activeTarget = selectedGroup?.targets.find((target) => target.active)
+  const selectedGroup = chatAction
+    ? switchGroups.find((group) => group.runtimeTarget.runtime === 'host')
+    : (switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0])
+
+  const accountControl = providerChatAccountControl(
+    'claude',
+    chatAction,
+    accountsLoaded,
+    signedInClaudeAccountCount(accounts),
+    isSwitching
+  )
+  if (accountControl?.add) {
+    return runtimeTarget.kind === 'local' ? accountControl.button : null
+  }
 
   return (
     <ProviderDetailsMenu
@@ -277,20 +287,23 @@ export function ClaudeSwitcherMenu({
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
+      trigger={accountControl?.button}
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.3dd7ddfae1',
         'Open Claude details and account switcher'
       )}
       topContent={
-        <AccountRuntimeToggle
-          groups={switchGroups}
-          value={selectedGroup?.key ?? selectedRuntimeKey}
-          onChange={(group) => void handleSelectRuntime(group)}
-          ariaLabel={translate(
-            'auto.components.status.bar.StatusBar.11e2354daf',
-            'Claude usage runtime'
-          )}
-        />
+        chatAction ? undefined : (
+          <AccountRuntimeToggle
+            groups={switchGroups}
+            value={selectedGroup?.key ?? selectedRuntimeKey}
+            onChange={(group) => void handleSelectRuntime(group)}
+            ariaLabel={translate(
+              'auto.components.status.bar.StatusBar.11e2354daf',
+              'Claude usage runtime'
+            )}
+          />
+        )
       }
       open={open}
       onOpenChange={handleOpenChange}
@@ -305,7 +318,7 @@ export function ClaudeSwitcherMenu({
         }}
       >
         <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {activeTarget?.label ??
+          {selectedGroup?.targets.find((target) => target.active)?.label ??
             translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
         </span>
         {accountsExpanded ? (
@@ -394,7 +407,8 @@ export function ClaudeSwitcherMenu({
           openSettingsTarget({
             pane: 'accounts',
             repoId: null,
-            sectionId: 'accounts-claude'
+            sectionId: 'accounts-claude',
+            ...(chatAction ? { hostScope: chatAction.target, intent: 'native-accounts' } : {})
           })
           openSettingsPage()
         }}

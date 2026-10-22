@@ -39,6 +39,7 @@ export function firstFrameOptionState(
 /** The picker's option state for one session: seeded, kept across its fences, re-read each turn. */
 export function useStructuredAgentSessionOptionState(args: {
   agent: AgentType
+  transportEnabled: boolean
   optionCatalog: AgentSessionOptionCatalog | null
   identity: string
   fence: number | null
@@ -75,6 +76,8 @@ export function useStructuredAgentSessionOptionState(args: {
   } = args
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
+    target: RuntimeClientTarget
+    canSwitchAccount: boolean
     commands: readonly AgentSessionConversationCommand[]
     threadGoal: AgentSessionOptionsResult['threadGoal']
     reportedThreadGoal: AgentSessionOptionsResult['reportedThreadGoal']
@@ -157,10 +160,19 @@ export function useStructuredAgentSessionOptionState(args: {
         target,
         'agentSession.options',
         { sessionId }
-      )
+      ).catch((error: unknown) => {
+        if (!stale) {
+          setConversationSupport((current) =>
+            current ? { ...current, canSwitchAccount: false } : current
+          )
+        }
+        throw error
+      })
       if (!stale && optionMutationGeneration.current === readGeneration) {
         setConversationSupport({
           sessionId,
+          target,
+          canSwitchAccount: result.canSwitchAccount === true,
           commands: result.conversationCommands ?? [],
           threadGoal: result.threadGoal,
           reportedThreadGoal: result.reportedThreadGoal,
@@ -214,11 +226,21 @@ export function useStructuredAgentSessionOptionState(args: {
     AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
   )
 
+  const support =
+    args.transportEnabled &&
+    conversationSupport?.sessionId === sessionId &&
+    conversationSupport.target === target
+      ? conversationSupport
+      : null
   return {
     // What the picker shows and a send carries.
     optionView: structuredAgentSessionOptionView,
     takesSendOptions,
-    conversationSupport,
+    conversationSupport: support,
+    sessionSupport: {
+      acceptsImages: support?.acceptsImages,
+      canSwitchAccount: support?.canSwitchAccount
+    },
     rereadOptions,
     optionState,
     optionStateRef,

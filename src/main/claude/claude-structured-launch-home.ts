@@ -3,7 +3,7 @@ import type { ClaudeProfileRouter } from '../claude-accounts/claude-profile-rout
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { resolveStructuredClaudeAccountHomePath } from '../runtime/structured-agent-account-home'
+import { claudeLaunchDestinationHome } from './claude-launch-destination-home'
 
 /**
  * The folder a structured launch runs under, and the env patch that pins it there.
@@ -19,14 +19,7 @@ export async function resolveClaudeStructuredLaunchHome(
   }
   const preparation = await router.prepareLaunch()
   // Why read before the patch: System default keeps the launch env's own CLAUDE_CONFIG_DIR.
-  const launchHome =
-    preparation.provenance === 'system'
-      ? resolveStructuredClaudeAccountHomePath({
-          launchEnv: env,
-          wslDistro: null,
-          getClaudeConfigDirectory: () => router.systemDefaultHome()
-        })
-      : preparation.configDir
+  const launchHome = claudeLaunchDestinationHome(preparation, env, router.systemDefaultHome())
   applyClaudeEnvPatch(env, preparation.envPatch)
   return launchHome
 }

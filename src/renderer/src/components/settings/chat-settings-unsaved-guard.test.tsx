@@ -28,6 +28,7 @@ function createModel(shouldDiscard = false, dirty = true) {
     settings: getDefaultSettings('/tmp'),
     updateSettingsOrThrow: vi.fn(async () => {}),
     activeSectionId: 'chat',
+    releaseNativeAccounts: vi.fn(),
     setActiveSectionId: vi.fn(),
     setPendingNavRequestTick: vi.fn(),
     settingsSearchQuery: ''

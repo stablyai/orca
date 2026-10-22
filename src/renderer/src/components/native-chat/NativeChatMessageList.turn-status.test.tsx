@@ -326,7 +326,7 @@ const usageLimitView = {
       expect(screen.queryByText('Earlier work')).toBeNull()
       expect(screen.getByText(/hit its session limit/)).toBeVisible()
       expect(screen.getByText('Details')).toBeVisible()
-      const button = screen.getByRole('button', { name: 'Continue' })
+      const button = screen.getByRole('button', { name: 'Continue Now' })
       expect(button).toBeVisible()
       fireEvent.click(button)
       expect(continueUsageLimit).toHaveBeenCalledOnce()

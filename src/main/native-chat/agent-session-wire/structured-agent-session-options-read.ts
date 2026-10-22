@@ -32,6 +32,7 @@ import { structuredAgentSessionOptionModels } from './structured-agent-session-o
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { readStructuredSessionRecovery } from './structured-agent-session-recovery-read'
 
 import { IN_PROCESS_OPTIONS_READER } from './structured-agent-session-option-observation'
 
@@ -296,8 +297,10 @@ export async function readStructuredAgentSessionOptions(
       ? current[key] === options.current[key]
       : false
   )
+  const recovery = await readStructuredSessionRecovery(session, context, sessionId)
   return {
     ...options,
+    ...recovery,
     current: {
       ...current,
       confirmed,

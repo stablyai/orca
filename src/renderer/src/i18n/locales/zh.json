@@ -18833,6 +18833,13 @@
       },
       "claudeSignIn": {
         "signingIn": "正在登录…"
+      },
+      "usageLimitActions": {
+        "continueNow": "立即继续",
+        "leadIn": "无需等待，继续此聊天：",
+        "switchAccount": "切换账号",
+        "addAccount": "添加账号…",
+        "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
       }
     },
     "tab": {

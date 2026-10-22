@@ -18868,6 +18868,13 @@
       },
       "claudeSignIn": {
         "signingIn": "로그인 중…"
+      },
+      "usageLimitActions": {
+        "continueNow": "지금 계속",
+        "leadIn": "기다리지 않고 이 채팅을 계속하세요:",
+        "switchAccount": "계정 전환",
+        "addAccount": "계정 추가…",
+        "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
       }
     },
     "tab": {

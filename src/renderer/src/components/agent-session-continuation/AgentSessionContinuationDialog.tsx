@@ -32,7 +32,10 @@ import {
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { chooseInitialContinuationAgent } from './agent-session-continuation-selection'
+import {
+  chooseInitialContinuationAgent,
+  isContinuationAgentAllowed
+} from './agent-session-continuation-selection'
 
 type AgentSessionContinuationDialogProps = {
   open: boolean
@@ -63,9 +66,16 @@ export function AgentSessionContinuationDialog({
   const agents = useMemo(
     () =>
       getAgentCatalog().filter(
-        (agent) => detectedAgents.includes(agent.id) && isTuiAgentEnabled(agent.id, disabledAgents)
+        (agent) =>
+          detectedAgents.includes(agent.id) &&
+          isTuiAgentEnabled(agent.id, disabledAgents) &&
+          isContinuationAgentAllowed(
+            agent.id,
+            request?.source.sourceAgent,
+            request?.avoidSourceAgent
+          )
       ),
-    [detectedAgents, disabledAgents]
+    [detectedAgents, disabledAgents, request]
   )
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
 
@@ -88,8 +98,14 @@ export function AgentSessionContinuationDialog({
         setDetectedAgents(enabled)
         setSelectedAgent(
           chooseInitialContinuationAgent({
-            availableAgents: enabled,
-            sourceAgent: request.source.sourceAgent,
+            availableAgents: enabled.filter((agent) =>
+              isContinuationAgentAllowed(
+                agent,
+                request.source.sourceAgent,
+                request.avoidSourceAgent
+              )
+            ),
+            sourceAgent: request.avoidSourceAgent ? null : request.source.sourceAgent,
             defaultAgent: settings?.defaultTuiAgent
           })
         )
@@ -124,7 +140,12 @@ export function AgentSessionContinuationDialog({
   }, [starting])
 
   const handleStart = async (): Promise<void> => {
-    if (!request || !selectedAgent || starting) {
+    if (
+      !request ||
+      !selectedAgent ||
+      !agents.some((agent) => agent.id === selectedAgent) ||
+      starting
+    ) {
       return
     }
     const prompt = buildAgentSessionContinuationPrompt(request.source, contextMode)
@@ -151,7 +172,7 @@ export function AgentSessionContinuationDialog({
   const sourceAgentLabel = request?.source.sourceAgent
     ? getAgentLabel(request.source.sourceAgent)
     : null
-  const startDisabled = detecting || starting || agents.length === 0 || !selectedAgent
+  const startDisabled = detecting || starting || !agents.some((agent) => agent.id === selectedAgent)
 
   return (
     <Dialog

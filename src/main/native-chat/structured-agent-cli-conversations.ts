@@ -19,6 +19,8 @@ export type StructuredAgentTranscriptImportSettings = {
 
 /** Finds a conversation the agent's CLI recorded, so a new chat can adopt it. */
 export type StructuredAgentTranscriptImport = {
+  /** Only native files can be read directly by a different agent. */
+  readableContext: { kind: 'file' } | { kind: 'container' }
   /** Recognised account homes, most-preferred first; the first that holds the transcript wins. */
   accountHomeCandidates: (input: {
     settings: StructuredAgentTranscriptImportSettings
@@ -72,6 +74,7 @@ export function directoryTranscriptImport(directories: {
   handleNamesTranscript?: true
 }): StructuredAgentTranscriptImport {
   return {
+    readableContext: { kind: 'file' },
     conversationStore: ({ accountHome, launchEnv }) =>
       isLegacyAgentSessionAccountHome(accountHome)
         ? absoluteConversationStore(

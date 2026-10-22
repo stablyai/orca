@@ -18828,6 +18828,13 @@
       },
       "claudeSignIn": {
         "signingIn": "Iniciando sesión…"
+      },
+      "usageLimitActions": {
+        "continueNow": "Continuar ahora",
+        "leadIn": "Continúa este chat sin esperar:",
+        "switchAccount": "Cambiar de cuenta",
+        "addAccount": "Añadir cuenta…",
+        "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
       }
     },
     "tab": {

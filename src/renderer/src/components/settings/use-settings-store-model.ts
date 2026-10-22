@@ -32,7 +32,7 @@ import {
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
 import { resolveSettingsHostScope } from './settings-host-scope'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { useSettingsHostNavigation } from './use-settings-host-navigation'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 
 export function useSettingsStoreModel() {
@@ -149,7 +149,13 @@ export function useSettingsStoreModel() {
   const confirm = useConfirmationDialog()
   // Why: session-only (deliberately not persisted) unlock — Option-click the Experimental page title reveals the hidden group.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
-  const [settingsHostChoice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(null)
+  const {
+    settingsHostChoice,
+    setSettingsHostChoice,
+    nativeAccounts,
+    releaseNativeAccounts,
+    consumeSettingsNavigation
+  } = useSettingsHostNavigation(settingsNavigationTarget)
   const defaultScope = defaultScopeHost(settings)
   const defaultRuntimeEnvironmentId =
     defaultScope.kind === 'environment' ? defaultScope.environmentId : null
@@ -251,6 +257,9 @@ export function useSettingsStoreModel() {
     setHiddenExperimentalUnlocked,
     runtimeEnvironments,
     settingsHostScope,
+    nativeAccounts,
+    releaseNativeAccounts,
+    consumeSettingsNavigation,
     setSettingsHostChoice
   }
 }

@@ -251,7 +251,7 @@ describe('the row a usage limit leaves', () => {
     expect(
       screen.getByText(`Claude hit its session limit. It resets at ${clock}.`)
     ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Now' }))
     expect(continueUsageLimit).toHaveBeenCalledTimes(1)
   })
 

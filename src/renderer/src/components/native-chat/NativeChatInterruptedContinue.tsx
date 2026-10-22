@@ -229,10 +229,12 @@ export function useNativeChatInterruptedContinuation(input: {
 export function NativeChatInterruptedContinueButton({
   onContinue,
   disabled,
+  label,
   explanation: shownExplanation
 }: {
   onContinue: (hadFocus?: boolean) => void
   disabled?: boolean
+  label?: string
   /** What Continue does here, when it is not picking up a reply Orca's stop cut off. */
   explanation?: string
 }): React.JSX.Element {
@@ -257,7 +259,7 @@ export function NativeChatInterruptedContinueButton({
             disabled={disabled}
           >
             <Play />
-            {translate('components.native-chat.interruptedContinue.continue', 'Continue')}
+            {label ?? translate('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>
