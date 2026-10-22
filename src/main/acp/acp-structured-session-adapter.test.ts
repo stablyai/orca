@@ -180,6 +180,45 @@ describe('ACP structured session adapter: turns', () => {
     })
   })
 
+  it('sends a model-only message and leaves the effort to the agent', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    await expect(
+      rig.adapter.dispatch({
+        sessionId: SESSION,
+        fence: 1,
+        clientMessageId: 'model-only',
+        body: hello,
+        executionOptions: { model: 'grok-4.6' }
+      })
+    ).resolves.toEqual({ state: 'admitted' })
+    await rig.frame('session/prompt')
+    const sent = rig.child().agent.frames.filter((frame) => frame.method?.startsWith('session/'))
+    expect(sent.slice(-2).map(({ method, params }) => ({ method, params }))).toEqual([
+      {
+        method: 'session/set_config_option',
+        params: { sessionId: PROVIDER_SESSION, configId: 'model', value: 'grok-4.6' }
+      },
+      { method: 'session/prompt', params: expect.objectContaining({ prompt: hello.blocks }) }
+    ])
+  })
+
+  it('refuses a model-only message once the chat picked an effort it cannot restore', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    await rig.adapter.setOption({ sessionId: SESSION, fence: 1, key: 'effort', value: 'low' })
+    await expect(
+      rig.adapter.dispatch({
+        sessionId: SESSION,
+        fence: 1,
+        clientMessageId: 'unknown-default',
+        body: hello,
+        executionOptions: { model: 'grok-4.6' }
+      })
+    ).rejects.toMatchObject({ name: 'AgentSessionOptionRejectedError' })
+    expect(rig.sent('session/prompt')).toEqual([])
+  })
+
   it("sends Grok's prompt identity only to an agent whose dialect echoes it", async () => {
     const rig = await openAcpAdapterRig({
       deps: { spec: { ...GROK, dialect: GENERIC_ACP_DIALECT } }
