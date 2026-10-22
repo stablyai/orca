@@ -111,6 +111,7 @@ async function createPromptContractHarness(
     candidate === handle ? `runtime_test:${handle}:1` : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+  vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
   vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
     handle: 'term_coord',
     worktreeId: 'repo::parent',

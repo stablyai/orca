@@ -139,23 +139,27 @@ async function detectCommandRuntime(
     : { installed: false }
 }
 
-export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
+export async function detectInstalledAgents(
+  context?: PreflightRuntimeContext,
+  options: { failOnProbeError?: boolean } = {}
+): Promise<string[]> {
   const commands = getTuiAgentDetectionProbeCommands(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-    await detectAgentCommandsOnHost(commands, { context }),
+    await detectAgentCommandsOnHost(commands, { context, ...options }),
     getPreflightWslTarget(context) ? 'wsl' : process.platform
   )
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(
-  context?: PreflightRuntimeContext
+  context?: PreflightRuntimeContext,
+  options: { failOnProbeError?: boolean } = {}
 ): Promise<string[]> {
   await hydrateShellPathForAgentDetection(context)
-  return detectInstalledAgents(context)
+  return detectInstalledAgents(context, options)
 }
 
 export type RefreshAgentsResult = {
