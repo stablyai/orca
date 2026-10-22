@@ -69,6 +69,10 @@ describe('RemoteFileBrowser keyboard navigation', () => {
     expect(input.getAttribute('aria-activedescendant')).toBe(
       container.querySelector('[role="option"][aria-selected="true"]')?.id
     )
+    expect(input.getAttribute('role')).toBe('combobox')
+    expect(input.getAttribute('aria-controls')).toBe(
+      container.querySelector('[role="listbox"]')?.id
+    )
 
     await press(input, 'ArrowDown')
     await press(input, 'ArrowDown')
@@ -101,6 +105,27 @@ describe('RemoteFileBrowser keyboard navigation', () => {
     await press(input, 'Enter')
 
     expect(input.hasAttribute('aria-activedescendant')).toBe(false)
+    await act(async () => root.unmount())
+  })
+
+  // Why: the previous listing's single folder would otherwise win Enter while the next one loads.
+  it('ignores Enter while the next listing loads', async () => {
+    browseDir.mockImplementationOnce(async () => ({
+      entries: [
+        { name: 'docs', isDirectory: true },
+        { name: 'README.md', isDirectory: false }
+      ],
+      resolvedPath: '/home/alice',
+      pathFlavor: 'posix' as const
+    }))
+    const { input, root } = await render()
+    browseDir.mockClear()
+    browseDir.mockImplementationOnce(() => new Promise(() => {}))
+
+    await press(input, 'Enter')
+    await press(input, 'Enter')
+
+    expect(browseDir).toHaveBeenCalledTimes(1)
     await act(async () => root.unmount())
   })
 })

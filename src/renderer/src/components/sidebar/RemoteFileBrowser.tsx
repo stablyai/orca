@@ -170,8 +170,10 @@ export function RemoteFileBrowser({
   )
   // Why: while a listing loads only the spinner renders, so the prior rows can't be targeted.
   const displayEntries = loading ? NO_ENTRIES : (previewFilteredEntries ?? filteredEntries)
-  const activeIndex =
-    highlight?.entries === displayEntries
+  // Why: a resolving preview keeps its prior rows on screen, but they are no longer targetable.
+  const activeIndex = preview?.loading
+    ? -1
+    : highlight?.entries === displayEntries
       ? highlight.index
       : initialRemoteFileBrowserHighlight(displayEntries, preview !== null && preview.filter === '')
   const moveHighlight = useCallback(
@@ -235,6 +237,7 @@ export function RemoteFileBrowser({
   )
 
   const handleFilterKeyDown = useRemoteFileBrowserFilterKeyCommands({
+    loading,
     filter,
     setFilter,
     filteredEntries,
@@ -276,6 +279,13 @@ export function RemoteFileBrowser({
         <ImeInput
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded
+          aria-autocomplete="list"
+          aria-label={translate(
+            'auto.components.sidebar.RemoteFileBrowser.inputLabel',
+            'Filter or path'
+          )}
           autoFocus
           value={filter}
           onChange={(e) => handleInputChange(e.target.value)}

@@ -13,6 +13,7 @@ import type { PreviewState } from './remote-file-browser-path-preview-resolver'
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 
 export type RemoteFileBrowserFilterKeyCommandsArgs = {
+  loading: boolean
   filter: string
   setFilter: Dispatch<SetStateAction<string>>
   filteredEntries: DirEntry[]
@@ -33,6 +34,7 @@ export type RemoteFileBrowserFilterKeyCommandsArgs = {
 }
 
 export function useRemoteFileBrowserFilterKeyCommands({
+  loading,
   filter,
   setFilter,
   filteredEntries,
@@ -99,6 +101,11 @@ export function useRemoteFileBrowserFilterKeyCommands({
           }
           return
         }
+        // Why: while the next listing loads, filteredEntries still holds the previous directory.
+        if (loading) {
+          e.preventDefault()
+          return
+        }
         const action = decideEnterAction(filteredEntries)
         if (action.type === 'navigate') {
           e.preventDefault()
@@ -130,6 +137,7 @@ export function useRemoteFileBrowserFilterKeyCommands({
       }
     },
     [
+      loading,
       filter,
       filteredEntries,
       displayEntries,

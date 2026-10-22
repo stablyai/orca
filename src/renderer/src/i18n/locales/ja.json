@@ -5521,7 +5521,8 @@
           "971d85cc84": "このホスト上のプロジェクトとして開きます · {{value0}}",
           "00c4235c10": "「{{value0}}」に一致するものはありません",
           "largeInputNoMatches": "この長い入力に一致するものはありません",
-          "entriesLabel": "フォルダーの項目"
+          "entriesLabel": "フォルダーの項目",
+          "inputLabel": "フィルターまたはパス"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
