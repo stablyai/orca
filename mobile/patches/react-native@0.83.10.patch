@@ -226,3 +226,127 @@ index e48223552a7da3d4ac478286c8aeead70e43dad2..b6e09c168bd8fde56fe2c3a0c922a84e
      socketID: number,
    ) => void;
    +send: (message: string, forSocketID: number) => void;
+diff --git a/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec.h b/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec.h
+--- a/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec.h
++++ b/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec.h
+@@ -2054,6 +2054,7 @@
+   namespace NativeWebSocketModule {
+     struct SpecConnectOptions {
+       id<NSObject> _Nullable headers() const;
++      std::optional<bool> followRedirects() const;
+ 
+       SpecConnectOptions(NSDictionary *const v) : _v(v) {}
+     private:
+@@ -2065,6 +2066,33 @@
+ @interface RCTCxxConvert (NativeWebSocketModule_SpecConnectOptions)
+ + (RCTManagedPointer *)JS_NativeWebSocketModule_SpecConnectOptions:(id)json;
+ @end
++namespace JS {
++  namespace NativeWebSocketModule {
++    struct Constants {
++
++      struct Builder {
++        struct Input {
++          RCTRequired<bool> supportsNoRedirects;
++        };
++
++        /** Initialize with a set of values */
++        Builder(const Input i);
++        /** Initialize with an existing Constants */
++        Builder(Constants i);
++        /** Builds the object. Generally used only by the infrastructure. */
++        NSDictionary *buildUnsafeRawValue() const { return _factory(); };
++      private:
++        NSDictionary *(^_factory)(void);
++      };
++
++      static Constants fromUnsafeRawValue(NSDictionary *const v) { return {v}; }
++      NSDictionary *unsafeRawValue() const { return _v; }
++    private:
++      Constants(NSDictionary *const v) : _v(v) {}
++      NSDictionary *_v;
++    };
++  }
++}
+ @protocol NativeWebSocketModuleSpec <RCTBridgeModule, RCTTurboModule>
+ 
+ - (void)connect:(NSString *)url
+@@ -2081,6 +2109,8 @@
+      socketID:(double)socketID;
+ - (void)addListener:(NSString *)eventName;
+ - (void)removeListeners:(double)count;
++- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants::Builder>)constantsToExport;
++- (facebook::react::ModuleConstants<JS::NativeWebSocketModule::Constants::Builder>)getConstants;
+ 
+ @end
+ 
+@@ -2774,5 +2804,19 @@
+   id const p = _v[@"headers"];
+   return p;
+ }
++inline std::optional<bool> JS::NativeWebSocketModule::SpecConnectOptions::followRedirects() const
++{
++  id const p = _v[@"followRedirects"];
++  return RCTBridgingToOptionalBool(p);
++}
++inline JS::NativeWebSocketModule::Constants::Builder::Builder(const Input i) : _factory(^{
++  NSMutableDictionary *d = [NSMutableDictionary new];
++  auto supportsNoRedirects = i.supportsNoRedirects.get();
++  d[@"supportsNoRedirects"] = @(supportsNoRedirects);
++  return d;
++}) {}
++inline JS::NativeWebSocketModule::Constants::Builder::Builder(Constants i) : _factory(^{
++  return i.unsafeRawValue();
++}) {}
+ NS_ASSUME_NONNULL_END
+ #endif // FBReactNativeSpec_H
+diff --git a/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec-generated.mm b/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec-generated.mm
+--- a/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec-generated.mm
++++ b/React/FBReactNativeSpec/FBReactNativeSpec/FBReactNativeSpec-generated.mm
+@@ -2268,6 +2268,10 @@
+       return static_cast<ObjCTurboModule&>(turboModule).invokeObjCMethod(rt, VoidKind, "removeListeners", @selector(removeListeners:), args, count);
+     }
+ 
++    static facebook::jsi::Value __hostFunction_NativeWebSocketModuleSpecJSI_getConstants(facebook::jsi::Runtime& rt, TurboModule &turboModule, const facebook::jsi::Value* args, size_t count) {
++      return static_cast<ObjCTurboModule&>(turboModule).invokeObjCMethod(rt, ObjectKind, "getConstants", @selector(getConstants), args, count);
++    }
++
+   NativeWebSocketModuleSpecJSI::NativeWebSocketModuleSpecJSI(const ObjCTurboModule::InitParams &params)
+     : ObjCTurboModule(params) {
+       
+@@ -2291,5 +2295,8 @@
+         
+         methodMap_["removeListeners"] = MethodMetadata {1, __hostFunction_NativeWebSocketModuleSpecJSI_removeListeners};
+         
+-  }
+-} // namespace facebook::react
++        
++        methodMap_["getConstants"] = MethodMetadata {0, __hostFunction_NativeWebSocketModuleSpecJSI_getConstants};
++        
++  }
++} // namespace facebook::react
+diff --git a/React/FBReactNativeSpec/FBReactNativeSpecJSI.h b/React/FBReactNativeSpec/FBReactNativeSpecJSI.h
+--- a/React/FBReactNativeSpec/FBReactNativeSpecJSI.h
++++ b/React/FBReactNativeSpec/FBReactNativeSpecJSI.h
+@@ -5256,6 +5256,7 @@
+ 
+ protected:
+   NativeWebSocketModuleCxxSpec(std::shared_ptr<CallInvoker> jsInvoker) : TurboModule(std::string{NativeWebSocketModuleCxxSpec::kModuleName}, jsInvoker) {
++    methodMap_["getConstants"] = MethodMetadata {.argCount = 0, .invoker = __getConstants};
+     methodMap_["connect"] = MethodMetadata {.argCount = 4, .invoker = __connect};
+     methodMap_["send"] = MethodMetadata {.argCount = 2, .invoker = __send};
+     methodMap_["sendBinary"] = MethodMetadata {.argCount = 2, .invoker = __sendBinary};
+@@ -5266,6 +5267,13 @@
+   }
+   
+ private:
++  static jsi::Value __getConstants(jsi::Runtime &rt, TurboModule &turboModule, const jsi::Value* /*args*/, size_t /*count*/) {
++    static_assert(
++      bridging::getParameterCount(&T::getConstants) == 1,
++      "Expected getConstants(...) to have 1 parameters");
++    return bridging::callFromJs<jsi::Object>(rt, &T::getConstants,  static_cast<NativeWebSocketModuleCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule));
++  }
++
+   static jsi::Value __connect(jsi::Runtime &rt, TurboModule &turboModule, const jsi::Value* args, size_t count) {
+     static_assert(
+       bridging::getParameterCount(&T::connect) == 5,
