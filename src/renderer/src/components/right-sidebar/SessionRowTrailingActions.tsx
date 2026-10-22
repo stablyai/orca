@@ -5,8 +5,7 @@ import {
   MessageSquarePlus,
   MoreHorizontal,
   PanelTopOpen,
-  Play,
-  Square
+  Play
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -51,7 +50,6 @@ export function SessionRowTrailingActions({
   worktreeInfo,
   onToggleDetails,
   onJumpToOriginalPane,
-  onCloseOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
   onResume,
@@ -78,7 +76,6 @@ export function SessionRowTrailingActions({
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
-  onCloseOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
@@ -135,36 +132,6 @@ export function SessionRowTrailingActions({
                 {translate(
                   'auto.components.right.sidebar.AiVaultSessionRow.jumpToOriginalPane',
                   'Jump to Original Pane'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {onCloseOriginalPane ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.closeOriginalPane',
-                    'Close Open Session'
-                  )}
-                  draggable={false}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onCloseOriginalPane()
-                  }}
-                  data-testid="ai-vault-session-close-original-pane"
-                  className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
-                >
-                  <Square className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.right.sidebar.AiVaultSessionRow.closeOriginalPane',
-                  'Close Open Session'
                 )}
               </TooltipContent>
             </Tooltip>
@@ -308,7 +275,6 @@ export function SessionRowTrailingActions({
               onResumeInNewChat={onResumeInNewChat}
               onResumeInNewCli={onResumeInNewCli}
               onJumpToOriginalPane={onJumpToOriginalPane}
-              onCloseOriginalPane={onCloseOriginalPane}
               showJumpToWorktree={showJumpToWorktree}
               jumpWorkspaceId={worktreeInfo?.worktreeId}
               onJumpToWorktree={onJumpToWorktree}
