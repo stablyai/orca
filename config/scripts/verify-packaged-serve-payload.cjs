@@ -2,7 +2,7 @@ const { existsSync, readFileSync, statSync } = require('node:fs')
 const { dirname, join, posix } = require('node:path')
 
 const WEB_CLIENT_INDEX = 'web-index.html'
-const REMEDY = 'Run pnpm build:web (build:desktop and build:release already do).'
+const REMEDY = 'Run pnpm build:web-from-renderer (build:desktop and build:release already do).'
 
 function failure(message) {
   return new Error(`[verify-packaged-serve-payload] ${message}`)
@@ -27,7 +27,33 @@ function assertPackagedWebClient(resourcesDir) {
   if (!existsSync(join(outDir, 'cli'))) {
     throw failure(`no unpacked CLI at ${join(outDir, 'cli')}; the web client root resolves from it`)
   }
-  const webRoot = join(outDir, 'web')
+  const webRoot = join(outDir, 'renderer')
+  const manifestPath = join(webRoot, '.orca-web-client-files.json')
+  if (!existsSync(manifestPath)) {
+    throw failure(`missing unpacked web file manifest at ${manifestPath}. ${REMEDY}`)
+  }
+  const files = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  if (
+    !Array.isArray(files) ||
+    !files.includes(WEB_CLIENT_INDEX) ||
+    !files.every(
+      (file) =>
+        typeof file === 'string' &&
+        (file === WEB_CLIENT_INDEX || /^(?:assets|cmaps|standard_fonts|wasm)\//.test(file)) &&
+        !file.includes('\\') &&
+        !file.includes('\0') &&
+        file.split('/').every((part) => part !== '' && part !== '.' && part !== '..') &&
+        !file.endsWith('.map')
+    )
+  ) {
+    throw failure(`invalid web file manifest at ${manifestPath}`)
+  }
+  const absent = files.filter(
+    (file) => !statSync(join(webRoot, file), { throwIfNoEntry: false })?.isFile()
+  )
+  if (absent.length > 0) {
+    throw failure(`missing unpacked web files: ${absent.join(', ')}`)
+  }
   const indexPath = join(webRoot, WEB_CLIENT_INDEX)
   if (!existsSync(indexPath)) {
     throw failure(`missing unpacked ${indexPath}. ${REMEDY}`)
@@ -37,7 +63,10 @@ function assertPackagedWebClient(resourcesDir) {
     throw failure(`${indexPath} references no ./ assets. ${REMEDY}`)
   }
   const missing = assets.filter(
-    (asset) => asset.startsWith('..') || !existsSync(join(webRoot, ...asset.split('/')))
+    (asset) =>
+      asset.startsWith('..') ||
+      !files.includes(asset) ||
+      !existsSync(join(webRoot, ...asset.split('/')))
   )
   if (missing.length > 0) {
     throw failure(`${indexPath} loads files missing from ${webRoot}: ${missing.join(', ')}`)

@@ -99,7 +99,7 @@ function renderActions(agentCmdOverrides?: { opencode?: string }) {
   ).result.current
 }
 
-describe('Resume in New CLI launch', () => {
+describe('Switch to Terminal launch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.getState.mockReturnValue({ activeWorktreeId: 'worktree-1', settings: {} })

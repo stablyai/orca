@@ -4,6 +4,7 @@ import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness
 import { makeWorktreeMeta } from './worktrees-test-fixtures'
 import { buildDetectedGitWorktrees } from './worktrees/listing/ssh-worktree-fallback'
 import type { Store } from '../persistence/loading-store/store'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -27,9 +28,6 @@ vi.mock('../github/client', async () =>
 )
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
@@ -224,11 +222,14 @@ describe('registerWorktreeHandlers', () => {
       })
     ])
     expect(store.getWorktreeMeta).not.toHaveBeenCalled()
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith('repo-ssh::/remote/feature-wt', {
-      projectId: 'repo:repo-ssh',
-      hostId: 'ssh:conn-1',
-      projectHostSetupId: 'repo-ssh'
-    })
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: 'repo-ssh::/remote/feature-wt', hostId: 'ssh:conn-1' }),
+      {
+        projectId: 'repo:repo-ssh',
+        hostId: 'ssh:conn-1',
+        projectHostSetupId: 'repo-ssh'
+      }
+    )
   })
 
   it('lists a canonical-only SSH row without leaking the same-id local row', async () => {

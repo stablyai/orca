@@ -9,27 +9,31 @@
  * Timers are monotonic, and a power resume re-verifies instead of trusting them.
  */
 import type { WslOrcadConnection } from './wsl-orcad-connection'
-import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
+import type { WslOrcadConnectIntent, WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { recoverWslOrcad, type WslOrcadRecoveryReason } from './wsl-orcad-liveness-recovery'
 import {
-  attachSupervisedWatch,
   confirmsRunning,
-  disarmSupervised,
-  defaultSchedule,
-  ensureHolderQuietly,
   EXIT_SETTLE_MS,
   failedExit,
+  gatherWslLivenessEvidence
+} from './wsl-orcad-liveness-evidence'
+import {
+  attachSupervisedWatch,
   cancellableWait,
-  gatherWslLivenessEvidence,
+  defaultSchedule,
+  ensureHolderQuietly,
+  subscribeWake
+} from './wsl-orcad-liveness-monitor'
+import {
+  disarmSupervised,
   newSupervised,
-  subscribeWake,
   WSL_ORCAD_HEARTBEAT_MS,
   type Supervised,
   type Trigger,
   type WslOrcadLivenessDependencies,
   type WslOrcadTimer
-} from './wsl-orcad-liveness-model'
+} from './wsl-orcad-liveness-state'
 import {
   classifyWslOrcadLiveness,
   type WslLivenessEvidence,
@@ -60,10 +64,10 @@ export class WslOrcadLivenessSupervisor {
   }
 
   /** User-initiated, so it may boot the distro. Resolves once the watch is armed. */
-  async connect(distro: string, options: { force?: boolean } = {}): Promise<WslOrcadConnection> {
+  async connect(distro: string, options: WslOrcadConnectIntent = {}): Promise<WslOrcadConnection> {
     const entry = this.entryFor(distro)
-    // A recovery this connect supersedes would have reported ready itself; now nothing will.
-    const supersedesRecovery = entry.busy
+    // An unchanged bridge offer may stay quiet even when an earlier failure needs clearing.
+    const reportReady = entry.busy || (entry.state !== null && entry.state !== 'ready')
     // Supersedes a recovery or deferred re-check: this connect relaunches and re-arms itself.
     const generation = (entry.generation += 1)
     disarmSupervised(entry)
@@ -81,7 +85,7 @@ export class WslOrcadLivenessSupervisor {
     if (entry.generation === generation) {
       entry.backoff.reset()
       await this.arm(entry, connection)
-      if (supersedesRecovery && entry.generation === generation) {
+      if (reportReady && entry.generation === generation) {
         this.publish(entry, { state: 'ready', census: null })
       }
     }

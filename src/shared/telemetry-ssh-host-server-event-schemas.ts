@@ -14,6 +14,7 @@ const UNAVAILABLE_REASONS = [
   'artifacts_unavailable',
   'libc_unidentified',
   'runtime_self_test',
+  'runtime_noexec',
   'security_software',
   'native_preflight'
 ] as const

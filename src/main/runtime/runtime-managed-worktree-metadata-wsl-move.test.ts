@@ -16,6 +16,7 @@ import {
   updateRuntimeManagedWorktreeMetadata
 } from './runtime-managed-worktree-metadata'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -113,8 +114,8 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
 
 describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
   it('drops the moving project from the batch and writes the rest', () => {
-    store.setWorktreeMeta(MOVING, { sortOrder: 1 })
-    store.setWorktreeMeta(STAYING, { sortOrder: 2 })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: MOVING, hostId: 'local' }), { sortOrder: 1 })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STAYING, hostId: 'local' }), { sortOrder: 2 })
     const result = persistRuntimeManagedWorktreeSortOrder({
       orderedIds: [MOVING, STAYING],
       store,
@@ -124,5 +125,19 @@ describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
     expect(result).toEqual({ updated: 1 })
     expect(store.getWorktreeMeta(MOVING)?.sortOrder).toBe(1)
     expect(store.getWorktreeMeta(STAYING)?.sortOrder).toBeGreaterThan(2)
+  })
+
+  // A host-qualified read migrates a legacy row in place, which the move must keep frozen.
+  it('never reads the moving copy by host, even when the client names its host', () => {
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STAYING, hostId: 'local' }), { sortOrder: 2 })
+    const hostRead = vi.spyOn(store, 'getWorktreeMetaForHost')
+    persistRuntimeManagedWorktreeSortOrder({
+      orderedIds: [MOVING, STAYING],
+      hostIds: ['local', 'local'],
+      store,
+      invalidateResolved: vi.fn(),
+      notifyChanged: vi.fn()
+    })
+    expect(hostRead.mock.calls.map(([id]) => id)).not.toContain(MOVING)
   })
 })

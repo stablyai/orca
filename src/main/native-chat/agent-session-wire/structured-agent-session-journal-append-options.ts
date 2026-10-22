@@ -1,3 +1,4 @@
+import { journalItemEchoFields } from '../agent-session-journal/journal-item-echo'
 // The journal options one admitted single-item sink append forwards.
 //
 // Every such path calls this, so a row-level field added to the sink's options
@@ -17,6 +18,7 @@ export function structuredAgentSessionJournalAppendOptions(
 ): JournalItemAppendOptions {
   return {
     fence,
+    ...journalItemEchoFields(options),
     ownerFence: fence,
     ...(options.executes ? { executionOwner: fence } : {}),
     ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt }),

@@ -29,7 +29,6 @@ function openNotebookUrl(url: string): void {
     worktreeId: 'wt-1',
     activeLoadFailureRef: ref(null),
     lastKnownWebviewUrlRef: ref(null),
-    trackNextLoadingEventRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
     webviewRef: ref(null),
     onSetUrlRef: ref(vi.fn()),

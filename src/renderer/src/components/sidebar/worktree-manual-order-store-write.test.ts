@@ -42,7 +42,6 @@ function seedManualOrderedRows(count: number): Worktree[] {
 function renderReorder(worktrees: readonly Worktree[]) {
   return renderHook(() =>
     useWorktreeStatusMutations({
-      worktreeMap: new Map(worktrees.map((worktree) => [worktree.id, worktree])),
       manualOrderCatalog: buildWorktreeManualOrderCatalog({
         worktrees,
         folderWorkspaces: []

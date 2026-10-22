@@ -50,6 +50,7 @@ const MOBILE_CI_TOOL_FILES = new Set([
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
   '.github/actions/install-node-dependencies/',
+  '.github/actions/setup-pnpm/',
   '.github/actions/restore-pnpm-verification/',
   '.github/actions/prepare-native-runtime/',
   'config/scripts/pr-code-change-scope',
@@ -177,6 +178,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
+  'config/scripts/mobile-web-app/',
   'config/scripts/mobile-web-bundle-',
   'config/scripts/verify-packaged-mobile-web-bundle',
   'config/scripts/mobile-web-source-line-endings',
@@ -230,6 +232,14 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
+  // The released phone contract runs the current discovery owner and Claude producer.
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-entry.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-store.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-service.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-lister.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-listing-waiters.ts',
+  'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
+  'src/main/claude/claude-model-catalog-probe.ts',
   'src/main/runtime/agent-session-record-store',
   'src/main/runtime/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
@@ -445,6 +455,25 @@ export const STATIC_ANALYSIS_SCAN_ROOTS = readStaticAnalysisScanRoots()
 
 const STATIC_ANALYSIS_SCAN_PREFIXES = STATIC_ANALYSIS_SCAN_ROOTS.map((root) => `${root}/`)
 
+// Over-inclusive on purpose: a type oxfmt skips only costs this PR a static run.
+const FORMAT_CHECKED_EXTENSION =
+  /\.(?:[cm]?[jt]sx?|json[c5]?|css|less|scss|md|mdx|ya?ml|vue|html|graphql|gql|toml)$/i
+
+function readFormatIgnoredPrefixes() {
+  let config
+  try {
+    config = JSON.parse(readFileSync(join(import.meta.dirname, '../../.oxfmtrc.json'), 'utf8'))
+  } catch {
+    // Fail closed: with no ignores known, every formatted type keeps the gate.
+    return []
+  }
+  return (config.ignorePatterns ?? [])
+    .filter((pattern) => pattern.endsWith('/**'))
+    .map((pattern) => pattern.slice(0, -2))
+}
+
+const FORMAT_IGNORED_PREFIXES = readFormatIgnoredPrefixes()
+
 export function isDocsOnlyPath(file) {
   if (DOCS_ONLY_FILES.has(file)) {
     return true
@@ -514,7 +543,11 @@ export function classifyPrJobs(
   // Why outside should_run: a mobile-only diff is desktop-irrelevant and skips every job above,
   // but the repo-wide audits lint mobile/, and skipping them lands the violation on main, where
   // it then fails this same gate on every later PR's merge ref.
-  jobs.static_analysis = jobs.static_analysis || changedFiles.some(isStaticAnalysisScannedPath)
+  // Why formatted paths too: the formatting check reads the whole tree, so a docs-only diff that
+  // skipped it would land drift that then fails every later PR.
+  jobs.static_analysis =
+    jobs.static_analysis ||
+    changedFiles.some((file) => isStaticAnalysisScannedPath(file) || isFormatCheckedPath(file))
   // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
   // that is exactly the diff that changes the page this job builds. Gated on should_run it would
   // skip on every PR that can break it and run on none.
@@ -528,6 +561,11 @@ export function classifyPrJobs(
   return {
     should_run: shouldRun,
     mobile_ci_tools: mobileCiTools,
+    // Relay contracts exercise host/cloud code; any input outside the renderer keeps them.
+    relay_integration:
+      shouldRun &&
+      (forceAll ||
+        changedFiles.some((file) => !file.startsWith('src/renderer/') && !isDocsOnlyPath(file))),
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
     mobile_dependencies:
       (shouldRun || jobs.static_analysis) && needsMobileDependencies(changedFiles),
@@ -619,12 +657,20 @@ function isStaticAnalysisScannedPath(file) {
   )
 }
 
+function isFormatCheckedPath(file) {
+  return FORMAT_CHECKED_EXTENSION.test(file) && !matchesPrefix(file, FORMAT_IGNORED_PREFIXES)
+}
+
 function isNativeCacheInputPath(file) {
   return NATIVE_CACHE_FILES.has(file) || matchesPrefix(file, NATIVE_CACHE_PREFIXES)
 }
 
 function isGlobalForcePath(file) {
-  return GLOBAL_FORCE_FILES.has(file) || matchesPrefix(file, GLOBAL_FORCE_PREFIXES)
+  return (
+    GLOBAL_FORCE_FILES.has(file) ||
+    (matchesPrefix(file, GLOBAL_FORCE_PREFIXES) &&
+      !(file.startsWith('config/scripts/') && isTestFile(file)))
+  )
 }
 
 function matchesPrefix(file, prefixes) {

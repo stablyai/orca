@@ -583,6 +583,50 @@ describe('RelayAgentHookServer', () => {
       expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
         'Relay transcript completed.'
       )
+      // A Stop whose opening the relay never saw is ambiguous; SessionEnd and the retry keep that.
+      const ends = forward.mock.calls.map(([env]) => `${env.turnEndedAt}:${env.turnEndDisposition}`)
+      expect(new Set(ends)).toEqual(new Set(['undefined:ambiguous']))
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('marks a verified re-entered Stop as a later end, an unproven repeat ambiguous, and replays both unchanged', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (payload: Record<string, unknown>) =>
+        fetch(`http://127.0.0.1:${port}/hook/claude`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': token },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+      await post({ hook_event_name: 'UserPromptSubmit', prompt: 'Lint it' })
+      await post({ hook_event_name: 'Stop', last_assistant_message: 'Draft.' })
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      // Claude re-fires Stop with the flag when a blocking Stop hook continues the same turn.
+      await post({
+        hook_event_name: 'Stop',
+        stop_hook_active: true,
+        last_assistant_message: 'Final.'
+      })
+      const [draft, final] = forward.mock.calls.slice(-2).map(([env]) => env.turnEndedAt)
+      expect(final).toBeGreaterThan(draft!)
+      await post({ hook_event_name: 'Stop', last_assistant_message: 'Final.' })
+      const repeat = { turnEndedAt: final, turnEndDisposition: 'ambiguous' }
+      expect(forward.mock.calls.at(-1)?.[0]).toMatchObject(repeat)
+
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward.mock.calls.at(-1)?.[0]).toMatchObject({ isReplay: true, ...repeat })
+      expect(forward.mock.calls.at(-1)?.[0]).not.toHaveProperty('hostTurn')
     } finally {
       server.stop()
     }

@@ -13,8 +13,8 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
-import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
+import { LAYOUT_SOURCE } from './mobile-web-app/preview/mobile-web-app-terminal-probe-route.mjs'
 
 /**
  * The working rings keep turning on the page. Each is a one-second rotation loop; a loop that

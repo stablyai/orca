@@ -98,7 +98,6 @@ export class BrowserPopupAdapterProbeFixture {
         unrelatedDuringAdmission = false
         const response = allowNativeBrowserPopup({
           opener: guest,
-          targetUrl: details.url,
           options: { show: false },
           onCreated: ({ nativeWindow }) => {
             if (!nativeWindow) {

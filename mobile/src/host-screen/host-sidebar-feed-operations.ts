@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import { SidebarInputsReadResultSchema } from '../../../src/shared/sidebar-list/sidebar-inputs-feed-contract'
+import type { SidebarFeedTransport } from '../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
 import type { RpcResponse } from '../transport/types'
+import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
 
 // The host's sidebar feed (src/main/runtime/sidebar-inputs/), read only by a page built with
 // ORCA_SIDEBAR_INPUTS=main. A host without it answers method_not_found, or forbidden from an
@@ -65,5 +67,16 @@ export function readHostMethodReply<Value>(
     return verdict.accepted ? { kind: 'answered', value: verdict.value } : { kind: 'failed' }
   } catch {
     return { kind: 'failed' }
+  }
+}
+
+/** The shared feed reader's reads over one host connection. */
+export function hostSidebarFeedTransport(client: UnvalidatedRpcRequestPort): SidebarFeedTransport {
+  return async (params) => {
+    const read = readHostMethodReply(
+      await sidebarInputsRead.request(client, params),
+      sidebarInputsRead.interpret
+    )
+    return read.kind === 'answered' ? { kind: 'answered', reply: read.value } : read
   }
 }

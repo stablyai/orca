@@ -7,6 +7,11 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 
+vi.mock('expo-router', async () => {
+  const React = await import('react')
+  return { useFocusEffect: (effect: () => void) => React.useEffect(effect, [effect]) }
+})
+
 // The screen-state module these loaders share with the panel pulls the icon set in; none of it is
 // reachable from a hook that renders nothing.
 vi.mock('lucide-react-native', () => ({

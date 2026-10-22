@@ -35,9 +35,6 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
@@ -109,7 +106,7 @@ function makeRepo(fields: Record<string, unknown>) {
 function useRepo(repo: ReturnType<typeof makeRepo>): void {
   store.getRepos.mockReturnValue([repo])
   store.getRepo.mockReturnValue(repo)
-  store.setWorktreeMeta.mockImplementation((_worktreeId: string, meta: unknown) => meta)
+  store.setWorktreeMeta.mockImplementation((_target: unknown, meta: unknown) => meta)
 }
 
 describe('registerWorktreeHandlers', () => {

@@ -14,13 +14,15 @@ import {
 import { useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { useStatusBarDensity } from './status-bar-density'
-import { useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
+import { getUsageOwnerHostScope, useOwnerUsageRateLimits } from './use-owner-usage-rate-limits'
+import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const localRateLimits = useAppStore((s) => s.rateLimits)
   // Why: with a remote account owner the agents run there, so its usage is the one to show.
-  const { rateLimits, remoteOwned, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
+  const { rateLimits, remoteOwner, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
+  const remoteOwned = remoteOwner !== null
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -223,11 +225,16 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
     showZcode ? visibleZcode : null
-  ].filter((p): p is ProviderRateLimits => p !== null)
+  ]
+    .filter((p): p is ProviderRateLimits => p !== null)
+    // Why: the bar collapses chips from the end, so placeholders give way first.
+    .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
+  // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
+  const hostScope = getUsageOwnerHostScope(remoteOwner)
   const handleManageAccounts = (): void => {
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null })
+    openSettingsTarget({ pane: 'accounts', repoId: null, hostScope })
     openSettingsPage()
   }
   const handleUsageDetails = (): void => {
@@ -237,11 +244,17 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
   const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
     const sectionId = getUsageProviderAccountsSectionId(provider)
-    if (!sectionId) {
+    // Why: a placeholder for a CLI-owned provider still leads to the host's accounts.
+    if (!sectionId && !remoteOwner) {
       return
     }
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null, sectionId })
+    openSettingsTarget({
+      pane: 'accounts',
+      repoId: null,
+      hostScope,
+      ...(sectionId ? { sectionId } : {})
+    })
     openSettingsPage()
   }
   const canSignInFromUsageRow = (provider: ProviderRateLimits['provider']): boolean =>
@@ -278,6 +291,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     overflowing,
     petEnabled,
     recordFeatureInteraction,
+    remoteOwner,
     rosterProviders,
     segmentsIconOnly,
     segmentsRef,

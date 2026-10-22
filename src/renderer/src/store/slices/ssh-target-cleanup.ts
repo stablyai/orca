@@ -4,6 +4,7 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
 import { resolveDirectSshTargetWorktreeIds } from '../../lib/direct-ssh-target-scope'
 import { unbindTerminalTabPtys } from './tabs/worktree-layout-lifecycle'
+import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function sshTargetLabelsEqual(
   labels: Map<string, string>,
@@ -47,12 +48,12 @@ function collectSshTargetTerminalTabIds(state: AppState, targetId: string): Set<
   const targetWorktreeIds = resolveDirectSshTargetWorktreeIds({
     targetId,
     repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    worktreesByRepo: selectWorktreesByRepo(state),
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
   })
   const tabIds = new Set<string>()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
+  for (const worktrees of Object.values(selectWorktreesByRepo(state))) {
     for (const worktree of worktrees) {
       if (!targetWorktreeIds.has(worktree.id)) {
         continue

@@ -13,7 +13,7 @@ import {
   readBridgePageClientIdentity,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 /**
  * The session route's terminal, driven from a shell double that answers the streams a host does.

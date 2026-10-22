@@ -51,9 +51,29 @@ export function restoreCodexHistoryItem(
 export const CODEX_RESTORE_MAX_OPERATIONS = 1_024
 export const CODEX_RESTORE_MAX_BYTES = 16 * 1024 * 1024
 
+/** One import's size against the restore budget: its items, lifecycle rows and any extra rows. */
+export function codexRestoreFits(turns: readonly unknown[], extraOperations = 0): boolean {
+  const items = turns.flatMap((rawTurn) => {
+    const turn = readCodexJournalRecord(rawTurn)
+    const turnId = readCodexJournalString(turn, 'id')
+    return turnId
+      ? (Array.isArray(turn.items) ? turn.items : []).map((item) => ({ turnId, item }))
+      : []
+  })
+  const lifecycles = turns.filter((rawTurn) =>
+    readCodexJournalString(readCodexJournalRecord(rawTurn), 'id')
+  ).length
+  return (
+    items.length + lifecycles + extraOperations <= CODEX_RESTORE_MAX_OPERATIONS &&
+    Buffer.byteLength(JSON.stringify(items), 'utf8') <= CODEX_RESTORE_MAX_BYTES
+  )
+}
+
 export function restoreCodexJournalThread(input: {
   threadId: string
   thread: Record<string, unknown>
+  /** The isolated recorder bounds actual translated mutations instead of the old raw fallback. */
+  historyImport?: true
   currentTurnIds: Map<string, Set<string>>
   ordinals: CodexTurnOrdinals
   handleItem: (event: CodexHistoryItemEvent) => CodexJournalTranslationAdmission
@@ -64,23 +84,7 @@ export function restoreCodexJournalThread(input: {
   flush: () => void
 }): CodexJournalTranslationAdmission {
   const turns = Array.isArray(input.thread.turns) ? input.thread.turns : []
-  const items = turns.flatMap((rawTurn) => {
-    const turn = readCodexJournalRecord(rawTurn)
-    const turnId = readCodexJournalString(turn, 'id')
-    return turnId
-      ? (Array.isArray(turn.items) ? turn.items : []).map((item) => ({ turnId, item }))
-      : []
-  })
-  const lifecycles = input.restoreTurnLifecycle
-    ? turns.flatMap(
-        (rawTurn) => historicalTurnLifecycle(input.threadId, readCodexJournalRecord(rawTurn)) ?? []
-      )
-    : []
-  const encodedBytes = Buffer.byteLength(JSON.stringify(items), 'utf8')
-  if (
-    items.length + lifecycles.length > CODEX_RESTORE_MAX_OPERATIONS ||
-    encodedBytes > CODEX_RESTORE_MAX_BYTES
-  ) {
+  if (!input.historyImport && !codexRestoreFits(turns)) {
     return { accepted: false, reason: 'backpressure' }
   }
   for (const rawTurn of turns) {
@@ -100,7 +104,25 @@ export function restoreCodexJournalThread(input: {
         return admission
       }
     }
-    input.currentTurnIds.set(input.threadId, new Set([turnId]))
+    const admission = restoreTurnItems(input, turnId, turn)
+    if (!admission.accepted) {
+      return admission
+    }
+  }
+  input.flush()
+  return { accepted: true }
+}
+
+function restoreTurnItems(
+  input: Pick<
+    Parameters<typeof restoreCodexJournalThread>[0],
+    'threadId' | 'currentTurnIds' | 'ordinals' | 'handleItem'
+  >,
+  turnId: string,
+  turn: Record<string, unknown>
+): CodexJournalTranslationAdmission {
+  input.currentTurnIds.set(input.threadId, new Set([turnId]))
+  try {
     for (const item of Array.isArray(turn.items) ? turn.items : []) {
       const admission = input.handleItem({
         threadId: input.threadId,
@@ -111,30 +133,26 @@ export function restoreCodexJournalThread(input: {
         return admission
       }
     }
+    return { accepted: true }
+  } finally {
+    // A refused row must not leave this turn current for the live turns that follow.
     input.currentTurnIds.delete(input.threadId)
     input.ordinals.forgetTurn(input.threadId, turnId)
   }
-  input.flush()
-  return { accepted: true }
 }
 
-/** Codex reports both endpoints in unix seconds; a turn missing either has no durable duration. */
+/** Codex reports both endpoints in unix seconds, each optional; the row keeps the turn's status
+ *  and marks it known to the journal even without them. */
 function historicalTurnLifecycle(
   threadId: string,
   turn: Record<string, unknown>
 ): AgentJournalTurnLifecycle | null {
   const turnId = readCodexJournalString(turn, 'id')
-  const startedAt = turn.startedAt
-  const completedAt = turn.completedAt
-  if (
-    !turnId ||
-    typeof startedAt !== 'number' ||
-    typeof completedAt !== 'number' ||
-    !Number.isFinite(startedAt) ||
-    !Number.isFinite(completedAt)
-  ) {
+  if (!turnId) {
     return null
   }
+  const startedAt = unixSecondsToMs(turn.startedAt)
+  const completedAt = unixSecondsToMs(turn.completedAt)
   const durationMs = readCodexTurnDurationMs(turn)
   const status = readCodexTurnStatus(turn)
   const outcome = codexTurnOutcome(status)
@@ -143,8 +161,12 @@ function historicalTurnLifecycle(
     state: codexTurnLifecycleState(status),
     ...(outcome ? { outcome } : {}),
     userItemId: codexTurnUserItemId(threadId, turnId),
-    startedAt: startedAt * 1000,
-    completedAt: completedAt * 1000,
+    ...(startedAt !== null ? { startedAt } : {}),
+    ...(completedAt !== null ? { completedAt } : {}),
     ...(durationMs !== null ? { durationMs } : {})
   }
+}
+
+function unixSecondsToMs(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value * 1000 : null
 }

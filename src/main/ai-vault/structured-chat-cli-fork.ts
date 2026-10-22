@@ -4,6 +4,7 @@ import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import { pendingAgentSessionRewindFork } from '../../shared/agent-session-rewind'
 import type {
   AiVaultPrepareChatForkArgs,
   AiVaultPrepareSessionResumeResult,
@@ -93,6 +94,13 @@ export async function prepareStructuredChatCliFork(
     !agentForksConversations(record.provider)
   ) {
     throw new Error('This chat has no saved conversation available on this host.')
+  }
+  // A terminal resume can't cut where the rewind did, so it would bring back the undone turns.
+  if (
+    pendingAgentSessionRewindFork(record.rewind, head.handle.nativeId)?.replacesSessionId ===
+    head.handle.nativeId
+  ) {
+    throw new Error('Send a message after rewinding this chat, then open it in a terminal.')
   }
   const agent = record.provider
   const cwd =

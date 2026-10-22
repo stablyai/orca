@@ -5,11 +5,8 @@ name: Dev Channel Windows Build
 # Windows artifact can be rebuilt for an existing tag without paying for the mac
 # leg's packaging and notarization again.
 #
-# Each mac workflow calls this as a `needs:`-gated job once its release is live,
-# passing the tag it created. Both legs land in that one release, so a tag
-# carries every platform it managed to build. Measured cost of the Windows leg is
-# ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a mac run of ~9.5
-# min, so running it after the mac job keeps an hourly well inside its cron.
+# Adhoc can stage Windows alongside macOS, then publish only after macOS succeeds.
+# Hourly, daily, and manual dispatches keep packaging and publishing together.
 #
 # Why unsigned: Windows release installers are signed by SignPath *after*
 # packaging, and release-cut budgets 1h + 4h for those approval waits. That does
@@ -27,9 +24,8 @@ name: Dev Channel Windows Build
 # installer run. Every way out — to another dev build, or back to Stable — works
 # through the in-app updater. The picker offers a download for exactly that jump.
 #
-# Called as a job by each mac workflow once its release is live, and separately
-# dispatchable by hand to rebuild a Windows artifact for an existing tag without
-# re-running the mac leg's twenty minutes of packaging and notarization:
+# Mac workflows call this directly or stage artifacts for a later publish job.
+# It is also dispatchable to rebuild Windows for an existing tag:
 #
 #   gh workflow run dev-channel-win-build.yml --ref main \
 #     -f channel=adhoc -f tag=v1.4.178-adhoc.20260819010203 \
@@ -47,7 +43,7 @@ on:
         required: true
         type: string
       tag:
-        description: Existing release tag in the channel repo
+        description: Release tag for staged or published artifacts
         required: true
         type: string
       ref:
@@ -58,6 +54,19 @@ on:
         description: Version to package, without the leading v
         required: true
         type: string
+      stage_only:
+        description: Package unsigned artifacts for a later gated publish job
+        required: false
+        type: boolean
+        default: false
+      fast_release:
+        description: Use the faster unsigned-build runner outside signing provenance
+        type: boolean
+        default: false
+      javascript_source_sha:
+        description: Restore this run's shared dev JavaScript instead of rebuilding it
+        type: string
+        default: ''
       orcad_template:
         description: Ship the orcad-template artifact the calling run built
         required: false
@@ -103,12 +112,15 @@ jobs:
     # that can write to the dev-channel repos, and it should be reachable from
     # exactly the same place those secrets already live.
     environment: adhoc-mac-build
-    # Why windows-2022 and not windows-latest: windows-latest moved to the
-    # Windows 2025 / VS 2026 image before node-gyp could detect VS 18, breaking
-    # native dependency install. release-cut pins the same image.
-    runs-on: windows-2022
+    # The fast image has VS Build Tools 2022; signed release provenance stays separate.
+    runs-on: ${{ inputs.fast_release && 'blacksmith-8vcpu-windows-2025' || 'windows-2022' }}
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 90
     env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      JOBS: ${{ inputs.fast_release && 'max' || '' }}
       NODE_OPTIONS: --max-old-space-size=4096
       CHANNEL: ${{ inputs.channel }}
       TAG: ${{ inputs.tag }}
@@ -171,6 +183,14 @@ jobs:
           fi
           echo "Vetted $CHANNEL $TAG at $REQUESTED_SHA"
 
+      - name: Enable parallel checkout
+        if: inputs.fast_release
+        shell: bash
+        run: |
+          git config --global checkout.workers 0
+          # These fresh native builds do not need MSBuild's incremental file tracking.
+          echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
+
       - name: Checkout the built commit
         uses: actions/checkout@v6
         with:
@@ -216,6 +236,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -249,6 +270,7 @@ jobs:
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: inputs.javascript_source_sha == ''
 
       # Why the packaging check runs before the 20-minute build: it only needs
       # node_modules, and a stale config should cost seconds rather than a build.
@@ -256,14 +278,54 @@ jobs:
         shell: bash
         run: node config/scripts/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
 
+      - name: Download shared JavaScript
+        if: inputs.javascript_source_sha != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
       - name: Build app
         shell: bash
-        run: pnpm build:release
+        run: |
+          if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
+            node config/scripts/release-javascript-artifact.mjs restore
+            pnpm run build:release:host
+          else
+            pnpm build:release
+          fi
         env:
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ inputs.javascript_source_sha }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
           # Why unset ORCA_BUILD_IDENTITY: telemetry's transport gate accepts only
           # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
           # is correct for unvetted artifacts. Same as the mac dev channels.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      # Inline so refs predating the wait can still use the trusted dispatch workflow.
+      - name: Wait for the qualified orcad template
+        if: inputs.fast_release && inputs.stage_only && inputs.orcad_template
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Template qualification failed: ${failed.name}`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: context.runId, per_page: 100
+              })
+              const ready = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              const completed = lanes.length > 0 && lanes.every(job => job.status === 'completed')
+              if (ready && (process.env.WAIT_FOR_TEMPLATE_COMPLETION !== '1' || completed)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for the qualified orcad template')
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -276,6 +338,7 @@ jobs:
       # Why the token is minted here and not at the top: installation tokens live
       # one hour and nothing before this point writes anything.
       - name: Mint dev channel repo token
+        if: ${{ !inputs.stage_only }}
         id: app_token
         uses: actions/create-github-app-token@v2
         with:
@@ -289,6 +352,7 @@ jobs:
       # while this was building, that would mint a fresh, untitled, Windows-only
       # release. Check first and fail instead.
       - name: Confirm the target release still exists
+        if: ${{ !inputs.stage_only }}
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
@@ -300,6 +364,7 @@ jobs:
           fi
 
       - name: Publish Windows artifacts
+        if: ${{ !inputs.stage_only }}
         uses: nick-fields/retry@v4
         with:
           # 30 is the pack + upload budget; there is no notary queue on this leg.
@@ -323,6 +388,7 @@ jobs:
       # release carrying the installer but not the manifest is one the picker
       # offers and the update 404s on, so assert both.
       - name: Verify Windows update manifest published
+        if: ${{ !inputs.stage_only }}
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
@@ -338,3 +404,41 @@ jobs:
             fi
           done
           echo "Windows artifacts verified on $TAG."
+
+      - name: Package Windows artifacts without publishing
+        if: inputs.stage_only
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 30
+          max_attempts: 2
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+        env:
+          ORCA_BUILD_COMMIT: ${{ inputs.ref }}
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '' }}
+
+      - name: Validate staged Windows artifacts
+        if: inputs.stage_only
+        shell: bash
+        run: |
+          set -euo pipefail
+          for required in orca-windows-setup.exe orca-windows-setup.exe.blockmap latest.yml; do
+            if [[ ! -s "dist/$required" ]]; then
+              echo "::error::Missing or empty staged Windows artifact: $required"
+              exit 1
+            fi
+          done
+
+      - name: Stage Windows artifacts for gated publishing
+        if: inputs.stage_only
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-channel-windows-${{ inputs.tag }}
+          path: |
+            dist/orca-windows-setup.exe
+            dist/orca-windows-setup.exe.blockmap
+            dist/latest.yml
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+          overwrite: true

@@ -33,6 +33,7 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
 
   override syncWindowGraph(...args: Parameters<Runtime['syncWindowGraph']>) {
     const previousTabs = this.tabs
+    const previousLeaves = this.leaves
     const result = super.syncWindowGraph(...args)
     // Only a tab moving workspace can change where an agent row is attributed.
     const moved = [...this.tabs.values()].some(
@@ -41,7 +42,20 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
     if (moved || [...previousTabs.keys()].some((tabId) => !this.tabs.has(tabId))) {
       this.workspaceActivityFacts.resyncAgentPanes()
     }
+    // Now, not on the session publication: a closed pane's stopping PTY stops counting here.
+    // syncWindowGraph replaces this.leaves (session-window-graph.ts), so previousLeaves stays intact.
+    this.refreshWorkspaces(leafPtyChangedWorktrees(previousLeaves, this.leaves))
     return result
+  }
+
+  override markPtyStopRequested(ptyId: string): void {
+    super.markPtyStopRequested(ptyId)
+    this.refreshWorkspaces(this.ptyWorktreeIds(ptyId))
+  }
+
+  override clearPtyStopRequest(ptyId: string): void {
+    super.clearPtyStopRequest(ptyId)
+    this.refreshWorkspaces(this.ptyWorktreeIds(ptyId))
   }
 
   protected override notifyMobileSessionTabsChangedNow(
@@ -102,6 +116,11 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
     }
   }
 
+  // Asked to stop with no pane left: the window that closed it already shows it gone.
+  private isClosing(ptyId: string): boolean {
+    return this.isPtyStopRequested(ptyId) && this.getLeavesForPty(ptyId).length === 0
+  }
+
   private ptyWorktreeIds(ptyId: string): Set<string> {
     const worktreeIds = new Set(this.getLeavesForPty(ptyId).map((leaf) => leaf.worktreeId))
     const recorded = this.ptysById.get(ptyId)?.worktreeId
@@ -123,8 +142,8 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
     }
   }
 
-  // getLivePtyIdsForWorktree's identity rule in one pass. A host that only lost contact keeps its
-  // terminals unverifiable, never gone, even while the record still reads connected.
+  // Matches every host form of the worktree's id. A host that only lost contact keeps its terminals
+  // unverifiable, never gone, even while the record still reads connected or is being closed.
   private readWorkspaceTerminalLiveness(worktreeId: string): WorkspaceTerminalLiveness | null {
     const key = worktreeIdentityKey(worktreeId)
     const owns = (id: string): boolean => id === worktreeId || worktreeIdentityKey(id) === key
@@ -136,11 +155,31 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
         }
         if (this.getPtyLivenessVerdict(surface.ptyId)?.status === 'unverifiable') {
           unverifiable = true
-        } else if (surface.connected) {
+        } else if (surface.connected && !this.isClosing(surface.ptyId)) {
           return 'live'
         }
       }
     }
     return unverifiable ? 'unverifiable' : null
   }
+}
+
+function leafPtyChangedWorktrees(
+  before: ReadonlyMap<string, { worktreeId: string; ptyId: string | null }>,
+  after: ReadonlyMap<string, { worktreeId: string; ptyId: string | null }>
+): Set<string> {
+  const changed = new Set<string>()
+  for (const [leafId, leaf] of before) {
+    const next = after.get(leafId)
+    if (next?.ptyId !== leaf.ptyId || next.worktreeId !== leaf.worktreeId) {
+      changed.add(leaf.worktreeId)
+    }
+  }
+  for (const [leafId, leaf] of after) {
+    const previous = before.get(leafId)
+    if (previous?.ptyId !== leaf.ptyId || previous.worktreeId !== leaf.worktreeId) {
+      changed.add(leaf.worktreeId)
+    }
+  }
+  return changed
 }

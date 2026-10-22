@@ -62,6 +62,12 @@ function toNonNegativeInteger(value: unknown): number {
 
 export type MobileTerminalTheme = RuntimeMobileTerminalTheme
 
+/** What a terminal-input notification carries besides its bytes. */
+export type TerminalPointerInput = {
+  /** A click the program may answer by moving its cursor to the clicked cell. */
+  readonly click: boolean
+}
+
 export type TerminalSelectionEvents = {
   onSelectionMode?: (active: boolean) => void
   onSelectionCopy?: (text: string) => void
@@ -69,7 +75,8 @@ export type TerminalSelectionEvents = {
   onModesChanged?: (modes: TerminalModes) => void
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
-  onTerminalInput?: (bytes: string) => void
+  // Only a tap's click passes `input`; wheel and drag reports keep the bytes-only call.
+  onTerminalInput?: (bytes: string, input?: TerminalPointerInput) => void
   onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
   // Tap landed on a detected file path; RN resolves + opens it.

@@ -39,7 +39,8 @@ vi.mock('../../observability/tracer', () => ({
 function listing(id: string): AgentModelCatalogSuccess {
   return {
     models: [{ id, label: id, isDefault: true, efforts: [] }],
-    origin: 'probe'
+    origin: 'probe',
+    complete: true
   }
 }
 
@@ -82,6 +83,7 @@ describe('model catalog prewarm', () => {
 
     expect(codex).toHaveBeenCalledTimes(1)
     expect(codex).toHaveBeenCalledWith(HOME('CODEX_HOME', '/homes/a'), {
+      workspacePath: expect.any(String),
       signal: expect.any(AbortSignal)
     })
     expect(grok).toHaveBeenCalledTimes(1)
@@ -391,8 +393,8 @@ describe('one account, one catalog key', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key reads only provider, accountHome and location.
     return {
       sessionId: 'session-1',
-      provider: 'codex',
-      accountHome: HOME('CODEX_HOME', path),
+      provider: 'grok',
+      accountHome: HOME('GROK_HOME', path),
       location: {
         executionHostId: 'local',
         wslDistro: null,
@@ -405,15 +407,15 @@ describe('one account, one catalog key', () => {
   // The read and launch resolvers agreeing on the home is runtime-home-catalog-account-key.test.ts.
   it('a session’s saves through the host and through its adapter’s handle land under its record’s key', async () => {
     const store = new AgentModelCatalogStore()
-    const managedHome = '/orca/codex-accounts/acct-1/home'
+    const managedHome = '/orca/grok-accounts/acct-1/home'
     const launched = record(managedHome)
     const service = createAgentModelCatalogService({
       store,
       getRecord: () => launched,
       drivesRecord: () => true,
-      resolveAccountHome: async () => HOME('CODEX_HOME', managedHome)
+      resolveAccountHome: async () => HOME('GROK_HOME', managedHome)
     })
-    // What the chat saved, through the host and through the Codex adapter's own handle…
+    // What the chat saved, through the host and through the Grok adapter's own handle…
     service.recordLiveListing('session-1', { models: listing('gpt-live').models })
     const incoming = { models: [...listing('gpt-live').models, ...listing('gpt-new').models] }
     const retained = (launchOnlyModelId: string) =>
@@ -422,13 +424,13 @@ describe('one account, one catalog key', () => {
     expect(await retained('gpt-new')).toEqual(['gpt-live'])
     const adapterAccess = agentModelCatalogSessionAccess(
       store,
-      { agent: 'codex', accountHomeVariable: 'CODEX_HOME' },
+      { agent: 'grok', accountHomeVariable: 'GROK_HOME' },
       managedHome
     )
     expect(adapterAccess?.fingerprint).toBe(agentModelCatalogFingerprintForRecord(launched))
 
     // …is what the next new chat reads for the same home: no cold start for this account.
-    const read = await service.read({ agent: 'codex' })
+    const read = await service.read({ agent: 'grok' })
     expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['gpt-live'])
   })
 })

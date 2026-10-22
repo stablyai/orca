@@ -45,14 +45,16 @@ import {
 import {
   captureOrcadStateSnapshotCommand,
   compareOrcadStateSnapshotCommand,
-  newestStateMtimeCommand,
   orcadSnapshotIsUnchanged,
-  parseNewestStateMtimeSeconds,
   parseOrcadSnapshotCapture,
   parseOrcadSnapshotRestore,
   probeOrcadStateSnapshotCommand,
   restoreOrcadStateSnapshotCommand
 } from '../host-state/orcad-state-snapshot'
+import {
+  newestStateMtimeCommand,
+  parseNewestStateMtimeSeconds
+} from '../host-state/orcad-state-newest-mtime'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { ORCAD_STOP_REQUEST_FILENAME } from '../../../shared/orcad-stop-request'
 

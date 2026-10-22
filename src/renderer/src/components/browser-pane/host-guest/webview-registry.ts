@@ -3,7 +3,6 @@ import {
   clearBrowserPageViewportPresetSize,
   removeBrowserPageViewport
 } from './browser-page-viewport'
-import { forgetExplicitBrowserPageZoomLevel } from './browser-page-zoom'
 import {
   acquireWebviewsDragPassthrough,
   isWebviewDragPassthroughActive,
@@ -252,13 +251,9 @@ export function moveFocusToRendererBeforeWebviewDetach(webview: Electron.Webview
 
 function removePersistentWebview(
   browserTabId: string,
-  { preserveViewport, preserveZoom }: { preserveViewport: boolean; preserveZoom: boolean }
+  { preserveViewport }: { preserveViewport: boolean }
 ): Promise<void> {
   const webview = webviewRegistry.get(browserTabId)
-  if (!preserveZoom) {
-    // The guest is gone, so its user-applied zoom must not be inherited by a later tab that reuses the id.
-    forgetExplicitBrowserPageZoomLevel(browserTabId)
-  }
   if (!webview) {
     // Why: the viewport can outlive a missing webview entry; tear it down on
     // explicit close paths so overlay slots do not leak parked shells.
@@ -286,15 +281,12 @@ function removePersistentWebview(
 }
 
 export function destroyPersistentWebview(browserTabId: string): Promise<void> {
-  return removePersistentWebview(browserTabId, {
-    preserveViewport: false,
-    preserveZoom: false
-  })
+  return removePersistentWebview(browserTabId, { preserveViewport: false })
 }
 
 export function replacePersistentWebview(
   browserTabId: string,
   { preserveViewport = false }: { preserveViewport?: boolean } = {}
 ): Promise<void> {
-  return removePersistentWebview(browserTabId, { preserveViewport, preserveZoom: true })
+  return removePersistentWebview(browserTabId, { preserveViewport })
 }

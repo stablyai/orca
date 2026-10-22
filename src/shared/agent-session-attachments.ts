@@ -1,9 +1,10 @@
-// Files a client attaches to a structured chat on a paired Orca server: the client uploads the
-// bytes, the server keeps them in a store it owns, and the agent only ever sees the server path.
+// Files attached to a structured chat: kept in a store owned by the host that runs the chat (a
+// paired server's clients upload the bytes; this machine's own pastes are written in place), and
+// the agent only ever sees the host path.
 
 import type { ImportSkipReason } from './filesystem-import-result-types'
 
-/** Directory name of the server's store, under its userData. Also how a client recognizes a
+/** Directory name of a host's store, under its userData. Also how a client recognizes a
  *  stored attachment's path without a round trip. */
 export const AGENT_SESSION_ATTACHMENTS_DIR_NAME = 'agent-session-attachments'
 
@@ -48,8 +49,8 @@ export type AgentSessionAttachmentUploadCommitResult = {
   byteLength: number
 }
 
-/** Whether `filePath` names a file in some server's attachment store. Only routes a preview read;
- *  the server re-checks the real path before reading anything. */
+/** Whether `filePath` names a file in some host's attachment store. Only routes a preview read;
+ *  the host re-checks the real path before reading anything. */
 export function isAgentSessionAttachmentStorePath(filePath: string): boolean {
   return filePath.split(/[\\/]/).includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
 }

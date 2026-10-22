@@ -163,7 +163,15 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
     this.stopRequestedPtyIds.delete(ptyId)
     if (options.awaitsRegistration !== false) {
       // Why: surface absence cannot distinguish an in-flight admission from a completed headless lifecycle.
-      this.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
+      const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
+      if (pending && (pending.incarnationId === null || pending.incarnationId === incarnationId)) {
+        pending.incarnationId = incarnationId ?? null
+      } else {
+        this.pendingPtyRegistrationIncarnations.set(ptyId, {
+          incarnationId: incarnationId ?? null,
+          exitedIncarnations: new Set()
+        })
+      }
     }
     this.terminalViewSubscribers.markSpawnPublished(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)

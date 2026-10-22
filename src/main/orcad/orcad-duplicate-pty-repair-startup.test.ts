@@ -26,12 +26,15 @@ const state = vi.hoisted(() => {
     rekeyWorkerTerminalResourcePaneKey: Mock<() => number>
     /** What a startup step saw on disk; set by a test that watches the order. */
     onStartupStep: ((step: string) => void) | null
+    /** The startup pass that shows live terminals fails outright. */
+    placementRejects: boolean
   } = {
     root: '',
     store: null,
     layoutOwnerIsMain: true,
     rekeyWorkerTerminalResourcePaneKey: vi.fn(() => 1),
-    onStartupStep: null
+    onStartupStep: null,
+    placementRejects: false
   }
   return value
 })
@@ -146,8 +149,18 @@ vi.mock('../runtime/orca-runtime', () => ({
     async reconcileLegacyWorkerTerminals() {
       state.onStartupStep?.('reconcile')
     }
+    async placeUnshownLiveTerminals() {
+      state.onStartupStep?.('place')
+      if (state.placementRejects) {
+        throw new Error('census record unreadable')
+      }
+      return { placed: [], declined: [] }
+    }
     async installPendingOrcadMigrationShellHistory() {}
     async stopLegacyWorkerTerminalRecovery() {}
+    flushPaneGrids() {
+      return null
+    }
     async closeNotificationDismissals() {}
     syncWindowGraph() {}
   }
@@ -177,6 +190,7 @@ beforeEach(() => {
 afterEach(() => {
   state.layoutOwnerIsMain = true
   state.onStartupStep = null
+  state.placementRejects = false
   state.rekeyWorkerTerminalResourcePaneKey.mockClear()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
@@ -303,7 +317,24 @@ it('writes the repair before reconcile and RPC even when a profile write is in f
   await heldWrite
   const host = await startup
   try {
-    expect(diskAtStep).toEqual({ reconcile: [KEPT], 'rpc.start': [KEPT] })
+    expect(diskAtStep).toEqual({ reconcile: [KEPT], place: [KEPT], 'rpc.start': [KEPT] })
+  } finally {
+    await host.stop()
+  }
+})
+
+it('still starts serving when showing live terminals fails at startup', async () => {
+  await seedDuplicatePtyProfile()
+  vi.spyOn(agentHookServer, 'transferPaneAuthority').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  state.placementRejects = true
+  const steps: string[] = []
+  state.onStartupStep = (step) => steps.push(step)
+
+  const { startOrcad } = await import('./orcad-entry')
+  const host = await startOrcad({ noPairing: true, json: true })
+  try {
+    expect(steps).toEqual(['reconcile', 'place', 'rpc.start'])
   } finally {
     await host.stop()
   }

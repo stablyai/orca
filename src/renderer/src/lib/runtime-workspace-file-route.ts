@@ -10,6 +10,7 @@ import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type RuntimeWorkspaceFileRoute = {
   worktreeId: string
@@ -41,12 +42,12 @@ export function findWorkspaceFileRoute(
   executionHostId: ExecutionHostId,
   absolutePath: string
 ): RuntimeWorkspaceFileRoute | null {
-  const roots = getIndexedAllWorktrees(state.worktreesByRepo).flatMap((worktree) =>
+  const roots = getIndexedAllWorktrees(selectWorktreesByRepo(state)).flatMap((worktree) =>
     workspaceMatchesExecutionHost(state, worktree.id, executionHostId)
       ? [{ workspaceId: worktree.id, rootPath: worktree.path, executionHostId }]
       : []
   )
-  for (const workspace of state.folderWorkspaces) {
+  for (const workspace of selectFolderWorkspaces(state)) {
     const workspaceId = folderWorkspaceKey(workspace.id)
     if (workspaceMatchesExecutionHost(state, workspaceId, executionHostId)) {
       roots.push({ workspaceId, rootPath: workspace.folderPath, executionHostId })

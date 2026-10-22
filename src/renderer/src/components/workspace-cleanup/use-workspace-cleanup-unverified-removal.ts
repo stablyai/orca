@@ -14,7 +14,6 @@ import type {
 import { startWorkspaceCleanupBackgroundRemoval } from './workspace-cleanup-background-removal'
 import type { WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
-import { withWorkspaceCleanupFocusAfterDelete } from './workspace-cleanup-focus-after-delete'
 
 type UnverifiedRemovalArgs = {
   setRowFailures: Dispatch<SetStateAction<Record<string, WorkspaceCleanupFailure>>>
@@ -52,7 +51,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
       markQueued([hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId])
       startWorkspaceCleanupBackgroundRemoval({
         candidates: [candidate],
-        removeCandidates: withWorkspaceCleanupFocusAfterDelete(removeCandidates, [candidate]),
+        removeCandidates,
         snapshotPruneBatch: createWorkspaceCleanupSnapshotPruneBatch(),
         getRemoveOptions: () => ({
           unverifiedRemovalConsent: { identity, attemptId }

@@ -75,6 +75,9 @@ vi.mock('./BrowserTerminalLinkActionsSetting', () => ({
 vi.mock('./BrowserLocalhostWorktreeLabelsSetting', () => ({
   BrowserLocalhostWorktreeLabelsSetting: () => <span>Localhost row</span>
 }))
+vi.mock('./BrowserSitePermissionsSetting', () => ({
+  BrowserSitePermissionsSetting: () => <span>Site permissions row</span>
+}))
 vi.mock('./BrowserClientHostedRemoteSetting', () => ({
   BrowserClientHostedRemoteSetting: () => <span>Remote row</span>
 }))

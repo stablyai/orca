@@ -156,7 +156,8 @@ export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string
       }
       sender.send('fs:changed', {
         worktreePath: suspended.worktreePath,
-        events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }]
+        events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }],
+        resync: true
       } satisfies FsChangedPayload)
     } catch (error) {
       if (!isCurrentWatcherSender(sender, signal)) {

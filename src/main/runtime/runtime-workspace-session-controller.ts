@@ -6,10 +6,11 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { Repo } from '../../shared/repo-types'
 import { getFolderWorkspaceHostId } from '../../shared/folder-workspace-execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree/id'
 import { workspaceSessionPartitionHostId } from '../../shared/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { workspaceSessionListsTerminalTab } from '../../shared/workspace-session-terminal-tab-close'
@@ -79,11 +80,18 @@ export class RuntimeWorkspaceSessionController {
   private getTwinRepoHostId(
     store: RuntimeStore,
     repoId: string,
-    worktreeId: string
+    worktreeId: string,
+    repos?: readonly Repo[]
   ): ExecutionHostId | null {
-    return ORCA_LAYOUT_OWNER_IS_MAIN
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN || !splitWorktreeId(worktreeId)) {
+      return null
+    }
+    // Why: routing is hot; only a registered repo can have a twin, and getRepo skips hydrating every row.
+    const inventory = repos ?? (store.getRepo?.(repoId) ? store.getRepos?.() : undefined)
+    return inventory
       ? resolveTwinRepoSessionHostId(
           store,
+          inventory,
           repoId,
           worktreeId,
           this.deps.getCachedWorktrees?.() ?? null
@@ -248,7 +256,7 @@ export class RuntimeWorkspaceSessionController {
         const catalogOwnerHostId =
           scope?.type === 'folder'
             ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (this.getTwinRepoHostId(store, repoId, rawWorktreeId) ??
+            : (this.getTwinRepoHostId(store, repoId, rawWorktreeId, repos) ??
               repoHostIdByRepoId.get(repoId) ??
               LOCAL_EXECUTION_HOST_ID)
         const ownerHostId = this.resolveHostId(

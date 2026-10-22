@@ -772,9 +772,10 @@ describe('Store', () => {
   it('normalizes default browser zoom UI writes', async () => {
     const store = await createStore()
 
+    // 1.26 is about 130%, which snaps to Chrome's 125% preset.
     store.updateUI({ browserDefaultZoomLevel: 1.26 })
 
-    expect(store.getUI().browserDefaultZoomLevel).toBe(1.5)
+    expect(1.2 ** (store.getUI().browserDefaultZoomLevel ?? 0)).toBeCloseTo(1.25)
   })
 
   it('encrypts the Kagi session link on disk and decrypts it on load', async () => {

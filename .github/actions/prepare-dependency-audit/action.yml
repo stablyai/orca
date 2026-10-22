@@ -1,0 +1,28 @@
+name: Prepare release dependency audit data
+description: Extract only manifests, lockfiles, and patches without candidate executable configuration
+inputs:
+  ref:
+    required: true
+    description: Exact release ref to audit
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        RELEASE_REF: ${{ inputs.ref }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        git -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags --depth=1 origin "$RELEASE_REF"
+        mapfile -t files < <(git ls-tree -r FETCH_HEAD -- \
+          pnpm-lock.yaml pnpm-workspace.yaml mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml \
+          native config/patches mobile/patches | \
+          awk '$1 ~ /^100(644|755)$/ {sub(/^[^\t]*\t/, ""); print}' | \
+          rg '(^|/)(pnpm-lock.yaml|pnpm-workspace.yaml)$|^native/[^/]+/Cargo\.(toml|lock)$|^(config|mobile)/patches/.*\.patch$')
+        test "${#files[@]}" -gt 0
+        mkdir candidate
+        git archive --worktree-attributes FETCH_HEAD -- "${files[@]}" | tar -x -C candidate
+        for file in pnpm-lock.yaml pnpm-workspace.yaml mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml; do
+          test -f "candidate/$file"
+          test ! -L "candidate/$file"
+        done

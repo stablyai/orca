@@ -1,6 +1,10 @@
 import { AlertTriangle } from 'lucide-react'
 import React from 'react'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  OwnerNotSetUpPlaceholder,
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../shared/rate-limit-types'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
@@ -14,13 +18,18 @@ import {
   USAGE_WARNING_PERCENT,
   clampUsedPercent,
   getProviderDisplayName,
+  getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './tooltip'
+import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
 import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
 import { getStatusBarUsageSections } from './status-bar-usage-sections'
+import { GroupedPoolUsage } from './usage-grouped-pools'
+import { formatStatusBarSectionLabel, isGroupedUsagePool } from './usage-pool-label'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 
 function MiniBar({
   usedPct,
@@ -75,6 +84,26 @@ export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX
         className={`inline-block h-2 w-2 rounded-full ${hasData ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
       />
       {getProviderLetter(p.provider)}
+    </span>
+  )
+}
+
+// Why only the host name truncates: the phrase around it must stay readable in every locale.
+function OwnerNotSetUpLabel({
+  placeholder
+}: {
+  placeholder: OwnerNotSetUpPlaceholder
+}): React.JSX.Element {
+  const { before, host, after } = getOwnerNotSetUpLabelParts(placeholder)
+  return (
+    <span className="text-[11px] font-medium">
+      {before}
+      {host ? (
+        <span data-owner-host className="inline-block max-w-28 truncate align-bottom">
+          {host}
+        </span>
+      ) : null}
+      {after}
     </span>
   )
 }
@@ -225,6 +254,21 @@ export function ProviderSegment({
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
   // Why: not a problem; Claude updates its own login the next time it runs.
   const calm = p ? isClaudeUsageWaitingForClaude(p) : false
+  const tightest = p
+    ? mode === 'compact'
+      ? getUsageHeadlineSection(p)
+      : getTightestUsageSection(p)
+    : null
+  const sections = getStatusBarUsageSections(p, mode)
+  const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
+  const showLabels = mode === 'verbose' || !compact
+  const now = useResetCountdownClock(
+    showLabels
+      ? groupedBuckets
+          .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT)
+          .map((bucket) => bucket.resetsAt)
+      : []
+  )
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -235,8 +279,6 @@ export function ProviderSegment({
       </span>
     )
   }
-
-  const tightest = mode === 'compact' ? getUsageHeadlineSection(p) : getTightestUsageSection(p)
 
   // Fetching with no prior data
   if (p.status === 'fetching' && !tightest) {
@@ -257,6 +299,20 @@ export function ProviderSegment({
     )
   }
 
+  // Set up on this device but not on the owning host: labelled like a failure, minus the alarm
+  if (p.usageMetadata?.ownerNotSetUp) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-muted-foreground"
+        title={getProviderUsageErrorMessage(p)}
+      >
+        <ProviderIcon provider={provider} />
+        {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
+        {compact ? '--' : <OwnerNotSetUpLabel placeholder={p.usageMetadata.ownerNotSetUp} />}
+      </span>
+    )
+  }
+
   // Error with no data
   if (p.status === 'error' && !tightest) {
     return (
@@ -271,7 +327,8 @@ export function ProviderSegment({
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error' && !calm
   const showBalance = isExtraUsageActive(p)
-  const sections = getStatusBarUsageSections(p, mode)
+  const showGroupedPools =
+    mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -279,18 +336,27 @@ export function ProviderSegment({
       {mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
-      {sections.map((section, index) => (
-        <React.Fragment key={section.key}>
-          {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-          <WindowLabel
-            w={section.window}
-            label={section.label}
-            display={display}
-            showLabel={mode === 'verbose' || !compact}
-            labelFirst={section.labelFirst}
-          />
-        </React.Fragment>
-      ))}
+      {showGroupedPools ? (
+        <GroupedPoolUsage
+          visibleBuckets={groupedBuckets}
+          allBuckets={p.buckets ?? []}
+          display={display}
+          now={now}
+        />
+      ) : (
+        sections.map((section, index) => (
+          <React.Fragment key={section.key}>
+            {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+            <WindowLabel
+              w={section.window}
+              label={formatStatusBarSectionLabel(p, section, now)}
+              display={display}
+              showLabel={showLabels}
+              labelFirst={section.labelFirst}
+            />
+          </React.Fragment>
+        ))
+      )}
       {showBalance && p.extraUsage ? (
         <>
           <span className="text-muted-foreground">·</span>

@@ -126,7 +126,7 @@ it('keeps real rows through partial rescans, detached keys and failed retries', 
   }
   expect(view.getByText('12 files')).toBeTruthy()
   expect(panel.container.querySelectorAll('.animate-spin').length).toBe(1)
-  expect(view.getByText('Reading', { exact: false })).toBeTruthy()
+  expect(view.getByText('Checking', { exact: false })).toBeTruthy()
   // Finished before the list it produced is applied: still one row, now settled.
   act(() => push({ scanKey: 'worktree-a', progress: next }))
   expect(view.getByText('Scanned', { exact: false })).toBeTruthy()
@@ -160,4 +160,19 @@ it('keeps real rows through partial rescans, detached keys and failed retries', 
   }
   act(() => push({ scanKey: 'worktree-c', progress: { ...next, agents: [FINISHED.agents[0]!] } }))
   expect(rowCount()).toBe(1)
+})
+
+it('shows settled candidate work and keeps older snapshots without skipped compatible', () => {
+  const reading: AiVaultScanProgress = {
+    ...FINISHED,
+    stage: 'reading',
+    settledAt: null,
+    read: { done: 3, total: 10, skipped: 4 }
+  }
+  const panel = render(<AiVaultScanProgressStrip progress={reading} />)
+  expect(screen.getByRole('button').textContent).toContain('Checking 7 / 10')
+  panel.rerender(
+    <AiVaultScanProgressStrip progress={{ ...reading, read: { done: 3, total: 10 } }} />
+  )
+  expect(screen.getByRole('button').textContent).toContain('Checking 3 / 10')
 })

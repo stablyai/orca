@@ -114,7 +114,7 @@ it('forwards the opt-in and pinned runtime only when compilation is needed', () 
 })
 
 it.each(['ssh-windows-hosts', 'node-server-tests'])(
-  'opts in only in prepared Windows PR packaging in %s',
+  'opts in only after Windows preparation, retaining the SSH PR boundary in %s',
   (name) => {
     const workflow = parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
     const job = workflow.jobs[name === 'ssh-windows-hosts' ? 'hosts' : 'persistence']
@@ -140,7 +140,7 @@ it.each(['ssh-windows-hosts', 'node-server-tests'])(
             }
           )
           expect(enabled).toBe(
-            event === 'pull_request' &&
+            (name === 'node-server-tests' || event === 'pull_request') &&
               outcome === 'success' &&
               (name === 'ssh-windows-hosts' || os === 'Windows')
           )

@@ -27,10 +27,10 @@ export type PendingViewControls = {
   sendCollapse: (key: string, collapsed: boolean) => Promise<PendingViewOutcome>
   /** The last change sent; a read sent after it judges every change up to it. */
   lastOpId: () => number
-  /** The changes still waiting once the desktop's values are read; after a reconnect each is resent. */
+  /** The changes still waiting once the desktop's values are read; `resend` sends each again. */
   reconcile: (
     ui: WorkspaceViewSettings,
-    options: { reconnected: boolean; sentByOpId: number }
+    options: { resend: boolean; sentByOpId: number }
   ) => PendingViewChange[]
 }
 
@@ -121,12 +121,12 @@ function useHostPendingViewChanges(client: RpcClient | null): HostPendingViewCha
   )
   const lastOpId = useCallback(() => seqRef.current, [])
   const reconcile = useCallback(
-    (ui: WorkspaceViewSettings, options: { reconnected: boolean; sentByOpId: number }) => {
+    (ui: WorkspaceViewSettings, options: { resend: boolean; sentByOpId: number }) => {
       const waiting = reconcilePendingViewChanges(current(), ui, options.sentByOpId)
       if (waiting.length !== current().length) {
         write(waiting)
       }
-      if (options.reconnected) {
+      if (options.resend) {
         // Each sets a desired value, so sending one again is safe.
         waiting.forEach((change) => void send(change))
       }

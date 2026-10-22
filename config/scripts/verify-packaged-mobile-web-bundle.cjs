@@ -2,6 +2,8 @@ const { createHash } = require('node:crypto')
 const { readFileSync, readdirSync, statSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 
+const { darkBuildMarkerFileNames } = require('../dark-build-switches.cjs')
+
 const projectDir = resolve(__dirname, '..', '..')
 const MOBILE_WEB_BUNDLE_DIR = join(projectDir, 'out', 'mobile-web')
 const REMEDY = 'Run pnpm build:mobile-web (build:desktop and build:release already do).'
@@ -141,7 +143,12 @@ function listBundleFiles(directory, prefix = '') {
  * the installer; content-addressed names mean stale copies never get overwritten.
  */
 function assertNoUnlistedFiles(bundleDir, manifest) {
-  const listed = new Set(['manifest.json', ...manifest.assets.map((asset) => asset.path)])
+  // A dark build's marker is accounted for here; packaging refuses it through assertNotDarkBuild.
+  const listed = new Set([
+    'manifest.json',
+    ...darkBuildMarkerFileNames(),
+    ...manifest.assets.map((asset) => asset.path)
+  ])
   const strays = listBundleFiles(bundleDir).filter((path) => !listed.has(path))
   if (strays.length > 0) {
     throw failure(

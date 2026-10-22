@@ -45,6 +45,8 @@ const { resolveNativeChatSkillDiscoveryContext, selectNativeChatSkillStateInputs
   await import('@/components/native-chat/native-chat-skill-discovery-context')
 const { mirroredRuntimeEnvironmentIdForWorkspace } =
   await import('@/runtime/web-session-tabs-sync/mirrored-workspace-owner')
+const { resolveStructuredAgentSessionOwner } =
+  await import('@/runtime/structured-agent-session-owner')
 
 const RUNTIME_HOST: ExecutionHostId = `runtime:${TWIN_RUNTIME_ENV}`
 
@@ -211,6 +213,51 @@ describe('folder workspace twin', () => {
       })
     }
   )
+})
+
+describe('a new structured chat', () => {
+  it.each<HostTwinKind>(['folder local+ssh', 'folder group local+ssh'])(
+    'refuses a %s twin instead of starting on this computer',
+    (kind) => {
+      const { store, workspaceKey } = bind(createHostTwinFixture(kind))
+      expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBeNull()
+      store.setState({ activeWorktreeId: workspaceKey, activeWorkspaceExecutionHostId: null })
+      expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBeNull()
+    }
+  )
+
+  it('refuses an active worktree twin with no copy picked, and starts on the picked one', () => {
+    const { store, workspaceKey } = bind(createHostTwinFixture('local+runtime'))
+    store.setState({ activeWorktreeId: workspaceKey, activeWorkspaceExecutionHostId: null })
+    expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBeNull()
+    store.setState({ activeWorkspaceExecutionHostId: RUNTIME_HOST })
+    expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBe(RUNTIME_HOST)
+  })
+
+  it("starts on the copy the user picked, and on a lone unstamped folder's computer", () => {
+    const { store, workspaceKey, projectId } = bind(createHostTwinFixture('folder local+ssh'))
+    store.setState({ activeWorktreeId: workspaceKey, activeWorkspaceExecutionHostId: 'local' })
+    expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBe('local')
+    store.setState({
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: null,
+      projectGroups: [],
+      folderWorkspaces: [makeFolderWorkspace({ id: projectId, folderPath: '/work/twin' })]
+    })
+    expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBe('local')
+  })
+
+  it('starts a lone unstamped worktree on this computer', () => {
+    const fixture = bind(createHostTwinFixture('local+ssh'))
+    const { store, workspaceKey, projectId } = fixture
+    store.setState({
+      repos: store.getState().repos.filter((repo) => !repo.connectionId),
+      worktreesByRepo: {
+        [projectId]: [makeWorktree({ id: workspaceKey, repoId: projectId, path: '/work/twin' })]
+      }
+    })
+    expect(resolveStructuredAgentSessionOwner(store.getState(), workspaceKey)).toBe('local')
+  })
 })
 
 describe('a workspace selected on the unresolved-owner sentinel', () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
+import { startSocketDeadlineClock } from './socket-deadline-clock'
 
 type AppStateListener = (next: string) => void
 type NetworkSnapshot = { isConnected?: boolean; type?: string }
@@ -13,6 +14,7 @@ const networkRemove = vi.fn()
 
 vi.mock('react-native', () => ({
   AppState: {
+    currentState: 'active',
     addEventListener: (_event: string, listener: AppStateListener) => {
       appStateListener = listener
       return { remove: appStateRemove }
@@ -53,6 +55,27 @@ describe('subscribeConnectionRevivalTriggers', () => {
     expect(nudge).not.toHaveBeenCalled()
     appStateListener?.('active')
     expect(nudge).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps elapsed background time when a device sleep pauses the monotonic clock', async () => {
+    let wall = 1_000
+    let monotonic = 50
+    const wallClock = vi.spyOn(Date, 'now').mockImplementation(() => wall)
+    const monotonicClock = vi.spyOn(performance, 'now').mockImplementation(() => monotonic)
+    const unsubscribe = await subscribeAndSeed(nudge)
+    const elapsed = startSocketDeadlineClock()
+    try {
+      appStateListener?.('background')
+      wall += 3 * 60 * 60_000
+      monotonic += 12_000
+      appStateListener?.('active')
+      expect(elapsed()).toBe(3 * 60 * 60_000)
+      expect(nudge).toHaveBeenCalledTimes(1)
+    } finally {
+      unsubscribe()
+      wallClock.mockRestore()
+      monotonicClock.mockRestore()
+    }
   })
 
   it('nudges when the network comes back online', async () => {

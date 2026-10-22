@@ -27,6 +27,7 @@ export type StructuredAgentLaunchSettlement =
   | { kind: 'terminal' }
 
 export type StructuredAgentLaunchHooks = {
+  activate?: boolean
   onStructuredReady?: (sessionId: string) => void
   /** Abort the moment the caller abandons the launch. The loop cancels on the event, not only by
    *  polling after awaits, so a staged prompt is discarded before it can reach the provider. */
@@ -110,6 +111,7 @@ export function beginStructuredAgentLaunchSettlement(
 ): StructuredAgentLaunchHandle {
   const launch = startStructuredAgentLaunch(worktreeId, agent, {
     ...options,
+    ...(hooks.activate !== undefined ? { activate: hooks.activate } : {}),
     ...(hooks.beforeCreate ? { beforeCreate: hooks.beforeCreate } : {})
   })
   // Joining transfers no source ownership to the already independent destination.

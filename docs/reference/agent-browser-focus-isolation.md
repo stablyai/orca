@@ -17,18 +17,18 @@ A `<webview>` guest is an inner WebContents in the window's frame tree. Chromium
 that tree's focus, not by which debugger the command arrived on. A hidden-window probe (host
 `<textarea>` focused, guest page logging its own events) measured:
 
-| Input | Where it lands | Host focus |
-| --- | --- | --- |
-| CDP `Input.dispatchKeyEvent` / `Input.insertText` on the guest's main session | **host textarea** | kept |
-| same, with `Emulation.setFocusEmulationEnabled` | **host textarea** | kept |
-| `webContents.sendInputEvent` key / `char` on the guest | guest | kept |
-| CDP key / `insertText` on a cross-site iframe's own (auto-attached) session | that iframe | kept |
-| `webContents.insertText` with focus in a cross-site iframe | **guest renderer crashed** | — |
-| `sendInputEvent` key with focus in a same-site iframe | that iframe | kept |
-| any mouse press (CDP mouse, touch, tap gesture, `sendInputEvent`) | guest | **moved to the webview** |
-| `inert` / `tabindex=-1` on the `<webview>` during the press | guest | **moved** |
-| press + synchronous host restore on the `<webview>` `focus` event | guest | restored, next user key lands in the host |
-| the restore above with focus emulation enabled first | guest | **not restored** (the host `focus` event never fires) |
+| Input                                                                         | Where it lands             | Host focus                                            |
+| ----------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| CDP `Input.dispatchKeyEvent` / `Input.insertText` on the guest's main session | **host textarea**          | kept                                                  |
+| same, with `Emulation.setFocusEmulationEnabled`                               | **host textarea**          | kept                                                  |
+| `webContents.sendInputEvent` key / `char` on the guest                        | guest                      | kept                                                  |
+| CDP key / `insertText` on a cross-site iframe's own (auto-attached) session   | that iframe                | kept                                                  |
+| `webContents.insertText` with focus in a cross-site iframe                    | **guest renderer crashed** | —                                                     |
+| `sendInputEvent` key with focus in a same-site iframe                         | that iframe                | kept                                                  |
+| any mouse press (CDP mouse, touch, tap gesture, `sendInputEvent`)             | guest                      | **moved to the webview**                              |
+| `inert` / `tabindex=-1` on the `<webview>` during the press                   | guest                      | **moved**                                             |
+| press + synchronous host restore on the `<webview>` `focus` event             | guest                      | restored, next user key lands in the host             |
+| the restore above with focus emulation enabled first                          | guest                      | **not restored** (the host `focus` event never fires) |
 
 With focus emulation on, the press still moves focus and the restore on the `focus` event never
 runs, but restoring when the press ends works and the page sees no blur, so a menu or picker the
@@ -75,25 +75,32 @@ popup and copies every frame. It stays an experiment, not the fix.
    If the pane does not answer, the input is refused with `browser_focus_guard_unavailable`
    rather than sent. Agent Tab keys take the same guard, because Tab from the page's last field
    moves focus out of the guest into Orca's window.
+   While the user's IME composition is open the pane answers `composing` and main refuses the
+   input, because the blur would commit the unfinished text (into a terminal, that sends it to
+   the shell). It is refused rather than held, so a press cannot outlive its agent or land in the
+   user's next composition. Direct commands report `browser_user_composing`; commands run through
+   the agent-browser helper, like `click`, report `browser_error` with the same retry message.
 4. **Agent keys are marked as the agent's.** While agent input is injected, the guest's Orca
    shortcut and grab handlers ignore keys and `setIgnoreMenuShortcuts` keeps unhandled keys
    from Orca's app menu, so an agent's Cmd/Ctrl+T, W or Ctrl+Tab stays in the page. Measured:
    synthetic input never fired the guest's `before-input-event`; the mark is the guarantee.
 
 Known gaps: the user's element is blurred for the length of one agent press, so keys typed in that
-window reach the page and an in-progress IME composition is lost. Edit commands (`selectAll`,
-`paste`, ...) run even when the page cancels the key. Focus emulation stays on while the debugger
-is attached, so a page the user really leaves sees no blur, and it covers the main frame only, so
-a menu inside a cross-site frame can still close. A pane that misses the 150 ms ready window
-refuses that input. Only offscreen rendering removes the first gap.
+window reach the page, and a composition started between the pane's answer and the press is still
+committed. Edit commands (`selectAll`, `paste`, ...) run even when the page cancels the key. Focus
+emulation stays on while the debugger is attached, so a page the user really leaves sees no blur,
+and it covers the main frame only, so a menu inside a cross-site frame can still close. A pane
+that misses the 150 ms ready window refuses that input. Only offscreen rendering removes the first
+two gaps.
 
 ## Tracker
 
-| Step | PR | State |
-| --- | --- | --- |
-| CDP focus side effects removed (`bringToFront`, `activateTarget`) + this doc | stack 1/3 | in review |
-| Keys and text delivered to the guest directly | stack 2/3 | in review |
-| Presses and CDP-only input borrow focus and give it back; focus emulation | stack 3/3 | in review |
-| Regression spec: user typing in a terminal while an agent clicks, types and presses keys | stack 2/3, 3/3 | in review |
-| Visible-window spec (`@headful`, isolated display only): native focus stays on Orca's window | stack 3/3 | in review |
-| Main-session keys and text for a focused cross-site iframe go to its own session, no focus borrow | follow-up PR | in review |
+| Step                                                                                              | PR             | State     |
+| ------------------------------------------------------------------------------------------------- | -------------- | --------- |
+| CDP focus side effects removed (`bringToFront`, `activateTarget`) + this doc                      | stack 1/3      | in review |
+| Keys and text delivered to the guest directly                                                     | stack 2/3      | in review |
+| Presses and CDP-only input borrow focus and give it back; focus emulation                         | stack 3/3      | in review |
+| Regression spec: user typing in a terminal while an agent clicks, types and presses keys          | stack 2/3, 3/3 | in review |
+| Visible-window spec (`@headful`, isolated display only): native focus stays on Orca's window      | stack 3/3      | in review |
+| Main-session keys and text for a focused cross-site iframe go to its own session, no focus borrow | follow-up PR   | in review |
+| Agent presses are refused while the user's IME composition is open (#28700)                       | follow-up PR   | in review |

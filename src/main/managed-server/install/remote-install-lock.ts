@@ -1,6 +1,6 @@
 import type { RemoteInstallTransport } from './remote-install-transport'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
-import { RELAY_DEPLOY_TIMEOUT_MS } from './remote-deploy-timing'
+import { REMOTE_INSTALL_TIMEOUT_MS } from './remote-deploy-timing'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { isRelayGcClaimed, waitForRelayGcClaimRelease } from './remote-install-gc-claim'
 import {
@@ -19,18 +19,13 @@ import {
 import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
 
-export { RELAY_INSTALL_LOCK_NAME }
-
 const INSTALL_LOCK_POLL_MS = 1_000
 // Why: a fresh lock can cross the stale threshold during our bounded wait.
 // Recheck infrequently so it becomes recoverable without adding an exec per poll.
 const INSTALL_LOCK_STALE_RECHECK_MS = 60_000
-// Why: the lock holder can legitimately use the full deploy bound for upload,
-// native install/rebuild, probes, and finalization. A concurrent first install
-// must not fail earlier; completed-relay repair uses a separate one-shot path.
-const INSTALL_LOCK_TIMEOUT_MS = RELAY_DEPLOY_TIMEOUT_MS
-// Why: native-deps repair can keep running after the deploy backstop wins its
-// Promise.race, so stale takeover must leave room for that bounded work.
+// Why: a waiter gives the holder at least one full install step's bound before giving up.
+const INSTALL_LOCK_TIMEOUT_MS = REMOTE_INSTALL_TIMEOUT_MS
+// Why longer: a holder's step can outlive the bound that raced it, so takeover leaves it room.
 export const INSTALL_LOCK_STALE_MS = 20 * 60_000
 export const INSTALL_LOCK_STALE_SECONDS = INSTALL_LOCK_STALE_MS / 1000
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
@@ -38,7 +33,7 @@ const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 export class RemoteInstallLockBusyError extends Error {
   constructor(lockDir: string, timeoutMs: number) {
     super(
-      `Could not acquire relay install lock at ${lockDir} after ${timeoutMs / 1000}s; ` +
+      `Could not acquire the install lock at ${lockDir} after ${timeoutMs / 1000}s; ` +
         'another install is still in progress.'
     )
     this.name = 'RemoteInstallLockBusyError'
@@ -182,7 +177,7 @@ export async function acquireInstallLock(
         if (exitedOwner && reason === 'exited-owner') {
           options?.exitedOwner?.reclaimed(exitedOwner.token)
         }
-        console.warn(`[ssh-relay] Stealing ${reason} install lock at ${lockDir}`)
+        console.warn(`[ssh] Stealing ${reason} install lock at ${lockDir}`)
         if (await keptAfterGcRecheck()) {
           return
         }
@@ -190,7 +185,7 @@ export async function acquireInstallLock(
     }
     if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {
       lastWaitLogAt = Date.now()
-      console.info(`[ssh-relay] Waiting for install lock at ${lockDir}`)
+      console.info(`[ssh] Waiting for install lock at ${lockDir}`)
     }
     if (Date.now() - start >= waitTimeoutMs) {
       if (!sawHolder && lastCommandError !== undefined) {

@@ -74,6 +74,6 @@ describe('renderer spawn commit: run facts', () => {
     expect(outcome).toBe('discarded')
     expect(persistPtyBinding).toHaveBeenCalledOnce()
     expect(facts.read(PTY_ID, INCARNATION_ID).freshSpawn).toBe(false)
-    expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['reversible'])
+    expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['replaced'])
   })
 })

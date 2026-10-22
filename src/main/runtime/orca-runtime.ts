@@ -21,7 +21,7 @@ import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invali
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
-import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import { WorkspaceLayoutStream, type WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import {
@@ -37,6 +37,10 @@ import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-l
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
 import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import {
+  installStructuredAgentAvailability,
+  type StructuredAgentAvailabilityReader
+} from './structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
@@ -91,10 +95,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   readonly workspaceRows = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new WorkspaceRowsProducer({
         store: this.store,
-        // Merged fresh (git scans keep their own cache): the window's metadata writes emit no
-        // client event, so the shared listing may predate them.
-        listVisibleWorktrees: async () =>
-          this.visibleResolvedWorktreeSnapshot(await this.computeResolvedWorktrees()),
+        // Its own scans, not the shared listing: metadata joins at read, so no write waits on git.
+        scan: () => this.scanResolvedWorktreeRepos(),
+        join: (scans) => this.joinResolvedWorktreeScans(scans),
+        visible: (snapshot) => this.visibleResolvedWorktreeSnapshot(snapshot),
+        lifecycle: this.workspaceLifecycle,
         onClientEvent: (listener, options) => this.onClientEvent(listener, options)
       })
     : null
@@ -105,7 +110,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
           sidebarInputsFeedDomains({
             facts: requireSwitchedOn(this.sidebarFacts),
             pairedServerRows: requireSwitchedOn(this.pairedServerRows),
-            workspaceCreations: requireSwitchedOn(this.workspaceCreations),
+            workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
             workspaceRows: requireSwitchedOn(this.workspaceRows),
             repoIcons: requireSwitchedOn(this.repoIconDataUrls),
             store: () => this.store,
@@ -178,6 +183,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
+  private structuredAgentAvailability?: ReturnType<typeof installStructuredAgentAvailability>
+
+  /** This host's agent health snapshot and every replacement, from first use; returns the release. */
+  subscribeStructuredAgentAvailability(read: StructuredAgentAvailabilityReader): () => void {
+    this.structuredAgentAvailability ??= installStructuredAgentAvailability(this.store, this)
+    return this.structuredAgentAvailability.subscribe(read)
+  }
+
   /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
   canPublishAgentLaunchTab(): boolean {
     return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
@@ -237,7 +250,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     store: () => this.store,
     homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
     // An empty title is no title.
-    liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null
+    liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
+    ...this.paneFactSources()
   })
 
   protected markPaneLiveTitlesDirty(): void {
@@ -251,26 +265,30 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.workspaceLayoutStream.subscribe(listener)
   }
 
+  /** Main's one layout projection for readers beside the stream, with or without a window. */
+  get workspaceLayoutReads(): WorkspaceLayoutReads {
+    return this.workspaceLayoutStream
+  }
+
   /** A window's layout command (`layout.apply`), applied to the partitions that hold its tab. */
   async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
+    // A workspace's first surface comes after the live terminals main is placing.
+    const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
       applyWindowLayoutCommand(
         this.requireStore(),
-        (worktreeId, tabId) => {
-          if (tabId !== null) {
-            return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
-          }
-          const routed = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
-          return routed ? [routed] : []
-        },
+        (worktreeId, tabId) =>
+          tabId !== null
+            ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
+            : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
-        (move) => rekeyMovedPaneOwners(this, move)
+        (move) => rekeyMovedPaneOwners(this, move),
+        this.layoutCommandRun(command)
       )
     // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
-    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN &&
-    (command.type === 'sleep' || command.type === 'wake')
+    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
       ? this.inResumeRecordOrder(apply)
-      : apply())
+      : (placing?.then(apply) ?? apply()))
     // Sent before the reply, so the window can wait for the frame that shows the change.
     return { ...reply, frameSeq: this.workspaceLayoutStream.settledSeq() }
   }

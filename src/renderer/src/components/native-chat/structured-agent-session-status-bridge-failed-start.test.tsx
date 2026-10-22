@@ -52,7 +52,6 @@ vi.mock('@/store', async () => {
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => null,
   getExecutionHostIdForWorktree: () => 'local'
 }))
 

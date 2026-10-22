@@ -7,8 +7,8 @@
  * their ordinary sleeping state, and waking them later restores them from it, so nothing is lost.
  */
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
-import type { WslMoveExitProof } from './wsl-move-exit-proof'
-import type { WslMoveRestoreHintCapture } from './wsl-move-restore-hints'
+import type { WslMoveExitProof, WslMoveExitProofScope } from './wsl-move-exit-proof'
+import type { WslMoveRestoreHintCapture, WslMoveRestoreHintPane } from './wsl-move-restore-hints'
 import {
   assessWslMoveTerminals,
   type WslMoveGateBlocker,
@@ -20,8 +20,8 @@ export type WslMoveQuiesceScope = {
   workspaceIds: readonly string[]
   /** Workspace keys as session ids mint them, for the exit proof. */
   workspaceKeys: ReadonlySet<string>
-  /** The panes the move carries, with the daemon session each one recorded. */
-  panes: readonly { paneKey: string; sessionId: string }[]
+  /** The panes the move carries, with each one's daemon session and its distro read before Sleep. */
+  panes: readonly WslMoveRestoreHintPane[]
 }
 
 export type WslMoveQuiesceDeps = {
@@ -34,10 +34,7 @@ export type WslMoveQuiesceDeps = {
     panes: WslMoveQuiesceScope['panes'],
     distro: string
   ) => Promise<WslMoveRestoreHintCapture>
-  proveExited: (scope: {
-    workspaceKeys: ReadonlySet<string>
-    sessionIds: ReadonlySet<string>
-  }) => Promise<WslMoveExitProof>
+  proveExited: (scope: WslMoveExitProofScope) => Promise<WslMoveExitProof>
   writeCutover: (cutover: WslMoveCutover) => void
   removeCutover: (migrationId: string) => void
   now: () => Date
@@ -186,7 +183,7 @@ async function proveAndRecord(
   const restoreHints = await deps.captureRestoreHints(scope.panes, distro)
   const sessionIds = new Set(scope.panes.map((pane) => pane.sessionId))
   // Last, so a session that came back while the hints were read still refuses.
-  const proof = await deps.proveExited({ workspaceKeys: scope.workspaceKeys, sessionIds })
+  const proof = await deps.proveExited({ distro, workspaceKeys: scope.workspaceKeys, sessionIds })
   if (proof.verdict === 'live') {
     return refuse({ reason: 'terminals-live', liveSessionIds: proof.sessionIds })
   }

@@ -11,6 +11,7 @@ import type { JournalLoad } from './journal-open'
 import type { AgentJournalEpochReason } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 import type { JournalWriteBody } from './journal-write-queue'
+import type { JournalOperationReceipt } from './journal-row-writer'
 
 export class JournalEpochController {
   constructor(
@@ -60,7 +61,8 @@ export class JournalEpochController {
   replace(
     reason: AgentJournalEpochReason,
     fence: number,
-    items: readonly JournalReplacementItem[]
+    items: readonly JournalReplacementItem[],
+    receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
@@ -71,6 +73,7 @@ export class JournalEpochController {
         reason,
         fence,
         items,
+        receipt,
         previous: this.deps.state(),
         queuePause: this.deps.queuePauseRestatement(),
         now: this.deps.now,

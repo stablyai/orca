@@ -77,6 +77,27 @@ describe('buildWorktreeRenameState value-owned worktree rows', () => {
     })
   })
 
+  it('re-points a paired-host tab close intent onto the new worktree id', () => {
+    const next = buildWorktreeRenameState(
+      appState({
+        pairedTerminalTabCloseIntentsByEnvironment: {
+          'env-1': [
+            { hostTabIds: ['host-1'], worktreeId: OLD, closedAt: 3, pairingRevision: 1 },
+            { hostTabIds: ['host-2'], worktreeId: OTHER, closedAt: 4 }
+          ]
+        }
+      }),
+      OLD,
+      NEW
+    )
+    expect(next.pairedTerminalTabCloseIntentsByEnvironment).toEqual({
+      'env-1': [
+        { hostTabIds: ['host-1'], worktreeId: NEW, closedAt: 3, pairingRevision: 1 },
+        { hostTabIds: ['host-2'], worktreeId: OTHER, closedAt: 4 }
+      ]
+    })
+  })
+
   it('emits neither map when no row names the renamed worktree', () => {
     const next = buildWorktreeRenameState(
       appState({
@@ -90,5 +111,6 @@ describe('buildWorktreeRenameState value-owned worktree rows', () => {
     )
     expect(Object.hasOwn(next, 'closedTerminalTabTombstonesByTabId')).toBe(false)
     expect(Object.hasOwn(next, 'clientHostedBrowserCloseIntentsByEnvironment')).toBe(false)
+    expect(Object.hasOwn(next, 'pairedTerminalTabCloseIntentsByEnvironment')).toBe(false)
   })
 })

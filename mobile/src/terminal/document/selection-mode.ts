@@ -2,6 +2,8 @@ import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
 import { repositionOverlay, stopEdgeScroll } from './selection-overlay'
 import { seedWordSelection } from './selection-range'
+import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
+import { stopSurfaceTouchGestures } from './surface-touch-gestures'
 
 // Why: entering and leaving select mode drives the overlay; kept out of selection-range so the
 // range math the overlay reads doesn't import the overlay back.
@@ -27,6 +29,8 @@ export function cancelSelect(scope: TerminalDocumentScope) {
 }
 
 export function enterSelect(scope: TerminalDocumentScope, col: number, absRow: number) {
+  stopSurfaceTouchGestures(scope)
+  resetSmoothScrollOffset(scope)
   scope.selMode = 'select'
   seedWordSelection(scope, col, absRow)
   scope.selectionOverlay!.classList.add('active')

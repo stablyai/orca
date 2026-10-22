@@ -1,3 +1,4 @@
+import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
@@ -29,7 +30,6 @@ export const ptySessionControlApi = {
     cols: number
     rows: number
     cwd?: string
-    cwdFallback?: 'worktree'
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
@@ -119,8 +119,8 @@ export const ptySessionControlApi = {
   resetInputModes: (id: string): void => {
     ipcRenderer.send('pty:resetInputModes', { id })
   },
-  ackColdRestore: (id: string): void => {
-    ipcRenderer.send('pty:ackColdRestore', { id })
+  ackColdRestore: (id: string, pane?: PaintedRestorePane): void => {
+    ipcRenderer.send('pty:ackColdRestore', pane ? { id, pane } : { id })
   },
   ackHiddenOutputRestoreApplied: (id: string, hiddenDropEpisode?: number): void => {
     ipcRenderer.send('pty:hiddenOutputRestoreApplied', { id, hiddenDropEpisode })

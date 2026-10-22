@@ -27,6 +27,8 @@ export type CodexJournalTranslatorDeps = {
   acquisitionId?: string
   /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
   sessionId?: string
+  /** Catch-up imports use turn-qualified identities without changing live/resume keys. */
+  historyImport?: true
   now?: () => number
   bindPromptItemId?: (
     journalItemId: string,

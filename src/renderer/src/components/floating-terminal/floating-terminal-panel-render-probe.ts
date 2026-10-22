@@ -56,22 +56,6 @@ export function findByTypeName(node: unknown, typeName: string): ReactElementLik
   return found
 }
 
-export function findAllByTypeName(node: unknown, typeName: string): ReactElementLike[] {
-  const found: ReactElementLike[] = []
-  visit(node, (entry) => {
-    const candidate =
-      typeof entry.type === 'function' || typeof entry.type === 'object'
-        ? ((entry.type as { displayName?: string; name?: string }).displayName ??
-          (entry.type as { displayName?: string; name?: string }).name ??
-          '')
-        : entry.type
-    if (candidate === typeName) {
-      found.push(entry)
-    }
-  })
-  return found
-}
-
 export function findByProp(node: unknown, propName: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {

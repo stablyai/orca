@@ -104,7 +104,7 @@ beforeEach(() => {
 })
 
 describe('the tab menu offers exactly what the Session History row offers', () => {
-  it('Resume in New Native Chat for a CLI conversation', () => {
+  it('Switch to Chat for a CLI conversation', () => {
     const state = useAppStore.getState()
     const session = row()
     const subject: TabSessionHistorySubject = {
@@ -140,7 +140,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     ).toBeNull()
   })
 
-  it("Resume in New Native Chat in the conversation's own worktree when that differs", () => {
+  it("Switch to Chat in the conversation's own worktree when that differs", () => {
     const state = useAppStore.getState()
     const session = row({ cwd: '/repo/sibling' })
     const panel = panelTargets(state, session)
@@ -157,7 +157,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     ).toEqual({ action: 'resume-in-new-chat', worktreeId: SIBLING_ID })
   })
 
-  it('Resume in New CLI for a native chat, and nothing once it has no saved turns', () => {
+  it('Switch to Terminal for a native chat, and nothing once it has no saved turns', () => {
     const state = useAppStore.getState()
     const subject: TabSessionHistorySubject = {
       kind: 'chat',
@@ -181,7 +181,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     expect(resolveTabSessionSwitch(state, emptyChat, subject)).toBeNull()
   })
 
-  it("Resume in New Native Chat in the conversation's own folder workspace", () => {
+  it("Switch to Chat in the conversation's own folder workspace", () => {
     useAppStore.setState({
       folderWorkspaces: [
         {

@@ -45,7 +45,7 @@ function lockDir(host: RemoteHostPlatform, storeDir: string): string {
   return joinRemotePath(host, storeDir, RUNTIME_STORE_LOCK_NAME)
 }
 
-function posixReleaseOwnedLockCommand(
+export function posixReleaseOwnedLockCommand(
   host: RemoteHostPlatform,
   lock: string,
   owner: InstallLockOwnerFile

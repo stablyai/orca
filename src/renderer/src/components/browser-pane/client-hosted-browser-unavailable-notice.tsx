@@ -13,6 +13,7 @@ import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat
 } from './ReopenBrowserPageOnServerButton'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 /**
  * What a client-hosted page shows when its guest is not here: the page belongs to another desktop,
@@ -42,6 +43,12 @@ export function ClientHostedBrowserUnavailableNotice({
       ? (s.runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)
           ?.name ?? null)
       : null
+  })
+  // Why: a runtime known to have no browser of its own (orcad) cannot take the page back.
+  const runtimeCanHostPage = useAppStore((s) => {
+    const capabilities =
+      s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status?.capabilities
+    return !capabilities || capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
   })
   const ownHostClientId = readBrowserClientHostId()
   const onOtherDesktop = Boolean(
@@ -78,12 +85,16 @@ export function ClientHostedBrowserUnavailableNotice({
           {translate('browser.clientHosted.unavailableTitle', 'Client-hosted browser unavailable')}
         </div>
         <div className="text-xs leading-5 text-muted-foreground">{description}</div>
-        <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat()}</div>
-        <ReopenBrowserPageOnServerButton
-          environmentId={runtimeEnvironmentId}
-          worktreeId={worktreeId}
-          lastCommittedUrl={lastCommittedUrl}
-        />
+        {runtimeCanHostPage ? (
+          <>
+            <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat()}</div>
+            <ReopenBrowserPageOnServerButton
+              environmentId={runtimeEnvironmentId}
+              worktreeId={worktreeId}
+              lastCommittedUrl={lastCommittedUrl}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   )

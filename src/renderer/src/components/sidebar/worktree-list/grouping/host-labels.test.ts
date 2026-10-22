@@ -25,19 +25,20 @@ function makeWorktrees(rows: { id: string; repoId: string }[]): Worktree[] {
 describe('host worktree counts and ids', () => {
   it('counts a repeated host identity once', () => {
     const repoMap = makeRepos({ 'repo-local': undefined })
+    const repoOf = (worktree: Worktree) => repoMap.get(worktree.repoId)
     const worktrees = makeWorktrees([
       { id: 'a', repoId: 'repo-local' },
       { id: 'a', repoId: 'repo-local' },
       { id: 'b', repoId: 'repo-local' }
     ])
 
-    expect(getHostWorktreeCounts(worktrees, repoMap, LOCAL)?.get(LOCAL)).toBe(2)
-    expect(getHostWorktreeIds(worktrees, repoMap, LOCAL)?.get(LOCAL)).toEqual(['a', 'b'])
+    expect(getHostWorktreeCounts(worktrees, repoOf, LOCAL)?.get(LOCAL)).toBe(2)
+    expect(getHostWorktreeIds(worktrees, repoOf, LOCAL)?.get(LOCAL)).toEqual(['a', 'b'])
   })
 
   it('returns undefined for an empty lane', () => {
-    const repoMap = makeRepos({})
-    expect(getHostWorktreeCounts([], repoMap, LOCAL)).toBeUndefined()
-    expect(getHostWorktreeIds([], repoMap, LOCAL)).toBeUndefined()
+    const repoOf = () => undefined
+    expect(getHostWorktreeCounts([], repoOf, LOCAL)).toBeUndefined()
+    expect(getHostWorktreeIds([], repoOf, LOCAL)).toBeUndefined()
   })
 })

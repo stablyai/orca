@@ -99,7 +99,7 @@ describe('the kinds and the functions behind them', () => {
    * A table mapping two kinds to one function would pass every case above — each still plays
    * something — and would mean a Save that felt like a failure. The third direction, a haptic
    * `haptics.ts` grows with no kind of its own, is the census's:
-   * `config/scripts/mobile-web-app-haptics-seam.test.mjs` reads both files' names.
+   * `config/scripts/mobile-web-app/platform-seams/mobile-web-app-haptics-seam.test.mjs` reads both files' names.
    */
   it('plays a different device call for every kind, so no two share a row', () => {
     for (const kind of BRIDGE_HAPTICS_KINDS) {

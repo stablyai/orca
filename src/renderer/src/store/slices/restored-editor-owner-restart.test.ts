@@ -1,10 +1,23 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
 import { buildWorkspaceSessionPayload } from '../../lib/workspace-session'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const SOURCE = 'repo-a::/repo-a'
 const TARGET = 'repo-b::/repo-b'
@@ -39,9 +52,8 @@ function installWorkspaceState(): void {
 }
 
 /** The restored tab's file loaded under a sibling workspace, and Orca moved the tab there (F42). */
-function openAndMoveToOwner(): void {
-  const state = useAppStore.getState()
-  const fileId = state.openFile(
+async function openAndMoveToOwner(main: TabsDrawnFromMain): Promise<void> {
+  const fileId = useAppStore.getState().openFile(
     {
       filePath: FILE_PATH,
       relativePath: FILE_PATH,
@@ -52,6 +64,9 @@ function openAndMoveToOwner(): void {
     },
     { suppressActiveRuntimeFallback: true }
   )
+  // A layout-owner build draws the restored tab from main's frame before Orca can move it.
+  await main.settle()
+  const state = useAppStore.getState()
   state.setRestoredEditorOwnerMigrationPending(fileId, true)
   const moved = state.reparentRestoredEditorFileOwner({
     fileId,
@@ -62,12 +77,15 @@ function openAndMoveToOwner(): void {
     targetOperationProvenance: captureEditorFileOperationProvenance(state, TARGET, null, true)
   })
   expect(moved.ok).toBe(true)
+  await main.settle()
 }
 
 describe('an editor tab Orca moved to the workspace owning its file', () => {
-  it('is still open in that workspace after a restart', () => {
+  it('is still open in that workspace after a restart', async () => {
     installWorkspaceState()
-    openAndMoveToOwner()
+    const main = await drawTabsFromMain(useAppStore)
+    await openAndMoveToOwner(main)
+    main.close()
     const saved = buildWorkspaceSessionPayload(useAppStore.getState())
 
     installWorkspaceState()

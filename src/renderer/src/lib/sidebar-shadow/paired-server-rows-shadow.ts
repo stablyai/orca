@@ -1,18 +1,18 @@
 import type { AppState } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
-import { getWorkspaceRowKindFacts } from '../../../../shared/worktree/workspace-kinds'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import type {
-  PairedServerHostFacts,
-  PairedServerWorkspaceRow
+import {
+  pairedServerRowOfWorktree,
+  type PairedServerHostFacts,
+  type PairedServerWorkspaceRow
 } from '../../../../shared/sidebar-list/paired-server-rows'
 import { describePairedServerHosts } from '../../../../shared/paired-server-hosts'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */
 export function readWindowPairedServerRows(
@@ -38,48 +38,18 @@ export function readWindowPairedServerRows(
     if (!worktree.hostId || !hostIds.has(worktree.hostId)) {
       return
     }
-    const key = getWorktreeHostIdentity(worktree)
-    const lineage = checkedLineageByKey.get(key)
-    // The server's reply carries no automation name, so the row leaves it out too.
-    const { automationName: _automationName, ...kindFacts } = getWorkspaceRowKindFacts(
+    const row = pairedServerRowOfWorktree(
       worktree,
-      repoById.get(worktree.repoId)
-    )
-    rows.set(key, {
-      key,
-      worktreeId: worktree.id,
-      repoId: worktree.repoId,
       kind,
-      path: worktree.path,
-      branch: worktree.branch,
-      displayName: worktree.displayName,
-      isArchived: worktree.isArchived,
-      isPinned: worktree.isPinned,
-      isMainWorktree: worktree.isMainWorktree,
-      isUnread: worktree.isUnread,
-      instanceId: worktree.instanceId,
-      lineage: lineage
-        ? {
-            parentWorktreeId: lineage.parentWorktreeId,
-            worktreeInstanceId: lineage.worktreeInstanceId,
-            parentWorktreeInstanceId: lineage.parentWorktreeInstanceId
-          }
-        : null,
-      workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-      sortOrder: worktree.sortOrder,
-      manualOrder: worktree.manualOrder,
-      createdAt: worktree.createdAt,
-      creatorProvenance: worktree.creatorProvenance,
-      ...kindFacts,
-      recentAt: worktree.lastActivityAt,
-      smartTier: worktree.smartTier,
-      smartAt: worktree.smartAt
-    })
+      repoById.get(worktree.repoId),
+      checkedLineageByKey.get(getWorktreeHostIdentity(worktree))
+    )
+    rows.set(row.key, row)
   }
   for (const worktree of getAllWorktreesFromState(state)) {
     add(worktree, 'git')
   }
-  for (const folder of state.folderWorkspaces ?? []) {
+  for (const folder of selectFolderWorkspaces(state) ?? []) {
     add(folderWorkspaceToWorktree(folder), 'folder')
   }
   return rows

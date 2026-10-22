@@ -14,14 +14,18 @@ const reported = [
 ]
 
 describe('mobileComposerSlashItems', () => {
-  it('offers what the session reported: its commands, then its skills with their descriptions', () => {
+  it("offers the host's commands, then the session's own and its skills with their descriptions", () => {
     const items = mobileComposerSlashItems({
       agent: 'claude',
       structured: { reported, conversationCommands: ['clear', 'compact'] },
       query: ''
     })
+    // The host answers /compact itself, so its row stands in for the session's.
     expect(items.map((item) => [item.kind, item.token, item.description ?? null])).toEqual([
-      ['command', '/compact', 'Compact the chat'],
+      ['command', '/model', 'Choose the model'],
+      ['command', '/effort', 'Choose reasoning effort'],
+      ['command', '/clear', 'Clear conversation context'],
+      ['command', '/compact', 'Compact conversation context'],
       ['skill', '/research', null],
       ['skill', '/review-pr', 'Review a pull request']
     ])

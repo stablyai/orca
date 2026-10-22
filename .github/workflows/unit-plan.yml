@@ -39,6 +39,7 @@ jobs:
         id: plan
         env:
           ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
+          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
         run: node config/scripts/ci-unit-plan.mjs
       - uses: actions/upload-artifact@v7
         continue-on-error: true

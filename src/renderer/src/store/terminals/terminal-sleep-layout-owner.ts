@@ -93,7 +93,10 @@ export function recordSleepingRecordChangesThroughLayoutOwner(
   }
 }
 
-/** A layout-owner build's record of the one pane this window showed and resumed. */
+/**
+ * A layout-owner build's record of the one pane this window showed and resumed itself: record-only,
+ * since a plain wake has main start the pane too.
+ */
 export function recordPaneWakeThroughLayoutOwner(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string,
@@ -101,6 +104,11 @@ export function recordPaneWakeThroughLayoutOwner(
 ): void {
   const tabId = parsePaneKey(paneKey)?.tabId
   if (tabId) {
-    recordLayoutApply(state, worktreeId, { type: 'wake', tabId, paneKeys: [paneKey] })
+    recordLayoutApply(state, worktreeId, {
+      type: 'wake',
+      tabId,
+      paneKeys: [paneKey],
+      recordOnly: true
+    })
   }
 }

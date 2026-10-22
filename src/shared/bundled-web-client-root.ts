@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { WEB_CLIENT_FILES_FILENAME } from './bundled-web-client-manifest'
 
 export const WEB_CLIENT_INDEX_FILENAME = 'web-index.html'
 
@@ -13,5 +14,18 @@ export function findBundledWebClientRoot(appPath: string): string | undefined {
     // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the web bundle.
     join(appPath, '..', 'web')
   ]
-  return roots.find((root) => existsSync(join(root, WEB_CLIENT_INDEX_FILENAME)))
+  const standalone = roots.find((root) => existsSync(join(root, WEB_CLIENT_INDEX_FILENAME)))
+  if (standalone) {
+    return standalone
+  }
+  const sharedAppPath = appPath.endsWith('.asar') ? `${appPath}.unpacked` : appPath
+  const sharedRoots = [
+    join(sharedAppPath, 'out', 'renderer'),
+    join(sharedAppPath, '..', 'renderer')
+  ]
+  return sharedRoots.find(
+    (root) =>
+      existsSync(join(root, WEB_CLIENT_INDEX_FILENAME)) &&
+      existsSync(join(root, WEB_CLIENT_FILES_FILENAME))
+  )
 }

@@ -12,6 +12,10 @@ import type { CapturePaintHold } from './cdp-screenshot'
 import type { AgentInputFocusGuard } from './agent-input-focus-guard'
 import { CdpPageInputCommands } from './cdp-page-input-commands'
 import { isTrustedCdpLoopbackRequest } from './cdp-loopback-request-guard'
+import {
+  assertRemoteCliPageAccess,
+  runUnderRemoteCliPageAdmission
+} from './remote-cli-page-admission'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -96,7 +100,9 @@ export class CdpWsProxy {
         this.closeClient()
         this.client = ws
         const onMessage = (data: WebSocket.RawData): void => {
-          this.handleClientMessage(ws, data.toString())
+          runUnderRemoteCliPageAdmission(this.webContents.id, () =>
+            this.handleClientMessage(ws, data.toString())
+          )
         }
         const onClose = (): void => {
           detach()
@@ -178,6 +184,17 @@ export class CdpWsProxy {
     }
     const clientId = msg.id
     this.responder.recordRequestSessionId(client, clientId, msg)
+    // Why here too: a revoked host's helper is refused even its read-only steps, so it stops at once.
+    try {
+      assertRemoteCliPageAccess(this.webContents.id)
+    } catch (error) {
+      this.responder.sendError(
+        clientId,
+        error instanceof Error ? error.message : String(error),
+        client
+      )
+      return
+    }
 
     if (this.discovery.handleCommand(client, clientId, msg)) {
       return

@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import type { TextInput } from 'react-native'
+import { hostOs } from '../platform/host-os'
 import { bindTerminalTextFieldSubmit } from './terminal-text-field-submit-binding'
 import { bindTerminalTextFieldSubmit as bindOnWeb } from './terminal-text-field-submit-binding.web'
+
+vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'android') }))
 
 /** A ref holding whatever the platform hands back, which on RN Web is the DOM node. */
 const asField = (node: unknown): TextInput | null =>
@@ -108,5 +111,98 @@ describe('the web sibling', () => {
     sendBeforeInput(div, 'insertLineBreak')
 
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+})
+
+describe('live terminal keyboard chords', () => {
+  function setup(accept = true) {
+    const field = mountField()
+    const onChord = vi.fn(() => accept)
+    const unbind = bindOnWeb(asField(field), vi.fn(), onChord)
+    const key = (name: string, options: KeyboardEventInit = {}) => {
+      const event = new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: name,
+        ...options
+      })
+      // happy-dom treats every Alt as AltGraph; browsers report them separately.
+      vi.spyOn(event, 'getModifierState').mockReturnValue(false)
+      field.dispatchEvent(event)
+      return event
+    }
+    return { field, onChord, unbind, key }
+  }
+
+  it.each([
+    ['c', { ctrlKey: true }, '\x03'],
+    ['Escape', {}, '\x1b'],
+    ['Tab', {}, '\t'],
+    ['Tab', { shiftKey: true }, '\x1b[Z'],
+    ['ArrowUp', {}, '\x1b[A'],
+    ['ArrowLeft', { ctrlKey: true }, '\x1b[1;5D'],
+    ['b', { altKey: true }, '\x1bb']
+  ])('claims %s once before RNWeb can resend it', (name, options, bytes) => {
+    const { field, onChord, key } = setup()
+    const parentKey = vi.fn()
+    field.parentElement?.addEventListener('keydown', parentKey, { once: true })
+    expect(key(name, options).defaultPrevented).toBe(true)
+    expect(onChord).toHaveBeenCalledExactlyOnceWith({ bytes })
+    expect(parentKey).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a', {}],
+    ['Enter', {}],
+    ['Backspace', {}],
+    ['Delete', {}],
+    ['c', { ctrlKey: true, isComposing: true }],
+    ['c', { ctrlKey: true, keyCode: 229 }],
+    ['c', { ctrlKey: true, altKey: true }],
+    ['c', { metaKey: true }],
+    [' ', { ctrlKey: true }],
+    ['1', { ctrlKey: true }]
+  ])('leaves %s input and IME/platform shortcuts alone', (name, options) => {
+    const { onChord, key } = setup()
+    expect(key(name, options).defaultPrevented).toBe(false)
+    expect(onChord).not.toHaveBeenCalled()
+  })
+
+  it('preserves an active composition even if the key event omits its flag', () => {
+    const { field, onChord, key } = setup()
+    field.dispatchEvent(new Event('compositionstart'))
+    expect(key('Escape').defaultPrevented).toBe(false)
+    field.dispatchEvent(new Event('compositionend'))
+    expect(key('Escape').defaultPrevented).toBe(true)
+    expect(onChord).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves AltGraph text entry to the IME', () => {
+    const { field, onChord } = setup()
+    const event = new KeyboardEvent('keydown', { key: 'q', altKey: true, cancelable: true })
+    vi.spyOn(event, 'getModifierState').mockReturnValue(true)
+    field.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(onChord).not.toHaveBeenCalled()
+  })
+
+  it.each(['ios', 'web'] as const)('leaves %s keyboard handling unchanged', (os) => {
+    vi.mocked(hostOs).mockReturnValueOnce(os)
+    const { key, onChord } = setup()
+    expect(key('Tab').defaultPrevented).toBe(false)
+    expect(key('c', { ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(onChord).not.toHaveBeenCalled()
+  })
+
+  it('does not swallow keys when the current terminal cannot send', () => {
+    const { key } = setup(false)
+    expect(key('Tab').defaultPrevented).toBe(false)
+  })
+
+  it('removes control listeners when the field unmounts', () => {
+    const { onChord, unbind, key } = setup()
+    unbind()
+    expect(key('Escape').defaultPrevented).toBe(false)
+    expect(onChord).not.toHaveBeenCalled()
   })
 })

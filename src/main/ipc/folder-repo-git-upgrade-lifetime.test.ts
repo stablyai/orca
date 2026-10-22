@@ -60,7 +60,7 @@ function begin(repos = [folder()], meta: ReturnType<Store['getAllWorktreeMeta']>
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getAllWorktreeMeta: () => meta,
-    updateRepo: vi.fn((id: string, patch: Partial<Repo>) => {
+    updateRepo: vi.fn(({ id }: Pick<Repo, 'id'>, patch: Partial<Repo>) => {
       const repo = repos.find((row) => row.id === id)
       return repo ? Object.assign(repo, patch) : null
     })

@@ -6,6 +6,10 @@ import type {
 } from '../../shared/native-file-drop-preparation'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import type { LocalFileAccess } from '../../shared/local-file-access'
+import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
+} from '../../shared/file-write-disk-precondition'
 import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 import type {
   AgentSessionAttachmentPathUploadResult,
@@ -113,8 +117,9 @@ export const fsApi = {
       content: string
       connectionId?: string
       access?: LocalFileAccess
+      diskPrecondition?: FileWriteDiskPrecondition
     } & SshMutationExpectation
-  ): Promise<void> => ipcRenderer.invoke('fs:writeFile', args),
+  ): Promise<FileWriteResult> => ipcRenderer.invoke('fs:writeFile', args),
   createFile: (
     args: { filePath: string; connectionId?: string } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:createFile', args),

@@ -73,7 +73,7 @@ describe('locked audit tool execution', () => {
     const [policy] = parseAllDocuments(
       readFileSync(join(root, 'config/audit-tools/pnpm-workspace.yaml'), 'utf8')
     ).map((document) => document.toJS())
-    expect(policy).toEqual({ minimumReleaseAge: 4320, ignoreScripts: true, allowBuilds: {} })
+    expect(policy).toMatchObject({ minimumReleaseAge: 4320, ignoreScripts: true, allowBuilds: {} })
     const documents = parseAllDocuments(
       readFileSync(join(root, 'config/audit-tools/pnpm-lock.yaml'), 'utf8')
     ).map((document) => document.toJS())

@@ -40,7 +40,9 @@ export async function structuredLaunchSeedOnSavedListing(
   }
   const catalog = await workspacePath()
     .catch(() => null)
-    .then((path) => catalogs.read({ agent, workspacePath: path, savedOnly: true }))
+    .then((path) =>
+      catalogs.read({ agent, workspacePath: path, savedOnly: true, verifiedOnly: true })
+    )
     .catch(() => null)
   const listed = catalog ? finishedListingIds(catalog) : undefined
   if (!catalog || catalog.origin === 'unknown' || !listed || listed.includes(seed.model)) {

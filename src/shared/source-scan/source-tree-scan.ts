@@ -87,14 +87,6 @@ export function scanSourceTree(
   return found
 }
 
-/** Read a ratchet allowlist, dropping comments and blanks. */
-export function readAllowlist(fixturePath: string): string[] {
-  return readFileSync(fixturePath, 'utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'))
-}
-
 /**
  * Comments blanked out, so a construct documented in prose is not counted as code.
  *

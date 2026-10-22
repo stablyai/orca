@@ -87,3 +87,33 @@ export function endStructuredAgentSessionReleasedChild(
   // The released acquisition was the live generation: readers and the queued-card drain re-derive.
   context.generationEnded?.(sessionId)
 }
+
+/** A reservation that support drift invalidated, released as processless. */
+export async function settleUnsupportedReservation(
+  input: AttachFlowInput,
+  record: AgentSessionRecord
+): Promise<void> {
+  const spawnToken = record.lease.reservedSpawnToken
+  if (!spawnToken) {
+    return
+  }
+  try {
+    await input.store.settleFailedAcquisition({
+      sessionId: record.sessionId,
+      fence: record.lease.runtimeFence,
+      spawnToken,
+      callerKey: input.callerKey,
+      operationId: input.params.envelope.clientOperationId,
+      outcome: {
+        status: 'failed',
+        code: 'structured_agent_session_unsupported',
+        details: { reason: 'hostUnsupported' },
+        message: 'Structured session support changed before the provider could start.'
+      },
+      exitProof: 'processless',
+      now: input.now()
+    })
+  } catch (error) {
+    throw new AggregateError([error], 'agent session unsupported reservation settlement failed')
+  }
+}

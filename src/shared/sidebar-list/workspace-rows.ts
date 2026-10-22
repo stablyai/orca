@@ -11,7 +11,10 @@ import type { Repo } from '../repo-types'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
 import { getWorkspaceAttachments } from '../workspace-attachments'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
-import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
@@ -133,6 +136,59 @@ function toWorkspaceRow(
   }
 }
 
+type ListedRow = { identity: HostScopedWorktreeKey; hostId: ExecutionHostId }
+type ListedWorktree = Pick<Worktree, 'id' | 'repoId' | 'hostId'>
+type ListedRepo = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+
+/** Where this host lists a workspace, or null for one it does not (a paired server's). */
+function listedRow(worktree: ListedWorktree, repo: ListedRepo | undefined): ListedRow | null {
+  const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
+  if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
+    return null
+  }
+  // As the window stamps rows (worktree-host-ownership.ts): a remote repo's host always, a local
+  // row only the host its metadata names.
+  const identityHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
+  return { identity: composeWorktreeHostIdentity(identityHostId, worktree.id), hostId }
+}
+
+/** Each git worktree with the repo it belongs to; the same repo id can be registered on two hosts. */
+function withOwnerRepos<W extends ListedWorktree, R extends ListedRepo>(
+  worktrees: readonly W[],
+  repos: readonly R[]
+): { worktree: W; repo: R | undefined }[] {
+  const reposById = new Map<string, R[]>()
+  for (const repo of repos) {
+    reposById.set(repo.id, [...(reposById.get(repo.id) ?? []), repo])
+  }
+  return worktrees.map((worktree) => {
+    const owners = reposById.get(worktree.repoId) ?? []
+    const repo =
+      owners.find((owner) => getRepoExecutionHostId(owner) === worktree.hostId) ??
+      (worktree.hostId === undefined && owners.length === 1 ? owners[0] : undefined)
+    return { worktree, repo }
+  })
+}
+
+/** Each git worktree this host lists, under the key `buildWorkspaceRows` lists it and with its own repo. */
+export function listGitWorkspaceRows<W extends ListedWorktree, R extends ListedRepo>(
+  worktrees: readonly W[],
+  repos: readonly R[]
+): { identity: HostScopedWorktreeKey; worktree: W; repo: R | undefined }[] {
+  return withOwnerRepos(worktrees, repos).flatMap(({ worktree, repo }) => {
+    const listed = listedRow(worktree, repo)
+    return listed ? [{ identity: listed.identity, worktree, repo }] : []
+  })
+}
+
+/** The keys `buildWorkspaceRows` lists these git worktrees under. */
+export function listGitWorkspaceRowKeys(
+  worktrees: readonly Worktree[],
+  repos: readonly Repo[]
+): HostScopedWorktreeKey[] {
+  return listGitWorkspaceRows(worktrees, repos).map(({ identity }) => identity)
+}
+
 /**
  * Every workspace this host lists, from its own catalog: git worktrees (folder projects included)
  * and folder workspaces. A paired server's rows are another domain, so they are left out.
@@ -142,35 +198,20 @@ export function buildWorkspaceRows(catalog: {
   folderWorkspaces: readonly FolderWorkspace[]
   repos: readonly Repo[]
   lineageById: Readonly<Record<string, WorktreeLineage>>
-}): Map<string, WorkspaceRow> {
-  const reposById = new Map<string, Repo[]>()
-  for (const repo of catalog.repos) {
-    reposById.set(repo.id, [...(reposById.get(repo.id) ?? []), repo])
-  }
-  const rows = new Map<string, WorkspaceRow>()
+}): Map<HostScopedWorktreeKey, WorkspaceRow> {
+  const rows = new Map<HostScopedWorktreeKey, WorkspaceRow>()
   const add = (
     worktree: Worktree,
     kind: WorkspaceRow['kind'],
     repo?: Repo,
     lineage?: WorktreeLineage
   ): void => {
-    const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
-    if (hostId && parseExecutionHostId(hostId)?.kind !== 'runtime') {
-      // As the window stamps rows (worktree-host-ownership.ts): a remote repo's host always, a
-      // local row only the host its metadata names.
-      const identityHostId = hostId === LOCAL_EXECUTION_HOST_ID ? worktree.hostId : hostId
-      rows.set(
-        composeWorktreeHostIdentity(identityHostId, worktree.id),
-        toWorkspaceRow(worktree, hostId, kind, repo, lineage)
-      )
+    const listed = listedRow(worktree, repo)
+    if (listed) {
+      rows.set(listed.identity, toWorkspaceRow(worktree, listed.hostId, kind, repo, lineage))
     }
   }
-  for (const worktree of catalog.worktrees) {
-    const owners = reposById.get(worktree.repoId) ?? []
-    // The same repo id can be registered on two hosts; the row's host picks its owner.
-    const repo =
-      owners.find((owner) => getRepoExecutionHostId(owner) === worktree.hostId) ??
-      (worktree.hostId === undefined && owners.length === 1 ? owners[0] : undefined)
+  for (const { worktree, repo } of withOwnerRepos(catalog.worktrees, catalog.repos)) {
     add(worktree, 'git', repo, catalog.lineageById[worktree.id])
   }
   for (const folderWorkspace of catalog.folderWorkspaces) {

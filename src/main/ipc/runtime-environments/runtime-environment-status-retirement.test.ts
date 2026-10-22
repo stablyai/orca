@@ -2,10 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import {
-  addEnvironmentFromPairingCode,
-  resolveEnvironment
-} from '../../../shared/runtime-environment-store'
+  addManagedOrcadEnvironment,
+  refreshManagedOrcadPairing
+} from '../../../shared/runtime-environment-managed-orcad-store'
 import { pairingCode } from './runtime-environments-ipc-test-harness'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import {
@@ -33,9 +34,14 @@ vi.mock('./runtime-environment-request-connections', async () => {
   })
 })
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
+// Why: the tunnel is standing; these cases are about what answers through it.
+vi.mock('./runtime-environment-managed-tunnel', () => ({
+  resolveManagedRuntimeEnvironment: vi.fn(async () => undefined)
+}))
 
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
+import { setRefusedPairingHandlers } from './runtime-environment-pairing-refusal-registry'
 
 let directory: string
 let envId: string
@@ -43,11 +49,17 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetRuntimeEnvironmentCapabilityEvidence()
   directory = mkdtempSync(join(tmpdir(), 'orca-status-retirement-'))
-  envId = addEnvironmentFromPairingCode(directory, {
+  envId = addManagedOrcadEnvironment(directory, {
+    id: 'env-managed',
     name: 'Host',
     now: 1,
     pairingCode: pairingCode(),
-    connectionDependency: 'ssh-tunnel'
+    orcadDeployment: {
+      sshTargetId: 'box',
+      sshTargetGeneration: 1,
+      localPort: 6768,
+      remotePort: 6768
+    }
   }).id
   mocks.diagnostics.mockReturnValue(null)
 })
@@ -109,4 +121,78 @@ it('does not fence another environment or a fresh probe after retirement', async
   await expect(getRuntimeEnvironmentStatus(directory, envId)).resolves.toMatchObject({ ok: true })
   expect(resolveEnvironment(directory, envId).runtimeId).toBe('old-host')
   expect(mocks.ensure).toHaveBeenCalledTimes(2)
+})
+
+/** What a re-pair over SSH does mid-probe: store a new pairing and retire the old transports. */
+function repairMidProbe(now: number, keyByte = 1): void {
+  refreshManagedOrcadPairing(
+    directory,
+    envId,
+    pairingCode(undefined, { deviceToken: `token-${now}`, keyByte }),
+    now
+  )
+  advanceRuntimeEnvironmentCapabilityIncarnation(envId)
+}
+
+it('answers from the successor owner when the probe itself re-paired the server', async () => {
+  mocks.request.mockImplementationOnce(async () => {
+    repairMidProbe(2)
+    return {
+      id: 'status',
+      ok: false,
+      error: { code: 'unauthorized', message: 'refused' },
+      _meta: { runtimeId: 'old-host' }
+    }
+  })
+  mocks.request.mockResolvedValueOnce(response())
+  await expect(
+    getRuntimeEnvironmentStatus(directory, envId, undefined, { reconnect: true })
+  ).resolves.toMatchObject({ ok: true })
+  expect(mocks.request).toHaveBeenCalledTimes(2)
+})
+
+it.each([
+  ['a pairing under another host key', () => repairMidProbe(2, 2), true],
+  ['a caller pinned to the old pairing', () => repairMidProbe(2), false]
+] as const)('never answers %s from the replacement', async (_name, replace, follow) => {
+  mocks.request.mockImplementationOnce(async () => {
+    replace()
+    return response()
+  })
+  mocks.request.mockResolvedValue(response())
+  await expect(
+    getRuntimeEnvironmentStatus(directory, envId, undefined, undefined, follow)
+  ).resolves.toMatchObject({ ok: false, error: { code: 'runtime_environment_changed' } })
+  expect(mocks.request).toHaveBeenCalledOnce()
+})
+
+it('follows a re-pair only once', async () => {
+  let now = 2
+  mocks.request.mockImplementation(async () => {
+    repairMidProbe(now++)
+    return response()
+  })
+  await expect(getRuntimeEnvironmentStatus(directory, envId)).resolves.toMatchObject({
+    ok: false,
+    error: { code: 'runtime_environment_changed' }
+  })
+  expect(mocks.request).toHaveBeenCalledTimes(2)
+})
+
+it('does not claim the pairing changed when the refusal only rebuilt the tunnel', async () => {
+  const noRecovery = { recover: () => null, sharedControl: () => null, connectRequested: () => {} }
+  setRefusedPairingHandlers({ ...noRecovery, recover: async () => 'built' as const })
+  mocks.request.mockResolvedValueOnce({
+    id: 'status',
+    ok: false,
+    error: { code: 'unauthorized', message: 'refused' },
+    _meta: { runtimeId: 'old-host' }
+  })
+  try {
+    const answer = await getRuntimeEnvironmentStatus(directory, envId)
+    expect(answer).toMatchObject({ ok: false, error: { code: 'runtime_environment_changed' } })
+    expect(JSON.stringify(answer)).not.toMatch(/pairing changed/)
+  } finally {
+    setRefusedPairingHandlers(noRecovery)
+  }
 })

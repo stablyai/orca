@@ -17,12 +17,15 @@ import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
-import { recordOpenedEditorTabInLayoutOwner } from '../store/slices/editor/tabs/editor-tab-layout-owner'
-import { recordOpenedAgentSessionTabInLayoutOwner } from './agent-session-tab-layout-owner'
-import { recordOpenedSimulatorTabInLayoutOwner } from '@/lib/simulator-tab-layout-owner'
 import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
 import { endLayoutFramePositions } from './layout-frame-position'
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
+import { installLayoutFrameApplyCheck } from './workspace-layout-frame-apply-check.test-fixture'
+import { mainLayoutFrameSender } from './main-loaded-layout-frames.test-fixture'
+import {
+  getRuntimeMobileSessionSyncKey,
+  runtimeMobileSessionSyncKeysEqual
+} from './sync-runtime-graph/sync-key'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -32,7 +35,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 type Call = {
-  command: { type: string; tabId?: string; title?: string }
+  command: { type: string; tabId?: string; title?: string; renames?: { title: string }[] }
   answer: (r: LayoutApplyReply) => void
   fail: (error: Error) => void
 }
@@ -91,11 +94,12 @@ function publishedOf(session: WorkspaceSessionState): PublishedWorkspaceLayout {
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 let seq = 0
+let frames = mainLayoutFrameSender()
 /** A frame main sent before it had the window's change: another tab got renamed. */
 function sendStaleFrame(layout: PublishedWorkspaceLayout): void {
   const stale = structuredClone(layout)
   stale.tabs.find((tab) => tab.id === 'tab-unbound')!.customTitle = `renamed ${++seq}`
-  stream.onFrame!({ type: 'workspace', key: GIT_KEY, layout: stale, seq })
+  stream.onFrame!(frames.records(GIT_KEY, stale, seq))
   stream.onPosition!(seq)
 }
 
@@ -105,7 +109,8 @@ async function boot() {
   await bootWindowFromPartitions(store, [{ hostId: 'local', session }])
   const sync = openWorkspaceLayoutFrameSync(store)
   const before = publishedOf(session)
-  stream.onFrame!({ type: 'snapshot', workspaces: [{ key: GIT_KEY, layout: before }], seq: ++seq })
+  frames = mainLayoutFrameSender()
+  stream.onFrame!(frames.snapshot({ [GIT_KEY]: before }, ++seq))
   stream.onPosition!(seq)
   sync.start()
   await settle()
@@ -119,7 +124,7 @@ async function boot() {
     const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
     mainChange(frame)
     seq += 1
-    stream.onFrame!({ type: 'workspace', key: GIT_KEY, layout: frame, seq })
+    stream.onFrame!(frames.records(GIT_KEY, frame, seq))
     stream.onPosition!(seq)
     rpc.calls[index]!.answer({ ...reply, frameSeq: seq })
     await settle()
@@ -129,6 +134,20 @@ async function boot() {
 }
 
 const okReply: LayoutApplyReply = { ok: true, result: {} }
+
+/** Counts the store writes that change one slice: main's frame is one, a window re-apply another. */
+function writesOf<T>(
+  store: ReturnType<typeof createTestStore>,
+  pick: (state: ReturnType<ReturnType<typeof createTestStore>['getState']>) => T
+) {
+  let count = 0
+  const stop = store.subscribe((state, previous) => {
+    if (pick(state) !== pick(previous)) {
+      count += 1
+    }
+  })
+  return { count: () => count, stop }
+}
 
 const tabBar = (store: ReturnType<typeof createTestStore>) =>
   store.getState().unifiedTabsByWorktree[GIT_KEY]!.map((tab) => tab.id)
@@ -168,11 +187,17 @@ function drawTab(
   return drawn
 }
 
+let check: ReturnType<typeof installLayoutFrameApplyCheck>
 beforeEach(() => {
   rpc.calls = []
   vi.clearAllMocks()
+  check = installLayoutFrameApplyCheck()
 })
-afterEach(() => endLayoutFramePositions())
+afterEach(() => {
+  endLayoutFramePositions()
+  check.uninstall()
+  expect(check.failures).toEqual([])
+})
 
 describe('a tab the window drew, closed or moved, with a frame from before main had it', () => {
   it('keeps a just-created terminal tab, then shows main’s copy', async () => {
@@ -210,80 +235,7 @@ describe('a tab the window drew, closed or moved, with a frame from before main 
     sync.close()
   })
 
-  it.each([
-    [
-      'editor',
-      (store: ReturnType<typeof createTestStore>) => {
-        const file = {
-          ...store.getState().openFiles[0]!,
-          id: '/Users/dev/orca/src/new.ts',
-          filePath: '/Users/dev/orca/src/new.ts',
-          relativePath: 'src/new.ts'
-        }
-        store.setState({ openFiles: [...store.getState().openFiles, file] })
-        const tab = drawTab(store, {
-          id: 'editor:new',
-          entityId: file.id,
-          contentType: 'editor'
-        })
-        recordOpenedEditorTabInLayoutOwner(store.getState(), tab)
-        return tab
-      }
-    ],
-    [
-      'chat',
-      (store: ReturnType<typeof createTestStore>) => {
-        const tab = drawTab(store, {
-          id: 'agent-session-new',
-          contentType: 'agent-session',
-          agentSessionAgent: 'claude'
-        })
-        recordOpenedAgentSessionTabInLayoutOwner(store.getState(), tab)
-        return tab
-      }
-    ],
-    [
-      'simulator',
-      (store: ReturnType<typeof createTestStore>) => {
-        const tab = drawTab(store, { id: 'simulator-new' })
-        recordOpenedSimulatorTabInLayoutOwner(store.getState(), tab)
-        return tab
-      }
-    ]
-  ])('keeps a just-opened %s tab', async (_kind, open) => {
-    const { store, sync, before } = await boot()
-    const tab = open(store)
-    expect(rpc.calls.length).toBeGreaterThan(0)
-
-    sendStaleFrame(before)
-    await settle()
-    expect(tabBar(store)).toContain(tab.id)
-    expect(groupOrder(store, 'group-b')).toContain(tab.id)
-    if (tab.contentType === 'editor') {
-      expect(store.getState().openFiles.map((file) => file.id)).toContain(tab.entityId)
-    }
-    sync.close()
-  })
-
-  it('keeps a just-opened browser tab and its page', async () => {
-    const { store, sync, before } = await boot()
-    const created = store.getState().createBrowserTab(GIT_KEY, 'https://example.com/', {
-      title: 'Example'
-    })
-    const entry = store
-      .getState()
-      .unifiedTabsByWorktree[GIT_KEY]!.find((tab) => tab.entityId === created.id)!
-    expect(rpc.calls.some((call) => call.command.type === 'openBrowserTab')).toBe(true)
-
-    sendStaleFrame(before)
-    await settle()
-    expect(tabBar(store)).toContain(entry.id)
-    expect(store.getState().browserTabsByWorktree[GIT_KEY]!.map((tab) => tab.id)).toContain(
-      created.id
-    )
-    expect(store.getState().browserPagesByWorkspace[created.id]?.length).toBeGreaterThan(0)
-    sync.close()
-  })
+  // Browser, chat and simulator opens draw from main's frame alone: content-tabs-from-main-frames.test.ts.
 
   it('keeps a reorder the window made, and main’s order for the rest', async () => {
     const { store, sync, before, answer } = await boot()
@@ -310,8 +262,9 @@ describe('a tab the window drew, closed or moved, with a frame from before main 
   ])('removes a just-created terminal tab, stopping it, when main %s', async (_case, refuse) => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { store, sync, before } = await boot()
-    const tab = store.getState().createTab(GIT_KEY)
+    // Why: spied before the create, whose start mark publishes a new state after the tab's.
     const closeTab = vi.spyOn(store.getState(), 'closeTab')
+    const tab = store.getState().createTab(GIT_KEY)
     sendStaleFrame(before)
     await settle()
     expect(tabBar(store)).toContain(tab.id)
@@ -330,8 +283,8 @@ describe('a tab the window drew, closed or moved, with a frame from before main 
 describe('a change main applies first, with frames flowing', () => {
   const callsOf = (type: string) => rpc.calls.filter((call) => call.command.type === type)
 
-  it('pins a preview tab and promotes it once; a frame from before does not undo it', async () => {
-    const { store, sync, before, answer } = await boot()
+  it('pins a preview tab and promotes it once; only main’s frame ends the preview', async () => {
+    const { store, sync, answer } = await boot()
     const file = {
       ...store.getState().openFiles[0]!,
       id: '/Users/dev/orca/src/peek.ts',
@@ -346,28 +299,38 @@ describe('a change main applies first, with frames flowing', () => {
       contentType: 'editor',
       isPreview: true
     })
-    recordOpenedEditorTabInLayoutOwner(store.getState(), tab)
-    await answer(0)
+    // Main holds the tab: its frame carries the window's copy.
+    seq += 1
+    stream.onFrame!(
+      frames.records(GIT_KEY, publishedOf(buildWorkspaceSessionPayload(store.getState())), seq)
+    )
+    stream.onPosition!(seq)
+    await settle()
     const entry = () =>
       store.getState().unifiedTabsByWorktree[GIT_KEY]!.find((item) => item.id === tab.id)!
 
+    const windowPin = vi.fn((tabId: string) => store.getState().pinFile(file.id, tabId))
     withLayoutOwnerTabProps(
-      { togglePinned: (item) => store.getState().pinFile(file.id, item.unifiedTabId) },
+      {
+        togglePinned: (item) => windowPin(item.unifiedTabId),
+        makePreviewFilePermanent: (fileId, tabId) =>
+          store.getState().makePreviewFilePermanent(fileId, tabId)
+      },
       () => GIT_KEY
-    ).togglePinned({ unifiedTabId: tab.id, isPinned: false })
+    ).togglePinned({ unifiedTabId: tab.id, isPinned: false, type: 'editor', data: { id: file.id } })
     const pin = rpc.calls.length - 1
     expect(rpc.calls[pin]!.command).toMatchObject({ type: 'setTabProps', isPinned: true })
     await answer(pin, okReply, (layout) => {
       layout.tabs.find((item) => item.id === tab.id)!.isPinned = true
     })
+    // Main's frame draws the pin; the window does not pin it again.
+    expect(windowPin).not.toHaveBeenCalled()
     expect(callsOf('promotePreviewTab')).toHaveLength(1)
-    expect(entry()).toMatchObject({ isPinned: true })
-    expect(entry().isPreview).toBeFalsy()
+    expect(entry()).toMatchObject({ isPinned: true, isPreview: true })
 
-    sendStaleFrame(before)
-    await settle()
-    expect(entry().isPreview).toBeFalsy()
-    await answer(rpc.calls.indexOf(callsOf('promotePreviewTab')[0]!))
+    await answer(rpc.calls.indexOf(callsOf('promotePreviewTab')[0]!), okReply, (layout) => {
+      delete layout.tabs.find((item) => item.id === tab.id)!.isPreview
+    })
     expect(entry()).toMatchObject({ isPinned: true })
     expect(entry().isPreview).toBeFalsy()
     expect(callsOf('promotePreviewTab')).toHaveLength(1)
@@ -379,14 +342,18 @@ describe('a change main applies first, with frames flowing', () => {
     store.getState().toggleTabViewMode('tab-agent')
     const toggle = rpc.calls.length - 1
     expect(rpc.calls[toggle]!.command).toMatchObject({ type: 'setTabProps', viewMode: 'terminal' })
+    const writes = writesOf(store, (state) => state.unifiedTabsByWorktree)
 
     await answer(toggle, okReply, (layout) => {
       layout.tabs.find((item) => item.id === 'tab-agent')!.viewMode = 'terminal'
     })
+    writes.stop()
+    expect(writes.count()).toBe(1)
     const agent = () =>
       store.getState().unifiedTabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-agent')!
     expect(agent().viewMode).toBe('terminal')
-    expect(effects.mirrorViewMode).toHaveBeenCalledTimes(1)
+    // Main owns the workspace: the paired-server mirror is not asked.
+    expect(effects.mirrorViewMode).not.toHaveBeenCalled()
     expect(effects.chatToggled).toHaveBeenCalledTimes(1)
     expect(effects.chatToggled).toHaveBeenCalledWith(
       expect.objectContaining({ from: 'chat', to: 'terminal' })
@@ -398,43 +365,71 @@ describe('a change main applies first, with frames flowing', () => {
     sync.close()
   })
 
-  it('settles a generated title once main’s frame shows it, so the next one is sent', async () => {
-    const { store, sync, answer } = await boot()
+  it('sends main no generated title, and shows the one main derived from its frame alone', async () => {
+    const { store, sync } = await boot()
     store.setState({ settings: { ...store.getState().settings!, tabAutoGenerateTitle: true } })
     const leafId = store.getState().terminalLayoutsByTabId['tab-unbound']!.activeLeafId!
     const paneKey = makePaneKey('tab-unbound', leafId)
+    const renames = () => callsOf('renameTabs')
     store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Refactor the auth middleware')
-    const renames = () => callsOf('renameTab')
-    expect(renames()).toHaveLength(1)
-    const title = renames()[0]!.command.title!
-    // Unanswered: a later prompt for the same tab waits for the first.
-    store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test')
-    expect(renames()).toHaveLength(1)
-
-    await answer(rpc.calls.indexOf(renames()[0]!), okReply, (layout) => {
-      layout.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = title
-    })
-    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
-    expect(row.generatedTitle).toBe(title)
     store.getState().setGeneratedTabTitleFromAgentPrompt(paneKey, 'Fix the flaky login test', {
       replaceExistingGeneratedTitle: true
     })
-    expect(renames()).toHaveLength(2)
+    expect(renames()).toEqual([])
+
+    // Main's frame carries the title main derived from its own agent status.
+    const writes = writesOf(store, (state) => state.tabsByWorktree)
+    const frame = publishedOf(buildWorkspaceSessionPayload(store.getState()))
+    frame.tabs.find((item) => item.id === 'tab-unbound')!.generatedTitle = 'Refactor the auth'
+    stream.onFrame!(frames.records(GIT_KEY, frame, ++seq))
+    stream.onPosition!(seq)
+    await settle()
+    writes.stop()
+    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
+    expect(row.generatedTitle).toBe('Refactor the auth')
+    expect(writes.count()).toBe(1)
+    expect(renames()).toEqual([])
     sync.close()
   })
 
-  it('runs a rename’s graph sync once and shows main’s title', async () => {
+  it('shows main’s rename from its frame alone, without the window writing it again', async () => {
     const { store, sync, answer } = await boot()
     store.getState().setTabCustomTitle('tab-unbound', 'Build')
     const rename = rpc.calls.length - 1
-    expect(effects.graphSync).not.toHaveBeenCalled()
+    const writes = writesOf(store, (state) => state.tabsByWorktree)
+    const graphBefore = getRuntimeMobileSessionSyncKey(store.getState())
 
     await answer(rename, okReply, (layout) => {
       layout.tabs.find((item) => item.id === 'tab-unbound')!.customTitle = 'Build'
     })
     const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
     expect(row.customTitle).toBe('Build')
-    expect(effects.graphSync).toHaveBeenCalledTimes(1)
+    expect(writes.count()).toBe(1)
+    // The frame's write changes what the phone graph publishes, so useRuntimeGraphSync republishes.
+    expect(
+      runtimeMobileSessionSyncKeysEqual(
+        getRuntimeMobileSessionSyncKey(store.getState()),
+        graphBefore
+      )
+    ).toBe(false)
+    writes.stop()
+    sync.close()
+  })
+
+  it('shows main’s tab color from its frame alone, without the window writing it again', async () => {
+    const { store, sync, answer } = await boot()
+    store.getState().setTabColor('tab-unbound', '#ff0000')
+    const color = rpc.calls.length - 1
+    expect(rpc.calls[color]!.command).toMatchObject({ type: 'setTabProps', color: '#ff0000' })
+    const writes = writesOf(store, (state) => state.tabsByWorktree)
+
+    await answer(color, okReply, (layout) => {
+      layout.tabs.find((item) => item.id === 'tab-unbound')!.color = '#ff0000'
+    })
+    const row = store.getState().tabsByWorktree[GIT_KEY]!.find((item) => item.id === 'tab-unbound')!
+    expect(row.color).toBe('#ff0000')
+    expect(writes.count()).toBe(1)
+    writes.stop()
     sync.close()
   })
 })

@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type {
@@ -20,8 +23,6 @@ import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type {
   RuntimeBrowserDriverState,
-  RuntimeMarkdownReadTabResult,
-  RuntimeMarkdownSaveTabResult,
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState,
   RuntimeTerminalPresentation
@@ -139,6 +140,8 @@ export type RuntimeNotifier = {
     navigation?: RuntimeNavigationTarget,
     position?: RuntimeFileOpenPosition
   ): void
+  /** Layout-owner builds: shows a tab main already wrote for a file it opened. */
+  revealEditorTab?(reveal: RuntimeEditorTabReveal): void
   openDiff?(
     worktreeId: string,
     filePath: string,
@@ -147,13 +150,6 @@ export type RuntimeNotifier = {
     runtimeEnvironmentId?: string | null,
     navigation?: RuntimeNavigationTarget
   ): void
-  readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
-  saveMobileMarkdownTab?(
-    worktreeId: string,
-    tabId: string,
-    baseVersion: string,
-    content: string
-  ): Promise<RuntimeMarkdownSaveTabResult>
   /** Closes the whole tab. */
   closeTerminal(tabId: string): void
   /** Drops one split pane main already closed; never closes its tab. */

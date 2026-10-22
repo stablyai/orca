@@ -5,7 +5,8 @@ import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
 import { LoadedStateParsingOperations } from './loaded-state-parsing'
 import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 import { PrimaryStateWriteOperations } from './primary-state-writes'
-import { WriteSchedulingOperations } from './write-scheduling'
+import { scheduleSave, WriteSchedulingOperations } from './write-scheduling'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { WriteFlushBarrierOperations } from './write-flush-barriers'
 import { ProfilePreferences } from './profile-preferences'
 import { RepoLifecycleOperations } from './repo-lifecycle-operations'
@@ -166,7 +167,12 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     remoteLayoutSnapshots,
     sparsePresets,
     ptyBindings,
-    layoutCommands: new LayoutCommandPersistence(runtime, sessions),
+    layoutCommands: new LayoutCommandPersistence(
+      runtime,
+      sessions,
+      // Switch point: a terminal close kept after a failed write is saved again later.
+      ORCA_LAYOUT_OWNER_IS_MAIN ? () => scheduleSave(scheduling) : undefined
+    ),
     sshProfiles,
     retiredWorktreeNames,
     sshLeases,

@@ -4,7 +4,9 @@
  */
 import type { Store } from '../../persistence'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { GLOBAL_WORKSPACE_SESSION_FIELDS } from '../../../shared/workspace-session-host-field-ownership'
 import {
   ORCAD_MIGRATION_DEPENDENCY_KINDS,
@@ -17,6 +19,8 @@ import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orc
 export type DependentStateStore = Pick<
   Store,
   | 'getAllWorktreeMetaForHost'
+  | 'getProjects'
+  | 'getRepos'
   | 'getSshRemotePtyLeases'
   | 'getWorkspaceSession'
   | 'getWorkspaceSessionHostIds'
@@ -40,7 +44,7 @@ export function collectDependentStateBlockers(
           .filter((a) => a.executionTargetType === 'ssh' && a.executionTargetId === targetId)
           .map((a) => a.name)
     ],
-    ['worktree-metadata', () => Object.keys(store.getAllWorktreeMetaForHost(hostId))],
+    ['worktree-metadata', () => hostWorktreeMetadataNames(store, hostId)],
     // Why every status: a terminated lease is still a saved record pointing at this host.
     [
       'terminal-lease',
@@ -115,6 +119,25 @@ export function collectUntransferredDependentBlockers(
     : []
 }
 
+/**
+ * The projection hands every host each unstamped legacy row, so one counts only when its repo is
+ * registered on this host, or it belongs to a project (which can span hosts). An orphan whose repo
+ * is gone is no host's state and cannot be cleared in the UI, so it must not block (#31498).
+ */
+function hostWorktreeMetadataNames(store: DependentStateStore, hostId: ExecutionHostId): string[] {
+  const repos = store.getRepos()
+  const projectIds = new Set(store.getProjects().map((project) => project.id))
+  return Object.entries(store.getAllWorktreeMetaForHost(hostId))
+    .filter(([worktreeId, meta]) => {
+      if (meta.hostId) {
+        return meta.hostId === hostId
+      }
+      const ownerId = getRepoIdFromWorktreeId(worktreeId)
+      return getRepoRegistrationHostIds(repos, ownerId).has(hostId) || projectIds.has(ownerId)
+    })
+    .map(([worktreeId]) => worktreeId)
+}
+
 /** Non-default host-owned fields of the host's partition, plus a local session pointed at the host. */
 function workspaceSessionReferences(store: DependentStateStore, hostId: string): string[] {
   const references: string[] = []
@@ -148,12 +171,19 @@ function isEmptyValue(value: unknown): boolean {
   return typeof value === 'object' && Object.keys(value).length === 0
 }
 
+/** Each blocking dependency with its count and the first names, e.g. `automation ×1 (Nightly)`. */
+export function dependentStateSummary(dependencies: OrcadMigrationDependency[]): string {
+  return dependencies
+    .map(
+      ({ kind, count, names }) =>
+        `${kind} ×${count}${names?.length ? ` (${names.join(', ')})` : ''}`
+    )
+    .join('; ')
+}
+
 export function dependentStateMessage(dependencies: OrcadMigrationDependency[]): string {
-  const parts = dependencies.map(
-    ({ kind, count, names }) => `${kind} ×${count}${names?.length ? ` (${names.join(', ')})` : ''}`
-  )
   return (
-    'This SSH target is still referenced by saved Orca state that a managed server cannot take ' +
-    `over yet: ${parts.join('; ')}. Remove it, or keep this host in direct SSH mode.`
+    'This SSH target is still referenced by saved Orca state that this host’s Orca server cannot take ' +
+    `over yet: ${dependentStateSummary(dependencies)}. Remove it, or keep this host in direct SSH mode.`
   )
 }

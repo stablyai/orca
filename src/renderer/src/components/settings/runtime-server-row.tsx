@@ -1,40 +1,56 @@
 import { useState } from 'react'
-import { AlertTriangle, Link2, Loader2, Server, ServerOff, Trash2 } from 'lucide-react'
+import { Link2 } from 'lucide-react'
 import {
-  isUserManagedRuntimeEnvironment,
+  getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../shared/runtime-environments'
+import type { SshTarget } from '../../../../shared/ssh-types'
+import type { ManagedOrcadPreloadApi } from '../../../../preload/api/managed-orcad-api'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
+import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
+import { getRuntimeServerProblemLine, getRuntimeServerRoute } from './runtime-server-row-meta'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { resolveHostDisplay } from '../../../../shared/host-display-resolution'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
-import { useAppStore } from '@/store'
+import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
+import type { RuntimeHostDetails } from './runtime-environment-host-details'
 import {
-  getHostDetailsDescription,
-  getHostDetailsSummary,
-  evaluateHostDetails,
-  getRuntimeServerConnectionState,
-  isRuntimeServerTransportConnected,
-  type RuntimeHostDetails
-} from './runtime-environment-host-details'
-import {
-  getRemoteServerManualUpdateHelp,
-  RemoteServerUpdateStatus
-} from './RemoteServerUpdateStatus'
-import { RuntimeRepairDialog } from './RuntimeRepairDialog'
-import {
+  formatRuntimeEndpointAddress,
+  getRuntimeServerAvailableUpdateText,
   getRuntimeServerStatusIndicator,
-  getRuntimeServerVersionFooter
+  getRuntimeServerVersionText,
+  isRemoteServerUpdateInFlight
 } from './runtime-server-row-presentation'
+import { RuntimeRepairDialog } from './RuntimeRepairDialog'
+import { RuntimeServerRowDetails } from './runtime-server-row-details'
+import { RuntimeServerRowMenuItems } from './runtime-server-row-menu'
+import { useRuntimeServerRowState } from './runtime-server-row-state'
+import {
+  ServerListRow,
+  ServerRowChip,
+  ServerRowDetailsToggle,
+  type ServerRowStatus
+} from './runtime-server-list-row'
+import { RuntimeSshAccessControl } from './RuntimeSshAccessControl'
+import { RuntimeSshAccessDialog } from './runtime-ssh-access-dialog'
+import {
+  getManagedServerSummary,
+  ManagedServerConfirmations,
+  ManagedServerDetailLines,
+  managedServerHasConfirmation,
+  ManagedServerMenuItems,
+  managedServerHasPrimaryAction,
+  ManagedServerPrimaryAction
+} from './managed-server-row-parts'
+import type { ManagedServerLifecycle } from './use-managed-server-lifecycle'
+
+const NO_SSH_TARGETS: SshTarget[] = []
+const NO_DUPLICATES: readonly string[] = []
 
 type RuntimeServerRowProps = {
   environment: PublicKnownRuntimeEnvironment
+  /** Other saved servers with this one's host key: the same machine paired twice. */
+  duplicateOfNames?: readonly string[]
   details: RuntimeHostDetails | undefined
   isActive: boolean
   remoteUpdate: RemoteServerUpdateEntry | undefined
@@ -44,14 +60,27 @@ type RuntimeServerRowProps = {
   disconnecting: boolean
   removing: boolean
   isBusy: boolean
+  /** The SSH-access API and hosts; absent where managed servers aren't available (web). */
+  sshAccessApi?: Pick<ManagedOrcadPreloadApi, 'linkSshAccess' | 'unlinkSshAccess'> | null
+  sshTargets?: SshTarget[]
+  managed?: ManagedServerLifecycle | null
   onOpenUpdate: () => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
+  onMakeDefault?: (environment: PublicKnownRuntimeEnvironment) => void
+  onCheckForUpdates?: (options: UpdateCheckOptions) => void
+  onChanged?: () => void
+  /** Re-reads SSH hosts; the route dialog lists them. */
+  onRefreshSshTargets?: () => void
+  /** Re-probes every server; offered when the host answered but Orca didn't. */
+  onRecheck?: () => void
+  rechecking?: boolean
 }
 
 export function RuntimeServerRow({
   environment,
+  duplicateOfNames = NO_DUPLICATES,
   details,
   isActive,
   remoteUpdate,
@@ -61,223 +90,265 @@ export function RuntimeServerRow({
   disconnecting,
   removing,
   isBusy,
+  sshAccessApi = null,
+  sshTargets = NO_SSH_TARGETS,
+  managed = null,
   onOpenUpdate,
   onDisconnect,
   onConnect,
-  onRemove
+  onRemove,
+  onMakeDefault,
+  onCheckForUpdates,
+  onChanged,
+  onRefreshSshTargets,
+  onRecheck,
+  rechecking = false
 }: RuntimeServerRowProps): React.JSX.Element {
-  const runtimeStatusEntry = useAppStore((state) =>
-    state.runtimeStatusByEnvironmentId.get(environment.id)
-  )
-  // Why the shared verdict and not `entry.status`: an unverifiable probe nulls it while the
-  // transport is still up, and this row then read "error" and offered Connect for a host that
-  // RepositoryHostSetupsSection -- which already derives through this same function -- was
-  // showing as reachable. One host, two surfaces, opposite answers. A probe that did not come
-  // back is not a host that went away (docs/reference/ssh-execution-boundary.md).
-  const entryReachable =
-    runtimeStatusEntry !== undefined &&
-    isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatusEntry))
-  const effectiveDetails = runtimeStatusEntry
-    ? {
-        ...(details ?? {
-          status: entryReachable ? ('ready' as const) : ('error' as const),
-          runtimeStatus: null,
-          compatibility: null,
-          error: null
-        }),
-        status: entryReachable ? ('ready' as const) : ('error' as const),
-        runtimeStatus: runtimeStatusEntry.status,
-        compatibility: runtimeStatusEntry.status
-          ? evaluateHostDetails(runtimeStatusEntry.status)
-          : null,
-        remoteControl:
-          runtimeStatusEntry.remoteControl ?? runtimeStatusEntry.status?.remoteControl ?? null
-      }
-    : details
   const [repairOpen, setRepairOpen] = useState(false)
-  const snapshot = runtimeStatusEntry?.snapshot
-  const accessRevoked =
-    snapshot?.verification === 'blocked' &&
-    !snapshot.retired &&
-    snapshot.blockedReason === 'access-revoked'
-  // Why: managed and cloud-workspace servers are paired by the service that owns them.
-  const repairable = !environment.orcadDeployment && isUserManagedRuntimeEnvironment(environment)
-  const detailsDescription = accessRevoked
-    ? translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.accessRevoked',
-        '{{value0}} no longer accepts this computer. Re-pair it with a new access link.',
-        { value0: environment.name }
-      )
-    : getHostDetailsDescription(effectiveDetails)
-  const connectionState =
-    details?.status === 'loading' && !runtimeStatusEntry?.status
-      ? 'checking'
-      : getRuntimeServerConnectionState(effectiveDetails)
-  // A connected host exposes Disconnect; otherwise Connect.
-  const isReachable = isRuntimeServerTransportConnected(connectionState)
+  const [sshDialogOpen, setSshDialogOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const row = useRuntimeServerRowState(environment, details)
   const actionBusy = connecting || switching || disconnecting || removing
-  // Why: the snapshot keeps the last answered status across a lost probe; `status` is only the latest answer.
-  const descriptorStatus = lastVerifiedRuntimeStatus(runtimeStatusEntry)
-  const hostDisplay = resolveHostDisplay({
-    name: environment.name,
-    machineName: descriptorStatus?.machineName,
-    platform: descriptorStatus?.hostPlatform
-  })
-  const hostDescriptorText = hostDisplay.descriptorLine
-  const statusIndicator = getRuntimeServerStatusIndicator(connectionState, accessRevoked)
-  const versionFooter = remoteUpdate
-    ? getRuntimeServerVersionFooter(remoteUpdate, {
-        accessRevoked,
-        lastKnownVersion: descriptorStatus?.appVersion
-      })
-    : null
-  // Why: when revoked, the red line replaces the summary; "Status unavailable" would contradict it.
-  const rowSummary =
-    environment.connectionDependency === 'ssh-tunnel'
-      ? translate(
-          'auto.components.settings.RuntimeEnvironmentsPane.sshTunnelRequired',
-          'SSH tunnel required'
-        )
-      : isActive
-        ? translate(
-            'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
-            'Default host for new projects. Existing projects stay on their own host.'
-          )
-        : accessRevoked
-          ? null
-          : getHostDetailsSummary(effectiveDetails)
+  const repairable = row.repairRoute === 'access-link'
   // Why: the revoked host rejects this token on every Connect; Re-pair is the only way back.
-  const showConnect = !(accessRevoked && repairable)
+  const canConnect = !(row.accessRevoked && repairable)
+  const updateActionable = remoteUpdate?.phase === 'available' || remoteUpdate?.phase === 'failed'
+  const deployment = getOrcadSshDeployment(environment)
+  const sshAccess = environment.sshAccess
+  const pendingSshAccess = environment.pendingSshAccessOperation
+
+  // Why: the transport is up but Orca didn't answer; only a fresh probe can tell more.
+  const needsRecheck =
+    row.connectionState === 'runtime-unavailable' ||
+    row.connectionState === 'workspace-window-closed'
+  const primary: 'managed' | 'repair' | 'update' | 'connect' | 'retry' | 'recheck' | null =
+    managed && managedServerHasPrimaryAction(managed)
+      ? 'managed'
+      : row.accessRevoked && repairable
+        ? 'repair'
+        : updateActionable
+          ? 'update'
+          : // Why: the first probe hasn't answered yet; Connect would race it.
+            !row.isReachable && canConnect && row.connectionState !== 'checking'
+            ? row.probeFailed
+              ? 'retry'
+              : 'connect'
+            : needsRecheck && onRecheck
+              ? 'recheck'
+              : null
+
+  const status: ServerRowStatus = getRuntimeServerStatusIndicator({
+    connectionState: row.connectionState,
+    accessRevoked: row.accessRevoked,
+    compatibilityBlocked: row.compatibilityBlocked,
+    probeFailed: row.probeFailed,
+    connecting,
+    disconnecting,
+    remoteUpdate,
+    managedNotRunning: Boolean(managed?.status && !managed.status.activeVersion)
+  })
+
+  const endpoint =
+    environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId)?.endpoint ??
+    environment.endpoints[0]?.endpoint ??
+    null
+  const sshRoute = getRuntimeServerRoute(environment, sshTargets)
+  const address = formatRuntimeEndpointAddress(endpoint ?? undefined)
+  const problemLine = getRuntimeServerProblemLine({
+    environment,
+    row,
+    remoteUpdate,
+    managedStatusError: managed?.statusError ?? null,
+    managedSummary: managed ? getManagedServerSummary(managed) : null,
+    address,
+    duplicateOfNames
+  })
+
+  const versionText = getRuntimeServerVersionText(
+    remoteUpdate,
+    managed?.status?.activeVersion ?? row.descriptorStatus?.appVersion
+  )
+  const availableText = getRuntimeServerAvailableUpdateText(remoteUpdate)
+  const infoParts = [sshRoute ?? address, versionText].filter((part): part is string =>
+    Boolean(part)
+  )
+
+  const meta = (
+    <>
+      {problemLine ? (
+        <span className={cn('truncate', problemLine.destructive && 'text-destructive')}>
+          {problemLine.text}
+        </span>
+      ) : (
+        infoParts.map((part, index) => (
+          <span key={part} className="flex min-w-0 shrink items-center gap-1">
+            {index > 0 ? <span aria-hidden>·</span> : null}
+            <span className="truncate">{part}</span>
+          </span>
+        ))
+      )}
+      {!problemLine && availableText ? (
+        <span className="flex shrink-0 items-center gap-1 text-status-warning">
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          {availableText}
+        </span>
+      ) : null}
+      {problemLine ? (
+        <>
+          <span aria-hidden>·</span>
+          <ServerRowDetailsToggle expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+        </>
+      ) : null}
+    </>
+  )
+
+  const primaryAction =
+    primary === 'managed' && managed ? (
+      <ManagedServerPrimaryAction lifecycle={managed} />
+    ) : primary === 'repair' ? (
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        onClick={() => setRepairOpen(true)}
+        disabled={actionBusy}
+      >
+        <Link2 />
+        {translate('auto.components.settings.RuntimeEnvironmentsPane.repair', 'Re-pair…')}
+      </Button>
+    ) : primary === 'update' ? (
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        onClick={onOpenUpdate}
+        disabled={remoteServerUpdatesRunning || isRemoteServerUpdateInFlight(remoteUpdate)}
+      >
+        {translate('auto.components.settings.RuntimeEnvironmentsPane.updateServer', 'Update')}
+      </Button>
+    ) : primary === 'recheck' ? (
+      <Button type="button" variant="ghost" size="xs" onClick={onRecheck} disabled={rechecking}>
+        {rechecking ? <LoadingSpinner className="size-3" /> : null}
+        {translate('auto.components.settings.serverList.retry', 'Retry')}
+      </Button>
+    ) : primary === 'connect' || primary === 'retry' ? (
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        onClick={() => onConnect(environment)}
+        disabled={actionBusy || row.connectionState === 'checking'}
+      >
+        {connecting ? <LoadingSpinner className="size-3" /> : null}
+        {primary === 'retry'
+          ? translate('auto.components.settings.serverList.retry', 'Retry')
+          : translate('auto.components.settings.RuntimeEnvironmentsPane.connect', 'Connect')}
+      </Button>
+    ) : null
+
+  const showSshAccess = sshAccessApi !== null && !deployment && !pendingSshAccess
+  const footer =
+    pendingSshAccess || expanded || (managed && managedServerHasConfirmation(managed)) ? (
+      <>
+        {pendingSshAccess && sshAccessApi ? (
+          <RuntimeSshAccessControl
+            api={sshAccessApi}
+            environment={environment}
+            targets={sshTargets}
+            onChanged={() => onChanged?.()}
+          />
+        ) : null}
+        {managed ? <ManagedServerConfirmations lifecycle={managed} /> : null}
+        {expanded ? (
+          <RuntimeServerRowDetails
+            endpoint={endpoint}
+            details={row.effectiveDetails}
+            remoteUpdate={remoteUpdate}
+            problem={row.problem ?? problemLine?.text ?? null}
+            sshRoute={sshRoute}
+            unreachable={row.probeFailed}
+          >
+            {managed ? <ManagedServerDetailLines lifecycle={managed} /> : null}
+          </RuntimeServerRowDetails>
+        ) : null}
+      </>
+    ) : null
 
   return (
-    <div data-settings-section={environment.id} className="flex items-center gap-3 px-4 py-3">
-      <Server className="size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="truncate text-sm font-medium">{hostDisplay.title}</div>
-          <span className={cn('size-2 shrink-0 rounded-full', statusIndicator.dotClassName)} />
-          <span className={cn('text-[11px]', statusIndicator.labelClassName)}>
-            {statusIndicator.label}
-          </span>
-          {/* Why: the red "Access revoked" label already carries the warning. */}
-          {!accessRevoked && effectiveDetails?.compatibility?.kind === 'blocked' ? (
-            <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-          ) : effectiveDetails?.status === 'loading' ? (
-            <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-          ) : null}
-        </div>
-        {hostDescriptorText ? (
-          <p className="truncate text-xs text-muted-foreground">{hostDescriptorText}</p>
-        ) : null}
-        {rowSummary ? <p className="truncate text-xs text-muted-foreground">{rowSummary}</p> : null}
-        {detailsDescription ? (
-          <p
-            className={cn(
-              'mt-0.5 truncate text-xs',
-              accessRevoked || effectiveDetails?.compatibility?.kind === 'blocked'
-                ? 'text-destructive'
-                : 'text-muted-foreground'
-            )}
-          >
-            {detailsDescription}
-          </p>
-        ) : null}
-        {remoteUpdate && versionFooter ? (
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">{versionFooter.text}</span>
-            {versionFooter.showUpdateStatus ? (
-              <RemoteServerUpdateStatus entry={remoteUpdate} compact />
+    <>
+      <ServerListRow
+        sectionId={environment.id}
+        name={
+          deployment
+            ? (sshTargets.find((target) => target.id === deployment.sshTargetId)?.label ??
+              environment.name)
+            : row.title
+        }
+        descriptor={row.hostDescriptorText}
+        chips={
+          <>
+            {isActive ? (
+              <ServerRowChip>
+                {translate('auto.components.settings.serverList.defaultChip', 'Default')}
+              </ServerRowChip>
             ) : null}
-          </div>
-        ) : null}
-        {remoteUpdate?.phase === 'manual' ? (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {getRemoteServerManualUpdateHelp(remoteUpdate)}
-          </p>
-        ) : null}
-        {remoteUpdate?.phase === 'failed' && remoteUpdate.error ? (
-          <p className="mt-1 text-xs text-destructive">{remoteUpdate.error}</p>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {remoteUpdate?.phase === 'available' || remoteUpdate?.phase === 'failed' ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={onOpenUpdate}
-            disabled={remoteServerUpdatesRunning}
-          >
-            {translate('auto.components.settings.RuntimeEnvironmentsPane.updateServer', 'Update')}
-          </Button>
-        ) : null}
-        {accessRevoked && repairable ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() => setRepairOpen(true)}
-            disabled={actionBusy}
-          >
-            <Link2 />
-            {translate('auto.components.settings.RuntimeEnvironmentsPane.repair', 'Re-pair…')}
-          </Button>
-        ) : null}
-        {isReachable ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="gap-1.5"
-            onClick={() => onDisconnect(environment)}
-            disabled={actionBusy}
-          >
-            {disconnecting ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <ServerOff className="size-3" />
-            )}
-            {translate('auto.components.settings.RuntimeEnvironmentsPane.disconnect', 'Disconnect')}
-          </Button>
-        ) : showConnect ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="gap-1.5"
-            onClick={() => onConnect(environment)}
-            disabled={actionBusy || connectionState === 'checking'}
-          >
-            {connecting ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <Server className="size-3" />
-            )}
-            {translate('auto.components.settings.RuntimeEnvironmentsPane.connect', 'Connect')}
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => onRemove(environment)}
-          className="size-7 text-muted-foreground hover:text-red-400"
-          disabled={isBusy}
-          aria-label={translate(
-            'auto.components.settings.RuntimeEnvironmentsPane.aeb26635d2',
-            'Remove {{value0}}',
-            { value0: environment.name }
-          )}
-        >
-          {removing ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
-        </Button>
-      </div>
+            {!deployment && (sshAccess || environment.connectionDependency === 'ssh-tunnel') ? (
+              <ServerRowChip>
+                {translate('auto.components.settings.serverList.sshTunnelChip', 'SSH tunnel')}
+              </ServerRowChip>
+            ) : null}
+          </>
+        }
+        meta={meta}
+        status={status}
+        primaryAction={primaryAction}
+        menuItems={
+          <RuntimeServerRowMenuItems
+            showUpdate={updateActionable && primary !== 'update'}
+            showConnect={
+              !row.isReachable && canConnect && primary !== 'connect' && primary !== 'retry'
+            }
+            showDisconnect={row.isReachable}
+            showMakeDefault={Boolean(onMakeDefault) && !isActive}
+            sshAccessLinked={showSshAccess ? Boolean(sshAccess) : null}
+            detailsExpanded={expanded}
+            actionBusy={actionBusy}
+            isBusy={isBusy}
+            connectDisabled={row.connectionState === 'checking'}
+            managedItems={managed ? <ManagedServerMenuItems lifecycle={managed} /> : null}
+            onUpdate={onOpenUpdate}
+            onConnect={() => onConnect(environment)}
+            onDisconnect={() => onDisconnect(environment)}
+            onMakeDefault={() => onMakeDefault?.(environment)}
+            onCheckForUpdates={onCheckForUpdates}
+            onSshAccess={() => {
+              onRefreshSshTargets?.()
+              setSshDialogOpen(true)
+            }}
+            onToggleDetails={() => setExpanded((v) => !v)}
+            onRemove={() => onRemove(environment)}
+          />
+        }
+        footer={footer}
+      />
       <RuntimeRepairDialog
         open={repairOpen}
         onOpenChange={setRepairOpen}
         environmentId={environment.id}
         name={environment.name}
       />
-    </div>
+      {showSshAccess && sshAccessApi ? (
+        <RuntimeSshAccessDialog
+          open={sshDialogOpen}
+          api={sshAccessApi}
+          environment={environment}
+          targets={sshTargets}
+          onOpenChange={setSshDialogOpen}
+          onChanged={() => onChanged?.()}
+        />
+      ) : null}
+    </>
   )
 }

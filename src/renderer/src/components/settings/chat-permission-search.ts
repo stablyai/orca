@@ -7,6 +7,6 @@ export const getChatPermissionSearchEntry = createLocalizedCatalog((): SettingsS
   title: translate('settings.chat.permissionsTitle', 'Permissions for new chats'),
   description: translate(
     'settings.chat.permissionsDescription',
-    'Applies to new chats only. Agents you open in a terminal use Settings → Agents → Agent Permissions.'
+    'New chats only. Agent-specific defaults are in Settings → Agents.'
   )
 }))

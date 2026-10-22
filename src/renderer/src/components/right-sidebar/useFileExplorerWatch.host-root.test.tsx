@@ -64,7 +64,7 @@ it('refreshes the selected host Explorer when another host publishes the same wo
   })
   const [target] = targets
   const adapter = buildEditorExternalWatchEventHandler((worktreePath, runtimeEnvironmentId) =>
-    targets.find(
+    targets.filter(
       (candidate) =>
         candidate.worktreePath === worktreePath &&
         candidate.runtimeEnvironmentId === runtimeEnvironmentId

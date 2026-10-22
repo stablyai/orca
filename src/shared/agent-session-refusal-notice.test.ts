@@ -46,7 +46,8 @@ const WRITES: AgentSessionWriteKind[] = [
   'command',
   'clear',
   'compact',
-  'goal'
+  'goal',
+  'queued-edit'
 ]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 
@@ -96,7 +97,8 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   command: 'notDoneCommand',
   clear: 'notDoneCommand',
   compact: 'notDoneCommand',
-  goal: 'notDoneGoal'
+  goal: 'notDoneGoal',
+  'queued-edit': 'notDoneQueuedEdit'
 }
 
 function codeOf(failure: AgentSessionWriteFailure): string {

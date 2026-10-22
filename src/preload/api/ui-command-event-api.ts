@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import type { JiraQuickFilterState } from '../../shared/jira-quick-filters'
 import type { JiraSavedFilterState, JiraSavedFilterMutation } from '../../shared/jira-saved-filters'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
@@ -39,10 +42,6 @@ import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
-import type {
-  RuntimeMobileMarkdownRequest,
-  RuntimeMobileMarkdownResponse
-} from '../../shared/mobile-markdown-document'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
@@ -272,6 +271,8 @@ export type UiCommandEventApi = {
       position?: RuntimeFileOpenPosition
     }) => void
   ) => () => void
+  /** Layout-owner builds: shows a tab main wrote for a file it opened. */
+  onRevealEditorTabFromRuntime: (callback: (data: RuntimeEditorTabReveal) => void) => () => void
   onOpenDiffFromMobile: (
     callback: (data: {
       worktreeId: string
@@ -282,8 +283,6 @@ export type UiCommandEventApi = {
       navigation?: RuntimeNavigationTarget
     }) => void
   ) => () => void
-  onMobileMarkdownRequest: (callback: (request: RuntimeMobileMarkdownRequest) => void) => () => void
-  respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse) => void
   onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void) => () => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void

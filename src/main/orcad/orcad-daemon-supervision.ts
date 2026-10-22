@@ -22,7 +22,7 @@ import { errorMessage } from '../../shared/error-message'
 
 const WINDOWS_DAEMON_STARTUP_TIMEOUT_MS = 30_000
 
-export type OrcadDaemonStartup =
+type OrcadDaemonStartup =
   | { state: 'live'; pid: number | null }
   | { state: 'degraded'; reason: string }
   | { state: 'unavailable'; reason: string }
@@ -42,6 +42,8 @@ export async function startOrcadDaemon(
   // session dies. An orcad daemon must survive its SSH session ending — that is the point.
   const policy = {
     macosLoginSessionWatch: false,
+    // Why: a daemon another orcad version forked keeps its code and umask; swap it once no terminal would die.
+    recycleStaleDaemonOnEveryPlatform: true,
     spawnAdmission: resolveTerminalSpawnAdmissionMode(),
     // A freshly uploaded node.exe plus conpty can take well over 10 s on its first, AV-scanned exec.
     ...(platform === 'win32' ? { startupTimeoutMs: WINDOWS_DAEMON_STARTUP_TIMEOUT_MS } : {})

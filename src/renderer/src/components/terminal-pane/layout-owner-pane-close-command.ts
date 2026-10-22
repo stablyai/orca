@@ -1,16 +1,16 @@
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { expectPaneToClose, type PaneCloseKind } from '@/runtime/layout-owner-pane-intents'
+import { expectPaneToClose } from '@/runtime/layout-owner-pane-intents'
 import { closeAfterLastPaneRefusal } from './layout-owner-last-pane-refusal'
 
 /**
- * A pane close in a layout-owner build: main closes the pane first, and the window removes it when
- * main's frame drops it (the frame reconciler runs the close `kind` names). False when a paired
+ * The user's pane close in a layout-owner build: main closes the pane first, and the window removes
+ * it when main's frame drops it (the frame reconciler runs the user's close). False when a paired
  * server owns the workspace; the caller closes as today.
  */
-export function sendPaneCloseToLayoutOwner(
-  pane: { worktreeId: string; tabId: string; leafId: string; kind: PaneCloseKind },
+function sendPaneCloseToLayoutOwner(
+  pane: { worktreeId: string; tabId: string; leafId: string },
   on: {
     /** Main cannot close it: close as today. */
     asToday: () => void
@@ -22,10 +22,10 @@ export function sendPaneCloseToLayoutOwner(
   }
 ): boolean {
   const { tabId, leafId } = pane
-  const forget = expectPaneToClose(tabId, leafId, pane.kind)
+  const forget = expectPaneToClose(tabId, leafId, 'user')
   const sent = sendLayoutCommandToOwner(
     pane.worktreeId,
-    { type: 'closePane', tabId, leafId, ...(pane.kind === 'exit' && { automatic: true }) },
+    { type: 'closePane', tabId, leafId },
     {
       apply: (result) => {
         // Already gone from main's copy (a workspace it lacks): no frame will drop it.
@@ -63,7 +63,7 @@ export function sendUserPaneCloseToLayoutOwner(
 ): boolean {
   const { tabId, leafId, paneId } = pane
   return sendPaneCloseToLayoutOwner(
-    { worktreeId: pane.worktreeId, tabId, leafId, kind: 'user' },
+    { worktreeId: pane.worktreeId, tabId, leafId },
     {
       asToday: () => tab.closePaneLocally(paneId),
       lastPane: () =>

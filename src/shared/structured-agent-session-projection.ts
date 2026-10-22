@@ -50,15 +50,26 @@ export {
 } from './structured-agent-session-live-turn'
 export { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
-function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
-  return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
+/** A tool's output as its result block. Only a cut the sent copy made has more behind it; a head an
+ *  older build saved has none, so only that cut names the item to fetch. */
+function toolResult(
+  item: AgentJournalRenderItem,
+  payload: { head: string; truncated: boolean; byteLength: number },
+  callId: string | undefined
+) {
+  return {
+    type: 'tool-result' as const,
+    output: payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head,
+    callId,
+    ...(item.shortened && payload.truncated ? { fullOutputItemId: item.itemId } : {})
+  }
 }
 
 /** The markers a clipped payload carries in its own text, anchored to the end
  *  so nothing that merely looks like one inside the body can match. */
 const BOUNDED_TEXT_MARKERS = [
-  /\n… \(\d+ bytes\)$/,
-  /\n\[Orca: output truncated — \d+ bytes total, digest [0-9a-f]+\]$/
+  /\n\u2026 \(\d+ bytes\)$/,
+  /\n\[Orca: output truncated \u2014 \d+ bytes total, digest [0-9a-f]+\]$/
 ]
 
 /** Recovers the clipped body from a bounded payload's text, and says whether a
@@ -83,10 +94,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
     // The call and its output are one journal row, so the result names its call.
     const { callId } = call
     if (body.kind === 'diff') {
-      return {
-        role: 'assistant',
-        blocks: [call, { type: 'tool-result', output: boundedText(body.patch), callId }]
-      }
+      return { role: 'assistant', blocks: [call, toolResult(item, body.patch, callId)] }
     }
     return {
       role: 'assistant',
@@ -95,11 +103,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
         ...(body.output
           ? [
               {
-                type: 'tool-result' as const,
-                output: boundedText(body.output),
+                ...toolResult(item, body.output, callId),
                 // Output a call left when it was cut short is not an error it reported.
-                isError: agentJournalToolCallLifecycle(body) === 'failed',
-                callId
+                isError: agentJournalToolCallLifecycle(body) === 'failed'
               }
             ]
           : [])
@@ -202,7 +208,8 @@ export function projectStructuredItemToNativeChat(
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
         ...lifecycle,
         ...(command ? { command } : {}),
-        ...(from && projected.role === 'user' ? { from } : {})
+        ...(from && projected.role === 'user' ? { from } : {}),
+        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
       }
     : null
   projectedItems.set(item, message)

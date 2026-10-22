@@ -39,6 +39,7 @@ import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   callBuild,
   expectDeclaredSurfaceExecutes,
+  expectItemDetailNegotiation,
   runtimeStub
 } from './structured-agent-session-surface-execution'
 import {
@@ -300,6 +301,7 @@ describe('cross-version structured agent sessions', () => {
           build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
         ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
       }
+      expectItemDetailNegotiation([current, baseline])
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)
@@ -558,32 +560,28 @@ describe('cross-version structured agent sessions', () => {
     })
 
     it('hides the row from the old client and annotates it for a capable client', async () => {
-      const oldReply = (
-        await callBuild(
-          current,
-          'aiVault.listSessions',
-          {},
-          {
-            clientKind: 'runtime',
-            clientCapabilities: legacyClientCapabilities()
-          },
-          runtime
-        )
-      )[0]
+      const [oldReply] = await callBuild(
+        current,
+        'aiVault.listSessions',
+        {},
+        {
+          clientKind: 'runtime',
+          clientCapabilities: legacyClientCapabilities()
+        },
+        runtime
+      )
       expect(oldReply).toMatchObject({ ok: true, result: { sessions: [] } })
 
-      const capableReply = (
-        await callBuild(
-          current,
-          'aiVault.listSessions',
-          {},
-          {
-            clientKind: 'runtime',
-            clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-          },
-          runtime
-        )
-      )[0]
+      const [capableReply] = await callBuild(
+        current,
+        'aiVault.listSessions',
+        {},
+        {
+          clientKind: 'runtime',
+          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+        },
+        runtime
+      )
       expect(capableReply).toMatchObject({
         ok: true,
         result: {
@@ -704,7 +702,7 @@ describe('cross-version structured agent sessions', () => {
             starts += 1
             await startGate
             return {
-              providerChildPhase: 'starting' as const,
+              acquisitionGeneration: `cursor-${fence}`,
               process: {
                 hostId: 'local',
                 pid: 4242,
@@ -743,7 +741,7 @@ describe('cross-version structured agent sessions', () => {
 
     /** Reopens the store from disk and installs a fresh host over the same journal
      *  root — what a process restart actually leaves behind. */
-    async function bootHost(generation: string, startupLimits?: { silenceMs: number }) {
+    async function bootHost(generation: string, startupLimits?: { ceilingMs: number }) {
       store = await openTestAgentSessionRecordStore(root)
       const host: StructuredAgentSessionHost = new StructuredAgentSessionHost({
         agents: NO_STRUCTURED_AGENTS,
@@ -943,7 +941,9 @@ describe('cross-version structured agent sessions', () => {
         (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
       )
       const created = await answer('agentSession.create', createIntentParams())
-      await bootHost('b', { silenceMs: 200 })
+      // The ceiling counts from the start's registration, so a short one ends a start whose
+      // handshake never answers without waiting out the real ten minutes.
+      await bootHost('b', { ceilingMs: 200 })
       handshake = new Promise(() => undefined)
 
       const params = sendParams('never started', created.fence)
