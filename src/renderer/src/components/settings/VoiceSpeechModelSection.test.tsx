@@ -106,6 +106,7 @@ function renderSection(args: {
         modelStates={modelStates}
         onUpdateVoiceSettings={vi.fn()}
         onOpenOpenAiDialog={vi.fn()}
+        onOpenCustomEndpointDialog={vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
       />
     )

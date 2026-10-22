@@ -8,6 +8,7 @@ import type {
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import { hasCustomSttEndpoint } from './custom-stt-endpoint-store'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -103,8 +104,12 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
-      return { id: modelId, status: this.hasOpenAiKey() ? 'ready' : 'not-downloaded' }
+    if (manifest.provider !== 'local') {
+      // Why: the OpenAI key check is injected so a host that cannot decrypt the
+      // desktop-sealed key (orcad) reports cloud models as not ready.
+      const configured =
+        manifest.provider === 'custom' ? hasCustomSttEndpoint() : this.hasOpenAiKey()
+      return { id: modelId, status: configured ? 'ready' : 'not-downloaded' }
     }
 
     const modelDir = this.getModelDir(modelId)
