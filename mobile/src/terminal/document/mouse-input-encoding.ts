@@ -3,6 +3,21 @@ import type { TerminalDocumentScope } from './document-scope'
 import { ESC } from './escape-introducers'
 import { viewportToMouseReportCell } from './mouse-report-cell'
 
+export function scrollNormalBufferLines(scope: TerminalDocumentScope, lines: number) {
+  const terminal = scope.term
+  if (!terminal) {
+    return
+  }
+  const beforeY = terminal.buffer.active.viewportY
+  terminal.scrollLines(lines)
+  if (terminal === scope.pendingTerm && terminal.buffer.active.viewportY !== beforeY) {
+    scope.pendingReplayScrollAnchorRows = Math.max(
+      0,
+      terminal.buffer.active.baseY - terminal.buffer.active.viewportY
+    )
+  }
+}
+
 export function isAlternateBufferActive(scope: TerminalDocumentScope) {
   try {
     return !!(
@@ -235,7 +250,7 @@ export function routeScrollLines(
   const mouseTrackingMode = getMouseTrackingMode(scope)
   const alternateBufferActive = isAlternateBufferActive(scope)
   if (isWheelEncodingUnproven(scope, mouseTrackingMode)) {
-    scope.term.scrollLines(lines)
+    scrollNormalBufferLines(scope, lines)
     return
   }
   if (isWheelMouseTrackingMode(mouseTrackingMode)) {
@@ -264,5 +279,5 @@ export function routeScrollLines(
     }
     return
   }
-  scope.term.scrollLines(lines)
+  scrollNormalBufferLines(scope, lines)
 }

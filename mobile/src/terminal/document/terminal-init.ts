@@ -1,3 +1,4 @@
+import { resizeTerminalBuffer } from './terminal-buffer-resize'
 import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
 import { stopSurfaceTouchGestures } from './surface-touch-gestures'
 import { clearLongPress } from './tap-dispatch'
@@ -102,12 +103,21 @@ export function init(
   }
   // Why: a width-reflow re-stream rewraps the same content at new cols.
   // Distance-from-bottom (rows) is the only stable anchor across reflow,
-  // since line counts and cell positions change. null = stay pinned to bottom.
-  const prevB =
-    preserveScroll && scope.term && scope.term.buffer && scope.term.buffer.active
-      ? scope.term.buffer.active
-      : null
-  const scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1
+  // since line counts and cell positions change. Nonpositive offsets stay at bottom.
+  const pendingBuffer = scope.pendingTerm?.buffer.active
+  // Why: pending gestures and explicit resets carry through every superseding replay.
+  let pendingAnchorRows = pendingBuffer ? scope.pendingReplayScrollAnchorRows : null
+  if (pendingBuffer?.type === 'alternate') {
+    pendingAnchorRows = 0
+  } else if (pendingBuffer && pendingBuffer.viewportY < pendingBuffer.baseY) {
+    pendingAnchorRows = pendingBuffer.baseY - pendingBuffer.viewportY
+  }
+  const committedBuffer = scope.committedTerm?.buffer.active
+  const scrollAnchorRows = preserveScroll
+    ? (pendingAnchorRows ??
+      (committedBuffer ? Math.max(0, committedBuffer.baseY - committedBuffer.viewportY) : -1))
+    : -1
+  scope.pendingReplayScrollAnchorRows = preserveScroll ? pendingAnchorRows : 0
   scope.terminalGeneration++
   const gen = scope.terminalGeneration
   const reused = scope.provisionalTerm
@@ -145,6 +155,9 @@ export function init(
   // mirrored modes aligned with exactly what this mobile xterm replays.
   updateMouseModeFromData(scope, replayData)
   scope.activeAltScreenSnapshot = isAltScreenActive(replayData)
+  if (scope.activeAltScreenSnapshot) {
+    scope.pendingReplayScrollAnchorRows = 0
+  }
   scope.initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : []
   scope.initialOscLinkRowOffset = 0
   scope.initialOscLinkEvictionReady = false
@@ -217,6 +230,9 @@ export function init(
 }
 
 export function write(scope: TerminalDocumentScope, data: string) {
+  if (scope.pendingTerm) {
+    scope.pendingReplayScrollAnchorRows = 0
+  }
   updateMouseModeFromData(scope, data, true)
   enqueueWrite(scope, data)
   pumpWrites(scope, scope.terminalGeneration)
@@ -241,7 +257,7 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
     return
   }
   scope.initRows = rows || scope.initRows
-  scope.term.resize(cols || scope.term.cols, rows || scope.term.rows)
+  resizeTerminalBuffer(scope, cols || scope.term.cols, rows || scope.term.rows)
   emitKeyboardAvoidanceMetrics(scope)
   applyFitScale(scope, 'resize-msg')
   notify(scope, { type: 'ready', cols: cols, rows: rows })

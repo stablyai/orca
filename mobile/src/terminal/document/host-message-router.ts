@@ -88,6 +88,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
   } else if (msg.type === 'write') {
     write(scope, msg.data!)
   } else if (msg.type === 'clear') {
+    scope.pendingReplayScrollAnchorRows = 0
     scope.terminalGeneration++
     resetWriteQueue(scope)
     resumeTerminalDataReplyAuthority(scope) // Why: clear drops the replay boundary.
@@ -102,9 +103,9 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     scope.initialOscLinks = []
     scope.initialOscLinkRowOffset = 0
     scope.initialOscLinkEvictionReady = false
-    if (scope.term) {
-      scope.term.clear()
-      scope.term.reset()
+    for (const terminal of new Set([scope.term, scope.committedTerm])) {
+      terminal?.clear()
+      terminal?.reset()
     }
     emitModesIfChanged(scope)
     emitKeyboardAvoidanceMetrics(scope)

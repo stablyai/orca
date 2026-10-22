@@ -1,3 +1,4 @@
+import { resizeTerminalBuffer } from './terminal-buffer-resize'
 import { getCellHeight, getCellWidth } from './cell-metrics'
 import { elementInRoot } from './document-host-seams'
 import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
@@ -95,7 +96,7 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
         applyFitScale(scope, 'text-scale')
         return
       }
-      scope.term.resize(fit.cols, fit.rows)
+      resizeTerminalBuffer(scope, fit.cols, fit.rows)
     }
     applyFitScale(scope, 'text-scale')
   })

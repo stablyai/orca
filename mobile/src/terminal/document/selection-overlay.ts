@@ -2,6 +2,7 @@ import { getCellHeight, getTotalScale } from './cell-metrics'
 import { cellToViewportPx } from './cell-geometry'
 import type { TerminalDocumentScope } from './document-scope'
 import { notify } from './host-notify'
+import { scrollNormalBufferLines } from './mouse-input-encoding'
 import { applyXtermSelection, selRange } from './selection-range'
 import { viewportPoint, viewportToCell } from './viewport-cell'
 
@@ -110,7 +111,7 @@ export function startEdgeScroll(scope: TerminalDocumentScope, dir: number) {
       return
     }
     const beforeY = scope.term.buffer.active.viewportY
-    scope.term.scrollLines(scope.edgeScrollDir)
+    scrollNormalBufferLines(scope, scope.edgeScrollDir)
     const afterY = scope.term.buffer.active.viewportY
     if (beforeY === afterY) {
       notify(scope, { type: 'haptic', kind: 'edge-bump' })

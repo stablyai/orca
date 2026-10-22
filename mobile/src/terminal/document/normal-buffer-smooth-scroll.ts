@@ -1,5 +1,6 @@
 import { getCellHeight, getTotalScale } from './cell-metrics'
 import { updateScrollIndicator } from './viewport-transform'
+import { scrollNormalBufferLines } from './mouse-input-encoding'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
 
@@ -42,7 +43,7 @@ export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, delta
   if (lines !== 0) {
     const applied = clampNormalScrollLines(scope, lines)
     if (applied !== 0) {
-      scope.term.scrollLines(applied)
+      scrollNormalBufferLines(scope, applied)
       // Why: a touch that scrolled a row is a scroll, even inside TAP_SLOP.
       scope.tapCandidate = null
       // Why: xterm's renderer is row-based. Buffer touch pixels and only

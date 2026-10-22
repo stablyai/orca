@@ -1,3 +1,4 @@
+import { resizeTerminalBuffer } from './terminal-buffer-resize'
 import { applyFitScale } from './fit-scale'
 import { isAlternateBufferActive } from './mouse-input-encoding'
 import { updateScrollIndicator } from './viewport-transform'
@@ -24,7 +25,7 @@ export function reflow(scope: TerminalDocumentScope, cols: number, rows: number)
   const wasAtBottom = buffer.viewportY >= buffer.baseY
   const distanceFromBottom = buffer.baseY - buffer.viewportY
   scope.initRows = nextRows
-  scope.term.resize(nextCols, nextRows)
+  resizeTerminalBuffer(scope, nextCols, nextRows)
   const rewrapped = scope.term.buffer.active
   if (wasAtBottom) {
     scope.term.scrollToBottom()
