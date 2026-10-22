@@ -9,7 +9,8 @@ import {
   pushRecentTabId,
   sanitizeRecentTabIds,
   updateGroup,
-  patchTab
+  patchTab,
+  dedupeEditorTabsWithinGroups
 } from './tab-group-state'
 
 function makeTab(overrides: Partial<Tab> & { id: string; worktreeId: string }): Tab {
@@ -193,5 +194,21 @@ describe('patchTab', () => {
     }
     const result = patchTab(tabs, 't1', { label: 'changed' })
     expect(result!.unifiedTabsByWorktree.w1[1].label).toBe('b')
+  })
+})
+
+describe('editor view deduplication', () => {
+  it('retains the pinned view and independent split groups', () => {
+    const plain = makeTab({
+      id: 'plain',
+      worktreeId: 'w1',
+      contentType: 'editor',
+      entityId: '/note'
+    })
+    const pinned = { ...plain, id: 'pinned', isPinned: true }
+    const split = { ...plain, id: 'split', groupId: 'g2' }
+    const result = dedupeEditorTabsWithinGroups([plain, pinned, split])
+    expect(result.tabs).toEqual([pinned, split])
+    expect(result.tabIdAliasesByGroup.get('g1')?.get('plain')).toBe('pinned')
   })
 })

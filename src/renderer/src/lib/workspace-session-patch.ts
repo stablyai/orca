@@ -58,6 +58,7 @@ export function buildWorkspaceSessionPatch(
   const snapshot = withoutStagedBrowserTabs(fullSnapshot)
   const changed = new Set(changedFields)
   const patch: WorkspaceSessionPatch = {}
+  const editorFilesChanged = changed.has('openFiles')
 
   if (changed.has('activeRepoId')) {
     patch.activeRepoId = snapshot.activeRepoId
@@ -132,8 +133,8 @@ export function buildWorkspaceSessionPatch(
     )
   }
   if (
+    editorFilesChanged ||
     hasAnyChangedField(changed, [
-      'openFiles',
       'editorDrafts',
       'markdownFrontmatterVisible',
       'activeFileIdByWorktree',
@@ -182,7 +183,9 @@ export function buildWorkspaceSessionPatch(
     patch.pairedTerminalTabCloseIntentsByEnvironment =
       snapshot.pairedTerminalTabCloseIntentsByEnvironment
   }
+  // Why openFiles: tab restorability reads the edit-mode files, so a file-only change must re-filter.
   if (
+    editorFilesChanged ||
     stagedVisibilityChanged ||
     hasAnyChangedField(changed, [
       'activeGroupIdByWorktree',

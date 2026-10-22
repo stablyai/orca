@@ -1,6 +1,7 @@
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { workspaceRootGroupId } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
 
@@ -169,6 +170,25 @@ export function isTransientEditorContentType(contentType: TabContentType): boole
   )
 }
 
+export function canRestorePersistedTab(
+  tab: Tab,
+  persistedEditFileIds: ReadonlySet<string>,
+  /** A transient tab whose record the caller still holds, as a frame rebuild does. */
+  keepsTransientTab: (entityId: string) => boolean = () => false
+): boolean {
+  if (tab.contentType === 'terminal') {
+    return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
+  }
+  if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
+    return false
+  }
+  return (
+    !isTransientEditorContentType(tab.contentType) ||
+    persistedEditFileIds.has(tab.entityId) ||
+    keepsTransientTab(tab.entityId)
+  )
+}
+
 export function getPersistedEditFileIdsByWorktree(
   session: WorkspaceSessionState
 ): Record<string, Set<string>> {
@@ -214,23 +234,31 @@ export function dedupeEditorTabsWithinGroups(tabs: Tab[]): {
   tabIdAliasesByGroup: Map<string, Map<string, string>>
 } {
   const tabIdAliasesByGroup = new Map<string, Map<string, string>>()
-  const editorTabIdByGroupAndEntity = new Map<string, Map<string, string>>()
-  const dedupedTabs = dedupeTabsById(tabs).filter((tab) => {
+  const canonicalByGroup = new Map<string, Map<string, Tab>>()
+  const uniqueTabs = dedupeTabsById(tabs)
+  for (const tab of uniqueTabs) {
+    if (tab.contentType !== 'editor') {
+      continue
+    }
+    const canonicalByEntity = canonicalByGroup.get(tab.groupId) ?? new Map<string, Tab>()
+    canonicalByGroup.set(tab.groupId, canonicalByEntity)
+    const previous = canonicalByEntity.get(tab.entityId)
+    if (!previous || (tab.isPinned && !previous.isPinned)) {
+      canonicalByEntity.set(tab.entityId, tab)
+    }
+  }
+  const dedupedTabs = uniqueTabs.filter((tab) => {
     if (tab.contentType !== 'editor') {
       return true
     }
-    const editorTabIdByEntity =
-      editorTabIdByGroupAndEntity.get(tab.groupId) ?? new Map<string, string>()
-    editorTabIdByGroupAndEntity.set(tab.groupId, editorTabIdByEntity)
-    const existingTabId = editorTabIdByEntity.get(tab.entityId)
-    if (existingTabId !== undefined) {
-      const tabIdAliases = tabIdAliasesByGroup.get(tab.groupId) ?? new Map<string, string>()
-      tabIdAliasesByGroup.set(tab.groupId, tabIdAliases)
-      tabIdAliases.set(tab.id, existingTabId)
-      return false
+    const canonical = canonicalByGroup.get(tab.groupId)?.get(tab.entityId)
+    if (!canonical || canonical.id === tab.id) {
+      return true
     }
-    editorTabIdByEntity.set(tab.entityId, tab.id)
-    return true
+    const aliases = tabIdAliasesByGroup.get(tab.groupId) ?? new Map<string, string>()
+    tabIdAliasesByGroup.set(tab.groupId, aliases)
+    aliases.set(tab.id, canonical.id)
+    return false
   })
   return { tabs: dedupedTabs, tabIdAliasesByGroup }
 }

@@ -1,71 +1,93 @@
 import { structuredLaunchSlotIds } from './structured-agent-session-launch-persistence'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
+import {
+  canRestorePersistedTab,
+  dedupeEditorTabsWithinGroups,
+  selectHydratedActiveGroupId
+} from '../store/slices/tab-group-state'
+import {
+  appendOwnedTabIdsToGroups,
+  adoptGrouplessTabs,
+  layoutSpanningGroups,
+  restrictGroupToOwnedTabs
+} from '../store/slices/tab-group-reference-repair'
+import { resolveTabGroupOwners } from '../../../shared/workspace-layout/tab-group-owners'
+import { pruneTabGroupLayoutForGroups } from '../store/slices/tabs-hydration'
 
 type PersistedUnifiedTabSessionData = Pick<
   WorkspaceSessionState,
   'activeGroupIdByWorktree' | 'tabGroupLayouts' | 'tabGroups' | 'unifiedTabs'
 >
 
-function prunePersistedLayoutForGroups(
-  root: TabGroupLayoutNode,
-  validGroupIds: Set<string>
-): TabGroupLayoutNode | null {
-  if (root.type === 'leaf') {
-    return validGroupIds.has(root.groupId) ? root : null
-  }
-
-  const first = prunePersistedLayoutForGroups(root.first, validGroupIds)
-  const second = prunePersistedLayoutForGroups(root.second, validGroupIds)
-
-  if (first === null) {
-    return second
-  }
-  if (second === null) {
-    return first
-  }
-
-  return { ...root, first, second }
-}
-
-function buildPersistedGroupsForWorktree(
-  tabs: Tab[],
-  groups: TabGroup[],
-  worktreeId: string
-): TabGroup[] {
-  const validTabIds = new Set(tabs.map((tab) => tab.id))
-  const tabIdsByGroup = new Map<string, string[]>()
-  for (const tab of tabs) {
-    const groupTabs = tabIdsByGroup.get(tab.groupId) ?? []
-    groupTabs.push(tab.id)
-    tabIdsByGroup.set(tab.groupId, groupTabs)
-  }
-
-  return groups
-    .map((group) => {
-      const slots = structuredLaunchSlotIds(worktreeId, group.id)
-      const orderedTabIds = new Set([
-        ...group.tabOrder.filter((tabId) => validTabIds.has(tabId) || slots.has(tabId)),
-        ...(tabIdsByGroup.get(group.id) ?? [])
-      ])
-      const tabOrder = Array.from(orderedTabIds)
-      const activeTabId =
-        group.activeTabId && validTabIds.has(group.activeTabId) ? group.activeTabId : null
-      return {
-        ...group,
-        activeTabId,
-        tabOrder,
-        recentTabIds: group.recentTabIds?.filter((tabId) => validTabIds.has(tabId))
-      }
-    })
+/** Same validity, dedupe, and ownership steps as hydration, so the file holds what restore keeps. */
+function buildPersistedTabsAndGroups(
+  worktreeId: string,
+  tabs: readonly Tab[],
+  groups: readonly TabGroup[],
+  persistedEditFileIds: ReadonlySet<string>
+): { tabs: Tab[]; groups: TabGroup[] } {
+  // Filter before deduplication so an unrestorable copy cannot hide a live editor.
+  const deduped = dedupeEditorTabsWithinGroups(
+    tabs
+      .filter((tab) => canRestorePersistedTab(tab, persistedEditFileIds))
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+  )
+  const restorableTabs = deduped.tabs
+  const tabOwners = resolveTabGroupOwners(restorableTabs, groups, deduped.tabIdAliasesByGroup)
+  const persistedGroups = appendOwnedTabIdsToGroups(groups, tabOwners)
+    .map((group) =>
+      restrictGroupToOwnedTabs(
+        group,
+        tabOwners,
+        deduped.tabIdAliasesByGroup.get(group.id),
+        structuredLaunchSlotIds(worktreeId, group.id)
+      )
+    )
     .filter((group) => group.tabOrder.length > 0)
+  const persistedTabs = restorableTabs.map((tab) => {
+    const groupId = tabOwners.get(tab.id)
+    return groupId === undefined || groupId === tab.groupId ? tab : { ...tab, groupId }
+  })
+  const tabsByWorktree = { [worktreeId]: persistedTabs }
+  const groupsByWorktree = { [worktreeId]: persistedGroups }
+  // A missing group is not evidence that the user closed its content.
+  adoptGrouplessTabs(tabsByWorktree, groupsByWorktree, {}, {})
+  const adopted = dedupeEditorTabsWithinGroups(tabsByWorktree[worktreeId])
+  const adoptedOwners = resolveTabGroupOwners(
+    adopted.tabs,
+    groupsByWorktree[worktreeId],
+    adopted.tabIdAliasesByGroup
+  )
+  const finalGroups = groupsByWorktree[worktreeId].map((group) =>
+    restrictGroupToOwnedTabs(
+      group,
+      adoptedOwners,
+      adopted.tabIdAliasesByGroup.get(group.id),
+      structuredLaunchSlotIds(worktreeId, group.id)
+    )
+  )
+  const retainedById = new Map(adopted.tabs.map((tab) => [tab.id, tab]))
+  return {
+    tabs: finalGroups.flatMap((group) =>
+      group.tabOrder.flatMap((id) => {
+        const tab = retainedById.get(id)
+        return tab ? [tab] : []
+      })
+    ),
+    groups: finalGroups
+  }
 }
 
 export function buildPersistedUnifiedTabSessionData(
   snapshot: Pick<
     WorkspaceSessionSnapshot,
-    'activeGroupIdByWorktree' | 'groupsByWorktree' | 'layoutByWorktree' | 'unifiedTabsByWorktree'
+    | 'activeGroupIdByWorktree'
+    | 'groupsByWorktree'
+    | 'layoutByWorktree'
+    | 'openFiles'
+    | 'unifiedTabsByWorktree'
   >
 ): PersistedUnifiedTabSessionData {
   const unifiedTabs: WorkspaceSessionState['unifiedTabs'] = {}
@@ -76,6 +98,15 @@ export function buildPersistedUnifiedTabSessionData(
   const sourceGroups = snapshot.groupsByWorktree ?? {}
   const sourceLayouts = snapshot.layoutByWorktree ?? {}
   const sourceActiveGroups = snapshot.activeGroupIdByWorktree ?? {}
+  // Why edit-mode only: buildEditorSessionData persists only those, and hydration reads that list.
+  const persistedEditFileIdsByWorktree = new Map<string, Set<string>>()
+  for (const file of snapshot.openFiles) {
+    if (file.mode === 'edit') {
+      const ids = persistedEditFileIdsByWorktree.get(file.worktreeId) ?? new Set<string>()
+      ids.add(file.filePath)
+      persistedEditFileIdsByWorktree.set(file.worktreeId, ids)
+    }
+  }
   const worktreeIds = new Set([
     ...Object.keys(sourceTabs),
     ...Object.keys(sourceGroups),
@@ -88,26 +119,31 @@ export function buildPersistedUnifiedTabSessionData(
       continue
     }
 
-    const groups = buildPersistedGroupsForWorktree(tabs, sourceGroups[worktreeId] ?? [], worktreeId)
-    if (groups.length === 0) {
+    const persisted = buildPersistedTabsAndGroups(
+      worktreeId,
+      tabs,
+      sourceGroups[worktreeId] ?? [],
+      persistedEditFileIdsByWorktree.get(worktreeId) ?? new Set<string>()
+    )
+    if (persisted.groups.length === 0) {
       continue
     }
 
-    const groupIds = new Set(groups.map((group) => group.id))
-    const persistedTabs = tabs.filter((tab) => groupIds.has(tab.groupId))
-    if (persistedTabs.length === 0 && structuredLaunchSlotIds(worktreeId).size === 0) {
-      continue
+    unifiedTabs[worktreeId] = persisted.tabs
+    tabGroups[worktreeId] = persisted.groups
+    const groupIds = new Set(persisted.groups.map((group) => group.id))
+    const activeGroupId = selectHydratedActiveGroupId(
+      persisted.groups,
+      sourceActiveGroups[worktreeId]
+    )
+    if (activeGroupId) {
+      activeGroupIdByWorktree[worktreeId] = activeGroupId
     }
-
-    unifiedTabs[worktreeId] = persistedTabs
-    tabGroups[worktreeId] = groups
-    const activeGroupId = sourceActiveGroups[worktreeId]
-    activeGroupIdByWorktree[worktreeId] =
-      activeGroupId && groupIds.has(activeGroupId) ? activeGroupId : groups[0].id
     const prunedLayout = sourceLayouts[worktreeId]
-      ? prunePersistedLayoutForGroups(sourceLayouts[worktreeId], groupIds)
+      ? pruneTabGroupLayoutForGroups(sourceLayouts[worktreeId], groupIds)
       : null
-    tabGroupLayouts[worktreeId] = prunedLayout ?? { type: 'leaf', groupId: groups[0].id }
+    // A partial layout must still render every surviving group, as hydration lays it out.
+    tabGroupLayouts[worktreeId] = layoutSpanningGroups(persisted.groups, prunedLayout)
   }
 
   return {

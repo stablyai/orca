@@ -107,21 +107,27 @@ describe('buildWorkspaceSessionPatch', () => {
     })
   })
 
-  it('derives only editor session keys for open file changes', () => {
+  it('derives editor session keys and re-filtered tab chrome for open file changes', () => {
     const patch = buildWorkspaceSessionPatch(createSnapshot(), ['openFiles'])
 
     expect(Object.keys(patch).sort()).toEqual(
       [
         'activeFileIdByWorktree',
+        'activeGroupIdByWorktree',
         'activeTabTypeByWorktree',
         'markdownFrontmatterVisible',
-        'openFilesByWorktree'
+        'openFilesByWorktree',
+        'tabGroupLayouts',
+        'tabGroups',
+        'unifiedTabs'
       ].sort()
     )
     expect(patch.openFilesByWorktree).toEqual({
       'wt-1': [
         {
           filePath: '/tmp/demo.ts',
+          runtimeEnvironmentId: undefined,
+          externalSshTargetId: undefined,
           relativePath: 'demo.ts',
           worktreeId: 'wt-1',
           language: 'typescript',
@@ -129,6 +135,47 @@ describe('buildWorkspaceSessionPatch', () => {
         }
       ]
     })
+  })
+
+  it('drops a diff tab from disk when only the edit file backing it closes', () => {
+    const diffTab = {
+      id: 'diff-tab',
+      entityId: '/tmp/demo.ts',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'diff' as const,
+      label: 'demo.ts',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 1
+    }
+    const editorTab = { ...diffTab, id: '/tmp/other.ts', entityId: '/tmp/other.ts' }
+    const tabs = {
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...editorTab, contentType: 'editor' as const }, diffTab]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'diff-tab',
+            tabOrder: ['/tmp/other.ts', 'diff-tab']
+          }
+        ]
+      }
+    }
+
+    const opened = buildWorkspaceSessionPatch(createSnapshot(tabs), ['unifiedTabsByWorktree'])
+    expect(opened.tabGroups?.['wt-1']?.[0]?.tabOrder).toEqual(['/tmp/other.ts', 'diff-tab'])
+
+    const patch = buildWorkspaceSessionPatch(createSnapshot({ ...tabs, openFiles: [] }), [
+      'openFiles'
+    ])
+
+    expect(patch.unifiedTabs?.['wt-1']?.map((tab) => tab.id)).toEqual(['/tmp/other.ts'])
+    expect(patch.tabGroups?.['wt-1']?.[0]?.tabOrder).toEqual(['/tmp/other.ts'])
   })
 
   it('derives editor session keys when only editor drafts change', () => {

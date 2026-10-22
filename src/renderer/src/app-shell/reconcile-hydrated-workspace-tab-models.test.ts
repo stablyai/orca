@@ -13,7 +13,18 @@ describe('reconcileHydratedWorkspaceTabModels', () => {
     expect(reconciled).toEqual(['wt-a', 'wt-b', 'wt-c'])
   })
 
-  it('reconciles nothing for a session without terminal rows', () => {
+  it('reconciles editor-only workspaces that have unified tabs but no terminal rows', () => {
+    const reconcile = vi.fn()
+    const reconciled = reconcileHydratedWorkspaceTabModels(
+      { tabsByWorktree: { 'wt-a': [] }, unifiedTabs: { 'wt-a': [], 'wt-editor-only': [] } },
+      reconcile
+    )
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    // Shared keys are reconciled once; terminal-row keys keep their order.
+    expect(reconciled).toEqual(['wt-a', 'wt-editor-only'])
+  })
+
+  it('reconciles nothing for a session with neither terminal rows nor unified tabs', () => {
     const reconcile = vi.fn()
     expect(reconcileHydratedWorkspaceTabModels({ tabsByWorktree: {} }, reconcile)).toEqual([])
     expect(reconcile).not.toHaveBeenCalled()

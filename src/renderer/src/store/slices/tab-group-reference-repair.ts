@@ -1,5 +1,7 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { sanitizeRecentTabIds } from './tab-group-state'
 
 function collectLayoutGroupIds(node: TabGroupLayoutNode, groupIds: Set<string>): void {
   if (node.type === 'leaf') {
@@ -52,6 +54,40 @@ export function appendOwnedTabIdsToGroups(
       ? { ...group, tabOrder: [...group.tabOrder, ...missingTabIds] }
       : group
   })
+}
+
+/** Narrow a group to the tabs `tabOwners` assigns it, so no id is listed by two groups. */
+export function restrictGroupToOwnedTabs(
+  group: TabGroup,
+  tabOwners: ReadonlyMap<string, string>,
+  tabIdAliases?: ReadonlyMap<string, string>,
+  /** Structured-launch slot ids this group keeps in its order before their tab row exists. */
+  launchSlotIds: ReadonlySet<string> = new Set()
+): TabGroup {
+  const canonicalTabId = (tabId: string): string => tabIdAliases?.get(tabId) ?? tabId
+  // Why: persisted tabOrder can contain duplicates from older buggy writes; restore the store
+  // invariant before group operations branch on tab counts or neighbors.
+  const tabOrder = dedupeTabOrder(
+    group.tabOrder
+      .map(canonicalTabId)
+      .filter((tabId) => tabOwners.get(tabId) === group.id || launchSlotIds.has(tabId))
+  )
+  const canonicalActiveTabId = group.activeTabId ? canonicalTabId(group.activeTabId) : null
+  const activeTabId =
+    canonicalActiveTabId && tabOwners.get(canonicalActiveTabId) === group.id
+      ? canonicalActiveTabId
+      : null
+  // Why: the active tab sits at the MRU tail so the first close after restore returns to the
+  // previous tab rather than falling through to neighbor selection.
+  const sanitizedRecent = sanitizeRecentTabIds(
+    group.recentTabIds?.map(canonicalTabId),
+    tabOrder.filter((tabId) => tabOwners.get(tabId) === group.id)
+  )
+  const recentTabIds =
+    activeTabId && sanitizedRecent.at(-1) !== activeTabId
+      ? [...sanitizedRecent.filter((id) => id !== activeTabId), activeTabId]
+      : sanitizedRecent
+  return { ...group, tabOrder, activeTabId, recentTabIds }
 }
 
 /** Re-home tabs stranded by a dropped group so hydration cannot render a blank workspace. */
