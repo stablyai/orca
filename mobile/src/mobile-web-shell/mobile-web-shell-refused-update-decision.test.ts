@@ -309,4 +309,63 @@ describe('an update this shell refused, once it is on screen', () => {
     expect(afterCFailed.session.state).toMatchObject({ kind: 'ready', buildId: BUILD_B })
     expect(afterCFailed.session.updateNotice).toBe('update-failed')
   })
+
+  it('activates a background update on a session that originally opened from a cold download', () => {
+    const BUILD_B = 'b'.repeat(64)
+    const BUILD_C = 'c'.repeat(64)
+    const coldReady = run(
+      afterCacheRead(null).session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_B })
+      },
+      { type: 'download-staged' },
+      {
+        type: 'activated',
+        generationDirectory: '/gen/b',
+        sessionId: 'session-b',
+        buildId: BUILD_B,
+        totalBytes: 2048,
+        elapsedMs: 12
+      }
+    )
+    expect(coldReady.session.cached).toBeNull()
+    expect(coldReady.session.state).toMatchObject({ kind: 'ready', buildId: BUILD_B })
+
+    const updated = run(
+      coldReady.session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: BUILD_C })
+      },
+      {
+        type: 'activated',
+        generationDirectory: '/gen/c',
+        sessionId: 'session-c',
+        buildId: BUILD_C,
+        totalBytes: 4096,
+        elapsedMs: 15
+      }
+    )
+    expect(updated.session.state).toMatchObject({
+      kind: 'ready',
+      buildId: BUILD_C,
+      generationDirectory: '/gen/c',
+      sessionId: 'session-c'
+    })
+
+    const failedFollowup = run(
+      updated.session,
+      {
+        type: 'manifest-read',
+        manifest: manifestFacts({ ...MANIFEST_WIRE, buildId: 'd'.repeat(64) })
+      },
+      { type: 'download-failed', cause: BUNDLE_REFUSED }
+    )
+    expect(failedFollowup.session.state).toMatchObject({
+      kind: 'ready',
+      buildId: BUILD_C
+    })
+    expect(failedFollowup.session.updateNotice).toBe('update-failed')
+  })
 })
