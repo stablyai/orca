@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 
 export type TerminalRecord = {
   handle: string
@@ -18,10 +19,12 @@ export type MobileTerminalSessionTab = {
   type: 'terminal'
   id: string
   title: string
+  customTitle?: string | null
   parentTabId?: string
   leafId?: string
   status?: 'pending-handle' | 'ready'
   terminal: string | null
+  launchAgent?: TuiAgent | null
   agentStatus?: AgentStatusEntry | null
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
@@ -126,10 +129,12 @@ function mobileSessionTabEqual(
     case 'terminal':
       return (
         b.type === 'terminal' &&
+        a.customTitle === b.customTitle &&
         a.parentTabId === b.parentTabId &&
         a.leafId === b.leafId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
+        a.launchAgent === b.launchAgent &&
         // A frame whose only delta is the launch draft appearing or retracting
         // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&

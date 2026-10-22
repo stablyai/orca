@@ -243,6 +243,23 @@ describe('mobile terminal records', () => {
     ).toBe(false)
   })
 
+  it('treats terminal launchAgent and customTitle changes as session-tab changes', () => {
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'My Renamed Session',
+      customTitle: 'My Renamed Session',
+      status: 'ready',
+      terminal: 'pty-1',
+      isActive: true
+    }
+
+    expect(mobileSessionTabsEqual([base], [{ ...base, launchAgent: 'claude' }])).toBe(false)
+    expect(mobileSessionTabsEqual([base], [{ ...base, customTitle: 'Updated Title' }])).toBe(false)
+  })
+
   const record = (over: Partial<TerminalRecord> & { handle: string }): TerminalRecord => ({
     title: 'Terminal',
     terminalTheme: undefined,
