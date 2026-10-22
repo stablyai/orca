@@ -65,4 +65,21 @@ describe('useEditorKeymapFocusMirror', () => {
     unmount()
     expect(setEditorKeymapFocused).toHaveBeenLastCalledWith(false)
   })
+
+  it('keeps the focus another editor holds when a different editor unmounts', () => {
+    const other = document.createElement('div')
+    const otherInput = document.createElement('textarea')
+    other.append(otherInput)
+    document.body.append(other)
+    const first = renderHook(() => useEditorKeymapFocusMirror({ current: container }, true))
+    const second = renderHook(() => useEditorKeymapFocusMirror({ current: other }, true))
+
+    act(() => otherInput.focus())
+    setEditorKeymapFocused.mockClear()
+    first.unmount()
+    expect(setEditorKeymapFocused).not.toHaveBeenCalled()
+
+    second.unmount()
+    expect(setEditorKeymapFocused).toHaveBeenLastCalledWith(false)
+  })
 })
