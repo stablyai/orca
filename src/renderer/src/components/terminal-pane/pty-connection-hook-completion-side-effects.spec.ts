@@ -600,5 +600,52 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
         expect.any(Function)
       )
     })
+
+    it('cancels a scheduled waiting notification when the pane returns to working during the grace window', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-attention-grace')
+      transportFactoryQueue.push(transport)
+      enableActiveRuntimeEnvironment()
+      vi.useFakeTimers()
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      const statusHandler = createdTransportOptions[0]?.onAgentStatus
+      if (typeof statusHandler !== 'function') {
+        throw new Error('Expected hook status handler to be registered')
+      }
+
+      statusHandler({
+        state: 'working',
+        prompt: 'approve the tool call',
+        agentType: 'claude'
+      })
+      statusHandler({
+        state: 'waiting',
+        prompt: 'approve the tool call',
+        agentType: 'claude',
+        toolName: 'Shell',
+        toolInput: 'git status'
+      })
+
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS - 1)
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+
+      statusHandler({
+        state: 'working',
+        prompt: 'approve the tool call',
+        agentType: 'claude',
+        toolName: 'Shell',
+        toolInput: 'git status'
+      })
+      notifyStoreSubscribers()
+      vi.advanceTimersByTime(1)
+      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+      expect(deps.dispatchNotification).not.toHaveBeenCalled()
+    })
   })
 }
