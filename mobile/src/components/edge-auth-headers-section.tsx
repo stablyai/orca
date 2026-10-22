@@ -94,10 +94,12 @@ export function EdgeAuthHeadersSection({
   storedCount,
   error,
   onRowsChange,
-  scrollViewRef
+  scrollViewRef,
+  hint
 }: {
   rows: EdgeAuthRow[]
   storedCount: number
+  hint?: string
   error: string | null
   onRowsChange: (rows: EdgeAuthRow[]) => void
   scrollViewRef: { current: EdgeAuthScrollTarget | null }
@@ -140,7 +142,7 @@ export function EdgeAuthHeadersSection({
     <View>
       <Text style={styles.label}>{t('edgeAuth.title', 'Edge authentication')}</Text>
       <Text style={styles.hint}>
-        {t(
+        {hint ?? t(
           'edgeAuth.hint',
           "Optional headers sent on the connection handshake, for tunnels protected by edge authentication (for example Cloudflare Access service tokens). Stored in this phone's keychain, never in pairing links. Pair over LAN or Relay before configuring these headers. If the secure host or port changes, save the address, then reopen this form to enter credentials for it. Leave all rows blank for none."
         )}
