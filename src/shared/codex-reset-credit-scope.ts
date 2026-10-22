@@ -12,13 +12,19 @@ export type CodexResetCreditExpectedScope = {
   offerRevision: string
 }
 
+// Why: the offer token only reads these fields, so callers can carry extra metadata.
+type CodexResetCreditLimits = Pick<
+  ProviderRateLimits,
+  'provider' | 'rateLimitResetCredits' | 'session' | 'weekly' | 'updatedAt'
+>
+
 type BuildCodexResetCreditExpectedScopeOptions = {
   target: RateLimitRuntimeTarget
   account: Pick<
     CodexManagedAccountSummary,
     'id' | 'managedHomeRuntime' | 'wslDistro' | 'updatedAt'
   > | null
-  limits: ProviderRateLimits | null
+  limits: CodexResetCreditLimits | null
 }
 
 function windowRevision(window: RateLimitWindow | null): readonly unknown[] | null {
@@ -28,7 +34,7 @@ function windowRevision(window: RateLimitWindow | null): readonly unknown[] | nu
   return [window.usedPercent, window.windowMinutes, window.resetsAt]
 }
 
-function buildOfferRevision(limits: ProviderRateLimits): string {
+function buildOfferRevision(limits: CodexResetCreditLimits): string {
   const credits = limits.rateLimitResetCredits
   const creditRows = [...(credits?.credits ?? [])]
     .map((credit) => [credit.status, credit.expiresAt, credit.grantedAt] as const)
