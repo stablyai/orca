@@ -74,6 +74,13 @@ export const GITHUB_PULL_REQUEST_METHODS = [
       })
   }),
   defineMethod({
+    name: 'github.prRelandings',
+    permission: 'workspace',
+    params: PullRequest,
+    handler: async (params, { runtime }) =>
+      runtime.getRepoPRRelandings(params.repo, params.prNumber, params.prRepo ?? null)
+  }),
+  defineMethod({
     name: 'github.setPRCommentReaction',
     permission: 'workspace',
     params: PRCommentReaction,

@@ -1,5 +1,8 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type {
+  PRInfo,
+  RelandedPullRequestSummary
+} from '../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 
@@ -29,7 +32,7 @@ type LinkedReviewNumbers = {
   linkedGiteaPR: number | null
 }
 
-export type WorktreeCardPrDisplay =
+export type WorktreeCardPrDisplay = (
   | HostedReviewInfo
   | {
       provider: LinkedReviewMetadataProvider
@@ -39,6 +42,10 @@ export type WorktreeCardPrDisplay =
       url?: string
       status?: HostedReviewInfo['status']
     }
+) & {
+  /** Merged PRs that carried a closed PR's work; looked up only for closed GitHub PRs. */
+  relandedIn?: RelandedPullRequestSummary[]
+}
 
 type WorktreeCardPrDisplayOptions = {
   reviewHintKey?: string

@@ -6154,7 +6154,9 @@
           "cliCreated": "Created by Orca CLI",
           "jiraIssue": "Jira {{value0}}",
           "viewOnJira": "View on Jira",
-          "linkedJira": "Linked Jira {{value0}}"
+          "linkedJira": "Linked Jira {{value0}}",
+          "relandedInHeading": "Re-landed in",
+          "relandedInRow": "#{{value0}} by {{value1}}, merged {{value2}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",

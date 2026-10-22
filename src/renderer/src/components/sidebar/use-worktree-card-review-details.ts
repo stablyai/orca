@@ -19,6 +19,7 @@ import {
 } from './worktree-card-pr-display'
 import type { WorktreeCardProps } from './worktree-card-model'
 import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
+import { usePRRelandings } from './use-pr-relandings'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
 
@@ -181,7 +182,7 @@ export function useWorktreeCardReviewDetails({
     !isCachedMergedBranchPRCurrentForWorktree(hostedReview, worktree)
       ? null
       : hostedReviewEntry?.branchLookupGitHubPRNumber
-  const prDisplay = getWorktreeCardPrDisplay(
+  const basePrDisplay = getWorktreeCardPrDisplay(
     cachedBranchReview,
     linkedGitHubPR,
     linkedGitLabMR,
@@ -196,6 +197,11 @@ export function useWorktreeCardReviewDetails({
       branchLookupGitHubPRNumber,
       suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
     }
+  )
+  const relandedIn = usePRRelandings(repo, basePrDisplay)
+  const prDisplay = useMemo(
+    () => (basePrDisplay && relandedIn?.length ? { ...basePrDisplay, relandedIn } : basePrDisplay),
+    [basePrDisplay, relandedIn]
   )
 
   return {

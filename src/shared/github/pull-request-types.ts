@@ -99,6 +99,15 @@ export type IssueInfo = {
   description?: string
 }
 
+/** A merged PR that references a closed one; where a superseded PR's work landed. */
+export type RelandedPullRequestSummary = {
+  number: number
+  title: string
+  url: string
+  author: string
+  mergedAt: string
+}
+
 export type GitHubViewer = {
   login: string
   email: string | null

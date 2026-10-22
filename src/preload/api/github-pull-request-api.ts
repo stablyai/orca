@@ -20,7 +20,8 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubViewer,
-  PRInfo
+  PRInfo,
+  RelandedPullRequestSummary
 } from '../../shared/github/pull-request-types'
 import type { GetRateLimitResult } from '../../shared/github/rate-limit-types'
 import type { GitHubRepoSelectorArgs } from './github-work-item-api'
@@ -103,6 +104,13 @@ export type GithubPullRequestApi = {
     prRepo?: GitHubOwnerRepo | null
     noCache?: boolean
   }) => Promise<PRComment[]>
+  prRelandings: (args: {
+    repoPath: string
+    repoId?: string
+    sourceContext?: TaskSourceContext | null
+    prNumber: number
+    prRepo?: GitHubOwnerRepo | null
+  }) => Promise<RelandedPullRequestSummary[]>
   setPRCommentReaction: (args: {
     repoPath: string
     repoId?: string

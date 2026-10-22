@@ -18,6 +18,7 @@ import { ReviewChecksBadge, ReviewStateBadge } from './WorktreeCardMetadataStatu
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getProviderName, getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
+import { WorktreeCardRelandedIn } from './WorktreeCardRelandedIn'
 
 type WorktreeCardReviewDetailSectionProps = {
   review: WorktreeCardPrDisplay | null
@@ -176,6 +177,7 @@ export function WorktreeCardReviewDetailSection({
             <ReviewChecksBadge status={review.status} />
           </div>
         )}
+        {review.state === 'closed' && <WorktreeCardRelandedIn pullRequests={review.relandedIn} />}
       </WorktreeCardDetailSectionContent>
     </WorktreeCardDetailSection>
   )
