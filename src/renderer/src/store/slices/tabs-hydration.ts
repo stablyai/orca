@@ -11,11 +11,11 @@ import {
 import {
   dedupeEditorTabsWithinGroups,
   getPersistedEditFileIdsByWorktree,
-  isTransientEditorContentType,
   sanitizeRecentTabIds,
   selectHydratedActiveGroupId
 } from './tab-group-state'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { restoresSavedContentTab } from '../../../../shared/workspace-layout/saved-editor-tab-restore'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
@@ -127,22 +127,10 @@ export function buildHydratedTabState(
           // containing "::"; those are invalid pane-key tab ids.
           return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
         }
-        // Why dropped rather than converted: a preview used to be an editor tab whose id encoded
-        // the document, and its document was never persisted — so this chrome has always come back
-        // naming a file no restore produces, which is the empty pane the surface was reported for.
-        // A preview is a browser tab now, and the worktree id inside that encoded id can itself
-        // contain the separator, so re-deriving the document from it is guesswork. The reader
-        // reopens the preview; nothing is left pointing at a surface that cannot exist.
-        if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
-          return false
-        }
-        if (!isTransientEditorContentType(tab.contentType)) {
-          return true
-        }
-        // Why: restore skips backing editor state for transient diff/conflict
-        // items. Hydration must drop their tab chrome too or the split group
-        // comes back pointing at a document that no longer exists.
-        return persistedEditFileIds.has(tab.entityId) || keepsTransientTab(worktreeId, tab.entityId)
+        // The same rule main's layout load applies, so neither holds a tab the other drops.
+        return restoresSavedContentTab(tab, persistedEditFileIds, () =>
+          keepsTransientTab(worktreeId, tab.entityId)
+        )
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
     // Why after the sort: the surviving record is the one the strip renders first.

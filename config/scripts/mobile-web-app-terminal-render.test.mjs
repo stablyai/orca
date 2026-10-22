@@ -5,14 +5,17 @@ import {
   FIRST_MARKER,
   LAST_MARKER,
   MIN_STREAM_BYTES
-} from './mobile-web-app-terminal-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-terminal-probe-route.mjs'
 import {
   CONTROL_ROUTE,
   openProbeTerminal,
   PROBE_ROUTE,
   startTerminalRenderFixture
 } from './mobile-web-app-terminal-render-fixture.mjs'
-import { readRootComputedStyles, terminalStyleReach } from './mobile-web-app-render-harness.mjs'
+import {
+  readRootComputedStyles,
+  terminalStyleReach
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 /**
  * The page's terminal, in a real browser, under the policy the shell sends.

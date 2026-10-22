@@ -4,7 +4,6 @@ import type { OpenFile } from '@/store/slices/editor'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import {
-  canAutoSaveOpenFile,
   isAutosaveSuspendedForFile,
   normalizeAutoSaveDelayMs,
   ORCA_EDITOR_FILE_SAVED_EVENT,
@@ -12,7 +11,11 @@ import {
 } from './editor-autosave'
 import { flushPendingEditorBuffer, hasPendingEditorBufferChange } from './editor-pending-flush'
 import { createAutoSaveHolds, editorPathHoldKey } from './editor-autosave-holds'
-import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
+import {
+  editorBufferIdOfView,
+  editorBufferViewIds
+} from '@/store/slices/editor/buffers/editor-buffer-views'
+import { editorAutoSaveDueRecords } from './editor-autosave-due-records'
 import {
   clearSelfWrite,
   recordSelfWrite,
@@ -23,6 +26,7 @@ import { trackExternalChangeConflictAction } from './editor-external-change-tele
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { isEditorLargePasteInFlight } from './editor-large-paste-in-flight'
 import {
+  markEditorSaveRefusal,
   rebaselineAfterEditorWrite,
   setModelExternalMutation,
   waitForModelBaselineRestamps
@@ -40,6 +44,7 @@ import { editorSaveWriterView } from './editor-save-writer-view'
 import { createEditorSaveSlots, type EditorSaveRequest } from './editor-save-slots'
 import { EditorSaveDiscardedError, editorDiscardEpoch } from './editor-discard-epoch'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { releaseNonUtf8PausesWithoutDirtyTab } from './editor-non-utf8-autosave-pause'
 
 export type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -114,8 +119,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
     const nothingToWrite = trigger === 'autosave' ? 'failed' : 'written'
     // Why: before the flush, which could republish discarded edits; no await follows before the write.
-    const discarded = (): boolean =>
-      editorDiscardEpoch(recordKeyOf(request.fileId)) !== request.discardEpoch
+    // Why the queued record: a rejoin since then moves the view to a record with its own epoch.
+    const discarded = (): boolean => editorDiscardEpoch(request.recordId) !== request.discardEpoch
     if (discarded()) {
       return nothingToWrite
     }
@@ -175,15 +180,13 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
     if (!writeResult.ok) {
       clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
-      // Why: the banner (or deleted tombstone) explains the refusal and pauses autosave.
-      setModelExternalMutation(
-        store.getState(),
-        fileId,
-        writeResult.diskConflict === 'missing' ? 'deleted' : 'changed'
-      )
-      return 'blocked-stale'
+      markEditorSaveRefusal(store.getState(), liveFile, writeResult.diskConflict)
+      return writeResult.diskConflict === 'not-utf8' ? 'failed' : 'blocked-stale'
     }
 
+    if (writeResult.unchanged) {
+      clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+    }
     rebaselineAfterEditorWrite(store.getState(), fileId, contentToSave)
     const nextState = store.getState()
     const currentDraft = nextState.editorDrafts[fileId]
@@ -194,8 +197,6 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     if (!stillDirty) {
       nextState.clearEditorDraft(fileId)
     }
-    // Why: disk now holds contentToSave, so a pending restore verification is moot.
-    nextState.clearPendingDiskBaselineVerification(fileId)
     // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
     const savedFile = nextState.openFiles.find((openFile) => openFile.id === fileId)
     if (savedFile?.externalMutation === 'changed') {
@@ -205,7 +206,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
     window.dispatchEvent(
       new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
-        detail: { fileId, content: contentToSave }
+        detail: {
+          fileId,
+          content: contentToSave,
+          recordViewIds: editorBufferViewIds(nextState, recordKeyOf(fileId))
+        }
       })
     )
     return 'written'
@@ -242,6 +247,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       fallbackContent,
       trigger,
       requestedDirty,
+      recordId: key,
       discardEpoch
     })
   }
@@ -259,46 +265,16 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const syncAutoSave = (): void => {
     const state = store.getState()
     holds.flagOverdue(state)
-    const openFilesByKey = new Map(
-      state.openFiles.map((file) => [editorBufferIdOfView(state, file.id), file])
-    )
-
+    releaseNonUtf8PausesWithoutDirtyTab(state.openFiles)
+    const due = editorAutoSaveDueRecords(state, holds.isHeld)
     for (const key of Array.from(autoSaveTimers.keys())) {
-      const file = openFilesByKey.get(key)
-      const draft = file ? state.editorDrafts[file.id] : undefined
-      const shouldKeepTimer =
-        state.settings?.editorAutoSave &&
-        file &&
-        file.isDirty &&
-        canAutoSaveOpenFile(file) &&
-        // Why: suspension holds until the user picks a side via the banner (or saves manually).
-        !isAutosaveSuspendedForFile(file) &&
-        !holds.isHeld(state, file) &&
-        draft !== undefined
-      if (!shouldKeepTimer) {
+      if (!due.has(key)) {
         clearScheduledAutoSave(key)
       }
     }
 
-    if (!state.settings?.editorAutoSave) {
-      return
-    }
-
-    const autoSaveDelayMs = normalizeAutoSaveDelayMs(state.settings.editorAutoSaveDelayMs)
-    for (const file of state.openFiles) {
-      const key = editorBufferIdOfView(state, file.id)
-      const draft = state.editorDrafts[file.id]
-      if (
-        !file.isDirty ||
-        draft === undefined ||
-        !canAutoSaveOpenFile(file) ||
-        isAutosaveSuspendedForFile(file) ||
-        holds.isHeld(state, file)
-      ) {
-        clearScheduledAutoSave(key)
-        continue
-      }
-
+    const autoSaveDelayMs = normalizeAutoSaveDelayMs(state.settings?.editorAutoSaveDelayMs)
+    for (const [key, { file, draft }] of due) {
       if (autoSaveTimers.has(key) && autoSaveScheduledContent.get(key) === draft) {
         continue
       }
@@ -308,7 +284,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       const timerId = window.setTimeout(() => {
         autoSaveTimers.delete(key)
         autoSaveScheduledContent.delete(key)
-        void queueSave(file, draft, 'autosave').catch((error) => {
+        // Why: the view that scheduled may have closed while another view keeps the record open.
+        const current = store.getState()
+        const viewIds = new Set(editorBufferViewIds(current, key))
+        const view = current.openFiles.find((openFile) => viewIds.has(openFile.id)) ?? file
+        void queueSave(view, draft, 'autosave').catch((error) => {
           console.error('[editor] autosave failed', error)
         })
       }, autoSaveDelayMs)

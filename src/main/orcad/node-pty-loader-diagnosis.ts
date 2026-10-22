@@ -16,7 +16,7 @@ import {
   parseUnmetGlibcVersion
 } from './native-host-abi'
 
-export type NodePtyLoadCause = {
+type NodePtyLoadCause = {
   reason: RuntimeTerminalUnavailableReason
   /** Short human phrase naming the actual values found, not a remedy. */
   detail: string

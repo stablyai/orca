@@ -1,4 +1,4 @@
-import { completeRuntimeSpawnResponse } from './spawn-commit-response'
+import { completeRuntimeSpawnResponse, reportRuntimeResumeOutcome } from './spawn-commit-response'
 import type { Store } from '../../../persistence'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/pty-binding-persistence'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/pty-binding-refusals'
@@ -125,6 +125,7 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       agentSessionEnsure: ctx.result.agentSessionEnsure
     }
   }
+  reportRuntimeResumeOutcome(ctx)
   if (ctx.hostSessionBinding) {
     try {
       const { store, worktreeId, tabId, leafId, expectedSourceBinding, placement } =

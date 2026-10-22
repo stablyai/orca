@@ -28,29 +28,13 @@ vi.mock('./monaco-editor-input-bindings', () => ({
 
 afterEach(cleanup)
 
-it('keeps a retained cursor listener on the current file ID after same-path owner migration', () => {
-  const store = createEditorTabsStore()
-  storeRef.current = store
-  const filePath = '/repo/file.ts'
-  const oldId = 'restored-file'
-  store.setState({
-    activeFileId: null,
-    openFiles: [
-      {
-        id: oldId,
-        filePath,
-        relativePath: 'file.ts',
-        worktreeId: 'old-workspace',
-        language: 'typescript',
-        mode: 'edit',
-        isDirty: false
-      }
-    ],
-    runtimeEnvironments: [],
-    detectedWorktreesByRepo: {}
-  })
-  const params: MonacoEditorMountParams = {
-    fileId: oldId,
+function mountParams(
+  store: StoreApi<AppState>,
+  fileId: string,
+  filePath: string
+): MonacoEditorMountParams {
+  return {
+    fileId,
     filePath,
     viewStateKey: 'stable-tab-view',
     viewStateId: 'stable-tab',
@@ -100,6 +84,30 @@ it('keeps a retained cursor listener on the current file ID after same-path owne
       setGutterMenuLine: vi.fn()
     }
   }
+}
+
+it('keeps a retained cursor listener on the current file ID after same-path owner migration', () => {
+  const store = createEditorTabsStore()
+  storeRef.current = store
+  const filePath = '/repo/file.ts'
+  const oldId = 'restored-file'
+  store.setState({
+    activeFileId: null,
+    openFiles: [
+      {
+        id: oldId,
+        filePath,
+        relativePath: 'file.ts',
+        worktreeId: 'old-workspace',
+        language: 'typescript',
+        mode: 'edit',
+        isDirty: false
+      }
+    ],
+    runtimeEnvironments: [],
+    detectedWorktreesByRepo: {}
+  })
+  const params = mountParams(store, oldId, filePath)
   let emitCursor:
     | ((event: { position: { lineNumber: number; column: number } }) => void)
     | undefined
@@ -178,4 +186,39 @@ it('keeps a retained cursor listener on the current file ID after same-path owne
   view.unmount()
   store.getState().closeFile(result.fileId)
   expect(store.getState().editorCursorLine).toEqual({})
+})
+
+it("a passive mirror never moves the borrowed tab's cursor line or takes its reveal", () => {
+  const store = createEditorTabsStore()
+  storeRef.current = store
+  const filePath = '/repo/file.ts'
+  const reveal = { fileId: 'borrowed', filePath, line: 9, column: 1, matchLength: 0 }
+  store.setState({ pendingEditorReveal: reveal, editorCursorLine: { borrowed: 3 } })
+  const params = { ...mountParams(store, 'borrowed', filePath), passiveMirror: true }
+  let emitCursor: ((event: { position: { lineNumber: number } }) => void) | undefined
+  const mockEditor = {
+    getModel: () => null,
+    getPosition: () => ({ lineNumber: 1, column: 1 }),
+    focus: vi.fn(),
+    onDidChangeCursorPosition: (listener: NonNullable<typeof emitCursor>) => {
+      emitCursor = listener
+      return { dispose: vi.fn() }
+    },
+    onDidScrollChange: () => ({ dispose: vi.fn() }),
+    onMouseDown: () => ({ dispose: vi.fn() }),
+    onDidDispose: vi.fn()
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mount and tracking use only the editor methods mocked above; decorations/input/probe integrations are mocked.
+  const editorInstance = mockEditor as unknown as editor.IStandaloneCodeEditor
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked mount integrations do not access Monaco, and the mouse listener is not invoked.
+  const monaco = {} as Parameters<OnMount>[1]
+  const view = renderHook(() => useMonacoEditorMount(params))
+
+  view.result.current(editorInstance, monaco)
+  emitCursor?.({ position: { lineNumber: 7 } })
+
+  expect(store.getState().editorCursorLine).toEqual({ borrowed: 3 })
+  expect(params.queueReveal).not.toHaveBeenCalled()
+  expect(store.getState().pendingEditorReveal).toBe(reveal)
+  params.unregisterFileSearchSelectionRef.current?.()
 })

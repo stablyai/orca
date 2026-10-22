@@ -9,7 +9,7 @@ import {
   type OutputSalvageState
 } from './legacy-relay-output-salvage'
 
-export type LegacyRelayHiddenOutputDeps = {
+type LegacyRelayHiddenOutputDeps = {
   onData: (ptyId: string, data: string) => void
   /** A whole screen that replaces what the pane shows. */
   onReplay: (ptyId: string, replay: string) => void

@@ -25,7 +25,7 @@ import {
   type OrcadDaemonProtocolFacts
 } from './orcad-daemon-protocol-crossing'
 
-export type OrcadUpdateDecision =
+type OrcadUpdateDecision =
   | { action: 'noop'; reason: string }
   | {
       action: 'proceed'
@@ -159,12 +159,12 @@ export function planOrcadUpdate(input: {
   }
 }
 
-export type OrcadRollbackSafety =
+type OrcadRollbackSafety =
   | { safety: 'clean'; target: string; notes: string[] }
   | { safety: 'lossy'; target: string; discards: string[] }
   | { safety: 'unsafe'; code: OrcadRollbackUnsafeCode; reason: string }
 
-export type OrcadRollbackUnsafeCode =
+type OrcadRollbackUnsafeCode =
   | 'orcad_rollback_no_target'
   | 'orcad_rollback_snapshot_missing'
   | 'orcad_rollback_orphans_live_terminals'

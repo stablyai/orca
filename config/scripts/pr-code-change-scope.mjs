@@ -50,6 +50,7 @@ const MOBILE_CI_TOOL_FILES = new Set([
 const GLOBAL_FORCE_PREFIXES = [
   '.github/workflows/pr.yml',
   '.github/actions/install-node-dependencies/',
+  '.github/actions/setup-pnpm/',
   '.github/actions/restore-pnpm-verification/',
   '.github/actions/prepare-native-runtime/',
   'config/scripts/pr-code-change-scope',
@@ -177,6 +178,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
+  'config/scripts/mobile-web-app/',
   'config/scripts/mobile-web-bundle-',
   'config/scripts/verify-packaged-mobile-web-bundle',
   'config/scripts/mobile-web-source-line-endings',
@@ -559,6 +561,11 @@ export function classifyPrJobs(
   return {
     should_run: shouldRun,
     mobile_ci_tools: mobileCiTools,
+    // Relay contracts exercise host/cloud code; any input outside the renderer keeps them.
+    relay_integration:
+      shouldRun &&
+      (forceAll ||
+        changedFiles.some((file) => !file.startsWith('src/renderer/') && !isDocsOnlyPath(file))),
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
     mobile_dependencies:
       (shouldRun || jobs.static_analysis) && needsMobileDependencies(changedFiles),
@@ -659,7 +666,11 @@ function isNativeCacheInputPath(file) {
 }
 
 function isGlobalForcePath(file) {
-  return GLOBAL_FORCE_FILES.has(file) || matchesPrefix(file, GLOBAL_FORCE_PREFIXES)
+  return (
+    GLOBAL_FORCE_FILES.has(file) ||
+    (matchesPrefix(file, GLOBAL_FORCE_PREFIXES) &&
+      !(file.startsWith('config/scripts/') && isTestFile(file)))
+  )
 }
 
 function matchesPrefix(file, prefixes) {

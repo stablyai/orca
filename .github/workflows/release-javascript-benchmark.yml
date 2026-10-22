@@ -102,6 +102,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
       - uses: ./.github/actions/install-node-dependencies
       - uses: actions/download-artifact@v8
         with:

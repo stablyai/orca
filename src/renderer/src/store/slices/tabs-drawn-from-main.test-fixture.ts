@@ -13,6 +13,7 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { _resetLayoutFramePositionForTests } from '@/runtime/layout-frame-position'
 import { _resetPendingTabsForTests } from '@/runtime/layout-owner-pending-tabs'
+import { _resetPendingTabFactsForTests } from '@/runtime/layout-owner-pending-tab-facts'
 import { _resetContentRekeysForTests } from '@/runtime/layout-owner-content-rekeys'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
@@ -71,6 +72,7 @@ export async function drawTabsFromMain(store: DrawnStore): Promise<TabsDrawnFrom
   layoutApplyTestTransport.reset()
   _resetLayoutFramePositionForTests()
   _resetPendingTabsForTests()
+  _resetPendingTabFactsForTests()
   _resetContentRekeysForTests()
   layoutApplyTestTransport.answerWith('apply')
   store.setState(missingFrameSlices(store.getState()))

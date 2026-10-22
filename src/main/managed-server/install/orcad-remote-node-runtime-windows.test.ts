@@ -79,12 +79,12 @@ describe('Windows runtime store commands', () => {
       .toMatchInlineSnapshot(`
         "$ProgressPreference = 'SilentlyContinue'
         function Get-OrcaSha256([string]$p) { if (Test-Path -LiteralPath $p -PathType Leaf) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() } else { "" } }
-        $runtimeDir = 'C:/Users/u/.orca-remote/runtimes/node-ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32'
-        $exe = 'C:/Users/u/.orca-remote/runtimes/node-ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32/node.exe'
-        $verified = 'C:/Users/u/.orca-remote/runtimes/node-ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32/.verified'
-        if ((Get-OrcaSha256 $exe) -eq 'ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32') {
+        $runtimeDir = 'C:/Users/u/.orca-remote/runtimes/node-d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5'
+        $exe = 'C:/Users/u/.orca-remote/runtimes/node-d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5/node.exe'
+        $verified = 'C:/Users/u/.orca-remote/runtimes/node-d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5/.verified'
+        if ((Get-OrcaSha256 $exe) -eq 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5') {
         if (Test-Path -LiteralPath $verified -PathType Leaf) { Write-Output 'ORCA_NODE_RUNTIME_READY'; exit 0 }
-        try { $adoptOut = ((& $exe --version 2>&1) | ForEach-Object { "$_" }) -join ''; if (($LASTEXITCODE -eq 0) -and ($adoptOut.Trim() -eq 'v24.21.0')) { [IO.File]::WriteAllText($verified, ''); Write-Output 'ORCA_NODE_RUNTIME_READY'; exit 0 } } catch { }
+        try { $adoptOut = ((& $exe --version 2>&1) | ForEach-Object { "$_" }) -join ''; if (($LASTEXITCODE -eq 0) -and ($adoptOut.Trim() -eq 'v24.22.1')) { [IO.File]::WriteAllText($verified, ''); Write-Output 'ORCA_NODE_RUNTIME_READY'; exit 0 } } catch { }
         }
         Write-Output 'ORCA_NODE_RUNTIME_MISSING'"
       `)

@@ -78,6 +78,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.consumeHibernatedAgentWake()
       consumeRestartReplacement(session)
       session.resumeDeferredSpawnOnReveal()
+      session.mainPaneStartOnReveal?.()
       session.requestKnownWindowsShiftEnterReconfirmation()
       session.sampleVisiblePaneForegroundAgent()
     },

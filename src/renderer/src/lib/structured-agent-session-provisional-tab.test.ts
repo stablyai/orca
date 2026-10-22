@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type * as launchModule from './launch-structured-agent-session'
 import type { AgentSessionLaunchPlan } from './agent-session-launch-plan'
@@ -18,6 +18,26 @@ import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+
+// Switch-on, main opens and closes the chat's tab and its frames draw it.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 const mocks = vi.hoisted(() => ({ text: '', focus: vi.fn(), toast: vi.fn(), launch: vi.fn() }))
 vi.mock('./launch-structured-agent-session', async (original) => ({
@@ -32,8 +52,27 @@ vi.mock('@/components/native-chat/native-chat-composer-draft-store', () => ({
   structuredAgentSessionDraftScopeKey: (id: string) => `agent-session:${id}`
 }))
 
+function terminalRecord(id: string): TerminalTab {
+  return {
+    id,
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'Terminal',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
+}
+
+let refuse = (): void => {}
+
+// The host's refusal lands once the test releases it, after the chat's tab is drawn.
 function planSettlingAs(error: StructuredAgentSessionCreateRefusalError): AgentSessionLaunchPlan {
-  mocks.launch.mockRejectedValue(error)
+  const refusal = new Promise<never>((_, reject) => {
+    refuse = () => reject(error)
+  })
+  mocks.launch.mockReturnValue(refusal)
   return adoptAgentSessionLaunchVerdict({
     requestId: 'action',
     route: 'structured-native-chat',
@@ -43,7 +82,9 @@ function planSettlingAs(error: StructuredAgentSessionCreateRefusalError): AgentS
   })
 }
 
-beforeEach(() => {
+let main: TabsDrawnFromMain
+
+beforeEach(async () => {
   vi.clearAllMocks()
   mocks.text = ''
   resetStructuredAgentLaunchRegistryForTests()
@@ -56,7 +97,55 @@ beforeEach(() => {
     tabsByWorktree: {},
     tabBarOrderByWorktree: {}
   })
+  main = await drawTabsFromMain(useAppStore)
 })
+
+afterEach(() => main.close())
+
+// Main takes the terminal tabs the test drew straight into the store, as a real create sends them.
+async function mainLoadsStoreLayout(): Promise<void> {
+  main.close()
+  main = await drawTabsFromMain(useAppStore)
+}
+
+/** The user's pin: the tab bar sends it to main switch-on, whose frame draws it. */
+function pinAsUser(tabId: string): void {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    useAppStore.getState().pinTab(tabId)
+    return
+  }
+  const worktreeId = useAppStore.getState().getTab(tabId)?.worktreeId ?? 'wt-1'
+  sendLayoutCommandToOwner(
+    worktreeId,
+    { type: 'setTabProps', tabId, isPinned: true },
+    { apply: () => {}, asToday: () => useAppStore.getState().pinTab(tabId) }
+  )
+}
+
+/** The tab bar's rename and colour: main's commands with the switch on. */
+function labelAsUser(tabId: string, label: string, color: string): void {
+  if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+    useAppStore.getState().setTabCustomLabel(tabId, label)
+    useAppStore.getState().setUnifiedTabColor(tabId, color)
+    return
+  }
+  const asToday = { apply: () => {}, asToday: () => {} }
+  sendLayoutCommandToOwner(
+    'wt-1',
+    { type: 'renameTab', tabId, kind: 'custom', title: label },
+    asToday
+  )
+  sendLayoutCommandToOwner('wt-1', { type: 'setTabProps', tabId, color }, asToday)
+}
+
+/** The group main's frame drew the tab in. */
+function groupOf(tabId: string): string {
+  const groupId = useAppStore.getState().getTab(tabId)?.groupId
+  if (!groupId) {
+    throw new Error(`No drawn tab ${tabId}`)
+  }
+  return groupId
+}
 
 function openChat(requestedSurface?: 'chat') {
   let complete!: (value: AgentTerminalLaunchCompletion) => void
@@ -100,6 +189,7 @@ describe('a provisional structured chat tab', () => {
     const { launch, chat, fallback, complete } = openChat(
       scenario === 'explicit' ? 'chat' : undefined
     )
+    await main.settle()
     expect(mocks.focus).toHaveBeenCalledWith(chat.id)
     const view = renderHook(() => {
       const current = useNativeChatProvisionalLaunch('wt-1', chat.entityId)
@@ -120,6 +210,8 @@ describe('a provisional structured chat tab', () => {
     if (scenario === 'closed') {
       useAppStore.getState().closeUnifiedTab(chat.id)
     }
+    await main.settle()
+    refuse()
     await vi.waitFor(() =>
       expect(
         scenario === 'closed' || scenario === 'explicit' || fallback.mock.calls.length
@@ -131,19 +223,26 @@ describe('a provisional structured chat tab', () => {
       view.unmount()
       return
     }
-    expect(useAppStore.getState().unifiedTabsByWorktree['wt-1']).toContainEqual(chat)
+    // Switch-on, main's frame draws the tab the open named.
+    expect(useAppStore.getState().unifiedTabsByWorktree['wt-1']).toContainEqual(
+      expect.objectContaining({ ...chat, contentType: 'agent-session' })
+    )
     // Move the source while its host is preparing the terminal, then invest in the composer.
     const sibling = useAppStore.getState().createUnifiedTab('wt-1', 'terminal', {
       entityId: 'sibling',
-      split: { sourceGroupId: chat.groupId, splitDirection: 'right', activate: true }
+      split: { sourceGroupId: groupOf(chat.id), splitDirection: 'right', activate: true }
     })
     const groupId = sibling.groupId
+    // Main loads only terminal tabs with their terminal's record.
+    const siblingRecords = () =>
+      ORCA_LAYOUT_OWNER_IS_MAIN ? [terminalRecord(sibling.entityId)] : []
+    useAppStore.setState({ tabsByWorktree: { 'wt-1': siblingRecords() } })
+    await mainLoadsStoreLayout()
     const pinnedSource = scenario === 'empty' || scenario === 'typed-during'
     if (pinnedSource) {
-      useAppStore.getState().pinTab(chat.id)
-      useAppStore.getState().pinTab(sibling.id)
-      useAppStore.getState().setTabCustomLabel(chat.id, 'My work')
-      useAppStore.getState().setUnifiedTabColor(chat.id, '#ff0000')
+      pinAsUser(chat.id)
+      pinAsUser(sibling.id)
+      labelAsUser(chat.id, 'My work', '#ff0000')
     }
     useAppStore.getState().moveUnifiedTabToGroup(chat.id, groupId)
     useAppStore.getState().reorderUnifiedTabs(groupId, [chat.id, sibling.id])
@@ -163,12 +262,12 @@ describe('a provisional structured chat tab', () => {
     if (scenario === 'closed-during') {
       useAppStore.getState().closeUnifiedTab(chat.id)
     }
+    await main.settle()
     if (pinnedSource) {
       useAppStore.getState().activateTab(chat.id)
       useAppStore.getState().setActiveTabType('agent-session', 'wt-1')
     }
     const priorFailure = getStructuredAgentSessionLaunchFailure('wt-1', chat.entityId)
-    const selected = useAppStore.getState().getActiveTab('wt-2')
     const terminal =
       scenario === 'failed' || scenario === 'unreconciled'
         ? null
@@ -177,25 +276,14 @@ describe('a provisional structured chat tab', () => {
             .createUnifiedTab('wt-1', 'terminal', { id: 'replacement', activate: false })
     if (terminal) {
       useAppStore.setState({
-        tabsByWorktree: {
-          'wt-1': [
-            {
-              id: terminal.entityId,
-              ptyId: null,
-              worktreeId: 'wt-1',
-              title: 'Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        }
+        tabsByWorktree: { 'wt-1': [terminalRecord(terminal.entityId), ...siblingRecords()] }
       })
       if (scenario === 'typed-before') {
         useAppStore.getState().pinTab(terminal.id)
       }
     }
+    await mainLoadsStoreLayout()
+    const selected = useAppStore.getState().getActiveTab('wt-2')
     const interaction = vi.fn()
     useAppStore.setState({ recordFeatureInteraction: interaction })
     await act(async () => {
@@ -205,6 +293,7 @@ describe('a provisional structured chat tab', () => {
         tabId: terminal?.id ?? 'missing'
       })
       await launch?.settlement
+      await main.settle()
     })
     expect(interaction).not.toHaveBeenCalled()
     const state = useAppStore.getState()
@@ -266,5 +355,52 @@ describe('a provisional structured chat tab', () => {
       expect(state.getActiveTab('wt-2')).toEqual(selected)
     }
     view.unmount()
+  })
+
+  // A hidden launch slot is in the window's group order but not in main's: the terminal's place
+  // is counted among the tabs both draw.
+  it("places a declined chat's terminal right after the chat past a hidden launch slot", async () => {
+    const { launch, chat, fallback, complete } = openChat()
+    await main.settle()
+    refuse()
+    await vi.waitFor(() => expect(fallback).toHaveBeenCalled())
+    const chatGroupId = groupOf(chat.id)
+    const state = useAppStore.getState()
+    const sibling = state.createUnifiedTab('wt-1', 'terminal', {
+      entityId: 'sibling',
+      targetGroupId: chatGroupId,
+      activate: false
+    })
+    const terminal = state.createUnifiedTab('wt-1', 'terminal', {
+      id: 'replacement',
+      targetGroupId: chatGroupId,
+      activate: false
+    })
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-1': ORCA_LAYOUT_OWNER_IS_MAIN
+          ? [terminalRecord(sibling.entityId), terminalRecord(terminal.entityId)]
+          : []
+      }
+    })
+    await mainLoadsStoreLayout()
+    const slot = structuredAgentSessionTabId('hidden-launch')
+    useAppStore.getState().ensureWorktreeRootGroup('wt-1', {
+      tabId: slot,
+      targetGroupId: chatGroupId,
+      precedingTabIds: []
+    })
+    const order = () =>
+      useAppStore.getState().groupsByWorktree['wt-1']?.find((g) => g.id === chatGroupId)?.tabOrder
+    expect(order()).toEqual([slot, chat.id, sibling.id, terminal.id])
+
+    await act(async () => {
+      complete({ outcome: { status: 'created' }, tabId: terminal.id })
+      await launch?.settlement
+      await main.settle()
+    })
+
+    expect(useAppStore.getState().getTab(chat.id)).toBeNull()
+    expect(order()?.filter((id) => id !== slot)).toEqual([terminal.id, sibling.id])
   })
 })

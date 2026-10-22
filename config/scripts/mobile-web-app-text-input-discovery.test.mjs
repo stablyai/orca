@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { modulesDeclaringTextInput } from './mobile-web-app-text-input-font-size-seam.mjs'
+import { modulesDeclaringTextInput } from './mobile-web-app/platform-seams/mobile-web-app-text-input-font-size-seam.mjs'
 
 it('discovers input modules and ignores tests and non-JSX mentions', () => {
   const scratch = mkdtempSync(join(tmpdir(), 'orca-text-input-discovery-'))

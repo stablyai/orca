@@ -1,3 +1,4 @@
+import { isUtf8 } from 'node:buffer'
 import { StringDecoder } from 'node:string_decoder'
 import {
   DiskBaselineSignatureBuilder,
@@ -8,7 +9,8 @@ import {
 import {
   compareDiskWritePrecondition,
   FILE_WRITE_OK,
-  type FileWriteDiskConflict,
+  FILE_WRITE_UNCHANGED,
+  type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
@@ -17,6 +19,7 @@ import { basename, dirname, join, normalize, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import { serializedParentDirectoryKey } from '../../destination-serialized-local-rename'
 import {
+  assertLocalWriteTargetIsRegularFile,
   FileTooLargeError,
   openLocalRegularFile,
   readLocalFileBounded
@@ -41,36 +44,51 @@ export async function diskSignatureOfUtf8(buffer: Buffer): Promise<string> {
 /** Reads the file the writer is about to replace and reports why it no longer matches the baseline. */
 export async function checkLocalDiskWritePrecondition(
   filePath: string,
-  precondition: FileWriteDiskPrecondition
-): Promise<FileWriteDiskConflict | null> {
+  precondition: FileWriteDiskPrecondition,
+  content: string
+): Promise<FileWriteDiskComparison> {
   let opened: Awaited<ReturnType<typeof openLocalRegularFile>>
   try {
     opened = await openLocalRegularFile(filePath)
   } catch (error) {
     // Why the code alone: the message quotes the path, which can spell any error.
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return compareDiskWritePrecondition(precondition, null)
+      return compareDiskWritePrecondition(precondition, null, content)
     }
     throw error
   }
   const { handle, stats } = opened
   try {
+    const written = Buffer.from(content, 'utf8')
     const expectedLength = diskBaselineSignatureLength(precondition.expectedSignature)
-    // Why: the signature pins the decoded length, so a size it can't decode to skips reading a huge file.
-    if (expectedLength === null || !utf8ByteSizeCanDecodeToLength(stats.size, expectedLength)) {
+    // Why: the signature pins the decoded length, so a size neither it nor the save can match skips reading a huge file.
+    const baselineFits =
+      expectedLength !== null && utf8ByteSizeCanDecodeToLength(stats.size, expectedLength)
+    if (!baselineFits && stats.size !== written.length) {
       return 'changed'
     }
     let buffer: Buffer
     try {
-      buffer = await readLocalFileBounded(handle, expectedLength * 3, stats.size)
+      buffer = await readLocalFileBounded(
+        handle,
+        Math.max(baselineFits ? expectedLength * 3 : 0, written.length),
+        stats.size
+      )
     } catch (error) {
-      // Why: grown past what the baseline could decode from since the size check, so it changed.
+      // Why: grown past what the baseline or the save could match since the size check, so it changed.
       if (error instanceof FileTooLargeError) {
         return 'changed'
       }
       throw error
     }
-    return (await diskSignatureOfUtf8(buffer)) === precondition.expectedSignature ? null : 'changed'
+    if (buffer.equals(written)) {
+      return 'identical'
+    }
+    if (!baselineFits || (await diskSignatureOfUtf8(buffer)) !== precondition.expectedSignature) {
+      return 'changed'
+    }
+    // Why bytes: a decoded U+FFFD may be a real character or replaced bytes; only the bytes tell.
+    return precondition.requireLosslessUtf8 && !isUtf8(buffer) ? 'not-utf8' : null
   } finally {
     await handle.close()
   }
@@ -147,14 +165,19 @@ export async function writeLocalTextFileWithDiskPrecondition(
 ): Promise<FileWriteResult> {
   // Why: an unguarded write has nothing to compare, so it skips the locks a stuck guarded save holds.
   if (!precondition) {
+    await assertLocalWriteTargetIsRegularFile(filePath)
     await writeFile(filePath, content, 'utf-8')
     return FILE_WRITE_OK
   }
   const compareAndWrite = async (): Promise<FileWriteResult> => {
-    const diskConflict = await checkLocalDiskWritePrecondition(filePath, precondition)
+    const diskConflict = await checkLocalDiskWritePrecondition(filePath, precondition, content)
+    if (diskConflict === 'identical') {
+      return FILE_WRITE_UNCHANGED
+    }
     if (diskConflict) {
       return { ok: false, diskConflict }
     }
+    await assertLocalWriteTargetIsRegularFile(filePath)
     await writeFile(filePath, content, 'utf-8')
     return FILE_WRITE_OK
   }

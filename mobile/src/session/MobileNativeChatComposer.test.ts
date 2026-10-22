@@ -19,9 +19,11 @@ function MobileNativeChatComposer({
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),

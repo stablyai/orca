@@ -30,16 +30,6 @@ const PACKAGE_MANAGER_HINTS: readonly { bin: string; install: string }[] = [
 type BuildToolchainStatus = {
   present: string[]
   packageManager: string | null
-  // A node-pty source build needs make, Python, and a C++ compiler.
-  toolchainMissing: boolean
-}
-
-function hasCxxCompiler(present: ReadonlySet<string>): boolean {
-  return present.has('g++') || present.has('c++') || present.has('clang++')
-}
-
-function hasPython(present: ReadonlySet<string>): boolean {
-  return present.has('python3') || present.has('python')
 }
 
 // POSIX-sh probe: echo a `HAVE <tool>` line per resolvable build tool and a
@@ -70,8 +60,7 @@ export function parseBuildToolchainProbe(output: string): BuildToolchainStatus {
   }
   return {
     present: PROBED_TOOLS.filter((tool) => present.has(tool)),
-    packageManager,
-    toolchainMissing: !present.has('make') || !hasCxxCompiler(present) || !hasPython(present)
+    packageManager
   }
 }
 

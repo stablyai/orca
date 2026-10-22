@@ -16,11 +16,6 @@ vi.mock('./parcel-watcher-process', () => ({
   disposeWatcherProcess: disposeWatcherProcessMock
 }))
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn(),
-  onSshFilesystemProviderRegistered: () => () => {}
-}))
-
 import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import {

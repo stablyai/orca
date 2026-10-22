@@ -145,6 +145,11 @@ export function recordHiddenRendererPtyDataDrop(
   return { shouldEmitRestoreMarker: true, hiddenDropEpisode: episode }
 }
 
+/** The open drop episode, if bytes were dropped since the last restore painted. */
+export function hiddenRendererPtyDropEpisode(id: string): number | undefined {
+  return droppedSinceHiddenPtys.get(id)?.episode
+}
+
 /** Renderer process replaced (reload / crash): its ref-counted interest
  *  holds and hidden marks died with it, so keeping them would gate (or
  *  force-feed) PTYs no live renderer party asked about. Runtime-owned marks

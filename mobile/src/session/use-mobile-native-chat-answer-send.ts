@@ -231,9 +231,9 @@ export function useMobileNativeChatAnswerSend(args: {
           }
           return false
         }
-        // Grok commits pasted labels; Claude and Codex need their selector-specific
+        // Grok and async questions take pasted text; Claude and Codex need their selector-specific
         // keystrokes paced so each step renders before the next lands.
-        if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
+        if (prompt.replyAsMessage || !shouldStepNativeChatAskAnswer(agentRef.current)) {
           // This shape pastes the label into the composer and commits it, so an
           // orphaned image paste would be submitted along with the answer (#10228).
           // The selector shapes below deliberately skip the heal: their keys are

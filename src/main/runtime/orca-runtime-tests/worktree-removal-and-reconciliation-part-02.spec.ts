@@ -8,11 +8,9 @@ import {
   assertWorktreeCleanForRemoval,
   beginWatcherInstall,
   closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePathMock,
   deleteWorktreeHistoryDirMock,
   forceDeleteLocalBranchMock,
   forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshotMock,
   getEffectiveHooks,
   gitRunner,
   join,
@@ -24,7 +22,6 @@ import {
   removeWorktree,
   removeWorktreeLinkedPathsMock,
   restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemovalMock,
   rm,
   runHook,
   setPlatform,
@@ -89,13 +86,10 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(localProvider.listProcesses).not.toHaveBeenCalled()
-    expect(closeRemoteWatcherForWorktreePathMock).toHaveBeenCalledWith('ssh-1', TEST_WORKTREE_PATH)
-    // The remote directory survives, so its watchers are restored, not forgotten.
-    expect(restoreRemoteWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(
-      'ssh-1',
-      TEST_WORKTREE_PATH
-    )
-    expect(forgetRemoteWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
+    // The remote path never had a desktop watcher, so none is closed, restored or forgotten.
+    expect(closeLocalWatcherForWorktreePathMock).not.toHaveBeenCalled()
+    expect(restoreLocalWatcherAfterFailedRemovalMock).not.toHaveBeenCalled()
+    expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
   })
 
   it('does not remove a runtime worktree when watcher teardown cannot release it', async () => {

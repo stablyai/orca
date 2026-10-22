@@ -45,7 +45,7 @@ import {
   type HostServerReport
 } from './ssh-host-server-connect-events'
 
-export type HostServerPhase = 'deploying' | 'converting' | 'connecting' | 'updating' | 'starting'
+type HostServerPhase = 'deploying' | 'converting' | 'connecting' | 'updating' | 'starting'
 
 export type HostServerOnConnectResult =
   | {

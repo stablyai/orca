@@ -5,13 +5,7 @@ import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
-import {
-  addBrowserPageZoomEventListener,
-  applyBrowserPageZoom,
-  rememberExplicitBrowserPageZoomLevel,
-  type BrowserPageZoomCommand,
-  type BrowserPageZoomDirection
-} from './browser-page-zoom'
+import { addBrowserPageZoomEventListener, type BrowserPageZoomCommand } from './browser-page-zoom'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 /**
@@ -26,8 +20,6 @@ export function useBrowserPageWebviewShortcuts({
   chromeShortcutScope,
   isActiveRef,
   webviewRef,
-  paneZoomLevelRef,
-  setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
   reloadWebviewOrRecoverGuest
 }: {
@@ -37,8 +29,6 @@ export function useBrowserPageWebviewShortcuts({
   chromeShortcutScope: BrowserChromeShortcutScope
   isActiveRef: MutableRefObject<boolean>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
-  paneZoomLevelRef: MutableRefObject<number>
-  setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
 }): void {
@@ -156,23 +146,16 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
-    const applyActivePageZoom = (direction: BrowserPageZoomDirection): void => {
-      if (!isActiveRef.current) {
+    // Why main: zoom belongs to the page's site in its browser profile, which main remembers.
+    const handleZoom = ({ browserPageId, direction }: BrowserPageZoomCommand): void => {
+      if (browserPageId !== browserTabId || !isActiveRef.current) {
         return
       }
-      // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.
-      const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
-      if (nextLevel !== null) {
-        paneZoomLevelRef.current = nextLevel
-        rememberExplicitBrowserPageZoomLevel(browserTabId, nextLevel)
-        setBrowserDefaultZoomLevel(nextLevel)
-        showBrowserZoomFeedback(nextLevel)
-      }
-    }
-    const handleZoom = ({ browserPageId, direction }: BrowserPageZoomCommand): void => {
-      if (browserPageId === browserTabId) {
-        applyActivePageZoom(direction)
-      }
+      void window.api.browser.zoomPage({ browserPageId, direction }).then((display) => {
+        if (display?.site) {
+          showBrowserZoomFeedback(display.zoomLevel)
+        }
+      })
     }
     const removeGuestListener = window.api.ui.onZoomBrowserPage(handleZoom)
     const removeLocalListener = addBrowserPageZoomEventListener(handleZoom)
@@ -180,13 +163,5 @@ export function useBrowserPageWebviewShortcuts({
       removeGuestListener()
       removeLocalListener()
     }
-  }, [
-    browserTabId,
-    isActive,
-    isActiveRef,
-    paneZoomLevelRef,
-    setBrowserDefaultZoomLevel,
-    showBrowserZoomFeedback,
-    webviewRef
-  ])
+  }, [browserTabId, isActive, isActiveRef, showBrowserZoomFeedback])
 }

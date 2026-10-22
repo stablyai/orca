@@ -38,6 +38,7 @@ import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'
 import { collectRemovalUnsavedFiles } from '@/components/editor/removal-unsaved-editor-files'
 
@@ -252,6 +253,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       if (!currentWorktrees) {
         return
       }
+      const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
       // Why: force-delete is a recovery path taken after a failed first delete.
       // Saving "don't ask again" from that state would conflate the recovery
       // action with a broader preference. Only persist the preference on the
@@ -265,7 +267,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           currentWorktrees,
           removeWorktree,
           closeModal,
-          onDeleted
+          onDeleted,
+          confirmedDiscards
         })
       } else {
         // Why: this modal is the destructive confirmation for the workspace
@@ -273,7 +276,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         // a redundant Force Delete toast after the user already confirmed.
         const deletePromise = runWorktreeDeletesInParallel(currentWorktrees, {
           force: forceOnConfirm,
-          onForceDeleted: handleForceDeletedFromToast
+          onForceDeleted: handleForceDeletedFromToast,
+          confirmedDiscards
         })
         // Why: the workspace card owns the in-progress feedback, so the
         // confirmation should get out of the way as soon as deletion begins.
@@ -297,7 +301,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       worktreeIds.length,
       worktreeDeleteIdentities,
       worktreeId,
-      resolveConfirmedTargets
+      resolveConfirmedTargets,
+      unsavedTargets
     ]
   )
 
@@ -309,7 +314,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       forceOnConfirm,
       onForceDeleted: handleForceDeletedFromToast,
       closeModal,
-      onDeleted
+      onDeleted,
+      confirmedDiscards: confirmUnsavedDiscard(useAppStore.getState, unsavedTargets)
     })
   }
 

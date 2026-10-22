@@ -49,7 +49,7 @@ const PROBE_TIMEOUT_MS = 20_000
  * a reason that was never established. Same verdict discipline as the SSH execution
  * boundary: loss of contact is not proof of death.
  */
-export type NodePtyPreconditionStatus = 'ok' | 'degraded' | 'blocked' | 'unverifiable'
+type NodePtyPreconditionStatus = 'ok' | 'degraded' | 'blocked' | 'unverifiable'
 
 export type NodePtyPreconditionVerdict = {
   status: NodePtyPreconditionStatus
@@ -61,14 +61,14 @@ export type NodePtyPreconditionVerdict = {
   prebuilt?: PrebuiltSlotOutcome
 }
 
-export type NodePtyProbeFailure = {
+type NodePtyProbeFailure = {
   status: 'blocked' | 'unverifiable'
   reason: RuntimeTerminalUnavailableReason
   detail: string
 }
 
 /** What the child actually reported, before any judgement is made about it. */
-export type NodePtyProbeOutcome =
+type NodePtyProbeOutcome =
   | { kind: 'loaded'; loadedDir: string | null }
   | { kind: 'noBinary' }
   | { kind: 'loaderError'; message: string }
@@ -78,7 +78,7 @@ export type NodePtyProbeOutcome =
   /** It answered, but with nothing that names a cause. */
   | { kind: 'unexplained'; detail: string }
 
-export function readNodePtyProbeOutcome(
+function readNodePtyProbeOutcome(
   result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
 ): NodePtyProbeOutcome {
   const stdout = result.stdout
@@ -160,7 +160,7 @@ function readReportedLoadError(stdout: string): string | null {
 }
 
 /** Read a dynamic-loader message. Pure, so shapes this host cannot reproduce are testable. */
-export function classifyLoaderMessage(message: string): NodePtyProbeFailure {
+function classifyLoaderMessage(message: string): NodePtyProbeFailure {
   return { status: 'blocked', ...classifyNodePtyLoaderMessage(message) }
 }
 

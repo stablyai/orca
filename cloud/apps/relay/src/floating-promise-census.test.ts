@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
 // A promise nobody awaits rejects into Node's unhandledRejection, which ends the process:
@@ -29,13 +29,19 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
   module: ts.ModuleKind.NodeNext,
   moduleResolution: ts.ModuleResolutionKind.NodeNext,
   strict: true,
+  types: ['node'],
   noEmit: true,
   skipLibCheck: true
 }
 
 function productionFiles(): string[] {
-  return readdirSync(sourceDirectory)
-    .filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
+  return readdirSync(sourceDirectory, { recursive: true, encoding: 'utf8' })
+    .filter(
+      (entry) =>
+        entry.endsWith('.ts') &&
+        !entry.endsWith('.test.ts') &&
+        !entry.split(/[\\/]/).includes('test-fixtures')
+    )
     .map((entry) => join(sourceDirectory, entry))
 }
 

@@ -23,7 +23,9 @@ export function projectHydratedBrowserSession(
     | 'tabsByWorktree'
   >,
   session: WorkspaceSessionState,
-  validWorktreeIds: ReadonlySet<string>
+  validWorktreeIds: ReadonlySet<string>,
+  /** A workspace with no remembered browser tab keeps none, instead of restoring its first. */
+  options: { unchosenStaysUnset?: true } = {}
 ) {
   const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
   const persistedPagesByWorkspace = session.browserPagesByWorkspace ?? {}
@@ -113,7 +115,9 @@ export function projectHydratedBrowserSession(
     activeBrowserTabIdByWorktree[worktreeId] =
       persistedTabId && validBrowserTabIds.has(persistedTabId)
         ? persistedTabId
-        : (tabs[0]?.id ?? null)
+        : !persistedTabId && options.unchosenStaysUnset
+          ? null
+          : (tabs[0]?.id ?? null)
   }
 
   const activeWorktreeId = s.activeWorktreeId

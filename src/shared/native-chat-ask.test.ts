@@ -234,3 +234,35 @@ describe('resolveNativeChatAsk', () => {
     )
   })
 })
+
+describe('async questions', () => {
+  const asyncCall = (callId: string, title: string): NativeChatBlock => ({
+    type: 'tool-call',
+    name: 'request_user_input_async',
+    callId,
+    input: JSON.stringify({ questions: [{ title }] })
+  })
+  const userRow = (id: string, flags: Partial<NativeChatMessage> = {}): NativeChatMessage => ({
+    ...message(id, [{ type: 'text', text: 'hi' }]),
+    role: 'user',
+    ...flags
+  })
+  const titles = (messages: NativeChatMessage[]): string[] | undefined =>
+    extractPendingAsk(messages)?.questions.map((question) => question.question)
+
+  it('keeps every unanswered async question, once per call', () => {
+    const first = message('a', [asyncCall('call-a', 'A?'), result()])
+    expect(titles([first, first, message('b', [asyncCall('call-b', 'B?'), result()])])).toEqual([
+      'A?',
+      'B?'
+    ])
+  })
+
+  it('stays open until a user message reaches the agent', () => {
+    const asked = message('a', [asyncCall('call-a', 'A?'), result()])
+    expect(titles([asked, userRow('q', { queued: true }), userRow('u', { unsent: true })])).toEqual(
+      ['A?']
+    )
+    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+  })
+})

@@ -24,7 +24,7 @@
   "settings": {
     "chat": {
       "permissionsTitle": "Permisos para chats nuevos",
-      "permissionsDescription": "Se aplica solo a chats nuevos. Los agentes que abres en una terminal usan Configuración → Agentes → Permisos de agentes.",
+      "permissionsDescription": "Solo para chats nuevos. Los valores predeterminados de cada agente están en Configuración → Agentes.",
       "description": "Elige cómo se ven y se comportan los chats.",
       "names": {
         "title": "Nombres de chats",
@@ -5435,7 +5435,7 @@
         "PendingWorktreeRow": {
           "af21e953d1": "Cancelar creación del worktree",
           "188f6922a0": "Cancelar",
-          "creatingWorkspace": "Creando workspace…"
+          "creatingWorkspace": "Creando espacio de trabajo…"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancelar",
@@ -7103,8 +7103,6 @@
           "ee110e1830": "Sin ref base predeterminada"
         },
         "BrowserDefaultZoomSetting": {
-          "2622126877": "Nivel de zoom aplicado a nuevas pestañas del navegador.",
-          "bbeec087d3": "Se aplica a nuevas pestañas del navegador.",
           "265597101f": "Zoom predeterminado"
         },
         "BrowserHomePageSetting": {
@@ -12665,7 +12663,7 @@
           "reassurance": "Se ejecuta en cada host y se accede a través de tu propia conexión SSH. Tu código y tus archivos se quedan donde están. Solo la lista de proyectos, pestañas y terminales de Orca pasa al host."
         },
         "sshHostServer": {
-          "sourceChanged": "Una versión anterior de Orca cambió los proyectos de este host. Mueve esos cambios al servidor de Orca de este host o conserva la versión del servidor para volver a conectarte.",
+          "sourceChanged": "Este equipo tiene proyectos o carpetas de este host que su servidor de Orca aún no tiene, a menudo añadidos por una versión anterior de Orca. Muévelos al servidor de Orca de este host o conserva la versión del servidor para volver a conectarte.",
           "deploying": "Configurando Orca en {{host}}…",
           "converting": "Pasando a Orca en {{host}}…",
           "connecting": "Conectando con Orca en {{host}}…",
@@ -12851,7 +12849,7 @@
         "SshRestoreRemovedHosts": {
           "title": "¿Restaurar los hosts eliminados?",
           "description": "Los hosts de ~/.ssh/config que eliminaste en Orca vuelven a Ajustes y a todos los selectores de hosts.",
-          "none": "No hay hosts eliminados de ~/.ssh/config.",
+          "none": "No hay hosts de ~/.ssh/config eliminados en Orca que se puedan restaurar.",
           "confirm": "Restaurar"
         },
         "SshTargetList": {
@@ -14489,7 +14487,7 @@
             "databaseCount_one": "{{value0}} base de datos",
             "databaseCount_other": "{{value0}} bases de datos",
             "scanning": "Analizando {{value0}}",
-            "reading": "Leyendo {{value0}} archivos",
+            "checking": "Comprobando {{value0}}",
             "scanned": "Analizados {{value0}}"
           }
         }
@@ -16289,6 +16287,9 @@
             }
           }
         },
+        "staleViewEdit": {
+          "rejected": "Se descartó lo que escribiste recientemente en esta vista porque el archivo cambió en otra vista."
+        },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "El contenido pegado es demasiado grande.",
           "stopped": "El pegado grande se detuvo antes de terminar.",
@@ -16303,11 +16304,11 @@
           "copy": "Tareas de copia"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "Este archivo ha cambiado en el disco mientras tienes cambios sin guardar. Al sobrescribir, se reemplaza el contenido más reciente del disco.",
           "3fa2b8d417": "Recargar desde disco",
           "a95d02c644": "Mantener mis ediciones",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "Sobrescribir",
+          "keepHint": "Conserva tu versión. La próxima vez que guardes, se reemplazará la versión del disco.",
           "5c02de9b31": "Recargado desde disco",
           "d1e830fa22": "Deshacer",
           "90b2ce7d43": "Comparar"
@@ -16348,10 +16349,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "Este archivo ha cambiado en el disco desde que lo editaste. Usa el aviso para comparar, recargar o sobrescribir."
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "Este archivo ha cambiado en el disco desde que se cargó esta sección."
             }
           }
         },
@@ -16658,7 +16659,6 @@
             "95af781091": "Enviar comentarios a un agente",
             "ac39b9366b": "Enviar",
             "a3508d7e6e": "{{value0}} anotación{{value1}} listo. Seleccione otro elemento o copie todos los comentarios.",
-            "f796c774a4": "Escriba una URL arriba para comenzar a navegar.",
             "366bf5d62c": "Nueva pestaña",
             "1c78adc73d": "Abrir externamente",
             "da68d35f7b": "Abrir página fallida en el navegador predeterminado",
@@ -18335,9 +18335,9 @@
         "couldNotStart": "{{agent}} no pudo iniciarse.",
         "editSavedArguments": "Edítalos en Ajustes > Agentes > Argumentos.",
         "couldNotRestart": "{{agent}} no pudo reiniciarse.",
+        "cliTooOld": "{{agent}} {{installedVersion}} es demasiado antiguo para los chats. Actualiza a {{minimumVersion}} o una versión posterior.",
         "startTimedOut": "{{agent}} tardó demasiado en iniciarse (sin respuesta a {{method}} después de {{seconds}} s).",
         "startTimedOutKeepsHappening": "Si esto sigue ocurriendo, es posible que el equipo que ejecuta este chat esté sobrecargado.",
-        "codexCliTooOld": "Codex {{installedVersion}} es demasiado antiguo para los chats. Actualiza a {{minimumVersion}} o una versión posterior.",
         "notSignedIn": "{{agent}} no ha iniciado sesión.",
         "claudeSystemNotSignedIn": "Claude no ha iniciado sesión. Ejecuta `{{loginCommand}}` o elige una cuenta en los ajustes de Cuentas de Claude.",
         "claudeManagedNotSignedIn": "Esta cuenta de Claude no ha iniciado sesión. Vuelve a iniciar sesión en la configuración de Cuentas de Claude.",
@@ -19025,7 +19025,7 @@
         "set": "Objetivo establecido"
       },
       "structuredSessionHostDeclined": "Se abrió {{value0}} en una terminal",
-      "structuredSessionHostDeclinedDescription": "Este servidor no puede ejecutar un chat de {{value0}} en este espacio de trabajo.",
+      "structuredSessionHostDeclinedDescription": "Este espacio de trabajo no puede ejecutar un chat de {{value0}}.",
       "structuredSessionHostUnreachable": "No se pudo contactar con {{value0}}",
       "structuredSessionHostUnreachableDescription": "Orca no abrió un chat de {{value0}}. Comprueba la conexión con el servidor y vuelve a intentarlo.",
       "hostOutage": {
@@ -19362,7 +19362,11 @@
           "discarded_other": "Se descartarán las ediciones sin guardar de {{count}} archivos:",
           "moreFiles": "y {{value}} más",
           "blocked_one": "Guarda o cierra antes {{count}} archivo sin guardar en {{name}}",
-          "blocked_other": "Guarda o cierra antes {{count}} archivos sin guardar en {{name}}"
+          "blocked_other": "Guarda o cierra antes {{count}} archivos sin guardar en {{name}}",
+          "closedToast_one": "Se cerró {{count}} archivo con ediciones sin guardar de {{workspace}}",
+          "closedToast_other": "Se cerraron {{count}} archivos con ediciones sin guardar de {{workspace}}",
+          "reopen": "Reabrir",
+          "reopenFailed": "No se pudieron reabrir algunos archivos. Abre un espacio de trabajo e intenta Reabrir de nuevo."
         }
       }
     },
@@ -20302,8 +20306,12 @@
   },
   "sourceControl": {
     "discard": {
+      "deleteUntrackedFileDescription": "Esto eliminará permanentemente este archivo sin seguimiento. No se puede deshacer.",
+      "deleteUntrackedFilesDescription": "Esto eliminará permanentemente estos {{count}} archivos sin seguimiento. No se puede deshacer.",
       "restoreStagedVersionDescription": "Esto restaurará la última versión preparada y descartará la eliminación. No se puede deshacer.",
-      "unstagedChangesDescription": "Esto revertirá los cambios no preparados de este archivo. No se puede deshacer."
+      "unstagedChangesDescription": "Esto revertirá los cambios no preparados de este archivo. No se puede deshacer.",
+      "unstagedSelectionIncludingUntrackedDescription": "Esto revertirá los cambios no preparados y eliminará permanentemente cualquier archivo sin seguimiento de esta selección. No se puede deshacer.",
+      "unstagedFilesIncludingUntrackedDescription": "Esto revertirá los cambios no preparados y eliminará permanentemente cualquier archivo sin seguimiento entre estos {{count}} archivos. No se puede deshacer."
     },
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculada"
@@ -20618,6 +20626,27 @@
       "siteMismatch": "Elige un proyecto del sitio de Jira del favorito o borra el filtro de proyectos.",
       "truncated": "No se pudieron mostrar algunos favoritos. Gestiona tus favoritos en Jira para acortar la lista.",
       "unsupported": "Actualiza el host de Jira para usar los favoritos."
+    }
+  },
+  "onboarding": {
+    "language": {
+      "back": "Idiomas",
+      "requestPrompt": "¿Qué idioma te gustaría que Orca admitiera?",
+      "requestSuccess": "Solicitud de idioma registrada. Puedes continuar la configuración.",
+      "requestError": "No se pudo registrar tu solicitud. Inténtalo de nuevo.",
+      "retry": "Reintentar",
+      "requestAction": "Solicitar idioma",
+      "title": "Idioma de la interfaz",
+      "device": "Idioma del sistema: {{language}}",
+      "unsupported": "Idioma del sistema: {{language}}. Este idioma aún no es compatible.",
+      "unknown": "No se pudo detectar el idioma del sistema. Elige uno a continuación.",
+      "loadError": "No se pudo cargar este idioma. Inténtalo de nuevo.",
+      "saveError": "No se pudo guardar tu preferencia de idioma. Inténtalo de nuevo.",
+      "other": "Otro idioma…",
+      "settingsError": "No se pudo cargar tu configuración.",
+      "loadingSettings": "Cargando configuración…",
+      "loading": "Cargando idioma…",
+      "saving": "Guardando idioma…"
     }
   }
 }

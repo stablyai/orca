@@ -313,7 +313,7 @@ function getSharedControlConnection(
     sharedControlConnections.set(environmentId, cached)
     const entry = cached
     // Why ready is enough: a socket reaches ready only on its own server frame, which stamps it.
-    setSharedControlAnswerSource(environmentId, () =>
+    setSharedControlAnswerSource(environmentId, entry.connection, () =>
       entry.connection.getDiagnostics().state === 'ready' ? entry.answeredAt() : null
     )
   }

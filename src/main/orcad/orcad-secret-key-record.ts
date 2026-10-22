@@ -34,12 +34,12 @@ export type StoredKeyState =
       check: string
     }
 
-export type RecordRead =
+type RecordRead =
   | { kind: 'absent' }
   | { kind: 'record'; stored: StoredKeyState }
   | { kind: 'unreadable'; reason: string }
 
-export function parseStoredState(raw: string): StoredKeyState | null {
+function parseStoredState(raw: string): StoredKeyState | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)

@@ -24,7 +24,7 @@ import { COOKIE_ENVELOPE_PREFIX, getMiniMaxCookiePath } from '../minimax/minimax
 import { miniMaxApiKeyEnvelopeFile } from '../minimax/minimax-api-key-store'
 import { openCodeGoApiKeyEnvelopeFile } from '../opencode/opencode-go-api-key-store'
 
-export type PlaintextCredentialTarget = {
+type PlaintextCredentialTarget = {
   path: string
   /** `<prefix>plaintext:<base64>` becomes `<prefix>encrypted:<base64>`. */
   envelopePrefix?: string
@@ -32,7 +32,7 @@ export type PlaintextCredentialTarget = {
   raw?: boolean
 }
 
-export type PlaintextCredentialMigrationResult = { sealed: number; failed: number }
+type PlaintextCredentialMigrationResult = { sealed: number; failed: number }
 
 function encFilesIn(dir: string): string[] {
   try {
@@ -49,7 +49,7 @@ export function orcadCredentialRoot(): string {
   return join(homedir(), '.orca')
 }
 
-export function listPlaintextCredentialTargets(): PlaintextCredentialTarget[] {
+function listPlaintextCredentialTargets(): PlaintextCredentialTarget[] {
   return [
     { path: getWorkspaceTokenPath(LEGACY_WORKSPACE_ID), raw: true },
     ...encFilesIn(getWorkspaceTokenDir()).map((path) => ({ path, raw: true })),

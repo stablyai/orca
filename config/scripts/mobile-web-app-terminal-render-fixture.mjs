@@ -11,7 +11,7 @@ import {
   LAYOUT_SOURCE,
   probeRouteSource,
   ROWS
-} from './mobile-web-app-terminal-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-terminal-probe-route.mjs'
 import {
   createBundleServer,
   installCspViolationRecorder,
@@ -22,7 +22,7 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 /**
  * The scratch bundle the terminal render check runs against, and the two ways to open a page on it.

@@ -32,6 +32,10 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/components/native-chat/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
+  'src/renderer/src/lib/desktop-created-server-tabs.ts': notApplicableDisposition(
+    60,
+    'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
+  ),
   'src/renderer/src/store/slices/worktrees/session/worktree-visit-recency.ts':
     notApplicableDisposition(
       32,

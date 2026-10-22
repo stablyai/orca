@@ -27,7 +27,6 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     fileListScrollElement,
     filterQuery,
     filteredBranchEntries,
-    filteredGrouped,
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
@@ -76,10 +75,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     visibleTreeRowsBySection
   } = model
 
-  const hasFilteredUncommittedEntries =
-    filteredGrouped.staged.length > 0 ||
-    filteredGrouped.unstaged.length > 0 ||
-    filteredGrouped.untracked.length > 0
+  const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
@@ -151,7 +147,6 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           requestDiscardAllInArea={requestDiscardAllInArea}
           handleStageAllPaths={handleStageAllPaths}
           handleStageSectionPaths={handleStageSectionPaths}
-          isStatusTruncated={repositoryHuge !== undefined}
           handleUnstagePaths={handleUnstagePaths}
           sourceControlViewMode={sourceControlViewMode}
           visibleTreeRowsBySection={visibleTreeRowsBySection}

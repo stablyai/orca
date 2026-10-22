@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -226,7 +226,7 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     expect(input.value).toBe('')
   })
 
-  it('offers the shared URL history as suggestions once the bar has focus', () => {
+  it('offers the shared URL history once the user types, not on a blank tab’s focus', () => {
     useAppStore.setState({
       browserUrlHistory: [
         {
@@ -243,6 +243,9 @@ describe('RemoteBrowserPagePane address bar parity', () => {
 
     renderPane()
 
+    // The New Tab page under the bar already lists history, so focus alone opens nothing.
+    expect(screen.queryByText('Google Maps')).toBeNull()
+    fireEvent.change(addressBar(), { target: { value: 'maps' } })
     expect(screen.getByText('Google Maps')).toBeTruthy()
   })
 

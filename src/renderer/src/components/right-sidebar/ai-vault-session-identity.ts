@@ -40,10 +40,3 @@ export function reuseAiVaultListResult(
   }
   return { ...incoming, sessions, issues }
 }
-
-export function applyPublishedAiVaultList(
-  published: AiVaultListResult,
-  setScanResult: (updater: (prev: AiVaultListResult | null) => AiVaultListResult) => void
-): void {
-  setScanResult((prev) => reuseAiVaultListResult(prev, published))
-}

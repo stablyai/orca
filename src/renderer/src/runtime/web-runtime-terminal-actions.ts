@@ -14,6 +14,9 @@ import {
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive
 } from './web-runtime-session-environment'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { isServerFrameDrawnWorkspace } from './web-session-tabs-sync/frame-drawn-server-workspaces'
+import { redrawServerLayoutWorkspace } from './server-layout-apply-routes'
 import {
   beginWebRuntimeSplitFocusRequest,
   captureWebRuntimeSplitFocusTarget,
@@ -159,7 +162,11 @@ function getPendingWebRuntimeSplitMirrorTelemetryKey(
   return `${direction}:${sourcePtyId}`
 }
 
-export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boolean {
+/** `worktreeId`: the pane's workspace, whose server frames redraw a pane the server kept. */
+export function closeWebRuntimeTerminal(
+  ptyId: string | null | undefined,
+  worktreeId?: string
+): boolean {
   if (!ptyId) {
     return false
   }
@@ -183,6 +190,10 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
       unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>)
     })
     .catch((error) => {
+      // Switch point: the window already dropped the pane; the server's frames draw what it kept.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && worktreeId) {
+        redrawServerLayoutWorkspace(environmentId, worktreeId)
+      }
       console.warn(
         '[web-runtime-session] failed to close terminal pane:',
         error instanceof Error ? error.message : String(error)
@@ -209,6 +220,11 @@ export async function updateWebRuntimePaneLayout(args: {
   )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
+  }
+  // Switch point: a frame-drawn workspace's pane geometry goes as layout.apply intents (sizes, moves,
+  // chat pane) and its frames draw it back; only a pane rename still needs this push.
+  if (!args.renamedLeafIds?.length && isServerFrameDrawnWorkspace(environmentId, args.worktreeId)) {
+    return true
   }
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const hostTabId = isWebTerminalSurfaceTabId(args.tabId)

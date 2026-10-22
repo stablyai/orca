@@ -14,7 +14,7 @@ import {
   readBridgePagePainted,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 // Why a real browser: the route tree is handed to expo-router's own ExpoRoot through a synthesized
 // RequireContext. Nothing short of mounting it proves that object is the shape ExpoRoot reads.

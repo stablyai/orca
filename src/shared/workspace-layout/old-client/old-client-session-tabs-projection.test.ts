@@ -7,6 +7,7 @@ import {
   type SessionTabsView
 } from './old-client-session-tabs-projection'
 import { BLANK_BROWSER_TAB_STATE } from '../workspace-layout-beside'
+import { editorFileKey } from '../workspace-layout-editor-tab-file'
 import { build, testContext, WS } from '../workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
 
@@ -115,7 +116,14 @@ describe('projectSessionTabs', () => {
         }
       },
       panes: { [apiTab]: { activeLeafId: apiSplit, expandedLeafId: null } },
-      editorDrafts: { [WS]: { '/Users/dev/orca/README.md': { dirtyDraftContent: '# draft' } } }
+      // Keyed as editorFileKey keys it (an owned id in a layout-owner build), as the Loader does.
+      editorDrafts: {
+        [WS]: {
+          [editorFileKey({ filePath: '/Users/dev/orca/README.md' })]: {
+            dirtyDraftContent: '# draft'
+          }
+        }
+      }
     })
     const facts: SessionTabsFacts = {
       tabLabels: {},

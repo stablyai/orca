@@ -452,14 +452,10 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open files renamed on disk, layout-ow
       expect.objectContaining({
         id: '/repo-a/lib/a.ts',
         isDirty: true,
-        pendingLiveDiskVerification: true,
         pendingSelfMoveEcho: { operationId: 'move-1', targetPath: '/repo-a/lib/a.ts' }
       })
     ])
     expect(state.editorDrafts).toEqual({ '/repo-a/lib/a.ts': 'unsaved' })
-    expect(state.editorBuffers['/repo-a/lib/a.ts']).toMatchObject({
-      pendingLiveDiskVerification: true
-    })
   })
 
   it('changes nothing when main refuses the rename', async () => {

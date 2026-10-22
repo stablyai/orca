@@ -92,6 +92,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_PANE_KEY/u',
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
+    // An id, never a path; agent wrappers and the guest CLI read it like ORCA_WORKTREE_ID.
+    'ORCA_WORKSPACE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
     // The guest plugin uses this marker to select the OpenCode variant that
     // owns the pane when both native and WSL installations are present.

@@ -14,6 +14,7 @@ import { projectQueuedMessageCards } from './structured-agent-session-queued-car
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 import type * as NativeChatAttachmentUpload from './native-chat-attachment-upload'
+import type * as I18n from '@/i18n/i18n'
 import {
   handOffQueuedEdit,
   queuedEditImageFields,
@@ -43,7 +44,8 @@ beforeEach(() => {
     return externalAttachments(args)
   })
 })
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (original) => ({
+  ...(await original<typeof I18n>()),
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => values?.[name] ?? '')
 }))

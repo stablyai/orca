@@ -21,3 +21,11 @@ Be mindful of the user's `gh` CLI API rate limit — batch requests where possib
 ## Merging Pull Requests
 
 Before merging, verify that the required checks and aggregate gate in the full PR workflow have pass.
+
+## Retrying GitHub Actions
+
+Inspect a failed run with `gh run view <run-id> --log-failed --repo stablyai/orca`, then retry failed jobs with `gh run rerun <run-id> --failed --repo stablyai/orca`. GitHub also reruns jobs that depend on the failed jobs. In GitHub's UI, choose **Re-run failed jobs**; Orca offers **Rerun failed checks**.
+
+Keep successful jobs unless there is a concrete reason to revalidate them, such as investigating runner-dependent flakiness. A full rerun restarts passing unit shards, packages, and platform checks too. If fixing the failure changes code, push the fix and validate the new commit; rerunning an older run still tests its original commit.
+
+On a partial retry, the unit-selection plan or full set of shard artifacts may be absent for that attempt. Unit execution falls back to the full test inventory; incomplete selection evidence is advisory and cannot justify enabling selection. Inspect artifact requirements before retrying release or publishing jobs.

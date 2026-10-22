@@ -12,11 +12,11 @@ import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-accou
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
 import { openCodeStoredUserMessagesReader } from '../opencode/opencode-acp-stored-messages'
 import type { AcpStoredUserMessagesReader } from './acp-recovery-history'
-import { isStableCliVersionFrom, isStableCliVersionOnLine } from '../agent-cli-version-probe'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
+import { compareAppVersions } from '../../shared/app-version'
 import type { ManagedRuntime } from '../node-runtime/managed-runtime-release'
 import { readGrokModelCatalog } from './acp-dialects/grok-model-catalog'
 import {
@@ -134,14 +134,14 @@ export type AcpLaunchSpec = {
   signIn?: Omit<AcpSignInWatch, 'link'>
   /** The account each chat pins, and how a launch points the agent at it. */
   account: AcpAccountBinding
-  /** The `--version` releases a structured chat runs on, asked before a create and again at every
-   *  launch; any other release keeps the terminal chat. Absent runs whatever is installed. */
-  supportsVersion?(version: string): boolean
+  /** The ascending `--version` minimums a structured chat needs (`agentCliMinimumVersion`), asked
+   *  before a create and again at every launch; absent runs whatever is installed. */
+  minimumVersions?: readonly string[]
   /** Where the agent installs its own binary, searched after PATH. */
   installDirectories(input: { env: Readonly<Record<string, string>>; homePath: string }): string[]
   /** A pinned copy Orca installs under its data folder when the person asks; a start runs an
    *  installed release before PATH and never installs one. A spec with one names no
-   *  `supportsVersion`. */
+   *  `minimumVersions`. */
   managedRuntime?: ManagedRuntime
   /** The agent's `mode` config option value per chat permission mode, through which it enforces
    *  the mode itself; Orca then answers none of its permission requests for the person. */
@@ -207,15 +207,14 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: GROK_SESSION_HISTORY
 }
 
-// The release the recorded sessions capture.
-const OPENCODE_1X_LINE = { major: 1, floor: '1.18.31' } as const
-// The 2.x release verified to start the private child below.
-const OPENCODE_2X_LINE = { major: 2, floor: '2.0.14' } as const
+// 1.18.31 is the release the recorded sessions capture; 2.0.14 the 2.x release verified to start the
+// private child below.
+const OPENCODE_MINIMUM_VERSIONS = ['1.18.31', '2.0.14'] as const
 
 // `opencode acp` on 1.x serves in-process; on 2.x it starts a private `opencode serve --stdio` child
 // with this environment and ends it with stdin, so both lines run the chat's own account.
 function openCodeLaunchSpec(
-  row: Pick<AcpLaunchSpec, 'agent' | 'command' | 'supportsVersion' | 'modelDiscovery'>
+  row: Pick<AcpLaunchSpec, 'agent' | 'command' | 'minimumVersions' | 'modelDiscovery'>
 ): AcpLaunchSpec {
   return {
     ...row,
@@ -243,8 +242,7 @@ function openCodeLaunchSpec(
 const OPENCODE_LAUNCH_SPEC = openCodeLaunchSpec({
   agent: 'opencode',
   command: 'opencode',
-  supportsVersion: (version) =>
-    [OPENCODE_1X_LINE, OPENCODE_2X_LINE].some((line) => isStableCliVersionOnLine(version, line)),
+  minimumVersions: OPENCODE_MINIMUM_VERSIONS,
   // Its `initialize` names no models; 1.x lists them with a command, 2.x in a session it deletes.
   modelDiscovery: {
     kind: 'command',
@@ -252,8 +250,8 @@ const OPENCODE_LAUNCH_SPEC = openCodeLaunchSpec({
     parse: parseOpenCodeModelListing,
     // The listing marks no default; a chat started with no pick names it.
     listingNamesConfiguredModel: false,
-    // 2.x rejects `--verbose`, and its own listings omit providers that report after startup.
-    supportsVersion: (version) => isStableCliVersionOnLine(version, OPENCODE_1X_LINE),
+    // 2.x and later reject `--verbose`, and their listings omit providers that report after startup.
+    supportsVersion: (version) => compareAppVersions(version, '2.0.0') < 0,
     otherReleasesListInSession: true
   }
 })
@@ -263,7 +261,7 @@ const OPENCODE_LAUNCH_SPEC = openCodeLaunchSpec({
 const OPENCODE2_LAUNCH_SPEC = openCodeLaunchSpec({
   agent: 'opencode2',
   command: 'opencode2',
-  supportsVersion: (version) => isStableCliVersionOnLine(version, OPENCODE_2X_LINE),
+  minimumVersions: ['2.0.14'],
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false }
 })
 
@@ -282,8 +280,8 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   ),
   // OMP's installers use directories the shared resolver already searches after PATH.
   installDirectories: () => [],
-  // Stable releases from 17.0.5, the release verified to serve `omp acp`.
-  supportsVersion: (version) => isStableCliVersionFrom(version, '17.0.5'),
+  // 17.0.5 is the release verified to serve `omp acp`.
+  minimumVersions: ['17.0.5'],
   // `omp models --json` lists every model without the `enabledModels` filter a chat applies, so it
   // could offer models a chat refuses. A session lists exactly what a chat in that folder offers;
   // `omp acp` cannot delete one, so it is kept out of OMP's store (17.0.5 and 18.12.2 verified).

@@ -35,7 +35,8 @@ import {
   commitLayoutCommand,
   commitLayoutCommandsAcrossPartitions,
   commitWindowPaneDetach,
-  keepFrozen
+  keepFrozen,
+  type LayoutCommandRun
 } from './layout-command-commit'
 import {
   fencedIfLayoutOwner,
@@ -136,7 +137,8 @@ export function withdrawPane(
 export function applyLayout(
   hostIds: readonly ExecutionHostId[],
   command: LayoutCommand,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  run: LayoutCommandRun = {}
 ): () => DurableProfileStateMutation<LayoutApplyOutcome> {
   return traced(
     'apply_layout',
@@ -150,7 +152,7 @@ export function applyLayout(
               { ...command, windowDetach: command.windowDetach },
               context
             )
-          : commitLayoutCommand(hostIds, command, context)
+          : commitLayoutCommand(hostIds, command, context, run)
     ),
     (outcome) => (outcome.ok ? undefined : outcome.code)
   )

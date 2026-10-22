@@ -3,6 +3,7 @@
 // can never describe the same pending question differently.
 
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
+import { CODEX_ASYNC_QUESTION_TOOL } from './codex-async-question-input'
 import { parseAskFromToolInput } from './native-chat-ask'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 import { pairToolBlocks } from './native-chat-tool-fold'
@@ -24,7 +25,11 @@ export type NativeChatAskRowSubject =
 /** Whether this block is a question tool call, and so is drawn as the awaiting
  *  row rather than as an ordinary tool line. */
 export function isNativeChatAskCall(block: NativeChatBlock): boolean {
-  return isToolCallBlock(block) && block.state !== 'failed' && isAskUserQuestionTool(block.name)
+  return (
+    isToolCallBlock(block) &&
+    block.state !== 'failed' &&
+    (isAskUserQuestionTool(block.name) || block.name === CODEX_ASYNC_QUESTION_TOOL)
+  )
 }
 
 /** Remove each summarized call together with its FIFO result, preserving failed calls. */

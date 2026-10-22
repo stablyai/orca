@@ -22,6 +22,7 @@ export type StoreState = {
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
   terminalPaneStartsByPaneKey?: AppState['terminalPaneStartsByPaneKey']
+  terminalPaneResumeOutcomesByPaneKey?: AppState['terminalPaneResumeOutcomesByPaneKey']
   /** Pty id → the agent its pane restarts as once the account change lands. */
   pendingPaneAccountRestarts?: AppState['pendingPaneAccountRestarts']
   unreadTerminalTabs?: Record<string, true>

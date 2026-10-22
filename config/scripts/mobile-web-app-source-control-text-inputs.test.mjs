@@ -23,7 +23,7 @@ import {
   textInputFontSizeFloor,
   textInputFontSizeOffenders,
   unresolvedTextInputStyles
-} from './mobile-web-app-text-input-font-size-seam.mjs'
+} from './mobile-web-app/platform-seams/mobile-web-app-text-input-font-size-seam.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile/', import.meta.url))
 const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.skip

@@ -146,9 +146,11 @@ export function useMobileNativeChatController(args: {
     permission: legacyNativeChatPermission,
     question: legacyQuestion,
     detectedAsk: nativeChatDetectedAsk,
-    ask: nativeChatAskPrompt
+    ask: nativeChatAskPrompt,
+    structuredAnswer
   } = useMobileNativeChatPrompts({
-    enabled: activeChatResolution != null && !activeChatStructured,
+    enabled: activeChatStructured || activeChatResolution != null,
+    structured: activeChatStructured ? structuredNativeChat : null,
     status: nativeChatStatus,
     messages: nativeChatSession.messages,
     transcriptLoading: nativeChatSession.transcriptLoading
@@ -173,7 +175,7 @@ export function useMobileNativeChatController(args: {
     : nativeChatInputLeaseReady && connState === 'connected'
 
   const {
-    answerAsk: handleNativeChatAnswerAsk,
+    answerAsk: bridgeAnswerAsk,
     cancelAsk: handleNativeChatCancelAsk,
     respondPermission: legacyHandleNativeChatRespondPermission,
     stop: handleNativeChatStop
@@ -254,7 +256,7 @@ export function useMobileNativeChatController(args: {
     appendComposerTextRef.current = appendComposerText
   }, [appendComposerText, recordNativeChatSessionOptionCommand])
   // Card actions retire the route's held failure banner too, not just sends.
-  const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
+  const answerAsk = useNativeChatAcceptedAction(structuredAnswer ?? bridgeAnswerAsk, onSendResolved)
   const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
   const promptCards = useMobileNativeChatPromptCards({
     terminal: {
@@ -312,10 +314,7 @@ export function useMobileNativeChatController(args: {
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,
     ...promptCards,
-    nativeChatAsk:
-      !activeChatStructured && (askDismissal.showAsk || askDismissal.collapsedAsk)
-        ? nativeChatAskPrompt
-        : null,
+    nativeChatAsk: askDismissal.showAsk || askDismissal.collapsedAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey: askDismissal.askKey,
     dismissNativeChatAsk: askDismissal.dismissAsk,
     collapseNativeChatAsk: askDismissal.collapseAsk,

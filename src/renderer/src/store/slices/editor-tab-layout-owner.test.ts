@@ -363,6 +363,29 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('editor tabs drawn from main’s frame
     expect(store.getState().openFiles.map((file) => file.id)).toContain(a)
   })
 
+  it('drops a tab’s content when main lost its workspace before the close came in', async () => {
+    const a = openFile('/a.ts')
+    await main.settle()
+    store.getState().setEditorDraft(a, 'draft')
+    const tabId = tabFor(a)!.id
+    layoutApplyTestTransport.answerWith((command) =>
+      command.type === 'closeTabs' ? 'pending' : 'apply'
+    )
+
+    store.getState().closeFile(a)
+    // Main drops the tab on its own (its workspace went away), then answers the window's close.
+    layoutApplyTestTransport.answerWith('apply')
+    await layoutApplyTestTransport.call({
+      command: { type: 'closeTabs', workspace: WT, tabIds: [tabId] }
+    })
+    layoutApplyTestTransport.answerPending({ ok: false, code: 'workspace_not_found' })
+    await main.settle()
+
+    expect(tabFor(a)).toBeUndefined()
+    expect(store.getState().openFiles.map((file) => file.id)).not.toContain(a)
+    expect(store.getState().editorDrafts[a]).toBeUndefined()
+  })
+
   it('reopens a closed tab at its place with one open (index)', async () => {
     const a = openFile('/a.ts')
     const b = openFile('/b.ts')

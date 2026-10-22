@@ -52,7 +52,7 @@ import {
   useMobileNativeChatDisclosure
 } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-import { mobileNativeChatMemberId } from './MobileNativeChatScrollHold'
+import { mobileNativeChatMemberId } from './mobile-native-chat-reading-place'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
@@ -343,7 +343,7 @@ function ToolRunMemberList({
   const { editCards, consumedResults } = useMemo(() => buildEditCards(blocks), [blocks])
   const { resultByCall, pairedResults } = useMemo(() => pairNativeChatToolResults(blocks), [blocks])
   const seen = new Map<string, number>()
-  // Each drawn member's line identity: the page's place-hold finds it by this, and a card keyed by
+  // Each drawn member's line identity: the page finds the reader's line by this, and a card keyed by
   // it keeps its state when older calls join the run above it.
   const memberSeen = new Map<string, number>()
   const memberIdentity = (block: NativeChatBlock) =>

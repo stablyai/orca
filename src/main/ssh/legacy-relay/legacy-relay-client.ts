@@ -37,7 +37,7 @@ export type LegacyRelayCliServer = {
   postOutput: (params: Record<string, unknown>, signal: AbortSignal) => Promise<unknown>
 }
 
-export type LegacyRelayClientOptions = {
+type LegacyRelayClientOptions = {
   clientInstanceId: string
   /** A claim this client held before a drop, so the owner role resumes without waiting. */
   resume?: LegacyRelayOwnerClaim | null

@@ -2,6 +2,10 @@
 // bar and the new-tab omnibox. Pure: no store, no React.
 
 import type { BrowserHistoryEntry } from '../../../shared/browser-workspace-types'
+import {
+  LOOPBACK_LOCALHOST_HOSTS,
+  normalizeLocalhostHostname
+} from '../../../shared/localhost-worktree-labels'
 import { formatBrowserPaletteUrl } from './browser-palette-search'
 
 /** Compared before frecency, so "the site you meant" always beats "appears somewhere". */
@@ -73,6 +77,15 @@ export function prepareBrowserHistoryEntries(
   return prepared
 }
 
+function frecencyScore(prepared: PreparedBrowserHistoryEntry, now: number): number {
+  const ageHours = (now - prepared.entry.lastVisitedAt) / (1000 * 60 * 60)
+  // Clamped both ends: a future lastVisitedAt must not buy more than a fresh visit.
+  return (
+    prepared.frecencyBase +
+    Math.min(RECENCY_BONUS_HOURS, Math.max(0, RECENCY_BONUS_HOURS - ageHours))
+  )
+}
+
 function matchTier(
   prepared: PreparedBrowserHistoryEntry,
   lowerQuery: string
@@ -118,15 +131,7 @@ export function matchBrowserHistory({
     if (tier === null || (tier === 'url-tail' && !includeUrlTail)) {
       continue
     }
-    const ageHours = (now - candidate.entry.lastVisitedAt) / (1000 * 60 * 60)
-    matches.push({
-      entry: candidate.entry,
-      tier,
-      // Clamped both ends: a future lastVisitedAt must not buy more than a fresh visit.
-      score:
-        candidate.frecencyBase +
-        Math.min(RECENCY_BONUS_HOURS, Math.max(0, RECENCY_BONUS_HOURS - ageHours))
-    })
+    matches.push({ entry: candidate.entry, tier, score: frecencyScore(candidate, now) })
   }
   if (matches.length === 0) {
     return NO_MATCHES
@@ -141,4 +146,41 @@ export function matchBrowserHistory({
       a.entry.normalizedUrl.localeCompare(b.entry.normalizedUrl)
   )
   return matches.slice(0, limit)
+}
+
+// Why loopback is out: dev servers come and go, so the new-tab page lists the live ones instead.
+function isTopSiteCandidate(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false
+    }
+    const hostname = normalizeLocalhostHostname(parsed.hostname)
+    return !LOOPBACK_LOCALHOST_HOSTS.has(hostname) && !hostname.endsWith('.localhost')
+  } catch {
+    return false
+  }
+}
+
+/** New-tab tiles, one per page as Chrome does, so removing a tile removes exactly that page. */
+export function rankBrowserTopSites({
+  limit,
+  now = Date.now(),
+  prepared
+}: {
+  limit: number
+  now?: number
+  prepared: readonly PreparedBrowserHistoryEntry[]
+}): readonly BrowserHistoryEntry[] {
+  return prepared
+    .filter((candidate) => isTopSiteCandidate(candidate.entry.url))
+    .map((candidate) => ({ entry: candidate.entry, score: frecencyScore(candidate, now) }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.entry.lastVisitedAt - a.entry.lastVisitedAt ||
+        a.entry.normalizedUrl.localeCompare(b.entry.normalizedUrl)
+    )
+    .slice(0, limit)
+    .map((ranked) => ranked.entry)
 }

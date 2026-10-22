@@ -260,6 +260,9 @@ export type BrowserSlice = {
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void
+  /** Returns the removed entry so an Undo can put it back with its visit count. */
+  removeBrowserHistoryEntry: (normalizedUrl: string) => BrowserHistoryEntry | null
+  restoreBrowserHistoryEntry: (entry: BrowserHistoryEntry) => void
   workspaceDocHistory: WorkspaceDocHistoryEntry[]
   /** A visit bumps recency and count; a title-only refresh (bump: false) renames the row. */
   recordWorkspaceDocVisit: (

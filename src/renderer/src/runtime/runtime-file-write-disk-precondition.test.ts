@@ -5,7 +5,10 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
-import { FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY } from '../../../shared/file-write-disk-precondition'
+import {
+  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
+} from '../../../shared/file-write-disk-precondition'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
@@ -33,6 +36,7 @@ function rpcOk(result: unknown) {
 
 function serveHost(options: {
   enforcesPrecondition: boolean
+  identicalNoop?: boolean
   diskContent?: string
   readError?: string
   readErrorCode?: string
@@ -50,7 +54,12 @@ function serveHost(options: {
           capabilities: [
             FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
             ...(options.enforcesPrecondition
-              ? [FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY]
+              ? [
+                  FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
+                  ...(options.identicalNoop === false
+                    ? []
+                    : [FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY])
+                ]
               : [])
           ]
         })
@@ -193,6 +202,73 @@ describe('writeRuntimeFile disk precondition', () => {
     )
 
     expect(result).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(writeCalls()).toHaveLength(0)
+  })
+
+  it('skips writing through an older host whose changed disk already holds the text', async () => {
+    serveHost({ enforcesPrecondition: false, diskContent: 'edited' })
+    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
+
+    const result = await writeRuntimeFile(
+      remoteContext,
+      '/remote/repo/file.ts',
+      'edited',
+      undefined,
+      precondition
+    )
+
+    expect(result).toEqual({ ok: true, unchanged: true })
+    expect(writeCalls()).toHaveLength(0)
+  })
+
+  it.each(['original', 'edited'])(
+    'skips identical content on a v1 guarded host for an automatic save (baseline %s)',
+    async (baseline) => {
+      serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'edited' })
+      expect(
+        await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, {
+          expectedSignature: getDiskBaselineSignature(baseline),
+          requireLosslessUtf8: true
+        })
+      ).toEqual({ ok: true, unchanged: true })
+      expect(writeCalls()).toHaveLength(0)
+    }
+  )
+
+  it('keeps the v1 host guard for non-identical automatic saves after comparing locally', async () => {
+    serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'original' })
+    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: false, diskConflict: 'changed' }))
+    expect(
+      await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, {
+        ...precondition,
+        requireLosslessUtf8: true
+      })
+    ).toEqual({ ok: false, diskConflict: 'changed' })
+    expect(writeCalls()[0]?.method).toBe('files.writeIfUnchanged')
+  })
+
+  it('sends an explicit save straight to a v1 guarded host without reading first', async () => {
+    let reads = 0
+    serveHost({
+      enforcesPrecondition: true,
+      identicalNoop: false,
+      diskContent: 'edited',
+      onRead: () => (reads += 1)
+    })
+    runtimeEnvironmentCall.mockResolvedValue(rpcOk({ ok: true }))
+    await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'edited', undefined, precondition)
+    expect(reads).toBe(0)
+    expect(writeCalls()[0]?.method).toBe('files.writeIfUnchanged')
+  })
+
+  it('refuses an ambiguous automatic baseline before sending to a v1 host', async () => {
+    serveHost({ enforcesPrecondition: true, identicalNoop: false, diskContent: 'a�' })
+    expect(
+      await writeRuntimeFile(remoteContext, '/remote/repo/file.ts', 'a�', undefined, {
+        expectedSignature: getDiskBaselineSignature('a�'),
+        requireLosslessUtf8: true
+      })
+    ).toEqual({ ok: false, diskConflict: 'not-utf8' })
     expect(writeCalls()).toHaveLength(0)
   })
 

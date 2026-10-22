@@ -38,7 +38,8 @@ export function runWorktreeDeleteWithToast(
 
   const removeOptions = {
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
-    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {})
+    ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {}),
+    ...(options.confirmedDiscards ? { confirmedDiscards: options.confirmedDiscards } : {})
   }
   const showFailureToast = (
     error: string,

@@ -1,50 +1,32 @@
-import type { CodexInstallationProblem } from '../../shared/codex-cli-installation'
-import { sayAgentSessionFailureEnglish } from '../../shared/agent-session-failure-copy'
-import { readCodexCliInstallation } from '../preflight/codex-cli-installation'
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import {
+  CODEX_MINIMUM_SUPPORTED_VERSION,
+  parseCodexCliVersion
+} from '../../shared/codex-cli-installation'
+import {
+  checkAgentCliVersion,
+  readAgentCliVersion,
+  type AgentCliVersionReader
+} from '../agent-cli-version-probe'
+import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import type { StructuredAgentLaunchResolver } from '../runtime/structured-agent-launch-composition'
 import {
   resolveProviderChildEnv,
   type ProviderProcessLaunch
 } from '../provider-process/provider-process-launch'
-import { findInErrorChain } from '../provider-process/provider-error-chain'
 
-export class CodexCliInstallationError extends AgentSessionPreSpawnError {
-  readonly codexInstallation: CodexInstallationProblem
-
-  constructor(problem: CodexInstallationProblem) {
-    super(
-      sayAgentSessionFailureEnglish(
-        problem.installedVersion === null ? 'cliMissing' : 'codexCliTooOld',
-        {
-          agent: 'Codex',
-          installedVersion: problem.installedVersion ?? '',
-          minimumVersion: problem.minimumVersion
-        }
-      )
-    )
-    this.codexInstallation = problem
-  }
-}
-
-export function codexInstallationProblemOf(error: unknown): CodexInstallationProblem | undefined {
-  return findInErrorChain(error, (inner) =>
-    inner instanceof CodexCliInstallationError ? inner.codexInstallation : undefined
-  )
-}
+/** Codex's `--version`, which names the binary on its own line. */
+export const readCodexCliVersion: AgentCliVersionReader = (input) =>
+  readAgentCliVersion(input, parseCodexCliVersion)
 
 export async function requireSupportedCodexCli(
-  input: Parameters<typeof readCodexCliInstallation>[0],
-  readInstallation: typeof readCodexCliInstallation = readCodexCliInstallation
+  input: Parameters<AgentCliVersionReader>[0],
+  readVersion: AgentCliVersionReader = readCodexCliVersion
 ): Promise<void> {
-  const result = await readInstallation(input)
-  if (result.status === 'unsupported') {
-    throw new CodexCliInstallationError({
-      installedVersion: result.version,
-      minimumVersion: result.minimumVersion
-    })
+  const check = await checkAgentCliVersion(input, [CODEX_MINIMUM_SUPPORTED_VERSION], readVersion)
+  if (check.status === 'tooOld') {
+    throw AgentCliInstallationError.tooOld('codex', check)
   }
-  if (result.status === 'unknown') {
+  if (check.status !== 'ready') {
     console.warn(`[codex-cli-version] Could not verify ${input.program}; allowing structured chat`)
   }
 }
@@ -52,7 +34,7 @@ export async function requireSupportedCodexCli(
 /** Check every acquired child against the same sealed launch the app-server will use. */
 export function withSupportedCodexCli<L extends ProviderProcessLaunch>(
   resolveLaunch: StructuredAgentLaunchResolver<L>,
-  readInstallation: typeof readCodexCliInstallation = readCodexCliInstallation
+  readVersion: AgentCliVersionReader = readCodexCliVersion
 ): StructuredAgentLaunchResolver<L> {
   return async (request) => {
     const launch = await resolveLaunch(request)
@@ -62,7 +44,7 @@ export function withSupportedCodexCli<L extends ProviderProcessLaunch>(
         cwd: launch.cwd,
         env: resolveProviderChildEnv(launch, process.env)
       },
-      readInstallation
+      readVersion
     )
     return launch
   }

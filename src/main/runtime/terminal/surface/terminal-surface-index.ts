@@ -10,7 +10,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import { bindingOf } from '../../pane-start-statuses'
+import { bindingOf } from '../../pane-live-facts'
 import {
   projectSessionTabs,
   type ProjectedSessionTabs

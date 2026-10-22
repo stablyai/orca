@@ -3,7 +3,7 @@ import type { AcpStructuredSessionAdapterDeps } from '../acp/acp-structured-sess
 import type { AcpStructuredLaunchPartDeps } from '../acp/acp-structured-launch-resolution'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
 import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
-import type { readCodexCliInstallation } from '../preflight/codex-cli-installation'
+import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type { StructuredAgentSessionStartupLimits } from '../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
 import type { PiRpcSessionDeps } from '../pi/rpc-session'
 import type { PiRpcSessionAdapterDeps } from '../pi/rpc-session-adapter'
@@ -17,7 +17,7 @@ export type StructuredAgentSessionTransportOverrides = {
   /** Independent discovery uses its own short-lived transport, separate from chat children. */
   runCodexCatalogSession?: CodexModelCatalogProbeDeps['runSession']
   /** Scripted transports must also replace the real host's version probe. */
-  readCodexInstallation?: typeof readCodexCliInstallation
+  readCodexInstallation?: AgentCliVersionReader
   openAcpConnection?: AcpStructuredSessionAdapterDeps['connect']
   /** Answers an ACP launch's command lookup and version probe for a scripted child; every launch
    *  still resolves and checks through them. Unset, the real binary is found and probed. */

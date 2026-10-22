@@ -97,11 +97,7 @@ export function posixNodeRuntimeExecutable(host: RemoteHostPlatform, runtimeDir:
 }
 
 /** A per-installer stage beside the runtime; its dot prefix keeps it out of `node-*` listings. */
-export function nodeRuntimeStageDir(
-  host: RemoteHostPlatform,
-  runtimeDir: string,
-  token: string
-): string {
+function nodeRuntimeStageDir(host: RemoteHostPlatform, runtimeDir: string, token: string): string {
   return joinRemotePath(
     host,
     remoteDirname(runtimeDir, host),
@@ -249,11 +245,11 @@ export function installNodeRuntimeFromHostArchiveCommand(
   return `(umask 077 && mkdir -p ${stage} && ${copy} && ${promote}); status=$?; rm -rf ${stage}; exit $status`
 }
 
-export type RemoteRuntimeStep = <T>(operation: () => Promise<T>) => Promise<T>
+type RemoteRuntimeStep = <T>(operation: () => Promise<T>) => Promise<T>
 
 const runDirectly: RemoteRuntimeStep = (operation) => operation()
 
-export type EnsuredRemoteNodeRuntime = {
+type EnsuredRemoteNodeRuntime = {
   executable: string
   transfer: 'cached' | 'uploaded' | 'host-downloaded'
 }

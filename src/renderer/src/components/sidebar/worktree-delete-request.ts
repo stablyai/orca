@@ -1,3 +1,4 @@
+import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
@@ -26,6 +27,7 @@ export type WorktreeDeleteWithToastOptions = {
   onPreservedBranch?: (branch: PreservedBranchCleanup) => void
   suppressPreservedBranchToast?: boolean
   snapshotPruneBatchId?: string
+  confirmedDiscards?: ConfirmedUnsavedDiscards
 }
 
 export function toWorktreeDeleteIdentities(

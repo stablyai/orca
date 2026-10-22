@@ -96,7 +96,10 @@ describe('nested deletion confirmation', () => {
     await review()
     fireEvent.click(screen.getByRole('button', { name: 'Delete all listed worktrees' }))
     await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalled())
-    expect(mocks.remove).toHaveBeenCalledWith(target, true, { approvedNestedWorktrees: plan })
+    expect(mocks.remove).toHaveBeenCalledWith(target, true, {
+      approvedNestedWorktrees: plan,
+      confirmedDiscards: expect.any(Map)
+    })
     expect(dismissToast).toHaveBeenCalledOnce()
     expect(onDeleted).toHaveBeenCalledOnce()
   })

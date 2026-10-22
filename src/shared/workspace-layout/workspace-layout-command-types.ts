@@ -89,7 +89,16 @@ export type LayoutCommand =
        */
       recordClose?: 'user' | 'cleanup'
     })
-  | (On & { type: 'moveTab'; tabId: string; toGroupId: string; index: number })
+  | (On & {
+      type: 'moveTab'
+      tabId: string
+      toGroupId: string
+      index: number
+      /** Right after this tab (null: first) when it is in the target group; else `index`. */
+      afterTabId?: string | null
+      /** Pins or unpins the tab where `index` puts it, in the same step. */
+      isPinned?: boolean
+    })
   | (On & { type: 'splitGroup'; tabId: string; besideGroupId: string; direction: GroupSide })
   /** `ratios`, or from a window older than them, `groupLayout`: exactly one. */
   | (On & {
@@ -236,7 +245,7 @@ export type LayoutCommand =
       /** Records how each agent resumes and stops nothing: the window's live and quit captures. */
       recordOnly?: true
     })
-  /** `recordOnly`: drops the records and starts nothing. */
+  /** Starts the slept panes, which keep their records. `recordOnly`: drops them, starts nothing. */
   | (On & { type: 'wake'; paneKeys?: string[]; recordOnly?: true })
   /** The workspace's default tabs were applied (or it had none): never apply them again. */
   | (On & { type: 'setDefaultTabsApplied' })
@@ -321,6 +330,7 @@ export type LayoutRefusalCode =
   | 'pane_structure_changed'
   | 'same_pane'
   | 'last_pane'
+  /** Sent by older hosts only: a startPane of an unbound pane with a sleeping record. */
   | 'pane_sleeping'
   | 'pane_already_bound'
   | 'workspace_exists'
@@ -384,6 +394,13 @@ export type LayoutContext = {
   now: () => number
   /** True while a start of this pane is in flight; such a pane is not started again. */
   isStarting?: (leafId: string) => boolean
+  /**
+   * Whether the pane's bound terminal is live, as the runtime knows it; a binding with a start
+   * status, or to a terminal that ended, names what the pane restores from. Absent: live.
+   */
+  isBindingLive?: (paneKey: string, ptyId: string) => boolean
+  /** Whether the live bound terminal is an empty shell a hibernated agent left: startPane replaces it. */
+  retiresBinding?: (paneKey: string, ptyId: string) => boolean
 }
 
 export type LayoutApplyResult<Model> =

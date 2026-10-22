@@ -251,7 +251,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
     // An empty title is no title.
     liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
-    paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null
+    ...this.paneFactSources()
   })
 
   protected markPaneLiveTitlesDirty(): void {
@@ -282,11 +282,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
-        (move) => rekeyMovedPaneOwners(this, move)
+        (move) => rekeyMovedPaneOwners(this, move),
+        this.layoutCommandRun(command)
       )
     // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
-    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN &&
-    (command.type === 'sleep' || command.type === 'wake')
+    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
       ? this.inResumeRecordOrder(apply)
       : (placing?.then(apply) ?? apply()))
     // Sent before the reply, so the window can wait for the frame that shows the change.

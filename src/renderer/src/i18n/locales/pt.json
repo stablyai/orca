@@ -12,8 +12,12 @@
       "status": "PR #{{number}} desvinculado"
     },
     "discard": {
+      "deleteUntrackedFileDescription": "Isso excluirá permanentemente este arquivo não rastreado. Essa ação não pode ser desfeita.",
+      "deleteUntrackedFilesDescription": "Isso excluirá permanentemente estes {{count}} arquivos não rastreados. Essa ação não pode ser desfeita.",
       "restoreStagedVersionDescription": "Isso restaurará a última versão preparada e descartará a exclusão. Essa ação não pode ser desfeita.",
-      "unstagedChangesDescription": "Isso reverterá as alterações não preparadas neste arquivo. Essa ação não pode ser desfeita."
+      "unstagedChangesDescription": "Isso reverterá as alterações não preparadas neste arquivo. Essa ação não pode ser desfeita.",
+      "unstagedSelectionIncludingUntrackedDescription": "Isso reverterá as alterações não preparadas e excluirá permanentemente quaisquer arquivos não rastreados nesta seleção. Essa ação não pode ser desfeita.",
+      "unstagedFilesIncludingUntrackedDescription": "Isso reverterá as alterações não preparadas e excluirá permanentemente quaisquer arquivos não rastreados entre estes {{count}} arquivos. Essa ação não pode ser desfeita."
     }
   },
   "githubChecks": {
@@ -8163,8 +8167,6 @@
           "5f5142a62a": "Ícone anterior"
         },
         "BrowserDefaultZoomSetting": {
-          "2622126877": "Nível de zoom aplicado às abas de navegador recém-abertas.",
-          "bbeec087d3": "Aplicado às abas de navegador recém-abertas.",
           "265597101f": "Zoom Padrão"
         },
         "BrowserUseComputerUseNotice": {
@@ -8491,7 +8493,7 @@
           "reassurance": "É executado em cada host, acessado pela sua própria conexão SSH. Seu código e seus arquivos permanecem onde estão. Apenas a lista de projetos, abas e terminais do Orca é movida para o host."
         },
         "sshHostServer": {
-          "sourceChanged": "Uma versão anterior do Orca alterou os projetos deste host. Mova essas alterações para o servidor Orca deste host ou mantenha a versão do servidor para conectar novamente.",
+          "sourceChanged": "Este computador tem projetos ou pastas deste host que o servidor Orca dele ainda não tem, muitas vezes adicionados por uma versão anterior do Orca. Mova-os para o servidor Orca deste host ou mantenha a versão do servidor para conectar novamente.",
           "deploying": "Configurando Orca em {{host}}…",
           "converting": "Movendo para o Orca em {{host}}…",
           "connecting": "Conectando ao Orca em {{host}}…",
@@ -10367,7 +10369,6 @@
             "databaseCount_one": "{{value0}} banco de dados",
             "databaseCount_other": "{{value0}} bancos de dados",
             "scanning": "Verificando {{value0}}",
-            "reading": "Lendo {{value0}} arquivos",
             "scanned": "Verificação concluída: {{value0}}"
           }
         }
@@ -12519,6 +12520,9 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "Todas as notas não enviadas"
+        },
+        "staleViewEdit": {
+          "rejected": "O que você digitou recentemente nesta visualização foi descartado porque o arquivo foi alterado em outra visualização."
         },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "A colagem é muito grande.",
@@ -16337,7 +16341,6 @@
             "95af781091": "Enviar feedback para um agente",
             "ac39b9366b": "Enviar",
             "a3508d7e6e": "{{value0}} anotação{{value1}} pronta. Selecione outro elemento ou copie todo o feedback.",
-            "f796c774a4": "Digite uma URL acima para começar a navegar.",
             "366bf5d62c": "Nova Aba",
             "1c78adc73d": "Abrir Externamente",
             "da68d35f7b": "Abrir a página com falha no navegador padrão",
@@ -19394,7 +19397,6 @@
         "couldNotRestart": "Não foi possível reiniciar {{agent}}.",
         "startTimedOut": "{{agent}} demorou demais para iniciar (sem resposta a {{method}} após {{seconds}}s).",
         "startTimedOutKeepsHappening": "Se isso continuar acontecendo, o computador que executa este chat pode estar sobrecarregado.",
-        "codexCliTooOld": "O Codex {{installedVersion}} é antigo demais para chats. Atualize para {{minimumVersion}} ou uma versão mais recente.",
         "notSignedIn": "{{agent}} não está conectado à conta.",
         "claudeSystemNotSignedIn": "O Claude não está conectado à conta. Execute `{{loginCommand}}` ou escolha uma conta nas configurações de Contas do Claude.",
         "claudeManagedNotSignedIn": "Esta conta do Claude não está conectada. Entre novamente nas configurações de Contas do Claude.",
@@ -20889,5 +20891,26 @@
       "unavailable": "Este espaço de trabalho está protegido ou indisponível."
     },
     "rowActions": "Ações para {{name}}"
+  },
+  "onboarding": {
+    "language": {
+      "back": "Idiomas",
+      "requestPrompt": "Qual idioma você gostaria que o Orca oferecesse?",
+      "requestSuccess": "Solicitação de idioma registrada. Você pode continuar a configuração.",
+      "requestError": "Não foi possível registrar sua solicitação. Tente novamente.",
+      "retry": "Tentar novamente",
+      "requestAction": "Solicitar idioma",
+      "title": "Idioma de exibição",
+      "device": "Idioma do sistema: {{language}}",
+      "unsupported": "Idioma do sistema: {{language}}. Este idioma ainda não é compatível.",
+      "unknown": "Não foi possível detectar o idioma do sistema. Escolha um idioma abaixo.",
+      "loadError": "Não foi possível carregar este idioma. Tente novamente.",
+      "saveError": "Não foi possível salvar sua preferência de idioma. Tente novamente.",
+      "other": "Outro idioma…",
+      "settingsError": "Não foi possível carregar suas configurações.",
+      "loadingSettings": "Carregando configurações…",
+      "loading": "Carregando idioma…",
+      "saving": "Salvando idioma…"
+    }
   }
 }

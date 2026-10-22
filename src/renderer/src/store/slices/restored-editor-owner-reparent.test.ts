@@ -77,8 +77,7 @@ function openRestoredSource(): string {
       worktreeId: SOURCE,
       runtimeEnvironmentId: null,
       language: 'markdown',
-      mode: 'edit',
-      pendingDiskBaselineVerification: true
+      mode: 'edit'
     },
     { suppressActiveRuntimeFallback: true }
   )
@@ -172,8 +171,7 @@ describe('restored editor owner reparent', () => {
       relativePath: 'docs/readme.md',
       worktreeId: TARGET,
       runtimeEnvironmentId: null,
-      isDirty: true,
-      pendingDiskBaselineVerification: true
+      isDirty: true
     })
     expect(moved.pendingOwnerMigration).toBeUndefined()
     expect(moved.operationProvenance?.generation.route).toEqual({

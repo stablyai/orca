@@ -11,16 +11,17 @@ versions or suppress advisories.
 | node-forge 1.4.0 | GHSA-86w9-cpqp-85rv | Require exactly the captured OID and optional NULL in the nested DigestAlgorithm sequence, rejecting unconsumed elements during RSA signature verification.      |
 | sprintf-js 1.1.3 | GHSA-hp3w-g68c-fv3c | Clamp numeric precision to the ECMAScript range before formatting; protect both Node and browser entries.                                                        |
 
-The braces patch applies to desktop, mobile, docs tooling, and isolated audit
-tools. The formatting patch applies to desktop and mobile; mobile's older
-sprintf-js 1.0.3 is first upgraded to 1.1.3. Mobile carries the RSA patch.
+The braces patch applies to mobile, docs tooling, and isolated audit tools.
+Desktop no longer installs braces after removing the unused shadcn generator CLI.
+The formatting patch applies to desktop and mobile; mobile's older sprintf-js
+1.0.3 is first upgraded to 1.1.3. Mobile carries the RSA patch.
 Mobile patch files stay inside its independent workspace for standalone builds.
 
-`config/scripts/dependency-security-patches.test.mjs` exercises the installed
-desktop packages with deeply nested patterns, direct AST inputs, and excessive
-precision in both formatting entries. The mobile regression in
-`mobile/scripts/dependency-security-patches.test.ts` checks the installed Expo
-dependency and rejects a signed malformed DigestInfo while accepting a valid
+`config/scripts/dependency-security-patches.test.mjs` exercises excessive numeric
+precision in both installed desktop formatting entries. The mobile regressions in
+`mobile/scripts/dependency-security-patches.test.ts` exercise deeply nested brace
+and parenthesis patterns and direct AST inputs, then check the installed Expo
+RSA dependency rejects a signed malformed DigestInfo while accepting a valid
 signature. Both suites use the packages installed from the workspace lockfiles;
 they do not run installs or access the registry. Normal patterns and formatting
 retain their previous behavior. Excessive brace patterns now fail explicitly;

@@ -108,6 +108,33 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
+  it('sends a Codex async answer as an ordinary message that quotes each answered question', () => {
+    const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'codex'))
+    const prompt: AskPrompt = {
+      replyAsMessage: true,
+      questions: [
+        { question: 'Which color?', multiSelect: false, options: [{ label: 'Red' }] },
+        { question: 'Skipped?', multiSelect: false, options: [] },
+        { question: 'Any constraints?', multiSelect: false, options: [] }
+      ]
+    }
+
+    act(() =>
+      result.current.sendAnswer(prompt, [
+        { indices: [0] },
+        { indices: [] },
+        { indices: [], other: 'None' }
+      ])
+    )
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledWith(
+      'pty-1',
+      '> Which color?\n\nRed\n\n> Any constraints?\n\nNone',
+      { onDeliverySettled: expect.any(Function) }
+    )
+    expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+  })
+
   it('routes a Claude answer through the option-number keystroke path', () => {
     const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'claude'))
 

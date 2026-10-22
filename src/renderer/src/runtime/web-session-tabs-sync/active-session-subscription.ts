@@ -155,6 +155,7 @@ export function installActiveSessionTabsSubscription({
       skipWakeRespawn:
         shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId) ||
         // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — a frame-drawn workspace's terminals are not the mirror's to respawn.
+        // Interim (ledger L240): respawn stays only for servers without `layout.intents.v1`, until Phase 2.
         (ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, activeWorktreeId))
     })
     let settle: HostSessionMirrorSettle | null = decision.apply

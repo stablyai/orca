@@ -44,23 +44,19 @@ export function rekeyOpenFilesPatch(
     }
   }
 
-  const echoGatedIds = new Set<string>()
   const nextOpenFiles = s.openFiles.map((f) => {
     const rekey = rekeyByOldId.get(f.id)
     if (!rekey) {
       return f
     }
     // Spread the whole OpenFile so fields this action doesn't know about survive; change only the path-derived ones.
-    // Gate atomically here so autosave is suspended before any echo can be verified (only a dirty autosave-capable tab can be clobbered).
-    const gatesEcho =
+    // Only a dirty autosave-capable tab needs its destination echo verified.
+    const verifiesEcho =
       moveOperationId !== undefined &&
       f.isDirty &&
-      // A 'changed' tab is already autosave-suspended via externalMutation; gating it would strand the gate (verification skips a 'changed' tab), so leave the banner as terminal.
+      // A 'changed' tab already shows the banner, which verification would only repeat.
       f.externalMutation !== 'changed' &&
       (f.mode === 'edit' || (f.mode === 'diff' && f.diffSource === 'unstaged'))
-    if (gatesEcho) {
-      echoGatedIds.add(f.id)
-    }
     return {
       ...f,
       id: rekey.newFileId,
@@ -75,9 +71,8 @@ export function rekeyOpenFilesPatch(
       ...(rekey.consumeUntitled
         ? { isUntitled: undefined, deleteUntouchedOnClose: undefined }
         : {}),
-      ...(gatesEcho
+      ...(verifiesEcho
         ? {
-            pendingLiveDiskVerification: true,
             pendingSelfMoveEcho: {
               operationId: moveOperationId,
               targetPath: rekey.newFilePath
@@ -119,9 +114,7 @@ export function rekeyOpenFilesPatch(
     ok: true,
     patch: {
       openFiles: nextOpenFiles,
-      editorBuffers: rekeyEditorBuffers(s.editorBuffers, s.openFiles, migrations, (f) =>
-        echoGatedIds.has(f.id) ? { pendingLiveDiskVerification: true } : undefined
-      ),
+      ...rekeyEditorBuffers(s, s.openFiles, migrations, 'rename'),
       editorDrafts: rekeyFileIdRecord(s.editorDrafts, migrations),
       editorCursorLine: rekeyFileIdRecord(s.editorCursorLine, migrations),
       markdownViewMode: rekeyFileIdRecord(s.markdownViewMode, migrations),

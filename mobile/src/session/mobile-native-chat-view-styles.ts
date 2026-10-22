@@ -2,6 +2,8 @@ import { StyleSheet } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
 const FLOATING_CONTROLS_BOTTOM = spacing.md
+const LOAD_EARLIER_HEIGHT = 44
+const LOAD_EARLIER_RETRY_HEIGHT = 28
 
 export const styles = StyleSheet.create({
   root: {
@@ -71,18 +73,35 @@ export const styles = StyleSheet.create({
   loadEarlier: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    minHeight: 36
+    height: LOAD_EARLIER_HEIGHT
   },
-  loadEarlierText: {
-    color: colors.textMuted,
+  loadEarlierFailed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md
+  },
+  loadEarlierRetry: {
+    justifyContent: 'center',
+    height: LOAD_EARLIER_RETRY_HEIGHT,
+    paddingHorizontal: spacing.md,
+    borderRadius: LOAD_EARLIER_RETRY_HEIGHT / 2,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
+  loadEarlierRetryPressed: {
+    opacity: 0.6
+  },
+  loadEarlierRetryLabel: {
+    color: colors.textSecondary,
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
   loadEarlierFailedText: {
+    flexShrink: 1,
     color: colors.textMuted,
     fontSize: typography.metaSize,
-    textAlign: 'center',
-    marginTop: spacing.xs
+    textAlign: 'center'
   }
 })

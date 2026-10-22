@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { parse } from 'yaml'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { collectNodeServerInputs } from './node-server-change-scope.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const unit = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
@@ -52,9 +53,14 @@ function routedOutputs(files, reused, options) {
     }
   }
   return Object.fromEntries(
-    ['test', 'static_analysis', 'typecheck', 'mobile_ci_tools', ...routes.map(([job]) => job)].map(
-      (name) => [name, String(evaluate(workflow.jobs.code_paths.outputs[name], context))]
-    )
+    [
+      'test',
+      'static_analysis',
+      'typecheck',
+      'mobile_ci_tools',
+      'relay_integration',
+      ...routes.map(([job]) => job)
+    ].map((name) => [name, String(evaluate(workflow.jobs.code_paths.outputs[name], context))])
   )
 }
 
@@ -259,7 +265,6 @@ describe('Mobile CI tool preflight routing', () => {
     expect(
       evaluate(unit.jobs.relay_integration.if, { inputs: { run_relay_integration: false } })
     ).toBe(false)
-    expect(workflow.jobs.test.with.run_relay_integration).toBeUndefined()
     expect(unit.jobs.relay_integration.needs).toBeUndefined()
   })
 
@@ -289,6 +294,74 @@ describe('Mobile CI tool preflight routing', () => {
     const files = ['config/scripts/run-mobile-ci-tests.mjs']
     expect(routedOutputs(files, 'true', verified).mobile_ci_tools).toBe('false')
     expect(routedOutputs(files, 'false', verified).mobile_ci_tools).toBe('true')
+  })
+})
+
+describe('Renderer-only relay admission', () => {
+  const renderer = 'src/renderer/src/components/right-sidebar/FileExplorer.tsx'
+  const admitted = (files) => {
+    const outputs = routedOutputs(files, 'false')
+    const runRelay = evaluate(workflow.jobs.test.with.run_relay_integration, {
+      needs: { code_paths: { outputs } }
+    })
+    return evaluate(unit.jobs.relay_integration.if, {
+      inputs: { run_relay_integration: runRelay }
+    })
+  }
+
+  it('skips relay setup for renderer-only changes while retaining unit and package checks', () => {
+    const files = [renderer, 'src/renderer/src/i18n/locales/en.json', 'README.md']
+    expect(admitted(files)).toBe(false)
+    expect(classifyPrJobs(files)).toMatchObject({
+      test: true,
+      static_analysis: true,
+      typecheck: true,
+      package: true,
+      package_windows: true
+    })
+  })
+
+  it.each([
+    [],
+    ['src/main/runtime/mobile-cloud-relay/relay-http-client.ts'],
+    ['src/shared/relay-region-preference.ts'],
+    ['tests/e2e/relay-region-compatibility.unit.test.ts'],
+    ['src/main/orcad/orcad-browser-provider.ts'],
+    ['package.json'],
+    ['pnpm-lock.yaml'],
+    ['config/vitest.config.ts'],
+    ['.github/workflows/unit-tests.yml'],
+    ['.github/workflows/pr.yml'],
+    ['unknown-input'],
+    [renderer, 'cloud/packages/relay-contract/src/director-messages.ts'],
+    [renderer, 'src/main/runtime/mobile-cloud-relay/relay-http-client.ts'],
+    [renderer, 'src/shared/relay-region-preference.ts']
+  ])('retains relay coverage for non-renderer or incomplete evidence: %j', (...files) => {
+    expect(admitted(files)).toBe(true)
+  })
+
+  it.each([
+    {},
+    { relay_integration: '' },
+    { relay_integration: 'unknown' },
+    { relay_integration: 'false', orcad_browser: 'true' }
+  ])(
+    'retains relay/browser execution for missing routes or a selected browser contract: %j',
+    (outputs) => {
+      expect(
+        evaluate(workflow.jobs.test.with.run_relay_integration, {
+          needs: { code_paths: { outputs } }
+        })
+      ).toBe(true)
+    }
+  )
+
+  it('keeps the shipped relay contracts independent of renderer inputs', async () => {
+    const testStep = relaySteps.find((step) => step.name === 'Test relay integration contracts')
+    const entryPoints = testStep.run.split(/\s+/).filter((arg) => arg.endsWith('.test.ts'))
+    expect(entryPoints.length).toBeGreaterThan(0)
+    const inputs = await collectNodeServerInputs({ entryPoints })
+    expect([...inputs].filter((file) => file.startsWith('src/renderer/'))).toEqual([])
   })
 })
 

@@ -24,7 +24,7 @@
   "settings": {
     "chat": {
       "permissionsTitle": "新しいチャットの権限",
-      "permissionsDescription": "新しいチャットにのみ適用されます。ターミナルで開くAgentには、設定 → Agent → Agentの権限が適用されます。",
+      "permissionsDescription": "新しいチャットにのみ適用されます。Agentごとのデフォルト設定は、設定 → Agent にあります。",
       "description": "チャットの外観と動作を選びます。",
       "names": {
         "title": "チャット名",
@@ -7093,8 +7093,6 @@
           "ee110e1830": "デフォルトの基本参照はありません"
         },
         "BrowserDefaultZoomSetting": {
-          "2622126877": "新しく開いたブラウザタブに適用されるズームレベル。",
-          "bbeec087d3": "新しく開いたブラウザタブに適用されます。",
           "265597101f": "デフォルトのズーム"
         },
         "BrowserHomePageSetting": {
@@ -12670,7 +12668,7 @@
           "reassurance": "各ホスト上で動作し、あなた自身の SSH 接続を通じて利用します。コードやファイルは今の場所から動きません。ホストに移るのは、Orca のプロジェクト、タブ、ターミナルの一覧だけです。"
         },
         "sshHostServer": {
-          "sourceChanged": "古いバージョンの Orca がこのホストのプロジェクトを変更しました。再接続するには、その変更をこのホストの Orca サーバーに移動するか、サーバーのバージョンを維持してください。",
+          "sourceChanged": "このコンピューターには、このホストの Orca サーバーにまだないプロジェクトまたはフォルダーがあります。多くは古いバージョンの Orca で追加されたものです。再接続するには、それらをこのホストの Orca サーバーに移動するか、サーバーのバージョンを維持してください。",
           "deploying": "{{host}} に Orca をセットアップ中…",
           "converting": "{{host}} 上の Orca に移行中…",
           "connecting": "{{host}} 上の Orca に接続中…",
@@ -12856,7 +12854,7 @@
         "SshRestoreRemovedHosts": {
           "title": "削除したホストを復元しますか？",
           "description": "Orca で削除した ~/.ssh/config のホストが、設定とすべてのホスト選択に戻ります。",
-          "none": "~/.ssh/config から削除したホストはありません。",
+          "none": "Orca で削除した ~/.ssh/config のホストのうち、復元できるものはありません。",
           "confirm": "復元"
         },
         "SshTargetList": {
@@ -14494,7 +14492,7 @@
             "databaseCount_one": "{{value0}} 個のデータベース",
             "databaseCount_other": "{{value0}} 個のデータベース",
             "scanning": "{{value0}}をスキャン中",
-            "reading": "{{value0}} ファイルを読み込み中",
+            "checking": "確認中 {{value0}}",
             "scanned": "{{value0}}をスキャン済み"
           }
         }
@@ -16294,6 +16292,9 @@
             }
           }
         },
+        "staleViewEdit": {
+          "rejected": "ファイルが別のビューで変更されたため、このビューでの最近の入力は破棄されました。"
+        },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "貼り付け内容が大きすぎます。",
           "stopped": "大きなペーストは完成する前に止まりました。",
@@ -16308,11 +16309,11 @@
           "copy": "コピージョブ"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "未保存の編集がある間に、ディスク上のファイルが変更されました。上書きすると、ディスク上の新しい内容が置き換えられます。",
           "3fa2b8d417": "ディスクから再読み込み",
           "a95d02c644": "編集内容を保持",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "上書き",
+          "keepHint": "編集中の内容を保持します。次回の保存時にディスク上の内容が置き換えられます。",
           "5c02de9b31": "ディスクから再読み込みしました",
           "d1e830fa22": "元に戻す",
           "90b2ce7d43": "比較"
@@ -16353,10 +16354,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "編集後にディスク上のファイルが変更されました。バナーから比較、再読み込み、または上書きを行ってください。"
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "このセクションの読み込み後に、ディスク上のファイルが変更されました。"
             }
           }
         },
@@ -16663,7 +16664,6 @@
             "95af781091": "Agent にフィードバックを送信する",
             "ac39b9366b": "送信",
             "a3508d7e6e": "{{value0}} アノテーション{{value1}} が準備されました。別の要素を選択するか、すべてのフィードバックをコピーします。",
-            "f796c774a4": "上に URL を入力して閲覧を開始します。",
             "366bf5d62c": "新規タブ",
             "1c78adc73d": "外部で開く",
             "da68d35f7b": "失敗したページをデフォルトのブラウザで開く",
@@ -18375,9 +18375,9 @@
         "couldNotStart": "{{agent}} を起動できませんでした。",
         "editSavedArguments": "設定 > Agent > 引数で編集してください。",
         "couldNotRestart": "{{agent}} を再起動できませんでした。",
+        "cliTooOld": "{{agent}} {{installedVersion}} はチャットには古すぎます。{{minimumVersion}} 以降に更新してください。",
         "startTimedOut": "{{agent}} の起動に時間がかかりすぎました ({{seconds}} 秒経っても {{method}} に応答がありません)。",
         "startTimedOutKeepsHappening": "これが繰り返し起こる場合は、このチャットを実行しているコンピューターが過負荷になっている可能性があります。",
-        "codexCliTooOld": "Codex {{installedVersion}} はチャットには古すぎます。{{minimumVersion}} 以降に更新してください。",
         "notSignedIn": "{{agent}} にサインインしていません。",
         "claudeSystemNotSignedIn": "Claude にサインインしていません。`{{loginCommand}}` を実行するか、Claude アカウント設定でアカウントを選択してください。",
         "claudeManagedNotSignedIn": "この Claude アカウントにサインインしていません。設定の Claude アカウントで再度サインインしてください。",
@@ -19065,7 +19065,7 @@
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
       "structuredSessionHostDeclined": "{{value0}} をターミナルで開きました",
-      "structuredSessionHostDeclinedDescription": "このサーバーはこのワークスペースで {{value0}} チャットを実行できません。",
+      "structuredSessionHostDeclinedDescription": "このワークスペースでは {{value0}} チャットを実行できません。",
       "structuredSessionHostUnreachable": "{{value0}} に接続できませんでした",
       "structuredSessionHostUnreachableDescription": "Orca は {{value0}} チャットを開きませんでした。サーバーへの接続を確認して、もう一度お試しください。",
       "hostOutage": {
@@ -19409,7 +19409,11 @@
           "discarded_other": "{{count}} 個のファイルの未保存の編集は破棄されます：",
           "moreFiles": "ほか {{value}} 件",
           "blocked_one": "先に {{name}} の未保存のファイル {{count}} 個を保存するか閉じてください",
-          "blocked_other": "先に {{name}} の未保存のファイル {{count}} 個を保存するか閉じてください"
+          "blocked_other": "先に {{name}} の未保存のファイル {{count}} 個を保存するか閉じてください",
+          "closedToast_one": "{{workspace}} の未保存の編集がある {{count}} 個のファイルを閉じました",
+          "closedToast_other": "{{workspace}} の未保存の編集がある {{count}} 個のファイルを閉じました",
+          "reopen": "再度開く",
+          "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。"
         }
       }
     },
@@ -19964,8 +19968,12 @@
       "status": "PR #{{number}} のリンクが解除されました"
     },
     "discard": {
+      "deleteUntrackedFileDescription": "この未追跡ファイルは完全に削除されます。この操作は元に戻せません。",
+      "deleteUntrackedFilesDescription": "これらの {{count}} 個の未追跡ファイルは完全に削除されます。この操作は元に戻せません。",
       "restoreStagedVersionDescription": "これにより、最後にステージングされたバージョンが復元され、削除が破棄されます。これを元に戻すことはできません。",
-      "unstagedChangesDescription": "これにより、このファイルに対するステージングされていない変更が元に戻ります。これを元に戻すことはできません。"
+      "unstagedChangesDescription": "これにより、このファイルに対するステージングされていない変更が元に戻ります。これを元に戻すことはできません。",
+      "unstagedSelectionIncludingUntrackedDescription": "ステージングされていない変更を元に戻し、この選択内の未追跡ファイルを完全に削除します。この操作は元に戻せません。",
+      "unstagedFilesIncludingUntrackedDescription": "ステージングされていない変更を元に戻し、これらの {{count}} 個のファイルに含まれる未追跡ファイルを完全に削除します。この操作は元に戻せません。"
     }
   },
   "rendererRecovery": {
@@ -20630,6 +20638,27 @@
       "waitingAriaLabel": "他の Orca インスタンスを待機中の更新。クリックして展開します。",
       "preparingLabel": "更新を準備中",
       "preparingAriaLabel": "更新を準備中。クリックして展開します。"
+    }
+  },
+  "onboarding": {
+    "language": {
+      "back": "言語",
+      "requestPrompt": "Orcaに対応してほしい言語は何ですか？",
+      "requestSuccess": "言語のリクエストを記録しました。設定を続けられます。",
+      "requestError": "リクエストを記録できませんでした。再試行してください。",
+      "retry": "再試行",
+      "requestAction": "言語をリクエスト",
+      "title": "表示言語",
+      "device": "システム言語：{{language}}",
+      "unsupported": "システム言語：{{language}}。この言語はまだサポートされていません。",
+      "unknown": "システム言語を検出できませんでした。以下から選択してください。",
+      "loadError": "この言語を読み込めませんでした。再試行してください。",
+      "saveError": "言語設定を保存できませんでした。再試行してください。",
+      "other": "その他の言語…",
+      "settingsError": "設定を読み込めませんでした。",
+      "loadingSettings": "設定を読み込み中…",
+      "loading": "言語を読み込み中…",
+      "saving": "言語を保存中…"
     }
   }
 }

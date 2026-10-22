@@ -43,7 +43,11 @@ export type MobileAgentSessionHistoryPanelProps = {
   origin?: string
 }
 
-export function MobileAgentSessionHistoryPanel({
+export function MobileAgentSessionHistoryPanel(props: MobileAgentSessionHistoryPanelProps) {
+  return <MobileAgentSessionHistoryPanelContent key={props.hostId} {...props} />
+}
+
+function MobileAgentSessionHistoryPanelContent({
   hostId,
   worktreeId,
   name = '',

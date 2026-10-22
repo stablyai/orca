@@ -4,6 +4,7 @@
 import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
+import { withEditorBufferRecords } from '@/store/editor-buffer-record-lifecycle'
 import type { AppState } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { emptyTabLayoutState } from '@/store/slices/editor-slice-test-harness'
@@ -39,8 +40,11 @@ export function createFakeEditorDisk(initialFiles: Record<string, string> = {}):
           diskPrecondition?: FileWriteDiskPrecondition
         }) => {
           const diskConflict = diskPrecondition
-            ? compareDiskWritePrecondition(diskPrecondition, files.get(filePath) ?? null)
+            ? compareDiskWritePrecondition(diskPrecondition, files.get(filePath) ?? null, content)
             : null
+          if (diskConflict === 'identical') {
+            return { ok: true, unchanged: true }
+          }
           if (diskConflict) {
             return { ok: false, diskConflict }
           }
@@ -94,26 +98,32 @@ export function stubEditorWindow(): ReturnType<typeof vi.fn> {
 }
 
 export function createEditorStore(): StoreApi<AppState> {
+  // Why the record middleware: views of one file share a record only through it, as in the app.
   // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
-  return createStore<any>()((...args: any[]) => ({
-    ...emptyTabLayoutState(),
-    activeWorktreeId: 'wt-1',
-    repos: [],
-    worktreesByRepo: {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
-    },
-    detectedWorktreesByRepo: {},
-    runtimeEnvironments: [],
-    runtimeEnvironmentCatalogHydrated: true,
-    removedRuntimeEnvironmentIds: new Set(),
-    sshConnectionStates: {},
-    sshStateByEnvironment: {},
-    settings: {
-      editorAutoSave: true,
-      editorAutoSaveDelayMs: 1000
-    },
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  const create = withEditorBufferRecords<any>(
+    (...args: any[]) => ({
+      ...emptyTabLayoutState(),
+      activeWorktreeId: 'wt-1',
+      repos: [],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
+      },
+      detectedWorktreesByRepo: {},
+      runtimeEnvironments: [],
+      runtimeEnvironmentCatalogHydrated: true,
+      removedRuntimeEnvironmentIds: new Set(),
+      sshConnectionStates: {},
+      sshStateByEnvironment: {},
+      settings: {
+        editorAutoSave: true,
+        editorAutoSaveDelayMs: 1000
+      },
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    }),
+    true
+  )
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: as above.
+  return createStore<any>()(create) as unknown as StoreApi<AppState>
 }
 
 /** Store with a local worktree at /repo and an open, untouched untitled note at /repo/`fileName`. */

@@ -8,7 +8,7 @@ import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
-import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
+import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { WorkspaceOptionsSheet } from './workspace-options-sheet'
@@ -24,7 +24,6 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     existingWorktreePaths,
     hostCapabilities,
     hostId,
-    showNewWorktree,
     state
   } = controller
   const actionTarget = state.actionTarget
@@ -156,8 +155,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       />
 
       <NewWorktreeModalController
-        ref={state.newWorktreeModalRef}
-        routeVisible={showNewWorktree}
+        visible={state.showNewWorktree}
         client={client}
         hostCapabilities={hostCapabilities}
         hostId={hostId}
@@ -167,9 +165,6 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         // The seam, not react-native's `Linking`: this screen is in the tasks page closure, and
         // inside the shell's WebView `openURL` resolves without opening anything.
         openExternalUrl={openExternalLink}
-        onVisibleChange={(visible) => {
-          state.newWorktreeModalVisibleRef.current = visible
-        }}
         onCreated={(worktreeId, worktreeName, warning, executionHost) => {
           void catalog.fetchWorktrees({ allowDuringModal: true })
           actions.navigateFromHostList(
@@ -179,7 +174,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             )
           )
         }}
-        onRouteVisibleChange={actions.setShowNewWorktreeVisible}
+        onClose={actions.closeNewWorktreeModal}
       />
     </>
   )

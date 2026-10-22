@@ -24,7 +24,7 @@
   "settings": {
     "chat": {
       "permissionsTitle": "新聊天的权限",
-      "permissionsDescription": "仅适用于新聊天。在终端中打开的智能体使用设置 → 智能体 → 智能体权限。",
+      "permissionsDescription": "仅适用于新聊天。各智能体的默认设置位于设置 → 智能体。",
       "description": "选择聊天的外观和行为方式。",
       "names": {
         "title": "聊天名称",
@@ -7093,8 +7093,6 @@
           "ee110e1830": "没有默认的基本参考"
         },
         "BrowserDefaultZoomSetting": {
-          "2622126877": "缩放级别应用于新打开的浏览器选项卡。",
-          "bbeec087d3": "应用于新打开的浏览器选项卡。",
           "265597101f": "默认缩放"
         },
         "BrowserHomePageSetting": {
@@ -12684,7 +12682,7 @@
           "reassurance": "在各个主机上运行，通过你自己的 SSH 连接访问。你的代码和文件留在原处。只有 Orca 的项目、标签页和终端列表会移到该主机。"
         },
         "sshHostServer": {
-          "sourceChanged": "较旧版本的 Orca 更改了此主机的项目。要重新连接，请将这些更改迁移到此主机上的 Orca 服务器，或保留服务器版本。",
+          "sourceChanged": "此计算机上有此主机的 Orca 服务器尚未包含的项目或文件夹，通常是由较旧版本的 Orca 添加的。要重新连接，请将它们迁移到此主机上的 Orca 服务器，或保留服务器版本。",
           "deploying": "正在 {{host}} 上设置 Orca…",
           "converting": "正在迁移到 {{host}} 上的 Orca…",
           "connecting": "正在连接到 {{host}} 上的 Orca…",
@@ -12856,7 +12854,7 @@
         "SshRestoreRemovedHosts": {
           "title": "恢复已移除的主机？",
           "description": "你在 Orca 中移除的 ~/.ssh/config 主机将重新出现在设置和所有主机选择器中。",
-          "none": "没有从 ~/.ssh/config 移除的主机。",
+          "none": "没有在 Orca 中移除且可恢复的 ~/.ssh/config 主机。",
           "confirm": "恢复"
         },
         "SshTargetList": {
@@ -14494,7 +14492,7 @@
             "databaseCount_one": "{{value0}} 个数据库",
             "databaseCount_other": "{{value0}} 个数据库",
             "scanning": "正在扫描 {{value0}}",
-            "reading": "正在读取 {{value0}} 个文件",
+            "checking": "正在检查 {{value0}}",
             "scanned": "已扫描 {{value0}}"
           }
         }
@@ -16294,6 +16292,9 @@
             }
           }
         },
+        "staleViewEdit": {
+          "rejected": "文件已在另一个视图中更改，因此你在此视图中最近输入的内容已被丢弃。"
+        },
         "richMarkdownLargeTextPaste": {
           "tooLarge": "粘贴内容过大。",
           "stopped": "大浆糊还没完成就停了。",
@@ -16308,11 +16309,11 @@
           "copy": "复制作业"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "当你有未保存的编辑时，磁盘上的文件发生了更改。覆盖将替换磁盘上较新的内容。",
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "覆盖",
+          "keepHint": "保留你的版本。下次保存时将替换磁盘上的版本。",
           "5c02de9b31": "已从磁盘重新加载",
           "d1e830fa22": "撤销",
           "90b2ce7d43": "比较"
@@ -16353,10 +16354,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "自你编辑以来，磁盘上的文件发生了更改。请使用横幅进行比较、重新加载或覆盖。"
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "此部分加载后，磁盘上的文件发生了更改。"
             }
           }
         },
@@ -16663,7 +16664,6 @@
             "95af781091": "向智能体发送反馈",
             "ac39b9366b": "发送",
             "a3508d7e6e": "{{value0}} 注释{{value1}} 准备就绪。选择另一个元素或复制所有反馈。",
-            "f796c774a4": "在上面输入 URL 即可开始浏览。",
             "366bf5d62c": "新标签",
             "1c78adc73d": "在外部打开",
             "da68d35f7b": "在默认浏览器中打开失败页面",
@@ -18340,9 +18340,9 @@
         "couldNotStart": "{{agent}} 无法启动。",
         "editSavedArguments": "请在设置 > 智能体 > 参数中编辑。",
         "couldNotRestart": "{{agent}} 无法重新启动。",
+        "cliTooOld": "{{agent}} {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本。",
         "startTimedOut": "{{agent}} 启动时间过长（{{seconds}} 秒后 {{method}} 仍无响应）。",
         "startTimedOutKeepsHappening": "如果此问题持续出现，运行此聊天的计算机可能负载过重。",
-        "codexCliTooOld": "Codex {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本。",
         "notSignedIn": "{{agent}} 尚未登录。",
         "claudeSystemNotSignedIn": "Claude 尚未登录。请运行 `{{loginCommand}}`，或在 Claude 账户设置中选择账户。",
         "claudeManagedNotSignedIn": "此 Claude 账户尚未登录。请在 Claude 账户设置中重新登录。",
@@ -19030,7 +19030,7 @@
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
       "structuredSessionHostDeclined": "已在终端中打开 {{value0}}",
-      "structuredSessionHostDeclinedDescription": "此服务器无法在此工作区中运行 {{value0}} 聊天。",
+      "structuredSessionHostDeclinedDescription": "此工作区无法运行 {{value0}} 聊天。",
       "structuredSessionHostUnreachable": "无法连接到 {{value0}}",
       "structuredSessionHostUnreachableDescription": "Orca 未打开 {{value0}} 聊天。请检查与服务器的连接，然后重试。",
       "hostOutage": {
@@ -19374,7 +19374,11 @@
           "discarded_other": "{{count}} 个文件中未保存的编辑将被放弃：",
           "moreFiles": "及另外 {{value}} 个",
           "blocked_one": "请先保存或关闭 {{name}} 中 {{count}} 个未保存的文件",
-          "blocked_other": "请先保存或关闭 {{name}} 中 {{count}} 个未保存的文件"
+          "blocked_other": "请先保存或关闭 {{name}} 中 {{count}} 个未保存的文件",
+          "closedToast_one": "已关闭 {{workspace}} 中 {{count}} 个有未保存编辑的文件",
+          "closedToast_other": "已关闭 {{workspace}} 中 {{count}} 个有未保存编辑的文件",
+          "reopen": "重新打开",
+          "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”。"
         }
       }
     },
@@ -19964,8 +19968,12 @@
       "status": "PR #{{number}} 未链接"
     },
     "discard": {
+      "deleteUntrackedFileDescription": "这将永久删除此未跟踪文件。此操作无法撤销。",
+      "deleteUntrackedFilesDescription": "这将永久删除这 {{count}} 个未跟踪文件。此操作无法撤销。",
       "restoreStagedVersionDescription": "这将恢复最后一个暂存版本并放弃删除。此操作无法撤消。",
-      "unstagedChangesDescription": "这将恢复对此文件的未暂存更改。此操作无法撤消。"
+      "unstagedChangesDescription": "这将恢复对此文件的未暂存更改。此操作无法撤消。",
+      "unstagedSelectionIncludingUntrackedDescription": "这将还原未暂存的更改，并永久删除此选择中的任何未跟踪文件。此操作无法撤销。",
+      "unstagedFilesIncludingUntrackedDescription": "这将还原未暂存的更改，并永久删除这 {{count}} 个文件中的任何未跟踪文件。此操作无法撤销。"
     }
   },
   "rendererRecovery": {
@@ -20630,6 +20638,27 @@
       "waitingAriaLabel": "更新正在等待其他 Orca 实例。点击展开。",
       "preparingLabel": "正在准备更新",
       "preparingAriaLabel": "正在准备更新。点击展开。"
+    }
+  },
+  "onboarding": {
+    "language": {
+      "back": "语言",
+      "requestPrompt": "你希望 Orca 支持哪种语言？",
+      "requestSuccess": "语言请求已记录。你可以继续设置。",
+      "requestError": "无法记录你的请求。请重试。",
+      "retry": "重试",
+      "requestAction": "请求语言支持",
+      "title": "显示语言",
+      "device": "系统语言：{{language}}",
+      "unsupported": "系统语言：{{language}}。暂不支持此语言。",
+      "unknown": "无法检测系统语言。请在下方选择语言。",
+      "loadError": "无法加载此语言。请重试。",
+      "saveError": "无法保存你的语言偏好设置。请重试。",
+      "other": "其他语言…",
+      "settingsError": "无法加载你的设置。",
+      "loadingSettings": "正在加载设置…",
+      "loading": "正在加载语言…",
+      "saving": "正在保存语言…"
     }
   }
 }

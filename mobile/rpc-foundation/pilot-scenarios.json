@@ -7219,7 +7219,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "repoId": "repo-1"
           },
           "reply": {
             "ok": true,

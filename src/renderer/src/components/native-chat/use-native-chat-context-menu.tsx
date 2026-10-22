@@ -26,7 +26,10 @@ import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shor
 import { TabWorkspaceLayoutMenuSection } from '@/components/tab-bar/TabWorkspaceLayoutMenuSection'
 import { canMoveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
 import { isEditableTarget } from '@/lib/editable-target'
-import { findNativeChatPasteField } from '@/lib/native-chat-paste-request'
+import {
+  findNativeChatAnswerField,
+  findNativeChatPasteField
+} from '@/lib/native-chat-paste-request'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
@@ -52,7 +55,7 @@ type NativeChatContextMenuState = {
   point: { x: number; y: number }
   selectedText: string
   canPaste: boolean
-  pasteOrigin: HTMLTextAreaElement | null
+  pasteOrigin: HTMLTextAreaElement | HTMLInputElement | null
   image?: NativeChatCopyImage
   target: NativeChatContextMenuTarget
   returnFocusTo: Element | null
@@ -88,7 +91,7 @@ export type NativeChatContextMenuTargetArgs = {
 }
 
 export type NativeChatContextMenuActions = {
-  onPaste: (origin?: HTMLTextAreaElement) => void
+  onPaste: (origin?: HTMLTextAreaElement | HTMLInputElement) => void
   onSplitRight: () => void
   onSplitDown: () => void
   canEqualizePaneSizes: boolean
@@ -202,7 +205,9 @@ export function useNativeChatContextMenu({
         point: { x: event.clientX, y: event.clientY },
         selectedText: getNativeChatSelectedText(rootRef.current),
         canPaste: isEditableTarget(event.target),
-        pasteOrigin: findNativeChatPasteField(event.target, rootRef.current),
+        pasteOrigin:
+          findNativeChatPasteField(event.target, rootRef.current) ??
+          findNativeChatAnswerField(event.target, rootRef.current),
         returnFocusTo: rootRef.current?.ownerDocument.activeElement ?? null,
         image: readNativeChatCopyImage(event.target),
         target: readNativeChatContextMenuTarget(event.target, {

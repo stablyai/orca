@@ -40,6 +40,14 @@ function nullContentWindowFocus(): TypeError {
   return new TypeError("Cannot read properties of null (reading 'focus')")
 }
 
+function pageNavigationStart(): Event {
+  return Object.assign(new Event('did-start-navigation'), {
+    isMainFrame: true,
+    isInPlace: false,
+    url: 'https://example.com/next'
+  })
+}
+
 function page(overrides?: Partial<BrowserPage>): BrowserPage {
   return {
     id: 'page-a',
@@ -223,11 +231,11 @@ describe('client-hosted browser pane over a dead guest', () => {
     })
 
     act(() => {
-      webview.dispatchEvent(new Event('did-start-loading'))
+      webview.dispatchEvent(pageNavigationStart())
     })
 
     expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()
-    // did-start-loading writes loading:true first; the loss must be the last word.
+    // The navigation start writes loading:true first; the loss must be the last word.
     expect(onUpdatePageState.mock.calls.at(-1)).toEqual(['page-a', { loading: false }])
   })
 
@@ -237,7 +245,7 @@ describe('client-hosted browser pane over a dead guest', () => {
     act(() => webview.dispatchEvent(new Event('destroyed')))
     onUpdatePageState.mockClear()
 
-    act(() => webview.dispatchEvent(new Event('did-start-loading')))
+    act(() => webview.dispatchEvent(pageNavigationStart()))
 
     expect(onUpdatePageState).not.toHaveBeenCalled()
     expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()

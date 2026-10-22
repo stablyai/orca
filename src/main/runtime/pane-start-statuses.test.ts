@@ -2,12 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeStore } from './runtime-store-contract'
 import { spawnInAdmittedPane } from './runtime-pane-admission'
 import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
-import {
-  bindingOf,
-  PaneStartStatuses,
-  paneStartFactsOf,
-  withPaneStartFacts
-} from './pane-start-statuses'
+import { bindingOf } from './pane-live-facts'
+import { PaneStartStatuses, paneStartFactsOf, withPaneStartFacts } from './pane-start-statuses'
 import {
   joinPublishedLayout,
   splitPublishedLayout

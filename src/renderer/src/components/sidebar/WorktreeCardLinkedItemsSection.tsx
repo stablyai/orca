@@ -3,7 +3,6 @@ import { CircleDot, ExternalLink, GitMerge, GitPullRequest, Link2, Plus } from '
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
 import {
   workspaceAttachmentLabel,
   workspaceAttachmentProviderLabel
@@ -20,7 +19,7 @@ import {
 import { WorkspaceAttachmentOrigins } from './WorkspaceAttachmentOrigins'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
-import { getWorkspaceHoverAttachments } from './workspace-hover-attachments'
+import { getWorkspaceLinkedItemRows } from './workspace-hover-attachments'
 import type {
   WorktreeCardIssueDisplay,
   WorktreeCardLinearIssueDisplay,
@@ -52,22 +51,21 @@ export function WorktreeCardLinkedItemsSection({
   if (!workspace) {
     return null
   }
-  const { items, activeKey, referenceKeys } = getWorkspaceHoverAttachments(workspace, {
-    review,
-    issue,
-    linearIssue,
-    jiraIssue
-  })
+  const rows = getWorkspaceLinkedItemRows(
+    workspace,
+    { review, issue, linearIssue, jiraIssue },
+    referenceDetails
+  )
   const groups = [
     {
       label: translate('workspace.links.reviews', 'Reviews'),
-      items: items.filter((item) => item.type !== 'issue')
+      rows: rows.filter((row) => row.item.type !== 'issue')
     },
     {
       label: translate('workspace.links.tasks', 'Issues & tasks'),
-      items: items.filter((item) => item.type === 'issue')
+      rows: rows.filter((row) => row.item.type === 'issue')
     }
-  ].filter((group) => group.items.length)
+  ].filter((group) => group.rows.length)
   const open = (item: WorkspaceAttachment, event: React.MouseEvent): void => {
     event.stopPropagation()
     if (item.url) {
@@ -87,24 +85,12 @@ export function WorktreeCardLinkedItemsSection({
             <div key={group.label} className="space-y-1.5">
               <DetailHeader
                 icon={<Link2 className="size-3" />}
-                label={`${group.label} · ${group.items.length}`}
+                label={`${group.label} · ${group.rows.length}`}
               />
               <div className="divide-y divide-border">
-                {group.items.map((item) => {
-                  const key = getWorkspaceAttachmentKey(item)
+                {group.rows.map(({ item, key, url, detail, live }) => {
                   const label = workspaceAttachmentLabel(item)
                   const source = getWorkspaceAttachmentSourceLabel(item)
-                  const active = key === activeKey
-                  const detail = referenceDetails?.[referenceKeys[items.indexOf(item)]]
-                  const url = item.url || detail?.url
-                  const live =
-                    detail?.review ??
-                    (active &&
-                    review?.provider === item.provider &&
-                    review.number === item.number &&
-                    (!item.url || review.url === item.url)
-                      ? review
-                      : null)
                   return (
                     <div
                       key={key}
@@ -194,7 +180,7 @@ export function WorktreeCardLinkedItemsSection({
           onKeyDown={(event) => event.stopPropagation()}
         >
           <Plus />
-          {items.length
+          {rows.length
             ? translate('workspace.links.manage', 'Manage links…')
             : translate('workspace.links.addReference', 'Add reference')}
         </Button>
