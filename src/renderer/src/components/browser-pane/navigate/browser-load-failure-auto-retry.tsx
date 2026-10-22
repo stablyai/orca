@@ -1,5 +1,4 @@
 import { useEffect, useEffectEvent, useState, useSyncExternalStore } from 'react'
-import { Loader2 } from 'lucide-react'
 import type {
   BrowserLoadFailureDescription,
   BrowserLoadFailureRecovery
@@ -126,8 +125,7 @@ export function BrowserLoadFailureAutoRetryStatus({
     return null
   }
   return (
-    <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-      <Loader2 className="size-3 shrink-0 animate-spin" />
+    <p className="mt-4 text-xs text-muted-foreground">
       {translateLoadFailurePiece(
         failure.recovery === 'online'
           ? 'waitingForNetwork'
@@ -137,6 +135,6 @@ export function BrowserLoadFailureAutoRetryStatus({
               ? 'waitingForServer'
               : 'waiting'
       )}
-    </div>
+    </p>
   )
 }
