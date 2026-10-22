@@ -2,7 +2,8 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { Duplex } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { wrapRemoteCommandForPosixShell, type SshExecOptions } from '../ssh-connection-utils'
+import { wrapRemoteCommandForPosixShell } from '../ssh-posix-command-wrapper'
+import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
 
@@ -62,7 +63,9 @@ export function spawnSystemSshCommand(
   }
 
   const remoteCommand =
-    options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
+    options?.wrapCommand === false
+      ? command
+      : wrapRemoteCommandForPosixShell(command, { compress: options?.compressCommand === true })
   const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true

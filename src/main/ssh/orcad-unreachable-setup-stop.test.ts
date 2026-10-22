@@ -21,7 +21,7 @@ vi.mock('./orcad-migration-source-fence', () => ({
 vi.mock('../managed-server/lifecycle/orcad-managed-tunnel', () => ({
   closeOrcadManagedTunnel: async () => undefined
 }))
-vi.mock('./ssh-target-registry', () => ({
+vi.mock('./targets/ssh-target-registry', () => ({
   getSshTargetRegistryStore: () => ({ getTarget: () => ({ id: 'ssh-1' }) }),
   getSshConnectionManager: () => ({ connect: async () => ({}) })
 }))

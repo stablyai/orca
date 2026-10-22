@@ -21,6 +21,9 @@ describe('ACP agents in the runtime registrations', () => {
       'antigravity',
       'zcode'
     ])
+    expect(structuredAgentRuntimeRegistration('codex')?.definition.capabilities.contextUsage).toBe(
+      true
+    )
     expect(structuredAgentRuntimeRegistration('grok')?.definition).toMatchObject({
       handleTransport: 'acp',
       accountHomeVariable: 'GROK_HOME',

@@ -63,7 +63,7 @@ function listWith(fields: { actionError: string; setActionError: (value: string)
     router: { push: () => {} },
     sectionsResult: { rawSections: [], sections: [], repoById: new Map() },
     setDismissedNotice: () => {},
-    settings: { activeFilterCount: 0 },
+    settings: { activeFilterCount: 0, pendingViewChanges: { pending: [], stale: false } },
     state: {
       actionError: fields.actionError,
       setActionError: fields.setActionError,

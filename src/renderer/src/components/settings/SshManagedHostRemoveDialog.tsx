@@ -18,7 +18,7 @@ export function isManagedServerSshHost(
   return target.orcadFence !== undefined || target.orcadProvisioning !== undefined
 }
 
-/** Sends a managed server's host to Managed servers instead of a removal main would refuse. */
+/** Sends a host Orca runs on to its server row instead of a removal main would refuse. */
 export function SshManagedHostRemoveDialog({
   label,
   onClose
@@ -44,8 +44,8 @@ export function SshManagedHostRemoveDialog({
           </DialogTitle>
           <DialogDescription>
             {translate(
-              'auto.components.settings.sshManagedHostRemove.description',
-              '{{label}} runs a managed Orca server. Under Managed servers, use Stop… to remove the server from the host, or Forget… if the host is gone. Then you can remove this SSH host.',
+              'auto.components.settings.sshManagedHostRemove.descriptionServerHost',
+              'Orca runs on {{label}}. In Remote Orca Servers, open the ⋯ menu on {{label}} and choose Stop… to remove Orca from the host, or Forget… if the host is gone. Then you can remove this SSH host.',
               { label: label ?? '' }
             )}
           </DialogDescription>
@@ -56,8 +56,8 @@ export function SshManagedHostRemoveDialog({
           </Button>
           <Button onClick={openManagedServers}>
             {translate(
-              'auto.components.settings.sshManagedHostRemove.open',
-              'Open Managed servers'
+              'auto.components.settings.sshManagedHostRemove.openServers',
+              'Open Remote Orca Servers'
             )}
           </Button>
         </DialogFooter>

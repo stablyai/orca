@@ -2,7 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
-import { useOrderHeldWhileEngaged } from './use-order-hold'
+import type { SidebarFeedIndex } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 
 vi.mock('../../../../../../shared/sidebar-inputs-switch', () => ({
   ORCA_SIDEBAR_INPUTS_IS_MAIN: true
@@ -91,5 +95,43 @@ describe('useOrderHeldWhileEngaged', () => {
     expect(result.current).toEqual(['b', 'a'])
     rerender({ ids: ['a', 'b'], sortBy: 'name' })
     expect(result.current).toEqual(['a', 'b'])
+  })
+})
+
+describe('useProjectRecencyHeldWhileEngaged', () => {
+  afterEach(() => {
+    cleanup()
+    document.body.replaceChildren()
+  })
+
+  const indexAt = (recentAt: number): SidebarFeedIndex => ({
+    workspaces: [],
+    worktrees: [makeWorktree('b', 'b', { lastActivityAt: recentAt })],
+    folderWorkspaces: [],
+    repoMap: new Map(),
+    repoOf: () => undefined
+  })
+  const recentOf = (index: SidebarFeedIndex): number[] =>
+    index.worktrees.map((worktree: Worktree) => worktree.lastActivityAt)
+
+  it('keeps Recent project stamps under the pointer, and lets go on leave or in Manual', () => {
+    const { row } = mountList()
+    const outside = document.createElement('div')
+    document.body.append(outside)
+    const { result, rerender } = renderHook(
+      ({ index, by }: { index: SidebarFeedIndex; by: ProjectOrderBy }) =>
+        useProjectRecencyHeldWhileEngaged(index, by),
+      { initialProps: { index: indexAt(50), by: 'recent' } }
+    )
+    fire(row, 'pointerover')
+    rerender({ index: indexAt(200), by: 'recent' })
+    expect(recentOf(result.current)).toEqual([50])
+    rerender({ index: indexAt(300), by: 'manual' })
+    expect(recentOf(result.current)).toEqual([300])
+    rerender({ index: indexAt(400), by: 'recent' })
+    rerender({ index: indexAt(500), by: 'recent' })
+    expect(recentOf(result.current)).toEqual([400])
+    fire(outside, 'pointerover')
+    expect(recentOf(result.current)).toEqual([500])
   })
 })

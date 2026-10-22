@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/tmp/user-data', getVersion: () => '1.5.0' })
 }))
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getSshTargetRegistryStore: () => ({ getTarget: mocks.getTarget })
 }))
 vi.mock('../../ssh/ssh-host-server-on-connect', () => ({

@@ -36,7 +36,7 @@ vi.mock('./runtime-environment-status-probe', () => ({
   getRuntimeEnvironmentStatus: vi.fn(async () => ({ ok: true }))
 }))
 vi.mock('../ssh/ssh-session-teardown', () => ({ disconnectRegisteredSshTarget: hoisted.teardown }))
-vi.mock('../../ssh/ssh-target-registry', async (importOriginal) => ({
+vi.mock('../../ssh/targets/ssh-target-registry', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   connectRegisteredSshTarget: hoisted.connectHost
 }))

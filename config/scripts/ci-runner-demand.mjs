@@ -46,7 +46,7 @@ export async function collectRunnerDemand(env = process.env, request = (path) =>
   for (let index = 0; index < samples.length; index += 4) {
     await Promise.all(
       samples.slice(index, index + 4).map(async (sample) => {
-        const path = `actions/runs/${sample.run.id}/jobs?per_page=100`
+        const path = `actions/runs/${sample.run.id}/jobs?per_page=100&filter=all`
         const first = await request(path)
         sample.jobs = first.jobs
         for (let page = 2; page <= Math.ceil(first.total_count / 100); page++) {
@@ -59,7 +59,7 @@ export async function collectRunnerDemand(env = process.env, request = (path) =>
     start: new Date(end.getTime() - 86_400_000).toISOString(),
     end: end.toISOString(),
     method:
-      'Stratified by workflow/conclusion, six sampled runs per stratum; latest attempts only; incomplete jobs excluded',
+      'Stratified by latest workflow/conclusion, six sampled runs per stratum; all attempts included; incomplete jobs excluded; run outcome uses the latest attempt',
     ...runnerDemand(runs, samples)
   }
   return { report, runs, samples }
@@ -71,12 +71,14 @@ export function demandMarkdown(report) {
     '',
     `Estimated full job duration for runs created in this window (not window-clipped occupancy); ${report.sampledRuns}/${report.populationRuns} runs sampled. ${report.method}.`,
     '',
-    '| Workflow | Runs | Runner hours | Cancelled-run hours | Minutes/completed PR run |',
-    '| --- | ---: | ---: | ---: | ---: |',
+    '| Workflow | Runs | Runner hours | Cancelled-run hours | Repeated green-job hours | Minutes/completed PR run |',
+    '| --- | ---: | ---: | ---: | ---: | ---: |',
     ...report.workflows.map(
       (row) =>
-        `| ${row.workflow} | ${row.runs} | ${(row.runnerMinutes / 60).toFixed(1)} | ${(row.cancelledRunnerMinutes / 60).toFixed(1)} | ${row.runnerMinutesPerCompletedPrRun?.toFixed(1) ?? '—'} |`
+        `| ${row.workflow} | ${row.runs} | ${(row.runnerMinutes / 60).toFixed(1)} | ${(row.cancelledRunnerMinutes / 60).toFixed(1)} | ${(row.repeatedSuccessfulRunnerMinutes / 60).toFixed(1)} | ${row.runnerMinutesPerCompletedPrRun?.toFixed(1) ?? '—'} |`
     ),
+    '',
+    'Repeated green-job hours count assigned, completed jobs with a successful job of the same name in an earlier attempt of that run. This is a review bucket, not guaranteed avoidable work; it overlaps total and cancelled-run hours.',
     '',
     '| Runner labels | Hours | Queue/provisioning p95 minutes |',
     '| --- | ---: | ---: |',

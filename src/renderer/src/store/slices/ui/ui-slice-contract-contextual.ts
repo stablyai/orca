@@ -53,6 +53,8 @@ export type UISliceContextual = {
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
     | 'diagram-viewer'
+    | 'agent-session-history'
+    | 'node-dist-mirror'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void

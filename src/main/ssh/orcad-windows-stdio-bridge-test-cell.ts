@@ -9,7 +9,7 @@ import {
   readOrcadReadinessNowCommand
 } from '../managed-server/install/orcad-remote-readiness-wait'
 import { execOrcadRemote } from '../managed-server/install/orcad-remote-runtime-control'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { probeTcpForwarding } from './ssh-tcp-forwarding-probe'
 

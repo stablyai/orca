@@ -13,6 +13,8 @@ export type ManagedRuntimeInstallView = {
   /** Why the last operation or status read failed. */
   error: string | null
   action: ManagedRuntimeInstallAction | null
+  /** Update or Reinstall for a copy on disk, offered in the row's menu beside Remove. */
+  menuAction: ManagedRuntimeInstallAction | null
   /** The action is the first step to using the agent, so Settings draws it as a button. */
   prominent: boolean
   /** Settings may offer to delete the copy Orca installed: one is there and nothing runs. */
@@ -30,6 +32,7 @@ const EMPTY: ManagedRuntimeInstallView = {
   progress: null,
   error: null,
   action: null,
+  menuAction: null,
   prominent: false,
   removable: false,
   removing: false,
@@ -87,12 +90,14 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
   const view = (
     status: string | null,
     label: string | null,
-    note: string | null = null
+    note: string | null = null,
+    menuLabel: string | null = null
   ): ManagedRuntimeInstallView => ({
     ...EMPTY,
     status,
     error,
     action: label === null ? null : { kind: 'install', label },
+    menuAction: menuLabel === null ? null : { kind: 'install', label: menuLabel },
     removable: state.canRemove === true,
     note
   })
@@ -111,11 +116,16 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
     )
   }
   if (state.installedVersion !== null) {
-    // A healthy current copy needs nothing; Remove is its only action.
-    const label = state.installedCurrent
-      ? null
-      : translate('components.managed-runtime.update', 'Update')
-    return view(translate('components.managed-runtime.installed', 'Installed.'), label)
+    const reinstall = translate('components.managed-runtime.reinstall', 'Reinstall {{agent}}', {
+      agent
+    })
+    // Reinstalling a current copy checks it and repairs what's missing, so it needs the pin.
+    const label = !state.installedCurrent
+      ? translate('components.managed-runtime.update', 'Update')
+      : state.available
+        ? reinstall
+        : null
+    return view(translate('components.managed-runtime.installed', 'Installed'), null, null, label)
   }
   if (!state.available) {
     return view(
@@ -128,12 +138,14 @@ function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedR
     )
   }
   if (state.damaged) {
-    return view(
-      translate('components.managed-runtime.damaged', 'This copy of {{agent}} is damaged.', {
-        agent
-      }),
-      translate('components.managed-runtime.reinstall', 'Reinstall')
+    const status = translate(
+      'components.managed-runtime.damaged',
+      'This copy of {{agent}} is damaged.',
+      { agent }
     )
+    // The repair is the next step, so it is the row's button rather than a menu item.
+    const label = translate('components.managed-runtime.reinstallShort', 'Reinstall')
+    return { ...view(status, label), prominent: true }
   }
   const retry = translate('components.managed-runtime.tryAgain', 'Try again')
   if (operation?.kind === 'install' && operation.phase === 'cancelled') {

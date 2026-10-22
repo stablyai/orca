@@ -17,9 +17,15 @@ export function editorTabShowsFile(entityId: string, file: FileOwner, worktreeId
 }
 
 /**
- * A file record's key among its workspace's records: its path, and in a layout-owner build its
- * runtime owner too, since a local and a runtime-environment file can share a path.
+ * A file record's key among its workspace's records in this process: its path, and in a
+ * layout-owner build its runtime owner too, since a local and a runtime-environment file can share
+ * a path. A layout frame's records keep one key in every build (workspace-layout-records.ts).
  */
+/** The file fields `editorFileKey` is made of: a changed one names another record. */
+export const EDITOR_FILE_KEY_FIELDS: readonly (keyof FileOwner)[] = ORCA_LAYOUT_OWNER_IS_MAIN
+  ? ['filePath', 'runtimeEnvironmentId']
+  : ['filePath']
+
 export function editorFileKey(file: FileOwner): string {
   // Why no worktree: every record keyed here belongs to one workspace, or moves between two.
   return ORCA_LAYOUT_OWNER_IS_MAIN
@@ -42,19 +48,33 @@ export function holdsEditorFileId(
   )
 }
 
-export function editorTabFile<F extends FileOwner>(
-  workspace: { worktreeId: string; editorFiles?: readonly F[] },
-  entityId: string
-): F | undefined {
-  return workspace.editorFiles?.find((file) =>
-    editorTabShowsFile(entityId, file, workspace.worktreeId)
-  )
-}
-
 type EditorWorkspace<F> = {
   worktreeId: string
   tabs: readonly { entityId: string }[]
   editorFiles?: readonly F[]
+}
+
+/** The record an editor tab shows; in a layout-owner build a bare path skips owned-id tabs' records. */
+export function editorTabFile<F extends FileOwner>(
+  workspace: EditorWorkspace<F>,
+  entityId: string
+): F | undefined {
+  return ORCA_LAYOUT_OWNER_IS_MAIN
+    ? editorTabFiles(workspace, entityId)[0]
+    : workspace.editorFiles?.find((file) =>
+        editorTabShowsFile(entityId, file, workspace.worktreeId)
+      )
+}
+
+/** Whether an editor file id names this record, as `editorTabFile` resolves it. */
+export function editorTabNamesFile<F extends FileOwner>(
+  workspace: EditorWorkspace<F>,
+  entityId: string,
+  file: F
+): boolean {
+  return ORCA_LAYOUT_OWNER_IS_MAIN
+    ? editorTabFile(workspace, entityId) === file
+    : editorTabShowsFile(entityId, file, workspace.worktreeId)
 }
 
 /**

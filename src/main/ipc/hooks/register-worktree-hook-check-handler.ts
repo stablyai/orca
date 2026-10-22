@@ -1,6 +1,5 @@
-import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
@@ -27,7 +26,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
 
-      if (getStoredRepoSshConnectionId(repo)) {
+      if (getRepoDialableSshTargetId(repo)) {
         // Why: this process serves no SSH filesystem.
         return {
           status: 'error',

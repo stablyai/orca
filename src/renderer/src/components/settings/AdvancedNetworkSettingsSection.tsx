@@ -11,6 +11,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Textarea } from '../ui/textarea'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
+import { NodeDistMirrorSettingField } from './NodeDistMirrorSettingField'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { translate } from '@/i18n/i18n'
@@ -25,7 +26,11 @@ export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
 
 /** A configured proxy should also reveal the fields, so users see the value. */
 export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
-  return Boolean(settings.httpProxyUrl?.trim() || settings.httpProxyBypassRules?.trim())
+  return Boolean(
+    settings.httpProxyUrl?.trim() ||
+    settings.httpProxyBypassRules?.trim() ||
+    settings.nodeDistMirrorUrl?.trim()
+  )
 }
 
 export type HttpProxyUrlDraftState = {
@@ -216,7 +221,9 @@ export function AdvancedNetworkSettingsSection({
         'no_proxy',
         'network',
         'bypass',
-        'localhost'
+        'localhost',
+        'mirror',
+        'nodejs'
       ]}
       className="space-y-3"
     >
@@ -328,6 +335,11 @@ export function AdvancedNetworkSettingsSection({
                 )}
               </p>
             </div>
+
+            <NodeDistMirrorSettingField
+              value={settings.nodeDistMirrorUrl}
+              onCommit={(nodeDistMirrorUrl) => updateSettings({ nodeDistMirrorUrl })}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>

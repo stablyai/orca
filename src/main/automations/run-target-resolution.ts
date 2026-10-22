@@ -9,6 +9,10 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execu
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
+import {
+  buildWorkspaceRunContext,
+  type WorkspaceRunContext
+} from '../../shared/task-source-context'
 
 export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
@@ -53,6 +57,93 @@ function resolveAutomationOwnerRefusal(store: Store, automation: Automation): st
   return issue ? CAPTURED_HOST_REFUSALS[issue] : NO_RUNNABLE_HOST
 }
 
+const LEGACY_TWIN_REFUSAL =
+  'This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.'
+
+/** A record with no captured run target names its project by repo id alone. */
+function resolveLegacyAutomationRunTarget(
+  store: Store,
+  automation: Automation
+): AutomationRunTargetResult {
+  const repoId = getAutomationLegacyRepoId(automation)
+  const rows = store.getRepos().filter((entry) => entry.id === repoId)
+  // Why first: `getRepo(id)`, and the owner verdict below, would silently pick one twin's host.
+  if (rows.length > 1) {
+    return { ok: false, error: LEGACY_TWIN_REFUSAL }
+  }
+  const ownerRefusal = resolveAutomationOwnerRefusal(store, automation)
+  if (ownerRefusal) {
+    return { ok: false, error: ownerRefusal }
+  }
+  const repo = rows[0]
+  const cwd = getLegacyPrecheckCwd(store, automation)
+  if (!repo || !cwd) {
+    return { ok: false, error: 'Automation run target is no longer available.' }
+  }
+  return { ok: true, cwd, repo }
+}
+
+/**
+ * The run target to capture for a legacy record that resolves to exactly one host, so a twin
+ * added later cannot make it ambiguous. Only a context that runs it in the same folder on the
+ * same row qualifies, so capturing never changes where it runs.
+ */
+function findLegacyAutomationRunContextStamp(
+  store: Store,
+  automation: Automation,
+  options: AutomationRunTargetOptions
+): WorkspaceRunContext | null {
+  if (automation.runContext) {
+    return null
+  }
+  const legacy = resolveLegacyAutomationRunTarget(store, automation)
+  if (!legacy.ok) {
+    return null
+  }
+  const repoHostId = getRepoExecutionHostId(legacy.repo)
+  const setup = store
+    .getProjectHostSetups()
+    .find((candidate) => candidate.repoId === legacy.repo.id && candidate.hostId === repoHostId)
+  const runContext = setup
+    ? buildWorkspaceRunContext({
+        projectId: setup.projectId,
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: legacy.repo.id,
+        path: setup.path
+      })
+    : null
+  if (!runContext) {
+    return null
+  }
+  const captured = resolveAutomationRunTarget(store, { ...automation, runContext }, options)
+  return captured.ok &&
+    captured.cwd === legacy.cwd &&
+    getRepoExecutionHostId(captured.repo) === repoHostId
+    ? runContext
+    : null
+}
+
+/**
+ * Captures a legacy record's one host before the dispatch snapshot, which must already hold the
+ * target dispatch rechecks. Returns the record as stored afterwards.
+ */
+export function captureLegacyRunTarget(
+  store: Store,
+  automation: Automation,
+  allowRemoteHostScheduling: boolean
+): Automation {
+  const runContext = findLegacyAutomationRunContextStamp(store, automation, {
+    allowRemoteHostScheduling
+  })
+  if (!runContext) {
+    return automation
+  }
+  // Why re-read even when the write is refused: another run may have captured it first.
+  store.stampLegacyAutomationRunContext(automation.id, runContext)
+  return store.listAutomations().find((entry) => entry.id === automation.id) ?? automation
+}
+
 export function resolveAutomationRunTarget(
   store: Store,
   automation: Automation,
@@ -60,16 +151,7 @@ export function resolveAutomationRunTarget(
 ): AutomationRunTargetResult {
   const context = automation.runContext ?? null
   if (!context) {
-    const ownerRefusal = resolveAutomationOwnerRefusal(store, automation)
-    if (ownerRefusal) {
-      return { ok: false, error: ownerRefusal }
-    }
-    const repo = store.getRepo(getAutomationLegacyRepoId(automation))
-    const cwd = getLegacyPrecheckCwd(store, automation)
-    if (!repo || !cwd) {
-      return { ok: false, error: 'Automation run target is no longer available.' }
-    }
-    return { ok: true, cwd, repo }
+    return resolveLegacyAutomationRunTarget(store, automation)
   }
   const parsedHost = parseExecutionHostId(context.hostId)
   if (

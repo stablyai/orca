@@ -69,7 +69,11 @@ export function scheduleWorktreeBaseNotification(
     watch.pendingGitStatusScope,
     changes.gitStatusScope ?? FULL_HEAD_IDENTITY_SCOPE
   )
-  clearTimeout(watch.notifyTimer ?? undefined)
+  // Why: never push an armed notification back; SSH feeds raw provider events, so sustained
+  // index writes would otherwise delay it indefinitely. Pending changes join the armed one.
+  if (watch.notifyTimer) {
+    return
+  }
   watch.notifyTimer = setTimeout(() => {
     watch.notifyTimer = null
     if (watch.disposed || watch.mainWindow.isDestroyed()) {

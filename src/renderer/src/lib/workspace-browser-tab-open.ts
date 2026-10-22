@@ -12,6 +12,7 @@ import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-
 import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
 import {
   getClientCreationActionPolicy,
+  runtimeHostsPagesOnThisDesktop,
   type ClientCreationActionAvailability
 } from './client-creation-action-policy'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
@@ -58,7 +59,8 @@ function isExpectedRuntimeBrowserRoute(
     state.runtimeStatusByEnvironmentId?.get(expectedEnvironmentId)?.status?.capabilities
   if (
     environmentId !== expectedEnvironmentId ||
-    !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
+    (!capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
+      !runtimeHostsPagesOnThisDesktop(state, expectedEnvironmentId))
   ) {
     return false
   }

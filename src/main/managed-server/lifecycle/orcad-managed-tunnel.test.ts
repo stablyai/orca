@@ -5,9 +5,9 @@ import {
 } from '../../../shared/runtime-environments'
 import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { SshConnection } from '../../ssh/ssh-connection'
-import type { SshConnectionManager } from '../../ssh/ssh-connection-manager'
-import type { SshConnectionStore } from '../../ssh/ssh-connection-store'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
+import type { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import { OrcadManagedTunnelManager } from './orcad-managed-tunnel-manager'
 import type { OrcadManagedTunnelTargeting } from './orcad-managed-tunnel-target'
@@ -16,7 +16,7 @@ import { createCancelledConnectAttemptError } from '../../ssh/ssh-connect-attemp
 function createEnvironment(linkKind: 'orcadDeployment' | 'sshAccess'): KnownRuntimeEnvironment {
   const paired = createEnvironmentFromPairingOffer({
     id: 'environment-1',
-    name: 'Managed server',
+    name: 'Builder',
     now: 1,
     offer: {
       v: PAIRING_OFFER_VERSION,
@@ -47,7 +47,7 @@ function createEnvironment(linkKind: 'orcadDeployment' | 'sshAccess'): KnownRunt
 function setup(overrides: Partial<SshTarget> = {}, targeting?: OrcadManagedTunnelTargeting) {
   const target: SshTarget = {
     id: 'ssh-1',
-    label: 'Managed server',
+    label: 'Builder',
     host: 'example.com',
     port: 22,
     username: 'deploy',
@@ -244,7 +244,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         6_768,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
     })
 
@@ -289,7 +289,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         after,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
     })
 
@@ -586,7 +586,7 @@ describe.each(['orcadDeployment', 'sshAccess'] as const)(
         46_768,
         '127.0.0.1',
         6_768,
-        'Managed Orca server: Managed server'
+        'Orca on Builder'
       )
 
       await state.manager.ensure(environment())
@@ -717,7 +717,7 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
     expect(state.verifyIdentity).toHaveBeenCalledOnce()
   })
@@ -736,7 +736,7 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
     expect(state.ensureServing).toHaveBeenLastCalledWith(
       expect.objectContaining({ remotePort: 58_520 })
@@ -762,7 +762,7 @@ describe('OrcadManagedTunnelManager bound port', () => {
       46_768,
       '127.0.0.1',
       58_520,
-      'Managed Orca server: Managed server'
+      'Orca on Builder'
     )
   })
 

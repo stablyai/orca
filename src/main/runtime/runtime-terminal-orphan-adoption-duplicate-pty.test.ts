@@ -74,12 +74,10 @@ function adoptKeptPane(session: WorkspaceSessionState) {
       ]),
       queriedHostIds: new Set([LOCAL_EXECUTION_HOST_ID])
     },
-    session,
-    sessionWorktreeId: GIT_KEY,
     repoId: 'repo-1',
     worktreeWslDistro: null,
-    currentRevision: 0,
     ports: {
+      readSession: () => ({ session, sessionWorktreeId: GIT_KEY, currentRevision: 0 }),
       getPty: () => pty,
       getLeaves: () => [],
       getLeaf: () => undefined,

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ALL_RPC_METHODS } from './rpc/methods'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
@@ -44,6 +44,13 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'agentSession.history',
   'agentSession.hold',
   'agentSession.release'
+]
+
+// Why: only a page built with ORCA_SIDEBAR_INPUTS=main calls these, and only such a host serves them.
+const MOBILE_SIDEBAR_INPUTS_RPC_METHODS = [
+  'sidebarInputs.read',
+  'sidebarInputs.repoIcons',
+  'ui.setCollapsed'
 ]
 
 const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
@@ -98,7 +105,9 @@ function mobileLiteralRpcMethods(): string[] {
 }
 
 function mobileRpcMethods(): string[] {
-  return [...new Set([...mobileLiteralRpcMethods(), ...MOBILE_DYNAMIC_RPC_METHODS])].sort()
+  return [...new Set([...mobileLiteralRpcMethods(), ...MOBILE_DYNAMIC_RPC_METHODS])]
+    .filter((method) => !MOBILE_SIDEBAR_INPUTS_RPC_METHODS.includes(method))
+    .sort()
 }
 
 function mobileRpcAllowlist(): ReadonlySet<string> {
@@ -151,6 +160,30 @@ describe('mobile RPC allowlist', () => {
     expect(missing).toEqual([])
   })
 
+  it('allows and registers the sidebar feed the phone reads only in a switched-on build', async () => {
+    expect(mobileLiteralRpcMethods()).toEqual(
+      expect.arrayContaining(MOBILE_SIDEBAR_INPUTS_RPC_METHODS)
+    )
+    for (const method of MOBILE_SIDEBAR_INPUTS_RPC_METHODS) {
+      expect(mobileRpcAllowlist().has(method)).toBe(false)
+    }
+    vi.resetModules()
+    vi.doMock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+    try {
+      const { MOBILE_RPC_METHOD_ALLOWLIST: switchedOn } =
+        await import('./runtime-rpc/runtime-rpc-mobile-method-allowlist')
+      const { ALL_RPC_METHODS: switchedOnMethods } = await import('./rpc/methods')
+      const registered = new Set<string>(switchedOnMethods.map((method) => method.name))
+      for (const method of MOBILE_SIDEBAR_INPUTS_RPC_METHODS) {
+        expect(switchedOn.has(method)).toBe(true)
+        expect(registered.has(method)).toBe(true)
+      }
+    } finally {
+      vi.doUnmock('../../shared/sidebar-inputs-switch')
+      vi.resetModules()
+    }
+  })
+
   it('allows every cleanup RPC for mobile streaming subscriptions', () => {
     const allowed = mobileRpcAllowlist()
     const missing = MOBILE_STREAMING_CLEANUP_RPC_METHODS.filter((method) => !allowed.has(method))
@@ -197,6 +230,7 @@ describe('mobile RPC allowlist', () => {
       'agentSession.unsubscribe',
       'agentSession.subscribeStatus',
       'agentSession.readVisual',
+      'agentSession.item',
       'agentSession.hold',
       'agentSession.release'
     ])

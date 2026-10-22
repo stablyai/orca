@@ -6,8 +6,10 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
-import { allowsDirectSshRelay, SshConnectionStore } from '../../ssh/ssh-connection-store'
+import { RemoteNodeRuntimeNoexecError } from '../../ssh/orcad-remote-node-runtime-report'
+import { allowsDirectSshRelay, SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { resolveHostServerOnConnect } from '../../ssh/ssh-host-server-on-connect'
+import { unservedHostServerMessage } from '../../ssh/ssh-host-unserved-status'
 
 const mocks = vi.hoisted(() => {
   const registry: { current: unknown } = { current: null }
@@ -22,7 +24,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('../../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.5.0', getPath: () => '/tmp/unused' })
 }))
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getSshTargetRegistryStore: () => mocks.registry.current
 }))
 vi.mock('../../managed-server/lifecycle/orcad-runtime-deployment', () => ({
@@ -101,6 +103,30 @@ describe('connect-time server decision against the real profile', () => {
     mocks.deploy.mockClear()
     await resolveHostServerOnConnect(target(), hostServerOnConnectDeps(userDataPath))
     expect(mocks.deploy).not.toHaveBeenCalled()
+  })
+
+  it('does not remember a noexec home, so a connect after the remount deploys', async () => {
+    mocks.deploy.mockRejectedValue(new RemoteNodeRuntimeNoexecError('exit 126: Permission denied'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const decision = await resolveHostServerOnConnect(
+      target(),
+      hostServerOnConnectDeps(userDataPath)
+    )
+    warn.mockRestore()
+    expect(decision).toEqual({
+      route: 'unserved',
+      reason: 'orcad_unavailable',
+      detail: 'runtime_noexec'
+    })
+    // The connect's own error, which the host row shows, names noexec rather than "unsupported".
+    expect(decision.route === 'unserved' && unservedHostServerMessage(decision)).toMatch(
+      /noexec.*connect again/
+    )
+    expect(target().managedServerUnavailable).toBeUndefined()
+
+    mocks.deploy.mockClear()
+    await resolveHostServerOnConnect(target(), hostServerOnConnectDeps(userDataPath))
+    expect(mocks.deploy).toHaveBeenCalledTimes(1)
   })
 
   it('retries a host an older build kept on the relay', async () => {

@@ -4,7 +4,7 @@
  * SIGTERM starts one bounded durable shutdown. If it outlasts this wait, preserve the
  * current owner; SIGKILL would skip flushing state and releasing the instance lock.
  */
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -47,9 +47,11 @@ export function stopOrcadCommand(
       options.justLaunched === true ? '1' : '0'
     ])
   }
-  const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
-  const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
-  const requestFile = shellEscape(
+  const pidFile = quotePosixShell(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
+  const readiness = quotePosixShell(
+    joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME)
+  )
+  const requestFile = quotePosixShell(
     joinRemotePath(host, remoteInstallDir, ORCAD_STOP_REQUEST_FILENAME)
   )
   const readRuntimePid = [
@@ -69,7 +71,7 @@ export function stopOrcadCommand(
       ? []
       : [
           `runtime_answer=$(${selectOrcadSlotRuntimeCommand(host, remoteInstallDir, options.nodePath)}; ` +
-            `"$orcad_runtime" -e ${shellEscape(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
+            `"$orcad_runtime" -e ${quotePosixShell(readRuntimePid)} ${readiness} 2>/dev/null) || { echo UNKNOWN; exit 0; };`,
           '[ "$pid" = "${runtime_answer%%:*}" ] || { echo UNKNOWN; exit 0; };',
           'stop_mode=${runtime_answer#*:};'
         ]),

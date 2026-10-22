@@ -29,8 +29,6 @@ import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/loca
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
-import { requestCreationFromHost } from '@/lib/sidebar-shadow/host-creation-requests'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
 import {
@@ -39,6 +37,7 @@ import {
   type WorktreeCreateAttempt,
   type WorktreeCreateRequest
 } from './worktree-create-payload'
+import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   notifyWorktreeParentDropped,
   resolveWorktreeCreateParent,
@@ -77,16 +76,9 @@ async function runCreateAttempt(
           })
       : target.kind === 'local'
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
-          // Switch point: only a build where main lists creations tracks the requests it serves.
-          ORCA_SIDEBAR_INPUTS_IS_MAIN
-          ? await requestCreationFromHost(request, () =>
-              window.api.worktrees.create(
-                buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
-              )
-            )
-          : await window.api.worktrees.create(
-              buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
-            )
+          await window.api.worktrees.create(
+            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
+          )
         : await callRuntimeRpc<CreateWorktreeResult>(
             target,
             'worktree.create',
@@ -258,6 +250,10 @@ export function createCreateWorktree(
             warnParentDroppedOnce()
           }
           applyCreatedWorktree(set, repoId, outcome.result, creationHostId)
+          const created = get().getKnownWorktreeById(outcome.result.worktree.id, creationHostId)
+          if (created) {
+            holdCreatedSidebarWorkspace({ worktree: created })
+          }
           const { result } = outcome
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
           if (result.baseFallback) {

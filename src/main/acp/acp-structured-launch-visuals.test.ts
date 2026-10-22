@@ -44,7 +44,7 @@ function resolve(
   const spec = { ...acpLaunchSpecFor(agent)!, ...options.spec }
   const probeVersion = vi.fn<
     NonNullable<Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']>
-  >(async (_input, supports) => supports(options.version ?? '1.0.46'))
+  >(async () => ({ version: options.version ?? '1.0.46' }))
   const prepareVisuals = vi.fn(async () =>
     options.visuals === false ? null : { folder: FOLDER, skill: SKILL }
   )

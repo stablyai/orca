@@ -68,10 +68,15 @@ export async function prepareRuntimePtySpawn(
     shellOverride: args.shellOverride,
     plannedPty: args.launchRuntime?.pty,
     projectRuntimeSource: { kind: 'store', store: ctx.deps.store },
+    preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd
   })
   ctx.cwd = target.cwd
+  ctx.requestedCwd = target.requestedCwd
+  ctx.prevalidatedCwd = target.prevalidatedCwd
+  ctx.startupCwdFallback = target.startupCwdFallback
+  ctx.correctStartupCwd = target.correctStartupCwd
   ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro

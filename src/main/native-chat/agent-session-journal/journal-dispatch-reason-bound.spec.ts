@@ -8,7 +8,7 @@ import {
   DISPATCH_REJECTED_WRITE_FAILED,
   isWriteFailureSubmission
 } from '../../../shared/structured-agent-session-dispatch-rejection'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
@@ -22,7 +22,7 @@ export function registerJournalDispatchReasonBoundTests(): void {
     providerHandle: codexProviderHandle('thread-1')
   }
 
-  const HUGE = 'x'.repeat(4 * DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes)
+  const HUGE = 'x'.repeat(4 * JOURNAL_DISPATCH_REASON_LIMITS.inlineHeadBytes)
 
   let root: string
   let clock = 1_000

@@ -13,6 +13,8 @@ import type { AgentLaunchRequestId } from './agent-launch-request-id'
 export type StructuredAgentLaunchOptions = {
   /** The user action this start serves; only a re-delivery of it joins its chat. */
   requestId: AgentLaunchRequestId
+  /** Background launches never ask host publication to select their tab. */
+  activate?: boolean
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void

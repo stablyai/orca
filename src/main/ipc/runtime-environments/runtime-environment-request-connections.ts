@@ -16,9 +16,9 @@ import type {
   RemoteRuntimeSharedConnectionDiagnostics,
   RemoteRuntimeSharedSubscription
 } from '../../../shared/remote-runtime-shared-control-types'
-import { isRuntimeEnvironmentCapabilityPaused } from './runtime-environment-capability-evidence'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { publishRuntimeEnvironmentDiagnostics } from './runtime-environment-diagnostics-broadcast'
+import { sharedControlEnvironmentPolicy } from './runtime-environment-shared-control-policy'
 import {
   clearSharedControlAnswerSource,
   setSharedControlAnswerSource
@@ -42,6 +42,17 @@ type CachedSharedControlConnection = {
 const requestConnections = new Map<string, CachedRuntimeConnection>()
 const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
 const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
+
+/** Consult owned authenticated transports without acquiring another host channel. */
+export function isRemoteRuntimeConnectionReady(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection
+): boolean {
+  const pairingKey = getPairingKey(pairedConnection)
+  return [sharedControlConnections.get(environmentId), requestConnections.get(environmentId)].some(
+    (cached) => cached?.pairingKey === pairingKey && cached.connection.isReady()
+  )
+}
 
 export function getRuntimeEnvironmentStatusOwner(
   userDataPath: string,
@@ -144,6 +155,51 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   )
 }
 
+/**
+ * Sends only on the shared socket whose own `status.get` named `expectedRuntimeId`; null when it
+ * did not, or the socket changed before sending. Nothing is sent to another runtime either way.
+ */
+export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection,
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  expectedRuntimeId: string,
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
+): Promise<RuntimeRpcResponse<TResult> | null> {
+  const shared = getSharedControlConnection(environmentId, pairedConnection)
+  let statusSocket: number | undefined
+  const status = await shared.request<RuntimeStatus>(
+    'status.get',
+    undefined,
+    timeoutMs,
+    undefined,
+    signal,
+    () => {
+      statusSocket = shared.socketGeneration.peek()
+    }
+  )
+  if (!status.ok || status.result.runtimeId !== expectedRuntimeId) {
+    return null
+  }
+  let socketChanged = false
+  try {
+    return await shared.request<TResult>(method, params, timeoutMs, envelope, signal, () => {
+      socketChanged = shared.socketGeneration.peek() !== statusSocket
+      if (socketChanged) {
+        throw new Error('Runtime connection changed before sending')
+      }
+    })
+  } catch (error) {
+    if (socketChanged) {
+      return null
+    }
+    throw error
+  }
+}
+
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
   environmentId: string,
   pairedConnection: PairedRuntimeConnection,
@@ -227,8 +283,7 @@ function getSharedControlConnection(
       connection: new RemoteRuntimeSharedControlConnection(pairedConnection, {
         environmentId,
         clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-        isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
-        isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId),
+        ...sharedControlEnvironmentPolicy(environmentId),
         // Why wall clock: it advances across a suspend, so a pre-sleep answer reads as stale.
         onAnswered: () => {
           answeredAt = Date.now()

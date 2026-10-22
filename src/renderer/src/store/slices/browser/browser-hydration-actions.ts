@@ -8,7 +8,8 @@ import { projectHydratedBrowserSession } from './browser-hydration-state'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { findWorkspace } from '../browser-page-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { recordLayoutApply } from '@/runtime/layout-apply-send'
+import { sendBrowserLayoutCommand } from './browser-layout-owner-commands'
+import { selectFolderWorkspaces } from '../../workspace-record-selectors'
 
 export function createBrowserHydrationActions(
   set: BrowserSliceSet,
@@ -23,7 +24,7 @@ export function createBrowserHydrationActions(
         Object.keys(persistedTabsByWorktree)
       )
       validWorktreeIdsForCleanup.add(FLOATING_TERMINAL_WORKTREE_ID)
-      for (const workspace of currentState.folderWorkspaces) {
+      for (const workspace of selectFolderWorkspaces(currentState)) {
         validWorktreeIdsForCleanup.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIdsForCleanup, options)
@@ -47,7 +48,7 @@ export function createBrowserHydrationActions(
           Object.keys(persistedTabsByWorktree)
         )
         validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
-        for (const workspace of s.folderWorkspaces) {
+        for (const workspace of selectFolderWorkspaces(s)) {
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
@@ -75,38 +76,48 @@ export function createBrowserHydrationActions(
     },
 
     switchBrowserTabProfile: (workspaceId, profileId, sessionPartition) => {
-      set((s) => {
-        for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
-          const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
-          if (tabIndex !== -1) {
-            const updatedTabs = [...tabs]
-            updatedTabs[tabIndex] = {
-              ...updatedTabs[tabIndex],
-              sessionProfileId: profileId,
-              sessionPartition: sessionPartition ?? null
-            }
-            return {
-              browserTabsByWorktree: {
-                ...s.browserTabsByWorktree,
-                [worktreeId]: updatedTabs
+      const switchHere = (): void =>
+        set((s) => {
+          for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
+            const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
+            if (tabIndex !== -1) {
+              const updatedTabs = [...tabs]
+              updatedTabs[tabIndex] = {
+                ...updatedTabs[tabIndex],
+                sessionProfileId: profileId,
+                sessionPartition: sessionPartition ?? null
+              }
+              return {
+                browserTabsByWorktree: {
+                  ...s.browserTabsByWorktree,
+                  [worktreeId]: updatedTabs
+                }
               }
             }
           }
-        }
-        return s
-      })
-      // Switch point: main records the tab's new profile.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        const tab = findWorkspace(get().browserTabsByWorktree, workspaceId)
-        if (tab) {
-          recordLayoutApply(get(), tab.worktreeId, {
+          return s
+        })
+      // Switch point: main switches the tab's profile; its frame shows the change.
+      const tab = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? findWorkspace(get().browserTabsByWorktree, workspaceId)
+        : null
+      if (
+        tab &&
+        sendBrowserLayoutCommand(
+          get,
+          tab.worktreeId,
+          {
             type: 'setBrowserTabProfile',
             browserTabId: workspaceId,
             profileId,
             sessionPartition: sessionPartition ?? null
-          })
-        }
+          },
+          { here: switchHere }
+        )
+      ) {
+        return
       }
+      switchHere()
     }
   }
 }

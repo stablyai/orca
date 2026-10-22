@@ -22,6 +22,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -394,7 +398,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::/workspace/rocket',
+      hostWorktreeTarget({ id: 'repo-1::/workspace/rocket', hostId: 'local' }),
       expect.objectContaining({ displayName: '🚀' })
     )
   })
@@ -446,7 +450,7 @@ describe('registerWorktreeHandlers', () => {
       {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::../worktrees/feature',
+      hostWorktreeTarget({ id: 'repo-1::../worktrees/feature', hostId: 'local' }),
       expect.objectContaining({
         orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
@@ -584,7 +588,7 @@ describe('registerWorktreeHandlers', () => {
       kind: 'folder' as const
     }
     store.getRepo.mockReturnValue(repo)
-    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+    store.setWorktreeMeta.mockImplementation((_target: HostWorktreeTarget, meta) => ({
       displayName: '',
       comment: '',
       linkedIssue: null,

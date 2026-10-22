@@ -10,13 +10,13 @@ export function ResumeInNewCliTooltipText(): React.JSX.Element {
       <span className="block">
         {translate(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCliTooltipFork',
-          'Forks this conversation into a new CLI session.'
+          'Start a new terminal agent session with a copy of this conversation.'
         )}
       </span>
       <span className="block">
         {translate(
           'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCliTooltipChat',
-          'The native chat stays as it is.'
+          'This chat stays unchanged.'
         )}
       </span>
     </>

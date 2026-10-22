@@ -50,11 +50,11 @@ function permission(snapshot: readonly SessionOptionDescriptor[]): string | null
   return entry?.kind.type === 'select' ? entry.kind.currentValue : null
 }
 
-function renderReopened(fence: number) {
+function renderReopened(fence: number, agent: 'codex' | 'claude' = 'codex') {
   return renderHook(
     (props: { fence: number; stamp: string }) =>
       useStructuredAgentSessionOptions({
-        agent: 'codex',
+        agent,
         sessionId: 'session-1',
         target: LOCAL_TARGET,
         transportEnabled: true,
@@ -142,6 +142,53 @@ describe('a permission pick on this device', () => {
     await act(async () => first.resolve({ options: { permissionMode: 'full-access' } }))
     expect(permission(result.current.optionSnapshot)).toBe('auto')
     unmount()
+
+    // A permission commit clears generic pendingId while the model request still runs.
+    let model = 'model-a'
+    mocks.call.mockImplementation((_target: unknown, method: string) =>
+      Promise.resolve(
+        method === 'agentSession.options'
+          ? {
+              models: ['model-a', 'model-b'].map((id) => ({
+                id,
+                label: id,
+                isDefault: false,
+                efforts: [],
+                supportsAutoMode: true
+              })),
+              current: { model, permissionMode: model === 'model-a' ? 'ask' : 'full-access' }
+            }
+          : { origin: 'unknown' }
+      )
+    )
+    const modelWrite = Promise.withResolvers<{ options: Record<string, string> }>()
+    const modeWrite = Promise.withResolvers<{ options: Record<string, string> }>()
+    vi.mocked(mutate).mockReturnValueOnce(modelWrite.promise).mockReturnValueOnce(modeWrite.promise)
+    const claude = renderReopened(1, 'claude')
+    await waitFor(() => expect(permission(claude.result.current.optionSnapshot)).toBe('ask'))
+    const choices = (snapshot: readonly SessionOptionDescriptor[]) => {
+      const kind = snapshot.find((row) => row.id === 'permissionMode')?.kind
+      return kind?.type === 'select' ? kind.choices.map((choice) => choice.value) : []
+    }
+    expect(choices(claude.result.current.optionSnapshot)).toContain('auto')
+    const captured = claude.result.current.setStructuredOption
+    await act(async () => {
+      void captured('model', 'model-b')
+    })
+    await act(async () => {
+      void captured('permissionMode', 'full-access')
+    })
+    expect(permission(claude.result.current.optionSnapshot)).toBe('full-access')
+    expect(choices(claude.result.current.optionSnapshot)).not.toContain('auto')
+    expect(await captured('permissionMode', 'auto')).toBe(false)
+    const returned = await claude.result.current.optionSurface.setOption('permissionMode', 'auto')
+    expect(choices(returned.snapshot)).not.toContain('auto')
+    expect(vi.mocked(mutate)).toHaveBeenCalledTimes(4)
+    model = 'model-b'
+    await act(async () => modeWrite.resolve({ options: { permissionMode: 'full-access' } }))
+    await act(async () => modelWrite.resolve({ options: { model } }))
+    expect(choices(claude.result.current.optionSnapshot)).toContain('auto')
+    claude.unmount()
   })
 
   it("shows the host's mode again when the write is refused", async () => {

@@ -8,8 +8,8 @@
  * store GC also takes (design D5); nothing here deletes a runtime.
  */
 import { randomBytes } from 'node:crypto'
-import { copyFile, link, mkdtemp, rm } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { rm } from 'node:fs/promises'
+import { basename } from 'node:path'
 import {
   pinnedNodeRuntimeAsset,
   NODE_RUNTIME_PIN,
@@ -23,12 +23,14 @@ import {
   orcadNodeRuntimeExecutable
 } from '../../../shared/orcad-artifacts'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { uploadRelayDirectory } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
+import { remoteSha256Command } from './remote-sha256-command'
+import { stageNodeRuntimeArchive } from './remote-node-runtime-host-download'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -39,7 +41,9 @@ import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import { withRuntimeStoreLock, type HeldRuntimeStoreLock } from './remote-node-runtime-store-lock'
 import {
   assertRemoteNodeRuntimePromoted,
+  assertRemoteNodeRuntimeStoreExecutable,
   REMOTE_NODE_RUNTIME_EXIT_PREFIX,
+  REMOTE_NODE_RUNTIME_NOEXEC,
   REMOTE_NODE_RUNTIME_MISSING,
   REMOTE_NODE_RUNTIME_READY,
   REMOTE_NODE_RUNTIME_SELFTEST_FAILED,
@@ -93,11 +97,7 @@ export function posixNodeRuntimeExecutable(host: RemoteHostPlatform, runtimeDir:
 }
 
 /** A per-installer stage beside the runtime; its dot prefix keeps it out of `node-*` listings. */
-export function nodeRuntimeStageDir(
-  host: RemoteHostPlatform,
-  runtimeDir: string,
-  token: string
-): string {
+function nodeRuntimeStageDir(host: RemoteHostPlatform, runtimeDir: string, token: string): string {
   return joinRemotePath(
     host,
     remoteDirname(runtimeDir, host),
@@ -105,9 +105,21 @@ export function nodeRuntimeStageDir(
   )
 }
 
-// Why both tools: GNU/busybox ship sha256sum, macOS ships shasum; either prints the digest first.
-export function remoteSha256Command(path: string): string {
-  return `{ sha256sum ${path} 2>/dev/null || shasum -a 256 ${path}; } | cut -d' ' -f1`
+/**
+ * Creates the stage and runs a two-line script from it, so a store that can't run programs (a
+ * `noexec` home) is named before the ~40 MiB upload instead of failing the self-test after it.
+ */
+export function createExecProbedStageCommand(host: RemoteHostPlatform, stageDir: string): string {
+  const stage = quotePosixShell(stageDir)
+  const probe = quotePosixShell(joinRemotePath(host, stageDir, '.exec-probe'))
+  return (
+    // Why the probe write may fail quietly: a full disk is diagnosed by the upload that follows.
+    `mkdir -p ${stage} && { if printf '#!/bin/sh\\necho ok\\n' > ${probe} 2>/dev/null && chmod 700 ${probe}; then ` +
+    `orca_x=$(${probe} 2>&1); orca_x_status=$?; rm -f ${probe}; ` +
+    `[ "$orca_x_status" = 0 ] || { echo ${REMOTE_NODE_RUNTIME_NOEXEC}; ` +
+    `echo "${REMOTE_NODE_RUNTIME_EXIT_PREFIX}$orca_x_status"; printf '%s\\n' "$orca_x" | head -c 2000; }; ` +
+    `else rm -f ${probe}; fi; }`
+  )
 }
 
 /** Ready only when the executable hashes to the pin and reports the pinned version. */
@@ -119,11 +131,11 @@ export function probeRemoteNodeRuntimeCommand(
   if (isWindowsRemoteHost(host)) {
     return windowsNodeRuntimeProbeCommand(runtimeDir, target)
   }
-  const executable = shellEscape(posixNodeRuntimeExecutable(host, runtimeDir))
-  const verified = shellEscape(joinRemotePath(host, runtimeDir, VERIFIED_MARKER))
+  const executable = quotePosixShell(posixNodeRuntimeExecutable(host, runtimeDir))
+  const verified = quotePosixShell(joinRemotePath(host, runtimeDir, VERIFIED_MARKER))
   return (
     `if [ -f ${verified} ] && [ -x ${executable} ] && ` +
-    `[ "$(${remoteSha256Command(executable)})" = ${shellEscape(pinnedNodeRuntimeAsset(target).executableSha256)} ]; ` +
+    `[ "$(${remoteSha256Command(executable)})" = ${quotePosixShell(pinnedNodeRuntimeAsset(target).executableSha256)} ]; ` +
     `then echo ${REMOTE_NODE_RUNTIME_READY}; else echo ${REMOTE_NODE_RUNTIME_MISSING}; fi`
   )
 }
@@ -142,13 +154,13 @@ export function remoteNodeRuntimePresentCommand(
   if (isWindowsRemoteHost(host)) {
     return windowsNodeRuntimePresentCommand(runtimeDir, run)
   }
-  const executable = shellEscape(
+  const executable = quotePosixShell(
     joinRemotePath(host, runtimeDir, ...ORCAD_NODE_RUNTIME_POSIX_EXECUTABLE.split('/'))
   )
-  const verified = shellEscape(joinRemotePath(host, runtimeDir, VERIFIED_MARKER))
+  const verified = quotePosixShell(joinRemotePath(host, runtimeDir, VERIFIED_MARKER))
   const ready = run
     ? `{ orca_rt_out=$(${executable} --version 2>&1); orca_rt_status=$?; ` +
-      `if [ "$orca_rt_out" = ${shellEscape(`v${NODE_RUNTIME_PIN.version}`)} ]; then echo ${REMOTE_NODE_RUNTIME_READY}; ` +
+      `if [ "$orca_rt_out" = ${quotePosixShell(`v${NODE_RUNTIME_PIN.version}`)} ]; then echo ${REMOTE_NODE_RUNTIME_READY}; ` +
       `else echo ${REMOTE_NODE_RUNTIME_SELFTEST_FAILED}; echo "${REMOTE_NODE_RUNTIME_EXIT_PREFIX}$orca_rt_status"; ` +
       `printf '%s\\n' "$orca_rt_out" | head -c 4000; fi; }`
     : `echo ${REMOTE_NODE_RUNTIME_READY}`
@@ -175,21 +187,23 @@ export function promoteRemoteNodeRuntimeCommand(
   assertPosixOrcadHost(host)
   const asset = pinnedNodeRuntimeAsset(args.target)
   const member = nodeRuntimeExecutablePath(args.target, asset.archive)
-  const stage = shellEscape(args.stageDir)
-  const extracted = shellEscape(joinRemotePath(host, args.stageDir, ...member.split('/')))
-  const binDir = shellEscape(joinRemotePath(host, args.runtimeDir, 'bin'))
-  const temporary = shellEscape(joinRemotePath(host, args.runtimeDir, 'bin', `node.${args.token}`))
-  const executable = shellEscape(posixNodeRuntimeExecutable(host, args.runtimeDir))
-  const verified = shellEscape(joinRemotePath(host, args.runtimeDir, VERIFIED_MARKER))
+  const stage = quotePosixShell(args.stageDir)
+  const extracted = quotePosixShell(joinRemotePath(host, args.stageDir, ...member.split('/')))
+  const binDir = quotePosixShell(joinRemotePath(host, args.runtimeDir, 'bin'))
+  const temporary = quotePosixShell(
+    joinRemotePath(host, args.runtimeDir, 'bin', `node.${args.token}`)
+  )
+  const executable = quotePosixShell(posixNodeRuntimeExecutable(host, args.runtimeDir))
+  const verified = quotePosixShell(joinRemotePath(host, args.runtimeDir, VERIFIED_MARKER))
   return [
     `cd ${stage} || exit 1`,
-    `tar -xzf ${shellEscape(joinRemotePath(host, args.stageDir, args.archive))} ${shellEscape(member)} || { echo ORCA_NODE_RUNTIME_EXTRACT_FAILED; exit 1; }`,
-    `[ "$(${remoteSha256Command(extracted)})" = ${shellEscape(asset.executableSha256)} ] || { echo ORCA_NODE_RUNTIME_HASH_MISMATCH; exit 1; }`,
+    `tar -xzf ${quotePosixShell(joinRemotePath(host, args.stageDir, args.archive))} ${quotePosixShell(member)} || { echo ORCA_NODE_RUNTIME_EXTRACT_FAILED; exit 1; }`,
+    `[ "$(${remoteSha256Command(extracted)})" = ${quotePosixShell(asset.executableSha256)} ] || { echo ORCA_NODE_RUNTIME_HASH_MISMATCH; exit 1; }`,
     `chmod 755 ${extracted}`,
     // Why run it: executing is the only reliable check for noexec mounts and a wrong libc.
     // Exit 0 on refusal so the caller receives the loader's words to classify, not a bare exit 1.
     `{ orca_rt_out=$(${extracted} --version 2>&1); orca_rt_status=$?; ` +
-      `[ "$orca_rt_out" = ${shellEscape(`v${NODE_RUNTIME_PIN.version}`)} ] || ` +
+      `[ "$orca_rt_out" = ${quotePosixShell(`v${NODE_RUNTIME_PIN.version}`)} ] || ` +
       `{ echo ${REMOTE_NODE_RUNTIME_SELFTEST_FAILED}; echo "${REMOTE_NODE_RUNTIME_EXIT_PREFIX}$orca_rt_status"; ` +
       `printf '%s\\n' "$orca_rt_out" | head -c 4000; exit 0; }; }`,
     `mkdir -p ${binDir}`,
@@ -224,20 +238,20 @@ export function installNodeRuntimeFromHostArchiveCommand(
   args: { runtimeDir: string; archive: string; target: NodeRuntimeTarget; token: string }
 ): string {
   const stageDir = nodeRuntimeStageDir(host, args.runtimeDir, args.token)
-  const stage = shellEscape(stageDir)
+  const stage = quotePosixShell(stageDir)
   const promote = promoteRemoteNodeRuntimeCommand(host, { ...args, stageDir })
-  const copy = `cp -- "$1" ${shellEscape(joinRemotePath(host, stageDir, args.archive))}`
+  const copy = `cp -- "$1" ${quotePosixShell(joinRemotePath(host, stageDir, args.archive))}`
   // Subshell: promote's `exit 1` must still reach the stage cleanup.
   return `(umask 077 && mkdir -p ${stage} && ${copy} && ${promote}); status=$?; rm -rf ${stage}; exit $status`
 }
 
-export type RemoteRuntimeStep = <T>(operation: () => Promise<T>) => Promise<T>
+type RemoteRuntimeStep = <T>(operation: () => Promise<T>) => Promise<T>
 
 const runDirectly: RemoteRuntimeStep = (operation) => operation()
 
-export type EnsuredRemoteNodeRuntime = {
+type EnsuredRemoteNodeRuntime = {
   executable: string
-  transfer: 'cached' | 'uploaded'
+  transfer: 'cached' | 'uploaded' | 'host-downloaded'
 }
 
 /**
@@ -251,6 +265,8 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
   target: NodeRuntimeTarget
   /** The locally verified pinned archive (pinned-runtime-materializer). */
   archivePath: () => Promise<string>
+  /** Where a hand-copied archive makes `archivePath` succeed offline; named when every download fails. */
+  offlineArchivePath?: string
   signal?: AbortSignal
   /** Wraps each host round trip, so a caller can tell an unconfirmed channel from a local failure. */
   remoteStep?: RemoteRuntimeStep
@@ -283,22 +299,26 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
   }
   const cleanupStage = windows
     ? windowsNodeRuntimeStageCleanupCommand(stageDir)
-    : `rm -rf ${shellEscape(stageDir)}`
+    : `rm -rf ${quotePosixShell(stageDir)}`
   let localStage: string | undefined
   let stageUnconfirmed = false
   let hostRemovedStage = false
   try {
-    const archivePath = await options.archivePath()
-    const uploadDir = await mkdtemp(join(dirname(archivePath), '.runtime-upload-'))
-    localStage = uploadDir
-    const archive = basename(archivePath)
-    await link(archivePath, join(uploadDir, archive)).catch(() =>
-      copyFile(archivePath, join(uploadDir, archive))
-    )
+    // Why before the archive: fetching it may download, and a noexec store would waste both.
     if (!windows) {
-      await exec(`mkdir -p ${shellEscape(stageDir)}`, { signal })
+      assertRemoteNodeRuntimeStoreExecutable(
+        await exec(createExecProbedStageCommand(host, stageDir), { signal }),
+        remoteDirname(runtimeDir, host)
+      )
     }
-    await remoteStep(() => uploadRelayDirectory(conn, uploadDir, stageDir, host, { signal }))
+    const { archive } = await stageNodeRuntimeArchive({
+      ...options,
+      exec,
+      stageDir,
+      upload: (dir) =>
+        remoteStep(() => uploadRemoteInstallDirectory(conn, dir, stageDir, host, { signal })),
+      onLocalStage: (dir) => (localStage = dir)
+    })
     let promoteRan = false
     // Why unwrapped on Windows: these are already self-contained powershell.exe command lines.
     const runLocked = (command: string): Promise<string> =>
@@ -338,7 +358,7 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
     // Why: the Windows promote script removes its stage on every path; skip a second powershell.exe.
     hostRemovedStage = windows && promoteRan
     assertRemoteNodeRuntimePromoted(promoted)
-    return { executable, transfer: 'uploaded' }
+    return { executable, transfer: localStage ? 'uploaded' : 'host-downloaded' }
   } catch (error) {
     stageUnconfirmed = isUnconfirmedSshCommandTermination(error)
     throw error

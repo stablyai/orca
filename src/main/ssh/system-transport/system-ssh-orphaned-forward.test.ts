@@ -46,6 +46,19 @@ describe('findOrphanedOrcaSshForward', () => {
     expect(findOrphanedOrcaSshForward([row(900, 1, newOrphan)], withLogLevel, 'darwin')?.pid).toBe(
       900
     )
+    const extraLogLevel = ORCA_FORWARD.replace(' -T ', ' -o LogLevel=INFO -o LogLevel=INFO -T ')
+    expect(findOrphanedOrcaSshForward([row(900, 1, extraLogLevel)], EXPECTED, 'darwin')).toBeNull()
+  })
+
+  it('matches an orphan an earlier version spawned without the unmultiplexing -S none', () => {
+    const unmultiplexed = ['-o', 'BatchMode=no', '-T', '-S', 'none', ...EXPECTED.slice(3)]
+    expect(
+      findOrphanedOrcaSshForward([row(900, 1, ORCA_FORWARD)], unmultiplexed, 'darwin')?.pid
+    ).toBe(900)
+    const otherControlPath = ORCA_FORWARD.replace(' -T ', ' -T -S /tmp/cm ')
+    expect(
+      findOrphanedOrcaSshForward([row(900, 1, otherControlPath)], unmultiplexed, 'darwin')
+    ).toBeNull()
   })
 
   it("never picks a forward whose Orca is still running (another instance's tunnel)", () => {
@@ -94,6 +107,30 @@ describe('findOrphanedOrcaSshForward', () => {
         'win32'
       )
     ).toBeNull()
+  })
+
+  it('on posix, matches a spaced option value that itself holds a normalized option', () => {
+    const proxy = 'ProxyCommand=ssh -o ExitOnForwardFailure=yes -W %h:%p jump'
+    const expected = ['-o', proxy, ...EXPECTED]
+    const command = `/usr/bin/ssh -o ${proxy} ${EXPECTED.join(' ')}`
+    expect(findOrphanedOrcaSshForward([row(900, 1, command)], expected, 'linux')?.pid).toBe(900)
+  })
+
+  it('on Windows, matches the quoted command line of an argument with spaces', () => {
+    const keyPath = 'C:\\Users\\neil\\AppData\\Local\\Temp\\orca-a7c5-win12\\Jane Doe\\id_ed25519'
+    const head = ['-o', 'BatchMode=no', '-o', 'LogLevel=INFO', '-T', '-S', 'none', '-p', '22']
+    const tail = ['-o', 'IdentitiesOnly=yes', '-N', '-o', 'ExitOnForwardFailure=no']
+    const forward = ['-L', '127.0.0.1:47123:127.0.0.1:6768', '--', '10.255.255.1']
+    const expected = [...head, '-i', keyPath, ...tail, ...forward]
+    // Win32_Process.CommandLine captured on Windows 11 for a Node spawn of `expected`.
+    const command = `"C:\\Program Files\\OpenSSH\\ssh.exe" ${head.join(' ')} -i "${keyPath}" ${[...tail, ...forward].join(' ')}`
+    expect(findOrphanedOrcaSshForward([row(900, 400, command)], expected, 'win32')?.pid).toBe(900)
+    const unquoted = command.replace(`"${keyPath}"`, keyPath)
+    const otherKey = command.replace('Jane Doe', 'Jane Doe2')
+    const extraArg = command.replace(' -i ', ' -v -i ')
+    for (const other of [unquoted, otherKey, extraArg]) {
+      expect(findOrphanedOrcaSshForward([row(900, 400, other)], expected, 'win32')).toBeNull()
+    }
   })
 })
 

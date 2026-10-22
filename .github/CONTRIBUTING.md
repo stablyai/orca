@@ -37,6 +37,24 @@ In PowerShell, use `$env:ORCA_DEV_MAIN_SOURCEMAPS='0'` before `pnpm dev`.
 Remove the variable when debugging the main process with source maps. Renderer and
 preload settings are unaffected; production builds always keep their hidden main maps.
 
+Local installs use pnpm's global virtual store: each package version is one slot
+under `~/pnpm/store` that every worktree links to, instead of a full `node_modules` per worktree.
+An existing worktree converts on its next `pnpm install`, and an older branch without the setting
+converts back the same way. CI always uses the normal layout. On Windows, pnpm links with
+junctions when you lack the symlink privilege, so no administrator rights or Developer Mode are
+needed. Things to know:
+
+- Keep `~/node_modules` (and any other `node_modules` above the store) out of your home
+  directory. Node resolves upward from the store slot, so a stray one there supplies
+  dependencies the package never declared and hides missing-dependency bugs; `pnpm install` warns
+  when it finds one.
+- Native addons are never rebuilt in place in a shared slot: each CPU gets its own build
+  beside it (see [`native-build-entry.cjs`](../config/scripts/native-build-entry.cjs)), so
+  cross-arch packaging is safe for other worktrees.
+- `ORCA_PNPM_GLOBAL_VIRTUAL_STORE=0` opts out. Keep it set
+  in your shell: `pnpm run` re-checks the install and relinks a worktree whose layout no longer
+  matches.
+
 Ordinary installs include native optional dependencies for the current OS and CPU only.
 Before a cross-architecture build (including `pnpm build:mac`, which produces both x64 and
 arm64 artifacts by default), run `pnpm install:release` to add the other CPU's variants.

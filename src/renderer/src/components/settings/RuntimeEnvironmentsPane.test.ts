@@ -290,12 +290,8 @@ describe('RuntimeEnvironmentsPane host details', () => {
   })
 
   it('explains that the choice only picks the host for new projects', () => {
-    expect(getActiveServerModeDescription(true)).toContain(
-      'New projects are created on this computer'
-    )
-    expect(getActiveServerModeDescription(true)).toContain('stay on their own host')
-    expect(getActiveServerModeDescription(false)).toContain('default Host')
-    expect(getActiveServerModeDescription(false)).toContain('paired Orca runtime')
+    expect(getActiveServerModeDescription(true)).toBe('Existing projects stay where they are.')
+    expect(getActiveServerModeDescription(false)).toContain('new projects on the chosen server')
   })
 
   it('blocks removing the active server independently of local-runtime availability', () => {

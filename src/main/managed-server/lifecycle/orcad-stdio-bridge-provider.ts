@@ -17,7 +17,7 @@ import {
 import { listenOrcadStdioBridge } from './orcad-stdio-bridge-listener'
 import { sshOrcadHostTransport } from '../../ssh/orcad-ssh-host-transport'
 import type { RemoteCommandChannel } from '../install/remote-install-transport'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type {
   PortForwardStartOptions,
   SshPortForwardProvider,
@@ -42,7 +42,7 @@ export class OrcadStdioBridgePortForwardProvider implements SshPortForwardProvid
   ) {}
 
   // System SSH runs each bridge socket as an exec over its ControlMaster, or as its own login
-  // when multiplexing is off; the transport only picks it once forwarding was refused.
+  // when multiplexing is off; the transport only picks it once a forward did not start.
   canHandle(conn: SshConnection): boolean {
     return conn.getClient() !== null || conn.usesSystemSshTransport()
   }

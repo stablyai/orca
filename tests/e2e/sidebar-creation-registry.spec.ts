@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { removeWorktreeViaStore } from './helpers/dead-terminal'
 import { expect, test } from './helpers/orca-app'
-import { SIDEBAR_INPUTS_BUILD, expectNoSidebarShadowMismatches } from './helpers/sidebar-shadow'
+import { SIDEBAR_INPUTS_BUILD } from './helpers/sidebar-inputs-build'
 import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import { getActiveWorktreeId, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -48,7 +48,6 @@ test('main lists a window create while it runs and drops it when the workspace l
         return pending.length === 1 && host.includes(pending[0])
       })
       .toBe(true)
-    await expectNoSidebarShadowMismatches(orcaPage)
 
     await expect
       .poll(async () => (await readCreations(orcaPage)).pending.length, { timeout: 30_000 })
@@ -56,7 +55,6 @@ test('main lists a window create while it runs and drops it when the workspace l
     expect((await readCreations(orcaPage)).host).toEqual([])
     createdId = await getActiveWorktreeId(orcaPage)
     expect(createdId).not.toBe(originalWorktreeId)
-    await expectNoSidebarShadowMismatches(orcaPage)
   } finally {
     rmSync(hookPath, { force: true })
     if (createdId && createdId !== originalWorktreeId) {

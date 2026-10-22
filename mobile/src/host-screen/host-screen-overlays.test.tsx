@@ -49,7 +49,6 @@ async function renderSheet(row: Partial<Worktree>) {
     hostCapabilities: [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY],
     hostId: 'host-1',
     settings: {},
-    showNewWorktree: false,
     state: {
       actionTarget: { worktreeId: 'wt', repo: 'orca', branch: 'main', ...row },
       confirmDelete: null,

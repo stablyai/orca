@@ -12,6 +12,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
+import { removeWorktreeMetaRow } from './persistence/host-qualified-worktree-meta'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -86,6 +88,31 @@ describe('Store', () => {
     store.flush()
     const persisted = readDataFile() as { automations: { baseBranch: string | null }[] }
     expect(persisted.automations[0].baseBranch).toBeNull()
+  })
+
+  it('records the dispatch time a headless launch stamped before prompting its agent', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, Date.now())
+
+    const dispatched = store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      dispatchedAt: 1_234,
+      error: null
+    })
+
+    expect(dispatched.dispatchedAt).toBe(1_234)
   })
 
   it('returns the existing automation for a repeated creation key', async () => {
@@ -681,7 +708,9 @@ describe('Store', () => {
   it('snapshots automation run workspace names for deleted-workspace history', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
-    store.setWorktreeMeta('wt1', { displayName: 'Nightly workspace' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), {
+      displayName: 'Nightly workspace'
+    })
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -695,7 +724,7 @@ describe('Store', () => {
     })
 
     const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
-    store.removeWorktreeMeta('wt1')
+    removeWorktreeMetaRow(store, 'wt1', undefined)
 
     expect(run.workspaceDisplayName).toBe('Nightly workspace')
     expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
@@ -719,12 +748,41 @@ describe('Store', () => {
     })
     store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
 
-    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName('wt1', 'Deleted workspace')
+    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName(
+      hostWorktreeTarget({ id: 'wt1', hostId: 'local' }),
+      'Deleted workspace'
+    )
 
     expect(updatedCount).toBe(1)
     expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
       'Deleted workspace'
     )
+  })
+
+  it("deleting an SSH twin's workspace leaves the local twin's run label", async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    const before = store.listAutomationRuns(automation.id)[0].workspaceDisplayName
+
+    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName(
+      hostWorktreeTarget({ id: 'wt1', hostId: toSshExecutionHostId('ssh-1') }),
+      'SSH twin'
+    )
+
+    expect(updatedCount).toBe(0)
+    expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(before)
   })
 
   it('persists automation run output snapshots across later status updates', async () => {

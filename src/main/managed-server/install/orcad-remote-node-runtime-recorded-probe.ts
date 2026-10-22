@@ -5,7 +5,7 @@
  * forces the full hash again (verify on mismatch).
  */
 import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { assertPosixOrcadHost } from './orcad-remote-host-support'
 import {
@@ -13,7 +13,8 @@ import {
   REMOTE_NODE_RUNTIME_READY,
   REMOTE_NODE_RUNTIME_VERIFIED_MARKER
 } from '../../ssh/orcad-remote-node-runtime-report'
-import { posixNodeRuntimeExecutable, remoteSha256Command } from './orcad-remote-node-runtime'
+import { posixNodeRuntimeExecutable } from './orcad-remote-node-runtime'
+import { remoteSha256Command } from './remote-sha256-command'
 
 /** Beside `.verified`; store GC removes it with its runtime directory. */
 export const REMOTE_NODE_RUNTIME_HASHED_STAT_FILENAME = '.verified-stat'
@@ -25,14 +26,14 @@ export function recordedNodeRuntimeProbeCommand(
   executableSha256: string
 ): string {
   assertPosixOrcadHost(host)
-  const executable = shellEscape(posixNodeRuntimeExecutable(host, runtimeDir))
-  const verified = shellEscape(
+  const executable = quotePosixShell(posixNodeRuntimeExecutable(host, runtimeDir))
+  const verified = quotePosixShell(
     joinRemotePath(host, runtimeDir, REMOTE_NODE_RUNTIME_VERIFIED_MARKER)
   )
-  const record = shellEscape(
+  const record = quotePosixShell(
     joinRemotePath(host, runtimeDir, REMOTE_NODE_RUNTIME_HASHED_STAT_FILENAME)
   )
-  const pin = shellEscape(executableSha256)
+  const pin = quotePosixShell(executableSha256)
   // GNU/busybox `stat -c`, else BSD `stat -f`; an empty signature never matches and is never kept.
   const signature =
     `{ stat -L -c '%d:%i:%s:%y:%z' ${executable} || ` +

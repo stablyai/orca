@@ -26,7 +26,11 @@ import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-
 
 import { createHash } from 'node:crypto'
 
-import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
+import type {
+  AgentSubagentSnapshot,
+  ParsedAgentStatusPayload,
+  TurnEndDisposition
+} from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
 
@@ -122,6 +126,10 @@ export type AgentHookRelayEnvelope = {
   providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
+  /** The relay's turn-end stamp (see AgentHookEventPayload.turnEndedAt); older relays omit it. */
+  turnEndedAt?: number
+  /** How the relay identified that end; older relays omit it (legacy). */
+  turnEndDisposition?: TurnEndDisposition
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification), for input-interrupt inference on the receiving host. */
   claudeRunningNonAgentTask?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,

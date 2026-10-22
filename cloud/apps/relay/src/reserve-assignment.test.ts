@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { RelayRegion } from '@orca-cloud/relay-contract'
 import type { CellReserveClient } from './cell-reserve-client.js'
 import {
   ReserveAssignment,
@@ -13,7 +14,7 @@ import { ShadowSeatDirectory, type SeatFeedCell, type SeatFeedResponse } from '.
 const HOST = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
 const US = 'us-central1' as const
 
-function cellList(ids: string[], region = US): SeatFeedCell[] {
+function cellList(ids: string[], region: RelayRegion = US): SeatFeedCell[] {
   return ids.map((cellId) => ({
     cellId,
     cellUrl: `https://${cellId}.example`,
@@ -320,6 +321,92 @@ describe('reserve assignment on a director', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('for a share-draw loser', () => {
+    const ASIA = 'asia-east2' as const
+    const OTHER = { ...HOST, relayHostId: 'qrstuvwxyzabcdef' }
+    const setupAsia = (reserveCell = feed('c1'), reserve?: (cellId: string) => ReserveAttempt) =>
+      setup({
+        ...(reserve ? { reserve } : {}),
+        cells: [...cellList(['c1', 'c2'], ASIA), ...cellList(['c3'])],
+        feeds: [
+          reserveCell,
+          // Database room far above the reserve cell's, so the 0.25 draw loses.
+          feed('c2', { admitMode: 'db', counts: { seats: 0, controls: 0, bookings: 0, units: 0, ceiling: 5_000 } }),
+          feed('c3')
+        ]
+      })
+    const regionReserveOf = async (assignment: ReserveAssignment, identity = HOST) => {
+      const plan = await assignment.plan(identity, { reconnect: false, region: ASIA })
+      expect(plan).toMatchObject({ kind: 'database', epochFloor: 0 })
+      return plan.kind === 'database' ? plan.regionReserve : undefined
+    }
+
+    it('offers the reserve cell in its region only, only while it has a seat', async () => {
+      const { assignment, reserved, directory, now } = setupAsia()
+      const regionReserve = await regionReserveOf(assignment)
+      expect(reserved).toEqual([])
+      await expect(regionReserve?.()).resolves.toMatchObject({ cellId: 'c1', region: ASIA })
+      expect(reserved.map((call) => call.cellId)).toEqual(['c1'])
+      // A full reserve cell is not offered, and the US reserve cell never is.
+      const full = feed('c1', { counts: { seats: 500, controls: 500, bookings: 0, units: 500, ceiling: 500 } })
+      directory.apply('c1', full, now.value, now.value)
+      expect(await regionReserveOf(assignment, OTHER)).toBeUndefined()
+      expect(reserved.map((call) => call.cellId)).toEqual(['c1'])
+    })
+
+    it('paces when the reserve cell has seats but no intake budget, rather than give up the region', async () => {
+      const { assignment, reserved } = setupAsia(feed('c1', { intake: { perSec: 1, burst: 20, tokens: 0 } }))
+      const regionReserve = await regionReserveOf(assignment)
+      await expect(regionReserve?.()).rejects.toBeInstanceOf(ReservePaceError)
+      expect(reserved).toEqual([])
+    })
+
+    it('gives the region up when the reserve cell refuses with a seat still on the map', async () => {
+      for (const outcome of ['full', 'unreachable']) {
+        const { assignment, reserved } = setupAsia(feed('c1'), (cellId) =>
+          cellId === 'c1' ? { outcome } : { outcome: 'ok' }
+        )
+        const regionReserve = await regionReserveOf(assignment)
+        // Null sends the host to the database lane's cross-region fallback, not a 1 s retry.
+        await expect(regionReserve?.()).resolves.toBeNull()
+        expect(reserved.map((call) => call.cellId)).toEqual(['c1'])
+      }
+    })
+  })
+
+  describe('for a region-correction request', () => {
+    const request = { reconnect: true, region: US, regionCorrection: true }
+
+    it('leaves the answer to the database lane, offering only the in-region reserve fallback', async () => {
+      const row = vi.fn(async () => null)
+      // A memory answer would skip the window exchange; the share draw is not offered either.
+      const { assignment, reserved } = setup({ feeds: [feed('c1', { full: [seated(7)] }), feed('c2')], row })
+      const plan = await assignment.plan(HOST, request)
+      expect(plan).toEqual({ kind: 'database', regionReserve: expect.any(Function) })
+      expect(reserved).toEqual([])
+      expect(row).not.toHaveBeenCalled()
+      await expect(plan.kind === 'database' ? plan.regionReserve?.() : null).resolves.toMatchObject({
+        assignmentEpoch: 8
+      })
+    })
+
+    it('keeps today’s path for a host the map never saw, without reading its row', async () => {
+      const row = vi.fn(async () => ({ cellId: 'c1', assignmentEpoch: 3 }))
+      const { assignment, reserved } = setup({ row })
+      expect(await assignment.plan(HOST, request)).toEqual({ kind: 'database' })
+      expect(row).not.toHaveBeenCalled()
+      expect(reserved).toEqual([])
+    })
+
+    it('keeps today’s path while the map is incomplete, and in dry run', async () => {
+      const gated = setup({ cells: cellList(['c1', 'c2']), feeds: [feed('c1', { full: [seated(4)] })], startedAt: 100_500 })
+      expect(await gated.assignment.plan(HOST, request)).toEqual({ kind: 'database' })
+      const dryRun = setup({ mode: 'dry-run', feeds: [feed('c1', { full: [seated(4)] }), feed('c2')] })
+      expect(await dryRun.assignment.plan(HOST, request)).toEqual({ kind: 'database' })
+      expect([...gated.reserved, ...dryRun.reserved]).toEqual([])
+    })
   })
 
   it('paces with Retry-After when every reserve cell is out of budget and no database cell exists', async () => {

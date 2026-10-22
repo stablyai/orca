@@ -17,6 +17,7 @@ import {
   type NewExternalWorktreesInboxActionState
 } from '../../new-external-worktrees-inbox-actions'
 import { buildNewExternalWorktreesInboxCandidates } from '../../new-external-worktrees-inbox-candidates'
+import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // The two sidebar notice rows for worktrees Orca detected but does not yet show, plus the
 // pending/error state their inline actions surface.
@@ -123,7 +124,7 @@ export function useSidebarExternalWorktreeCards(args: {
           })
           return
         }
-        detected = useAppStore.getState().detectedWorktreesByRepo[projectId]
+        detected = selectDetectedWorktreesByRepo(useAppStore.getState())[projectId]
       }
       if (detected?.authoritative !== true) {
         setImportedWorktreeCardState(projectId, {

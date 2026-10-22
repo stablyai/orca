@@ -81,7 +81,8 @@ describe('remote filesystem watcher batching', () => {
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: WORKTREE_PATH,
-      events: [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }]
+      events: [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }],
+      connectionId: 'conn-1'
     })
     await closeAllWatchers()
     vi.useRealTimers()
@@ -103,7 +104,8 @@ describe('remote filesystem watcher batching', () => {
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: WORKTREE_PATH,
-      events: [{ kind: 'delete', absolutePath: `${WORKTREE_PATH}/dist/app.js` }]
+      events: [{ kind: 'delete', absolutePath: `${WORKTREE_PATH}/dist/app.js` }],
+      connectionId: 'conn-1'
     })
     await closeAllWatchers()
     vi.useRealTimers()
@@ -125,7 +127,8 @@ describe('remote filesystem watcher batching', () => {
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: WORKTREE_PATH,
-      events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
+      events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }],
+      connectionId: 'conn-1'
     })
     await closeAllWatchers()
     vi.useRealTimers()

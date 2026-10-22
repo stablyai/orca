@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { shellEscape } from '../ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   getSystemSshBuildArgsFromOperationOptions,
   type SystemSshBuildArgsOptions
@@ -48,7 +48,7 @@ export async function downloadFileViaSystemSsh(
   const isWindows = options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)
   const command = isWindows
     ? makeWindowsReadFileCommand(remotePath)
-    : `cat ${shellEscape(remotePath)}`
+    : `cat ${quotePosixShell(remotePath)}`
   const channel = spawnSystemSshCommand(target, command, {
     wrapCommand: !isWindows,
     ...getSystemSshBuildArgsFromOperationOptions(options)
@@ -238,7 +238,7 @@ export function makePosixWriteFileCommand(
 ): string {
   const redirection = options?.append ? '>>' : '>'
   const noclobber = !options?.append && options?.exclusive ? 'set -C; ' : ''
-  return `${noclobber}cat ${redirection} ${shellEscape(remotePath)}`
+  return `${noclobber}cat ${redirection} ${quotePosixShell(remotePath)}`
 }
 
 function makeWindowsReadFileCommand(remotePath: string): string {

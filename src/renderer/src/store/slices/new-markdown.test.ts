@@ -1,14 +1,25 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import { makeTab } from './store-session-test-harness'
+import { emptyTabLayoutState } from './editor-slice-test-harness'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
   return createStore<any>()((...args: any[]) => ({
+    ...emptyTabLayoutState(),
     activeWorktreeId: 'wt-1',
     tabsByWorktree: {},
     browserTabsByWorktree: {},
@@ -285,6 +296,7 @@ describe('New Markdown — tab bar ordering with openFile', () => {
 
 describe('New Markdown — split group targeting', () => {
   it('opens into the explicitly requested group instead of the ambient active group', () => {
+    layoutApplyTestTransport.reset()
     const createdTabs: {
       worktreeId: string
       contentType: TabContentType
@@ -341,6 +353,19 @@ describe('New Markdown — split group targeting', () => {
       { preview: false, targetGroupId: 'group-b' }
     )
 
+    // A layout-owner build asks main to open the tab in that group; main's frame draws it there.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(createdTabs).toEqual([])
+      expect(layoutApplyTestTransport.sentOfType('openEditorTab')).toEqual([
+        expect.objectContaining({
+          workspace: 'wt-1',
+          contentType: 'editor',
+          fileId: '/repo/untitled.md',
+          groupId: 'group-b'
+        })
+      ])
+      return
+    }
     expect(createdTabs).toEqual([
       {
         worktreeId: 'wt-1',

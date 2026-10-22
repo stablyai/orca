@@ -1,3 +1,4 @@
+import { quotePosixShellUnlessPlain } from '../shared/shell-argument-quoting'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
@@ -43,13 +44,6 @@ export type ExternalEditorLaunchSpec =
   | ExternalEditorExecutableLaunchSpec
   | ExternalEditorShellLaunchSpec
 
-function escapePosixPathForShell(pathValue: string): string {
-  if (/^[a-zA-Z0-9_./@:-]+$/.test(pathValue)) {
-    return pathValue
-  }
-  return `'${pathValue.replace(/'/g, "'\\''")}'`
-}
-
 function escapeWindowsPathForShell(pathValue: string): string {
   return /^[a-zA-Z0-9_./@:\\-]+$/.test(pathValue) ? pathValue : `"${pathValue}"`
 }
@@ -57,7 +51,7 @@ function escapeWindowsPathForShell(pathValue: string): string {
 function escapePathForShell(pathValue: string, platform: NodeJS.Platform): string {
   return platform === 'win32'
     ? escapeWindowsPathForShell(pathValue)
-    : escapePosixPathForShell(pathValue)
+    : quotePosixShellUnlessPlain(pathValue)
 }
 
 function isWindowsExecutablePath(command: string): boolean {

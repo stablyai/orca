@@ -10,6 +10,7 @@ import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-s
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
 
 import { hasEmptyReattachRetireEvidence } from './empty-reattach-retire-evidence'
+import { mainStartsPane } from './main-starts-pane'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -31,6 +32,9 @@ type ReattachResultSession = ReattachPayloadSession &
   Pick<
     ConnectPanePtySession,
     | 'agentCompletionCoordinator'
+    | 'buildColdRestoreAgentResumeStartup'
+    | 'mainStartAttach'
+    | 'runtimeEnvironmentId'
     | 'activePanePtyBinding'
     | 'activePanePtyBindingBoundAt'
     | 'authoritativeReattachGeneration'
@@ -167,12 +171,24 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
     )
     // Why: reattach drops startup commands; only real hibernation is authority to retire an empty adopted shell and resume its provider session.
+    const mainStarts = mainStartsPane(session)
     if (
       !hasStructuralReplay &&
       connectResult?.isReattach &&
-      hasEmptyReattachRetireEvidence(ptyId, coldRestoreStartup)
+      // Why: main already judged this terminal after its start; asking again would loop.
+      !(mainStarts && session.mainStartAttach) &&
+      hasEmptyReattachRetireEvidence(
+        ptyId,
+        // Main's attach carries no resume; the evidence reads the pane's record all the same.
+        mainStarts ? session.buildColdRestoreAgentResumeStartup() : coldRestoreStartup
+      )
     ) {
       session.transport.disconnect()
+      if (mainStarts) {
+        // Main retires the empty shell and resumes the agent in its place (startPane).
+        session.startFreshColdRestoreAgentResume(null)
+        return false
+      }
       if (staleSessionId) {
         session.clearExitedPanePtyLayoutBinding(staleSessionId)
         session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)

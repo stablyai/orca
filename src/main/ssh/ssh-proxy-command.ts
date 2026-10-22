@@ -4,7 +4,7 @@ import { Duplex } from 'node:stream'
 import type { Socket as NetSocket } from 'node:net'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
-import { shellEscape } from './ssh-connection-utils'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
 
 // Why: ProxyJump and jumpHost are syntactic sugar for ProxyCommand.
@@ -108,7 +108,7 @@ export function spawnProxyCommand(
           args: jumpHostSpawnArgs(proxy.jumpHost, host, port)
         })
       : (() => {
-          const escape = process.platform === 'win32' ? cmdEscape : shellEscape
+          const escape = process.platform === 'win32' ? cmdEscape : quotePosixShell
           const expanded = proxy.command
             .replace(/%h/g, escape(host))
             .replace(/%p/g, escape(String(port)))

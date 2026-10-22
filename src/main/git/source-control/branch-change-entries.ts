@@ -7,11 +7,11 @@ import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
 
 export async function loadBranchChanges(
   worktreePath: string,
-  mergeBase: string,
+  baseOid: string,
   headOid: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBranchChangeEntry[]> {
-  return loadCommitChanges(worktreePath, mergeBase, headOid, options)
+  return loadCommitChanges(worktreePath, baseOid, headOid, options)
 }
 
 export async function loadCommitChanges(

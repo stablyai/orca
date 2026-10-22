@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from
 
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
 
-import { SshConnection } from '../../ssh/ssh-connection'
+import { SshConnection } from '../../ssh/connection/ssh-connection'
 import {
   connectHostileHost,
   installHostileHostAppEnvironment
@@ -78,10 +78,13 @@ describe.runIf(RUN)('managed orcad on a Windows OpenSSH host', () => {
           bindHost: '127.0.0.1',
           port: 0
         }
+        const idle = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
         const deployed = await deployOrcad({
           ...options,
           target: context.serverTarget,
-          census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
+          census: idle,
+          recountCensus: async () => idle,
+          releaseIncumbentAdmission: async () => {}
         })
         receipt.deploy = deployed
         expect(deployed.outcome).toBe('installed-and-activated')

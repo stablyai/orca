@@ -8,10 +8,11 @@ import { isSmartSortRelevantAgentChange } from '../../../../shared/sidebar-list/
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   findAgentPaneWorktreeId,
+  findTabForAgentEntry,
   isAgentCompletionState
 } from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
-import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
+import { liveResumeRecord } from '../../../../shared/agent-resume-record-from-status'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
@@ -91,22 +92,14 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     verdictChanged ||
     doneRetentionFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
-  const liveRecoveryWorktreeId =
-    entry.state === 'done' && !retainsResumableRecoveryIdentity
-      ? null
-      : (entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey))
-  const liveRecoveryRecord = liveRecoveryWorktreeId
-    ? sleepingRecordFromEntry({
-        state,
-        entry: retainsResumableRecoveryIdentity
-          ? { ...entry, prompt: '', lastAssistantMessage: undefined }
-          : entry,
-        worktreeId: liveRecoveryWorktreeId,
-        capturedAt: updatedAt,
-        launchConfig: launchConfigSource,
-        origin: 'live'
-      })
-    : null
+  const liveRecoveryRecord = liveResumeRecord({
+    entry,
+    retainsResumableIdentity: retainsResumableRecoveryIdentity,
+    worktreeIdOf: () => entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey),
+    tabOf: (worktreeId) => findTabForAgentEntry(state, worktreeId, entry),
+    capturedAt: updatedAt,
+    launchConfig: launchConfigSource
+  })
   const migrationUnsupported = pruneMigrationUnsupportedEntries(
     state.migrationUnsupportedByPtyId,
     (migrationEntry) => migrationEntry.paneKey === paneKey

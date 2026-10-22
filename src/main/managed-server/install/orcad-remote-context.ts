@@ -16,14 +16,15 @@ import {
   orcadMachineHomeDir,
   orcadMachineHomeProbeCommand,
   orcadMachineOwnershipUnresolvedMessage,
-  parseOrcadMachineClaim,
   parseOrcadMachineHomeProbe
 } from '../host-state/orcad-machine-home'
-import { orcadMachineClaimCommand } from '../host-state/orcad-machine-claim-command'
+import {
+  orcadMachineClaimCommand,
+  readOrcadMachineClaimAnswer
+} from '../host-state/orcad-machine-claim-command'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
 import { readRemoteHomeCommand } from '../../ssh/ssh-remote-commands'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -59,7 +60,7 @@ export async function resolveOrcadRemoteContext<Target extends OrcadHostTarget =
 ): Promise<OrcadRemoteContext<Target>> {
   const host = detectedHost ?? (await detectRemoteHostPlatform(connection, { signal }))
   if (!host) {
-    throw new OrcadHostUnsupportedError('This SSH host platform is not supported by managed orcad.')
+    throw new OrcadHostUnsupportedError('Orca’s server doesn’t support this SSH host’s platform.')
   }
   const remote = { conn: connection, host, signal }
   const { orcadHome: remoteHome, userDataDir } = await resolveOrcadMachineHome(
@@ -138,16 +139,11 @@ export async function resolveOrcadMachineHome(
     )
   }
   if (decision.kind === 'claim') {
-    const won = parseOrcadMachineClaim(
-      (
-        await execOrcadRemote(
-          remote,
-          orcadMachineClaimCommand(host, loginHome, decision.machineKey)
-        )
-      ).trim()
+    const won = readOrcadMachineClaimAnswer(
+      await execOrcadRemote(remote, orcadMachineClaimCommand(host, loginHome, decision.machineKey))
     )
     if (won.state !== 'present') {
-      throw new Error(`orcad could not claim this host's ${RELAY_REMOTE_DIR}`)
+      throw new Error(won.message)
     }
     decision =
       won.machineKey === decision.machineKey
@@ -162,7 +158,7 @@ export async function resolveOrcadMachineHome(
     }
   }
   const orcadHome = orcadMachineHomeDir(host, loginHome, decision.machineKey)
-  await execOrcadRemote(remote, `umask 077; mkdir -p ${shellEscape(orcadHome)}`)
+  await execOrcadRemote(remote, `umask 077; mkdir -p ${quotePosixShell(orcadHome)}`)
   return {
     loginHome,
     orcadHome,

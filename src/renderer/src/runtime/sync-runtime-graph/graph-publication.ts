@@ -20,6 +20,11 @@ import { resolveRuntimeTerminalTitle } from './sync-projections'
 import { measureTerminalGroupGridSizes } from './terminal-group-grid-sizes'
 import { getProjectSectionCatalogFromState } from './project-section-catalog'
 import {
+  addMountedPanes,
+  addParkedPanes,
+  mainListsWorkspaceTerminals
+} from './main-owned-terminal-list'
+import {
   collectAmbiguousTerminalTabIds,
   graphState,
   mobilePublicationEpoch,
@@ -30,6 +35,9 @@ import {
   getMountedTerminalTabRegisteredAt,
   mountedTerminalTabEntries
 } from '../mounted-terminal-tab-registry'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { changedActiveGroups } from './active-group-publication'
 
 export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
@@ -61,7 +69,14 @@ export async function syncRuntimeGraph(): Promise<void> {
   )
   const publication = partitionMobileSessionPublication(mobileSessionTabs)
   const gridSizes = measureTerminalGroupGridSizes(state.settings?.terminalFontSize ?? 14)
-  const projectSectionCatalog = getProjectSectionCatalogFromState(state)
+  // Switch point: main answers mobileRelay.projectSections from its own catalog.
+  const projectSectionCatalog = ORCA_SIDEBAR_INPUTS_IS_MAIN
+    ? null
+    : getProjectSectionCatalogFromState(state)
+  // Switch point: main opens files in the group the window shows, so it hears of each change.
+  const activeGroupByWorkspace = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? changedActiveGroups(state.activeGroupIdByWorktree, graphState.publishedActiveGroups)
+    : undefined
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -74,7 +89,8 @@ export async function syncRuntimeGraph(): Promise<void> {
       : {}),
     ...(projectSectionCatalog && projectSectionCatalog !== graphState.publishedProjectSectionCatalog
       ? { projectSectionCatalog }
-      : {})
+      : {}),
+    ...(activeGroupByWorkspace ? { activeGroupByWorkspace } : {})
   }
 
   for (const [registrationKey, registeredTab] of mountedTerminalTabEntries()) {
@@ -89,6 +105,11 @@ export async function syncRuntimeGraph(): Promise<void> {
       continue
     }
     const manager = registeredTab.getManager()
+    // Switch point: main lists this workspace's panes; the window says only which it shows.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && mainListsWorkspaceTerminals(state, registeredTab.worktreeId)) {
+      addMountedPanes(graph, registeredTab.tabId, manager?.getPanes() ?? [], state)
+      continue
+    }
     const container = registeredTab.getContainer()
     const activePaneId = manager?.getActivePane()?.id ?? null
     const root =
@@ -162,6 +183,11 @@ export async function syncRuntimeGraph(): Promise<void> {
       if (liveLeaves.length === 0) {
         continue
       }
+      // Switch point: main lists this workspace's panes; the window says only which it parks.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && mainListsWorkspaceTerminals(state, worktreeId)) {
+        addParkedPanes(graph, tab.id, liveLeaves, state)
+        continue
+      }
       const title = resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled)
       const publishedLeafIds = new Set(liveLeaves.map(([leafId]) => leafId))
       const savedActiveLeafId = layout?.activeLeafId
@@ -205,6 +231,9 @@ export async function syncRuntimeGraph(): Promise<void> {
     graphState.publishedTerminalGroupGridSizesKey = JSON.stringify(gridSizes ?? null)
     graphState.publishedProjectSectionCatalog =
       projectSectionCatalog ?? graphState.publishedProjectSectionCatalog
+    if (activeGroupByWorkspace) {
+      graphState.publishedActiveGroups = state.activeGroupIdByWorktree
+    }
     commitMobileSessionPublication(mobileSessionTabs, result?.mobileSessionResyncWorktrees)
     const currentState = graphState.getStoreState()
     currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})

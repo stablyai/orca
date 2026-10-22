@@ -116,6 +116,7 @@ describe('useNativeChatComposerRevealFocus', () => {
     tab.focus()
 
     act(() => requestNativeChatComposerFocus('chat-tab'))
+    expect(container.querySelector('textarea')).toBe(document.activeElement)
     drainFrames()
 
     expect(container.querySelector('textarea')).toBe(document.activeElement)

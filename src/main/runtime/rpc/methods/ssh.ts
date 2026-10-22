@@ -6,8 +6,8 @@ import {
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets,
   SshTargetManagementUnservedError
-} from '../../../ssh/ssh-target-registry'
-import { isManagedOrcadSshTarget } from '../../../ssh/ssh-connection-store'
+} from '../../../ssh/targets/ssh-target-registry'
+import { isManagedOrcadSshTarget } from '../../../ssh/connection/ssh-connection-store'
 import { browseSshDirectory } from '../../../ssh/ssh-remote-directory-browse'
 import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'

@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import {
   OrcadManagedIdentityError,
+  OrcadManagedPairingRejectedError,
   type OrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
 import {
@@ -85,6 +86,21 @@ describe('forwardToVerifiedOrcad', () => {
     await expect(result).rejects.toBeInstanceOf(OrcadManagedIdentityError)
     await expect(result).rejects.toThrow(/orcad_identity_mismatch.*remote port 6768/)
     expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
+  })
+
+  it('says the host dropped this pairing, not that another Orca holds the port', async () => {
+    const state = setup(
+      [{ verdict: 'unpaired', detail: 'Remote Orca runtime rejected the pairing token.' }],
+      58_520
+    )
+    const result = forwardToVerifiedOrcad(state.args)
+    await expect(result).rejects.toBeInstanceOf(OrcadManagedPairingRejectedError)
+    await expect(result).rejects.toThrow(/no longer accepts this desktop's pairing/)
+    await expect(result).rejects.not.toThrow(/another Orca/)
+    expect(state.removeForwardAndWait).toHaveBeenCalledWith('forward-1')
+    // Our own server refusing our token is not a moved port: no re-read, no wake.
+    expect(state.rereadRemotePort).not.toHaveBeenCalled()
+    expect(state.addForward).toHaveBeenCalledTimes(1)
   })
 
   it('fails when the re-read port is foreign too, without re-reading forever', async () => {

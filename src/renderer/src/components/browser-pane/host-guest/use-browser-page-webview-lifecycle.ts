@@ -59,14 +59,11 @@ export function useBrowserPageWebviewLifecycle({
   setFindOpen,
   focusAddressBarNow,
   focusWebviewNow,
-  paneZoomLevelRef,
-  setBrowserZoomPercent,
   pendingAnnotationPayload,
   inputLocked,
   faviconUrl,
   webviewRef,
   lastKnownWebviewUrlRef,
-  trackNextLoadingEventRef,
   recoveryNavigationValidationRef,
   activeLoadFailureRef,
   retryGuestRecoveryRef,
@@ -100,14 +97,11 @@ export function useBrowserPageWebviewLifecycle({
   setFindOpen: Dispatch<SetStateAction<boolean>>
   focusAddressBarNow: () => boolean
   focusWebviewNow: () => boolean
-  paneZoomLevelRef: MutableRefObject<number>
-  setBrowserZoomPercent: Dispatch<SetStateAction<number>>
   pendingAnnotationPayload: BrowserGrabPayload | null
   inputLocked: boolean
   faviconUrl: string | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  trackNextLoadingEventRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   retryGuestRecoveryRef: MutableRefObject<() => void>
@@ -256,18 +250,15 @@ export function useBrowserPageWebviewLifecycle({
       activeLoadFailureRef,
       recoveryNavigationValidationRef,
       keepAddressBarFocusRef,
-      paneZoomLevelRef,
       viewportPresetIdRef,
       onUpdatePageStateRef,
       setGuestRecoveryGeneration,
-      setBrowserZoomPercent,
       focusAddressBarNow,
       syncNavigationState,
       syncBrowserAnnotationViewportBridge,
       faviconUrlRef,
       addressBarInputRef,
       lastKnownWebviewUrlRef,
-      trackNextLoadingEventRef,
       invalidateBrowserAnnotationDocumentRef,
       onSetUrlRef,
       setBrowserOverlayViewport,

@@ -31,7 +31,7 @@ import {
   structuredSessionTabRetired,
   structuredWorkerAddressable
 } from './structured-worker-custody'
-import { AGENT_SESSION_FOUNDING_FENCE } from './agent-session-record-founding'
+import { structuredSessionNeverStarted } from './agent-session-record-founding'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
@@ -284,20 +284,6 @@ export function observeStructuredWorker(
  * owner, spawn, handoff or provider handle. A released reservation whose exit was never proven has
  * moved the fence, so it stays unverifiable.
  */
-function structuredSessionNeverStarted(record: AgentSessionRecord): boolean {
-  const { lease } = record
-  return (
-    lease.claimStatus === 'released' &&
-    lease.runtimeFence === AGENT_SESSION_FOUNDING_FENCE &&
-    // A fence floor marks a copy restored from backup, which may hide a reservation it lost.
-    lease.minimumNextFence === undefined &&
-    lease.ownerProcess === null &&
-    lease.reservedSpawnToken === null &&
-    lease.handoffStage === null &&
-    record.providerHandleChain.length === 0
-  )
-}
-
 /** One session's own liveness, for callers that act on that session rather than on a worker. */
 export function observeStructuredSession(sessionId: string): StructuredWorkerObservation {
   const host = getStructuredAgentSessionHost()

@@ -24,6 +24,8 @@ import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeCh
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 
 export type MobileNativeChatController = {
+  /** Whether the saved default view and this workspace's per-tab views have been read. */
+  sessionViewReady: boolean
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
   isTabChatView: (tabId: string) => boolean
   setTabView: (tabId: string, view: MobileSessionView) => void
@@ -42,6 +44,8 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */
   nativeChatVisualSource: MobileNativeChatVisualSource | null
+  /** The same chat, where its host serves whole items; null before that host. */
+  nativeChatItemSource: MobileNativeChatVisualSource | null
   nativeChatAgentWorking: boolean
   /** What labels the live turn's one indicator row; null off the structured lane. */
   nativeChatTurnIndicator: NativeChatLiveTurnIndicator | null

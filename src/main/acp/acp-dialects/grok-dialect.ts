@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { acpNotificationEnvelopeSchema } from '../acp-context-usage'
-import type { AcpDialect, AcpDialectNotification } from './acp-dialect'
+import type { AcpDialect, AcpDialectNotification, AcpHookBlock } from './acp-dialect'
 import { grokRequest, grokSettleRequest } from './grok-requests'
 import { grokBackgroundTaskNotification, grokToolBackgroundTasks } from './grok-background-tasks'
 import { grokModelEfforts } from './grok-model-catalog'
@@ -31,6 +31,10 @@ const promptCompleteSchema = z.looseObject({
   promptId: z.string(),
   stopReason: z.string(),
   agentResult: z.string().nullish()
+})
+const hookDeniedSchema = z.looseObject({
+  cancellationCategory: z.literal('HookDenied'),
+  cancellationContext: z.looseObject({ reason: z.string().optional() }).nullish()
 })
 const promptErrorDataSchema = z.looseObject({ message: z.string() })
 /** Grok writes its result text as the failure's reason only for these ends. */
@@ -74,14 +78,24 @@ function contextWindow(models: unknown): number | undefined {
   )
 }
 
+/** Grok ends a hook-denied prompt as `cancelled`, naming the hook's verdict in `_meta`. */
+function hookBlock(meta: unknown): AcpHookBlock | undefined {
+  const parsed = hookDeniedSchema.safeParse(meta)
+  const reason = parsed.data?.cancellationContext?.reason?.trim()
+  return parsed.success ? (reason ? { reason } : {}) : undefined
+}
+
 function completionEnd(
-  completion: z.infer<typeof completionSchema>
+  completion: z.infer<typeof completionSchema>,
+  meta: unknown
 ): NonNullable<Extract<AcpDialectNotification, { disposition: 'map' }>['end']> {
   const detail = failureDetail(completion.stop_reason, completion.agent_result)
+  const blocked = hookBlock(meta)
   return {
     stopReason: completion.stop_reason,
     durationMs: completion.elapsed_ms,
-    ...(detail ? { failureDetail: detail } : {})
+    ...(detail ? { failureDetail: detail } : {}),
+    ...(blocked ? { hookBlock: blocked } : {})
   }
 }
 
@@ -172,7 +186,7 @@ function notification(
     ...(turn === undefined ? {} : { turn }),
     ...(meta.success && meta.data.turnStartMs !== undefined ? { at: meta.data.turnStartMs } : {}),
     replay: envelope._meta?.isReplay === true,
-    ...(completion.success ? { end: completionEnd(completion.data) } : {}),
+    ...(completion.success ? { end: completionEnd(completion.data, envelope._meta) } : {}),
     ...(retryFailure ? { failureDetail: retryFailure } : {}),
     ...(response.success
       ? {
@@ -209,9 +223,7 @@ export const GROK_ACP_DIALECT: AcpDialect = {
   notification,
   contextWindow,
   modelEfforts: grokModelEfforts,
+  hookBlock,
   promptErrorDetail: (error) => promptErrorDataSchema.safeParse(error.data).data?.message,
-  failedTurnText: (stopReason) =>
-    stopReason === 'rate_limit'
-      ? 'Grok usage limit reached.'
-      : 'Grok ended this turn with an error.'
+  failedTurnText: () => 'Grok ended this turn with an error.'
 }

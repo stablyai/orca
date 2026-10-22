@@ -11,7 +11,7 @@
  * can see, so a store shared across machines could be collected under another machine's server.
  */
 import { createHash } from 'node:crypto'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
 import { ORCAD_ACTIVATION_FILENAME } from '../activation/orcad-activation-record'
 import { parseDarwinPlatformUuid } from '../../persistence/profile-state/profile-state-access-identity'
@@ -56,7 +56,7 @@ const LOCAL_FILESYSTEM_TYPES = new Set([
   'hfsplus'
 ])
 
-export type OrcadMachineIdentity = {
+type OrcadMachineIdentity = {
   /** Short, path-safe hash; the raw identity never lands on disk. */
   key: string
   /** What the data root's profile-state owners record, to recognise another machine's. */
@@ -64,7 +64,7 @@ export type OrcadMachineIdentity = {
   hostname: string | null
 }
 
-export type OrcadMachineClaimRead =
+type OrcadMachineClaimRead =
   | { state: 'absent' }
   | { state: 'present'; machineKey: string }
   | { state: 'unreadable'; reason: string }
@@ -86,7 +86,7 @@ export type OrcadMachineHomeProbe = {
   homeOnLocalDisk: boolean
 }
 
-export type OrcadMachineHomeDecision =
+type OrcadMachineHomeDecision =
   | { kind: 'login-home' }
   | { kind: 'claim'; machineKey: string }
   | { kind: 'machine-home'; machineKey: string }
@@ -94,17 +94,17 @@ export type OrcadMachineHomeDecision =
   | { kind: 'unresolved'; machineKey: string; cause: OrcadMachineOwnershipUnresolvedCause }
 
 /** A stopped install left no owner; an older orcad's owner recorded no machine identity. */
-export type OrcadMachineOwnershipUnresolvedCause = 'stopped-install' | 'unattributed-owner'
+type OrcadMachineOwnershipUnresolvedCause = 'stopped-install' | 'unattributed-owner'
 
 /**
  * Reads the login home, this machine's identity, the claim, and who holds the shared data root,
  * in one exec. Identity sources match `profile-state-access-identity.ts`, so the two agree.
  */
 export function orcadMachineHomeProbeCommand(host: RemoteHostPlatform): string {
-  const claim = `"$HOME"/${shellEscape(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_CLAIM_FILENAME}`)}`
-  const access = `"$HOME"/${shellEscape(ACCESS_ROOT)}`
-  const homes = `"$HOME"/${shellEscape(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}`)}`
-  const activation = `"$HOME"/${shellEscape(`${RELAY_REMOTE_DIR}/${ORCAD_ACTIVATION_FILENAME}`)}`
+  const claim = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_CLAIM_FILENAME}`)}`
+  const access = `"$HOME"/${quotePosixShell(ACCESS_ROOT)}`
+  const homes = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_MACHINE_HOMES_DIRNAME}`)}`
+  const activation = `"$HOME"/${quotePosixShell(`${RELAY_REMOTE_DIR}/${ORCAD_ACTIVATION_FILENAME}`)}`
   return [
     `printf '%s\\n' "$HOME"; echo ${SECTION};`,
     host.os === 'darwin'

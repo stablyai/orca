@@ -157,8 +157,8 @@ describe('terminal tab retirement planning', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreesByRepo: {
         repo: [
-          { id: 'wt-1', repoId: 'repo' },
-          { id: 'wt-2', repoId: 'repo' }
+          { id: 'wt-1', repoId: 'repo', hostId: 'runtime:env-1' },
+          { id: 'wt-2', repoId: 'repo', hostId: 'runtime:env-1' }
         ]
       },
       tabsByWorktree: {
@@ -176,7 +176,7 @@ describe('terminal tab retirement planning', () => {
   it('deduplicates legacy and scoped aliases owned by the closing tab', () => {
     const state = makeState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
-      worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' }] },
+      worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo', hostId: 'runtime:env-1' }] },
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1', 'wt-1', 'remote:terminal-1')]
       },

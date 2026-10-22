@@ -172,8 +172,8 @@ export async function openSshHostSettings(page: Page): Promise<Locator> {
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: 'SSH Hosts' }) })
   await expect(sshSection).toBeVisible({ timeout: 10_000 })
-  await expect(sshSection.getByRole('button', { name: 'Import' })).toBeVisible()
-  await expect(sshSection.getByRole('button', { name: 'Add Target' })).toBeVisible()
+  await expect(sshSection.getByRole('button', { name: 'Sync ~/.ssh/config' })).toBeVisible()
+  await expect(sshSection.getByRole('button', { name: 'Add host' })).toBeVisible()
   return sshSection
 }
 

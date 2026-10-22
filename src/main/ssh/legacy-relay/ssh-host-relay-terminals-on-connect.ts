@@ -8,7 +8,7 @@ import {
   censusHostRelayEndpoints,
   type HostRelayEndpointCensus
 } from './ssh-host-relay-endpoint-census'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import { censusWindowsHostRelays, windowsCensusNodePath } from './ssh-host-relay-windows-census'
 import { execCommand } from '../remote-exec/remote-exec-command'
 import { readRemoteHomeCommand } from '../ssh-remote-commands'

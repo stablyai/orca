@@ -106,7 +106,9 @@ export function assertSafeRemotePathSegment(segment: string, pathFlavor: RemoteP
     normalized.includes('/') ||
     hasUnsafeWindowsPathChar(normalized) ||
     /[ .]$/u.test(normalized) ||
-    /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|CLOCK\$|COM[1-9¹²³]|LPT[1-9¹²³])$/u.test(deviceStem ?? '')
+    /^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|CLOCK\$|COM[1-9\u00B9\u00B2\u00B3]|LPT[1-9\u00B9\u00B2\u00B3])$/u.test(
+      deviceStem ?? ''
+    )
   ) {
     throw new Error(`Unsafe remote path segment: ${JSON.stringify(segment)}`)
   }

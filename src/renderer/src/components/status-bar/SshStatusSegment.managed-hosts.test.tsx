@@ -24,6 +24,7 @@ function noSettings(): GlobalSettings | null {
 let state = {
   sshTargetLabels: new Map<string, string>(),
   sshConnectionStates: new Map<string, SshConnectionState>(),
+  repos: [],
   runtimeEnvironments: new Array<PublicKnownRuntimeEnvironment>(),
   runtimeStatusByEnvironmentId: new Map<string, RuntimeEnvironmentStatus>(),
   settings: noSettings(),

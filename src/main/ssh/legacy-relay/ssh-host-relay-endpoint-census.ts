@@ -6,8 +6,8 @@
  * Loss of contact is never evidence of exit (docs/reference/ssh-execution-boundary.md): a listing
  * that failed, ran out of room, or an endpoint the probe could not classify is `unverifiable`.
  */
-import type { SshConnection } from '../ssh-connection'
-import { shellEscape } from '../ssh-connection-utils'
+import type { SshConnection } from '../connection/ssh-connection'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { execCommand } from '../remote-exec/remote-exec-command'
@@ -33,7 +33,7 @@ const MAX_CENSUS_ENDPOINTS = 32
  */
 export function hostRelayEndpointListCommand(remoteHome: string): string {
   return [
-    `base=${shellEscape(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
+    `base=${quotePosixShell(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
     `short_base="${SHORT_RELAY_SOCKET_DIR_PREFIX}$(id -u 2>/dev/null)"`,
     'for sock in "$base"/relay-*/relay*.sock "$short_base"/relay-*/relay*.sock; do',
     '  [ -S "$sock" ] && printf \'%s\\n\' "$sock"',

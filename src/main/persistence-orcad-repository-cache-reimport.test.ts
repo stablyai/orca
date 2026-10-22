@@ -34,7 +34,7 @@ describe('reimporting a repository after the destination resolves its Git identi
     async (identity) => {
       const store = createStore()
       commit(store, manifest())
-      store.updateRepo(REPOSITORY.id, { gitRemoteIdentity: identity })
+      store.updateRepo(store.getRepos()[0]!, { gitRemoteIdentity: identity })
       await store.flushPendingOrThrowAsync()
       await closeTestStores()
       const restored = createStore()
@@ -50,7 +50,7 @@ describe('reimporting a repository after the destination resolves its Git identi
   it('preserves the current cache when the incoming cache is stale', () => {
     const store = createStore()
     commit(store, manifest())
-    store.updateRepo(REPOSITORY.id, { gitRemoteIdentity: remoteIdentity })
+    store.updateRepo(store.getRepos()[0]!, { gitRemoteIdentity: remoteIdentity })
     const next = manifest({
       migrationId: 'migration-stale-cache',
       payload: { ...manifest().payload, repositories: [{ ...REPOSITORY, gitRemoteIdentity: null }] }
@@ -64,7 +64,7 @@ describe('reimporting a repository after the destination resolves its Git identi
     (changes) => {
       const store = createStore()
       commit(store, manifest())
-      store.updateRepo(REPOSITORY.id, { gitRemoteIdentity: remoteIdentity })
+      store.updateRepo(store.getRepos()[0]!, { gitRemoteIdentity: remoteIdentity })
       const next = manifest({
         migrationId: 'migration-conflict',
         payload: { ...manifest().payload, repositories: [{ ...REPOSITORY, ...changes }] }
@@ -91,7 +91,7 @@ describe('reimporting a repository after the destination resolves its Git identi
       manifest({ migrationId, payload: { ...manifest().payload, repositories: [source] } })
     const store = createStore()
     commit(store, withSource('m1'))
-    store.updateRepo(REPOSITORY.id, { gitRemoteIdentity: remoteIdentity, repoIcon: newIcon })
+    store.updateRepo(store.getRepos()[0]!, { gitRemoteIdentity: remoteIdentity, repoIcon: newIcon })
 
     expect(commit(store, withSource('m2'))).toMatchObject({ state: 'committed' })
     expect(store.getRepos()[0]).toMatchObject({
@@ -103,7 +103,7 @@ describe('reimporting a repository after the destination resolves its Git identi
   it('still refuses a changed icon the user chose', () => {
     const store = createStore()
     commit(store, manifest())
-    store.updateRepo(REPOSITORY.id, {
+    store.updateRepo(store.getRepos()[0]!, {
       repoIcon: githubAvatarIcon({ owner: 'example', repo: 'project' })
     })
     const next = manifest({

@@ -10,11 +10,11 @@ import type {
 } from './ai-vault-session-resume-in-chat'
 
 export type AiVaultSessionSurfaceSwitchTargets = {
-  /** Where "Resume in New Native Chat" opens, or null when it is not offered. */
+  /** Where the resumed chat opens, or null when it is not offered. */
   resumeInNewChatWorkspaceId: string | null
   /** How the offered chat opens: a structured adoption, or the read-only history tab. */
   resumeInNewChatRoute: AiVaultResumeInChatRoute | null
-  /** Where "Resume in New CLI" opens its fork, or null when it is not offered. */
+  /** Where the terminal fork opens, or null when it is not offered. */
   resumeInNewCliWorktreeId: string | null
 }
 

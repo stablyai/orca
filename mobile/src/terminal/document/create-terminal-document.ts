@@ -2,7 +2,7 @@ import { createTerminalDocumentScope } from './document-scope'
 import { cancelDocumentFrames } from './document-frame-registry'
 import { startFitScale, stopFitScale } from './fit-scale'
 import { handleMsg } from './host-message-router'
-import { startHostNotify, stopHostNotify } from './host-notify'
+import { reportEngineError, startHostNotify, stopHostNotify } from './host-notify'
 import { startMessageBridge, stopMessageBridge } from './message-bridge'
 import { stopNormalBufferSmoothScroll } from './normal-buffer-smooth-scroll'
 import { startSelectionMenuButtons } from './selection-menu-buttons'
@@ -67,11 +67,21 @@ export function startTerminalDocument(scope: TerminalDocumentScope) {
     startTapDispatch(scope)
     startSelectionMenuButtons(scope)
     startSurfaceTouchGestures(scope)
-    startMessageBridge(scope)
+    startMessageBridge(scope)?.catch(failDeferredStartup.bind(null, scope))
   } catch (error) {
     stopTerminalDocument(scope)
     throw error
   }
+}
+
+function failDeferredStartup(scope: TerminalDocumentScope, error: unknown) {
+  stopTerminalDocument(scope)
+  reportEngineError(
+    scope,
+    'terminal startup failed',
+    error instanceof Error ? error.message : String(error),
+    true
+  )
 }
 
 /** The undo, in reverse, with the frames the document is still owed taken back last (ruling 21). */

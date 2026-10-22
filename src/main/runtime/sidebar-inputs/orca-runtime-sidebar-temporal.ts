@@ -1,28 +1,32 @@
+import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
-import { OrcaRuntimeWithWorkspaceReviewFacts } from './orca-runtime-workspace-review-facts'
-import type { OrcaRuntimeWithMigrationCatalog } from '../orca-runtime-migration-catalog'
+import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './orca-runtime-detected-checkouts-live-content'
+import type { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
 import {
   getConnectionExecutionHostId,
-  getRepoExecutionHostId,
   isLocalExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/sidebar-temporal-snapshot'
-import type { Worktree } from '../../../shared/worktree/types'
-import type { Repo } from '../../../shared/repo-types'
+import { listGitWorkspaceRowKeys } from '../../../shared/sidebar-list/workspace-rows'
 import { SidebarRetentionOwner, type SidebarRetentionCandidates } from './sidebar-retention-owner'
 import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
 import { SortStampsProducer } from './sort-stamps-producer'
 import { writeUnreadFlag } from './sort-stamp-records'
 import { WorkspaceViewers } from './workspace-viewers'
+import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { TerminalUseProducer } from './terminal-use-producer'
+import { createKeyedTrailingEdgeCoalescer } from '../keyed-trailing-edge-coalescer'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
 import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/restored-status-dead-terminal-sweep'
+import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
@@ -32,24 +36,35 @@ import {
  * Feeds main's sleeping retention, and owns the host's sort stamps: clients sort by those, so main
  * keeps no order of its own.
  */
-export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWorkspaceReviewFacts {
+export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDetectedCheckoutsAndLiveContent {
   private readonly sidebarTemporal = new SidebarRetentionOwner(this.sidebarClock, {
     // The durable file keeps the hide form; the window reads it the same way at hydration.
     showSleepingWorkspaces: () =>
       !(this.store?.getUI?.().hideSleepingWorkspaces ?? DEFAULT_HIDE_SLEEPING_WORKSPACES),
-    listRows: () => this.listSidebarRows(),
+    listRowKeys: async () =>
+      listGitWorkspaceRowKeys(
+        (await this.listResolvedWorktreeSnapshot()).worktrees,
+        this.store?.getRepos() ?? []
+      ),
     retentionCandidates: () => this.readSidebarRetentionCandidates()
   })
   readonly workspaceViewers = new WorkspaceViewers(Date.now)
+  // A streaming agent can flip its title many times a second; each notice makes every client
+  // re-list the repo, so a burst is announced once. The store is already written.
+  private readonly sortStampNotices = createKeyedTrailingEdgeCoalescer(
+    (worktreeId) => this.notifySortStampsChanged(worktreeId),
+    { flushMs: 50, maxWaitMs: 250 }
+  )
   readonly sortStamps = new SortStampsProducer({
     store: () => this.store,
     isWriteFenced: (worktreeId) =>
       isWslMoveProjectBlocked(this.store ?? undefined, wslMoveProjectRefForWorkspace(worktreeId)),
-    resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
-    subscribeToPtyExit: (ptyId, listener) => this.subscribeToPtyExit(ptyId, listener),
     onClientEvent: (listener, options) => this.onClientEvent(listener, options),
     isViewing: (worktreeId, paneKey) => this.workspaceViewers.isViewing(worktreeId, paneKey),
-    onStampsWritten: (worktreeId) => this.notifySortStampsChanged(worktreeId),
+    onStampsWritten: (worktreeId) => {
+      this.invalidateResolvedWorktreeCache()
+      this.sortStampNotices.schedule(worktreeId)
+    },
     now: Date.now
   })
   readonly terminalUse = new TerminalUseProducer({
@@ -70,11 +85,25 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
       isWslMoveProjectBlocked(this.store ?? undefined, wslMoveProjectRefForWorkspace(worktreeId))
   })
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithWorkspaceReviewFacts>) {
+  constructor(
+    ...args: ConstructorParameters<typeof OrcaRuntimeWithDetectedCheckoutsAndLiveContent>
+  ) {
     super(...args)
     this.workspaceActivityFacts.revision.onChange(() => this.sidebarTemporal.noteActivityChange())
     this.store?.onUIChanged?.(() => this.sidebarTemporal.noteViewChange())
     this.terminalRunFacts.onInput((ptyId, now) => this.terminalUse.noteTerminalUse(ptyId, now))
+    // Before any store attaches, so its rows reach the stamps as seeds; titles flow without one.
+    this.sortStamps.attachAgentTransitions(this.agentTransitions)
+    // Why here: consuming side effects makes the host scan its bytes, which only this layer's
+    // stamps (and the switch) pay for; hookless titles then reach every detector reader.
+    this.onClientEvent(
+      (event) => {
+        if (event.type === 'terminalSideEffects') {
+          this.agentTransitions.noteTerminalSideEffects(event.batch)
+        }
+      },
+      { consumesTerminalSideEffects: true }
+    )
     // Every catalog change, from IPC or the runtime, reaches clients through this one bus.
     this.clientEvents.on(
       (event) => {
@@ -84,6 +113,12 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
       },
       { consumesTerminalSideEffects: false }
     )
+    // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
+    this.store?.onStateWritten?.((domains) => {
+      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
+        this.sortStamps.noteRecordsWritten()
+      }
+    })
   }
 
   getSidebarTemporalSnapshot(): SidebarTemporalSnapshot {
@@ -133,6 +168,19 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
       .catch((error: unknown) => console.warn('[sidebar] sort tier reconcile failed:', error))
   }
 
+  /** A paired desktop connected; while one that raises the unread flag itself is here, this host doesn't. */
+  noteRuntimeClient(connectionId: string, capabilities: readonly RuntimeCapability[]): void {
+    if (!clientRaisesUnreadFlagItself(capabilities)) {
+      return
+    }
+    this.workspaceViewers.noteSelfRaisingClient(connectionId)
+    this.registerSubscriptionCleanup(
+      `sidebar-self-raising-${connectionId}`,
+      () => this.workspaceViewers.dropClient(connectionId),
+      connectionId
+    )
+  }
+
   /** A phone holding the workspace's session open has it on screen: its flag is read and stays down. */
   readAndHoldPhoneSession(worktreeId: string): () => void {
     const hostId = this.workspaceHostId(worktreeId)
@@ -140,10 +188,21 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
       worktreeId,
       sshHostId: hostId && parseExecutionHostId(hostId)?.kind === 'ssh' ? hostId : null
     }
-    if (writeUnreadFlag(this.store, workspace, false)) {
+    // The phone names only an id. With same-id copies on two hosts it cannot say which one it
+    // shows, and a guessed host would clear the other copy's flag (a `runtime:` copy read as local).
+    if (!this.isTwinRepoWorkspace(worktreeId) && writeUnreadFlag(this.store, workspace, false)) {
+      this.sortStampNotices.cancel(worktreeId)
       this.notifySortStampsChanged(worktreeId)
     }
     return this.workspaceViewers.openPhoneSession(worktreeId)
+  }
+
+  private isTwinRepoWorkspace(worktreeId: string): boolean {
+    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+      return false
+    }
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    return getRepoRegistrationHostIds(this.store?.getRepos() ?? [], repoId).size > 1
   }
 
   private workspaceHostId(worktreeId: string): ExecutionHostId | null {
@@ -168,39 +227,24 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
     this.notifyWorktreesChanged(getRepoIdFromWorktreeId(worktreeId), { invalidateGitScans: false })
   }
 
-  /** Attaches every sidebar producer that reads the hook server's store. */
-  attachSidebarAgentStatusStore(store: AgentStatusStoreView): () => void {
+  override attachAgentStatusStore(store: AgentStatusStoreView): () => void {
+    // The sidebar subscribes first, so the statuses present at attach reach it as seeds.
     const detachActivity = this.workspaceActivityFacts.attachAgentStatusStore(store)
-    const detachStamps = this.sortStamps.attachAgentStatusStore(store)
+    const detachTransitions = super.attachAgentStatusStore(store)
     return () => {
+      detachTransitions()
       detachActivity()
-      detachStamps()
       this.sidebarTemporal.dispose()
+      this.sortStampNotices.dispose()
     }
-  }
-
-  // Retained ids are host-qualified; a row without a stamped host belongs to its repo's host.
-  private async listSidebarRows(repoById = this.readSidebarRepoMap()): Promise<Worktree[]> {
-    const { worktrees } = await this.listResolvedWorktreeSnapshot()
-    return worktrees.map((worktree) => {
-      const repo = repoById.get(worktree.repoId)
-      return worktree.hostId || !repo
-        ? worktree
-        : { ...worktree, hostId: getRepoExecutionHostId(repo) }
-    })
-  }
-
-  private readSidebarRepoMap(): Map<string, Repo> {
-    return new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
   }
 
   private readSidebarRetentionCandidates(): SidebarRetentionCandidates {
     const { facts } = this.workspaceActivityFacts.snapshot()
     return {
-      ids: Object.keys(facts),
       isActive: (worktreeId) => worktreeId in facts,
       isUnverifiableGap: (worktreeId) =>
-        !this.terminalSleepByWorktreeId.has(worktreeId) &&
+        !anySleepKeyNames(this.terminalSleepByHostWorktree.keys(), worktreeId) &&
         (this.mobileSessionTabsByWorktree
           .get(worktreeId)
           ?.tabs.some((tab) => tab.type === 'terminal') ??
@@ -211,7 +255,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithWork
 
 /** The top sidebar layer, so a switch-off build folds the instanceof away with the switch. */
 export function sidebarFactsRuntime(
-  runtime: OrcaRuntimeWithMigrationCatalog
+  runtime: OrcaRuntimeWithAgentTransitions
 ): OrcaRuntimeWithSidebarTemporal | null {
   return ORCA_SIDEBAR_INPUTS_IS_MAIN && runtime instanceof OrcaRuntimeWithSidebarTemporal
     ? runtime

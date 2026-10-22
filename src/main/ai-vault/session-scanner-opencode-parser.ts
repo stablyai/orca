@@ -24,6 +24,11 @@ import {
   tokenTotal
 } from './session-scanner-values'
 
+/** The session's cwd; a scope walk reads it from the session file without its messages. */
+export function openCodeSessionCwd(record: Record<string, unknown>): string | null {
+  return extractString(record.directory)
+}
+
 export async function parseOpenCodeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
@@ -36,7 +41,7 @@ export async function parseOpenCodeSessionFile(
   const sessionId = extractString(record.id) ?? sessionIdFromFileName(file.path)
   const accumulator = createAccumulator({ agent: 'opencode', file, sessionId, messages })
   accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
-  accumulator.cwd = extractString(record.directory)
+  accumulator.cwd = openCodeSessionCwd(record)
   updateTimeline(accumulator, timeObjectValue(record.time, 'created'))
   updateTimeline(accumulator, timeObjectValue(record.time, 'updated'))
   await consumeOpenCodeMessages(accumulator, findOpenCodeStorageRoot(file.path), sessionId)

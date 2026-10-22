@@ -1,5 +1,5 @@
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
-import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
+import { OrcaRuntimeWithSplitPaneInMain } from './terminal-split-in-main'
 import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../shared/workspace-session-pane-ownership'
@@ -13,8 +13,9 @@ import {
 } from '../../claude-agent-teams-shim-env'
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { SPLIT_PANE_WAIT_TIMEOUT_MESSAGE } from './terminal-split-wait-timeout'
 
-export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPtyBackedTerminal {
+export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPaneInMain {
   abstract getTerminalHandleForPaneKey(
     ...args: Parameters<
       OrcaRuntimeWithPruneMobileSessionTabGroupLayout['getTerminalHandleForPaneKey']
@@ -185,7 +186,7 @@ export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
-        reject(new Error('Timed out waiting for split pane handle'))
+        reject(new Error(SPLIT_PANE_WAIT_TIMEOUT_MESSAGE))
       }, timeoutMs)
 
       const check = (): void => {

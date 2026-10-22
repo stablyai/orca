@@ -10,21 +10,22 @@ import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { Store } from '../persistence'
 import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
-import { windowViewSaveForMain } from '../persistence/window-save-view'
+import { windowViewSaveForMain, type ReconnectFactsFor } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 
 type StageBeforeUnloadSyncArgs = {
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
   ui: Partial<PersistedUIState>
-  /** Layout-owner builds: the resume records the quit capture changed. */
-  sleepRecords?: SleepingAgentSessionRecord[]
 }
+
+/** Layout-owner builds: main's quit capture of the agents of the panes a partition holds. */
+export type QuitResumeRecordsFor = (session: WorkspaceSessionState) => SleepingAgentSessionRecord[]
 
 /**
  * The partition with the quit capture's resume records written, each workspace's through the
  * record-only sleep command a live capture sends: only what the capture changed, so a wake main
- * recorded after the window last looked stays. Records of panes the partition lacks change nothing.
+ * recorded stays. Records of panes the partition lacks change nothing.
  */
 function withQuitSleepRecords(
   hostId: string | undefined,
@@ -82,21 +83,27 @@ function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointR
 }
 
 /**
- * Switch point: main keeps its own layout over the window's and takes its view and facts, with the
- * quit capture's resume records written into main's first.
+ * Switch point: main keeps its own layout over the window's and takes its view and facts, with its
+ * quit capture's resume records written into its own first.
  */
 function stagedSessionForMain(
   store: Store,
   state: WorkspaceSessionState,
   hostId: ExecutionHostId | undefined,
-  sleepRecords: readonly SleepingAgentSessionRecord[] = []
+  quitResumeRecordsFor: QuitResumeRecordsFor,
+  reconnectFactsFor: ReconnectFactsFor | undefined
 ): WorkspaceSessionState {
-  const stored = withQuitSleepRecords(hostId, store.getWorkspaceSession(hostId), sleepRecords)
+  const session = store.getWorkspaceSession(hostId)
+  const stored = withQuitSleepRecords(hostId, session, quitResumeRecordsFor(session))
   reportWindowSaveDrift(stored, state, hostId, 'shutdown-checkpoint')
-  return windowViewSaveForMain(stored, state, hostId)
+  return windowViewSaveForMain(stored, state, hostId, reconnectFactsFor)
 }
 
-export function registerRendererShutdownCheckpointHandler(store: Store): void {
+export function registerRendererShutdownCheckpointHandler(
+  store: Store,
+  quitResumeRecordsFor: QuitResumeRecordsFor = () => [],
+  reconnectFactsFor?: ReconnectFactsFor
+): void {
   // Why: beforeunload cannot await, so the sync reply only reports staging.
   // Durability is joined out-of-band by paths that are about to navigate.
   let pendingCheckpoint: Promise<ShutdownCheckpointResult> = Promise.resolve({ ok: true })
@@ -108,7 +115,7 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
         if (!isFrozenOrcadSourceSessionPartition(store, hostId)) {
           store.stageWorkspaceSessionBeforeUnload(
             ORCA_LAYOUT_OWNER_IS_MAIN
-              ? stagedSessionForMain(store, state, hostId, args.sleepRecords)
+              ? stagedSessionForMain(store, state, hostId, quitResumeRecordsFor, reconnectFactsFor)
               : state,
             hostId
           )

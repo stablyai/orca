@@ -1,5 +1,5 @@
-import type { SshConnection } from './ssh-connection'
-import { createSshOperationAbortError } from './ssh-connection-utils'
+import type { SshConnection } from './connection/ssh-connection'
+import { createSshOperationAbortError } from './connection/ssh-exec-options'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, normalizeWindowsRemotePath } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'

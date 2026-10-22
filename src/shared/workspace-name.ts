@@ -7,7 +7,7 @@ import type { JiraIssueKeyCasing } from './ui-chrome-types'
 import { JIRA_ISSUE_KEY_PATTERN } from './jira-issue-url'
 
 function normalizeApostrophes(input: string): string {
-  return input.replace(/[‘’]/g, "'")
+  return input.replace(/[\u2018\u2019]/g, "'")
 }
 
 // Why: contractions and possessives should not become stray `t` / `s` tokens

@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
+import type {
+  RuntimeEditorTabReveal,
+  RuntimeFileOpenPosition
+} from '../../shared/runtime-file-contracts'
 import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
@@ -177,6 +180,16 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:renameTerminal', listener)
     return () => ipcRenderer.removeListener('ui:renameTerminal', listener)
   },
+  onSetPaneTitle: (
+    callback: (data: { tabId: string; leafId: string; title: string | null }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { tabId: string; leafId: string; title: string | null }
+    ) => callback(data)
+    ipcRenderer.on('ui:setPaneTitle', listener)
+    return () => ipcRenderer.removeListener('ui:setPaneTitle', listener)
+  },
   onFocusTerminal: (
     callback: (data: {
       tabId: string
@@ -268,5 +281,13 @@ export const uiTerminalAndSessionTabsApi = {
     ) => callback(data)
     ipcRenderer.on('ui:openFileFromMobile', listener)
     return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
+  },
+  onRevealEditorTabFromRuntime: (
+    callback: (data: RuntimeEditorTabReveal) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: RuntimeEditorTabReveal) =>
+      callback(data)
+    ipcRenderer.on('ui:revealEditorTabFromRuntime', listener)
+    return () => ipcRenderer.removeListener('ui:revealEditorTabFromRuntime', listener)
   }
 } satisfies Partial<PreloadApi['ui']>

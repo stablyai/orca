@@ -1,9 +1,19 @@
 import { ipcRenderer } from 'electron'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import type {
+  BrowserPageSiteDisplay,
+  BrowserSiteColorScheme
+} from '../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
+import type {
+  BrowserPagePromptRequest,
+  BrowserPagePromptResponse,
+  BrowserPagePromptResult
+} from '../../shared/browser-page-prompt'
 import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { browserClientPageRendererRequests } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
@@ -49,12 +59,37 @@ export const browserGuestRegistrationAndDownloadsApi = {
   },
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
     ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
+  onPagePromptRequest: (callback: (request: BrowserPagePromptRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: BrowserPagePromptRequest): void =>
+      callback(request)
+    ipcRenderer.on('browser:page-prompt-requested', listener)
+    return () => ipcRenderer.removeListener('browser:page-prompt-requested', listener)
+  },
+  onPagePromptClosed: (callback: (event: { requestId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }): void =>
+      callback(data)
+    ipcRenderer.on('browser:page-prompt-closed', listener)
+    return () => ipcRenderer.removeListener('browser:page-prompt-closed', listener)
+  },
+  respondPagePrompt: (response: BrowserPagePromptResponse): Promise<BrowserPagePromptResult> =>
+    ipcRenderer.invoke('browser:respondPagePrompt', response),
   openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:openDevTools', args),
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
   }): Promise<boolean> => ipcRenderer.invoke('browser:setViewportOverride', args),
+  getPageSiteDisplay: (args: { browserPageId: string }): Promise<BrowserPageSiteDisplay | null> =>
+    ipcRenderer.invoke('browser:getPageSiteDisplay', args),
+  zoomPage: (args: {
+    browserPageId: string
+    direction: BrowserPageZoomDirection
+  }): Promise<BrowserPageSiteDisplay | null> => ipcRenderer.invoke('browser:zoomPage', args),
+  setPageSiteColorScheme: (args: {
+    browserPageId: string
+    colorScheme: BrowserSiteColorScheme | null
+  }): Promise<BrowserPageSiteDisplay | null> =>
+    ipcRenderer.invoke('browser:setPageSiteColorScheme', args),
   reportViewportScrollState: (args: {
     browserPageId: string
     state: {

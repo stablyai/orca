@@ -23,6 +23,8 @@ export type SlashCommandSuggestion = {
   kindUnspecified?: true
   /** Declared only on curated rows; a surface that cannot show the reply drops the row. */
   reply?: NativeChatCommandReply
+  /** The desktop chat runs it itself: it hides an agent command of the same name, never a skill. */
+  orcaOwned?: true
 }
 
 // Best-effort, curated per-agent catalogs. The CLIs ship no machine-readable
@@ -165,7 +167,7 @@ export function sessionSlashCommandSuggestions(
 }
 
 /** A skill the running session reported: its name, and what it said the skill does. */
-export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description'>
+export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description' | 'path'>
 
 /** The skills the session reported, in the order it reported them. */
 export function sessionReportedSkills(
@@ -173,7 +175,13 @@ export function sessionReportedSkills(
 ): readonly NativeChatSessionSkill[] {
   return reported.flatMap((entry) =>
     entry.kind === 'skill'
-      ? [{ name: entry.name, ...(entry.description ? { description: entry.description } : {}) }]
+      ? [
+          {
+            name: entry.name,
+            ...(entry.description ? { description: entry.description } : {}),
+            ...(entry.path ? { path: entry.path } : {})
+          }
+        ]
       : []
   )
 }

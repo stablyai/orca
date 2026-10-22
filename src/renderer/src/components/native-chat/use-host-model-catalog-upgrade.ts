@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import {
   readAgentSessionUnavailable,
   type AgentSessionUnavailable
@@ -7,7 +7,6 @@ import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-se
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
 import {
-  applyStructuredAgentSessionModelCatalog,
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
@@ -15,11 +14,11 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
-import type { NativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
+import type { StructuredAgentSessionOptionRecord } from '../../../../shared/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
-} from './host-model-listing-waits'
+} from '../../../../shared/host-model-listing-waits'
 
 /**
  * Replaces the quiet placeholder with the host's stored catalog without waiting on
@@ -61,11 +60,15 @@ export function useHostModelCatalogUpgrade(args: {
   providerRunning?: boolean
   /** A listing landed after the chat's options were read, which answered without it. */
   onListingLanded?: () => void
-  activeOptionRecordRef: MutableRefObject<NativeChatSessionOptionRecord>
+  receiveCatalog: (
+    catalog: AgentSessionModelCatalogResult | null,
+    event: 'demand' | 'progress' | 'settled'
+  ) => void
+  activeOptionRecordRef: MutableRefObject<StructuredAgentSessionOptionRecord>
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
-}): { unavailable: AgentSessionUnavailable | null } {
+}): { unavailable: AgentSessionUnavailable | null; demandModelCatalog: () => void } {
   const {
     activeOptionRecordRef,
     agent,
@@ -79,6 +82,10 @@ export function useHostModelCatalogUpgrade(args: {
     updateOptionState,
     worktree
   } = args
+  const receiver = useRef(args.receiveCatalog)
+  useEffect(() => {
+    receiver.current = args.receiveCatalog
+  }, [args.receiveCatalog])
   const waitKey = `${structuredAgentSessionHostKey(target)}\u0000${agent}\u0000${sessionId}`
   const [verdict, setVerdict] = useState<{
     key: string
@@ -113,7 +120,14 @@ export function useHostModelCatalogUpgrade(args: {
         'agentSession.modelCatalog',
         waitForListing ? { ...params, waitForListing } : params
       )
-    const apply = (catalog: AgentSessionModelCatalogResult | null): void => {
+    const apply = (
+      catalog: AgentSessionModelCatalogResult | null,
+      settled = false,
+      event: 'demand' | 'progress' = 'demand'
+    ): void => {
+      if (stale) {
+        return
+      }
       const next = readAgentSessionUnavailable(catalog?.unavailable)
       setVerdict((current) => {
         const shown = current?.key === waitKey ? current.unavailable : null
@@ -128,15 +142,7 @@ export function useHostModelCatalogUpgrade(args: {
       if (catalog && newLaunch) {
         recordHostModelCatalogSnapshot(target, agent, worktree ?? '', catalog)
       }
-      updateOptionState((current) =>
-        current.record !== activeOptionRecordRef.current
-          ? current
-          : catalog
-            ? applyStructuredAgentSessionModelCatalog(current, optionCatalog, catalog, {
-                newLaunch
-              })
-            : settleStructuredAgentSessionBuiltinCatalog(current)
-      )
+      receiver.current(catalog, settled ? 'settled' : event)
     }
     let leave: (() => void) | null = null
     const waitForListing = (): void => {
@@ -144,8 +150,12 @@ export function useHostModelCatalogUpgrade(args: {
         waitKey,
         () => read(true),
         (catalog) => {
-          apply(catalog)
-          if (catalog && catalog.origin !== 'unknown') {
+          apply(
+            catalog,
+            catalog !== null && !catalog.listingInProgress && catalog.origin !== 'unknown',
+            'progress'
+          )
+          if (catalog && catalog.origin !== 'unknown' && !catalog.listingInProgress) {
             onListingLanded?.()
           }
         }
@@ -199,5 +209,5 @@ export function useHostModelCatalogUpgrade(args: {
     waitKey,
     worktree
   ])
-  return { unavailable }
+  return { unavailable, demandModelCatalog: recheck }
 }

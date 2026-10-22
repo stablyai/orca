@@ -26,10 +26,13 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof ExecCommandModule>()),
     execCommand: async (conn: { env?: NodeJS.ProcessEnv }, command: string) => {
+      const env = conn.env ?? shell.env
+      // An SSH gateway that merges the command's stderr into stdout.
+      const merged = env?.ORCA_TEST_MERGE_STDERR === '1'
       const result = await runProcess({
         program: '/bin/sh',
-        args: ['-c', command],
-        env: conn.env ?? shell.env
+        args: ['-c', merged ? `{ ${command}\n} 2>&1` : command],
+        env
       })
       if (result.code !== 0) {
         const { sshCommandExitError } = await import('../../ssh/remote-exec/remote-exec-command')
@@ -93,6 +96,12 @@ type MachineOptions = {
   claimWriteDelay?: number
   /** What `df -P` names as the home's source, e.g. an NFS export or a local disk. */
   homeSource?: string
+  /** What `df -P` reports free, in KB. */
+  availableKb?: number
+  /** `mv` onto the claim fails with this error, as on a full disk. */
+  claimMoveError?: string
+  /** `cat` warns on stderr, which a gateway merges into the answer (#30491). */
+  catStderrNoise?: string
 }
 
 /** A (macOS-flavored) machine sharing `home`, as on an NFS-mounted cluster home. */
@@ -107,10 +116,20 @@ function machine(name: string, hostname = name, options: MachineOptions = {}) {
   tool('ioreg', `printf '%s' '${ioregOutput(name)}'`)
   // As on macOS, which has no such OID.
   tool('sysctl', `echo "sysctl: unknown oid '$2'" >&2; exit 1`)
-  if (options.homeSource !== undefined) {
+  if (options.homeSource !== undefined || options.availableKb !== undefined) {
     tool(
       'df',
-      `printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n%s 100 1 99 1%% /home\\n' '${options.homeSource}'`
+      `printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n%s 100 1 ${options.availableKb ?? 99} 1%% /home\\n' '${options.homeSource ?? '/dev/disk3s5'}'`
+    )
+  }
+  if (options.claimMoveError !== undefined) {
+    tool(
+      'mv',
+      [
+        'for last; do :; done',
+        `case "$last" in */${ORCAD_MACHINE_CLAIM_FILENAME}) echo "mv: ${options.claimMoveError}" >&2; exit 1;; esac`,
+        'exec /bin/mv "$@"'
+      ].join('\n')
     )
   }
   if (options.noHardLinks) {
@@ -132,10 +151,18 @@ function machine(name: string, hostname = name, options: MachineOptions = {}) {
       ].join('\n')
     )
   }
+  if (options.catStderrNoise !== undefined) {
+    // Before and right after the claim, which ends with no newline.
+    tool(
+      'cat',
+      `echo '${options.catStderrNoise}' >&2; /bin/cat "$@"; s=$?; printf '%s' '${options.catStderrNoise}' >&2; exit $s`
+    )
+  }
   const env = {
     ...process.env,
     HOME: home,
-    PATH: `${bin}:${process.env.PATH ?? ''}`
+    PATH: `${bin}:${process.env.PATH ?? ''}`,
+    ORCA_TEST_MERGE_STDERR: options.catStderrNoise === undefined ? '0' : '1'
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked execCommand reads only env.
   const conn = {
@@ -341,6 +368,44 @@ describe.runIf(POSIX)('resolveOrcadMachineHome on a home several machines share'
     writeFileSync(claimPath(), '')
     expect(await resolveOrcadMachineHome(machine('node-a'), true)).toEqual(loginHomeResult())
     expect(readFileSync(claimPath(), 'utf8')).toContain('machineKey')
+  })
+
+  it.skipIf(process.getuid?.() === 0)(
+    'says why it could not write the claim, and leaves no partial behind (#30491)',
+    async () => {
+      const remote = mkdirp(home, '.orca-remote')
+      chmodSync(remote, 0o500)
+      try {
+        await expect(resolveOrcadMachineHome(machine('node-a'), true)).rejects.toThrow(
+          /^orcad could not claim this host's \.orca-remote: could not write a claim file in ~\/\.orca-remote: .*Permission denied.*belongs to this user and is writable/u
+        )
+        expect(readdirSync(remote)).toEqual([])
+      } finally {
+        chmodSync(remote, 0o700)
+      }
+    }
+  )
+
+  it('reads the claim through a gateway that merges shell noise into the answer (#30491)', async () => {
+    const noisy = { catStderrNoise: 'bash: warning: setlocale: LC_ALL: cannot change locale' }
+    expect(await resolveOrcadMachineHome(machine('node-a', 'node-a', noisy), true)).toEqual(
+      loginHomeResult()
+    )
+    expect(
+      (await resolveOrcadMachineHome(machine('node-b', 'node-b', noisy), true)).orcadHome
+    ).not.toBe(home)
+  })
+
+  it('names a full disk when the claim cannot be moved into place (#30491)', async () => {
+    const full = { noHardLinks: true, availableKb: 0, claimMoveError: 'No space left on device' }
+    await expect(resolveOrcadMachineHome(machine('node-a', 'node-a', full), true)).rejects.toThrow(
+      /could not move the claim into place at ~\/\.orca-remote\/orcad-machine\.json: mv: No space left on device\. The filesystem holding ~\/\.orca-remote has 0 KB free/u
+    )
+    expect(existsSync(claimPath())).toBe(false)
+    // Once there is room the same machine claims the home.
+    expect(await resolveOrcadMachineHome(machine('node-a', 'node-a-freed'), true)).toEqual(
+      loginHomeResult()
+    )
   })
 
   it('refuses to guess when the claim cannot be read', async () => {

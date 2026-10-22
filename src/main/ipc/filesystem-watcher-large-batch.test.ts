@@ -34,10 +34,9 @@ import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import {
-  WATCH_BATCH_MAX_WAIT_MS,
-  WATCH_BATCH_TRAILING_MS
+  WATCH_BATCH_INTERVAL_MS,
+  WATCH_BATCH_LEADING_MS
 } from '../../shared/filesystem-watch-batch-window'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
@@ -91,7 +90,7 @@ describe('local filesystem watcher large batches', () => {
     vi.useRealTimers()
   })
 
-  it('still coalesces a local burst on the shared trailing window', async () => {
+  it('still coalesces a local burst on the shared leading window', async () => {
     vi.useFakeTimers()
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
@@ -107,7 +106,7 @@ describe('local filesystem watcher large batches', () => {
     watcherCallback?.(null, [{ type: 'update', path: filePath }])
     watcherCallback?.(null, [{ type: 'update', path: filePath }])
 
-    await vi.advanceTimersByTimeAsync(WATCH_BATCH_TRAILING_MS - 1)
+    await vi.advanceTimersByTimeAsync(WATCH_BATCH_LEADING_MS - 1)
     expect(sender.send).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(1)
@@ -120,7 +119,7 @@ describe('local filesystem watcher large batches', () => {
     vi.useRealTimers()
   })
 
-  it('still flushes a sustained local stream at the shared max wait', async () => {
+  it('flushes a sustained local stream every interval instead of starving it', async () => {
     vi.useFakeTimers()
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
@@ -132,18 +131,15 @@ describe('local filesystem watcher large batches', () => {
     const sender = createWatcherSender(1)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath })
-    // Step under the trailing window so only the max wait can force a flush.
-    const step = 100
-    for (let elapsed = 0; elapsed <= WATCH_BATCH_MAX_WAIT_MS; elapsed += step) {
+    const step = 10
+    for (let elapsed = 0; elapsed < 1_000; elapsed += step) {
       watcherCallback?.(null, [{ type: 'update', path: join(worktreePath, `f-${elapsed}.ts`) }])
-      if (elapsed < WATCH_BATCH_MAX_WAIT_MS) {
-        expect(sender.send).not.toHaveBeenCalled()
-      }
       await vi.advanceTimersByTimeAsync(step)
     }
 
-    expect(sender.send).toHaveBeenCalledTimes(1)
-    expect((sender.send.mock.calls[0][1] as FsChangedPayload).events).toHaveLength(6)
+    const sends = sender.send.mock.calls.length
+    expect(sends).toBeGreaterThanOrEqual(1_000 / WATCH_BATCH_INTERVAL_MS - 1)
+    expect(sends).toBeLessThanOrEqual(1_000 / WATCH_BATCH_INTERVAL_MS + 1)
     await closeAllWatchers()
     vi.useRealTimers()
   })

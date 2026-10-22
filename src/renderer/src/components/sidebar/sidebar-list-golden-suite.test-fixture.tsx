@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import {
   getRepoMapFromState,
+  useAllWorktrees,
   useProjectHostSetupProjection,
   useRepoMap,
   useWorktreeMap
@@ -15,13 +16,13 @@ import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-
 import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list/listing/review-cache-inputs'
 import { useAgentSendTargetWorktreeId } from './worktree-list/listing/use-agent-send-target'
-import { useSidebarExternalWorktreeCards } from './worktree-list/listing/use-external-worktree-cards'
-import { useSidebarHostVisibleScope } from './worktree-list/listing/use-host-visible-scope'
-import { useSidebarSectionRows } from './worktree-list/listing/use-section-rows'
 import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
-import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
-import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
+import { useWindowSidebarListModel } from './worktree-list/listing/use-window-list-model'
+import type {
+  SidebarListModel,
+  SidebarListModelArgs
+} from './worktree-list/listing/sidebar-list-model'
 import { EMPTY_PROJECT_GROUPS } from './worktree-list/viewport/viewport-props'
 import {
   getPublishedVisibleWorktreeShortcutTargets,
@@ -48,7 +49,10 @@ import {
 export const initialState = useAppStore.getInitialState()
 
 /** The WorktreeList row pipeline, hook for hook, without the virtualized viewport. */
-export function useGoldenSidebarPipeline() {
+export function useGoldenSidebarPipeline(
+  useListModel: (args: SidebarListModelArgs) => SidebarListModel = useWindowSidebarListModel
+) {
+  const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const repos = useAppStore((s) => s.repos)
@@ -75,54 +79,27 @@ export function useGoldenSidebarPipeline() {
   )
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState } = useSidebarWorktreeFilters()
-  const sortedIds = useSidebarWorktreeSortOrder({ repoMap, sortBy })
-  const { visibleWorktrees, pairedDeviceIdsByEnvironment } = useVisibleSidebarWorktrees({
+  const { visibleWorktrees, rowModel } = useListModel({
     filterState,
     sortBy,
-    sortedIds,
-    repoMap,
-    worktreeLineageById,
-    defaultHostId,
-    agentSendTargetWorktreeId
-  })
-  const visibleScope = useSidebarHostVisibleScope({
-    filterState,
-    defaultHostId,
-    repos,
-    projectGroups,
-    folderWorkspaces,
-    pairedDeviceIdsByEnvironment
-  })
-  const externalWorktreeCards = useSidebarExternalWorktreeCards({
-    repos,
-    visibleReposForRows: visibleScope.visibleReposForRows,
-    detectedWorktreesByRepo,
-    filterRepoIds: filterState.filterRepoIds
-  })
-  const rowModel = useSidebarSectionRows({
     groupBy,
     projectOrderBy,
     pinnedDisplayPolicy,
     defaultHostId,
-    worktrees: visibleWorktrees,
+    workspaceStatuses,
+    settings,
+    collapsedGroups,
     repos,
     repoMap,
+    allWorktrees,
     worktreeMap,
     worktreeLineageById,
-    prCache,
-    settings,
-    workspaceStatuses,
-    effectiveCollapsedGroups: collapsedGroups,
-    agentSendTargetWorktreeId,
+    projectGroups,
+    folderWorkspaces,
     projectGrouping,
-    visibleReposForRows: visibleScope.visibleReposForRows,
-    visibleProjectGroupsForRows: visibleScope.visibleProjectGroupsForRows,
-    visibleFolderWorkspacesForRows: visibleScope.visibleFolderWorkspacesForRows,
-    importedWorktreesByRepo: externalWorktreeCards.importedWorktreesByRepo,
-    newExternalWorktreesInboxByRepo: externalWorktreeCards.newExternalWorktreesInboxByRepo,
-    filterRepoIds: filterState.filterRepoIds,
-    visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
-    workspaceHostScope: filterState.workspaceHostScope
+    detectedWorktreesByRepo,
+    prCache,
+    agentSendTargetWorktreeId
   })
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,

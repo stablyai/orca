@@ -27,7 +27,7 @@ import {
   remoteNodeRuntimeStoreDir,
   tryWithRuntimeStoreLock
 } from './remote-node-runtime-store-lock'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
@@ -51,7 +51,7 @@ import {
 const MAX_REMOVALS_PER_PASS = 8
 const ABANDONED_TOMBSTONE_MS = 30 * 60_000
 
-export type RuntimeStoreGcPlan = {
+type RuntimeStoreGcPlan = {
   /** `node-<sha>` entries to rename away and delete. */
   remove: string[]
   /** Abandoned tombstones whose runtime is still unwanted. */
@@ -119,7 +119,7 @@ export function planRuntimeStoreGc(
   return plan
 }
 
-export type RuntimeStoreGcResult =
+type RuntimeStoreGcResult =
   | { state: 'skipped'; reason: string }
   | {
       state: 'collected'
@@ -145,7 +145,7 @@ export function sweepStaleRuntimeStagesCommand(
     return windowsSweepStaleRuntimeStagesCommand(storeDir, staleMinutes, SWEPT_STAGE)
   }
   return [
-    `for s in ${shellEscape(storeDir)}/${RUNTIME_STORE_STAGE_PREFIX}*; do`,
+    `for s in ${quotePosixShell(storeDir)}/${RUNTIME_STORE_STAGE_PREFIX}*; do`,
     '  [ -d "$s" ] && [ ! -L "$s" ] || continue',
     `  recent=$(find "$s" -mmin -${staleMinutes} -print 2>/dev/null) || continue`,
     '  [ -z "$recent" ] || continue',

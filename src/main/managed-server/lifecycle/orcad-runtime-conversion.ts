@@ -9,7 +9,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { OrcadManagedConversionResult } from '../../../shared/orcad-managed-runtime'
-import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration-source-cutover'
+import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
 import { recordManagedOrcadMigration } from '../../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import {
@@ -36,7 +36,7 @@ import { createSshRelayMigrationSource } from '../../ssh/orcad-migration-ssh-rel
 import {
   leaveBehindClearsOrcadMigrationBlockers,
   onlyLeavableOrcadMigrationBlockers
-} from '../../ssh/ssh-target-orcad-preflight'
+} from '../../ssh/targets/ssh-target-orcad-preflight'
 import { ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON } from '../../ssh/orcad-migration-source-fence'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
 import {
@@ -90,12 +90,14 @@ export async function convertSshTargetToManagedOrcad(
     throw new Error('orcad_migration_destination_environment_mismatch')
   }
   // Before any commit can land, so a crash after it still blocks rollbacks across it.
-  const marked = recordManagedOrcadMigration(
+  recordManagedOrcadMigration(
     userDataPath,
     environment.id,
     (args.now ?? (() => new Date()))().toISOString()
   )
-  await ensureOrcadManagedTunnel(userDataPath, environment.id)
+  // Why the record ensure returns: a re-pair while the tunnel stands replaces the credentials
+  // every request below must carry; it keeps the migration mark recorded above.
+  const marked = await ensureOrcadManagedTunnel(userDataPath, environment.id)
   const { claims, targetStore } = requireManagedOrcadInfrastructure()
   const store = targetStore.getOrcadMigrationSource()
   const destination = args.destinationFor(marked)
@@ -138,7 +140,7 @@ export async function convertSshTargetToManagedOrcad(
     throw new Error(`orcad_migration_commit_not_proven:${committed.phase}`)
   }
   if (committed.phase === 'destination-committed') {
-    retainOrcadMigrationSource(userDataPath, committed.migrationId, args.now)
+    await retainOrcadMigrationSource(userDataPath, committed.migrationId, store, args.now)
   }
   const linkedProjects = linkedOrcadMigrationProjects(store, linked)
   return {
@@ -186,11 +188,7 @@ async function fenceOrResume(
     (environment) => getOrcadSshDeployment(environment)?.sshTargetId === target.id
   )
   if (converted) {
-    return refuse(
-      'live',
-      'orcad_migration_already_managed',
-      'This SSH host is already a managed server.'
-    )
+    return refuse('live', 'orcad_migration_already_managed', 'Orca already runs on this SSH host.')
   }
   // The fence re-checks leases once it holds.
   const terminalProof = await source.assessTerminals()

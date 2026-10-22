@@ -17,6 +17,11 @@ const ACTIVATING_INPUT_TYPES: ReadonlySet<string> = new Set([
 
 export const BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS = 1_000
 
+/** A click, tap or keypress the user made, as opposed to a pointer move or wheel. */
+export function isActivatingBrowserGuestInput(input: Electron.InputEvent | undefined): boolean {
+  return typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)
+}
+
 export type BrowserGuestInputGesture = {
   /** Single-use: one observed click cannot be replayed into a second window or tab. */
   consume: () => boolean
@@ -29,7 +34,7 @@ export function trackBrowserGuestInputGesture(
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   const onInputEvent = (_event: Electron.Event, input: Electron.InputEvent): void => {
-    if (typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)) {
+    if (isActivatingBrowserGuestInput(input)) {
       lastGestureAt = now()
     }
   }

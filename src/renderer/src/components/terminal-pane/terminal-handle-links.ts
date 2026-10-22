@@ -5,7 +5,7 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 import {
   extractOrchestrationTaskLinks,

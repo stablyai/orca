@@ -37,6 +37,11 @@ export function shouldStepNativeChatAskAnswer(agent: string | null | undefined):
   )
 }
 
+/** OMP's configurable keys and existing checkbox state cannot be replaced through PTY input. */
+export function nativeChatAskRequiresTerminal(agent: string | null | undefined): boolean {
+  return resolveNativeChatTranscriptAgent(agent) === 'omp'
+}
+
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {

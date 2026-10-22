@@ -1,13 +1,13 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   decodeOrcadMigrationSnapshotChunk,
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationSnapshotChunkResult,
   type OrcadMigrationSnapshotUploadState,
   type OrcadMigrationTerminalScrollbackSnapshot
-} from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import { syncDirectoryDurablySync } from '../../durable-file-write'
 import {
   getTerminalScrollbackSnapshotPath,

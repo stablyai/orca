@@ -9,6 +9,7 @@ import {
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import {
   resolveTerminalHttpLinkSourceOwner,
+  resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
 } from './terminal-http-link-source-owner'
 import {
@@ -167,10 +168,12 @@ export function prepareTerminalPaneMount(
     managerRef: deps.managerRef,
     linkProviderDisposablesRef: refs.linkProviderDisposablesRef,
     pathExistsCache,
-    getRuntimeEnvironmentIdForPane: (paneId) => {
-      const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
-    },
+    getRuntimeEnvironmentIdForPane: (paneId) =>
+      resolveTerminalLinkRuntimeEnvironmentId(
+        paneTransports.get(paneId),
+        useAppStore.getState(),
+        deps.worktreeId
+      ),
     getRuntimeTerminalHandleForPane: (id) => resolveTerminalRuntimeHandle(paneTransports.get(id)),
     getLinkActionContext,
     sourceTabId: deps.tabId

@@ -6,7 +6,7 @@
  * (docs/reference/windows-edr-posture.md). One exec now waits host-side for a complete line, an
  * oversized file, or its own bounded deadline.
  */
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -33,7 +33,7 @@ function posixReadinessWaitCommand(
   remoteInstallDir: string,
   waitSeconds: number
 ): string {
-  const file = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
+  const file = quotePosixShell(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
   const read = `head -c ${ORCAD_READINESS_MAX_BYTES + 1} ${file} 2>/dev/null`
   return [
     // Fractional sleep is not POSIX; probe it once so polling stays fine-grained where it can.

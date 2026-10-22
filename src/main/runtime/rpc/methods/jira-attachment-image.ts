@@ -5,8 +5,8 @@ import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import {
   attachmentImageGrant,
   isAttachmentImageGrantCurrent
-} from '../../../jira/attachment-image-grants'
-import { readGrantedAttachmentImage } from '../../../jira/attachment-image-read'
+} from '../../../jira/attachments/image-grants'
+import { readGrantedAttachmentImage } from '../../../jira/attachments/image-read'
 import { AttachmentImage } from '../../../../shared/rpc-contract/jira-params'
 import { defineStreamingMethod } from '../core'
 

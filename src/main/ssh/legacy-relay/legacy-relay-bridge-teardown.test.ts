@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { LegacyRelayBridgedPane } from '../../../shared/legacy-relay-bridge-contract'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import type { LegacyRelayTargetBridgeDeps } from './legacy-relay-target-bridge'
 import type { LegacyRelayBridgeHost } from './legacy-relay-bridge-registry'
 
@@ -82,6 +82,7 @@ beforeEach(async () => {
   registry.installLegacyRelayBridge({
     leases: () => leases,
     retireLease: vi.fn(),
+    recordStop: vi.fn(),
     connection: () => null,
     // Main publishes to the window as legacy-relay-bridge-ipc.ts does.
     onPanesChanged: (panes) => renderer.listeners.forEach((listener) => listener(panes)),
@@ -156,6 +157,7 @@ describe('attaching a bridged pane', () => {
     registry.installLegacyRelayBridge({
       leases: () => leases,
       retireLease: vi.fn(),
+      recordStop: vi.fn(),
       connection: () => connection,
       onPanesChanged: vi.fn(),
       onData: vi.fn(),

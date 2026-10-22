@@ -19,7 +19,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
-import { buildConnectConfig, type BuildConnectConfigOptions } from './ssh-connection-utils'
+import { buildConnectConfig, type BuildConnectConfigOptions } from './connection/ssh-connect-config'
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const mocks = vi.hoisted(() => ({
@@ -23,7 +23,7 @@ vi.mock('./ssh-host-relay-terminals-on-connect', () => ({
 }))
 
 const { censusHostRelayTerminalsFor } = await import('./ssh-host-relay-census-for-target')
-const attribution = await import('../ssh-connection-attribution')
+const attribution = await import('../connection/ssh-connection-attribution')
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution keys on identity only.

@@ -1,6 +1,6 @@
 import { recordSshSignInAwaited } from '../../ssh/ssh-credential-decline'
-import type { SshConnectionManager } from '../../ssh/ssh-connection-manager'
-import type { SshConnectionStore } from '../../ssh/ssh-connection-store'
+import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
+import type { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 import { credentialRequestedForTarget } from './ssh-connect-attempt-registry'
 
 /**

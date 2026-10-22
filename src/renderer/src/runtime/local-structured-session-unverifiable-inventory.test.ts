@@ -102,6 +102,7 @@ function hydratedState(): WebSessionTabsSyncState {
       }
     },
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: { [TERMINAL_ID]: ['pty-1'] },
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: { [WORKTREE_ID]: [TERMINAL_ID, CLAUDE_TAB, CODEX_TAB] },

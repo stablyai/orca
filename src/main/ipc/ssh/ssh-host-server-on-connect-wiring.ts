@@ -9,6 +9,7 @@ import { findOrcadMigrationSourceCutoverForTarget } from '../../ssh/orcad-migrat
 import { abandonOrcadConversion } from '../../ssh/orcad-conversion-abandon'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'
 import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
+import { isOrcadHostUnavailableFixableOnHost } from '../../orcad/orcad-host-unavailable'
 import { managedServerUpdateDeps } from '../../ssh/managed-server-update-deps'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving-verify'
@@ -30,7 +31,7 @@ import { setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { trackSshHostServerEvent } from '../../ssh/ssh-host-server-telemetry'
 import { knownSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
 import { knownOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
-import { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { releaseUnreachableOrcadSetup } from '../../ssh/orcad-unreachable-setup-release'
 import { getCurrentMainWindow } from './ssh-ipc-context'
 import { broadcastSshState } from './ssh-renderer-broadcast'
@@ -54,10 +55,10 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
     },
     ensureServing: (environmentId) => verifyOrcadManagedServing(userDataPath, environmentId),
-    retainCommittedSource: (target) => {
+    retainCommittedSource: async (target) => {
       const head = findOrcadMigrationSourceCutoverForTarget(userDataPath, target.id)
       if (head?.phase === 'destination-committed') {
-        retainOrcadMigrationSource(userDataPath, head.migrationId)
+        await retainOrcadMigrationSource(userDataPath, head.migrationId, store)
       }
     },
     hasTemplate: hasOrcadTemplate,
@@ -66,7 +67,9 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         ? target.managedServerUnavailable.reason
         : null,
     recordUnavailable: (target, reason) => {
-      registry.updateTarget(target.id, { managedServerUnavailable: { reason, appVersion } })
+      if (!isOrcadHostUnavailableFixableOnHost(reason)) {
+        registry.updateTarget(target.id, { managedServerUnavailable: { reason, appVersion } })
+      }
     },
     ...managedServerUpdateDeps(userDataPath),
     isEmptyHost: (target) => {

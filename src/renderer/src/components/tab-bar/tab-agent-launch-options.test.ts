@@ -5,6 +5,7 @@ import { getAgentCatalog, getAgentLabel } from '../../lib/agent-catalog'
 import { agentKindForAgentType, agentTypeToIconAgent } from '../../lib/agent-status'
 import {
   buildTabAgentLaunchOptions,
+  buildTabAgentLaunchOptionsFromRows,
   findMatchingTabAgentLaunchOptions,
   orderTabLaunchAgents
 } from './tab-agent-launch-options'
@@ -111,4 +112,17 @@ describe('tab agent launch options', () => {
       expect.arrayContaining(['codex', 'copilot'])
     )
   })
+})
+
+it('projects the same CLI label, unavailable reason and stable chat ID as static rows', () => {
+  const unavailable = buildTabAgentLaunchOptionsFromRows([
+    { kind: 'chat-unavailable', agent: 'claude', reason: 'ssh' },
+    { kind: 'cli', agent: 'claude' }
+  ])
+  expect(unavailable).toMatchObject([
+    { id: 'chat:claude', label: 'Claude', reason: 'No chat over SSH', disabled: true },
+    { id: 'cli:claude', label: 'Claude (CLI)', disabled: false }
+  ])
+  // Typing the agent's name and pressing Enter launches its CLI, not the disabled chat.
+  expect(findMatchingTabAgentLaunchOptions('claude', unavailable)[0]?.id).toBe('cli:claude')
 })

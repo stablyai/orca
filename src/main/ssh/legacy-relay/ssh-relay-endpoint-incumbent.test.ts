@@ -16,7 +16,7 @@ import {
   probeRelayEndpointIncumbent,
   relayEndpointIncumbentProbeCommand
 } from './ssh-relay-endpoint-incumbent'
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import { getRemoteHostPlatform } from '../ssh-remote-platform'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked execCommand never dereferences the connection; the Windows path returns before using it.

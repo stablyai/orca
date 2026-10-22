@@ -9,8 +9,6 @@ import { resolveTerminalTabTitle } from '../../tab-title-resolution'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionFileTab,
-  RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
 } from '../../runtime-mobile-session-tab-contracts'
@@ -18,21 +16,17 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
 } from '../../runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../tab-types'
 import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
 import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
-import {
-  agentSessionRowId,
-  publishedTabOrderId,
-  terminalRowId
-} from './old-client-session-tab-rows'
+import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'
+import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
+import { groupsInLayoutOrder } from './old-client-group-order'
 import {
   BLANK_BROWSER_TAB_STATE,
   type DesktopLayoutView,
   type LayoutContentFacts
 } from '../workspace-layout-beside'
-import { editorFileKey, editorTabFile } from '../workspace-layout-editor-tab-file'
 import type {
   LayoutContentTab,
   LayoutTab,
@@ -143,27 +137,16 @@ function resolveActiveGroupId(
   return groupsInLayoutOrder(workspace)[0]?.id ?? null
 }
 
-function groupsInLayoutOrder(workspace: WorkspaceLayout): WorkspaceLayout['groups'] {
-  const ids: string[] = []
-  const visit = (node: TabGroupLayoutNode | undefined): void => {
-    if (node?.type === 'leaf') {
-      ids.push(node.groupId)
-    } else if (node) {
-      visit(node.first)
-      visit(node.second)
-    }
-  }
-  visit(workspace.groupLayout)
-  const placed = ids.flatMap((id) => workspace.groups.filter((group) => group.id === id))
-  return [...placed, ...workspace.groups.filter((group) => !placed.includes(group))]
-}
-
 function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotTab[] {
   switch (tab.kind) {
     case 'terminal':
       return terminalRows(tab, scope)
     case 'editor': {
-      const row = editorRow(tab, scope)
+      const row = editorTabRow(tab, scope)
+      return row ? [row] : []
+    }
+    case 'diff': {
+      const row = diffTabRow(tab, scope)
       return row ? [row] : []
     }
     case 'browser': {
@@ -174,9 +157,7 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       const row = agentSessionRow(tab, scope)
       return row ? [row] : []
     }
-    // The model holds no file record for a diff (the window lists it from its own state); the
-    // others need the desktop to draw them and are not listed today.
-    case 'diff':
+    // These need the desktop to draw them.
     case 'conflict-review':
     case 'check-details':
     case 'simulator':
@@ -225,8 +206,14 @@ function terminalRows(tab: LayoutTerminalTab, scope: Scope): RuntimeMobileSessio
       type: 'terminal',
       id: terminalRowId(tab.entityId, leafId),
       title,
+      // A paired desktop reads an absent name as "keep mine", so a cleared name is sent as null.
+      customTitle: tab.customTitle?.trim() || null,
       ...(tabWide && tab.quickCommandLabel?.trim()
         ? { quickCommandLabel: tab.quickCommandLabel.trim() }
+        : {}),
+      ...(tabWide && tab.aiVaultTitle?.title.trim() ? { aiVaultTitle: tab.aiVaultTitle } : {}),
+      ...(tabWide && scope.generatedTitlesEnabled && tab.generatedTitle?.trim()
+        ? { generatedTitle: tab.generatedTitle.trim() }
         : {}),
       parentTabId: tab.entityId,
       leafId,
@@ -251,41 +238,6 @@ function recordOf(
     return value ? [[key, value] as const] : []
   })
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
-}
-
-/** Only edit-mode files are in the model; other editor tabs are the desktop view's own. */
-function editorRow(
-  tab: LayoutContentTab,
-  scope: Scope
-): RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab | null {
-  const file = editorTabFile(scope.workspace, tab.entityId)
-  if (!file) {
-    return null
-  }
-  const common = {
-    id: tab.id,
-    title: file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File',
-    filePath: file.filePath,
-    relativePath: file.relativePath,
-    isDirty:
-      scope.view.editorDrafts[scope.key]?.[editorFileKey(file)]?.dirtyDraftContent !== undefined,
-    color: tab.color ?? null,
-    isPinned: tab.isPinned === true,
-    isActive: scope.activeTabId === tab.id
-  }
-  if (file.language === 'markdown') {
-    return {
-      ...common,
-      type: 'markdown',
-      language: 'markdown',
-      mode: 'edit',
-      sourceFileId: file.filePath,
-      sourceFilePath: file.filePath,
-      sourceRelativePath: file.relativePath,
-      documentVersion: `file:${file.filePath}`
-    }
-  }
-  return { ...common, type: 'file', language: file.language, mode: 'edit' }
 }
 
 function browserRow(tab: LayoutContentTab, scope: Scope): RuntimeMobileSessionBrowserTab | null {

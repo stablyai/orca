@@ -177,4 +177,16 @@ describe('scheduleWorktreeBaseNotification git status attribution', () => {
       null
     )
   })
+
+  it('keeps notifying while SSH index writes never pause', async () => {
+    const watch = makeWatch('ssh-1')
+    // Raw provider events every 100 ms: a restarting debounce would never fire.
+    for (let elapsed = 0; elapsed < 2_000; elapsed += 100) {
+      scheduleWorktreeBaseNotification(watch, { gitStatusRepoIds: ['repo-1'] })
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    expect(
+      vi.mocked(notifyWorktreeGitStatusMetadataChanged).mock.calls.length
+    ).toBeGreaterThanOrEqual(4)
+  })
 })

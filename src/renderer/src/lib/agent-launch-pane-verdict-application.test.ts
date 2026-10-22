@@ -4,6 +4,13 @@ import type { AgentLaunchPaneVerdict } from '../../../shared/agent-launch-pane-v
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentStatusModule>()),

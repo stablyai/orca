@@ -7,11 +7,11 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairi
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { writeOrcadMigrationSourceCutover } from '../../ssh/orcad-migration-cutover-journal'
 import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../../shared/runtime-environment-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { SshTargetOrcadClaims } from '../../ssh/ssh-target-orcad-claims'
-import { emptyDependentStateStore } from '../../ssh/ssh-target-orcad-dependents-fixture'
+import { SshTargetOrcadClaims } from '../../ssh/targets/ssh-target-orcad-claims'
+import { emptyDependentStateStore } from '../../ssh/targets/ssh-target-orcad-dependents-fixture'
 import {
   withDeactivatedVersion,
   withDeactivatedVersionCommitted,
@@ -41,7 +41,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({ connect: mocks.connect }),
   getSshTargetRegistryStore: () => mocks.state.store
 }))
@@ -174,7 +174,7 @@ beforeEach(() => {
   mocks.probe.mockResolvedValue(readiness())
   mocks.startTunnel.mockResolvedValue(46_768)
   mocks.closeTunnel.mockResolvedValue(undefined)
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   mocks.localVersion.mockReturnValue(VERSION)
   mocks.wake.mockResolvedValue({ outcome: 'serving' })
 })

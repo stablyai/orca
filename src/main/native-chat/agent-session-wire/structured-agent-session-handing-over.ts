@@ -26,6 +26,20 @@ export async function whileStructuredAgentSessionHandingOver<T>(
   handOver: (released: () => void) => Promise<T>,
   workChanged?: () => void
 ): Promise<T> {
+  const released = beginStructuredAgentSessionHandover(journal, clientMessageId, workChanged)
+  try {
+    return await handOver(released)
+  } finally {
+    released()
+  }
+}
+
+/** The same held window across the host's separate pending-row and provider-call steps. */
+export function beginStructuredAgentSessionHandover(
+  journal: HandoverJournal,
+  clientMessageId: string,
+  workChanged?: () => void
+): () => void {
   let sends = handingOver.get(journal)
   if (!sends) {
     sends = new Map()
@@ -33,7 +47,7 @@ export async function whileStructuredAgentSessionHandingOver<T>(
   }
   sends.set(clientMessageId, (sends.get(clientMessageId) ?? 0) + 1)
   let held = true
-  const released = (): void => {
+  return (): void => {
     if (held) {
       held = false
       const count = sends.get(clientMessageId) ?? 1
@@ -44,10 +58,5 @@ export async function whileStructuredAgentSessionHandingOver<T>(
       }
       workChanged?.()
     }
-  }
-  try {
-    return await handOver(released)
-  } finally {
-    released()
   }
 }

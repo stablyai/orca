@@ -4,12 +4,12 @@ import {
   type KnownRuntimeEnvironment,
   type RuntimeSshTunnelLink
 } from '../../../shared/runtime-environments'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadManagedServing } from './orcad-managed-serving'
-import type { SshConnectionManager } from '../../ssh/ssh-connection-manager'
+import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
-import type { getSshTargetRegistryStore } from '../../ssh/ssh-target-registry'
+import type { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
   dropActiveOrcadTunnel,
   managedTunnelAccess,
@@ -202,19 +202,22 @@ export class OrcadManagedTunnelResumeRecovery {
       target,
       connection: active.connection
     })
+    const stillCurrent = (): boolean =>
+      active.connection.getConnectGeneration() === transportGeneration &&
+      this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
+      this.resolveEnvironment(environment.id, active, options) !== null
     const forward = await forwardToVerifiedOrcad({
       targetId: active.targetId,
       connection: active.connection,
       forwards: this.dependencies.forwards,
       localPort: deployment.localPort,
-      label: `Managed Orca server: ${current.environment.name}`,
+      label: `Orca on ${current.environment.name}`,
       ...checks,
-      stillCurrent: () =>
-        active.connection.getConnectGeneration() === transportGeneration &&
-        this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
-        this.resolveEnvironment(environment.id, active, options) !== null
+      stillCurrent
     })
-    if (!forward) {
+    // Why re-check: a teardown can land between the build's last check and this record.
+    if (!forward || !stillCurrent()) {
+      await (forward && this.dependencies.forwards.removeForwardAndWait(forward.id))
       return
     }
     recordActiveOrcadTunnel(this.dependencies.active, environment.id, forward, {

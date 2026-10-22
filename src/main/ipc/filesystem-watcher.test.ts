@@ -54,16 +54,16 @@ import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
-import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
+import { WATCH_BATCH_INTERVAL_MS } from '../../shared/filesystem-watch-batch-window'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
-/** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
+/** Remote fs:changed rides the shared flush window, so drain it before asserting sends. */
 const emitRemote = async (onEvents: (e: unknown[]) => void, events: unknown[]) => {
   onEvents(events)
   await (vi.isFakeTimers()
-    ? vi.advanceTimersByTimeAsync(WATCH_BATCH_TRAILING_MS)
-    : new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_TRAILING_MS + 25)))
+    ? vi.advanceTimersByTimeAsync(WATCH_BATCH_INTERVAL_MS)
+    : new Promise((resolve) => setTimeout(resolve, WATCH_BATCH_INTERVAL_MS + 25)))
 }
 
 describe('registerFilesystemWatcherHandlers', () => {
@@ -186,7 +186,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendMock).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ path: '/home/me/repo/file.txt', type: 'update' }]
+      events: [{ path: '/home/me/repo/file.txt', type: 'update' }],
+      connectionId: 'conn-1'
     })
     warnSpy.mockRestore()
     handlers['fs:unwatchWorktree'](
@@ -282,7 +283,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(senderOne.send).not.toHaveBeenCalled()
     expect(senderTwo.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }],
+      connectionId: 'conn-1'
     })
 
     staleTerminal(new Error('late stale failure'))
@@ -313,7 +315,9 @@ describe('registerFilesystemWatcherHandlers', () => {
     await vi.waitFor(() =>
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/home/me/repo',
-        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+        resync: true,
+        connectionId: 'conn-1'
       })
     )
 
@@ -321,7 +325,8 @@ describe('registerFilesystemWatcherHandlers', () => {
     await emitRemote(reinstalledEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }],
+      connectionId: 'conn-1'
     })
 
     await closeAllWatchers()
@@ -370,7 +375,9 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(retryWatchMock).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      resync: true,
+      connectionId: 'conn-1'
     })
 
     warnSpy.mockRestore()
@@ -441,7 +448,9 @@ describe('registerFilesystemWatcherHandlers', () => {
     for (const sender of [senderOne, senderTwo]) {
       expect(sender.send).toHaveBeenCalledWith('fs:changed', {
         worktreePath: '/home/me/repo',
-        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+        resync: true,
+        connectionId: 'conn-1'
       })
     }
 
@@ -570,13 +579,16 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(watchMock).toHaveBeenCalledTimes(2)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }],
+      resync: true,
+      connectionId: 'conn-1'
     })
     const replacementEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
     await emitRemote(replacementEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenLastCalledWith('fs:changed', {
       worktreePath: '/home/me/repo',
-      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
+      events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }],
+      connectionId: 'conn-1'
     })
   })
 

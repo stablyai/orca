@@ -39,6 +39,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneCommand: () =>
     translate('components.native-chat.writeNotice.notDoneCommand', COPY.notDoneCommand),
   notDoneGoal: () => translate('components.native-chat.writeNotice.notDoneGoal', COPY.notDoneGoal),
+  notDoneQueuedEdit: () =>
+    translate('components.native-chat.writeNotice.notDoneQueuedEdit', COPY.notDoneQueuedEdit),
   restartFailed: () =>
     translate('components.native-chat.writeNotice.restartFailed', COPY.restartFailed),
   capacity: () => translate('components.native-chat.writeNotice.capacity', COPY.capacity),
@@ -46,6 +48,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.outcomeUnknown', COPY.outcomeUnknown),
   sendOutcomeLost: () =>
     translate('components.native-chat.writeNotice.sendOutcomeLost', COPY.sendOutcomeLost),
+  continuationSuperseded: () =>
+    translate(
+      'components.native-chat.writeNotice.continuationSuperseded',
+      COPY.continuationSuperseded
+    ),
   questionChanged: () =>
     translate('components.native-chat.writeNotice.questionChanged', COPY.questionChanged),
   cancelNotSaved: () =>

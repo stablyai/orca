@@ -1,18 +1,26 @@
-import type { ProviderRateLimits, RateLimitState } from '../../../../shared/rate-limit-types'
+import type {
+  OwnerNotSetUpPlaceholder,
+  ProviderRateLimits,
+  RateLimitState,
+  UsageRateLimitFailureKind,
+  UsageRateLimitMetadata
+} from '../../../../shared/rate-limit-types'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import { translate } from '@/i18n/i18n'
 import {
   createPendingProviderSnapshot,
   hasUsageData,
+  hasUsageProviderSettingsForProvider,
   isProviderConfigured
 } from './status-bar-provider-visibility'
+import { describeOwnerNotSetUp } from './owner-not-set-up-copy'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */
 export type OwnerUsageState =
   | { kind: 'local' }
   /** A remote host owns usage and has not answered yet. */
   | { kind: 'remote-pending' }
-  | { kind: 'remote'; rateLimits: RateLimitState }
+  | { kind: 'remote'; ownerLabel: string; rateLimits: RateLimitState }
   /** The owning host's usage cannot be verified; no bar may claim numbers. */
   | {
       kind: 'remote-unverifiable'
@@ -90,6 +98,122 @@ function adoptRemoteRateLimits(remote: RateLimitState): RateLimitState {
   }
 }
 
+/** Stands in for a provider this device has set up but the owning host has not; carries no numbers. */
+export function isOwnerNotSetUpPlaceholder(provider: ProviderRateLimits): boolean {
+  return provider.usageMetadata?.ownerNotSetUp !== undefined
+}
+
+function isSetUpHere(local: RateLimitState, key: UsageProviderKey): boolean {
+  const provider = local[key]
+  return (
+    (provider != null && (isProviderConfigured(provider) || hasUsageData(provider))) ||
+    hasUsageProviderSettingsForProvider(USAGE_PROVIDER_IDS[key], local)
+  )
+}
+
+// Why: these credentials live in this device's safe storage, so the host cannot reuse them.
+function isSignInSavedHereOnly(local: RateLimitState, key: UsageProviderKey): boolean {
+  return key === 'minimax'
+    ? local.minimaxApiKeyConfigured || local.minimaxCookieConfigured
+    : key === 'zcode' && local.zcodePlanApiKeyConfigured === true
+}
+
+// Why an allow-list: a host also says `unavailable` for "set up, but no reading" (agy too old,
+// a ZCode account switch mid-refresh); only these reasons mean the provider is not set up.
+const NOT_SET_UP_FAILURE_KINDS: ReadonlySet<UsageRateLimitFailureKind> = new Set([
+  'missing-credentials',
+  'cli-unavailable'
+])
+// Why: these fetchers name every not-set-up answer, so a reasonless `unavailable` is not one.
+const NOT_SET_UP_NEEDS_REASON: ReadonlySet<UsageProviderKey> = new Set([
+  'minimax',
+  'zcode',
+  'cursor',
+  'antigravity'
+])
+
+/**
+ * Whether the host positively reports it has no such provider. Null only means the host has
+ * not finished a fetch (or blanked a skipped one), so it never counts.
+ */
+function isMissingOnHost(remote: RateLimitState, key: UsageProviderKey): boolean {
+  const provider = remote[key]
+  if (provider?.status !== 'unavailable') {
+    return false
+  }
+  const failureKind = provider.usageMetadata?.failureKind
+  return (
+    (failureKind ? NOT_SET_UP_FAILURE_KINDS.has(failureKind) : !NOT_SET_UP_NEEDS_REASON.has(key)) &&
+    // Why: a signed-in Grok account with no quota is also `unavailable`; its flag is not.
+    !hasUsageProviderSettingsForProvider(USAGE_PROVIDER_IDS[key], remote)
+  )
+}
+
+// Why: the host reports Claude on API-key billing exactly like no Claude login, so this
+// placeholder only says the host shows no usage, never that Claude is not set up there.
+function isClaudeUnknownOnHost(remote: RateLimitState): boolean {
+  return (
+    remote.claude?.status === 'unavailable' &&
+    remote.claude.usageMetadata?.failureKind === 'missing-credentials'
+  )
+}
+
+function describePlaceholder(
+  local: RateLimitState,
+  remote: RateLimitState,
+  key: UsageProviderKey,
+  ownerLabel: string
+): OwnerNotSetUpPlaceholder | null {
+  if (!isSetUpHere(local, key)) {
+    return null
+  }
+  if (key === 'claude') {
+    return isClaudeUnknownOnHost(remote) ? { kind: 'claude-unknown', ownerLabel } : null
+  }
+  return isMissingOnHost(remote, key)
+    ? {
+        kind: 'not-configured',
+        ownerLabel,
+        signInSavedHereOnly: isSignInSavedHereOnly(local, key)
+      }
+    : null
+}
+
+/** A numberless stand-in for a provider slot, carrying why it shows no usage. */
+function ownerPlaceholderSnapshot(
+  key: UsageProviderKey,
+  error: string,
+  usageMetadata: UsageRateLimitMetadata
+): ProviderRateLimits {
+  return {
+    ...createPendingProviderSnapshot(USAGE_PROVIDER_IDS[key]),
+    error,
+    usageMetadata,
+    status: 'error'
+  }
+}
+
+// Why: hiding a provider set up here reads as "usage broke"; a numberless placeholder
+// keeps it visible without passing this device's numbers off as the host's.
+function addNotSetUpPlaceholders(
+  local: RateLimitState,
+  remote: RateLimitState,
+  ownerLabel: string
+): RateLimitState {
+  return {
+    ...remote,
+    ...mapProviders((key) => {
+      const ownerNotSetUp = describePlaceholder(local, remote, key, ownerLabel)
+      if (!ownerNotSetUp) {
+        return remote[key]
+      }
+      return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp), {
+        ownerNotSetUp
+      })
+    })
+  }
+}
+
 // Why: an older host publishes no usage at all; its account services always cover these.
 const ACCOUNT_OWNED_PROVIDERS: ReadonlySet<UsageProviderKey> = new Set(['claude', 'codex'])
 
@@ -101,7 +225,7 @@ export function resolveOwnerUsageRateLimits(
     return local
   }
   if (owner.kind === 'remote') {
-    return adoptRemoteRateLimits(owner.rateLimits)
+    return addNotSetUpPlaceholders(local, adoptRemoteRateLimits(owner.rateLimits), owner.ownerLabel)
   }
   // Why: nothing of the viewer's (numbers or setup flags) may stand in for the remote host.
   if (owner.kind === 'remote-pending') {
@@ -111,12 +235,8 @@ export function resolveOwnerUsageRateLimits(
   }
   const message = describeUnverifiableOwner(owner.ownerLabel, owner.reason)
   const base = owner.lastKnown ? adoptRemoteRateLimits(owner.lastKnown) : null
-  const stamp = (key: UsageProviderKey): ProviderRateLimits => ({
-    ...createPendingProviderSnapshot(USAGE_PROVIDER_IDS[key]),
-    error: message,
-    usageMetadata: { unverifiableOwner: true },
-    status: 'error'
-  })
+  const stamp = (key: UsageProviderKey): ProviderRateLimits =>
+    ownerPlaceholderSnapshot(key, message, { unverifiableOwner: true })
   if (!base) {
     return createEmptyRateLimitState(
       mapProviders((key) => (ACCOUNT_OWNED_PROVIDERS.has(key) ? stamp(key) : null))

@@ -38,7 +38,11 @@ import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-
  * equals the recorded shell and would otherwise read as a real "nothing is running here". Ask the
  * descriptor before the name, because an unreadable PTY is not evidence that its children exited.
  */
-export async function inspectLocalPtyChildProcesses(id: string): Promise<PtyChildProcessVerdict> {
+export async function inspectLocalPtyChildProcesses(
+  id: string,
+  fresh = true,
+  ignoreDetached = false
+): Promise<PtyChildProcessVerdict> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return 'no-children'
@@ -47,10 +51,16 @@ export async function inspectLocalPtyChildProcesses(id: string): Promise<PtyChil
     return 'unverifiable'
   }
   try {
+    if (process.platform === 'win32') {
+      const verdict = await inspectSpawnFileWindowsChildProcesses(
+        proc,
+        ptyShellPath.get(id) ?? '',
+        fresh,
+        ignoreDetached
+      )
+      return ptyProcesses.get(id) === proc ? verdict : 'unverifiable'
+    }
     if (ptyProcessNameIsSpawnFile(proc)) {
-      if (process.platform === 'win32') {
-        return inspectSpawnFileWindowsChildProcesses(proc)
-      }
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       return ptyProcesses.get(id) === proc
         ? inspectSpawnFileChildProcessesFromRows(

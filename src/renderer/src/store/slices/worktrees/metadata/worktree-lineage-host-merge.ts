@@ -11,17 +11,21 @@ import {
 import { findWorktreeById, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { findRepoForHost } from '../../repo-host-identity'
 import { reuseEqualRecordMap } from '../../repo-identity-reconcile'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
 
 export function getWorktreeHostId(
   state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
   worktreeId: string
 ): ExecutionHostId | null {
-  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+  const worktree = findWorktreeById(selectWorktreesByRepo(state), worktreeId)
   if (worktree?.hostId) {
     return worktree.hostId
   }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const detected = state.detectedWorktreesByRepo[repoId]?.worktrees.find(
+  const detected = selectDetectedWorktreesByRepo(state)[repoId]?.worktrees.find(
     (entry) => entry.id === worktreeId
   )
   if (detected?.hostId) {

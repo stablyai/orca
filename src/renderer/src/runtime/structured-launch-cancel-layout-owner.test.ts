@@ -42,7 +42,6 @@ import {
   markStructuredAgentSessionLaunchCancelled,
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState,
-  subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
 } from '@/lib/structured-agent-session-launch-registry'
 import {
@@ -50,6 +49,7 @@ import {
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/structured-agent-session-launch-persistence'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
 import {
   acceptPairedHostStructuredSessions,
   beginStructuredAgentSessionTabClose,
@@ -184,19 +184,24 @@ describe('this machine, with main owning the layout', () => {
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
   })
 
-  it('a main that cannot be told gets the tombstone, so a late listing is still hidden', async () => {
+  // Main notes the close before anything in it can fail, so its fence refuses the late create and
+  // no chat is published to draw (structured-agent-session-close-before-create.test.ts).
+  it('a retire main fails is logged; no tombstone, and a late create reply revives nothing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.closeSession.mockRejectedValueOnce(new Error('host unavailable'))
     pendingLaunch('local', LOCAL)
-    const listener = vi.fn()
-    subscribeStructuredAgentLaunchStatus(listener)
 
     markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
     await vi.waitFor(() =>
-      expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(true)
+      expect(warn).toHaveBeenCalledWith(
+        '[structured-agent-session] local cancel retirement failed',
+        expect.any(Error)
+      )
     )
 
-    expect(listener).toHaveBeenCalledTimes(2)
-    expect(suppressCancelledStructuredSessionTabs(hostFrame(), LOCAL).tabs).toEqual([])
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)
+    expect(wasStructuredAgentLaunchClosedByLocalCancel(SESSION)).toBe(true)
+    expect(suppressCancelledStructuredSessionTabs(hostFrame(), LOCAL).tabs).toHaveLength(1)
   })
 
   it('switch off: keeps the tombstone and leaves the close to the tab close, as today', () => {

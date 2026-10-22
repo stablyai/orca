@@ -10,7 +10,7 @@ import { ORCAD_STDIO_BRIDGE_MAX_CHANNELS } from './orcad-stdio-bridge-listener'
 import { OrcadStdioBridgePortForwardProvider } from './orcad-stdio-bridge-provider'
 import { spawnLocalBridgeChannel, startEchoServer } from './orcad-stdio-bridge-test-channel'
 import { ORCAD_WINDOWS_HOST_SCRIPT } from '../host-state/orcad-windows-host-script'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import type { RemoteCommandChannel } from '../install/remote-install-transport'
 

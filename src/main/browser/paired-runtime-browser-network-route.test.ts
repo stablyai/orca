@@ -11,9 +11,9 @@ import type { BrowserNetworkExecutionHost } from '../../shared/browser-network-e
 import type { PairingOffer } from '../../shared/pairing'
 import type {
   RemoteRuntimeSubscription,
-  RemoteRuntimeSubscriptionCallbacks,
-  RemoteRuntimeSubscriptionOptions
+  RemoteRuntimeSubscriptionCallbacks
 } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()

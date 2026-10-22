@@ -3,9 +3,9 @@ import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
   buildWslExecArgs,
-  buildWslInteractiveLoginShellCommand,
-  quotePosixShell
+  buildWslInteractiveLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {

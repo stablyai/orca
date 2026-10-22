@@ -11,7 +11,9 @@ import type {
  */
 export function moveLeafThroughLayoutOwner(
   request: TerminalLeafMoveRequest,
-  placement: { groupId: string; index: number | undefined }
+  placement: { groupId: string; index: number | undefined },
+  /** The pane's folder, where main starts an unbound pane's new shell. */
+  paneCwd?: string
 ): Promise<TerminalLeafMoveResult> {
   const asToday = (): Promise<TerminalLeafMoveResult> => window.api.pty.moveLeafToNewTab(request)
   return new Promise((resolve, reject) => {
@@ -24,7 +26,7 @@ export function moveLeafThroughLayoutOwner(
         leafId: request.leafId,
         groupId: placement.groupId,
         ...(placement.index !== undefined ? { index: placement.index } : {}),
-        windowDetach: { ptyId: request.ptyId }
+        windowDetach: { ptyId: request.ptyId, ...(paneCwd ? { startupCwd: paneCwd } : {}) }
       },
       {
         apply: (result) =>

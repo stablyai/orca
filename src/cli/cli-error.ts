@@ -5,6 +5,7 @@ import {
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
+import { selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
@@ -12,6 +13,8 @@ export type CliErrorContext = {
   commandPath?: readonly string[]
   /** The `--worktree` value this invocation sent; the runtime's error never echoes it. */
   worktreeSelector?: string
+  /** The `--repo` value this invocation sent, for the same reason. */
+  repoSelector?: string
   /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
   remoteServerSelected?: boolean
 }
@@ -27,6 +30,13 @@ function contextRecovery(
 ): ContextRecovery | undefined {
   if (code === 'selector_not_found' && context.worktreeSelector) {
     return worktreeSelectorRecovery(context.worktreeSelector)
+  }
+  if (code === 'selector_ambiguous') {
+    return selectorAmbiguityRecovery({
+      repo: context.repoSelector,
+      worktree: context.worktreeSelector,
+      remoteServerSelected: context.remoteServerSelected
+    })
   }
   // Why: a paired server's handle sent to this machine reads as a dead terminal, not a missing flag.
   if (

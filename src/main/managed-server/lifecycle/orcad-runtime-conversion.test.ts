@@ -6,9 +6,14 @@ import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import {
   addManagedOrcadEnvironment,
+  refreshManagedOrcadPairing,
   removeManagedOrcadEnvironment
 } from '../../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments, resolveEnvironment } from '../../../shared/runtime-environment-store'
+import {
+  getPreferredPairingOffer,
+  type KnownRuntimeEnvironment
+} from '../../../shared/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
@@ -16,13 +21,13 @@ import { listOrcadMigrationSourceCutovers } from '../../ssh/orcad-migration-cuto
 import type { OrcadManagedConversionArgs } from './orcad-runtime-conversion'
 import { fakeOrcadMigrationDestination } from '../../ssh/orcad-migration-destination-fake'
 import { reconcileManagedOrcadSshTargets, visibleRepos } from '../../ssh/orcad-retained-source'
-import { SshConnectionStore } from '../../ssh/ssh-connection-store'
+import { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
 
 const mocks = vi.hoisted(() => {
   const state: { targetStore: unknown } = { targetStore: null }
   return { state, deploy: vi.fn(), ensureTunnel: vi.fn() }
 })
-vi.mock('../../ssh/ssh-target-registry', () => ({
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getSshConnectionManager: () => ({}),
   getSshTargetRegistryStore: () => mocks.state.targetStore
 }))
@@ -65,7 +70,7 @@ beforeEach(() => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SshConnectionStore wraps the real test store it is given.
   mocks.state.targetStore = new SshConnectionStore(store as never)
   destination = fakeOrcadMigrationDestination()
-  mocks.ensureTunnel.mockResolvedValue(undefined)
+  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
   // Registers the server the fence named, as the real deploy would after pairing.
   mocks.deploy.mockImplementation(async (path: string, args: { name: string }) => {
     const owner = getManagedOrcadFenceEnvironmentId(store.getSshTarget(TARGET.id))
@@ -117,6 +122,38 @@ const convert = (
   })
 
 describe('converting an SSH host into a managed server', () => {
+  it('commits first time with the pairing the tunnel re-paired to while it opened', async () => {
+    mocks.ensureTunnel.mockImplementation(async (path: string, id: string) => {
+      // The server refused the stored token; the tunnel paired again over SSH.
+      refreshManagedOrcadPairing(
+        path,
+        id,
+        encodePairingOffer({
+          v: PAIRING_OFFER_VERSION,
+          endpoint: 'ws://127.0.0.1:46768/',
+          deviceToken: 'fresh-token',
+          publicKeyB64: 'public-key'
+        })
+      )
+      return resolveEnvironment(path, id)
+    })
+    const destinationFor = vi.fn((_environment: KnownRuntimeEnvironment) => destination)
+    const result = await convertSshTargetToManagedOrcad(userDataPath, {
+      sshTargetId: TARGET.id,
+      name: 'Managed',
+      censusHost: async () => ({ verdict: 'exited', count: 0 }),
+      destinationFor,
+      releaseDirectSession,
+      now: () => new Date('2026-10-02T00:00:00.000Z')
+    })
+    expect(result).toMatchObject({ outcome: 'converted' })
+    expect(destination.commits).toBe(1)
+    const used = destinationFor.mock.calls[0]![0]
+    expect(getPreferredPairingOffer(used).deviceToken).toBe('fresh-token')
+    // The re-pair keeps the migration mark that blocks rollbacks across this commit.
+    expect(used.orcadMigratedAt).toBe('2026-10-02T00:00:00.000Z')
+  })
+
   it('fences, deploys, marks the server, commits once, then keeps the source rows', async () => {
     const result = await convert()
     expect(result).toMatchObject({ outcome: 'converted' })
@@ -245,7 +282,7 @@ describe('the source frozen during a conversion', () => {
   it('still refuses a catalog change mid-conversion', async () => {
     const stage = destination.stage.getMockImplementation()!
     destination.stage.mockImplementationOnce(async (manifest) => {
-      store.updateRepo('repo-1', { displayName: 'Renamed' })
+      store.updateRepo(store.getRepo('repo-1')!, { displayName: 'Renamed' })
       return stage(manifest)
     })
     await expect(convert()).rejects.toThrow('orcad_migration_source_changed')

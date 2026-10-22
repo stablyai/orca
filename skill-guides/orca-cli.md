@@ -60,7 +60,7 @@ ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
 
 ## Starting agents
 
-`worktree create --agent` (new checkout) and `agent launch` (existing worktree) are how to start an agent. They go through Orca's agent launch, the same one the app's new-agent tab uses: the user's Chat UI setting decides whether the agent opens as a chat or a terminal, and the result reports which (`outcome.kind`) and why (`receipt.detail`). When a chat is not possible, such as for an agent without chat support, the launch starts a terminal and the receipt says so. `terminal create` makes a terminal for shells and commands.
+`worktree create --agent` (new checkout) and `agent launch` (existing worktree) are how to start an agent. They go through Orca's agent launch, the same one the app's new-agent tab uses: the user's Chat UI setting decides whether the agent opens as a chat or a terminal, and the result reports which (`outcome.kind`) and why (`receipt.detail`). When a chat is not possible, such as for an agent without chat support, the launch starts a terminal and the receipt says so. `--surface chat|terminal` picks one for that launch instead of the setting; pass it only when the user asked for a chat or a terminal. `--surface chat` is refused when Orca can establish before starting anything that the agent cannot open as a chat. If support cannot be checked, the launch can fall back to a terminal. If chat becomes unavailable only after a new workspace is created, Orca keeps that workspace, its setup and default tabs, then opens a terminal; the receipt explains the fallback. `terminal create` makes a terminal for shells and commands.
 
 If a launch reply is lost, use the returned `operationId` to re-issue the exact same command from the same directory against the same execution host with `--retry-launch <operationId>`. Keep that ID on every retry: the host replays the accepted launch instead of starting another agent or submitting the brief twice. Do not retry as a fresh launch. If replay says the outcome is unknown or expired, or an older host gives no replay ID, inspect the workspace and agent without sending input before deciding whether another launch is needed. A host that cannot safely carry prompts or honor background/focus requests is refused before launch; update Orca on that execution host.
 
@@ -92,6 +92,8 @@ ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json
 ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
@@ -106,7 +108,7 @@ Selectors:
 
 - `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
-- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
+- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd; when targeting a paired server with `--environment` or `--pairing-code`, use an explicit selector from that server instead.
 - For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
 Lineage rules:
@@ -115,6 +117,8 @@ Lineage rules:
 - Use `--parent-worktree active` when the child worktree relationship should be explicit.
 - Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
+- A parent can be in a different project from its child, such as `worktree create --repo id:<otherRepoId> --name related-task --parent-worktree id:<parentRepoId>::<parentPath>`. A worktree parent and child must use the same execution host (local machine, SSH target, or paired server).
+- To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 - If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
 
@@ -127,7 +131,7 @@ ORCA worktree create --name task --setup skip --json
 ORCA worktree create --name task --run-hooks --json
 ```
 
-- `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat UI setting (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
+- `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat UI setting (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
 - Repo setup or default-terminal settings may still add tabs or splits. Configured default tabs are intentional; never close one without verifying it is an unused shell.
 - Address the agent through exactly one handle: `launch.outcome.handle`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already started the agent, so do not start it again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
@@ -202,6 +206,7 @@ ORCA terminal create --worktree active --command "pnpm dev" --json
 ORCA terminal split --terminal <handle> --direction vertical --json
 ORCA terminal split --terminal <handle> --direction horizontal --command "npm test" --json
 ORCA terminal rename --terminal <handle> --title "New Name" --json
+ORCA terminal set-pane-title --terminal <handle> --title "REVIEWER" --json
 ORCA terminal switch --terminal <handle> --json
 ORCA terminal close --terminal <handle> --json
 ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json

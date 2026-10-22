@@ -89,7 +89,11 @@ export function orcadNodePtySlotFiles(target: string): string[] {
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
-      'conpty/OpenConsole.exe'
+      'conpty/OpenConsole.exe',
+      // node-pty's winpty backend, which it selects below Windows build 18309.
+      'pty.node',
+      'winpty.dll',
+      'winpty-agent.exe'
     ]
   }
   return target.startsWith('darwin-') ? ['pty.node', 'spawn-helper'] : ['pty.node']
@@ -137,6 +141,21 @@ export function orcadRipgrepArtifact(target: string): string {
     throw new Error(`orcad ships no ripgrep for ${target}`)
   }
   return artifact
+}
+
+/** Packaging-only references; deployed slots still contain their own verified binary. */
+export function orcadTemplatePackagedRipgrep(
+  schemaVersion: number,
+  target: string,
+  reference: unknown
+): string | null {
+  if (reference === undefined) {
+    return null
+  }
+  if (schemaVersion !== 4 || reference !== true || target.startsWith('darwin-')) {
+    throw new Error(`Invalid packaged ripgrep reference for ${target}`)
+  }
+  return orcadRipgrepArtifact(target)
 }
 
 export const ORCAD_RIPGREP_LICENSE_ARTIFACTS = [
@@ -227,6 +246,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Worker threads the account services start: CLI probes off the event loop, Claude account setup.
   { filename: 'worker-thread-child-process-entry.js' },
   { filename: 'claude-profile-setup-worker-entry.js' },
+  // Dictation's worker thread; it loads the recognizer `orca serve` names (#31174).
+  { filename: 'stt-worker.js' },
   // Target-specific even when the JavaScript bundle is shared across packaged slots.
   { filename: ORCAD_SERVER_TARGET_FILENAME },
   // orcad never depends on a host runtime or host-installed native module.

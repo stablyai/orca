@@ -12,6 +12,7 @@ import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-f
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
 import {
   cancelCommandCodeDoneSettle,
@@ -106,7 +107,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     if (!unchanged) {
       return
     }
-    state.dropAgentStatus(paneKey)
+    if (!isRetainedProgramResult(current)) {
+      state.dropAgentStatus(paneKey)
+    }
   }
 
   // Complete the row only while it is still this turn's command-code/working entry.

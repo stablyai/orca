@@ -85,6 +85,9 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.promptSentDedupeByPaneKey.delete(paneKey)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
       this.evidenceObservedAtByPaneKey.delete(paneKey)
+      this.programStatusFacets.delete(paneKey)
+      this.hookSilenceRechecks.cancel(paneKey)
+      this.programStatusFacetRepublishes.cancel(paneKey)
     }
     // Why: an exit outlives its row, so it is matched by tab rather than by the keys cleared above.
     let exitsChanged = false
@@ -143,6 +146,9 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     this.restartedStatusLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
     // Why: the pane itself is gone, so its observation clock describes nothing a later pane owns.
     this.evidenceObservedAtByPaneKey.delete(resolvedPaneKey)
+    this.programStatusFacets.delete(resolvedPaneKey)
+    this.hookSilenceRechecks.cancel(resolvedPaneKey)
+    this.programStatusFacetRepublishes.cancel(resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, alias] of this.legacyPaneKeyAliases) {
       if (alias.stablePaneKey === resolvedPaneKey) {
@@ -155,6 +161,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         this.restartedStatusLaunchTokenHashByPaneKey.delete(legacyPaneKey)
         this.evidenceObservedAtByPaneKey.delete(legacyPaneKey)
+        this.programStatusFacets.delete(legacyPaneKey)
         clearedAlias = true
       }
     }

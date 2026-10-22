@@ -49,6 +49,7 @@ import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from './slices/structured-session-launch-directories'
+import { createStructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
@@ -61,6 +62,7 @@ import { installSettledSortEpoch } from './settled-sort-epoch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './store-identity-churn-probe'
+import { withEditorBufferRecords } from './editor-buffer-record-lifecycle'
 import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
@@ -76,67 +78,73 @@ const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>)
     ? withStoreIdentityChurnProbe(createState)
     : createState
 
+// Why buffer records outermost: the probes must see each caller's own partial and frame.
+// Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
-  withDevelopmentStoreProbes(
-    withReactCommitCascadeWriteProbe((...a) => {
-      // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
-      // Switch point: the stamp-sorted list reads no settled epoch.
-      if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
-        installSettledSortEpoch(a[2])
-      }
-      // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
-      installStoreListenerCensus(a[2])
-      return {
-        ...createRepoSlice(...a),
-        ...createSparsePresetsSlice(...a),
-        ...createWorktreeSlice(...a),
-        ...createTerminalSlice(...a),
-        ...createTabsSlice(...a),
-        ...createUISlice(...a),
-        ...createSettingsSlice(...a),
-        ...createKeybindingsSlice(...a),
-        ...createGitHubSlice(...a),
-        ...createHostedReviewSlice(...a),
-        ...createLinearSlice(...a),
-        ...createPreflightSlice(...a),
-        ...createJiraSlice(...a),
-        ...createEditorSlice(...a),
-        ...createStatsSlice(...a),
-        ...createMemorySlice(...a),
-        ...createWorkspaceSpaceSlice(...a),
-        ...createClaudeUsageSlice(...a),
-        ...createCodexUsageSlice(...a),
-        ...createOpenCodeUsageSlice(...a),
-        ...createMuseUsageSlice(...a),
-        ...createBrowserSlice(...a),
-        ...createRateLimitSlice(...a),
-        ...createSshSlice(...a),
-        ...createRuntimeEnvironmentSshSlice(...a),
-        ...createWslHostsSlice(...a),
-        ...createAgentStatusSlice(...a),
-        ...createPaneForegroundAgentSlice(...a),
-        ...createDiffCommentsSlice(...a),
-        ...createDetectedAgentsSlice(...a),
-        ...createRuntimeDetectedAgentsSlice(...a),
-        ...createWorktreeNavHistorySlice(...a),
-        ...createDictationSlice(...a),
-        ...createWorkspaceCleanupSlice(...a),
-        ...createWorkspaceCleanupBrowseSlice(...a),
-        ...createRuntimeStatusSlice(...a),
-        ...createPullRequestGenerationSlice(...a),
-        ...createCommitMessageGenerationSlice(...a),
-        ...createPinnedTabCloseConfirmSlice(...a),
-        ...createRecentlyClosedTabsSlice(...a),
-        ...createOrcaProfilesSlice(...a),
-        ...createNewIssueDraftSlice(...a),
-        ...createFeedbackDraftSlice(...a),
-        ...createTaskCreationDraftsSlice(...a),
-        ...createRemoteServerUpdatesSlice(...a),
-        ...createTerminalQuickCommandHostsSlice(...a),
-        ...createStructuredSessionLaunchDirectorySlice(...a),
-        ...createWorkspaceAttentionSlice(...a)
-      }
-    })
+  withEditorBufferRecords(
+    withDevelopmentStoreProbes(
+      withReactCommitCascadeWriteProbe((...a) => {
+        // Why first: settling inside the bump's own notify means hook subscribers never see it unsettled.
+        // Switch point: the stamp-sorted list reads no settled epoch.
+        if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
+          installSettledSortEpoch(a[2])
+        }
+        // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
+        installStoreListenerCensus(a[2])
+        return {
+          ...createRepoSlice(...a),
+          ...createSparsePresetsSlice(...a),
+          ...createWorktreeSlice(...a),
+          ...createTerminalSlice(...a),
+          ...createTabsSlice(...a),
+          ...createUISlice(...a),
+          ...createSettingsSlice(...a),
+          ...createKeybindingsSlice(...a),
+          ...createGitHubSlice(...a),
+          ...createHostedReviewSlice(...a),
+          ...createLinearSlice(...a),
+          ...createPreflightSlice(...a),
+          ...createJiraSlice(...a),
+          ...createEditorSlice(...a),
+          ...createStatsSlice(...a),
+          ...createMemorySlice(...a),
+          ...createWorkspaceSpaceSlice(...a),
+          ...createClaudeUsageSlice(...a),
+          ...createCodexUsageSlice(...a),
+          ...createOpenCodeUsageSlice(...a),
+          ...createMuseUsageSlice(...a),
+          ...createBrowserSlice(...a),
+          ...createRateLimitSlice(...a),
+          ...createSshSlice(...a),
+          ...createRuntimeEnvironmentSshSlice(...a),
+          ...createWslHostsSlice(...a),
+          ...createAgentStatusSlice(...a),
+          ...createPaneForegroundAgentSlice(...a),
+          ...createDiffCommentsSlice(...a),
+          ...createDetectedAgentsSlice(...a),
+          ...createRuntimeDetectedAgentsSlice(...a),
+          ...createWorktreeNavHistorySlice(...a),
+          ...createDictationSlice(...a),
+          ...createWorkspaceCleanupSlice(...a),
+          ...createWorkspaceCleanupBrowseSlice(...a),
+          ...createRuntimeStatusSlice(...a),
+          ...createPullRequestGenerationSlice(...a),
+          ...createCommitMessageGenerationSlice(...a),
+          ...createPinnedTabCloseConfirmSlice(...a),
+          ...createRecentlyClosedTabsSlice(...a),
+          ...createOrcaProfilesSlice(...a),
+          ...createNewIssueDraftSlice(...a),
+          ...createFeedbackDraftSlice(...a),
+          ...createTaskCreationDraftsSlice(...a),
+          ...createRemoteServerUpdatesSlice(...a),
+          ...createTerminalQuickCommandHostsSlice(...a),
+          ...createStructuredSessionLaunchDirectorySlice(...a),
+          ...createStructuredChatSleptAtSlice(...a),
+          ...createWorkspaceAttentionSlice(...a)
+        }
+      })
+    ),
+    import.meta.env.DEV || e2eConfig.exposeStore
   )
 )
 

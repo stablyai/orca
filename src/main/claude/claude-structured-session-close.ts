@@ -44,6 +44,7 @@ export function claudeAcquisitionCleanupError(
     : new AgentSessionAcquisitionExitUnprovenError(cause)
 }
 
+/** An unproven exit keeps the acquisition so a later stop can still prove its root gone. */
 export async function resolveClaudeAcquisitionError(input: {
   error: unknown
   sessionId: string
@@ -51,6 +52,7 @@ export async function resolveClaudeAcquisitionError(input: {
   attempt: ClaudeAcquisitionAttempt
   translator: ClaudeJournalTranslator | null
   prompts: ClaudePromptRegistry
+  releaseAcquisition: () => void
 }): Promise<unknown> {
   let acquisitionError = input.error
   if (input.sessions.get(input.sessionId)?.connection !== input.attempt.connection) {
@@ -64,6 +66,9 @@ export async function resolveClaudeAcquisitionError(input: {
     } else if (!closed) {
       acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)
     }
+  }
+  if (!(acquisitionError instanceof AgentSessionAcquisitionExitUnprovenError)) {
+    input.releaseAcquisition()
   }
   return acquisitionError
 }
@@ -96,8 +101,6 @@ async function finalizeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
 ): Promise<boolean> {
-  session.events?.observeExit?.(claudeHeldSends(session))
-  retireClaudeDispatchWaiters(session)
   settleClaudeTurnEndWaiters(session)
   // Settle every in-flight permission callback so closing leaves no dangling promise; `null`
   // writes no response, and the SDK ignores any post-cleanup answer regardless.
@@ -120,6 +123,10 @@ async function finalizeClaudePublishedSession(
     }
     rootExitVerdict = cleanupError
   }
+  // Held until the step that tells the host the child ended: released before the close's wait, a
+  // send reads as held by nobody, so in doubt, while the host still keeps the child.
+  session.events?.observeExit?.(claudeHeldSends(session))
+  retireClaudeDispatchWaiters(session)
   // Queues the session's ending for the host's child records; the adapter delivers it after close.
   // Even a proven close is Orca losing contact, not a Stop the CLI accepted: what still ran ends
   // with no outcome anyone reported.
@@ -287,6 +294,10 @@ export async function closeClaudeSession(input: {
     )
     // Why: cancellation must preserve the same actionable verdict as published-session close.
     if (!(cleanupError instanceof AgentSessionAcquisitionExitUnprovenError)) {
+      // A proved-dead attempt cannot remain the owner blocking the next start.
+      if (attempt) {
+        input.acquisitions.deleteIfCurrent(input.sessionId, attempt)
+      }
       throw cleanupError
     }
     return false

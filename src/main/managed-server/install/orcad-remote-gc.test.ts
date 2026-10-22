@@ -5,7 +5,9 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../ssh/ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+vi.mock('../../../shared/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('./remote-install-gc-claim', () => ({
   isRelayGcClaimOwned: vi.fn().mockResolvedValue(true),
   releaseRelayGcClaimWithRetry: vi.fn().mockResolvedValue('released'),

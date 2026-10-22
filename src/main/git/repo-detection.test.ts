@@ -326,6 +326,15 @@ describe('isGitRepo', () => {
     ).toBe(String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps a literal backslash in a POSIX checkout root',
+    () => {
+      expect(normalizeGitRepoRootForInputPath('/tmp/repo\\name/sub', '/tmp/repo\\name')).toBe(
+        '/tmp/repo\\name'
+      )
+    }
+  )
+
   it('preserves bare repository paths when no worktree root exists', () => {
     const bareRepo = path.join(tmpDir, 'bare.git')
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])

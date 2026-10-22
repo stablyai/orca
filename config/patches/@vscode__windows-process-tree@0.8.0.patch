@@ -32,13 +32,17 @@ index 11a5e71..1b2e74b 100644
                  "/guard:cf",
                  "/sdl",
 diff --git a/lib/index.js b/lib/index.js
-index e586cd6..0ee62c3 100644
+index 9747a7402600cd252859144d32580ed45c8c93f7..69cf7fe6d14e52b199ac9ab869567be5d9bb708c 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -7,11 +7,14 @@
+@@ -6,12 +6,17 @@
+ Object.defineProperty(exports, "__esModule", { value: true });
  exports.getAllProcesses = exports.getProcessTree = exports.getProcessCpuUsage = exports.getProcessList = exports.filterProcessList = exports.buildProcessTree = exports.ProcessDataFlag = void 0;
  const util_1 = require("util");
- const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
+-const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++// Orca's per-ABI build, published into package dirs shared across worktrees, wins over build/Release.
++const orcaNativeBuild = `${__dirname}/../build/orca-napi-win32-${process.arch}/windows_process_tree.node`;
++const native = process.platform === 'win32' ? require(require('fs').existsSync(orcaNativeBuild) ? orcaNativeBuild : '../build/Release/windows_process_tree.node') : undefined;
 +exports.getProcessCreationTime = native === undefined ? undefined : native.getProcessCreationTime;
 +exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;
  var ProcessDataFlag;
@@ -50,7 +54,7 @@ index e586cd6..0ee62c3 100644
  })(ProcessDataFlag = exports.ProcessDataFlag || (exports.ProcessDataFlag = {}));
  // requestInProgress is used for any function that uses CreateToolhelp32Snapshot, as multiple calls
  // to this cannot be done at the same time.
-@@ -66,11 +69,12 @@
+@@ -66,11 +71,12 @@ function buildProcessTree(rootPid, processList, maxDepth = MAX_FILTER_DEPTH) {
      // • the properties are inlined/splatted
      // • the 'ppid' field is omitted
      // • the depth of the tree is limited by `maxDepth`
@@ -65,13 +69,17 @@ index e586cd6..0ee62c3 100644
      });
      return buildNode(root, maxDepth);
 diff --git a/lib/index.ts b/lib/index.ts
-index 7b53aad..284dae1 100644
+index 7b53aad05c3682a5c7d814d81a39c3f391ae97e3..364b384e7d55f3682515431839352b5b4a9ffa93 100644
 --- a/lib/index.ts
 +++ b/lib/index.ts
-@@ -6,12 +6,16 @@
+@@ -5,13 +5,19 @@
+ 
  import { promisify } from 'util';
  
- const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
+-const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++// Orca's per-ABI build, published into package dirs shared across worktrees, wins over build/Release.
++const orcaNativeBuild = `${__dirname}/../build/orca-napi-win32-${process.arch}/windows_process_tree.node`;
++const native = process.platform === 'win32' ? require(require('fs').existsSync(orcaNativeBuild) ? orcaNativeBuild : '../build/Release/windows_process_tree.node') : undefined;
 +export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined = native?.getProcessCreationTime;
 +/** The flag bits this compiled addon reports; undefined off win32. */
 +export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;
@@ -86,7 +94,7 @@ index 7b53aad..284dae1 100644
  }
  
  type RequestCallback = (processList: IProcessInfo[]) => void;
-@@ -81,11 +85,12 @@
+@@ -81,11 +87,12 @@ export function buildProcessTree(rootPid: number, processList: Iterable<IProcess
    // • the properties are inlined/splatted
    // • the 'ppid' field is omitted
    // • the depth of the tree is limited by `maxDepth`

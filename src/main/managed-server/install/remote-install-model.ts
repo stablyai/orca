@@ -28,7 +28,7 @@ import {
 } from '../../../shared/orcad-artifacts'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 
-export type RemoteInstallModelId = 'relay' | 'orcad'
+type RemoteInstallModelId = 'relay' | 'orcad'
 
 export type RemoteInstallModel = {
   readonly id: RemoteInstallModelId
@@ -143,9 +143,9 @@ export function remoteInstallGcPermits(model: RemoteInstallModel, dirName: strin
  * `runtimes` is the shared Node store (design D5). No version-dir model owns it, so neither
  * model's GC can list or delete it; only `remote-node-runtime-store-gc.ts` collects inside it.
  */
-export type RemoteInstallDirOwner = RemoteInstallModelId | 'runtimes'
+type RemoteInstallDirOwner = RemoteInstallModelId | 'runtimes'
 
-export type RemoteInstallInventory = Record<RemoteInstallDirOwner | 'unknown', string[]>
+type RemoteInstallInventory = Record<RemoteInstallDirOwner | 'unknown', string[]>
 
 /** Group a raw `~/.orca-remote/` listing by owning model, for diagnostics and the client's choice. */
 export function inventoryRemoteInstallDirs(dirNames: readonly string[]): RemoteInstallInventory {

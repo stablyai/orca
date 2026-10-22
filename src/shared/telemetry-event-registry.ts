@@ -1,3 +1,8 @@
+import {
+  onboardingLanguagePickerOpenedSchema,
+  onboardingLanguageChangedSchema,
+  onboardingLanguageRequestedSchema
+} from './telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './telemetry-agent-token-usage-schema'
 import {
   agentErrorSchema,
@@ -169,6 +174,9 @@ export const eventSchemas = {
   feature_wall_feature_selected: featureWallFeatureSelectedSchema,
   feature_wall_docs_clicked: featureWallDocsClickedSchema,
 
+  onboarding_language_picker_opened: onboardingLanguagePickerOpenedSchema,
+  onboarding_language_changed: onboardingLanguageChangedSchema,
+  onboarding_language_requested: onboardingLanguageRequestedSchema,
   onboarding_started: onboardingStartedSchema,
   onboarding_step_viewed: onboardingStepViewedSchema,
   onboarding_step_completed: onboardingStepCompletedSchema,

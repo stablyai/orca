@@ -5,13 +5,14 @@
  * Read-only: lists sockets or pipes and reads each daemon's argv; never starts, stops or removes
  * anything. Another desktop's relay hashes another target id, so it is never listed here.
  */
-import type { SshConnection } from '../ssh-connection'
-import { shellEscape } from '../ssh-connection-utils'
+import type { SshConnection } from '../connection/ssh-connection'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from '../relay-socket-path-limit'
 import { execCommand } from '../remote-exec/remote-exec-command'
 import { readRelayDaemonRuntimes } from './ssh-relay-endpoint-runtime'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { probeRelayEndpointIncumbent } from './ssh-relay-endpoint-incumbent'
 import { readRemoteHomeCommand } from '../ssh-remote-commands'
 import { resolveRemoteNodePath } from '../ssh-remote-node-resolution'
 import { detectRemoteHostPlatform } from '../ssh-remote-platform-detection'
@@ -51,9 +52,9 @@ export type LegacyRelayEndpointListing =
   | { kind: 'unverifiable' }
 
 export function legacyRelayEndpointListCommand(remoteHome: string, sockName: string): string {
-  const name = shellEscape(sockName)
+  const name = quotePosixShell(sockName)
   return [
-    `base=${shellEscape(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
+    `base=${quotePosixShell(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
     `short_base="${SHORT_RELAY_SOCKET_DIR_PREFIX}$(id -u 2>/dev/null)"`,
     `for sock in "$base"/relay-*/${name} "$short_base"/relay-*/${name}; do`,
     '  [ -S "$sock" ] && printf \'%s\\n\' "$sock"',
@@ -81,9 +82,9 @@ export function posixLegacyRelayConnectCommand(
   }
   const relayDir = `${remoteHome}/${RELAY_REMOTE_DIR}/${versionDir}`
   return (
-    `cd ${shellEscape(relayDir)} && ${shellEscape(nodePath)} relay.js --connect ` +
-    `--sock-path ${shellEscape(sockPath)} ` +
-    `--credential-file ${shellEscape(`${relayDir}/${sockName}.credential`)}`
+    `cd ${quotePosixShell(relayDir)} && ${quotePosixShell(nodePath)} relay.js --connect ` +
+    `--sock-path ${quotePosixShell(sockPath)} ` +
+    `--credential-file ${quotePosixShell(`${relayDir}/${sockName}.credential`)}`
   )
 }
 
@@ -208,4 +209,21 @@ async function listWindowsEndpoints(
     })
   }
   return { kind: 'listed', endpoints, exhaustive }
+}
+
+/** A dead socket is the one failed open that proves its relay gone; Windows pipes never are. */
+export async function posixEndpointExited(
+  conn: SshConnection,
+  endpoint: LegacyRelayEndpoint
+): Promise<boolean> {
+  if (isWindowsRemoteHost(endpoint.host) || !endpoint.nodePath) {
+    return false
+  }
+  const incumbent = await probeRelayEndpointIncumbent(
+    conn,
+    endpoint.host,
+    endpoint.nodePath,
+    endpoint.endpoint
+  )
+  return incumbent.verdict === 'exited'
 }

@@ -1,11 +1,15 @@
-// The server-owned store for files a client attaches to a structured chat.
+// The host-owned store for files a client attaches to a structured chat: a paired server's for its
+// clients, and this machine's for its own local chats' pastes.
 //
 // `<root>/<upload id>/<original file name>`: one directory per upload keeps the user's file name
 // intact (agents read meaning into it) without two uploads colliding. Bytes land in a hidden part
 // file and are renamed into place on commit, so a stored name is always complete. Which chats hold
 // an upload is recorded by the message that names it (`agent-session-attachment-claims.ts`).
 
-import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { constants, createWriteStream } from 'node:fs'
+import { appendFile, lstat, mkdir, open, rm, writeFile } from 'node:fs/promises'
+import { pipeline } from 'node:stream/promises'
 import { extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
@@ -28,6 +32,7 @@ import {
 
 const UPLOAD_MAX_CONCURRENT = 8
 const UPLOAD_IDLE_TTL_MS = 5 * 60 * 1000
+const FRESH_FILE_STREAM_HIGH_WATER_MARK = 1024 * 1024
 const NOT_FOUND = 'Attachment upload was not found'
 const NOT_AN_IMAGE = 'Not an attachment image'
 const PREVIEW_TOO_LARGE = 'file_too_large'
@@ -151,6 +156,81 @@ export class AgentSessionAttachmentStore {
       throw error
     } finally {
       this.uploads.delete(args.uploadId)
+    }
+  }
+
+  /** Stores bytes this process already holds as one committed upload; returns its path. Not in
+   *  flight meanwhile: the sweep leaves a folder this new alone for an hour. */
+  async storeFile(name: string, bytes: Buffer): Promise<string> {
+    const uploadDir = join(this.rootDir, randomUUID())
+    const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
+    try {
+      await mkdir(uploadDir, { recursive: true })
+      const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      await writeFile(partPath, bytes, { flag: 'wx' })
+      await renameFileWithWindowsRetryAsync(partPath, finalPath)
+    } catch (error) {
+      await removeQuietly(uploadDir)
+      throw error
+    }
+    return finalPath
+  }
+
+  /** Trusted local intake of a recorded unpublished 0600 snapshot, never a user path. */
+  async importFreshFile(name: string, sourcePath: string, byteLength: number): Promise<string> {
+    const uploadDir = join(this.rootDir, randomUUID())
+    const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
+    try {
+      await mkdir(uploadDir, { recursive: true })
+      try {
+        // Rename is the commit: nothing fallible may follow a successful move.
+        await renameFileWithWindowsRetryAsync(sourcePath, finalPath)
+        return finalPath
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'EXDEV')) {
+          throw error
+        }
+      }
+      const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      const handle = await open(sourcePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+      try {
+        const before = await handle.stat()
+        if (!before.isFile() || before.size !== byteLength) {
+          throw new Error('Snapshot changed')
+        }
+        await (byteLength === 0
+          ? writeFile(partPath, '', { flag: 'wx', mode: 0o600 })
+          : pipeline(
+              handle.createReadStream({
+                start: 0,
+                end: byteLength - 1,
+                autoClose: false,
+                highWaterMark: FRESH_FILE_STREAM_HIGH_WATER_MARK
+              }),
+              createWriteStream(partPath, {
+                flags: 'wx',
+                mode: 0o600,
+                highWaterMark: FRESH_FILE_STREAM_HIGH_WATER_MARK
+              })
+            ))
+        const after = await handle.stat()
+        if (
+          (await lstat(partPath)).size !== byteLength ||
+          after.size !== before.size ||
+          after.mtimeMs !== before.mtimeMs ||
+          after.ino !== before.ino ||
+          after.dev !== before.dev
+        ) {
+          throw new Error('Snapshot changed')
+        }
+      } finally {
+        await handle.close()
+      }
+      await renameFileWithWindowsRetryAsync(partPath, finalPath)
+      return finalPath
+    } catch (error) {
+      await removeQuietly(uploadDir)
+      throw error
     }
   }
 

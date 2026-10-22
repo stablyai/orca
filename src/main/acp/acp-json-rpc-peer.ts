@@ -137,7 +137,7 @@ export class AcpJsonRpcPeer {
           ? undefined
           : setTimeout(() => {
               this.pending.delete(id)
-              const error = new AcpRequestTimeoutError(method)
+              const error = new AcpRequestTimeoutError(method, timeoutMs)
               controller.abort(error)
               reject(error)
             }, timeoutMs)

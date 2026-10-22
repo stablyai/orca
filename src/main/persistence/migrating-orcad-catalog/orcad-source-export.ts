@@ -7,13 +7,13 @@
 import {
   ORCAD_MIGRATION_SCROLLBACK_CHUNK_BYTES,
   type OrcadMigrationTerminalScrollbackSnapshot
-} from '../../../shared/orcad-migration-scrollback'
+} from '../../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { assertOrcadMigrationManifestDigest } from '../../orcad/orcad-migration-manifest-digest'
 import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
@@ -28,6 +28,10 @@ import {
 } from './orcad-source-delta-view'
 import { syncOrcadMigrationScrollbackRetention } from './orcad-source-scrollback-retention'
 import { createOrcadMigrationLeaveBehindView } from './orcad-source-leave-behind-view'
+import {
+  collectOrcadMigrationSourceDrafts,
+  type OrcadMigrationSourceDrafts
+} from './orcad-source-draft-rename'
 
 type OrcadSourceExportRuntime = Pick<
   StoreRuntimeState,
@@ -56,6 +60,11 @@ export class OrcadSourceExportPersistence {
       runtime.terminalScrollbackSnapshotStorage,
       destinationEnvironmentId
     ).payload
+  }
+
+  /** This desktop's drafts for what `manifest` moves, keyed as the server names the worktrees. */
+  collectOrcadMigrationSourceDrafts(manifest: OrcadMigrationManifest): OrcadMigrationSourceDrafts {
+    return collectOrcadMigrationSourceDrafts(this[orcadSourceExportContext].state, manifest)
   }
 
   /** A copy of the source with `moved` subtracted from it, for a delta move. */

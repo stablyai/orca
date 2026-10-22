@@ -162,6 +162,20 @@ describe('bounded output', () => {
   })
 })
 
+describe('stderr streaming', () => {
+  it('forwards stderr as it arrives without changing the captured result', async () => {
+    const chunks: string[] = []
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stderr.write("x".repeat(64))'],
+      maxOutputBytes: 8,
+      onStderr: (chunk) => chunks.push(chunk.toString())
+    })
+    expect(chunks.join('')).toBe('x'.repeat(64))
+    expect(result.stderr).toBe('xxxxxxxx')
+  })
+})
+
 describe('unkillable children', () => {
   it('settles after the grace period rather than outliving its own deadline', async () => {
     // `close` only fires once the child is gone, so a child that ignores the

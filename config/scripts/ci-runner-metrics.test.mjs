@@ -69,7 +69,50 @@ it('paginates jobs and bounds run discovery to 24 complete hours', async () => {
   expect(result.report.end).toBe('2026-09-28T04:00:00.000Z')
   expect(requests.filter((path) => path.startsWith('actions/runs?'))).toHaveLength(24)
   expect(result.samples[0].jobs).toHaveLength(101)
+  expect(requests.filter((path) => path.includes('/jobs'))).toEqual([
+    'actions/runs/1/jobs?per_page=100&filter=all',
+    'actions/runs/1/jobs?per_page=100&filter=all&page=2'
+  ])
   expect(result.report.workflows[0].runnerMinutes).toBe(505)
+})
+
+it('counts only later attempts of previously successful jobs, including failed repeats', () => {
+  const observation = (name, run_attempt, conclusion, extra = {}) => ({
+    ...job,
+    name,
+    run_attempt,
+    conclusion,
+    ...extra
+  })
+  const report = runnerDemand(
+    [run],
+    [
+      {
+        run,
+        weight: 2,
+        jobs: [
+          observation('unit 1', 3, 'failure'),
+          observation('unit 1', 1, 'success'),
+          observation('unit 1', 2, 'success'),
+          observation('unit 2', 1, 'failure'),
+          observation('unit 2', 2, 'success'),
+          observation('unit 2', 3, 'skipped', { runner_name: null }),
+          observation('lint', 1, 'success'),
+          observation('lint', 2, null, { completed_at: null }),
+          observation('same attempt', 1, 'success'),
+          observation('same attempt', 1, 'success'),
+          observation('missing attempt', undefined, 'success'),
+          observation('missing attempt', 2, 'failure')
+        ]
+      }
+    ]
+  )
+  expect(report.workflows[0]).toMatchObject({
+    repeatedSuccessfulJobs: 4,
+    repeatedSuccessfulRunnerMinutes: 20,
+    runnerMinutes: 100
+  })
+  expect(report.incompleteJobs).toBe(1)
 })
 
 it('refuses to publish a silently truncated inventory', async () => {

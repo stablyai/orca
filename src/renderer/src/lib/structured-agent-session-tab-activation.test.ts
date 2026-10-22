@@ -18,7 +18,9 @@ vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => 
   requestNativeChatComposerFocus: mocks.requestNativeChatComposerFocus
 }))
 
-vi.mock('./worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => 'env-1' }))
+vi.mock('./worktree-runtime-owner', () => ({
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => 'env-1'
+}))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 

@@ -4,6 +4,8 @@ import { RelayHostAnsweredError } from './remote-exec/remote-host-answered-failu
 export const REMOTE_NODE_RUNTIME_READY = 'ORCA_NODE_RUNTIME_READY'
 export const REMOTE_NODE_RUNTIME_MISSING = 'ORCA_NODE_RUNTIME_MISSING'
 export const REMOTE_NODE_RUNTIME_SELFTEST_FAILED = 'ORCA_NODE_RUNTIME_SELFTEST_FAILED'
+/** The store's filesystem refused to execute a file Orca wrote there; the shell's words follow. */
+export const REMOTE_NODE_RUNTIME_NOEXEC = 'ORCA_NODE_RUNTIME_NOEXEC'
 /** A file Orca wrote and verified changed or vanished afterwards; the rest of the line says which. */
 export const REMOTE_NODE_RUNTIME_SECURITY_MODIFIED = 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED'
 export const REMOTE_NODE_RUNTIME_EXIT_PREFIX = 'ORCA_RUNTIME_EXIT='
@@ -19,6 +21,34 @@ export class RemoteNodeRuntimeSelfTestError extends RelayHostAnsweredError {
       `The pinned Node runtime did not run on the host (exit ${exitStatus ?? 'unknown'}): ${output}`
     )
     this.name = 'RemoteNodeRuntimeSelfTestError'
+  }
+}
+
+/** The host refuses to run programs from the runtime store, e.g. a home mounted `noexec`. */
+export class RemoteNodeRuntimeNoexecError extends RelayHostAnsweredError {
+  constructor(
+    readonly output: string,
+    storeDir = 'Orca’s runtime folder'
+  ) {
+    super(`The host does not allow running programs from ${storeDir}: ${output}`)
+    this.name = 'RemoteNodeRuntimeNoexecError'
+  }
+}
+
+/**
+ * Throws only for the shell's exec refusal; any other probe failure falls through to the upload,
+ * whose self-test classifies it with the loader's own words.
+ */
+export function assertRemoteNodeRuntimeStoreExecutable(probe: string, storeDir: string): void {
+  const index = probe.indexOf(REMOTE_NODE_RUNTIME_NOEXEC)
+  if (index === -1) {
+    return
+  }
+  const report = parseRemoteRuntimeExitReport(probe.slice(index))
+  // Why the status alone: 126 is "found but not executable", and the probe is our own 0700 /bin/sh
+  // script, so only an exec refusal is left; the shell's words may be localized.
+  if (report.exitStatus === 126) {
+    throw new RemoteNodeRuntimeNoexecError(report.output, storeDir)
   }
 }
 

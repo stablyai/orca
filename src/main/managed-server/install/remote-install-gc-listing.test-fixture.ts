@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import { runProcess, spawnProcess } from '@orca/process-host'
-import type { SshConnection } from '../../ssh/ssh-connection'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 
 export const SSH_EXEC_OUTPUT_CAP_CHARS = 1024 * 1024
@@ -119,7 +119,7 @@ export function createRelayGcListingFixture(): {
     symlinkSync(join(root, validNames[0]), join(root, 'relay-0.1.0+eee'), 'dir')
     return {
       root,
-      findCommand: `find ${shellEscape(root)} -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print`,
+      findCommand: `find ${quotePosixShell(root)} -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print`,
       validNames,
       fillValidEntryBoundary: () => {
         for (let index = 0; index < 63; index += 1) {

@@ -6,10 +6,11 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { wrapRemoteCommandForPosixShell, type SshExecOptions } from './ssh-connection-utils'
+import { wrapRemoteCommandForPosixShell } from './ssh-posix-command-wrapper'
+import type { SshExecOptions } from './connection/ssh-exec-options'
 import { execCommand, isSshCommandExitError } from './remote-exec/remote-exec-command'
 import { readRemoteHomeCommand } from './ssh-remote-commands'
-import type { SshConnection } from './ssh-connection'
+import type { SshConnection } from './connection/ssh-connection'
 import { tryResolveViaLoginShell } from './ssh-remote-node-resolution'
 import {
   normalizeRemoteHome,

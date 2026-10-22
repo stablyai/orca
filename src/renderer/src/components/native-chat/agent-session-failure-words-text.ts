@@ -13,6 +13,7 @@ import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-wo
 import { STOP_FAILURE_PIECES } from './agent-session-failure-stop-words-text'
 import { PROVIDER_EXIT_PIECES } from './agent-session-provider-exit-words-text'
 import { PROVIDER_RETRY_PIECES } from './agent-session-provider-retry-words-text'
+import { USAGE_LIMIT_PIECES } from './agent-session-usage-limit-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
@@ -44,6 +45,13 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.couldNotRestart',
         COPY.couldNotRestart,
         values
+      ),
+    startTimedOut: (values) =>
+      translate('components.native-chat.failureWords.startTimedOut', COPY.startTimedOut, values),
+    startTimedOutKeepsHappening: () =>
+      translate(
+        'components.native-chat.failureWords.startTimedOutKeepsHappening',
+        COPY.startTimedOutKeepsHappening
       ),
     argumentsUnsupportedOption: (values) =>
       translate(
@@ -251,6 +259,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
     hostStopped: (values) =>
       translate('components.native-chat.failureWords.hostStopped', COPY.hostStopped, values),
     ...PROVIDER_RETRY_PIECES,
+    ...USAGE_LIMIT_PIECES,
     previousExitUnverifiable: (values) =>
       translate(
         'components.native-chat.failureWords.previousExitUnverifiable',

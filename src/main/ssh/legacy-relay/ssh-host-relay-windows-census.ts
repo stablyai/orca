@@ -8,7 +8,7 @@
  * failed or a live pipe that cannot be asked: a shell no lease here knows must never let the host
  * convert under it.
  */
-import type { SshConnection } from '../ssh-connection'
+import type { SshConnection } from '../connection/ssh-connection'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { RELAY_INSTALL_MODEL } from '../../managed-server/install/remote-install-model'
 import type { HostRelayEndpointCensus } from './ssh-host-relay-endpoint-census'

@@ -6,7 +6,7 @@
  * nonce). The slot's own `orcad.js` then writes the request and proves exit on the host.
  */
 import { randomUUID } from 'node:crypto'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { selectOrcadSlotRuntimeCommand } from '../install/orcad-remote-runtime'
 import {
   parseOrcadReadinessWaitOutput,
@@ -129,7 +129,7 @@ async function runSlotCommand(
     : await execOrcadRemote(
         options,
         `${selectOrcadSlotRuntimeCommand(options.host, slotDir, options.nodePath)} && ` +
-          `"$orcad_runtime" ${shellEscape(entry)} ${flag} ${shellEscape(JSON.stringify(request))}`
+          `"$orcad_runtime" ${quotePosixShell(entry)} ${flag} ${quotePosixShell(JSON.stringify(request))}`
       )
   const line = output
     .trim()

@@ -21,10 +21,7 @@ type Props<Value extends string> = {
 /** A pick-one pill control; each segment reads as a radio button. */
 export function MobileSegmentedControl<Value extends string>(props: Props<Value>) {
   return (
-    <View
-      style={[styles.segmented, props.style, props.disabled && styles.disabled]}
-      accessibilityRole="radiogroup"
-    >
+    <View style={[styles.segmented, props.style]} accessibilityRole="radiogroup">
       {props.segments.map((segment) => {
         const active = segment.value === props.selected
         return (
@@ -71,7 +68,6 @@ const styles = StyleSheet.create({
   },
   segmentFill: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
   segmentActive: { backgroundColor: colors.bgRaised },
-  disabled: { opacity: 0.5 },
   segmentText: { fontSize: typography.metaSize, color: colors.textSecondary, fontWeight: '600' },
   segmentTextActive: { color: colors.textPrimary }
 })

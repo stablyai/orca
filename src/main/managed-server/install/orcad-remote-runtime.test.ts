@@ -6,7 +6,7 @@ import { runProcessSync } from '@orca/process-host'
 import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { stopOrcadCommand } from './orcad-remote-process-control'
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 
 const directories: string[] = []
 const host = getRemoteHostPlatform('linux-x64')
@@ -41,12 +41,12 @@ function nodeSlot(options: { marker?: string; runtime?: boolean } = {}): string 
 
 /** Frozen copy of the Bun-era selector that shipped clients still run (design D7.1 R5). */
 function bunEraSelectorCommand(directory: string, legacyNodePath: string): string {
-  const runtime = shellEscape(join(directory, 'bun-runtime'))
-  const target = shellEscape(join(directory, '.build-target'))
+  const runtime = quotePosixShell(join(directory, 'bun-runtime'))
+  const target = quotePosixShell(join(directory, '.build-target'))
   return (
     `if [ -e ${target} ] || [ -e ${runtime} ]; then ` +
     `[ -x ${runtime} ] || exit 78; orcad_runtime=${runtime}; ` +
-    `else orcad_runtime=${shellEscape(legacyNodePath)}; fi`
+    `else orcad_runtime=${quotePosixShell(legacyNodePath)}; fi`
   )
 }
 

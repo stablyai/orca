@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { setAppEnvironment } from '../../../shared/app-environment'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { SshConnection } from '../ssh-connection'
+import { SshConnection } from '../connection/ssh-connection'
 
 export function installHostileHostAppEnvironment(): () => void {
   const userData = mkdtempSync(join(tmpdir(), 'orca-hostile-hosts-userdata-'))

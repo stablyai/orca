@@ -23,6 +23,7 @@ import {
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval
 } from '../worktree-background-removal'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -242,7 +243,9 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
       featureId,
       expect.objectContaining({ requirePhysicalStop: true })
     )
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(featureId, 'local')
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: featureId, hostId: 'local' })
+    )
     expect(await listFeature()).toBeUndefined()
   })
 

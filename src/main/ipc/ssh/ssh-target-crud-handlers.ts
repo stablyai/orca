@@ -14,15 +14,18 @@ import {
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { closeOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { rotateSshProviderAuthority } from '../../ssh/ssh-provider-authority'
-import { getSshTargetRegistryStore, setSshTargetMutations } from '../../ssh/ssh-target-registry'
+import {
+  getSshTargetRegistryStore,
+  setSshTargetMutations
+} from '../../ssh/targets/ssh-target-registry'
 import {
   allowsDirectSshRelay,
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
-} from '../../ssh/ssh-connection-store'
+} from '../../ssh/connection/ssh-connection-store'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
-import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-access'
+import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
 import { notifyReposChanged } from '../repos/repos-changed-notification'
 import { requestDesktopBrowserBridgeReconcile } from '../desktop-browser-bridge-reconcile'
@@ -97,7 +100,7 @@ export function assertNotManagedServerHost(targetId: string): void {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (target && isManagedOrcadSshTarget(target)) {
     throw new Error(
-      'This host runs a managed Orca server. Use Stop… under Settings › Managed servers to stop the server and remove it first, or Forget… there if the host is gone.'
+      'Orca runs on this host. Use Stop… under Settings › Orca on your SSH hosts to stop it and remove it from the host first, or Forget… there if the host is gone.'
     )
   }
 }
@@ -123,7 +126,7 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
   if (environmentId && updated) {
     // Why: the tunnel and the SSH transport under it were built from the old fields, so both go
     // and the next use dials the edited target. Only a host reached through its managed server:
-    // one an older build changed runs on the relay directly, whose session owns the transport.
+    // one an older build changed is unserved, so it has no managed connect to redial.
     const redial =
       !allowsDirectSshRelay(updated) &&
       (!before || fingerprintRuntimeSshTarget(before) !== fingerprintRuntimeSshTarget(updated))

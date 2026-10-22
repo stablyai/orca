@@ -33,18 +33,18 @@ export async function resolveOrcadStdioBridge(
   conn: OrcadHostTransport,
   port: number
 ): Promise<OrcadStdioBridge> {
+  // A WSL distro is always a POSIX host, and its deploy already proved Linux: skip the round trip.
+  if (isWslOrcadHostTarget(conn.getTarget())) {
+    return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
+  }
   const host = await detectRemoteHostPlatform(conn)
   if (!host) {
-    throw new OrcadHostUnsupportedError('This SSH host platform is not supported by managed orcad.')
+    throw new OrcadHostUnsupportedError('Orca’s server doesn’t support this SSH host’s platform.')
   }
   if (!isWindowsRemoteHost(host)) {
     return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
   }
   const target = conn.getTarget()
-  // A WSL distro is a Linux host, so a Windows answer from it is not one this path can serve.
-  if (isWslOrcadHostTarget(target)) {
-    throw new OrcadHostUnsupportedError('This WSL distro reported a Windows host platform.')
-  }
   // Stages this client's pinned node.exe and host script, which an app update may have changed.
   const context = await resolveOrcadRemoteContext(target, conn, undefined, host)
   return {
@@ -106,7 +106,7 @@ export async function checkOrcadStdioBridge(
     }
     const unavailable = (detail: string): Error =>
       new OrcadStdioBridgeUnavailableError(
-        `The SSH host could not run the managed Orca server's stdio bridge: ${detail}`
+        `The SSH host could not run the stdio bridge for this host’s Orca server: ${detail}`
       )
     decoder.on('signal', (signal: OrcadStdioBridgeSignal) => {
       settle(signal === 'no-node' ? unavailable('no pinned Node runtime') : 'running')

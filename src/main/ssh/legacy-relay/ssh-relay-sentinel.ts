@@ -1,5 +1,5 @@
 import type { ClientChannel } from 'ssh2'
-import { createSshOperationAbortError } from '../ssh-connection-utils'
+import { createSshOperationAbortError } from '../connection/ssh-exec-options'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../remote-exec/remote-frame-protocol'
 import type { MultiplexerTransport } from '../ssh-channel-multiplexer'
 import { buildRelayHandshakeRefusalError } from './ssh-relay-handshake-mismatch'

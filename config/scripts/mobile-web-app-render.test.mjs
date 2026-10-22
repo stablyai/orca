@@ -328,9 +328,10 @@ describe('the shell policy this page is tested under', () => {
     expect(cspHeader).not.toContain("script-src 'self' 'unsafe-inline'")
   })
 
-  it('admits data: and https: for images and for nothing else', () => {
+  it('admits embedded fonts and limits external sources to images', () => {
     expect(cspHeader.split('; ').filter((entry) => entry.includes('data:'))).toEqual([
-      "img-src 'self' data: blob: https:"
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:"
     ])
     expect(cspHeader.split('; ').filter((entry) => entry.includes('https:'))).toEqual([
       "img-src 'self' data: blob: https:"

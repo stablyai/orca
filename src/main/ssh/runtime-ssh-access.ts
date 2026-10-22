@@ -28,8 +28,6 @@ import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
 
 type TargetClaims = ReturnType<typeof requireManagedOrcadInfrastructure>['claims']
 
-export { fingerprintRuntimeSshTarget }
-
 function requireTarget(claims: TargetClaims, targetId: string): SshTarget & { generation: number } {
   const target = claims.listTargets().find((entry) => entry.id === targetId)
   const generation = target?.generation

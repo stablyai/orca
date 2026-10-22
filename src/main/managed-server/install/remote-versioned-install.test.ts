@@ -11,8 +11,8 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   execCommand: vi.fn()
 }))
 
-vi.mock('../../ssh/ssh-connection-utils', () => ({
-  shellEscape: (s: string) => `'${s}'`
+vi.mock('../../../shared/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
 }))
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -37,7 +37,7 @@ import {
   waitForRelayGcClaimRelease
 } from './remote-install-gc-claim'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import type { SshConnection } from '../../ssh/ssh-connection'
+import type { SshConnection } from '../../ssh/connection/ssh-connection'
 
 const conn = {} as SshConnection
 const mockExec = vi.mocked(execCommand)
@@ -134,8 +134,9 @@ describe('isRemoteInstallComplete', () => {
     await isRemoteInstallComplete(conn, ORCAD_INSTALL_MODEL, '/r', host)
     const cmd = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(ORCAD_INSTALL_MODEL.requiredArtifacts(host).length).toBeGreaterThan(0)
+    expect(cmd).toContain("cd '/r'")
     for (const artifact of ORCAD_INSTALL_MODEL.requiredArtifacts(host)) {
-      expect(cmd).toContain(`/r/${artifact}`)
+      expect(cmd).toContain(`test -f '${artifact}'`)
     }
     expect(cmd).toContain(ORCAD_INSTALL_MODEL.installCompleteFilename)
   })

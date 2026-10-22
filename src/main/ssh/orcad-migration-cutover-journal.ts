@@ -11,7 +11,7 @@ import {
   isRetainedOrcadMigrationSourceCutover,
   parseOrcadMigrationSourceCutover,
   type OrcadMigrationSourceCutover
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import {
   createMigrationJournalDirectory,
   orderMigrationJournalChain

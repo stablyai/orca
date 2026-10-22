@@ -15,6 +15,7 @@ it("creates a chat while another saved chat's owner check fails", async () => {
   await attach()
   const prior = hostTestState()
   prior.acquire.mockImplementation(async ({ fence, spawnToken }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: { hostId: 'local', pid: 4242, processStartTimeMs: HOST_TEST_NOW, spawnToken },
     link: {
       linkId: 'new-link',

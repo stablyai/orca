@@ -97,13 +97,19 @@ describe('ToolRun', () => {
       renderer = create(
         createElement(ToolRun, {
           blocks: Array.isArray(blocks) ? blocks : blocks.blocks,
-          defaultExpanded: true,
-          expandChildren: false,
           onOpenFile
         })
       )
     })
+    openRun(renderer!)
     return renderer!
+  }
+
+  /** Taps the run's header: a run starts closed. */
+  function openRun(tree: ReactTestRenderer): void {
+    act(() => {
+      tree.root.findAll((node) => String(node.type) === 'Pressable')[0]!.props.onPress()
+    })
   }
 
   const textIn = (node: ReactTestInstance): string[] =>
@@ -394,12 +400,11 @@ describe('ToolRun', () => {
         renderer = create(
           createElement(ToolRun, {
             blocks: [todo(['completed', 'completed', 'pending'])],
-            previousTodoWrite: todo(['completed', 'in_progress']),
-            defaultExpanded: true,
-            expandChildren: false
+            previousTodoWrite: todo(['completed', 'in_progress'])
           })
         )
       })
+      openRun(renderer!)
       expect(textIn(renderer!.root)).toEqual(
         expect.arrayContaining(['Completed Task 1', 'Added Task 2', 'Full task list'])
       )
@@ -414,7 +419,7 @@ describe('ToolRun', () => {
     ]
 
     /** The transcript's store, with the run mounted or recycled away. */
-    function Transcript({ mounted, toolsExpanded }: { mounted: boolean; toolsExpanded: boolean }) {
+    function Transcript({ mounted }: { mounted: boolean }) {
       const disclosures = useMobileNativeChatDisclosures('host\0worktree\0tab')
       return createElement(
         MobileNativeChatDisclosureContext.Provider,
@@ -422,15 +427,13 @@ describe('ToolRun', () => {
         mounted
           ? createElement(ToolRun, {
               blocks,
-              disclosureId: 'a1',
-              defaultExpanded: toolsExpanded,
-              expandChildren: toolsExpanded
+              disclosureId: 'a1'
             })
           : null
       )
     }
 
-    function show(props: { mounted: boolean; toolsExpanded: boolean }): void {
+    function show(props: { mounted: boolean }): void {
       act(() => {
         if (renderer) {
           renderer.update(createElement(Transcript, props))
@@ -450,12 +453,12 @@ describe('ToolRun', () => {
     }
 
     it('keeps an opened run and line open after the row is recycled and drawn again', () => {
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: true })
       press('ls')
       press('ls')
       expect(textIn(renderer!.root)).toContain('a.ts')
-      show({ mounted: false, toolsExpanded: false })
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: false })
+      show({ mounted: true })
       expect(textIn(renderer!.root)).toContain('a.ts')
     })
 
@@ -470,29 +473,18 @@ describe('ToolRun', () => {
     })
 
     it('comes back where the reader left its box after the row is recycled', () => {
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: true })
       press('ls')
       act(() => {
         box().props.onScroll(scrolled(120))
       })
-      show({ mounted: false, toolsExpanded: false })
-      show({ mounted: true, toolsExpanded: false })
+      show({ mounted: false })
+      show({ mounted: true })
       scrolls.to.mockClear()
       act(() => {
         box().props.onContentSizeChange()
       })
       expect(scrolls.to).toHaveBeenCalledWith({ y: 120, animated: false })
-    })
-
-    it('restores the reader’s choice when the Tools toggle goes back off', () => {
-      show({ mounted: true, toolsExpanded: false })
-      press('ls')
-      show({ mounted: true, toolsExpanded: true })
-      expect(textIn(renderer!.root)).toContain('a.ts')
-      show({ mounted: true, toolsExpanded: false })
-      // The run the reader opened is still open; the line they never opened is closed again.
-      expect(textIn(renderer!.root).filter((text) => text === 'ls')).toHaveLength(2)
-      expect(textIn(renderer!.root)).not.toContain('a.ts')
     })
   })
 
@@ -506,8 +498,6 @@ describe('ToolRun', () => {
     const live = (blocks: NativeChatBlock[]) =>
       createElement(ToolRun, {
         blocks,
-        defaultExpanded: true,
-        expandChildren: false,
         activeTurnIsWorking: true,
         trailing: true
       })
@@ -518,6 +508,7 @@ describe('ToolRun', () => {
     act(() => {
       renderer = create(live(first))
     })
+    openRun(renderer!)
     const box = () => renderer!.root.findAll((node) => String(node.type) === 'ScrollView')[0]!
     act(() => {
       box().props.onContentSizeChange()
@@ -568,8 +559,6 @@ describe('ToolRun', () => {
     const live = (blocks: NativeChatBlock[]) =>
       createElement(ToolRun, {
         blocks,
-        defaultExpanded: true,
-        expandChildren: false,
         activeTurnIsWorking: true,
         trailing: true
       })
@@ -577,6 +566,7 @@ describe('ToolRun', () => {
     act(() => {
       renderer = create(live([call]))
     })
+    openRun(renderer!)
     const box = () => renderer!.root.findAll((node) => String(node.type) === 'ScrollView')[0]!
     act(() => {
       box().props.onContentSizeChange()

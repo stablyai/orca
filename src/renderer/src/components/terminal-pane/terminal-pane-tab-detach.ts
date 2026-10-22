@@ -149,10 +149,11 @@ async function moveLeafToNewTab(
   // Switch point: main moves the pane and names the new tab.
   const answer = await (
     ORCA_LAYOUT_OWNER_IS_MAIN
-      ? moveLeafThroughLayoutOwner(request, {
-          groupId: args.targetGroupId,
-          index: args.targetIndex
-        })
+      ? moveLeafThroughLayoutOwner(
+          request,
+          { groupId: args.targetGroupId, index: args.targetIndex },
+          args.sourcePaneCwd?.cwd
+        )
       : window.api.pty.moveLeafToNewTab(request)
   ).catch((error: unknown) => {
     console.warn('[terminal-pane-detach] main did not answer the move', error)

@@ -25,6 +25,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 import { pairedHostClientCapabilities } from '@/runtime/paired-host-client-capabilities'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 
@@ -166,10 +167,10 @@ export function buildAgentLaunchRouteInput(
       workspaceId: workspace.worktreeId,
       requestedCwd: tuiCustomization?.cwd,
       workspacePath: workspace.worktreeId
-        ? findWorktreeById(store.worktreesByRepo ?? {}, workspace.worktreeId)?.path
+        ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
         : undefined,
       resolveFolderWorkspacePath: (folderWorkspaceId) =>
-        store.folderWorkspaces?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
+        selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
     }),
     ...hostStructuredAgentsInput(store, executionHostId)
   }

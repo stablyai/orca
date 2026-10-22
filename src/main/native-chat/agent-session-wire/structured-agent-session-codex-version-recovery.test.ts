@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { CodexCliInstallationError } from '../../codex/codex-cli-installation-error'
+import { AgentCliInstallationError } from '../agent-cli-installation-error'
 import { isStructuredAgentSessionStartFailureRow } from '../../../shared/structured-agent-session-start-failure-row-key'
 import { projectQueuedMessageCards } from '../../../renderer/src/components/native-chat/structured-agent-session-queued-cards'
 import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
@@ -41,7 +41,8 @@ async function retainedDraft() {
   await rig.settleAccepted(working, 'earlier-turn')
   await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
   rig.starts.mockImplementationOnce(() => {
-    throw new CodexCliInstallationError({
+    throw new AgentCliInstallationError({
+      agent: 'codex',
       installedVersion: '0.135.0',
       minimumVersion: '0.136.0'
     })

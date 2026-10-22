@@ -109,20 +109,20 @@ describe('sendLayoutApply', () => {
     expect(applied.apply).toHaveBeenCalledWith({ tabId: 'tab-1' })
   })
 
-  it('holds the tabs a drawn change names, in each workspace, until its answer is in', async () => {
+  it('holds the tabs a drawn change names until its answer is in, but no move main draws first', async () => {
     mocks.sent.reply = { ok: true, result: {} }
+    recordLayoutApply(NO_STATE, 'wt-1', { type: 'closeTabs', tabIds: ['tab-1'] })
+    // A restored tab's move is sent before the window draws it: its frame draws it.
     recordLayoutApply(NO_STATE, 'wt-1', {
       type: 'moveTabToWorkspace',
       toWorkspace: 'wt-2',
-      tabs: [{ tabId: 'tab-1', newTabId: 'tab-1b', newEntityId: 'file-1b' }],
+      tabs: [{ tabId: 'tab-2', newTabId: 'tab-2b', newEntityId: 'file-2b' }],
       groupId: 'group-2'
     })
     expect(isDrawnTabHeld('wt-1', 'tab-1')).toBe(true)
-    expect(isDrawnTabHeld('wt-2', 'tab-1b')).toBe(true)
-    expect(isDrawnTabHeld('wt-2', 'file-1b')).toBe(true)
-    expect(isDrawnTabHeld('wt-2', 'tab-1')).toBe(false)
+    expect(isDrawnTabHeld('wt-1', 'tab-2')).toBe(false)
+    expect(isDrawnTabHeld('wt-2', 'tab-2b')).toBe(false)
     await vi.waitFor(() => expect(isDrawnTabHeld('wt-1', 'tab-1')).toBe(false))
-    expect(isDrawnTabHeld('wt-2', 'tab-1b')).toBe(false)
   })
 
   it('holds group sizes the window set, and nothing for a change main draws first', async () => {
@@ -131,7 +131,7 @@ describe('sendLayoutApply', () => {
     sendLayoutApply(
       NO_STATE,
       'wt-1',
-      { type: 'setGroupRatios', groupLayout: { type: 'leaf', groupId: 'g' } },
+      { type: 'setGroupRatios', ratios: [{ path: '', ratio: 0.3 }] },
       {
         apply: keep,
         asToday: keep,
@@ -154,7 +154,10 @@ describe('sendLayoutApply', () => {
 })
 
 describe('sendLayoutApply holds with no answer', () => {
-  const RATIOS = { type: 'setGroupRatios', groupLayout: { type: 'leaf', groupId: 'g' } } as const
+  const RATIOS: Parameters<typeof sendLayoutApply>[2] = {
+    type: 'setGroupRatios',
+    ratios: [{ path: '', ratio: 0.3 }]
+  }
   const NO_ANSWER = 'setGroupRatios hold released: no answer in 15s'
 
   beforeEach(() => {

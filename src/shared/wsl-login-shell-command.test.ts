@@ -7,9 +7,9 @@ import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
-  buildWslLoginShellCommand,
-  quotePosixShell
+  buildWslLoginShellCommand
 } from './wsl-login-shell-command'
+import { quotePosixShell } from './shell-argument-quoting'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
 let wslShAvailable: boolean | null = null

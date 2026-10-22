@@ -19,6 +19,12 @@ import {
   installMonacoViewStateTracking,
   restoreMonacoViewState
 } from './monaco-view-state-persistence'
+import {
+  isStaleCachedEditorText,
+  mayPushTabTextIntoModel,
+  requestStaleCacheReload,
+  settleStaleCacheReload
+} from './editor-stale-mount-guard'
 
 // Why: binds a freshly created Monaco instance to the app; reads everything through refs so the callback identity stays stable across renders.
 export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
@@ -106,20 +112,31 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
 
       // Why: see contentRef — reconcile the retained model to the current prop before user interaction (surfaces edits made while unmounted).
       const modelKey = toEditorModelUri(filePath, modelOwnerKey)
-      beginProgrammaticContentSync(modelKey)
-      isApplyingProgrammaticContentRef.current = true
-      try {
-        const didSyncOnMount = syncContentOnMount(
-          editorInstance,
-          contentRef.current,
-          contentSyncModeRef.current
-        )
-        if (didSyncOnMount) {
-          lastSyncedContentRef.current = contentRef.current
+      const staleCache = isStaleCachedEditorText(fileIdRef.current, contentRef.current)
+      if (!staleCache) {
+        settleStaleCacheReload(fileIdRef.current)
+      }
+      const liveTextDiffers = editorInstance.getModel()?.getValue() !== contentRef.current
+      if (
+        (staleCache && liveTextDiffers) ||
+        (liveTextDiffers && !mayPushTabTextIntoModel(fileIdRef.current))
+      ) {
+        // Why: the live model's text is the truth; stale or disk text must never replace it.
+        lastSyncedContentRef.current = contentRef.current
+      } else if (staleCache) {
+        // Why: no live model holds the truth, so drop the stale cache once to reload from disk.
+        requestStaleCacheReload(fileIdRef.current, contentRef.current)
+      } else {
+        beginProgrammaticContentSync(modelKey)
+        isApplyingProgrammaticContentRef.current = true
+        try {
+          if (syncContentOnMount(editorInstance, contentRef.current, contentSyncModeRef.current)) {
+            lastSyncedContentRef.current = contentRef.current
+          }
+        } finally {
+          isApplyingProgrammaticContentRef.current = false
+          endProgrammaticContentSync(modelKey)
         }
-      } finally {
-        isApplyingProgrammaticContentRef.current = false
-        endProgrammaticContentSync(modelKey)
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)

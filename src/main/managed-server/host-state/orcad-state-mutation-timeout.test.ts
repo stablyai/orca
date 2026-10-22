@@ -14,7 +14,9 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => (
   ...(await importOriginal<typeof ExecCommandModule>()),
   execCommand: vi.fn()
 }))
-vi.mock('../../ssh/ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+vi.mock('../../../shared/shell-argument-quoting', () => ({
+  quotePosixShell: (s: string) => `'${s}'`
+}))
 vi.mock('../install/remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),
   acquireInstallLock: vi.fn()
@@ -75,12 +77,25 @@ const slot = {
 }
 const census = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
 const deploy = (): Promise<unknown> =>
-  deployOrcad({ ...slot, localOrcadDir: '/local/out/orcad', target: 'linux-x64-glibc', census })
+  deployOrcad({
+    ...slot,
+    localOrcadDir: '/local/out/orcad',
+    target: 'linux-x64-glibc',
+    census,
+    recountCensus: async () => census,
+    releaseIncumbentAdmission: async () => {}
+  })
 const rollback = (): Promise<unknown> =>
   rollbackOrcad({
     ...slot,
     record: FakeOrcadHost.newRecord(),
     census,
+    recountCensus: async () => ({
+      liveSessions: 0,
+      startedSinceActivation: 0,
+      daemonProtocolVersion: 3
+    }),
+    releaseIncumbentAdmission: async () => {},
     targetBuildHash: BUILD_HASH,
     targetDaemonProtocol: { protocolVersion: 3, previousProtocolVersions: [1, 2] }
   })

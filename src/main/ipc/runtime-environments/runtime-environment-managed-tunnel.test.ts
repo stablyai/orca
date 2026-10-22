@@ -50,7 +50,7 @@ vi.mock('../../managed-server/lifecycle/orcad-managed-update-on-restore', () => 
   redeployStoppedManagedOrcad: mocks.redeploy
 }))
 vi.mock('../../ssh/ssh-host-server-status', () => ({ setSshHostServerStatus: vi.fn() }))
-vi.mock('../../ssh/ssh-target-registry', () => ({ getSshTargetRegistryStore: () => null }))
+vi.mock('../../ssh/targets/ssh-target-registry', () => ({ getSshTargetRegistryStore: () => null }))
 vi.mock('../ssh/ssh-ipc-context', () => ({
   connectionManager: null,
   getCurrentMainWindow: () => null

@@ -22,6 +22,8 @@ type Attachment = {
   attachmentId: string
   connectionId: string
   pairedDeviceId: string
+  /** True when the desktop declared it understands `cancel`; older desktops never receive one. */
+  acceptsCancel?: boolean
   emit: (event: DesktopBrowserBridgeEvent) => void
 }
 
@@ -75,12 +77,26 @@ export class DesktopBrowserBridgeRegistry {
         this.pending.delete(requestId)
         options.signal?.removeEventListener('abort', onAbort)
       }
+      let emitted = false
+      // Why: without this a command still queued on the desktop runs after the CLI gave up on it.
+      const cancelOnDesktop = (): void => {
+        if (!emitted || !attachment.acceptsCancel || !this.attachments.includes(attachment)) {
+          return
+        }
+        try {
+          attachment.emit({ type: 'cancel', requestId })
+        } catch {
+          // The socket is gone, so the desktop's own detach revokes the command.
+        }
+      }
       const onAbort = (): void => {
         settle()
+        cancelOnDesktop()
         reject(new BrowserError('browser_aborted', 'The browser command was cancelled.'))
       }
       const timer = setTimeout(() => {
         settle()
+        cancelOnDesktop()
         reject(
           new BrowserError('browser_timeout', 'The desktop did not answer the browser command.')
         )
@@ -115,6 +131,7 @@ export class DesktopBrowserBridgeRegistry {
           ),
           ...(request.workspaceId ? { workspaceId: request.workspaceId } : {})
         })
+        emitted = true
       } catch {
         this.pending.get(requestId)?.reject(unavailableError())
       }

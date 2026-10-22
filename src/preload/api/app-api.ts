@@ -1,5 +1,5 @@
+import type { UiLanguageDetection } from '../../shared/ui-locale'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 import type { E2EConfig } from '../../shared/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -15,6 +15,9 @@ import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapsh
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
 
 export type AppApi = {
+  getSystemLanguageDetection?: (
+    browserPreferences?: readonly string[]
+  ) => Promise<UiLanguageDetection | null>
   /** A local profile storage operation is delayed and holds up subsequent saves. */
   isProfileStateSaveDelayed: () => Promise<boolean>
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
@@ -39,8 +42,6 @@ export type AppApi = {
   stageBeforeUnloadSync: (args: {
     sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
     ui: Partial<PersistedUIState>
-    /** Layout-owner builds: the resume records the quit capture changed. */
-    sleepRecords?: SleepingAgentSessionRecord[]
   }) => void
   /** Resolves once the last staged checkpoint is durably written; rejects if that
    *  write failed, so a reload/restart can abort instead of losing the snapshot. */

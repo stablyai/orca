@@ -11,13 +11,15 @@ import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import type { GetStatusOptions } from './get-status-options'
 
-/** Undefined — and therefore zero extra work — unless the caller asked for a total we can know exact. */
+/** Undefined — and therefore zero extra work — unless status succeeded and the caller asked for a valid base. */
 export function createBranchLineTotalInput(
   worktreePath: string,
   entries: GitStatusEntry[],
   options: GetStatusOptions,
   statusSucceeded: boolean
-): { mergeBase: string; compute: () => Promise<GitBranchLineTotal | undefined> } | undefined {
+):
+  | { mergeBase: string; compute: () => Promise<GitBranchLineTotal | null | undefined> }
+  | undefined {
   const mergeBase = readGitBranchLineTotalMergeBaseParam(options.branchLineTotalMergeBase)
   // Why: a failed status scan leaves the untracked list untrustworthy, so the
   // total would silently under-count rather than be absent.

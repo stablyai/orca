@@ -2,7 +2,7 @@
  * The steal's exited-holder condition, as each host's command reads it: `*Check` before the steal
  * claim, `*ClaimCheck` inside it, and `*Release` where the claim is cleaned up.
  */
-import { shellEscape } from '../../ssh/ssh-connection-utils'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import type { InstallLockOwnerFile } from './remote-install-lock-commands'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
 import {
@@ -30,9 +30,9 @@ export function posixCheck(
   if (!exitedOwner) {
     return `${variableName}=0;`
   }
-  const ownerPath = shellEscape(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
+  const ownerPath = quotePosixShell(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
   return (
-    `${variableName}=0; if [ "$(cat ${ownerPath} 2>/dev/null)" = ${shellEscape(exitedOwner.token)} ] && ` +
+    `${variableName}=0; if [ "$(cat ${ownerPath} 2>/dev/null)" = ${quotePosixShell(exitedOwner.token)} ] && ` +
     `[ "\${${ageVariable}:-0}" -gt ${exitedOwner.quietSeconds} ] 2>/dev/null; then ${variableName}=1; fi;`
   )
 }
@@ -67,13 +67,13 @@ function posixMutationAdmission(
   if (!exitedOwner?.mutationLock) {
     return ''
   }
-  const ownerPath = shellEscape(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
+  const ownerPath = quotePosixShell(`${lockDir.replace(/\/+$/u, '')}/${exitedOwner.fileName}`)
   return [
     'if [ "$current_exited" = 1 ]; then current_exited=0;',
-    `if mkdir ${shellEscape(exitedOwner.mutationLock)} 2>/dev/null; then held_mutation=${shellEscape(exitedOwner.mutationLock)};`,
+    `if mkdir ${quotePosixShell(exitedOwner.mutationLock)} 2>/dev/null; then held_mutation=${quotePosixShell(exitedOwner.mutationLock)};`,
     `owns_mutation=1; ${posixStateMutationPidRecord('"$held_mutation"', 'owns_mutation=0;')}`,
     posixStateMutationGroupRecord('"$held_mutation"'),
-    `[ "$owns_mutation" = 1 ] && [ "$(cat ${ownerPath} 2>/dev/null)" = ${shellEscape(exitedOwner.token)} ] &&`,
+    `[ "$owns_mutation" = 1 ] && [ "$(cat ${ownerPath} 2>/dev/null)" = ${quotePosixShell(exitedOwner.token)} ] &&`,
     `${identityAssignment(lockDir, 'again_key')} && [ "$again_key" = "$lock_key" ] && current_exited=1;`,
     'fi; fi;'
   ].join(' ')

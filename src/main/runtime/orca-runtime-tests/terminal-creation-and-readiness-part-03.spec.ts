@@ -328,7 +328,8 @@ describe('OrcaRuntimeService', () => {
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
     expect(spawnedPtyEnv(spawnCall).ORCA_WORKTREE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
-    expect(spawnCall?.env?.ORCA_WORKSPACE_ID).toBeUndefined()
+    // The window's floating panes carry the sentinel as their workspace id too.
+    expect(spawnCall?.env?.ORCA_WORKSPACE_ID).toBe(FLOATING_TERMINAL_WORKTREE_ID)
     expect(spawnCall?.env?.ORCA_PROJECT_GROUP_ID).toBeUndefined()
     expect(spawnCall?.env?.ORCA_WORKSPACE_ROOT).toBeUndefined()
   })

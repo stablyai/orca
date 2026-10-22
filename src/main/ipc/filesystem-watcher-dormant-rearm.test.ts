@@ -30,7 +30,9 @@ const WORKTREE_PATH = '/home/me/repo'
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
 const OVERFLOW_PAYLOAD = {
   worktreePath: WORKTREE_PATH,
-  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
+  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }],
+  resync: true,
+  connectionId: 'conn-1'
 }
 const RETRY_GIVE_UP_MS = 61_000
 const DORMANT_FIRST_MS = 60_000

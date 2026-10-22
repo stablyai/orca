@@ -3,8 +3,8 @@
  * paths differ on the destination (a local WSL distro reached through `\\wsl.localhost`) supplies a
  * rewriter; the relay-era SSH host uses the identity, which leaves the payload byte-identical.
  */
-import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration-manifest'
-import { isRecord } from '../../shared/orcad-migration-manifest-fields'
+import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
+import { isRecord } from '../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { PTY_SESSION_ID_SEPARATOR } from '../../shared/pty-session-id-format'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
