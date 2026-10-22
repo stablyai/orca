@@ -4,6 +4,7 @@ import {
 } from './remote-session-content-lines'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
+import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -19,6 +20,7 @@ import {
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { resolveCursorTranscriptCwd } from './session-scanner-cursor-project-cwd'
 import {
   asRecord,
   extractContentText,
@@ -106,5 +108,25 @@ async function parseCursorSessionLines(args: {
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
-  return state.finalize(args.platform, args.options)
+  const session = await state.finalize(args.platform, args.options)
+  if (!session) {
+    return null
+  }
+  if (!session.cwd) {
+    const legacyCwd = await resolveCursorTranscriptCwd(args.file.path)
+    if (legacyCwd) {
+      return {
+        ...session,
+        cwd: legacyCwd,
+        resumeCommand: buildAiVaultResumeCommand({
+          agent: session.agent,
+          sessionId: session.sessionId,
+          resumeFilePath: session.filePath,
+          cwd: legacyCwd,
+          platform: args.platform
+        })
+      }
+    }
+  }
+  return session
 }
