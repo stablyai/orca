@@ -166,6 +166,15 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
     return entry.refreshing
   }
 
+  /** A read that starts after this call: a fetch already in flight runs once more after it. */
+  rereadAfterChange(environmentId: string): Promise<void> {
+    const entry = this.servers.get(environmentId)
+    if (entry?.refreshing) {
+      entry.refreshAgain = true
+    }
+    return this.refresh(environmentId)
+  }
+
   /** The server's raw rows as last fetched under this pairing; null when none were. */
   rows(environmentId: string, fence: string): readonly MobileRelayServerWorktreeRow[] | null {
     const entry = this.servers.get(environmentId)

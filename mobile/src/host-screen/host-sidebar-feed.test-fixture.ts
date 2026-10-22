@@ -74,6 +74,7 @@ export function feedDomains(overrides: Partial<SidebarFeedDomains> = {}): Sideba
     activity: new Map(),
     review: new Map(),
     creations: new Map(),
+    inProgress: new Map(),
     pairedServerHosts: new Map(),
     pairedServerRows: new Map(),
     repoIcons: new Map(),

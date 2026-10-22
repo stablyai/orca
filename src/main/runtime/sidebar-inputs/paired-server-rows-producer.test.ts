@@ -242,6 +242,27 @@ describe('PairedServerRowsProducer', () => {
     expect(rowsOf(producer, 'runtime:box')?.rows.map((entry) => entry.worktreeId)).toEqual(['new'])
   })
 
+  it('rereads after a change it was told of, past a fetch that started before it', async () => {
+    const { hosts, call, watches } = fakeHosts([{ id: 'box', live: true }])
+    let answer: (response: RuntimeRpcResponse<unknown>) => void = () => {}
+    call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+    call.mockResolvedValueOnce(psReply([row('after-sleep')]))
+    const producer = new PairedServerRowsProducer({
+      hasDemand: () => true,
+      hostLabelOverrides: () => new Map()
+    })
+    producer.attach(hosts)
+    watches.get('box')?.onChange()
+    const reread = producer.rereadAfterChange('box')
+    answer(psReply([row('before-sleep')]))
+    await reread
+
+    expect(call).toHaveBeenCalledTimes(2)
+    expect(rowsOf(producer, 'runtime:box')?.rows.map((entry) => entry.worktreeId)).toEqual([
+      'after-sleep'
+    ])
+  })
+
   // A server answering after `delayMs`, or failing as the transport would once its bound passes.
   function slowServer(call: ReturnType<typeof fakeHosts>['call'], delayMs: number, rows: string[]) {
     call.mockImplementationOnce(

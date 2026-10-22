@@ -52,7 +52,7 @@ import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from './sidebar-row-plan'
 import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
-import { isIdleWorkspaceActivity } from './workspace-activity-facts'
+import { isFeedWorkspaceAsleep } from './workspace-sleep-verdict'
 import { prGroupOfReviewFact } from './workspace-review-facts'
 
 /** The host's view settings a reader shows the list with; the host's own phone reads them off ui.get. */
@@ -175,11 +175,8 @@ export function planSidebarFeedRows(
       isCliCreated: (worktree) => factsOf(worktree)?.cliCreated === true,
       isDetachedHead: (worktree) => factsOf(worktree)?.detachedHead === true,
       isMainWorktree: (worktree) => worktree.isMainWorktree,
-      isSleeping: (worktree) => {
-        const identity = getWorktreeHostIdentity(worktree)
-        const activity = domains.activity.get(identity)
-        return !retained.has(identity) && (!activity || isIdleWorkspaceActivity(activity))
-      }
+      isSleeping: (worktree) =>
+        isFeedWorkspaceAsleep(domains, retained, worktree, index.repoOf(worktree))
     },
     worktreeLineageById: lineageById,
     filterRepoIds: view.filters.filterRepoIds,

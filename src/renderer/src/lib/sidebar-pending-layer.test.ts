@@ -42,6 +42,7 @@ function domains(
     activity: new Map(),
     review: new Map(),
     creations: new Map(),
+    inProgress: new Map(),
     pairedServerHosts: new Map(),
     pairedServerRows: new Map(serverRows.map((row) => [row.key, row])),
     repoIcons: new Map(),

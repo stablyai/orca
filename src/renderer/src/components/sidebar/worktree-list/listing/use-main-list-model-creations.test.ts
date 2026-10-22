@@ -9,6 +9,7 @@ function domainsWith(creations: SidebarFeedDomains['creations']): SidebarFeedDom
     activity: new Map(),
     review: new Map(),
     creations,
+    inProgress: new Map(),
     pairedServerHosts: new Map(),
     pairedServerRows: new Map(),
     repoIcons: new Map(),

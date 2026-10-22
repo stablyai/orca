@@ -250,6 +250,7 @@ function SidebarRowProbe({ worktreeId }: { worktreeId: string }): React.JSX.Elem
     <React.Profiler id={worktreeId} onRender={recordSidebarRowCommit}>
       <WorktreeCardStatusSlot
         worktreeId={worktreeId}
+        repoId="repo-1"
         showStatus={true}
         showUnreadAction={false}
         isUnread={false}

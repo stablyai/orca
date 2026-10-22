@@ -77,3 +77,9 @@ export function useDesktopSidebarFeed(): DesktopSidebarFeed | null {
   useEffect(start, [])
   return useSyncExternalStore(subscribe, () => feed)
 }
+
+/** One value derived from the feed; the caller re-renders only when that value changes. */
+export function useDesktopSidebarFeedValue<T>(select: (feed: DesktopSidebarFeed | null) => T): T {
+  useEffect(start, [])
+  return useSyncExternalStore(subscribe, () => select(feed))
+}

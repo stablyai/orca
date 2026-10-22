@@ -149,7 +149,9 @@ export function useWorktreeContextMenuCommands(args: {
         args.openModal('confirm-sleep-twin', { worktreeIds, hostIds })
         return
       }
-      window.setTimeout(() => void runSleepWorktrees(worktreeIds), 50)
+      // Why at once: the row hides when main has the request. The window's own changes follow main's
+      // started notice, an IPC round trip later, after the menu began closing.
+      void runSleepWorktrees(worktreeIds)
     },
     [args]
   )

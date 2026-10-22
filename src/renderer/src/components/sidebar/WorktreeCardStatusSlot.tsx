@@ -1,4 +1,5 @@
 import React from 'react'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -18,6 +19,9 @@ import {
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
+  /** Which host's copy this card shows: twins share an id, and a sleep is per host. */
+  hostId?: Worktree['hostId']
+  repoId: string
   showStatus: boolean
   showUnreadAction: boolean
   isUnread: boolean
@@ -101,6 +105,8 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
 
 export function WorktreeCardStatusSlot({
   worktreeId,
+  hostId,
+  repoId,
   showStatus,
   showUnreadAction,
   isUnread,
@@ -116,7 +122,7 @@ export function WorktreeCardStatusSlot({
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const status = useWorktreeActivityStatus(worktreeId)
-  const isSleeping = useIsSleepingWorktree(worktreeId)
+  const isSleeping = useIsSleepingWorktree({ id: worktreeId, hostId, repoId })
   const statusLabel = getWorktreeStatusLabel(status) || status
   // Why: sleep must stay distinct from awake completion; a sleeping workspace
   // never collapses into branch/PR, even when retained done rows keep its

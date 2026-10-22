@@ -13,6 +13,10 @@ import {
 } from './workspace-activity-facts'
 import { WorkspaceCreationsSnapshotSchema, type WorkspaceCreation } from './workspace-creations'
 import {
+  WorkspaceLifecycleHintsSchema,
+  type WorkspaceLifecycleHint
+} from './workspace-lifecycle-hints'
+import {
   WorkspaceReviewFactsSnapshotSchema,
   type WorkspaceReviewFact
 } from './workspace-review-facts'
@@ -33,6 +37,8 @@ export type SidebarFeedDomains = {
   activity: ReadonlyMap<HostScopedWorktreeKey, WorkspaceActivityFacts>
   review: ReadonlyMap<HostScopedWorktreeKey, WorkspaceReviewFact>
   creations: ReadonlyMap<string, WorkspaceCreation>
+  /** Lifecycle commands main is running or holding, by host-qualified key; empty from an older host. */
+  inProgress: ReadonlyMap<string, WorkspaceLifecycleHint>
   pairedServerHosts: ReadonlyMap<
     string,
     { freshness: 'live' | 'unverifiable'; host: PairedServerHostFacts | null }
@@ -87,6 +93,7 @@ const entityParsers = {
   activity: entityParser(WorkspaceActivityFactsSnapshotSchema.shape.facts.valueType),
   review: entityParser(WorkspaceReviewFactsSnapshotSchema.shape.facts.valueType),
   creations: entityParser(WorkspaceCreationsSnapshotSchema.shape.creations.valueType),
+  inProgress: entityParser(WorkspaceLifecycleHintsSchema.valueType),
   pairedServerHosts: entityParser(
     PairedServerRowsSnapshotSchema.shape.servers.element.pick({
       freshness: true,
@@ -168,6 +175,9 @@ export function readSidebarFeedDomains(
     creations:
       unchanged('creations')?.creations ??
       readDomain(installed, 'creations', entityParsers.creations),
+    inProgress:
+      unchanged('inProgress')?.inProgress ??
+      readDomain(installed, 'inProgress', entityParsers.inProgress),
     pairedServerHosts:
       unchanged('pairedServerHosts')?.pairedServerHosts ??
       readDomain(installed, 'pairedServerHosts', entityParsers.pairedServerHosts),

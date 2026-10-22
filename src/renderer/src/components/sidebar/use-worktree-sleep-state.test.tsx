@@ -83,7 +83,7 @@ function makeUnifiedTab(args: {
 }
 
 function SleepProbe({ worktreeId }: { worktreeId: string }) {
-  return <span>{String(useIsSleepingWorktree(worktreeId))}</span>
+  return <span>{String(useIsSleepingWorktree({ id: worktreeId, repoId: 'repo-1' }))}</span>
 }
 
 describe('useIsSleepingWorktree', () => {

@@ -17,6 +17,7 @@ import type { WorkspaceSleepPlatform } from './workspace-sleep-platform'
 import type { LaunchHostRepo } from '../worktree-launch-host-repo'
 import type { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
 import { WORKSPACE_DELETED_ERROR } from './workspace-lifecycle-command'
+import type { PairedServerRowsProducer } from '../sidebar-inputs/paired-server-rows-producer'
 import type { RestoredPane, StartedPty } from '../terminal/recovery/restored-pane-start'
 import {
   explicitKey,
@@ -26,8 +27,13 @@ import {
   workspaceLifecycleKey
 } from './workspace-lifecycle-commands'
 
+// Bounds the wait for a paired server's rows to show a sleep; a slow server must not hold the queue.
+const SERVER_REREAD_WAIT_MS = 15_000
+
 export type WorkspaceSleepRuntime = {
   readonly workspaceLifecycle: WorkspaceLifecycleQueue | null
+  /** Null when the sidebar inputs switch is off. */
+  readonly pairedServerRows: Pick<PairedServerRowsProducer, 'rereadAfterChange'> | null
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
   listRepos: () => readonly LaunchHostRepo[]
   showManagedWorktree: (
@@ -194,6 +200,17 @@ export class WorkspaceSleepCoordinator {
           const key = environmentKey(host.environmentId, target.worktreeId)
           return runWorkspaceLifecycleCommand(runtime.workspaceLifecycle, key, {
             ...command,
+            // Why: the hint holds until the server's rows show the sleep, so the row never flickers back.
+            run: async () => {
+              const attempt = await command.run()
+              if (!attempt.failure && !attempt.unverifiable && runtime.pairedServerRows) {
+                await Promise.race([
+                  runtime.pairedServerRows.rereadAfterChange(host.environmentId),
+                  new Promise((resolve) => setTimeout(resolve, SERVER_REREAD_WAIT_MS).unref?.())
+                ])
+              }
+              return attempt
+            },
             // Any answer from the server, even a refusal, is the server answering.
             observe: async () => {
               try {

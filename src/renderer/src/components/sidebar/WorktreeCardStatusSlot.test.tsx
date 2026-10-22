@@ -64,6 +64,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -84,6 +85,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -105,6 +107,7 @@ describe('WorktreeCardStatusSlot', () => {
       const markup = renderToStaticMarkup(
         <WorktreeCardStatusSlot
           worktreeId="wt-1"
+          repoId="repo-1"
           showStatus
           showUnreadAction={false}
           isUnread={false}
@@ -126,6 +129,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread
@@ -146,6 +150,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread
@@ -172,6 +177,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread
@@ -196,6 +202,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread
@@ -220,6 +227,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread
@@ -241,6 +249,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread={false}
@@ -259,6 +268,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -278,6 +288,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -301,6 +312,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -324,6 +336,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -347,6 +360,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -372,6 +386,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -394,6 +409,7 @@ describe('WorktreeCardStatusSlot', () => {
     const awakeMarkup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -411,6 +427,7 @@ describe('WorktreeCardStatusSlot', () => {
     const sleepingMarkup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -432,6 +449,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -454,6 +472,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -478,6 +497,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction={false}
         isUnread={false}
@@ -501,6 +521,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread
@@ -523,6 +544,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread
@@ -555,6 +577,7 @@ describe('WorktreeCardStatusSlot', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
+        repoId="repo-1"
         showStatus
         showUnreadAction
         isUnread

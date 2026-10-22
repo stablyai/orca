@@ -38,6 +38,7 @@ import type {
   WorkspaceSleepRequest
 } from '../../../shared/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
+import type { PairedServerRowsProducer } from '../sidebar-inputs/paired-server-rows-producer'
 import type { RestoredPane } from '../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
@@ -226,6 +227,9 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
       repoId
     )
   }
+
+  /** Paired servers' workspace rows; null when the sidebar inputs switch is off. */
+  abstract readonly pairedServerRows: PairedServerRowsProducer | null
 
   abstract sleepTerminalsForWorktree(
     worktreeSelector: string

@@ -23,6 +23,7 @@ function coordinator(overrides: Partial<WorkspaceSleepRuntime> = {}) {
   const runtime: WorkspaceSleepRuntime = {
     workspaceLifecycle: new WorkspaceLifecycleQueue(),
     workspaceSleepPlatform: null,
+    pairedServerRows: null,
     listRepos: () => [],
     showManagedWorktree: async () => ({ id: WORKTREE, repoId: 'repo' }),
     listTerminals: async () => ({ terminals: [] }),

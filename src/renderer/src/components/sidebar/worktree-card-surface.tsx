@@ -41,7 +41,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     setShowRenameErrorDialog
   } = card
   const { titleOnlyCard, cardStyle } = presentation
-  const isSleeping = useIsSleepingWorktree(worktree.id)
+  const isSleeping = useIsSleepingWorktree(worktree)
 
   const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
 
