@@ -56,7 +56,8 @@ describe('init and state', () => {
           'native.audio.start',
           'native.audio.read',
           'native.audio.stop',
-          'native.storage.read'
+          'native.storage.read',
+          'native.font.read'
         ]
       },
       route: ROUTE,

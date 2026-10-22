@@ -96,8 +96,8 @@ export type TerminalDocumentState = {
   currentTextScale: number
   /** `text-scaling`: the font stack xterm renders with. */
   terminalFontFamily: string
-  /** `terminal-font`: the user's font face this document added, to remove when it is replaced. */
-  customFontFace: FontFace | null
+  /** `terminal-font`: the imported font this document renders with, released when it is replaced. */
+  customFontSource: string | null
   /** `terminal-font`: bumped per set-font so a slower load cannot override a later choice. */
   customFontRequest: number
   /** `terminal-init`: whether the first live chunk since init is still pending. */
@@ -281,7 +281,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
-    customFontFace: null,
+    customFontSource: null,
     customFontRequest: 0,
     firstDataPending: false,
     reportedCellBox: null,

@@ -19,6 +19,7 @@ import {
 import {
   clipboardReadResultSchema,
   clipboardWriteResultSchema,
+  terminalFontReadResultSchema,
   type BridgeClipboardMime,
   type BridgeNativeVerb
 } from './bridge-native-verbs'
@@ -87,6 +88,13 @@ export type NativeVerbs = {
    *  utterance no drain came back for. `stopped` is false for a session that was not capturing,
    *  which is not a fault. */
   stopAudio: () => Promise<z.infer<typeof audioStopResultSchema>>
+  /** Whether the shell serves the imported terminal font; an older one does not. */
+  canReadTerminalFont: boolean
+  /** One range of the stored font, from `offset` up to the shell's chunk size. */
+  readTerminalFont: (
+    fileName: string,
+    offset: number
+  ) => Promise<z.infer<typeof terminalFontReadResultSchema>>
 }
 
 /**
@@ -229,7 +237,10 @@ export function useNativeVerbs(): NativeVerbs {
       startAudio: (sampleRate) =>
         call('native.audio.start', { sampleRate }, audioStartResultSchema),
       readAudio: (maxBytes) => call('native.audio.read', { maxBytes }, audioReadResultSchema),
-      stopAudio: () => call('native.audio.stop', {}, audioStopResultSchema)
+      stopAudio: () => call('native.audio.stop', {}, audioStopResultSchema),
+      canReadTerminalFont: has('native.font.read'),
+      readTerminalFont: (fileName, offset) =>
+        call('native.font.read', { fileName, offset }, terminalFontReadResultSchema)
     }
   }, [client])
 }

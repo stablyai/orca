@@ -1,18 +1,11 @@
-import type { TerminalCustomFont } from '../terminal/document/terminal-font'
-import type { TerminalFontImportResult, TerminalFontPreference } from './terminal-font'
+import type { TerminalFontImportResult } from './terminal-font'
 
-// The page shell has no app-owned file store to keep an imported font in.
+export { loadTerminalFont, type TerminalFontPreference } from './terminal-font-preference'
+
+// Imports run in the shell's own settings screen; the page only reads the choice.
 export const TERMINAL_FONT_IMPORT_SUPPORTED = false
 
-export async function loadTerminalFont(): Promise<TerminalFontPreference | null> {
-  return null
-}
-
-export async function readTerminalFontSource(
-  _font: TerminalFontPreference
-): Promise<TerminalCustomFont> {
-  return null
-}
+export const MAX_TERMINAL_FONT_BYTES = 0
 
 export async function importTerminalFont(): Promise<TerminalFontImportResult> {
   return { status: 'unsupported' }
