@@ -531,14 +531,14 @@
 /* A pane-top banner takes real height: the terminal starts below it and refits. */
 .pane-top-banner {
   position: absolute;
-  top: 0;
+  top: var(--orca-pane-top-banner-offset, 0px);
   left: 0;
   right: 0;
   z-index: 5;
 }
 
 .pane[data-has-title] .pane-top-banner {
-  top: var(--orca-pane-title-height);
+  top: calc(var(--orca-pane-title-height) + var(--orca-pane-top-banner-offset, 0px));
 }
 
 .pane:has(> .pane-top-banner) .xterm-container {

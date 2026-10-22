@@ -45,7 +45,18 @@ describe('fetchWorktrees', () => {
     clearHugeRepoWarningDismissalsForTests()
   })
 
-  it('stamps ownerless worktrees from an older active remote runtime before repos hydrate', async () => {
+  it('lists a repo with no row from this app, never the focused server', async () => {
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    mockApi.worktrees.listDetected.mockResolvedValue(makeDetectedResult('repo1', []))
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.listDetected).toHaveBeenCalled()
+  })
+
+  it('stamps ownerless worktrees from a named remote runtime before repos hydrate', async () => {
     const store = createTestStore()
     const remote = makeWorktree({
       id: 'repo1::/remote/wt1',
@@ -61,7 +72,7 @@ describe('fetchWorktrees', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
 
-    await store.getState().fetchWorktrees('repo1')
+    await store.getState().fetchWorktrees('repo1', { executionHostId: 'runtime:env-1' })
 
     const expected = {
       ...remote,
@@ -587,7 +598,7 @@ describe('fetchWorktrees', () => {
       )
     )
 
-    await store.getState().fetchWorktrees('repo1')
+    await store.getState().fetchWorktrees('repo1', { executionHostId: 'runtime:env-1' })
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([
       {

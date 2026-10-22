@@ -14,7 +14,7 @@ import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqli
 import type * as OwnerInvariants from '../../../shared/workspace-layout/terminal-owner-invariants'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

@@ -63,8 +63,6 @@ vi.mock('../../runtime/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
-
 vi.mock('@/runtime/remote-browser-tab-ownership', () => ({
   browserWorkspaceHasRemoteOwner: () => false
 }))
@@ -115,13 +113,6 @@ beforeEach(() => {
 
 describe('structured agent-session close ordering', () => {
   it('removes the local tab synchronously while host retirement runs independently', async () => {
-    const { closeItem } = useTabGroupTabCloseCommands({ worktreeId: 'wt-1' })
-    closeItem(AGENT_TAB.id)
-
-    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id)
-  })
-
-  it('returns immediately for an unadopted launch tab', async () => {
     const { closeItem } = useTabGroupTabCloseCommands({ worktreeId: 'wt-1' })
     closeItem(AGENT_TAB.id)
 

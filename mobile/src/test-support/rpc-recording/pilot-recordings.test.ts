@@ -50,6 +50,9 @@ describe('RPC main recordings', () => {
             loading: false
           })
         }
+        if (id === 'settings-task-hydration-fulfilled') {
+          expect(visibleState(recording)).toMatchObject({ hydrated: true })
+        }
         const golden = goldenRecording(pilot.scenarios(), recording)
         const bytes = goldenBytes(golden)
         if (run) {

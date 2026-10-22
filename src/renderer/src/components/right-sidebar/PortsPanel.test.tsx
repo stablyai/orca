@@ -329,7 +329,7 @@ describe('PortsPanel runtime routing', () => {
         _meta: { runtimeId: 'runtime-1' }
       })
     )
-    const createBrowserTab = vi.fn(() => ({ activePageId: 'local-page-1' }))
+    const createBrowserTab = vi.fn()
     const setRemoteBrowserPageHandle = vi.fn()
 
     await expect(
@@ -368,13 +368,17 @@ describe('PortsPanel runtime routing', () => {
       'http://127.0.0.1:63468',
       {
         activate: true,
-        browserRuntimeEnvironmentId: 'env-1'
+        browserRuntimeEnvironmentId: 'env-1',
+        browserPageId: expect.any(String)
       }
     )
-    expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
-      environmentId: 'env-1',
-      remotePageId: 'remote-browser-page-1'
-    })
+    expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith(
+      createBrowserTab.mock.calls[0][2].browserPageId,
+      {
+        environmentId: 'env-1',
+        remotePageId: 'remote-browser-page-1'
+      }
+    )
   })
 
   it('rejects remote port browser creation before RPC without the screencast provider', async () => {
@@ -581,7 +585,7 @@ describe('PortsPanel runtime routing', () => {
         _meta: { runtimeId: 'runtime-1' }
       })
     )
-    const createBrowserTab = vi.fn(() => ({ activePageId: 'local-page-1' }))
+    const createBrowserTab = vi.fn()
     const setRemoteBrowserPageHandle = vi.fn()
 
     await expect(
@@ -602,12 +606,15 @@ describe('PortsPanel runtime routing', () => {
     expect(createBrowserTab).toHaveBeenCalledWith(
       'repo::/workspace/app',
       'http://127.0.0.1:63468',
-      { activate: true, browserRuntimeEnvironmentId: 'env-1' }
+      { activate: true, browserRuntimeEnvironmentId: 'env-1', browserPageId: expect.any(String) }
     )
-    expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
-      environmentId: 'env-1',
-      remotePageId: 'remote-browser-page-1'
-    })
+    expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith(
+      createBrowserTab.mock.calls[0][2].browserPageId,
+      {
+        environmentId: 'env-1',
+        remotePageId: 'remote-browser-page-1'
+      }
+    )
   })
 
   it('defaults unknown protocols to http for built-in browser opens', () => {

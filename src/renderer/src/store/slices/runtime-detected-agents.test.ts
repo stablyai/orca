@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from './store-test-helpers'
+import { createRuntimeDetectedAgentsTestStore as createTestStore } from './runtime-detected-agents.test-fixture'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import { getRuntimeAgentInventoryKey } from './runtime-agent-inventory-key'
 import {

@@ -6,6 +6,8 @@ import {
   type CliLaunchRedirectOptions
 } from './cli-launch-redirect'
 
+vi.mock('electron', () => ({ app: { commandLine: { getSwitchValue: () => '' } } }))
+
 const COMMAND_NAMES = ['project', 'serve', 'status', 'skills', 'worktree']
 
 const linux = {
@@ -470,5 +472,40 @@ describe('CLI launch redirect: spawning', () => {
     })
 
     expect(result).toEqual({ redirected: true, status: 1 })
+  })
+})
+
+describe('CLI launch redirect: in-process serve on Wayland (#25400)', () => {
+  const redirect = (argv: string[], readOzonePlatform: () => string): ReturnType<typeof vi.fn> => {
+    const execve = vi.fn()
+    maybeRedirectCliLaunch({
+      argv,
+      env: { XDG_SESSION_TYPE: 'wayland' },
+      platform: 'linux',
+      isPackaged: true,
+      resourcesPath: linux.resourcesPath,
+      execPath: linux.execPath,
+      commandNames: COMMAND_NAMES,
+      exists: () => true,
+      execve,
+      readOzonePlatform
+    })
+    return execve
+  }
+
+  it('re-execs a direct --serve onto X11 when Electron resolved Wayland', () => {
+    const execve = redirect([linux.execPath, '--serve', '--serve-port', '6768'], () => 'wayland')
+    expect(execve).toHaveBeenCalledExactlyOnceWith(
+      linux.execPath,
+      [linux.execPath, '--ozone-platform=x11', '--serve', '--serve-port', '6768'],
+      { XDG_SESSION_TYPE: 'wayland' }
+    )
+  })
+
+  it.each([
+    { name: 'a serve already on X11', argv: [linux.execPath, '--serve'], platform: 'x11' },
+    { name: 'a desktop launch', argv: [linux.execPath], platform: 'wayland' }
+  ])('leaves $name alone', ({ argv, platform }) => {
+    expect(redirect(argv, () => platform)).not.toHaveBeenCalled()
   })
 })

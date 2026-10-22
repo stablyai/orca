@@ -10,7 +10,7 @@ import {
   BUFFERED_FIELD_ID,
   LIVE_INPUT_FIELD_ID,
   liveInputProbeRouteSource
-} from './mobile-web-app-live-input-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-live-input-probe-route.mjs'
 import { MOBILE_WEB_APP_ROUTE_ROOT } from './mobile-web-app-route-manifest.mjs'
 import {
   createBundleServer,
@@ -18,8 +18,8 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
-import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
+import { LAYOUT_SOURCE } from './mobile-web-app/preview/mobile-web-app-terminal-probe-route.mjs'
 
 /**
  * The terminal's live input, in a real browser, on the bundle the shell would serve.
@@ -36,7 +36,7 @@ import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
  * ref points at is inside that branch and never renders, `liveInputRef.current` is null, and
  * `liveInputRef.current?.setNativeProps(...)` is skipped by its own optional chain. The check's
  * error list is exactly empty for a page that never made the call. Its two siblings —
- * `mobile-web-app-session-text-inputs.test.mjs` and `mobile-web-app-session-media-picker.test.mjs`
+ * `mobile-web-app-session-terminal-closure.test.mjs` and `mobile-web-app-session-media-picker.test.mjs`
  * — are source censuses over the route closure and mount nothing at all.
  *
  * So this file gives the hooks the one thing that route cannot: a mounted field. Everything else

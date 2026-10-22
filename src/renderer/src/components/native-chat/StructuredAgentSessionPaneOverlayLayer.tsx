@@ -8,7 +8,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
-import { isStructuredTab } from './structured-agent-session-tabs'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -23,12 +23,14 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId,
   isActive,
   isFocusedGroup,
+  hasSplitGroups,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
   isFocusedGroup: boolean
+  hasSplitGroups: boolean
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element | null {
   // Each chat is read from the host recorded on its tab, never from its workspace id, which two
@@ -42,6 +44,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
     <RetainedPaneHost
       groupId={groupId}
       isVisible={isActive}
+      dimmed={hasSplitGroups && !isFocusedGroup}
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
@@ -101,6 +104,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
               groupActiveTabById.get(tab.groupId) === tab.id &&
               tab.groupId === activeGroupId
             )}
+            hasSplitGroups={groups.length > 1}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

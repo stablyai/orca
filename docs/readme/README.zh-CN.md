@@ -68,7 +68,7 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="../../resources/onboarding/feature-wall/tile-02.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-02.poster.jpg" alt="终端分屏" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="../../resources/onboarding/feature-wall/tile-02.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-02.poster.jpg" alt="终端分屏" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -96,7 +96,7 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="../../resources/onboarding/feature-wall/tile-03.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-03.poster.jpg" alt="Orca 中的 GitHub 与 Linear 任务工作流" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="../../resources/onboarding/feature-wall/tile-03.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-03.poster.jpg" alt="Orca 中的 GitHub 与 Linear 任务工作流" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -110,7 +110,7 @@ Ghostty 级终端，支持 WebGL 渲染、无限分屏，以及重启后依然�
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="../../resources/onboarding/feature-wall/tile-06.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-06.poster.jpg" alt="通过 SSH 使用远程 worktree" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="../../resources/onboarding/feature-wall/tile-06.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-06.poster.jpg" alt="通过 SSH 使用远程 worktree" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -152,7 +152,7 @@ VS Code 的编辑器，处处自动保存 — 把文件或图片直接拖入智�
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="../../resources/onboarding/feature-wall/tile-09.gif" type="image/gif"><img src="../../resources/onboarding/feature-wall/tile-09.poster.jpg" alt="从 CLI 脚本化 Orca" width="100%" /></picture></a>
+  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="../../resources/onboarding/feature-wall/tile-09.webp" type="image/webp"><img src="../../resources/onboarding/feature-wall/tile-09.poster.jpg" alt="从 CLI 脚本化 Orca" width="100%" /></picture></a>
 </td>
 </tr>
 </table>
@@ -239,9 +239,9 @@ yay -S stably-orca-bin
 
 - **Discord:** 加入 **[Discord](https://discord.gg/fzjDKHxv8Q)** 社区。
 - **Twitter / X:** 关注 **[@orca_build](https://x.com/orca_build)** 获取更新和公告。
-- **微信:** 扫码加入 Orca 社区微信第 11 群。
+- **微信:** 第 11 群已满。扫码加入 Orca 社区微信第 12 群。
 
-  <img src="../assets/wechat-qr-group11.jpg" alt="Orca 社区微信第 11 群二维码" width="160" />
+  <img src="../assets/wechat-qr-group12.jpg" alt="Orca 社区微信第 12 群二维码" width="160" />
 
 - **反馈与想法:** 我们发布很快。缺少什么功能？[提交功能请求](https://github.com/stablyai/orca/issues)。
 - **隐私:** 查看[隐私与遥测文档](https://www.onorca.dev/docs/telemetry)，了解 Orca 收集哪些匿名使用数据以及如何退出。

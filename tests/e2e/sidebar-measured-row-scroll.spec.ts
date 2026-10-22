@@ -127,7 +127,7 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
     if (!group) {
       throw new Error('Fixture group was not created')
     }
-    await store.getState().moveProjectToGroup(member.id, group.id)
+    await store.getState().moveProjectToGroup(member, group.id)
     const state = store.getState()
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')
@@ -186,4 +186,13 @@ test('keeps a collapsed group visible when an idle card below it grows', async (
   expect(after.collapsedGap).toBeCloseTo(before.collapsedGap, 0)
   expect(after.expandedGap).toBeCloseTo(before.expandedGap, 0)
   await expect(group).toHaveCount(1)
+  // A pin lands in main's metadata, which the desktop-facts shadow compares against the window.
+  await orcaPage.evaluate(async (worktreeId) => {
+    const result = await window.__store
+      ?.getState()
+      .updateWorktreeMeta(worktreeId, { isPinned: true })
+    if (!result?.ok) {
+      throw new Error(`pin failed: ${JSON.stringify(result)}`)
+    }
+  }, fixture.worktreeId)
 })

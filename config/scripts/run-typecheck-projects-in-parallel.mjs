@@ -1,9 +1,10 @@
-import { spawnProcess } from '@orca/process-host'
+import { runProcessSync, spawnProcess } from '@orca/process-host'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { readPinnedBunVersion, resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 
 const BYTES_PER_GIB = 1024 ** 3
 
@@ -70,15 +71,31 @@ export function resolveProjectCompiler(config, root = repoRoot) {
   return resolveProjectCompilerInfo(config, root).program
 }
 
+// Bun 1.4.3 targets TypeScript 7.0.2; compiler upgrades require a new parity comparison.
+export const BUN_TYPESCRIPT_VERSION = '7.0.2'
+
 export function parseTypecheckOptions(args) {
-  const options = { compiler: 'native', bunConcurrency: 1, bunThreads: 4 }
+  const options = {
+    compiler: 'bun',
+    bunConcurrency: 2,
+    bunThreads: 4,
+    projects: TYPECHECK_PROJECTS
+  }
+  const selected = []
   for (const argument of args) {
-    if (argument === '--compiler=bun' || argument === '--compiler=native') {
+    if (/^--compiler=(bun|native)$/.test(argument)) {
       options.compiler = argument.slice('--compiler='.length)
     } else if (argument.startsWith('--bun-concurrency=')) {
       options.bunConcurrency = Number(argument.slice('--bun-concurrency='.length))
     } else if (argument.startsWith('--bun-threads=')) {
       options.bunThreads = Number(argument.slice('--bun-threads='.length))
+    } else if (argument.startsWith('--project=')) {
+      const config = argument.slice('--project='.length)
+      const project = TYPECHECK_PROJECTS.find((candidate) => candidate.config === config)
+      if (!project) {
+        throw new Error(`Unknown typecheck project: ${config}`)
+      }
+      selected.push(project)
     } else {
       throw new Error(`Unknown typecheck option: ${argument}`)
     }
@@ -88,7 +105,27 @@ export function parseTypecheckOptions(args) {
       throw new Error('Bun concurrency and threads must be integers from 1 to 4')
     }
   }
+  if (selected.length > 0) {
+    options.projects = selected
+  }
   return options
+}
+
+/**
+ * Bun is the default: on the node project it uses ~1/3 of tsc's CPU and ~2 GB instead of
+ * ~16 GB, and tsc's incremental cache rarely survives an edit to an export.
+ */
+export function selectTypecheckCompiler(compiler, { root, resolveBunExecutable }) {
+  if (compiler === 'native') {
+    return { compiler }
+  }
+  const bunExecutable = resolveBunExecutable(root)
+  if (!bunExecutable) {
+    throw new Error(
+      `Bun ${readPinnedBunVersion(root)} from devDependencies is missing; run pnpm install, or pass --compiler=native.`
+    )
+  }
+  return { compiler, bunExecutable }
 }
 
 export function typecheckBatches(projects, { compiler, bunConcurrency, memoryBytes, parallelism }) {
@@ -101,22 +138,27 @@ export function typecheckBatches(projects, { compiler, bunConcurrency, memoryByt
   )
 }
 
-function checkProject(config, { compiler, bunThreads, root, spawnCompiler }) {
+export function resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }) {
+  const installedCompiler = resolveProjectCompilerInfo(config, root)
+  if (compiler === 'bun' && installedCompiler.version !== BUN_TYPESCRIPT_VERSION) {
+    throw new Error(
+      `Bun CI compiler targets TypeScript ${BUN_TYPESCRIPT_VERSION}, but ${config} resolves ${installedCompiler.version}`
+    )
+  }
+  return {
+    program: compiler === 'bun' ? bunExecutable : process.execPath,
+    args:
+      compiler === 'bun'
+        ? ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all']
+        : [installedCompiler.program, '--noEmit', '-p', config],
+    cwd: root
+  }
+}
+
+function checkProject(config, { compiler, bunExecutable, bunThreads, root, spawnCompiler }) {
   return new Promise((resolve, reject) => {
-    const installedCompiler = resolveProjectCompilerInfo(config, root)
-    // Bun 1.4.3 targets TypeScript 7.0.2; compiler upgrades require a new parity comparison.
-    if (compiler === 'bun' && installedCompiler.version !== '7.0.2') {
-      throw new Error(
-        `Bun CI compiler targets TypeScript 7.0.2, but ${config} resolves ${installedCompiler.version}`
-      )
-    }
     const child = spawnCompiler({
-      program: compiler === 'bun' ? 'bun' : process.execPath,
-      args:
-        compiler === 'bun'
-          ? ['check', '-p', config, '--threads', String(bunThreads), '--no-pretty', '--all']
-          : [installedCompiler.program, '--noEmit', '-p', config],
-      cwd: root,
+      ...resolveTypecheckCommand(config, { compiler, bunExecutable, bunThreads, root }),
       stdio: 'inherit'
     })
     child.on('error', reject)
@@ -134,6 +176,7 @@ function checkProject(config, { compiler, bunThreads, root, spawnCompiler }) {
 
 export async function runTypecheckProjects({
   compiler = 'native',
+  bunExecutable = 'bun',
   bunConcurrency = 1,
   bunThreads = 4,
   root = repoRoot,
@@ -153,7 +196,13 @@ export async function runTypecheckProjects({
         while (next < pending.length) {
           const index = next++
           try {
-            await checkProject(pending[index].config, { compiler, bunThreads, root, spawnCompiler })
+            await checkProject(pending[index].config, {
+              compiler,
+              bunExecutable,
+              bunThreads,
+              root,
+              spawnCompiler
+            })
           } catch (reason) {
             failures.push({ index, reason })
           }
@@ -167,7 +216,7 @@ export async function runTypecheckProjects({
   for (const batch of batches) {
     const results = await Promise.allSettled(
       batch.map((project) =>
-        checkProject(project.config, { compiler, bunThreads, root, spawnCompiler })
+        checkProject(project.config, { compiler, bunExecutable, bunThreads, root, spawnCompiler })
       )
     )
     for (const result of results) {
@@ -180,7 +229,12 @@ export async function runTypecheckProjects({
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const failures = await runTypecheckProjects(parseTypecheckOptions(process.argv.slice(2)))
+  const options = parseTypecheckOptions(process.argv.slice(2))
+  const selection = selectTypecheckCompiler(options.compiler, {
+    root: repoRoot,
+    resolveBunExecutable: (root) => resolvePinnedBunExecutable(root, runProcessSync)
+  })
+  const failures = await runTypecheckProjects({ ...options, ...selection })
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(failure.message ?? failure)

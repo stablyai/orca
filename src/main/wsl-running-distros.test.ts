@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 
@@ -17,10 +20,19 @@ import {
   listRunningWslHomeDirsAsync
 } from './wsl'
 import { filterPathsToRunningWslDistrosAsync } from './wsl-running-path-filter'
+import { resetWslInteropSpawnDirectoryCache } from './wsl-interop-spawn-directory'
 import {
   observeWslTranscriptRunningState,
   resetWslTranscriptRunningObserverForTests
 } from './native-chat/wsl-transcript-running-observer'
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key]
+  } else {
+    process.env[key] = value
+  }
+}
 
 async function withPlatform<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -54,6 +66,28 @@ describe('running WSL distro discovery', () => {
         })
       )
     })
+  })
+
+  it('runs the startup probe from the system root, never the profile (#29845)', async () => {
+    runProcessMock.mockResolvedValue(exited('Ubuntu\n'))
+    const saved = { SystemRoot: process.env.SystemRoot, profile: process.env.ORCA_USER_DATA_PATH }
+    const systemRoot = mkdtempSync(join(tmpdir(), 'orca-wsl-probe-system-root-'))
+    const profile = mkdtempSync(join(tmpdir(), 'orca-wsl-probe-profile-'))
+    process.env.SystemRoot = systemRoot
+    process.env.ORCA_USER_DATA_PATH = profile
+    resetWslInteropSpawnDirectoryCache()
+    try {
+      await withPlatform('win32', () => listRunningWslDistrosAsync({ requireConfirmed: true }))
+      expect(runProcessMock).toHaveBeenCalledWith(
+        expect.objectContaining({ args: ['--list', '--running', '--quiet'], cwd: systemRoot })
+      )
+    } finally {
+      restoreEnv('SystemRoot', saved.SystemRoot)
+      restoreEnv('ORCA_USER_DATA_PATH', saved.profile)
+      resetWslInteropSpawnDirectoryCache()
+      rmSync(systemRoot, { recursive: true, force: true })
+      rmSync(profile, { recursive: true, force: true })
+    }
   })
 
   it('confirms an empty list when no distro runs', async () => {

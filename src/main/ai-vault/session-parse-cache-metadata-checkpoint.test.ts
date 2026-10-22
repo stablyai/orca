@@ -1,8 +1,7 @@
-import * as fsPromises from 'node:fs/promises'
-import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest'
 import {
   flushSessionParseCachePersist,
   initSessionParseCachePersistence,
@@ -13,20 +12,16 @@ import {
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests
 } from './session-scanner-parse-cache'
-import {
-  getSessionParseCacheEntry,
-  snapshotSessionParseCacheForPersistence
-} from './session-parse-cache-store'
+import { getSessionParseCacheEntry } from './session-parse-cache-store'
+import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { CODEX_FIXTURE_SESSION_ID, codexFixture } from './session-scanner-codex-fixtures'
 import { resetCursorChatMetaIndexCacheForTests } from './session-scanner-cursor-chat-meta'
 import { writeJsonlFile } from './session-scanner-test-fixtures'
 import type { SessionFileCandidate } from './session-scanner-types'
 
-vi.mock('node:fs/promises', { spy: true })
-vi.mock('./session-parse-cache-store', { spy: true })
-
 let root: string
 let cacheFile: string
+let write: MockInstance<SessionParseCacheDatabase['write']>
 
 beforeEach(async () => {
   resetSessionParseCacheForTests()
@@ -35,7 +30,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-cache-metadata-checkpoint-'))
   cacheFile = join(root, 'cache.json')
   initSessionParseCachePersistence({ filePath: cacheFile, appVersion: 'test' })
-  vi.clearAllMocks()
+  write = vi.spyOn(SessionParseCacheDatabase.prototype, 'write')
 })
 
 afterEach(async () => {
@@ -43,6 +38,7 @@ afterEach(async () => {
   resetSessionParseCachePersistenceForTests()
   resetSessionParseCacheForTests()
   resetCursorChatMetaIndexCacheForTests()
+  vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -69,8 +65,13 @@ async function candidate(
   }
 }
 
-async function storedSession() {
-  return JSON.parse(await readFile(cacheFile, 'utf8')).entries[0][1].session
+function storedSession(path: string) {
+  const database = new SessionParseCacheDatabase(join(root, 'session-parse-cache.sqlite'))
+  try {
+    return database.read(path)?.session
+  } finally {
+    database.close()
+  }
 }
 
 it('persists a reused Codex title update without mutating the prior session and skips its next hit', async () => {
@@ -88,7 +89,7 @@ it('persists a reused Codex title update without mutating the prior session and 
     join(codexHome, 'session_index.jsonl'),
     `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Indexed title' })}\n`
   )
-  vi.clearAllMocks()
+  write.mockClear()
   const stats = createSessionParseStats()
   const updated = await parseAgentSessionFileCached(
     await candidate('codex', path, codexHome),
@@ -99,15 +100,14 @@ it('persists a reused Codex title update without mutating the prior session and 
   expect(stats).toMatchObject({ reused: 1, fullParses: 0 })
   expect(first?.title).toBe('codex seed question')
   expect(updated?.title).toBe('Indexed title')
-  expect((await storedSession()).title).toBe('Indexed title')
-  expect(fsPromises.rename).toHaveBeenCalledTimes(1)
-  vi.clearAllMocks()
+  expect(storedSession(path)?.title).toBe('Indexed title')
+  expect(write).toHaveBeenCalledOnce()
+  write.mockClear()
   expect(
     await parseAgentSessionFileCached(await candidate('codex', path, codexHome), process.platform)
   ).toBe(updated)
   await flushSessionParseCachePersist()
-  expect(snapshotSessionParseCacheForPersistence).not.toHaveBeenCalled()
-  expect(fsPromises.rename).not.toHaveBeenCalled()
+  expect(write).not.toHaveBeenCalled()
 })
 
 it('persists a reused subagent count update with immutable session replacement and skips the next hit', async () => {
@@ -117,7 +117,7 @@ it('persists a reused subagent count update with immutable session replacement a
   const first = await parseAgentSessionFileCached(await candidate('claude', path), process.platform)
   await flushSessionParseCachePersist()
   await writeJsonlFile(join(root, id, 'subagents', 'agent-a.jsonl'), [])
-  vi.clearAllMocks()
+  write.mockClear()
   const stats = createSessionParseStats()
   const updated = await parseAgentSessionFileCached(
     await candidate('claude', path),
@@ -128,14 +128,14 @@ it('persists a reused subagent count update with immutable session replacement a
   expect(stats).toMatchObject({ reused: 1, fullParses: 0 })
   expect(first?.subagentTranscriptCount).toBe(0)
   expect(updated?.subagentTranscriptCount).toBe(1)
-  expect((await storedSession()).subagentTranscriptCount).toBe(1)
-  expect(fsPromises.rename).toHaveBeenCalledTimes(1)
-  vi.clearAllMocks()
+  expect(storedSession(path)?.subagentTranscriptCount).toBe(1)
+  expect(write).toHaveBeenCalledOnce()
+  write.mockClear()
   expect(await parseAgentSessionFileCached(await candidate('claude', path), process.platform)).toBe(
     updated
   )
   await flushSessionParseCachePersist()
-  expect(snapshotSessionParseCacheForPersistence).not.toHaveBeenCalled()
+  expect(write).not.toHaveBeenCalled()
 })
 
 it('persists metadata-only sidecar changes and retains identity across equivalent re-enrichment', async () => {
@@ -156,7 +156,7 @@ it('persists metadata-only sidecar changes and retains identity across equivalen
   await writeFile(metaPath, JSON.stringify({ ...meta, title: 'Second', cwd: '/repo/second' }))
   const future = new Date(Date.now() + 10_000)
   await utimes(metaPath, future, future)
-  vi.clearAllMocks()
+  write.mockClear()
   const stats = createSessionParseStats()
   const current = await candidate('cursor', path, null, metaPath)
   const updated = await parseAgentSessionFileCached(current, process.platform, stats)
@@ -165,14 +165,13 @@ it('persists metadata-only sidecar changes and retains identity across equivalen
   expect(first?.title).toBe('First')
   expect(previousEntry?.session?.title).toBe('First')
   expect(updated?.title).toBe('Second')
-  expect((await storedSession()).cwd).toBe('/repo/second')
-  expect(fsPromises.rename).toHaveBeenCalledTimes(1)
+  expect(storedSession(path)?.cwd).toBe('/repo/second')
+  expect(write).toHaveBeenCalledOnce()
   const uncertain = { ...current, file: { ...current.file, sidecar: 'unknown' as const } }
   expect(await parseAgentSessionFileCached(uncertain, process.platform)).toBe(updated)
   await flushSessionParseCachePersist()
-  vi.clearAllMocks()
+  write.mockClear()
   expect(await parseAgentSessionFileCached(uncertain, process.platform)).toBe(updated)
   await flushSessionParseCachePersist()
-  expect(snapshotSessionParseCacheForPersistence).not.toHaveBeenCalled()
-  expect(fsPromises.rename).not.toHaveBeenCalled()
+  expect(write).not.toHaveBeenCalled()
 })

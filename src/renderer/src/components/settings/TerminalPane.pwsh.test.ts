@@ -158,12 +158,6 @@ vi.mock('./TerminalRenderingSection', () => ({
   }
 }))
 
-vi.mock('./TerminalSetupScriptSection', () => ({
-  TerminalSetupScriptSection: function TerminalSetupScriptSection() {
-    return null
-  }
-}))
-
 vi.mock('@/lib/terminal-theme', () => ({
   clampNumber: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)),
   resolveEffectiveTerminalAppearance: () => ({

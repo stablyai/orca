@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '../lib/agent-status'
-import { buildMobileSessionTabSnapshots } from './sync-runtime-graph'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { createTestStore, makeWorktree } from '../store/slices/store-test-helpers'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../store/slices/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/lib/doc-preview-grants', () => ({
   releaseDocPreviewGrant: vi.fn(),
@@ -14,6 +18,18 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
+// Main answers the window's layout commands; its frames draw the browser tabs and conversions.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 const WORKTREE_ID = 'repo1::/path/wt1'
 const DOC_LOCATION = {
   kind: 'workspace-doc' as const,
@@ -21,7 +37,18 @@ const DOC_LOCATION = {
   filePath: '/home/alice/wt1/report/index.html'
 }
 
-function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
+let main: TabsDrawnFromMain | undefined
+afterEach(() => {
+  main?.close()
+  main = undefined
+})
+
+/** A layout-owner build draws each open and conversion once main's frame is in. */
+async function settled(): Promise<void> {
+  await main?.settle()
+}
+
+async function createStoreWithWorktree(): Promise<ReturnType<typeof createTestStore>> {
   const store = createTestStore()
   store.setState({
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
@@ -30,6 +57,7 @@ function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WORKTREE_ID
   })
+  main = await drawTabsFromMain(store)
   return store
 }
 
@@ -86,8 +114,8 @@ function publishedUnifiedTabIds(store: ReturnType<typeof createTestStore>): Set<
 // web page. Driven through the real store actions, not a hand-built state, so the mirror path the
 // conversion writes is the one the publisher reads.
 describe('mobile publish across an address-bar conversion', () => {
-  it('starts publishing a doc tab the moment it converts to web, and stops on the way back', () => {
-    const store = createStoreWithWorktree()
+  it('starts publishing a doc tab the moment it converts to web, and stops on the way back', async () => {
+    const store = await createStoreWithWorktree()
     // Presence precondition: an ordinary URL tab publishes throughout, so an empty answer would
     // fail rather than pass by the publisher being broken for browser tabs entirely.
     const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
@@ -96,6 +124,7 @@ describe('mobile publish across an address-bar conversion', () => {
       title: 'index.html',
       browserRuntimeEnvironmentId: null
     })
+    await settled()
     const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id ?? ''
 
     expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
@@ -105,6 +134,7 @@ describe('mobile publish across an address-bar conversion', () => {
       url: 'https://converted.example/'
     })
     expect(webPage).not.toBeNull()
+    await settled()
     expect(publishedBrowserWorkspaceIds(store).sort()).toEqual([urlTab.id, docTab.id].sort())
 
     const docPage = store.getState().convertBrowserPage(webPage?.id ?? '', {
@@ -112,15 +142,17 @@ describe('mobile publish across an address-bar conversion', () => {
       docLocation: DOC_LOCATION
     })
     expect(docPage).not.toBeNull()
+    await settled()
     expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
   })
 
   // Why groups and the layout are driven separately: the group projection was the historically
   // untested half of the publish boundary, and a doc tab surviving in a group's tabOrder names a
   // tab the phone is never sent.
-  it('holds the doc tab out of published groups and the layout, and admits it on conversion', () => {
-    const store = createStoreWithWorktree()
+  it('holds the doc tab out of published groups and the layout, and admits it on conversion', async () => {
+    const store = await createStoreWithWorktree()
     const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
+    await settled()
     // The doc tab gets a split group of its own, so holding it back must also take its group out
     // of the projection AND its leaf out of the layout — the observable no earlier test drove.
     const sourceGroupId = store.getState().activeGroupIdByWorktree[WORKTREE_ID] ?? ''
@@ -133,6 +165,7 @@ describe('mobile publish across an address-bar conversion', () => {
       browserRuntimeEnvironmentId: null,
       targetGroupId: splitGroupId ?? undefined
     })
+    await settled()
     const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id ?? ''
     const docUnifiedTabId =
       (store.getState().unifiedTabsByWorktree[WORKTREE_ID] ?? []).find(
@@ -163,6 +196,7 @@ describe('mobile publish across an address-bar conversion', () => {
       url: 'https://converted.example/'
     })
     expect(webPage).not.toBeNull()
+    await settled()
     expect(publishedUnifiedTabIds(store).has(docUnifiedTabId)).toBe(true)
     expect(publishedGroupIds().has(splitGroupId ?? '')).toBe(true)
     expect(layoutGroupIds().sort()).toEqual([sourceGroupId, splitGroupId ?? ''].sort())
@@ -173,6 +207,7 @@ describe('mobile publish across an address-bar conversion', () => {
       docLocation: DOC_LOCATION
     })
     expect(docPage).not.toBeNull()
+    await settled()
     expect(publishedUnifiedTabIds(store).has(docUnifiedTabId)).toBe(false)
     expect(publishedGroupIds().has(splitGroupId ?? '')).toBe(false)
     expect(layoutGroupIds()).toEqual([sourceGroupId])

@@ -2,7 +2,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { isUnknownWorkerStartOutcome, type WorkerSetupReceipt } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 
 export function failWorkerStartWithReceipt(args: {
   db: OrchestrationDb

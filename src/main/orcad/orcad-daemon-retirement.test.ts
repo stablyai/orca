@@ -82,9 +82,19 @@ describe('best-effort daemon retirement', () => {
   it('keeps the fence when a timed-out attempt turns out to retire the daemon', async () => {
     let answer: (result: DaemonIdleRetirementResult) => void = () => {}
     const late = ports(() => new Promise((resolve) => (answer = resolve)))
-    await retireOrcadDaemonIfIdle(late)
+    const outcome = await retireOrcadDaemonIfIdle(late)
     answer({ state: 'retiring' })
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    // Callers that must not keep a retiring daemon learn the late verdict.
+    expect(await outcome.lateRetirement).toBe(true)
     expect(late.releaseFence).toHaveBeenCalledOnce()
+  })
+
+  it('reports a late refusal only after admission reopened', async () => {
+    let answer: (result: DaemonIdleRetirementResult) => void = () => {}
+    const late = ports(() => new Promise((resolve) => (answer = resolve)))
+    const outcome = await retireOrcadDaemonIfIdle(late)
+    answer({ state: 'busy', liveSessions: 1 })
+    expect(await outcome.lateRetirement).toBe(false)
+    expect(late.releaseFence).toHaveBeenCalledTimes(2)
   })
 })

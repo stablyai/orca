@@ -7,6 +7,7 @@ import {
 } from '../../../shared/folder-workspace-execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type RuntimeWorkspaceState = Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo'> &
   Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups'>>
@@ -24,8 +25,10 @@ export function getLocalProjectRuntimeWorkspace(
   const scope = parseWorkspaceKey(targetWorktreeId)
   if (scope?.type !== 'folder') {
     return (
-      getIndexedWorktreeById(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO, targetWorktreeId) ??
-      null
+      getIndexedWorktreeById(
+        selectWorktreesByRepo(state) ?? EMPTY_WORKTREES_BY_REPO,
+        targetWorktreeId
+      ) ?? null
     )
   }
   const folderState = {

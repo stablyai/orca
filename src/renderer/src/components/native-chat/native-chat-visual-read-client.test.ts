@@ -30,10 +30,10 @@ afterEach(() => {
 
 describe('readNativeChatVisual', () => {
   it("reads through the chat's own runtime with only the session and file name", async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     expect(await readNativeChatVisual(remote)).toEqual({
       ok: true,
-      document: { revision: 'r1', html: '<p>' }
+      document: { revision: 'r1', html: '<p>', path: '/v' }
     })
     expect(callRuntimeRpc).toHaveBeenCalledWith(
       remote.target,
@@ -44,7 +44,7 @@ describe('readNativeChatVisual', () => {
   })
 
   it('revalidates with the held revision and keeps the cached bytes when unchanged', async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
     callRuntimeRpc.mockResolvedValueOnce({
       ok: true,
@@ -54,7 +54,7 @@ describe('readNativeChatVisual', () => {
     })
     expect(await readNativeChatVisual(local)).toEqual({
       ok: true,
-      document: { revision: 'r1', html: '<p>' }
+      document: { revision: 'r1', html: '<p>', path: '/v' }
     })
     expect(callRuntimeRpc.mock.calls[1][2]).toEqual({
       sessionId: 'session-alpha',
@@ -64,18 +64,18 @@ describe('readNativeChatVisual', () => {
   })
 
   it('shows a rewritten file as its new revision', async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r2', sizeBytes: 4, html: '<hr>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r2', html: '<hr>', path: '/v' })
     expect(await readNativeChatVisual(local)).toEqual({
       ok: true,
-      document: { revision: 'r2', html: '<hr>' }
+      document: { revision: 'r2', html: '<hr>', path: '/v' }
     })
     expect(peekCachedNativeChatVisual(local)?.revision).toBe('r2')
   })
 
   it('keeps one runtime from answering for another', async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
     expect(peekCachedNativeChatVisual(remote)).toBeNull()
   })
@@ -85,7 +85,7 @@ describe('readNativeChatVisual', () => {
     callRuntimeRpc.mockReturnValueOnce(new Promise((next) => (resolve = next)))
     const first = readNativeChatVisual(local)
     const second = readNativeChatVisual(local)
-    resolve({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+    resolve({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     expect(await first).toEqual(await second)
     expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
@@ -98,12 +98,12 @@ describe('readNativeChatVisual', () => {
   })
 
   it('passes host refusals through, degrades an unknown one, and forgets a refused file', async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
     callRuntimeRpc.mockResolvedValueOnce({ ok: false, error: 'not_found' })
     expect(await readNativeChatVisual(local)).toEqual({ ok: false, reason: 'not_found' })
     expect(peekCachedNativeChatVisual(local)).toBeNull()
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r2', sizeBytes: 3, html: '<p>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r2', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
     callRuntimeRpc.mockResolvedValueOnce({ ok: false, error: 'too_large' })
     expect(await readNativeChatVisual(local)).toEqual({ ok: false, reason: 'too_large' })
@@ -114,15 +114,15 @@ describe('readNativeChatVisual', () => {
   })
 
   it('asks again for the bytes when an unchanged answer finds nothing cached', async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
     clearNativeChatVisualCacheForTests()
     callRuntimeRpc
       .mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, unchanged: true })
-      .mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, html: '<p>' })
+      .mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     expect(await readNativeChatVisual(local)).toEqual({
       ok: true,
-      document: { revision: 'r1', html: '<p>' }
+      document: { revision: 'r1', html: '<p>', path: '/v' }
     })
   })
 
@@ -131,7 +131,7 @@ describe('readNativeChatVisual', () => {
       callRuntimeRpc.mockResolvedValueOnce({
         ok: true,
         revision: `r${index}`,
-        sizeBytes: 1,
+        path: '/v',
         html: 'x'
       })
       await readNativeChatVisual({ ...local, file: `f${index}.html` })

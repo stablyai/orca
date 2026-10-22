@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { UNFOCUSED_SPLIT_GROUP_OPACITY } from '../tab-group/split-group-dim'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 type MockAppState = {
@@ -216,6 +217,17 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatVisible).toBe('true')
     expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatFocusedGroup).toBe('false')
     expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatFocusedGroup).toBe('true')
+    const host = (tabId: string): HTMLElement | null =>
+      chatSurface(view.container, tabId).closest<HTMLElement>('[data-retained-pane-host]')
+    const first = host(FIRST_TAB_ID)
+    const second = host(SECOND_TAB_ID)
+    const dim = String(UNFOCUSED_SPLIT_GROUP_OPACITY)
+    // The unfocused chat takes the same dim as every other unfocused split group, never more.
+    expect(first?.style.opacity).toBe(dim)
+    expect(second?.style.opacity).toBe('1')
+    act(() => mocks.store?.setState({ activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID } }))
+    expect(first?.style.opacity).toBe('1')
+    expect(second?.style.opacity).toBe(dim)
   })
 
   it('marks no column as focused when the focused group id names nothing', () => {

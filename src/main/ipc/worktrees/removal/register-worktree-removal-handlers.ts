@@ -3,7 +3,8 @@ import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-gen
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { withWorktreeSpan } from '../../../observability/instrumentation'
-import { areWorktreePathsEqual, parseWorktreeId } from '../../worktree-logic'
+import { areWorktreePathsEqual } from '../../../git/worktree-path-comparison'
+import { parseWorktreeId } from '../../worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { executeWorktreeRemoval } from './execute-worktree-removal'
@@ -21,6 +22,13 @@ import {
   waitForPendingWorktreeRemoval
 } from '../../../worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../worktree-removal-acceptance-queue'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import {
+  deleteLostContact,
+  observeTerminals,
+  runWorkspaceLifecycleCommand,
+  workspaceLifecycleKey
+} from '../../../runtime/workspaces/workspace-lifecycle-commands'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context
@@ -40,6 +48,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
     if (!repo) {
       throw new Error(`Repo not found: ${repoId}`)
     }
+    assertWslMoveRepoWritable(store, repo)
     // The resolved repo supplies host ownership when legacy callers omit args.hostId.
     const removalHostId = getRepoExecutionHostId(repo)
     // Why: a retry or a second window asking while Git still deletes joins that removal.
@@ -126,5 +135,29 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       }
     }
   }
-  ipcMain.handle('worktrees:remove', (_event, args: RemoveWorktreeArgs) => remove(args))
+  ipcMain.handle('worktrees:remove', (_event, args: RemoveWorktreeArgs) => {
+    const repo = resolveRepoForExecutionHost(
+      store,
+      parseWorktreeId(args.worktreeId).repoId,
+      args.hostId
+    )
+    // Without its repo the removal refuses as before; there is no workspace to queue under.
+    return repo
+      ? runWorkspaceLifecycleCommand(
+          context.runtime.workspaceLifecycle,
+          workspaceLifecycleKey(getRepoExecutionHostId(repo), args.worktreeId),
+          {
+            kind: 'delete',
+            run: () => remove(args),
+            lostContact: deleteLostContact,
+            observe: observeTerminals(context.runtime, `id:${args.worktreeId}`),
+            delete: {
+              key: getWorktreeRemovalOptionsKey(args),
+              force: args.allowUnverifiedPtyStop === true,
+              label: args.worktreeId
+            }
+          }
+        )
+      : remove(args)
+  })
 }

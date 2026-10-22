@@ -13,6 +13,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   direction:
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',
+  environment:
+    '--environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them',
+  'pairing-code':
+    '--pairing-code <code>  Run against a remote Orca server using an orca://pair?... code',
   'element-index': '--element-index <n>   Element index from get-app-state',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
@@ -59,6 +63,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'restore-window': '--restore-window     Bring the target app/window forward before the operation',
   session: '--session <id>        Snapshot namespace for a related computer-use workflow',
   setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
+  surface:
+    '--surface chat|terminal Start the agent as a chat or in a terminal, instead of your setting',
   shell: '--shell <shell>        Windows shell the terminal itself runs as',
   terminal: '--terminal <handle>  Runtime-issued terminal handle',
   text: '--text <text>          Text payload to send or type',

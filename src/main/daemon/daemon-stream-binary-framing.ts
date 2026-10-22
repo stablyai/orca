@@ -162,6 +162,18 @@ export function createBinaryStreamFrameReader(
     bufferedBytes -= bytes
   }
 
+  const ownPendingHead = (): void => {
+    const head = chunks[0]
+    // Why: a leftover subarray pins its whole socket chunk; copying once per feed, not per frame, avoids quadratic batches.
+    if (
+      head &&
+      head.buffer.byteLength > Buffer.poolSize &&
+      head.length * 2 < head.buffer.byteLength
+    ) {
+      chunks[0] = Buffer.from(head)
+    }
+  }
+
   const deliver = (kind: number, body: Buffer): void => {
     let event: unknown
     try {
@@ -195,13 +207,14 @@ export function createBinaryStreamFrameReader(
         }
         const frameBytes = FRAME_HEADER_BYTES + bodyBytes
         if (bufferedBytes < frameBytes) {
-          return
+          break
         }
         const head = contiguousHead(frameBytes)
         const body = head.subarray(FRAME_HEADER_BYTES, frameBytes)
         consume(head, frameBytes)
         deliver(kind, body)
       }
+      ownPendingHead()
     }
   }
 }

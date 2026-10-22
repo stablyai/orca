@@ -10,7 +10,7 @@ import {
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
-import { readTerminalModes } from './headless-emulator-modes'
+import { readTerminalModes, trackModifyOtherKeys } from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
 import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
@@ -96,6 +96,7 @@ export class HeadlessEmulator {
 
     this.serializer = new SerializeAddon()
     this.terminal.loadAddon(this.serializer)
+    trackModifyOtherKeys(this.terminal)
 
     // Why Unicode 11: must match the renderer's char-width measurement, else emoji rows mismeasure and the mirror accumulates cell-shifted tears.
     this.terminal.loadAddon(new Unicode11Addon())

@@ -1,4 +1,5 @@
 import type { SshConfigHostResolution, SshTarget } from '../../../../shared/ssh-types'
+import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
 
 export type EditingTarget = {
   label: string
@@ -25,7 +26,7 @@ export const EMPTY_FORM: EditingTarget = {
   proxyCommand: '',
   jumpHost: '',
   systemSshConnectionReuse: true,
-  allowRemoteCliControl: false
+  allowRemoteCliControl: true
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
@@ -43,7 +44,7 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
-    allowRemoteCliControl: target.allowRemoteCliControl === true
+    allowRemoteCliControl: isRemoteCliControlAllowed(target)
   }
 }
 
@@ -151,7 +152,7 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
     form.proxyCommand.trim().length > 0 ||
     form.jumpHost.trim().length > 0 ||
     !form.systemSshConnectionReuse ||
-    form.allowRemoteCliControl
+    !form.allowRemoteCliControl
   )
 }
 

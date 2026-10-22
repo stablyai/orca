@@ -36,7 +36,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   Pressable: 'Pressable'
 }))
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: route.client, state: 'connected' })
 }))
 // The server's status is read for real; only the desktop's persisted records are stubbed.
@@ -45,11 +45,6 @@ vi.mock('../transport/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: () => {}
 }))
 vi.mock('./route-handoff', () => ({ useRouteHandoff: () => ({ replace: () => {} }) }))
-// The native switch always hands the page its route, so the census reads what the page is told.
-vi.mock('../mobile-web-shell/shell-switch-decision', () => ({
-  shellSwitchDecision: (shellRoute: unknown) =>
-    shellRoute ? { kind: 'shell', route: shellRoute } : { kind: 'native' }
-}))
 vi.mock('../mobile-web-shell/ShellSwitchPendingScreen', () => ({
   ShellSwitchPendingScreen: () => null
 }))

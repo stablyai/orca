@@ -21,13 +21,14 @@ const {
   releaseMock: vi.fn()
 }))
 
+vi.mock('./jira-agile-fields', () => ({
+  getAgileFieldIds: async () => ({}),
+  agileFieldIdList: () => []
+}))
+
 vi.mock('./request-queue', () => ({ acquire: acquireMock, release: releaseMock }))
 
-vi.mock('./authenticated-request', () => ({
-  apiBasePath: (site: { authType?: string }) =>
-    site.authType === 'server' ? '/rest/api/2' : '/rest/api/3',
-  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
-  jiraRequestBinary: (...args: unknown[]) => jiraRequestBinaryMock(...args),
+const { JiraApiError: JiraApiErrorMock } = vi.hoisted(() => ({
   JiraApiError: class JiraApiError extends Error {
     status: number | null
     constructor(message: string, status: number | null = null) {
@@ -35,6 +36,16 @@ vi.mock('./authenticated-request', () => ({
       this.status = status
     }
   }
+}))
+
+vi.mock('./jira-api-error', () => ({ JiraApiError: JiraApiErrorMock }))
+
+vi.mock('./authenticated-request', () => ({
+  apiBasePath: (site: { authType?: string }) =>
+    site.authType === 'server' ? '/rest/api/2' : '/rest/api/3',
+  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
+  jiraRequestBinary: (...args: unknown[]) => jiraRequestBinaryMock(...args),
+  JiraApiError: JiraApiErrorMock
 }))
 
 vi.mock('./client', () => ({
@@ -79,7 +90,7 @@ describe('Jira issue operations', () => {
     releaseMock.mockImplementation(() => {})
     jiraRequestBinaryMock.mockReset()
     jiraRequestMock.mockReset()
-    const { _resetAttachmentImageCache } = await import('./attachment-image-cache')
+    const { _resetAttachmentImageCache } = await import('./attachments/image-cache')
     _resetAttachmentImageCache()
   })
 

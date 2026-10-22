@@ -294,7 +294,18 @@ describe('a restored pane after a restart', () => {
         worktreeId,
         tabId,
         leafId,
-        env: { ORCA_PANE_KEY: paneKey, ORCA_TAB_ID: tabId, ORCA_WORKTREE_ID: worktreeId }
+        env: { ORCA_PANE_KEY: paneKey, ORCA_TAB_ID: tabId, ORCA_WORKTREE_ID: worktreeId },
+        // A pane that still carries its launch attaches to the agent it started, never plans again.
+        ...(daemon === 'live'
+          ? {
+              agentLaunch: {
+                launch: {
+                  agent: 'claude',
+                  target: { kind: 'existing', worktree: `id:${worktreeId}` }
+                }
+              }
+            }
+          : {})
       })
     )
 

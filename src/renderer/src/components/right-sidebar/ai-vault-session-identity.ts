@@ -30,7 +30,8 @@ export function reuseAiVaultListResult(
   if (
     sessions === current.sessions &&
     issues === current.issues &&
-    current.cancelled === incoming.cancelled
+    current.cancelled === incoming.cancelled &&
+    current.scanId === incoming.scanId
   ) {
     return current
   }
@@ -38,11 +39,4 @@ export function reuseAiVaultListResult(
     return incoming
   }
   return { ...incoming, sessions, issues }
-}
-
-export function applyPublishedAiVaultList(
-  published: AiVaultListResult,
-  setScanResult: (updater: (prev: AiVaultListResult | null) => AiVaultListResult) => void
-): void {
-  setScanResult((prev) => reuseAiVaultListResult(prev, published))
 }

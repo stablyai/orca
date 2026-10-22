@@ -1,4 +1,5 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
+import { _resetClosedPaneFencesForTests } from '../terminal-topology/closed-pane-binding-fence'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
@@ -7,10 +8,13 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
+
+// The layout-owner close fences a pane in memory; these tests reuse its ids.
+beforeEach(_resetClosedPaneFencesForTests)
 
 const binding = {
   worktreeId: 'repo-local::/fixture/local',

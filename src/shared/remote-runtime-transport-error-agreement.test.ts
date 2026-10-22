@@ -16,8 +16,7 @@
  *
  * WHAT THIS GUARD CANNOT CATCH: a transient code whose message matches no fragment. The
  * message side has nothing to disagree with, so the pair looks consistent. `remote_runtime_busy`
- * is exactly that case today — its messages say "retry after…" but match no fragment, so it
- * classifies fatal and this guard stays silent. Tracked as STA-3479; do not "fix" it here.
+ * was that case until STA-3479; its pairs are pinned recoverable below for that reason.
  */
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
@@ -263,11 +262,7 @@ const SHARED_CONTROL_TRANSPORT_ERRORS: TransportErrorPair[] = [
   }
 ]
 
-/**
- * `remote_runtime_busy` is semantically transient but absent from `RECOVERABLE_CODES`, so it
- * classifies fatal. It is listed here (not omitted) so the corpus stays complete; STA-3479
- * covers the classification itself.
- */
+/** Client-side admission caps: each frees as pending work settles, so the caller retries. */
 const BUSY_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-prepared-request-admission.ts:100',
@@ -508,12 +503,11 @@ describe('transport error code/message classification agreement', () => {
     expect(unbacked).toEqual([])
   })
 
-  it('pins why the guard cannot see the remote_runtime_busy exception (STA-3479)', () => {
+  it('classifies remote_runtime_busy recoverable with or without its code (STA-3479)', () => {
     for (const pair of BUSY_TRANSPORT_ERRORS) {
-      // Fatal by code with a message that matches nothing: the two sides cannot disagree, so the
-      // differential above stays silent. Fixing the classification is STA-3479, not this file.
-      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(false)
-      expect(matchingRecoverableFragment(pair.message)).toBeNull()
+      expect(isRecoverableRemoteRuntimeConnectionError(pair)).toBe(true)
+      // Electron IPC keeps only the message, so the fragment fallback must agree with the code.
+      expect(isRecoverableRemoteRuntimeConnectionError({ message: pair.message })).toBe(true)
     }
   })
 })

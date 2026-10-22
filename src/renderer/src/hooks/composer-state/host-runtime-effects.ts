@@ -17,6 +17,7 @@ type HostRuntimeEffectsInput = Pick<
   | 'repoIdRef'
   | 'runtimeEnvironmentId'
   | 'selectedRepoConnectionIdRef'
+  | 'selectedRepoExecutionHostId'
   | 'selectedRepoHookContextKey'
   | 'selectedRepoIsGit'
   | 'selectedRepoSshStatus'
@@ -37,6 +38,7 @@ import {
 } from '@/lib/repo-ssh-connection'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
   const {
@@ -55,6 +57,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     repoIdRef,
     runtimeEnvironmentId,
     selectedRepoConnectionIdRef,
+    selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
     selectedRepoSshStatus,
@@ -141,7 +144,12 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
       return
     }
     const liveState = useAppStore.getState()
-    const liveRepo = liveState.repos.find((repo) => repo.id === repoIdRef.current)
+    const liveRepo = liveState.repos.find(
+      (repo) =>
+        repo.id === repoIdRef.current &&
+        getRepoExecutionHostId(repo) === selectedRepoExecutionHostId &&
+        getRepoSshConnection(repo)?.targetId === targetId
+    )
     const connection = liveRepo ? getRepoSshConnection(liveRepo) : null
     if (!liveRepo || connection?.targetId !== targetId) {
       return
@@ -160,7 +168,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
           : translate('auto.hooks.useComposerState.ba6cb77082', 'Failed to connect to project.')
       )
     }
-  }, [repoIdRef, selectedRepoConnectionIdRef])
+  }, [repoIdRef, selectedRepoConnectionIdRef, selectedRepoExecutionHostId])
 
   const onConnectSelectedProjectGroup = useCallback(async (): Promise<void> => {
     if (!folderTargetConnectionId) {

@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/browser-client-file-channel-protocol'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { getBrowserClientDownloadTransferStore } from '../../browser-client-download-transfer-store'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { defineMethod, type RpcContext } from '../core'
 
@@ -45,7 +45,8 @@ function requireFileChannelPage(
     browserPageId: params.browserPageId,
     placement,
     pairedDeviceId,
-    connectionId
+    connectionId,
+    admitPendingProfileSwitch: true
   })
   if (
     leases.requireLease({

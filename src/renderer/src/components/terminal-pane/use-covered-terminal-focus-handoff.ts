@@ -1,5 +1,6 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import type { Terminal } from '@xterm/xterm'
+import { focusNativeChatPromptCard } from '../native-chat/use-native-chat-prompt-card-focus'
 
 /**
  * A terminal under a chat cover must never hold focus: its keys would reach an
@@ -19,7 +20,9 @@ export function useCoveredTerminalFocusHandoff(
     const ownerDocument = cover.ownerDocument
     // Focus first: making a focused element inert drops focus to <body>.
     if (terminalElement.contains(ownerDocument.activeElement)) {
-      cover.focus({ preventScroll: true })
+      if (!focusNativeChatPromptCard(cover, null)) {
+        cover.focus({ preventScroll: true })
+      }
     }
     terminalElement.inert = true
     return () => {

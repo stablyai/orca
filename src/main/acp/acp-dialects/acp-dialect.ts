@@ -51,13 +51,26 @@ export type AcpDialectNotification =
       replay?: boolean
       at?: number
       started?: boolean
-      end?: { stopReason: string; durationMs?: number; failureDetail?: string }
+      end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       /** The provider's own words for why `turn` failed, sent apart from its end. */
       failureDetail?: string
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
     }
+
+/** A prompt hook refused the message: the turn ended, but the user did not stop it. */
+export type AcpHookBlock = { reason?: string }
+
+/** How a turn ended, as the agent reported it. */
+export type AcpTurnEnding = {
+  stopReason: string
+  at: number
+  durationMs?: number
+  failureDetail?: string
+  notSignedIn?: boolean
+  hookBlock?: AcpHookBlock
+}
 
 /** How a `/compact` the agent ended normally went, read from its reply; absent compacted. */
 export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string }
@@ -95,16 +108,22 @@ export type AcpDialect = {
   contextWindow?(models: unknown): number | undefined
   /** A model's own effort menu and default, as the agent advertises them per model. */
   modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
+  /** A request shown to the person; a permission request it claims is never auto-answered. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   /** Requests answered at once instead of shown to the person. */
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
   /** The provider's words in a `session/prompt` error answer, when its message is generic. */
   promptErrorDetail?(error: AcpAgentError): string | undefined
   authenticationRequired?(error: AcpAgentError): boolean
+  /** A hook's refusal, read from the `_meta` of the prompt's answer or of the turn's end. */
+  hookBlock?(meta: unknown): AcpHookBlock | undefined
   /** The row for a failed turn the provider gave no words for. */
   failedTurnText?(stopReason: string): string
   /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own `/` commands a chat does not offer: hidden from its list, and a message
+   *  that is only one of them is refused before it reaches the agent. */
+  withheldCommands?: readonly string[]
 }
 
 /** Which of the dialect's stop routes this agent process proved it answers. */

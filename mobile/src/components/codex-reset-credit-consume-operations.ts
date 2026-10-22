@@ -29,9 +29,9 @@ export type MobileCodexResetCreditRpcSender = Parameters<typeof codexResetCredit
 
 /**
  * The scope the host contract accepts, which pairs each runtime with the distro it may name. The
- * shared `CodexResetCreditExpectedScope` predates that pairing and is one type wider, so the
- * journal's schema is what holds the invariant; taken from the operation so no module here names
- * the params catalog.
+ * shared `CodexResetCreditExpectedScope` predates that pairing and is one type wider, so
+ * `CodexResetCreditExpectedScopeSchema` is what holds the invariant; taken from the operation so no
+ * module here names the params catalog.
  */
 export type MobileCodexResetCreditSendScope = Parameters<
   typeof codexResetCreditConsume.request

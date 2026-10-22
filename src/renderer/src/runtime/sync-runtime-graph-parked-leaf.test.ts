@@ -12,6 +12,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { AppState } from '../store/types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
@@ -135,23 +136,43 @@ async function captureGraph(
   return syncWindowGraph.mock.calls[0]?.[0] as RuntimeSyncWindowGraph
 }
 
+/**
+ * What this publication reports of the window's terminal panes. A window-owned build lists them;
+ * with the switch on, main lists this app's panes and the window reports only what it shows or
+ * parks (mountedLeaves), so the PTY id is main's binding and is not reported here.
+ */
+function reportedPanes(graph: RuntimeSyncWindowGraph): Record<string, unknown>[] {
+  return ORCA_LAYOUT_OWNER_IS_MAIN ? (graph.mountedLeaves ?? []) : graph.leaves
+}
+
+function reportedTabIds(graph: RuntimeSyncWindowGraph): string[] {
+  return ORCA_LAYOUT_OWNER_IS_MAIN
+    ? (graph.mountedLeaves ?? []).map((leaf) => leaf.tabId)
+    : graph.tabs.map((tab) => tab.tabId)
+}
+
+/** The window's PTY claim, which only a window-owned build reports. */
+function withPty(ptyId: string): { ptyId?: string } {
+  return ORCA_LAYOUT_OWNER_IS_MAIN ? {} : { ptyId }
+}
+
 describe('syncRuntimeGraph cold-parked tabs', () => {
   it('publishes a parked tab leaf while a parked watcher still owns its PTY', async () => {
     installParkedWatcher(PARKED_PTY)
 
     const graph = await captureGraph()
 
-    expect(graph.leaves).toContainEqual(
-      expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, ptyId: PARKED_PTY, parked: true })
+    expect(reportedPanes(graph)).toContainEqual(
+      expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, ...withPty(PARKED_PTY), parked: true })
     )
-    expect(graph.tabs).toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+    expect(reportedTabIds(graph)).toContain(TAB_ID)
   })
 
   it('drops the leaf once the watcher is disposed (reveal, close, PTY exit, teardown)', async () => {
     const graph = await captureGraph()
 
-    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
-    expect(graph.tabs).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+    expect(reportedTabIds(graph)).not.toContain(TAB_ID)
   })
 
   // Why these two cases exist: `paneIdByPtyId` and `tabPtyId` both survive the
@@ -169,7 +190,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph()
 
-    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
   })
 
   it('drops the leaf when the PTY exited into the park handoff gap', async () => {
@@ -180,7 +201,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph()
 
-    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
   })
 
   it('does not publish a stale saved PTY that no watcher owns', async () => {
@@ -191,7 +212,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph()
 
-    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
   })
 
   it('excludes a remote-runtime PTY, whose parked watcher never sees an exit', async () => {
@@ -209,7 +230,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph({ seedState: false })
 
-    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
   })
 
   it('publishes the pane id the watcher uses, not a positional ordinal', async () => {
@@ -221,7 +242,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph()
 
-    expect(graph.leaves).toContainEqual(
+    expect(reportedPanes(graph)).toContainEqual(
       expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, paneRuntimeId: 7 })
     )
   })
@@ -238,7 +259,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph({ seedState: false })
 
-    expect(graph.leaves).toContainEqual(
+    expect(reportedPanes(graph)).toContainEqual(
       expect.objectContaining({ leafId: LEAF, paneTitle: 'codex [working]' })
     )
   })
@@ -255,9 +276,12 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     const graph = await captureGraph({ seedState: false })
 
-    expect(graph.tabs).toContainEqual(
-      expect.objectContaining({ tabId: TAB_ID, activeLeafId: LEAF })
-    )
-    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ leafId: otherLeaf }))
+    // With the switch on, the active pane is main's own selection (runtime-leaf-record-projection.test.ts).
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(graph.tabs).toContainEqual(
+        expect.objectContaining({ tabId: TAB_ID, activeLeafId: LEAF })
+      )
+    }
+    expect(reportedPanes(graph)).not.toContainEqual(expect.objectContaining({ leafId: otherLeaf }))
   })
 })

@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildTerminalShortcutKey } from '../terminal/terminal-accessory-keys'
-import type { CustomKey } from './CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 
 const store = vi.hoisted(() => ({ raw: null as string | null }))
 

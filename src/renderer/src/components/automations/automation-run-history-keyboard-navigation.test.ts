@@ -62,6 +62,15 @@ describe('shouldHandleAutomationRunHistoryKey', () => {
     expect(shouldHandleAutomationRunHistoryKey(makeEvent({ isComposing: true }))).toBe(false)
   })
 
+  it('ignores an IME-owned native Enter from the window listener but handles the committed one', () => {
+    const composingEnter = new KeyboardEvent('keydown', { key: 'Enter', isComposing: true })
+    const processEnter = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229 })
+    const committedEnter = new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13 })
+    expect(shouldHandleAutomationRunHistoryKey(composingEnter)).toBe(false)
+    expect(shouldHandleAutomationRunHistoryKey(processEnter)).toBe(false)
+    expect(shouldHandleAutomationRunHistoryKey(committedEnter)).toBe(true)
+  })
+
   it('ignores keys when target is an editable input element or inside a modal dialog', () => {
     const input = document.createElement('input')
     expect(shouldHandleAutomationRunHistoryKey(makeEvent({ target: input }))).toBe(false)

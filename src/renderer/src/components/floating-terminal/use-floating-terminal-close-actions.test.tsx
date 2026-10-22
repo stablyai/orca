@@ -11,6 +11,9 @@ import {
 import { useFloatingTerminalCloseActions } from './use-floating-terminal-close-actions'
 
 const requestEditorFileClose = vi.hoisted(() => vi.fn())
+vi.mock('../confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => async () => true
+}))
 vi.mock('@/components/editor/editor-autosave', () => ({ requestEditorFileClose }))
 
 const worktreeId = FLOATING_TERMINAL_WORKTREE_ID
@@ -89,8 +92,9 @@ describe('floating titlebar close actions', () => {
     expect(closeUnifiedTab).toHaveBeenCalledWith(editor.id)
   })
 
-  it('closes editor tabs without closing structured chats from Close All Editor Tabs', () => {
+  it('closes editor tabs without closing structured chats from Close All Editor Tabs', async () => {
     actions().closeAllFiles()
+    await Promise.resolve()
 
     expect(closeUnifiedTab).toHaveBeenCalledWith(editor.id)
     expect(closeUnifiedTab).not.toHaveBeenCalledWith(chat.id)
@@ -99,7 +103,7 @@ describe('floating titlebar close actions', () => {
 
   it.each([true, false])(
     'retains pinned editors without prompting during Close All Editor Tabs (confirmation %s)',
-    (confirmClosePinnedTab) => {
+    async (confirmClosePinnedTab) => {
       setPinnedConfirmation(confirmClosePinnedTab)
       useAppStore.setState({
         unifiedTabsByWorktree: { [worktreeId]: [editor, pinnedEditor, chat] },
@@ -110,6 +114,7 @@ describe('floating titlebar close actions', () => {
       })
 
       actions([editor, pinnedEditor, chat]).closeAllFiles()
+      await Promise.resolve()
 
       expect(closeUnifiedTab).toHaveBeenCalledWith(editor.id)
       expect(closeUnifiedTab).not.toHaveBeenCalledWith(pinnedEditor.id)
@@ -136,7 +141,8 @@ describe('floating titlebar close actions', () => {
   it('routes a dirty last reference through the shared save confirmation', () => {
     useAppStore.setState({
       unifiedTabsByWorktree: { [worktreeId]: [editor] },
-      openFiles: [makeOpenFile({ id: sharedFileId, worktreeId, isDirty: true })]
+      openFiles: [makeOpenFile({ id: sharedFileId, worktreeId, isDirty: true })],
+      editorBuffers: {}
     })
 
     actions().closeFloatingItemConfirmed(editor.id)

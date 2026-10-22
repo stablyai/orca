@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, expect } from 'vitest'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
@@ -14,6 +15,7 @@ import { agentSessionFailureFact } from '../../../src/shared/agent-session-failu
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalCursor,
   type AgentJournalItemBody,
   type AgentJournalTurnLifecycle
 } from '../../../src/shared/agent-session-journal-types'
@@ -82,23 +84,33 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger(),
       now: () => NOW,
-      adapter: {
-        supportsCreate: () => true,
-        acquire: async ({ fence, spawnToken }) => ({
-          process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken },
-          link: {
-            linkId: `link-${fence}`,
-            handle: codexProviderHandle(THREAD),
-            origin: 'created',
-            mintedAtFence: fence,
-            observedAt: NOW
-          }
-        }),
-        dispatch: async () => ({ state: 'unknown', reason: 'unused' }),
-        cancelTurn: async () => ({ cancelled: true }),
-        answerPrompt: async () => {},
-        setOption: async () => {}
-      }
+      // A ready provider proves its start as soon as it is published.
+      adapter: startsWhenPublished(
+        {
+          supportsCreate: () => true,
+          acquire: async ({ fence, spawnToken }) => ({
+            acquisitionGeneration: `stop-note-${fence}`,
+            process: {
+              hostId: 'local',
+              pid: 4242,
+              processStartTimeMs: NOW,
+              spawnToken
+            },
+            link: {
+              linkId: `link-${fence}`,
+              handle: codexProviderHandle(THREAD),
+              origin: 'created',
+              mintedAtFence: fence,
+              observedAt: NOW
+            }
+          }),
+          dispatch: async () => ({ state: 'unknown', reason: 'unused' }),
+          cancelTurn: async () => ({ cancelled: true }),
+          answerPrompt: async () => {},
+          setOption: async () => {}
+        },
+        () => host
+      )
     })
     setStructuredAgentSessionHost(host)
     expect(await host.attach({ callerKey: 'released-client' }, attachParams(null))).toMatchObject({
@@ -138,8 +150,10 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
       items: result.page.items.map((item) => client.AgentJournalRenderItemSchema.parse(item))
     }
   }
-  async function subscribe(cursor = journal.cursor()): Promise<RpcReply[]> {
-    return call('agentSession.subscribe', { sessionId: SESSION, cursor })
+  async function subscribe(
+    cursor: AgentJournalCursor | null = journal.cursor()
+  ): Promise<RpcReply[]> {
+    return call('agentSession.subscribe', { sessionId: SESSION, ...(cursor ? { cursor } : {}) })
   }
   function events(replies: RpcReply[]): AgentSessionSubscribeEvent[] {
     return replies.map((reply) => {

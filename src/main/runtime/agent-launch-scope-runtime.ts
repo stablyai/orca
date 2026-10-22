@@ -69,22 +69,6 @@ export function agentLaunchProjectRuntime(
   return pathDecides ? undefined : runtime
 }
 
-/** TEMPORARY parity: main checked an OpenCode model on the platform it quoted for, which in a
- *  `\\wsl$` repo not set to WSL was the Windows host. */
-export function openCodeModelCheckPlatform(
-  store: LaunchScopeRuntimeStore,
-  scope: TerminalWorkspaceLaunchScope,
-  platform: NodeJS.Platform
-): NodeJS.Platform {
-  return scope.repo && !scope.connectionId && isWslUncPath(scope.path)
-    ? executionRuntimePlatform(
-        resolveLocalProjectRuntimeForWorktreeId(store, scope.id),
-        undefined,
-        process.platform
-      )
-    : platform
-}
-
 /** The one runtime fact for an agent launched into this workspace. Throws, under
  *  `PROJECT_RUNTIME_REPAIR_REQUIRED_CODE` and in the settings page's words, when its runtime needs
  *  repair. */

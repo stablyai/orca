@@ -267,13 +267,21 @@ export function withoutWorkspaces(
   base: WorkspaceSessionState,
   workspaceIds: ReadonlySet<string>
 ): WorkspaceSessionState {
+  return filterWorkspaceRows(base, (workspaceId) => !workspaceIds.has(workspaceId))
+}
+
+/** The scoped rows of the workspaces kept, by the same routing; global fields stay as they are. */
+export function filterWorkspaceRows(
+  base: WorkspaceSessionState,
+  keepsWorkspace: (workspaceId: string) => boolean
+): WorkspaceSessionState {
   const worktreeIdByTabId = buildWorktreeIdByTabId(base)
   const worktreeIdByFileId = buildWorktreeIdByFileId(base)
   const next: KeyedRecord = { ...base }
   for (const field of SESSION_FIELDS) {
     const workspaceOf = entryWorkspaceResolver(field, worktreeIdByTabId, worktreeIdByFileId)
     const keeps = (key: string, entry: unknown): boolean =>
-      !workspaceIds.has(normalizeWorkspaceSessionKeyToWorkspaceId(workspaceOf?.(key, entry) ?? ''))
+      keepsWorkspace(normalizeWorkspaceSessionKeyToWorkspaceId(workspaceOf?.(key, entry) ?? ''))
     const value: unknown = base[field]
     if (!workspaceOf || !value) {
       continue

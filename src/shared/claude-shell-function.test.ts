@@ -165,7 +165,31 @@ describe.each(SHELLS)('the claude function in %s', (shell) => {
     expect(existsSync(join(f.a, '..', 'not-a-folder'))).toBe(false)
   })
 
-  it('lets the user’s own CLAUDE_CONFIG_DIR win silently when an account is selected', () => {
+  it('follows the selection over the user’s own CLAUDE_CONFIG_DIR, inherited or exported by an rc', () => {
+    const f = fixture()
+    // Why the slash: Claude keys its login by the exact string, so System default keeps the spelling.
+    const own = ['CLAUDE_CONFIG_DIR=/user/own/', 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own/']
+    writeFileSync(f.pointer, f.a)
+    expect(f.run(shell, own).stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
+    // The rc re-exported it after Orca injected another account.
+    const rc = [...own, `ORCA_CLAUDE_INJECTED_CONFIG_DIR=${f.b}`]
+    expect(f.run(shell, rc).stdout).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
+    writeFileSync(f.pointer, '')
+    expect(f.run(shell, own).stdout).toBe('HOME=/user/own/ KEY=fake TWIN=none\n')
+    // An rc may spell it without the slash; it still follows the selection.
+    writeFileSync(f.pointer, f.a)
+    expect(
+      f.run(shell, ['CLAUDE_CONFIG_DIR=/user/own', 'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own/']).stdout
+    ).toBe(`HOME=${f.a} KEY=fake TWIN=${f.a}\n`)
+    const deliberate = [
+      'CLAUDE_CONFIG_DIR=/somewhere/else',
+      'ORCA_CLAUDE_USER_CONFIG_DIR=/user/own'
+    ]
+    writeFileSync(f.pointer, f.a)
+    expect(f.run(shell, deliberate).stdout).toBe('HOME=/somewhere/else KEY=fake TWIN=none\n')
+  })
+
+  it('lets a CLAUDE_CONFIG_DIR win silently when Orca knows no user value', () => {
     const f = fixture()
     const own = f.run(shell, ['CLAUDE_CONFIG_DIR=/user/own'])
     expect(own.stdout).toBe('HOME=/user/own KEY=fake TWIN=none\n')
@@ -185,7 +209,7 @@ it("leaves the shell's Anthropic auth alone in the PowerShell function", () => {
 
 it('restores PowerShell process env without creating empty variables', () => {
   const script = getPowerShellClaudeShellFunction()
-  expect(script.startsWith('\n$orcaClaudeCommand = Get-Command claude')).toBe(true)
+  expect(script.startsWith('$orcaClaudeCommand = Get-Command claude')).toBe(true)
   expect(script).toContain('finally {')
   // .NET 9+ turns a $null/'' SetEnvironmentVariable into an empty variable, not a removal.
   expect(script).not.toMatch(/SetEnvironmentVariable\([^)]*,\s*(\$null|''|"")\s*,/)
@@ -205,6 +229,12 @@ it('prints no Orca text from the PowerShell function and creates a missing accou
   expect(script).toContain('-not [IO.Path]::IsPathRooted($orcaClaudeHome)')
 })
 
+it('escapes its arguments for the resolved PowerShell binary before splatting them', () => {
+  expect(getPowerShellClaudeShellFunction()).toContain(
+    '$claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)'
+  )
+})
+
 it('trims the PowerShell pointer read as POSIX command substitution does', () => {
   expect(getPowerShellClaudeShellFunction()).toContain(
     '[IO.File]::ReadAllText($env:ORCA_CLAUDE_PROFILE_POINTER).TrimEnd()'
@@ -218,5 +248,15 @@ it('restores the user’s own value on PowerShell System default rather than rem
   )
   expect(script).not.toContain(
     'Remove-Item Env:CLAUDE_CONFIG_DIR, Env:ORCA_CLAUDE_INJECTED_CONFIG_DIR'
+  )
+})
+
+it('follows the PowerShell selection over the user’s own value, whatever its separators', () => {
+  const script = getPowerShellClaudeShellFunction()
+  expect(script).toContain(
+    `$own = ("$env:ORCA_CLAUDE_USER_CONFIG_DIR" -replace '/', '\\').TrimEnd('\\')`
+  )
+  expect(script).toContain(
+    `(-not $own -or ("$env:CLAUDE_CONFIG_DIR" -replace '/', '\\').TrimEnd('\\') -ne $own)) {`
   )
 })

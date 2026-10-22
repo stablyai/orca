@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   connectionId: null as string | null | undefined,
   environmentId: null as string | null,
+  ambiguous: false,
   mintGrant: vi.fn(),
   revokeGrant: vi.fn()
 }))
@@ -11,7 +12,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionId
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => (mocks.ambiguous ? null : mocks.environmentId)
 }))
 
 import {
@@ -26,6 +27,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.connectionId = null
   mocks.environmentId = null
+  mocks.ambiguous = false
   mocks.mintGrant.mockResolvedValue({ grantId: 'grant-1', url: 'orca-preview://grant-1/a.html' })
   vi.stubGlobal('window', {
     api: { docPreview: { mintGrant: mocks.mintGrant, revokeGrant: mocks.revokeGrant } }
@@ -33,6 +35,11 @@ beforeEach(() => {
 })
 
 describe('buildDocPreviewGrantRequest', () => {
+  it('mints no grant for a twin, which names no server to mint against', () => {
+    mocks.ambiguous = true
+    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/a.html')).toBeNull()
+  })
+
   // A document outside every workspace resolves and authorizes from its own directory.
   it('roots an SSH grant outside the workspace at the document directory', () => {
     mocks.connectionId = 'ssh-1'

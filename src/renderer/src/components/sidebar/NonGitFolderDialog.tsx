@@ -20,6 +20,7 @@ import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
 import type { Repo } from '../../../../shared/repo-types'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 // Why: the SSH target is a paired server's own host, and only that server adds a project on it.
 async function addSshFolderProject(args: {
@@ -100,16 +101,15 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           // dialog closes and the UI shows no visible change, making the
           // add feel like a no-op. Activating the synthetic folder
           // worktree reveals it in the sidebar and opens the workspace.
-          const folderWorktree = useAppStore
-            .getState()
-            .worktreesByRepo[repo.id]?.find(
-              (worktree) => worktree.hostId === ownerOptions.executionHostId
-            )
+          const folderWorktree = selectWorktreesByRepo(useAppStore.getState())[repo.id]?.find(
+            (worktree) => worktree.hostId === ownerOptions.executionHostId
+          )
           if (folderWorktree) {
             const onboarding = await window.api.onboarding.get().catch(() => null)
             // Why: SSH users can hit this dialog from Add Project after
             // dismissing onboarding, bypassing the local addNonGitFolder path.
             const launch = resolveDismissedOnboardingFolderAgentLaunch({
+              worktreeId: folderWorktree.id,
               store: useAppStore.getState(),
               onboarding,
               hasExistingProject: hadProjectBeforeAdd,

@@ -269,15 +269,20 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     targetUrl: string,
     options: PopupChildWindowOptions
   ): Electron.WebContents {
-    const popup = openPopupWithOriginBar(options, targetUrl)
-    // Why: Electron emits no did-create-window for createWindow children, so attach the opener's policies here.
-    this.attachGuestPolicies(
-      popup.contentWebContents,
-      this.resolvePopupOwnerContext(openerGuest.id)
-    )
+    const popup = openPopupWithOriginBar(options, targetUrl, (contents) => {
+      if (openerGuest.isDestroyed() || contents.session !== openerGuest.session) {
+        return false
+      }
+      const owner = this.resolvePopupOwnerContext(openerGuest.id)
+      if (!owner) {
+        return false
+      }
+      this.attachGuestPolicies(contents, owner)
+      return true
+    })
     this.forwardOrQueuePopupEvent(openerGuest.id, {
       origin: safeOrigin(targetUrl),
-      action: 'opened-in-orca'
+      action: options.webContents || options.nativeWindow ? 'opened-in-orca' : 'blocked'
     })
     // Why: match Electron's child-window lifecycle so closing the owning tab doesn't orphan session-bearing popups.
     const closePopupWithOpener = (): void => popup.close()

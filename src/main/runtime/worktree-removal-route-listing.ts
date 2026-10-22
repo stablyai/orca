@@ -1,5 +1,5 @@
 import type { Repo } from '../../shared/repo-types'
-import type { Store } from '../persistence'
+import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { WorktreeRemovalRoute } from '../worktree-removal-execution-host-route'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -13,7 +13,7 @@ import { listWorktreesStrict } from '../git/worktree'
 export async function listWorktreesOnRemovalRoute(
   _route: WorktreeRemovalRoute,
   repo: Repo,
-  store: Store
+  store: ProjectRuntimeResolutionStore
 ): Promise<{
   localWorktreeGitOptions: LocalProjectWorktreeGitOptions
   registeredWorktrees: GitWorktreeInfo[]

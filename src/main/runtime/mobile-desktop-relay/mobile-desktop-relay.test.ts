@@ -56,7 +56,7 @@ function relayWithPhone(
 ) {
   const syncCalls: unknown[] = []
   const server = { capable: true }
-  const desktop = { nativeChatDefault: true }
+  const desktop: { nativeChatDefault: boolean } = { nativeChatDefault: true }
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
       environments: [],
@@ -79,7 +79,9 @@ function relayWithPhone(
       return syncResponse()
     },
     hostsBrowserPage: () => false,
-    onEnvironmentRetired: () => () => {}
+    onEnvironmentRetired: () => () => {},
+    onStatusChanged: () => () => {},
+    watchChanges: () => ({ close: () => {}, current: () => true })
   }
   const relay = new MobileDesktopRelay({
     hosts,
@@ -140,7 +142,9 @@ describe('MobileDesktopRelay', () => {
       frame('l3', 'terminal.list', { worktree: 'id:wt-1' })
     )
     await vi.waitFor(() => expect(sockets[0]?.sent.length).toBe(3))
-    const sent = sockets[0]!.sent.map((text) => JSON.parse(text))
+    const sent = sockets[0]!.sent
+      .map((text) => JSON.parse(text))
+      .sort((a, b) => a.id.localeCompare(b.id))
     expect(sent[0].params).toEqual({ agent: 'claude', target, nativeChatDefault: true })
     expect(sent[1].params).toEqual({
       agent: 'claude',

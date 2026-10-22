@@ -14,7 +14,7 @@ import {
   browserPaneProbeRouteSource,
   commandDockProbeRouteSource,
   holdDictationProbeRouteSource
-} from './mobile-web-app-held-press-probe-routes.mjs'
+} from './mobile-web-app/preview/mobile-web-app-held-press-probe-routes.mjs'
 import { MOBILE_WEB_APP_ROUTE_ROOT } from './mobile-web-app-route-manifest.mjs'
 import {
   createBundleServer,
@@ -23,8 +23,8 @@ import {
   readBridgeFaultGrant,
   readBridgeProtocolVersion,
   readShellCsp
-} from './mobile-web-app-render-harness.mjs'
-import { LAYOUT_SOURCE } from './mobile-web-app-terminal-probe-route.mjs'
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
+import { LAYOUT_SOURCE } from './mobile-web-app/preview/mobile-web-app-terminal-probe-route.mjs'
 
 /**
  * Held presses on the page. Held ~500 ms, Android WebView turns a touch into a long-press: it fires

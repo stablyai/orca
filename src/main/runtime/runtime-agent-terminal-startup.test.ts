@@ -79,8 +79,8 @@ describe('host agent planner', () => {
     })
   })
 
-  // TEMPORARY parity: main's project runtime still refuses this, though the agent runs in WSL.
-  it('refuses --shell wsl.exe for an agent in a WSL-share repo set to Windows host', async () => {
+  // A `\\wsl$` cwd runs in WSL whatever the project says, so a WSL shell is what this agent gets.
+  it('applies --shell wsl.exe for an agent in a WSL-share repo set to Windows host', async () => {
     const repo = { id: 'r', path: '\\\\wsl$\\Ubuntu\\r' }
     const preference = { kind: 'windows-host' }
     const store = {
@@ -95,9 +95,7 @@ describe('host agent planner', () => {
     const opts = { startupAgent: 'claude', shellOverride: 'wsl.exe' } as const
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
     const planHost = { ...host, store: store as never }
-    const plan = resolveAgentTerminalCreateOptions(share, opts, planHost)
-    await expect(plan).rejects.toThrow(
-      "This workspace's project runs its terminals on the Windows host"
-    )
+    const launch = await resolveAgentTerminalCreateOptions(share, opts, planHost)
+    expect(launch.launchRuntime?.pty.shellOverride).toBe('wsl.exe')
   })
 })

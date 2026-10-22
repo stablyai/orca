@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SearchResult } from '../../../../shared/code-search-types'
 import { useFileSearchRunner } from './useFileSearchRunner'
+import { localAndSshTwinRows } from '@/lib/workspace-twin-rows.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   getConnectionId: vi.fn(),
@@ -99,6 +100,21 @@ describe('useFileSearchRunner result ownership', () => {
         executionHostId: 'runtime:search-runtime-a'
       }
     })
+  })
+
+  it('does not search a workspace that two hosts publish', async () => {
+    const worktreeId = 'twin-repo::/repo'
+    const state = {
+      settings: { activeRuntimeEnvironmentId: 'ambient-runtime-b' },
+      ...localAndSshTwinRows('twin-repo', worktreeId),
+      fileSearchStateByWorktree: { [worktreeId]: {} }
+    }
+    const { hook, updates } = renderSearchRunner(state, worktreeId)
+
+    await finishSearch(hook.result.current.executeSearch)
+
+    expect(mocks.searchRuntimeFiles).not.toHaveBeenCalled()
+    expect(updates).toContainEqual({ results: null, resultOwner: null, loading: false })
   })
 
   it('commits explicit local ownership without inheriting an ambient runtime', async () => {

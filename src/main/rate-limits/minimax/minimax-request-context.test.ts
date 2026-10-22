@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Session } from 'electron'
 import { setMainHttpClient } from '../../network/http-client'
 
 const { clearStorageDataMock, cookiesSetMock, fetchMock, sessionFromPartitionMock } = vi.hoisted(
@@ -15,10 +16,6 @@ const { clearStorageDataMock, cookiesSetMock, fetchMock, sessionFromPartitionMoc
   }
 )
 
-vi.mock('electron', () => ({
-  session: { fromPartition: sessionFromPartitionMock }
-}))
-
 import {
   clearMiniMaxSessionCookieJar,
   extractMiniMaxCookieValue,
@@ -34,7 +31,12 @@ import {
   redactMiniMaxSecret
 } from './minimax-request-context'
 
-setMainHttpClient({ fetch: fetchMock, proxySession: () => null })
+setMainHttpClient({
+  fetch: fetchMock,
+  proxySession: () => null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test only calls clearStorageData, cookies.set and fetch, which the fake provides.
+  partitionSession: sessionFromPartitionMock as unknown as (partition: string) => Session
+})
 
 const FULL_COOKIE =
   '_token=eyJh.eyJ.payload; _twpid=tw.123; minimax_group_id_v2=12345; platform_cookie_consent=3'

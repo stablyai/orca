@@ -28,6 +28,7 @@ type TargetChangeActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setSelectedProjectHostSetupOverrideId'
+  | 'setSelectedProjectHostSetupOverrideHostId'
   | 'setSparseDirectories'
   | 'setSparseEnabled'
   | 'setSparseSelectedPresetId'
@@ -43,6 +44,8 @@ import {
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../shared/new-workspace/workspace-source'
 import {
   buildProjectHostSetupOptions,
+  getProjectHostSetupSelectionKey,
+  type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import { useAppStore } from '@/store'
@@ -76,6 +79,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setSelectedProjectHostSetupOverrideId,
+    setSelectedProjectHostSetupOverrideHostId,
     setSparseDirectories,
     setSparseEnabled,
     setSparseSelectedPresetId,
@@ -93,6 +97,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       if (value === repoId && !options.forceResetStartFrom) {
         if (!options.preserveStartFrom) {
           setSelectedProjectHostSetupOverrideId(null)
+          setSelectedProjectHostSetupOverrideHostId(null)
         }
         setRepoId(value)
         return
@@ -116,6 +121,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setRepoId(value)
       if (!options.preserveStartFrom) {
         setSelectedProjectHostSetupOverrideId(null)
+        setSelectedProjectHostSetupOverrideHostId(null)
       }
       // Why: only a GitHub PR re-resolves on the new host; other review bases are kept as before.
       if (options.preserveStartFrom && smartSourceSelectionRef.current?.kind === 'github-pr') {
@@ -188,6 +194,7 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       setReuseEligibleBranch,
       setReuseSelectedBranch,
       setSelectedProjectHostSetupOverrideId,
+      setSelectedProjectHostSetupOverrideHostId,
       setSparseDirectories,
       setSparseEnabled,
       setSparseSelectedPresetId,
@@ -230,7 +237,11 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
 
   const handleProjectHostSetupChange = useCallback(
     (setupId: string): void => {
-      const option = projectHostSetupOptions.find((candidate) => candidate.id === setupId)
+      const matchesSelection = (
+        candidate: Pick<ProjectHostSetupOption, 'id' | 'hostId'>
+      ): boolean =>
+        candidate.id === setupId || getProjectHostSetupSelectionKey(candidate) === setupId
+      const option = projectHostSetupOptions.find(matchesSelection)
       // Why: a just-created setup lands in the store before the memoized picker
       // options refresh. Rebuild through the same builder rather than reading the
       // raw record — repo eligibility, ephemeral-VM/runtime-owned host exclusion,
@@ -246,13 +257,14 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
               hosts: hostOptions
             }).find(
               (candidate): candidate is ReadyProjectHostSetupOption =>
-                candidate.id === setupId && candidate.kind === 'ready'
+                matchesSelection(candidate) && candidate.kind === 'ready'
             )
       if (!target) {
         return
       }
       // Why: switching run host for the same project must not erase the task/PR source the user is starting from.
       setSelectedProjectHostSetupOverrideId(target.id)
+      setSelectedProjectHostSetupOverrideHostId(target.hostId)
       handleRepoChange(target.repoId, {
         preserveStartFrom: true,
         forceResetStartFrom: true
@@ -263,7 +275,8 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
       hostOptions,
       projectHostSetupOptions,
       selectedRepoProjectId,
-      setSelectedProjectHostSetupOverrideId
+      setSelectedProjectHostSetupOverrideId,
+      setSelectedProjectHostSetupOverrideHostId
     ]
   )
 

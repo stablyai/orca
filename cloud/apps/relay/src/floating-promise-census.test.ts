@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
 // A promise nobody awaits rejects into Node's unhandledRejection, which ends the process:
@@ -15,9 +15,12 @@ const NEVER_REJECTS = new Map([
   ['cell-reserve-client.ts#send', 'one try/catch around the request; resolves every item'],
   ['cell-reserve-client.ts#demote', 'one try/catch around the request'],
   ['reserve-ledger-writer.ts#flush', 'one try/catch around the write; retries with backoff'],
+  ['resume-confirmed-audit-buffer.ts#flush', 'catches the insert; a failed batch goes back to the buffer'],
   ['control-renewal-batch.ts#flush', 'rejects the waiters, never itself'],
   ['regional-rehome-worker.ts#run', 'one try/catch around the whole poll'],
-  ['relay-control-flag-channel.ts#poll', 'one catch on the whole read']
+  ['relay-control-flag-channel.ts#poll', 'one catch on the whole read'],
+  ['host-session-registry.ts#releaseActivitySettled', 'one try/catch around the release'],
+  ['host-session-registry.ts#settledWithin', 'races the settled work against a timer']
 ])
 
 const sourceDirectory = fileURLToPath(new URL('.', import.meta.url))
@@ -26,13 +29,19 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
   module: ts.ModuleKind.NodeNext,
   moduleResolution: ts.ModuleResolutionKind.NodeNext,
   strict: true,
+  types: ['node'],
   noEmit: true,
   skipLibCheck: true
 }
 
 function productionFiles(): string[] {
-  return readdirSync(sourceDirectory)
-    .filter((entry) => entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
+  return readdirSync(sourceDirectory, { recursive: true, encoding: 'utf8' })
+    .filter(
+      (entry) =>
+        entry.endsWith('.ts') &&
+        !entry.endsWith('.test.ts') &&
+        !entry.split(/[\\/]/).includes('test-fixtures')
+    )
     .map((entry) => join(sourceDirectory, entry))
 }
 

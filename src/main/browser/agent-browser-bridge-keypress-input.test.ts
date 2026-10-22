@@ -123,6 +123,22 @@ describe('AgentBrowserBridge keypress input', () => {
     ])
   })
 
+  it("sends a key to an embedded guest directly so it never lands in the user's focus", async () => {
+    wc.getType.mockReturnValue('webview')
+
+    await expect(bridge.keypress('Enter', undefined, 'tab-1')).resolves.toEqual({
+      pressed: 'Enter'
+    })
+
+    expect(wc.focus).not.toHaveBeenCalled()
+    expect(keyEventCalls(wc)).toEqual([])
+    expect(wc.sendInputEvent.mock.calls.map(([event]) => event)).toEqual([
+      { type: 'keyDown', keyCode: 'Enter', modifiers: [], skipIfUnhandled: true },
+      { type: 'char', keyCode: '\r', modifiers: [], skipIfUnhandled: true },
+      { type: 'keyUp', keyCode: 'Enter', modifiers: [], skipIfUnhandled: true }
+    ])
+  })
+
   it('types & as shifted 7 instead of colliding with the ArrowUp virtual key code', async () => {
     await bridge.keypress('&', undefined, 'tab-1')
 

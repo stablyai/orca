@@ -97,3 +97,38 @@ it.each([
     expect(await releaseMacDaemonJob('gui/501/owned')).toBe(released)
   }
 )
+
+it.each(['stopped', 'missing'] as const)(
+  'waits for a retiring running job to become %s before releasing its label',
+  async (state) => {
+    run
+      .mockResolvedValueOnce(lingering)
+      .mockResolvedValueOnce(lingering)
+      .mockResolvedValueOnce(
+        state === 'stopped' ? { ...result, stdout: '\tstate = not running' } : missing
+      )
+      .mockResolvedValueOnce(result)
+      .mockResolvedValueOnce(missing)
+    expect(await releaseMacDaemonJob('gui/501/owned', 1_000)).toBe(true)
+    expect(clock.now).toBe(500)
+    expect(run.mock.calls.filter(([spec]) => spec.args?.[0] === 'bootout')).toHaveLength(
+      state === 'stopped' ? 1 : 0
+    )
+  }
+)
+
+it('bounds the retirement wait and never stops a job that remains running', async () => {
+  run.mockResolvedValue(lingering)
+  expect(await releaseMacDaemonJob('gui/501/owned', 125)).toBe(false)
+  expect(clock.now).toBe(125)
+  expect(run.mock.calls.every(([spec]) => spec.args?.[0] === 'print')).toBe(true)
+})
+
+it('does not wait or boot out when a retiring job becomes unreadable', async () => {
+  run
+    .mockResolvedValueOnce(lingering)
+    .mockResolvedValue({ ...result, code: 1, stderr: 'Operation not permitted' })
+  expect(await releaseMacDaemonJob('gui/501/owned', 1_000)).toBe(false)
+  expect(clock.now).toBe(250)
+  expect(run.mock.calls.every(([spec]) => spec.args?.[0] === 'print')).toBe(true)
+})

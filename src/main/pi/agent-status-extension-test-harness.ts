@@ -8,8 +8,13 @@ import { getPiAgentStatusExtensionSource } from './agent-status-extension-source
 
 export type HookContext = {
   hasUI?: boolean
-  ui?: { setEditorText?: (text: string) => void; notify?: (message: string, level: string) => void }
+  ui?: {
+    setEditorText?: (text: string) => void
+    notify?: (message: string, level: string) => void
+    onTerminalInput?: (handler: (data: string) => { consume?: boolean } | undefined) => () => void
+  }
   isIdle?: () => boolean
+  resolvePlanReview?: (reviewId: string, choice: string) => boolean
   model?: { provider?: unknown; id?: unknown } | null
   modelRegistry?: { getAvailable: () => { provider: string; id: string }[] }
   sessionManager?: {
@@ -78,6 +83,23 @@ const BASE_ENV = {
 // Why: ownership keys on process.pid, so reload and child-process tests need
 // stable, distinct identities.
 export const AGENT_STATUS_EXTENSION_SELF_PID = 4242
+
+const transpiledExtensionSources = new Map<string, string>()
+
+function transpileExtensionSource(source: string): string {
+  const cached = transpiledExtensionSources.get(source)
+  if (cached !== undefined) {
+    return cached
+  }
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020
+    }
+  }).outputText
+  transpiledExtensionSources.set(source, output)
+  return output
+}
 
 export function createAgentStatusExtensionHarness(args: {
   kind: 'pi' | 'omp' | 'prime-agent'
@@ -195,12 +217,7 @@ export function createAgentStatusExtensionHarness(args: {
   context.globalThis = context
 
   const source = getPiAgentStatusExtensionSource(args.kind)
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020
-    }
-  }).outputText
+  const output = transpileExtensionSource(source)
   createContext(context)
   // Why: a function scope per evaluation, so a Pi reload can evaluate the module again in one realm.
   const evaluateModule = (): NonNullable<typeof module.exports.default> => {

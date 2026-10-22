@@ -1,0 +1,242 @@
+import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
+import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../session-tabs/structured-session-tab-restoration'
+import { DEFAULT_WORKTREE_LIST_LIMIT } from '../orca-runtime-postlude'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
+import type {
+  RuntimeWorktreeListResult,
+  RuntimeWorktreeTerminalSleepResult
+} from '../../../shared/runtime-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
+import type { Repo } from '../../../shared/repo-types'
+import { stopMissingWorktreeTerminals } from '../missing-worktree-terminal-reconciliation'
+import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
+import type { RuntimeStore } from '../runtime-store-contract'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type {
+  WorkspacePortHostKillRequest,
+  WorkspacePortHostScanResult,
+  WorkspacePortKillRequest,
+  WorkspacePortKillResult,
+  WorkspacePortProbe,
+  WorkspacePortScanResult
+} from '../../../shared/workspace-ports'
+import {
+  filterWorkspacePortProbes,
+  killWorkspacePort,
+  scanWorkspacePortProbes
+} from '../../ports/workspace-port-ownership'
+import {
+  killWorkspacePortOnExecutionHost,
+  scanWorkspacePortsOnExecutionHost,
+  type WorkspacePortExecutionHostDeps
+} from '../../ports/workspace-port-execution-host'
+import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { teardownStops } from '../owned-session-teardown-policy'
+
+export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
+  protected abstract resolveTerminalWorkspaceLaunchTarget(
+    ...args: Parameters<
+      OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree['resolveTerminalWorkspaceLaunchTarget']
+    >
+  ): ReturnType<
+    OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree['resolveTerminalWorkspaceLaunchTarget']
+  >
+
+  listManagedWorktrees(
+    repoSelector?: string,
+    limit = DEFAULT_WORKTREE_LIST_LIMIT,
+    sourceDefaultsSupported = true
+  ): Promise<RuntimeWorktreeListResult> {
+    return this.managedWorktreeQueries.list(repoSelector, limit, sourceDefaultsSupported)
+  }
+
+  listRetiredWorktreeNames(repoSelector: string) {
+    return this.managedWorktreeQueries.listRetiredNames(repoSelector)
+  }
+
+  async listDetectedManagedWorktrees(
+    repoSelector: string,
+    connectionId?: string | null,
+    sourceDefaultsSupported = true
+  ): Promise<DetectedWorktreeListResult> {
+    return this.listDetectedWorktreesForResolvedRepo(
+      await this.resolveRepoSelectorForConnection(repoSelector, connectionId),
+      sourceDefaultsSupported
+    )
+  }
+
+  protected listDetectedWorktreesForResolvedRepo(
+    repo: Repo,
+    sourceDefaultsSupported = true
+  ): Promise<DetectedWorktreeListResult> {
+    return this.managedWorktreeQueries.listDetected(repo, sourceDefaultsSupported)
+  }
+
+  async teardownMissingManagedWorktreeTerminals(
+    repoSelector: string,
+    knownWorktreeIds: readonly string[],
+    connectionId?: string | null
+  ): Promise<{ stoppedWorktreeIds: string[] }> {
+    const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
+    // Why: killing PTYs must be proven against the host right now — a cached scan
+    // (30s TTL) can still list a directory git already dropped, and the renderer
+    // purges its state either way, so a stale miss strands those processes for good.
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
+    // Why: rescanning by `id:` would re-resolve the already-resolved repo, and a
+    // duplicate id across hosts makes that second lookup throw selector_ambiguous
+    // even though the caller's selector was unique — losing the sweep entirely.
+    const detected = await this.listDetectedWorktreesForResolvedRepo(repo)
+    if (!detected.authoritative) {
+      return { stoppedWorktreeIds: [] }
+    }
+    return stopMissingWorktreeTerminals(
+      repo,
+      knownWorktreeIds,
+      detected.worktrees.map((worktree) => worktree.id),
+      {
+        runtime: this,
+        getLocalProvider: () => this.getLocalProvider(),
+        onPtyStopped: this.onPtyStopped ?? undefined
+      }
+    )
+  }
+
+  protected resolveRepoSelectorForConnection(
+    repoSelector: string,
+    connectionId?: string | null
+  ): Promise<Repo> {
+    return this.managedWorktreeQueries.resolveRepoForConnection(repoSelector, connectionId)
+  }
+
+  protected isRuntimeWorktreeVisible(
+    worktree: Worktree,
+    worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher,
+    sourceDefaultsSupported = true,
+    providedSettings?: ReturnType<RuntimeStore['getSettings']>
+  ): boolean {
+    return this.managedWorktreeQueries.isVisible(
+      worktree,
+      worktreeVisibilitySourceMatcher,
+      sourceDefaultsSupported,
+      providedSettings
+    )
+  }
+
+  protected buildRuntimeVisibilitySourceMatchersByRepoId(
+    worktrees: readonly Worktree[],
+    sourceDefaultsSupported = true,
+    providedSettings?: ReturnType<RuntimeStore['getSettings']>
+  ): Map<string, WorktreeVisibilitySourceMatcher> {
+    return this.managedWorktreeQueries.buildVisibilityMatchers(
+      worktrees,
+      sourceDefaultsSupported,
+      providedSettings
+    )
+  }
+
+  async showManagedWorktree(worktreeSelector: string) {
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
+  }
+
+  /**
+   * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
+   * no such record — callers that only need to address the workspace want the scope below instead.
+   */
+  async showManagedTerminalWorkspace(worktreeSelector: string) {
+    const target = await this.resolveTerminalWorkspaceLaunchTarget(worktreeSelector)
+    if (!target.managedWorktree) {
+      throw new Error('selector_not_found')
+    }
+    return target.managedWorktree
+  }
+
+  /**
+   * Where a terminal workspace is, for every kind one can be: a git worktree, a folder workspace,
+   * or the floating sentinel. This is the general answer — `id` and `path` are resolved the same
+   * way for all three — so a caller that reads only those must ask for this rather than demand a
+   * worktree record it never reads and lose the floating workspace to a `selector_not_found`.
+   */
+  async showTerminalWorkspaceLaunchScope(
+    worktreeSelector: string
+  ): Promise<TerminalWorkspaceLaunchScope> {
+    return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+  }
+
+  async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {
+    return scanWorkspacePortProbes(await this.getWorkspacePortProbes(repoId))
+  }
+
+  async killWorkspacePort(args: WorkspacePortKillRequest): Promise<WorkspacePortKillResult> {
+    return killWorkspacePort(await this.getWorkspacePortProbes(args.repoId), args)
+  }
+
+  // Why the workspace, not a client-named host: this server resolves where the workspace runs.
+  async scanWorkspacePortsOnHost(worktreeSelector: string): Promise<WorkspacePortHostScanResult> {
+    const { executionHostId } = await this.resolveRuntimeFileTarget(worktreeSelector)
+    return scanWorkspacePortsOnExecutionHost(executionHostId, this.getWorkspacePortHostDeps())
+  }
+
+  async killWorkspacePortOnHost(
+    args: WorkspacePortHostKillRequest
+  ): Promise<WorkspacePortKillResult> {
+    const { executionHostId } = await this.resolveRuntimeFileTarget(args.worktree)
+    return killWorkspacePortOnExecutionHost(executionHostId, args, this.getWorkspacePortHostDeps())
+  }
+
+  protected getWorkspacePortHostDeps(): WorkspacePortExecutionHostDeps {
+    return {
+      getLocalProbes: () => this.getWorkspacePortProbes()
+    }
+  }
+
+  // Why: remote clients may invoke this over RPC, so the runtime derives
+  // allowed worktree paths from its own store instead of trusting client paths.
+  protected async getWorkspacePortProbes(repoId?: string): Promise<WorkspacePortProbe[]> {
+    const repos = this.requireStore().getRepos()
+    return filterWorkspacePortProbes(
+      (await this.listResolvedWorktrees()).map((worktree) => {
+        // Why host routing, not the repo-id row's connectionId: an SSH repo may carry only
+        // `executionHostId`, and its remote path must never authorize a local listener.
+        const routing = resolveWorktreeHostRouting(repos, worktree)
+        return {
+          id: worktree.id,
+          repoId: worktree.repoId,
+          displayName: worktree.displayName,
+          path: worktree.git.path,
+          runsHere:
+            routing.kind === 'unowned' ||
+            (routing.kind === 'resolved' && routing.hostId === LOCAL_EXECUTION_HOST_ID)
+        }
+      }),
+      repoId
+    )
+  }
+
+  abstract sleepTerminalsForWorktree(
+    worktreeSelector: string
+  ): Promise<RuntimeWorktreeTerminalSleepResult>
+
+  async sleepManagedWorktree(worktreeSelector: string): Promise<{ worktreeId: string }> {
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    // Switch point: main sleeps a workspace it owns itself, window or not; the window draws it.
+    const mainSleeps = ORCA_LAYOUT_OWNER_IS_MAIN && mainListsEveryPane(this, worktree.id)
+    // Why: sleep is renderer-initiated on desktop (it tears down tab state
+    // before killing PTYs). The notifier tells the renderer to run its own
+    // sleep flow so all cleanup happens in the correct order.
+    if (this.notifier && !mainSleeps) {
+      this.notifier.sleepWorktree(worktree.id)
+    } else if (teardownStops('sleep', 'pty')) {
+      // No renderer (headless serve, or the window is gone): the host sleeps its own terminals.
+      const slept = await this.sleepTerminalsForWorktree(worktreeSelector)
+      if (slept.postStopVerified !== true) {
+        // An unproven stop is never reported as asleep.
+        throw new Error(slept.postStopFailure ?? 'terminal_worktree_sleep_unverified')
+      }
+    }
+    return { worktreeId: worktree.id }
+  }
+}

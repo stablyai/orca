@@ -27,9 +27,9 @@ export const OUT_OF_STORE_DISPOSITIONS: readonly (WslMoveFieldDisposition & {
   { store: 'agent-hooks/last-status.json', disposition: 'rederive', item: 51 },
   {
     store: 'agent-session-journal.db',
-    disposition: 'move',
+    disposition: 'not-applicable',
     item: 52,
-    newManifestSection: true
+    note: 'Chats stay local on the desktop (owner decision C); the journal is not moved.'
   },
   { store: 'orchestration.db', disposition: 'rewrite-desktop', item: 53 },
   {

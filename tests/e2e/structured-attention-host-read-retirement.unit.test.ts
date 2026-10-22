@@ -90,9 +90,11 @@ function attentionPath(directory: string) {
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 1,
-      mutedNotificationSourceIds: []
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     }),
     readWorkspaceLabels: () => ({}),
+    isWorkspaceMuted: () => false,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42

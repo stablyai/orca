@@ -1,8 +1,13 @@
 import { basename } from 'node:path'
 import type { Repo } from '../shared/repo-types'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree/id'
+import {
+  getRepoMainWorktreeId,
+  splitWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../shared/worktree/id'
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Store } from './persistence'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 export type UsageWorktreeRef = {
   worktreeId: string
@@ -18,7 +23,7 @@ export function loadKnownUsageWorktreesByRepo(
   store: Pick<Store, 'getAllWorktreeMeta'>,
   repos: Repo[]
 ): Map<string, UsageWorktreeRef[]> {
-  const localRepos = repos.filter((repo) => !repo.connectionId)
+  const localRepos = repos.filter((repo) => !getRepoRoutingConnectionId(repo))
   // Why: all three usage scanners revisit persisted worktree metadata; index
   // repos once instead of linearly searching the full list for every row.
   const localReposById = new Map<string, Repo>()
@@ -35,7 +40,7 @@ export function loadKnownUsageWorktreesByRepo(
   for (const repo of localRepos) {
     worktreesByRepo.set(repo.id, [
       {
-        worktreeId: `${repo.id}::${repo.path}`,
+        worktreeId: getRepoMainWorktreeId(repo),
         path: repo.path,
         displayName: repo.displayName || getDefaultUsageWorktreeLabel(repo.path)
       }

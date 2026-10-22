@@ -30,7 +30,7 @@ import type { FakeRpcClient } from './bridge-host-test-fakes'
 const doubles = vi.hoisted((): { client: FakeRpcClient | null } => ({ client: null }))
 
 // Reaching the real one imports the Expo runtime this test does not have; the hook reads one field.
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useHostClient: () => ({ client: doubles.client })
 }))
 
@@ -45,6 +45,7 @@ import {
   useMobileWebShellBridge,
   type MobileWebShellBridgeView
 } from './use-mobile-web-shell-bridge'
+import { connectionLogStore } from '../transport/persisted-connection-log-store'
 
 const ID = bridgeId(1)
 const DIRECTORY = '/caches/mobile-web/deadbeef/generations/a1b2'
@@ -424,6 +425,24 @@ describe('the bridge channel', () => {
     expect(mounted.probe.view?.bridgeEnabled).toBe(true)
     await mounted.deliver(clientFrame({ type: 'ready' }))
     expect(mounted.posted).toEqual([])
+  })
+
+  it('logs a frame it dropped for want of a host once per session, naming what is missing', async () => {
+    doubles.client = null
+    const dropped = () =>
+      connectionLogStore
+        .get('host-1')
+        .filter((entry) => entry.message === 'Web shell: page frame with no bridge host')
+    const before = dropped().length
+    const mounted = await mount(readyState('session-one'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    expect(dropped().slice(before)).toEqual([
+      expect.objectContaining({ detail: 'client=null snapshot=ok' })
+    ])
+    await mounted.update(readyState('session-two'))
+    await mounted.deliver(clientFrame({ type: 'ready' }))
+    expect(dropped().slice(before)).toHaveLength(2)
   })
 })
 

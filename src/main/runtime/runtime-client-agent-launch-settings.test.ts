@@ -32,6 +32,19 @@ function fixture() {
 }
 
 describe('execution-host agent launch settings', () => {
+  it('presents an existing retired None default as Blank Terminal to every client', () => {
+    const { controller, host } = fixture()
+    host.defaultTuiAgent = 'blank'
+    host.newWorkspaceSetupOnly = true
+    expect(controller.get()).toMatchObject({
+      defaultTuiAgent: 'blank',
+      newWorkspaceSetupOnly: false
+    })
+    expect(controller.getAgentLaunch()).toMatchObject({
+      defaultTuiAgent: 'blank',
+      newWorkspaceSetupOnly: false
+    })
+  })
   it('edits the store the structured host reads, leaving desktop choices on the desktop', async () => {
     const desktop = createGlobalSettingsFixture({
       workspaceDir: '/desktop',
@@ -100,13 +113,47 @@ describe('execution-host agent launch settings', () => {
   it('changes terminal permissions on the host without roundtripping unrelated secrets', async () => {
     const { controller, host } = fixture()
     host.agentDefaultArgs = { claude: '--dangerously-skip-permissions' }
-    await controller.mutateAgentLaunch({ type: 'permissions', mode: 'manual' })
+    await controller.mutateAgentLaunch({
+      type: 'permissions',
+      syncNativeChat: true,
+      mode: 'manual'
+    })
     expect(host.agentDefaultArgs?.claude).toBe('')
+    expect(host.nativeChatPermissionMode).toBe('ask')
     expect(host.agentDefaultEnv?.claude).toEqual({ API_KEY: 'host-secret', KEEP: 'host-only' })
     expect(JSON.stringify(controller.getAgentLaunch())).not.toContain('host-only')
   })
 
-  it('persists and projects None, then clears it for a blank default', async () => {
+  it('applies Auto to new chats on the execution host', async () => {
+    const { controller, host } = fixture()
+    const beforeNative = host.nativeChatPermissionMode
+    host.agentDefaultArgs = { claude: '', codex: '' }
+    await controller.mutateAgentLaunch({ type: 'permissions', syncNativeChat: true, mode: 'auto' })
+    expect(host.agentDefaultArgs).toMatchObject({
+      claude: '--permission-mode auto',
+      codex: '--approve-for-me'
+    })
+    expect(host.nativeChatPermissionMode).toBe(beforeNative)
+    expect(host.agentNativeChatPermissionModes).toEqual({ claude: 'auto', codex: 'auto' })
+  })
+
+  it('publishes scoped host defaults and resets them when a paired client chooses a shared chat default', async () => {
+    const { controller, host } = fixture()
+    host.agentDefaultArgs = { claude: '', codex: '' }
+    await controller.mutateAgentLaunch({
+      type: 'permissions',
+      syncNativeChat: true,
+      agent: 'codex',
+      mode: 'auto'
+    })
+    expect(controller.get().agentNativeChatPermissionModes).toEqual({ codex: 'auto' })
+    expect(host.agentDefaultArgs.claude).toBe('')
+    await controller.update({ nativeChatPermissionMode: 'ask' })
+    expect(controller.get().agentNativeChatPermissionModes).toEqual({})
+    expect(host.nativeChatPermissionMode).toBe('ask')
+  })
+
+  it('normalizes older-client None default requests to Blank Terminal', async () => {
     const { controller, host } = fixture()
     const mutation = AgentLaunchSettingsMutation.parse({
       type: 'default',
@@ -115,9 +162,9 @@ describe('execution-host agent launch settings', () => {
     })
     await expect(controller.mutateAgentLaunch(mutation)).resolves.toMatchObject({
       defaultTuiAgent: 'blank',
-      newWorkspaceSetupOnly: true
+      newWorkspaceSetupOnly: false
     })
-    expect(host.newWorkspaceSetupOnly).toBe(true)
+    expect(host.newWorkspaceSetupOnly).toBe(false)
     await expect(
       controller.mutateAgentLaunch({ type: 'default', agent: 'blank' })
     ).resolves.toMatchObject({
@@ -129,7 +176,8 @@ describe('execution-host agent launch settings', () => {
 
   it('clears None when a legacy client explicitly picks Blank Terminal', async () => {
     const { controller, host } = fixture()
-    await controller.mutateAgentLaunch({ type: 'default', agent: 'blank', setupOnly: true })
+    host.defaultTuiAgent = 'blank'
+    host.newWorkspaceSetupOnly = true
     await controller.update({ defaultTuiAgent: 'blank' })
     expect(host.newWorkspaceSetupOnly).toBe(false)
     expect(controller.getAgentLaunch()).toMatchObject({

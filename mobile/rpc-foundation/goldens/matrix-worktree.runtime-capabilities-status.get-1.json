@@ -252,6 +252,11 @@
         }
       }
     },
+    "59a45eb98b67": {
+      "capabilities": {
+        "$rpc": "null"
+      }
+    },
     "73bcd4456e97": {
       "name": "status.get#1",
       "ordinal": 1,
@@ -427,6 +432,14 @@
         }
       }
     },
+    "ee20a1dc39e7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "null"
+      }
+    },
     "f793cb0dfb40": {
       "capabilities": {
         "agentLaunch": false,
@@ -459,9 +472,9 @@
           "sender": ["0ccee4def5e0"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "041e5e32563c"
+            "probe": "ee20a1dc39e7"
           },
-          "state": "f793cb0dfb40",
+          "state": "59a45eb98b67",
           "effects": []
         }
       },
@@ -471,9 +484,9 @@
           "sender": ["73bcd4456e97"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "041e5e32563c"
+            "probe": "ee20a1dc39e7"
           },
-          "state": "f793cb0dfb40",
+          "state": "59a45eb98b67",
           "effects": []
         }
       },
@@ -519,9 +532,9 @@
           "sender": ["16a71e555cb2"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "041e5e32563c"
+            "probe": "ee20a1dc39e7"
           },
-          "state": "f793cb0dfb40",
+          "state": "59a45eb98b67",
           "effects": []
         }
       },
@@ -531,9 +544,9 @@
           "sender": ["82f760e2c99f"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "041e5e32563c"
+            "probe": "ee20a1dc39e7"
           },
-          "state": "f793cb0dfb40",
+          "state": "59a45eb98b67",
           "effects": []
         }
       },
@@ -543,9 +556,9 @@
           "sender": ["e90520ab92af"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "041e5e32563c"
+            "probe": "ee20a1dc39e7"
           },
-          "state": "f793cb0dfb40",
+          "state": "59a45eb98b67",
           "effects": []
         }
       },
@@ -555,9 +568,9 @@
           "sender": ["2b8c44a85130"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "041e5e32563c"
+            "probe": "ee20a1dc39e7"
           },
-          "state": "f793cb0dfb40",
+          "state": "59a45eb98b67",
           "effects": []
         }
       },
@@ -567,9 +580,9 @@
           "sender": ["b799ba7b0c33"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "041e5e32563c"
+            "probe": "ee20a1dc39e7"
           },
-          "state": "f793cb0dfb40",
+          "state": "59a45eb98b67",
           "effects": []
         }
       }

@@ -1,7 +1,6 @@
 import { antigravityHookService } from '../antigravity/hook-service'
 import { getRelocatedDaemonHost } from '../daemon/daemon-host-relocation'
 import { app, ipcMain, powerMonitor, session } from 'electron'
-import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
 import { join } from 'node:path'
 import { maybeRedirectCliLaunch } from './cli-launch-redirect'
@@ -75,7 +74,7 @@ import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
-import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
+import { configureSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { recoverPendingProfileProjectMoves } from '../orca-profiles/profile-project-move-intent'
@@ -86,6 +85,7 @@ import { initOpenCodeUsagePath } from '../opencode-usage/store'
 import { initMuseUsagePath } from '../muse-usage/store'
 import { registerDocPreviewSchemePrivileges } from '../browser/doc-preview-protocol'
 import { MEDIA_PREVIEW_CUSTOM_SCHEME } from '../media/media-preview-protocol'
+import { JIRA_IMAGE_CUSTOM_SCHEME } from '../jira/attachments/image-protocol'
 import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
 import { CrashReportStore } from '../crash-reporting/crash-report-store'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
@@ -129,6 +129,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
 }
 
 function initializeMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
+  const isDev = !app.isPackaged
   // Why first: every step below, recovery and the instance lock included, may resolve userData.
   ensureWindowsAppDataPath(app)
   if (runProfileStateRecoveryPreflight()) {
@@ -160,7 +161,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   if (state.isServeMode) {
     reserveServeStdoutForReadiness()
   }
-  state.devInstanceIdentity = getDevInstanceIdentity(is.dev)
+  state.devInstanceIdentity = getDevInstanceIdentity(isDev)
   state.devAgentHookEndpointNamespace = state.devInstanceIdentity.isDev
     ? state.devInstanceIdentity.appUserModelId
     : undefined
@@ -207,7 +208,6 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why before any spawn: `signalProcessTree` is shared with the CLI and relay, so
   // it can only reach the main-process guard and breadcrumb store once this is registered.
   installMainProcessTreeKillGate()
-  const isDev = is.dev
   configureDevUserDataPath(isDev)
   configureOrcaUserDataPathEnv()
   // Why these four lines are one step (#16761): the two above decide where userData lives, and
@@ -340,7 +340,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // itself lands for the next launch (see macos-press-and-hold-default.ts).
   applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())
   // Why: use the canonical userData path — late app.getPath('userData') can resolve differently across restarts, defeating persistence.
-  initSessionParseCachePersistence({
+  configureSessionParseCachePersistence({
     filePath: join(getCanonicalUserDataPath(), 'ai-vault', 'session-parse-cache.json'),
     appVersion: app.getVersion()
   })
@@ -360,7 +360,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   initMuseUsagePath()
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
-  registerDocPreviewSchemePrivileges([MEDIA_PREVIEW_CUSTOM_SCHEME])
+  registerDocPreviewSchemePrivileges([MEDIA_PREVIEW_CUSTOM_SCHEME, JIRA_IMAGE_CUSTOM_SCHEME])
   // Why: must precede app.whenReady() so Crashpad is installed before the
   // first renderer spawns; a CHECK before this point is still exit-code-only.
   startCrashpadCapture()

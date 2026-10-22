@@ -1,4 +1,5 @@
-import type { ExecutionHostId } from '../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
+import type { Repo } from '../shared/repo-types'
 import { deriveGitRemoteIdentity, type GitRemoteIdentity } from '../shared/git-remote-identity'
 import { gitExecFileAsync } from './git/runner'
 import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
@@ -70,4 +71,19 @@ export async function detectGitRemoteIdentity(
 ): Promise<GitRemoteIdentity | null> {
   const probe = await probeGitRemoteIdentity(repoPath, executionHostId, options)
   return probe.status === 'resolved' ? probe.identity : null
+}
+
+/** A registered folder's remote as git reports it now; the stored answer only when git is unreachable. */
+export async function readCurrentGitRemoteIdentity(
+  repo: Pick<Repo, 'path' | 'kind' | 'gitRemoteIdentity'>
+): Promise<Pick<Repo, 'gitRemoteIdentity'>> {
+  if (repo.kind === 'folder') {
+    return { gitRemoteIdentity: null }
+  }
+  // Local on purpose: both setup paths register and read the folder in this process.
+  const probe = await probeGitRemoteIdentity(repo.path, LOCAL_EXECUTION_HOST_ID)
+  if (probe.status === 'resolved') {
+    return { gitRemoteIdentity: probe.identity }
+  }
+  return { gitRemoteIdentity: probe.status === 'no-remote' ? null : repo.gitRemoteIdentity }
 }

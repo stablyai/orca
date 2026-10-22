@@ -1,15 +1,10 @@
 import { useMemo } from 'react'
-import {
-  isAutomationGeneratedWorkspace,
-  isCliCreatedWorkspace,
-  isDetachedHeadWorkspace,
-  isSleepingSweepExemptWorkspace
-} from '@/components/sidebar/visible-worktrees'
 import { getStructuredChatWorktreeIds } from '@/components/sidebar/visible-worktree-activity-inputs'
-import { isDefaultBranchWorkspace } from '@/components/sidebar/default-branch-workspace'
-import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
+import { filterWorkspaceRows } from '../../../shared/workspace-view/workspace-row-filters'
+import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/desktop-workspace-row-facts'
+import { sortWorktreesSmart } from '../../../shared/sidebar-list/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
-import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
@@ -18,11 +13,9 @@ import {
 import { buildPaletteWorktreeIndex, resolvePaletteWorktree } from '@/lib/palette-repo-resolution'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-  getPairedDeviceIdsByEnvironment,
-  isWorkspaceFromOtherDevice
-} from '@/components/sidebar/workspace-creator-visibility'
+  getPairedDeviceIdsByEnvironment
+} from '../../../shared/workspace-creator-visibility'
 import type { Worktree } from '../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from './worktree-jump-palette-document-index'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
@@ -47,6 +40,7 @@ export function useWorktreeJumpPaletteWorktrees({
   ptyIdsByTabId,
   browserTabsByWorktree,
   unifiedTabsByWorktree,
+  structuredChatSleptAtByPaneKey,
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
   runtimeEnvironments,
@@ -60,6 +54,7 @@ export function useWorktreeJumpPaletteWorktrees({
   repoByHostIdentity,
   hostOptions,
   hostFilterActive,
+  defaultHostId,
   prCache,
   hostedReviewCache,
   settings,
@@ -87,77 +82,55 @@ export function useWorktreeJumpPaletteWorktrees({
   )
   const worktreeIdsWithStructuredChat = getStructuredChatWorktreeIds(
     showSleepingWorkspaces,
-    unifiedTabsByWorktree
+    unifiedTabsByWorktree,
+    structuredChatSleptAtByPaneKey
   )
-  const emptyQueryVisibleWorktrees = useMemo(
-    () =>
-      workspaces.filter((worktree) => {
-        if (worktree.isArchived) {
-          return false
-        }
-        if (filterPredicate && !filterPredicate.matchesWorktree(worktree)) {
-          return false
-        }
-        if (
-          hideWorkspacesFromOtherDevices &&
-          isWorkspaceFromOtherDevice(worktree, pairedDeviceIdsByEnvironment)
-        ) {
-          return false
-        }
-        // Folder rows follow the sidebar's host/device scope, without git or sleeping filters.
-        if (parseWorkspaceKey(worktree.id)?.type === 'folder') {
-          return true
-        }
-        if (
-          hideDefaultBranchWorkspace &&
-          isDefaultBranchWorkspace(worktree, repoMap.get(worktree.repoId))
-        ) {
-          return false
-        }
-        if (hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(worktree)) {
-          return false
-        }
-        if (hideCliCreatedWorkspaces && isCliCreatedWorkspace(worktree)) {
-          return false
-        }
-        if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
-          return false
-        }
-        if (
-          !showSleepingWorkspaces &&
-          !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
-          isInactiveWorkspace(
-            worktree.id,
-            tabsByWorktree,
-            ptyIdsByTabId,
-            browserTabsByWorktree,
-            worktreeIdsWithLiveAgent,
-            worktreeIdsWithStructuredChat
-          )
-        ) {
-          return false
-        }
-        return true
-      }),
-    [
+  const emptyQueryVisibleWorktrees = useMemo(() => {
+    // Why no project or host scope: the palette ignores the sidebar's scope; filterPredicate scopes it.
+    const visible = filterWorkspaceRows(
       workspaces,
-      alwaysShowDefaultBranchWorkspace,
-      browserTabsByWorktree,
-      filterPredicate,
-      hideAutomationGeneratedWorkspaces,
-      hideCliCreatedWorkspaces,
-      hideDefaultBranchWorkspace,
-      hideDetachedHeadWorkspaces,
-      hideWorkspacesFromOtherDevices,
-      pairedDeviceIdsByEnvironment,
-      ptyIdsByTabId,
-      repoMap,
-      showSleepingWorkspaces,
-      tabsByWorktree,
-      worktreeIdsWithLiveAgent,
-      worktreeIdsWithStructuredChat
-    ]
-  )
+      {
+        hideSleepingWorkspaces: !showSleepingWorkspaces,
+        alwaysShowDefaultBranchWorkspace,
+        hideDefaultBranchWorkspace,
+        hideAutomationGeneratedWorkspaces,
+        hideCliCreatedWorkspaces,
+        hideDetachedHeadWorkspaces,
+        hideWorkspacesFromOtherDevices,
+        filterRepoIds: [],
+        visibleHostIds: null
+      },
+      buildDesktopWorkspaceRowFactReader({
+        repoMap,
+        defaultHostId,
+        pairedDeviceIdsByEnvironment,
+        tabsByWorktree,
+        ptyIdsByTabId,
+        browserTabsByWorktree,
+        worktreeIdsWithLiveAgent,
+        worktreeIdsWithStructuredChat
+      })
+    )
+    return filterPredicate ? visible.filter(filterPredicate.matchesWorktree) : visible
+  }, [
+    workspaces,
+    alwaysShowDefaultBranchWorkspace,
+    browserTabsByWorktree,
+    filterPredicate,
+    hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces,
+    hideDefaultBranchWorkspace,
+    hideDetachedHeadWorkspaces,
+    hideWorkspacesFromOtherDevices,
+    pairedDeviceIdsByEnvironment,
+    ptyIdsByTabId,
+    repoMap,
+    defaultHostId,
+    showSleepingWorkspaces,
+    tabsByWorktree,
+    worktreeIdsWithLiveAgent,
+    worktreeIdsWithStructuredChat
+  ])
   const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
     () =>
       orderEmptyQueryWorktrees({
@@ -274,10 +247,12 @@ export function useWorktreeJumpPaletteWorktrees({
         repoMap,
         repoMapByHostIdentity: repoByHostIdentity,
         checksReviewByWorktree,
-        context: paletteSearchContext
+        context: paletteSearchContext,
+        lastVisitedAtByWorktreeId
       }),
     [
       checksReviewByWorktree,
+      lastVisitedAtByWorktreeId,
       paletteSearchQuery,
       paletteSearchContext,
       repoByHostIdentity,

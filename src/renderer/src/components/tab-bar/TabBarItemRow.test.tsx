@@ -187,6 +187,7 @@ function Strip({
   }
   const actions = useTabBarItemActions({
     props: {
+      worktreeId: 'wt-1',
       onActivate,
       onActivateFile: onActivate,
       onActivateBrowserTab: onActivate,

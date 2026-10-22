@@ -49,9 +49,6 @@ export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
 export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
 
-// Why: Electron's invoke error path preserves only message text, so signal reconnect via this stable token.
-export const SSH_TERMINATE_RECONNECT_REQUIRED = 'SSH_TERMINATE_RECONNECT_REQUIRED'
-
 export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chrome: 'Google Chrome',
   chromium: 'Chromium',

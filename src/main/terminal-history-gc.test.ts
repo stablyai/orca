@@ -297,16 +297,34 @@ describe('history GC concurrency behaviour', () => {
     seedDecisionMatrix()
     const live = new Set([LIVE_WORKTREE_ID])
 
-    const first = runHistoryGc(live)
-    const second = runHistoryGc(live)
-    expect(second).toBe(first)
+    seedBulk(64, 64)
+    const reachedYield = Promise.withResolvers<void>()
+    const releaseYield = Promise.withResolvers<void>()
+    const originalYield = eventLoopYield.yieldToEventLoop
+    const yieldObserver = vi
+      .spyOn(eventLoopYield, 'yieldToEventLoop')
+      .mockImplementationOnce(async () => {
+        reachedYield.resolve()
+        await releaseYield.promise
+        await originalYield()
+      })
 
-    await first
-    // Each rename produces its own tombstone, so a second overlapping walk would condemn twice.
-    const orphanRemovals = removeHostTreeMock.mock.calls.filter(([dir]) =>
-      basename(dir).startsWith('orphan-old.')
-    )
-    expect(orphanRemovals).toHaveLength(1)
+    const first = runHistoryGc(live)
+    let second: Promise<void> | undefined
+    try {
+      await reachedYield.promise
+      // A second walk with this snapshot would delete the first caller's live history.
+      second = runHistoryGc(new Set([DEAD_WORKTREE_ID]))
+      releaseYield.resolve()
+      await Promise.all([first, second])
+
+      expect(survivingDirs().has('live-old')).toBe(true)
+      expect(survivingDirs().has('orphan-old')).toBe(false)
+    } finally {
+      releaseYield.resolve()
+      await Promise.all([first, second])
+      yieldObserver.mockRestore()
+    }
   })
 
   it('starts a fresh pass once the previous one has settled', async () => {

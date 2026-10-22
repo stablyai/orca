@@ -12,7 +12,7 @@
  */
 import type { ReactElement, ReactNode } from 'react'
 import { cloneElement, isValidElement, StrictMode, useEffect, useState } from 'react'
-import { act, render, cleanup } from '@testing-library/react'
+import { act, render, cleanup, fireEvent } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -103,6 +103,22 @@ vi.mock('./TerminalTabLeadingIcon', () => ({
   TerminalTabLeadingIcon: () => {
     tabRenderCount += 1
     return <span />
+  }
+}))
+
+const menuCompletions: (() => void)[] = []
+vi.mock('./SortableTabContextMenu', () => ({
+  SortableTabContextMenu: ({
+    open,
+    onSessionSwitchComplete
+  }: {
+    open: boolean
+    onSessionSwitchComplete: () => void
+  }) => {
+    if (open) {
+      menuCompletions.push(onSessionSwitchComplete)
+    }
+    return open ? <div data-testid="open-menu" /> : null
   }
 }))
 
@@ -246,4 +262,23 @@ describe('SortableTab update-depth probe', () => {
     act(() => requestTerminalTabRename('terminal-tab-1'))
     expect(container.querySelector('[data-tab-rename-input]')).not.toBeNull()
   })
+})
+
+it('retires completion ownership for repeated gestures and batched blur/reopen', () => {
+  const { container } = render(<Harness tab={makeTab()} />)
+  const slot = container.querySelector('[data-tab-strip-slot]')!
+  act(() => fireEvent.contextMenu(slot))
+  const first = menuCompletions.at(-1)!
+  act(() => fireEvent.contextMenu(slot))
+  act(first)
+  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  const second = menuCompletions.at(-1)!
+  act(() => {
+    window.dispatchEvent(new Event('blur'))
+    fireEvent.contextMenu(slot)
+  })
+  act(second)
+  expect(container.querySelector('[data-testid="open-menu"]')).not.toBeNull()
+  act(menuCompletions.at(-1)!)
+  expect(container.querySelector('[data-testid="open-menu"]')).toBeNull()
 })

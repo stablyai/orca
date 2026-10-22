@@ -1,4 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
 
 const RESUME = { key: 'session_id', id: 'provider-session-1' } as const
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

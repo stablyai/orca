@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import * as rowContent from '../../../../shared/native-chat-row-content'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
@@ -249,6 +249,7 @@ describe('message rail hook', () => {
 
   it('ticks every user message and shows from the first one', () => {
     const element = document.createElement('div')
+    Object.defineProperty(element, 'clientWidth', { value: 800 })
     const scrollRef = { current: element }
 
     const { result } = renderHook(() =>
@@ -280,6 +281,7 @@ describe('message rail hook', () => {
 
   it('maps user messages above the loaded window from the outline, before the loaded ones', () => {
     const scrollRef = { current: document.createElement('div') }
+    Object.defineProperty(scrollRef.current, 'clientWidth', { value: 800 })
     const outline = Array.from({ length: 30 }, (_, index) => ({
       id: `older-${index}`,
       text: `older prompt ${index}`,

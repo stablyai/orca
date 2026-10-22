@@ -12,7 +12,7 @@ import {
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
 import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
 import { registerSocketDeviceKey } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from '../../../src/main/runtime/rpc/e2ee-crypto'
+import { generateKeyPair } from '../../../src/shared/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,

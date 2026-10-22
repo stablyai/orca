@@ -96,8 +96,6 @@ describe('CommandCodeHookService', () => {
       expect(script).toContain('orca-dev\\agent-hooks')
       expect(script).toContain('set ORCA_AGENT_HOOK_PORT=')
     } else {
-      expect(script).toContain('Command Code strips TOKEN-like env vars')
-      expect(script).toContain('Command Code sanitizes hook subprocess env')
       expect(script).toContain('__orca_read_ancestor_var')
       expect(script).toContain('__orca_fill_from_endpoint_file')
       expect(script).toContain('[ "$__orca_endpoint_port" != "$ORCA_AGENT_HOOK_PORT" ]')

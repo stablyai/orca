@@ -25,10 +25,12 @@ export function NativeChatToolFileTarget({
       </>
     )
   }
+  const href = createNativeChatFileHref(path, 'literal')
   return (
     <span
       role="link"
       tabIndex={0}
+      data-native-chat-link-href={href}
       className={cn(
         className,
         'cursor-pointer rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -38,7 +40,7 @@ export function NativeChatToolFileTarget({
       onClick={(event) => {
         // The row around this is its expand button; opening the file must not also toggle it.
         event.stopPropagation()
-        onLinkClick(event, createNativeChatFileHref(path, 'literal'))
+        onLinkClick(event, href)
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {

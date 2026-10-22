@@ -41,7 +41,8 @@ describe('readNativeChatVisualFile', () => {
       ok: true,
       html,
       revision: nativeChatVisualRevision(Buffer.from(html)),
-      sizeBytes: Buffer.byteLength(html)
+      sizeBytes: Buffer.byteLength(html),
+      path: join(folder, 'chart.html')
     })
   })
 
@@ -52,7 +53,12 @@ describe('readNativeChatVisualFile', () => {
       throw new Error('expected a read')
     }
     const again = await readNativeChatVisualFile(folder, 'chart.html', first.revision)
-    expect(again).toEqual({ ok: true, revision: first.revision, sizeBytes: 8, unchanged: true })
+    expect(again).toMatchObject({
+      ok: true,
+      revision: first.revision,
+      sizeBytes: 8,
+      unchanged: true
+    })
 
     await writeFile(join(folder, 'chart.html'), '<p>b</p>')
     const changed = await readNativeChatVisualFile(folder, 'chart.html', first.revision)

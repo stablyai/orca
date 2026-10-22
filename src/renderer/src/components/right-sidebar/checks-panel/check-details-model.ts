@@ -48,10 +48,6 @@ export function isFailedCheck(check: PRCheckDetail): boolean {
   )
 }
 
-export function isFailureState(state: string | null | undefined): boolean {
-  return state === 'failure' || state === 'failed' || state === 'cancelled' || state === 'timed_out'
-}
-
 export function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {

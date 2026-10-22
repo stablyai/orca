@@ -2,6 +2,8 @@ import {
   MAX_SUBAGENT_FIELD_CHARS,
   normalizeSubagentState
 } from '../../../../shared/native-chat-subagent-summary'
+import { fitInteractivePrompt } from '../../../../shared/agent-status-field-normalization'
+import { parseAskFromToolInput } from '../../../../shared/native-chat-ask'
 import type { NativeChatBlock, NativeChatSubagentState } from '../../../../shared/native-chat-types'
 import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import type { RpcContext } from '../core'
@@ -56,7 +58,7 @@ export function sanitizeNativeChatRpcBlock(
   }
   if (block.type === 'tool-call') {
     const budget = { remaining: MOBILE_BLOCK_CHAR_CAP, nodes: MOBILE_TOOL_INPUT_NODE_CAP }
-    return { ...block, input: sanitizeToolInput(block.input, budget, 0) }
+    return { ...block, input: sanitizeToolInput(fitAskToolInput(block), budget, 0) }
   }
   if (block.type === 'subagent-group') {
     return {
@@ -90,6 +92,27 @@ export function sanitizeNativeChatRpcBlock(
  *  what `unverifiable` records — clipping it would ship a truncated word. */
 function clipSubagentState(value: NativeChatSubagentState): NativeChatSubagentState {
   return value.length > MAX_SUBAGENT_FIELD_CHARS ? normalizeSubagentState(value) : value
+}
+
+// Why: the generic budget drops every option of a long question; shorten its presentation
+// text the way live status does so the transcript card keeps its labels.
+function fitAskToolInput(block: Extract<NativeChatBlock, { type: 'tool-call' }>): unknown {
+  const { name, input } = block
+  if (typeof input === 'string' && input.length <= MOBILE_BLOCK_CHAR_CAP) {
+    return input
+  }
+  if (!parseAskFromToolInput(name, input)) {
+    return input
+  }
+  const encoded = typeof input === 'string' ? input : JSON.stringify(input)
+  if (encoded.length <= MOBILE_BLOCK_CHAR_CAP) {
+    return input
+  }
+  const fitted = fitInteractivePrompt(encoded, (text) => text.length <= MOBILE_BLOCK_CHAR_CAP)
+  if (fitted === null) {
+    return input
+  }
+  return typeof input === 'string' ? fitted : JSON.parse(fitted)
 }
 
 function sanitizeToolInput(

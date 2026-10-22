@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { browserPageSchema } from '../../../../shared/workspace-session-browser-schema'
 import { createTestStore, makeWorktree } from './store-test-helpers'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn(), callRuntimeRpc: vi.fn() }))
 vi.mock('@/lib/doc-preview-grants', () => ({
@@ -10,10 +12,21 @@ vi.mock('@/lib/doc-preview-grants', () => ({
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
 }))
+// Main answers the window's layout commands (switch-on); every other call reaches the mock.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<object>()
-  return { ...actual, callRuntimeRpc: mocks.callRuntimeRpc.mockResolvedValue({}) }
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  const { runtimeRpcClientWithLayoutApply } =
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  return runtimeRpcClientWithLayoutApply({
+    ...actual,
+    callRuntimeRpc: mocks.callRuntimeRpc.mockResolvedValue({})
+  })
 })
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
@@ -33,7 +46,18 @@ const OTHER_DOC_LOCATION = {
 }
 const LIVE_GRANT_URL = `orca-preview://${'a'.repeat(32)}/report/index.html`
 
-function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
+let main: TabsDrawnFromMain | undefined
+afterEach(() => {
+  main?.close()
+  main = undefined
+})
+
+async function settled(): Promise<void> {
+  await main?.settle()
+}
+
+/** A store showing one worktree, its tabs drawn from main once the switch is on. */
+async function createStoreWithWorktree(): Promise<ReturnType<typeof createTestStore>> {
   const store = createTestStore()
   store.setState({
     repos: [{ id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }],
@@ -42,31 +66,34 @@ function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WORKTREE_ID
   })
+  main = await drawTabsFromMain(store)
   return store
 }
 
-function createDocTab(store: ReturnType<typeof createTestStore>): {
+async function createDocTab(store: ReturnType<typeof createTestStore>): Promise<{
   tabId: string
   pageId: string
-} {
+}> {
   const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
     docLocation: DOC_LOCATION,
     title: 'index.html',
     browserRuntimeEnvironmentId: null
   })
+  await settled()
   const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
   return { tabId: tab.id, pageId }
 }
 
 describe('convertBrowserPage doc→web', () => {
-  it('replaces the page under a fresh id in the same workspace row', () => {
-    const store = createStoreWithWorktree()
-    const { tabId, pageId } = createDocTab(store)
+  it('replaces the page under a fresh id in the same workspace row', async () => {
+    const store = await createStoreWithWorktree()
+    const { tabId, pageId } = await createDocTab(store)
 
     const converted = store.getState().convertBrowserPage(pageId, {
       kind: 'web',
       url: 'https://example.com/'
     })
+    await settled()
 
     expect(converted).not.toBeNull()
     // Fresh id: the old id must never resurface in the other registry half.
@@ -85,22 +112,24 @@ describe('convertBrowserPage doc→web', () => {
     expect(workspace?.activePageId).toBe(converted?.id)
   })
 
-  it('releases the old grant exactly once, after the store stops naming the document', () => {
-    const store = createStoreWithWorktree()
-    const { pageId } = createDocTab(store)
+  it('releases the old grant exactly once, after the store stops naming the document', async () => {
+    const store = await createStoreWithWorktree()
+    const { pageId } = await createDocTab(store)
     mocks.releaseDocPreviewGrant.mockClear()
 
     store.getState().convertBrowserPage(pageId, { kind: 'web', url: 'https://example.com/' })
+    await settled()
 
     expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledTimes(1)
     expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledWith(pageId)
   })
 
-  it('records one level of provenance so Back can return to the document', () => {
-    const store = createStoreWithWorktree()
-    const { tabId, pageId } = createDocTab(store)
+  it('records one level of provenance so Back can return to the document', async () => {
+    const store = await createStoreWithWorktree()
+    const { tabId, pageId } = await createDocTab(store)
 
     store.getState().convertBrowserPage(pageId, { kind: 'web', url: 'https://example.com/' })
+    await settled()
 
     const page = store.getState().browserPagesByWorkspace[tabId]?.[0]
     expect(page?.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
@@ -109,14 +138,16 @@ describe('convertBrowserPage doc→web', () => {
     expect(parsed.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
   })
 
-  it('refuses to convert a web page to web — that is navigation, not conversion', () => {
-    const store = createStoreWithWorktree()
+  it('refuses to convert a web page to web — that is navigation, not conversion', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
+    await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     const converted = store
       .getState()
       .convertBrowserPage(pageId, { kind: 'web', url: 'https://other.example/' })
+    await settled()
 
     expect(converted).toBeNull()
     expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id).toBe(pageId)
@@ -125,9 +156,10 @@ describe('convertBrowserPage doc→web', () => {
 })
 
 describe('convertBrowserPage web→doc', () => {
-  it('replaces the page with a client-local document page and mirrors it', () => {
-    const store = createStoreWithWorktree()
+  it('replaces the page with a client-local document page and mirrors it', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
+    await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
     mocks.releaseDocPreviewGrant.mockClear()
 
@@ -135,6 +167,7 @@ describe('convertBrowserPage web→doc', () => {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+    await settled()
 
     expect(converted).not.toBeNull()
     expect(converted?.id).not.toBe(pageId)
@@ -151,15 +184,17 @@ describe('convertBrowserPage web→doc', () => {
     expect(mocks.releaseDocPreviewGrant).not.toHaveBeenCalled()
   })
 
-  it('never lets a grant url into the converted page, even handed one directly', () => {
-    const store = createStoreWithWorktree()
+  it('never lets a grant url into the converted page, even handed one directly', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
+    await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     store.getState().convertBrowserPage(pageId, {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+    await settled()
 
     const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
     const written = JSON.stringify([page, store.getState().browserTabsByWorktree[WORKTREE_ID]])
@@ -168,15 +203,16 @@ describe('convertBrowserPage web→doc', () => {
 })
 
 describe('convertBrowserPage doc→doc retarget', () => {
-  it('replaces the page and its grant for a different document', () => {
-    const store = createStoreWithWorktree()
-    const { tabId, pageId } = createDocTab(store)
+  it('replaces the page and its grant for a different document', async () => {
+    const store = await createStoreWithWorktree()
+    const { tabId, pageId } = await createDocTab(store)
     mocks.releaseDocPreviewGrant.mockClear()
 
     const converted = store.getState().convertBrowserPage(pageId, {
       kind: 'workspace-doc',
       docLocation: OTHER_DOC_LOCATION
     })
+    await settled()
 
     expect(converted?.id).not.toBe(pageId)
     expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledWith(pageId)
@@ -185,15 +221,16 @@ describe('convertBrowserPage doc→doc retarget', () => {
     expect(page?.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
   })
 
-  it('is a no-op for the same document', () => {
-    const store = createStoreWithWorktree()
-    const { tabId, pageId } = createDocTab(store)
+  it('is a no-op for the same document', async () => {
+    const store = await createStoreWithWorktree()
+    const { tabId, pageId } = await createDocTab(store)
     mocks.releaseDocPreviewGrant.mockClear()
 
     const converted = store.getState().convertBrowserPage(pageId, {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+    await settled()
 
     expect(converted).toBeNull()
     expect(store.getState().browserPagesByWorkspace[tabId]?.[0]?.id).toBe(pageId)
@@ -202,14 +239,15 @@ describe('convertBrowserPage doc→doc retarget', () => {
 })
 
 describe('convertBrowserPage history legs', () => {
-  it('the return leg swaps convertedFrom for convertedTo, so Forward can re-cross', () => {
-    const store = createStoreWithWorktree()
-    const { tabId, pageId } = createDocTab(store)
+  it('the return leg swaps convertedFrom for convertedTo, so Forward can re-cross', async () => {
+    const store = await createStoreWithWorktree()
+    const { tabId, pageId } = await createDocTab(store)
 
     const webPage = store.getState().convertBrowserPage(pageId, {
       kind: 'web',
       url: 'https://example.com/'
     })
+    await settled()
     expect(webPage?.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
     expect(webPage?.convertedTo ?? null).toBeNull()
 
@@ -220,6 +258,7 @@ describe('convertBrowserPage history legs', () => {
         { kind: 'workspace-doc', docLocation: DOC_LOCATION },
         { leg: 'history-return' }
       )
+    await settled()
 
     expect(returned?.docLocation).toEqual(DOC_LOCATION)
     expect(returned?.convertedFrom ?? null).toBeNull()
@@ -235,12 +274,13 @@ describe('convertBrowserPage history legs', () => {
     expect(parsed.convertedTo).toEqual(expectedForward)
   })
 
-  it('the advance leg re-records convertedFrom and consumes convertedTo — a two-entry ping-pong', () => {
-    const store = createStoreWithWorktree()
-    const { pageId } = createDocTab(store)
+  it('the advance leg re-records convertedFrom and consumes convertedTo — a two-entry ping-pong', async () => {
+    const store = await createStoreWithWorktree()
+    const { pageId } = await createDocTab(store)
     const webPage = store
       .getState()
       .convertBrowserPage(pageId, { kind: 'web', url: 'https://example.com/' })
+    await settled()
     const docPage = store
       .getState()
       .convertBrowserPage(
@@ -248,6 +288,7 @@ describe('convertBrowserPage history legs', () => {
         { kind: 'workspace-doc', docLocation: DOC_LOCATION },
         { leg: 'history-return' }
       )
+    await settled()
 
     const advanced = store
       .getState()
@@ -256,6 +297,7 @@ describe('convertBrowserPage history legs', () => {
         { kind: 'web', url: 'https://example.com/' },
         { leg: 'history-advance' }
       )
+    await settled()
 
     expect(advanced?.url).toBe('https://example.com/')
     expect(advanced?.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
@@ -264,17 +306,19 @@ describe('convertBrowserPage history legs', () => {
 })
 
 describe('convertBrowserPage placement and activation', () => {
-  it('converts a background page without stealing the active page', () => {
-    const store = createStoreWithWorktree()
-    const { tabId, pageId: docPageId } = createDocTab(store)
+  it('converts a background page without stealing the active page', async () => {
+    const store = await createStoreWithWorktree()
+    const { tabId, pageId: docPageId } = await createDocTab(store)
     const webPage = store.getState().createBrowserPage(tabId, 'https://active.example/', {
       activate: true
     })
+    await settled()
 
     const converted = store.getState().convertBrowserPage(docPageId, {
       kind: 'web',
       url: 'https://converted.example/'
     })
+    await settled()
 
     const pages = store.getState().browserPagesByWorkspace[tabId] ?? []
     // Replacement holds the old page's position.
@@ -289,9 +333,9 @@ describe('convertBrowserPage placement and activation', () => {
     expect(converted?.id).not.toBe(docPageId)
   })
 
-  it('clears the old page id from every per-page side table', () => {
-    const store = createStoreWithWorktree()
-    const { pageId } = createDocTab(store)
+  it('clears the old page id from every per-page side table', async () => {
+    const store = await createStoreWithWorktree()
+    const { pageId } = await createDocTab(store)
     // Every table SEEDED, so a deletion that stops running fails instead of passing vacuously.
     store.setState((s) => ({
       pendingAddressBarFocusByPageId: { ...s.pendingAddressBarFocusByPageId, [pageId]: true },
@@ -307,6 +351,7 @@ describe('convertBrowserPage placement and activation', () => {
     }))
 
     store.getState().convertBrowserPage(pageId, { kind: 'web', url: 'https://example.com/' })
+    await settled()
 
     expect(store.getState().pendingAddressBarFocusByPageId[pageId]).toBeUndefined()
     expect(store.getState().pendingAddressBarFocusByTabId[pageId]).toBeUndefined()
@@ -316,9 +361,10 @@ describe('convertBrowserPage placement and activation', () => {
 
   // The leg the remote pane's address bar reaches: converting a runtime-owned page must close the
   // host's page and drop the handle, or a ghost page stays open on the remote host.
-  it('closes the remote page and drops its handle when a runtime-owned page converts', () => {
-    const store = createStoreWithWorktree()
+  it('closes the remote page and drops its handle when a runtime-owned page converts', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/')
+    await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
     store.setState((s) => ({
       remoteBrowserPageHandlesByPageId: {
@@ -332,6 +378,7 @@ describe('convertBrowserPage placement and activation', () => {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+    await settled()
 
     expect(converted).not.toBeNull()
     expect(store.getState().remoteBrowserPageHandlesByPageId[pageId]).toBeUndefined()
@@ -345,17 +392,19 @@ describe('convertBrowserPage placement and activation', () => {
 
   // Ownership rides provenance both ways, or Back silently moves a remote tab's browsing onto
   // this desktop (the ssh-execution-boundary concern).
-  it('carries runtime ownership through provenance and honors it on the return leg', () => {
-    const store = createStoreWithWorktree()
+  it('carries runtime ownership through provenance and honors it on the return leg', async () => {
+    const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/', {
       browserRuntimeEnvironmentId: 'env-1'
     })
+    await settled()
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     const docPage = store.getState().convertBrowserPage(pageId, {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+    await settled()
     expect(docPage?.convertedFrom).toEqual({
       kind: 'url',
       url: 'https://remote.example/',
@@ -371,12 +420,13 @@ describe('convertBrowserPage placement and activation', () => {
       },
       { leg: 'history-return' }
     )
+    await settled()
     expect(returned?.browserRuntimeEnvironmentId).toBe('env-1')
   })
 
-  it('returns a worktree-inferred remote page as inferred, never as client-local', () => {
-    const store = createStoreWithWorktree()
-    const { pageId } = createDocTab(store)
+  it('returns a worktree-inferred remote page as inferred, never as client-local', async () => {
+    const store = await createStoreWithWorktree()
+    const { pageId } = await createDocTab(store)
     // The return leg says "inferred" by passing the property explicitly undefined.
     const returned = store
       .getState()
@@ -385,18 +435,20 @@ describe('convertBrowserPage placement and activation', () => {
         { kind: 'web', url: 'https://remote.example/', browserRuntimeEnvironmentId: undefined },
         { leg: 'history-return' }
       )
+    await settled()
     expect(returned).not.toBeNull()
     expect('browserRuntimeEnvironmentId' in (returned ?? {})).toBe(false)
   })
 
-  it('returns null for an unknown page and changes nothing', () => {
-    const store = createStoreWithWorktree()
-    createDocTab(store)
+  it('returns null for an unknown page and changes nothing', async () => {
+    const store = await createStoreWithWorktree()
+    await createDocTab(store)
     const before = store.getState().browserPagesByWorkspace
 
     const converted = store
       .getState()
       .convertBrowserPage('missing-page', { kind: 'web', url: 'https://example.com/' })
+    await settled()
 
     expect(converted).toBeNull()
     expect(store.getState().browserPagesByWorkspace).toBe(before)

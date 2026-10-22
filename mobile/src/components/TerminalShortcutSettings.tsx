@@ -4,7 +4,8 @@ import { useFocusEffect } from 'expo-router'
 import { ChevronRight, Minus, Plus } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
-import { CustomKeyModal, loadCustomKeys, saveCustomKeys, type CustomKey } from './CustomKeyModal'
+import { CustomKeyModal } from './CustomKeyModal'
+import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import { DragReorderList } from './DragReorderList'
 import { TerminalShortcutReorderRow } from './terminal-shortcut-reorder-row'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -50,24 +51,6 @@ function useSequencedStorage<T>(
   const pendingRef = useRef(0)
   const refreshCountRef = useRef(0)
 
-  const commit = useCallback(
-    (next: T, persist = true) => {
-      seqRef.current += 1
-      setValue(next)
-      if (persist) {
-        pendingRef.current += 1
-        chainRef.current = chainRef.current
-          .catch(() => {})
-          .then(() => save(next))
-          .catch(() => {})
-          .finally(() => {
-            pendingRef.current -= 1
-          })
-      }
-    },
-    [save]
-  )
-
   const refresh = useCallback(() => {
     seqRef.current += 1
     const refreshSeq = seqRef.current
@@ -85,6 +68,32 @@ function useSequencedStorage<T>(
         setReady(refreshCountRef.current === 0)
       })
   }, [load])
+
+  const commit = useCallback(
+    (next: T, persist = true) => {
+      seqRef.current += 1
+      setValue(next)
+      if (!persist) {
+        return
+      }
+      pendingRef.current += 1
+      chainRef.current = chainRef.current
+        .catch(() => {})
+        .then(() => save(next))
+        .then(
+          () => false,
+          () => true
+        )
+        .then((refused) => {
+          pendingRef.current -= 1
+          // Why: a refused write left the store unchanged, and a later queued write still owns the screen.
+          if (refused && pendingRef.current === 0) {
+            refresh()
+          }
+        })
+    },
+    [refresh, save]
+  )
 
   return { value, ready, commit, refresh }
 }

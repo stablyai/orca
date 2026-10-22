@@ -12,7 +12,9 @@ export function newTabAgentMountAdapters(
       ).loadMobileNewTabAgentOptions
       return {
         action: (_name, args) =>
-          load({ client, worktreeId: String(args.workspace ?? 'repo-1::/folder') }),
+          load({ client, worktreeId: String(args.workspace ?? 'repo-1::/folder') }).then(
+            ({ options }) => options
+          ),
         state: () => ({}),
         dispose: () => {}
       }

@@ -8,6 +8,7 @@ import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-mo
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
+import { useWorktreeCreateBasePrefetch } from '../tasks/use-worktree-create-base-prefetch'
 import { useHostDescriptor } from '../transport/host-descriptor-store'
 import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
@@ -99,6 +100,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const executionTarget = useNewWorkspaceExecutionTarget({
     client,
     connectionId: selectedRepoConnectionId,
+    repoId: selectedRepo?.id,
     visible
   })
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
@@ -111,6 +113,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     selectedRepoId: selectedRepo?.id ?? null,
     worktreeBranches: selectedRepoWorktreeBranches,
     onError: setError
+  })
+  const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
+  useWorktreeCreateBasePrefetch({
+    client: visible ? client : null,
+    repoId: selectedRepo?.id ?? null,
+    repoIsGit: selectedRepoIsGit,
+    selection: composer.createSelection
   })
   const agentSelection = useNewWorkspaceAgentSelection({
     visible,
@@ -155,14 +164,14 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onClose
   })
 
-  const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
   const sourceAvailability: SmartModeAvailabilityInput = {
     textOnly: selectedRepo != null && !selectedRepoIsGit,
     tasksSupported,
     hasRepo: selectedRepo != null,
     githubAvailable: runtime.availableProviders.includes('github'),
     gitlabAvailable: runtime.availableProviders.includes('gitlab'),
-    linearAvailable: runtime.availableProviders.includes('linear')
+    linearAvailable: runtime.availableProviders.includes('linear'),
+    jiraAvailable: runtime.jiraConnection.connected && runtime.availableProviders.includes('jira')
   }
   // Why one client's: a source's repo switch is looked up through the picked repo's client.
   const hostRepos = useMemo(
@@ -273,6 +282,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         selectedRepo={selectedRepo}
         repos={hostRepos}
         pasteRepos={pasteRepos}
+        jiraSiteId={runtime.jiraConnection.selection}
+        jiraSites={runtime.jiraConnection.sites}
         sshReady={!executionTarget.sshGate.requiresConnection}
         projectPickerItems={projectPickerItems}
         selectedProjectId={selectedProjectId}

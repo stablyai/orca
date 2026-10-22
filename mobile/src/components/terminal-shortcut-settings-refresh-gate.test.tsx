@@ -4,7 +4,7 @@ import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
-import type { CustomKey } from './CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 import type { TerminalAccessoryLayoutPreference } from '../terminal/terminal-accessory-layout'
 
 function createDeferred<T>() {
@@ -80,7 +80,10 @@ vi.mock('./DragReorderList', () => ({
 }))
 
 vi.mock('./CustomKeyModal', () => ({
-  CustomKeyModal: hosts.CustomKeyModal,
+  CustomKeyModal: hosts.CustomKeyModal
+}))
+
+vi.mock('../terminal/terminal-custom-keys', () => ({
   loadCustomKeys: () => mocks.loadCustomQueue.shift() ?? Promise.resolve([]),
   saveCustomKeys: (keys: CustomKey[]) => mocks.saveCustom(keys)
 }))

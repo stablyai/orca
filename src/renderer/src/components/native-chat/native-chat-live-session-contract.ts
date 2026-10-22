@@ -44,4 +44,7 @@ export type NativeChatLiveSession = NativeChatSession & {
    *  outranks (and so hides) 'loading', which would let a consumer deciding from
    *  an empty list treat an in-flight transcript as real history. */
   readPhase: ReadState['phase']
+  /** The transcript is the host's present, not what a stopped or disconnected read left
+   *  behind. Absent on a chat read from a terminal, which cannot say what the reader missed. */
+  readCurrent?: boolean
 }

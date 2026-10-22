@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {

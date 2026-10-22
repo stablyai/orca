@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PinnedRuntimeArchive } from './pinned-runtime-materializer'
-import { downloadVerifiedArchive } from './runtime-archive-download'
+import { downloadFailureMessage, downloadVerifiedArchive } from './runtime-archive-download'
 
 const BODY = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
 const NO_DELAY = [0, 0, 0]
@@ -109,6 +109,29 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     ).rejects.toThrow()
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(signals[0]?.aborted).toBe(true)
+  })
+
+  // QA: a refused proxy was blamed on the release instead of the network.
+  it('blames the release only for a proven mismatch', async () => {
+    const failure = (response: () => Promise<Response>) =>
+      downloadVerifiedArchive(
+        archive(),
+        destination,
+        vi.fn<typeof fetch>(response),
+        undefined,
+        []
+      ).then(
+        () => '',
+        (error: unknown) => downloadFailureMessage('Node', error)
+      )
+    expect(
+      await failure(async () => {
+        throw new Error('net::ERR_PROXY_CONNECTION_FAILED')
+      })
+    ).toMatch(/^Couldn't download Node\./)
+    expect(await failure(async () => ok(new Uint8Array([9, 9])))).toMatch(
+      /didn't match the release/
+    )
   })
 
   it('stops waiting to retry once the caller cancels', async () => {

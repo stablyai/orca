@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import { folderWorkspaceKey } from '../shared/workspace-scope'
+import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -21,7 +22,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -71,7 +72,9 @@ describe('Store', () => {
 
   it('setWorktreeMeta creates meta with defaults for missing fields', async () => {
     const store = await createStore()
-    const meta = store.setWorktreeMeta('wt1', { displayName: 'my-wt' })
+    const meta = store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), {
+      displayName: 'my-wt'
+    })
 
     expect(meta.displayName).toBe('my-wt')
     expect(meta.comment).toBe('')
@@ -82,8 +85,13 @@ describe('Store', () => {
 
   it('setWorktreeMeta merges with existing meta', async () => {
     const store = await createStore()
-    store.setWorktreeMeta('wt1', { displayName: 'first', comment: 'hello' })
-    const updated = store.setWorktreeMeta('wt1', { comment: 'updated' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), {
+      displayName: 'first',
+      comment: 'hello'
+    })
+    const updated = store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), {
+      comment: 'updated'
+    })
 
     expect(updated.displayName).toBe('first')
     expect(updated.comment).toBe('updated')
@@ -113,7 +121,10 @@ describe('Store', () => {
       accountLabel: 'ada@example.com'
     }
 
-    store.setWorktreeMeta('wt-jira', { linkedWorkItem, linkedTaskSourceContext })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt-jira', hostId: 'local' }), {
+      linkedWorkItem,
+      linkedTaskSourceContext
+    })
     store.flush()
     const restored = await createStore()
 
@@ -122,12 +133,12 @@ describe('Store', () => {
       linkedTaskSourceContext
     })
     expect(
-      restored.setWorktreeMeta('wt-jira', {
+      restored.setWorktreeMeta(hostWorktreeTarget({ id: 'wt-jira', hostId: 'local' }), {
         linkedTaskSourceContext: { ...linkedTaskSourceContext, provider: 'linear' }
       }).linkedTaskSourceContext
     ).toBeNull()
     expect(
-      restored.setWorktreeMeta('wt-jira', {
+      restored.setWorktreeMeta(hostWorktreeTarget({ id: 'wt-jira', hostId: 'local' }), {
         linkedTaskSourceContext: {
           ...linkedTaskSourceContext,
           providerIdentity: {

@@ -2,11 +2,8 @@
  * Diagnose a host's C/C++ build toolchain from a POSIX-sh probe. Pure: it builds a shell
  * command and parses its output, so the Node-only orcad bundle runs it over a local shell.
  */
-// Why: node-pty@1.1.0 ships no Linux prebuild, so the remote `npm install` falls
-// back to `node-gyp rebuild` and needs a C/C++ toolchain. A missing toolchain is
-// the dominant first-connect failure on Linux relays (#1693); node-gyp surfaces
-// it as an opaque `not found: make`. We probe for the tools so we can replace
-// that with an actionable "install build-essential" message.
+// Why: a host with no usable node-pty binary needs a C/C++ toolchain to build one (#1693);
+// probing lets orcad's blocked report name the install command.
 const PROBED_TOOLS = [
   'make',
   'gcc',
@@ -33,18 +30,6 @@ const PACKAGE_MANAGER_HINTS: readonly { bin: string; install: string }[] = [
 type BuildToolchainStatus = {
   present: string[]
   packageManager: string | null
-  // node-gyp needs make, Python, and a C++ compiler. The caller only uses this
-  // verdict after npm/node-gyp output already points at a native-build failure,
-  // so custom Python paths do not make unrelated npm failures look toolchainy.
-  toolchainMissing: boolean
-}
-
-function hasCxxCompiler(present: ReadonlySet<string>): boolean {
-  return present.has('g++') || present.has('c++') || present.has('clang++')
-}
-
-function hasPython(present: ReadonlySet<string>): boolean {
-  return present.has('python3') || present.has('python')
 }
 
 // POSIX-sh probe: echo a `HAVE <tool>` line per resolvable build tool and a
@@ -75,8 +60,7 @@ export function parseBuildToolchainProbe(output: string): BuildToolchainStatus {
   }
   return {
     present: PROBED_TOOLS.filter((tool) => present.has(tool)),
-    packageManager,
-    toolchainMissing: !present.has('make') || !hasCxxCompiler(present) || !hasPython(present)
+    packageManager
   }
 }
 

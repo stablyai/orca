@@ -285,7 +285,7 @@ describe('AppearancePane', () => {
     ).toBeNull()
   })
 
-  it('renders the language dropdown with system, english, chinese, korean, japanese, and spanish options', async () => {
+  it('renders the language dropdown with every built-in language option', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -300,9 +300,13 @@ describe('AppearancePane', () => {
     const chineseOption = container.querySelector<HTMLButtonElement>(
       '[data-slot="select-item"][data-value="zh"]'
     )
+    const portugueseOption = container.querySelector<HTMLButtonElement>(
+      '[data-slot="select-item"][data-value="pt"]'
+    )
 
     expect(languageTrigger).not.toBeNull()
     expect(chineseOption).not.toBeNull()
+    expect(portugueseOption).not.toBeNull()
     expect(container.textContent).not.toContain('Advanced')
     expect(container.textContent).toContain('System')
     expect(container.textContent).toContain('English')
@@ -310,6 +314,7 @@ describe('AppearancePane', () => {
     expect(container.textContent).toContain('한국어')
     expect(container.textContent).toContain('日本語')
     expect(container.textContent).toContain('Español')
+    expect(container.textContent).toContain('Português (Brasil)')
 
     await act(async () => {
       chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

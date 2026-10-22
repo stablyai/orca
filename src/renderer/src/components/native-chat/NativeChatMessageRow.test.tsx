@@ -2,6 +2,26 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+// Why: these fixtures have neither inline visual owners nor sender navigation.
+const unusedChatLeaves = vi.hoisted(() => ({
+  inlineVisual: vi.fn(() => {
+    throw new Error('Unexpected inline visual in transcript fixture')
+  }),
+  openSender: vi.fn(() => {
+    throw new Error('Unexpected sender navigation in transcript fixture')
+  })
+}))
+vi.mock('./NativeChatInlineVisual', () => ({
+  NativeChatInlineVisual: unusedChatLeaves.inlineVisual
+}))
+vi.mock('@/lib/open-agent-message-sender', () => ({
+  openAgentMessageSender: unusedChatLeaves.openSender
+}))
+afterEach(() => {
+  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
+  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
+})
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { TooltipProvider } from '@/components/ui/tooltip'

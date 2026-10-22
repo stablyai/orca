@@ -1,3 +1,4 @@
+import { quoteCmdDoubleQuoted, quotePosixShell } from './shell-argument-quoting'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
@@ -20,9 +21,9 @@ export function quoteShellToken(value: string): string {
     // Inside cmd.exe double quotes, `^` is literal; an embedded `"` is escaped
     // by doubling it. This token is only displayed for manual cleanup, so it
     // must be valid when pasted into cmd.exe.
-    return `"${value.replace(/"/g, '""')}"`
+    return quoteCmdDoubleQuoted(value)
   }
-  return `'${value.replace(/'/g, `'\\''`)}'`
+  return quotePosixShell(value)
 }
 
 export async function runRecipeCommand(args: {

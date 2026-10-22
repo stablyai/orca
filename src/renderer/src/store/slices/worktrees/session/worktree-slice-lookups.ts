@@ -14,6 +14,9 @@ import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
 } from '../../../terminals/terminal-tab-recovery-ledger'
+import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,
@@ -128,7 +131,7 @@ export function createAllWorktrees(
   _set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['allWorktrees'] {
-  return () => Object.values(get().worktreesByRepo).flat()
+  return () => Object.values(selectWorktreesByRepo(get())).flat()
 }
 
 export function createGetKnownWorktreeById(
@@ -140,7 +143,7 @@ export function createGetKnownWorktreeById(
 
 export function createPurgeWorktreeTerminalState(
   set: WorktreeSliceSet,
-  _get: WorktreeSliceGet
+  get: WorktreeSliceGet
 ): WorktreeSlice['purgeWorktreeTerminalState'] {
   return (worktreeTargets) => {
     const purgeableWorktreeTargets = worktreeTargets.filter((target) => {
@@ -150,6 +153,15 @@ export function createPurgeWorktreeTerminalState(
     if (purgeableWorktreeTargets.length === 0) {
       return
     }
-    set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
+    // Why before the purge: delayed views must commit text the purge may offer back.
+    flushPurgedWorkspaceEdits(
+      get(),
+      purgeableWorktreeTargets.map((target) =>
+        typeof target === 'string' ? { id: target } : target
+      )
+    )
+    settleAttentionRemovedBy(set, get, () =>
+      set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
+    )
   }
 }

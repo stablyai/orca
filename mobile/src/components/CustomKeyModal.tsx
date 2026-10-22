@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 import {
@@ -18,16 +17,7 @@ import {
   customKeySaveLabel,
   replaceCustomKeyPreservingId
 } from './custom-key-edit'
-import { persistMirrored } from '../storage/mirrored-storage-keys'
-
-const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
-
-export type CustomKey = {
-  id: string
-  label: string
-  bytes: string
-  enter: boolean
-}
+import { updateStoredCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -73,22 +63,6 @@ type Props = {
   editingKey?: CustomKey | null
 }
 
-export async function loadCustomKeys(): Promise<CustomKey[]> {
-  try {
-    const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as CustomKey[]) : []
-  } catch {
-    return []
-  }
-}
-
-export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
-  // Through the one write path, which notes the mirror on an accepted write and on nothing else
-  // (ruling 35). There is no rollback here any more because there is nothing to undo: on the page
-  // a value over the cap rejects, and a rejected write never reached the map.
-  await persistMirrored(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
-}
-
 export function CustomKeyModal({
   visible,
   onClose,
@@ -124,10 +98,7 @@ export function CustomKeyModal({
 
   const addKey = useCallback(
     async (key: Omit<CustomKey, 'id'>) => {
-      const existing = await loadCustomKeys()
-      const updated = editingKey
-        ? replaceCustomKeyPreservingId(existing, { ...key, id: editingKey.id })
-        : [...existing, { ...key, id: `custom-${Date.now()}` }]
+      let updated: CustomKey[]
       // Caught here because both callers are `void addKey(...)`, which leaves a rejection nowhere
       // to go. On the page this key is allowlisted and its write rejects for size — the contract
       // `page-async-storage` states, and the one ruling 33.6 extends to a key `init` could not
@@ -135,7 +106,11 @@ export function CustomKeyModal({
       // handler, which reports a page fault and drops the generation for a key nobody could add.
       // Every other allowlisted writer in this closure already catches its own save.
       try {
-        await saveCustomKeys(updated)
+        updated = await updateStoredCustomKeys((keys) =>
+          editingKey
+            ? replaceCustomKeyPreservingId(keys, { ...key, id: editingKey.id })
+            : [...keys, { ...key, id: `custom-${Date.now()}` }]
+        )
       } catch (error) {
         // Neither reported nor closed: a drawer that dismissed itself and announced the key would
         // put a row on the accessory bar that no store holds and the next load would not have.

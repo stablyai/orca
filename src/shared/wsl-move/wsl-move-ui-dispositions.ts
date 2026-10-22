@@ -64,6 +64,11 @@ export const UI_STATE_DISPOSITIONS = {
     item: 38,
     note: "A 'local' filter also covers the WSL host."
   },
+  jiraQuickFilterState: notApplicableDisposition(38, 'Filters belong to the Jira host.'),
+  jiraSavedFilterState: notApplicableDisposition(
+    38,
+    'Filters belong to the Jira host, not a moved workspace.'
+  ),
   taskResumeState: notApplicableDisposition(38)
 } as const satisfies Partial<Record<keyof PersistedUIState, WslMoveFieldDisposition>>
 
@@ -133,6 +138,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'usageEmptyStateDismissed',
   'codexTerminalServerIsolationNoticeSeen',
   'codexSharedSettingsNoticeSeen',
+  'claudeDiffPanelNoticeSeen',
   'claudeAccountSignInNoticeSeen',
   'browserDefaultUrl',
   'browserDefaultSearchEngine',

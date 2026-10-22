@@ -18,6 +18,22 @@
       ]
     },
     {
+      "name": "jira-tickets",
+      "sourcePath": "skills/jira-tickets",
+      "packageDigest": "48ca2a93818e17bf1e942452e835800e8f967a935d3082e1e9c03fff9ddb3d19",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2129,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "5534da4000f4f4c87f7dbb263345a213068c0099a1440186adea865e17d90dfe",
+          "textNormalizedSha256": "5534da4000f4f4c87f7dbb263345a213068c0099a1440186adea865e17d90dfe",
+          "identitySha256": "5534da4000f4f4c87f7dbb263345a213068c0099a1440186adea865e17d90dfe"
+        }
+      ]
+    },
+    {
       "name": "linear-tickets",
       "sourcePath": "skills/linear-tickets",
       "packageDigest": "1eab442d048b79ab0b836adf57663ac384988dd79172ec5f14193eb05e037715",
@@ -78,6 +94,22 @@
           "exactSha256": "3ade4e6f8f2717ca899fd841e61f116963a406e9527015b803854c16d012e278",
           "textNormalizedSha256": "3ade4e6f8f2717ca899fd841e61f116963a406e9527015b803854c16d012e278",
           "identitySha256": "3ade4e6f8f2717ca899fd841e61f116963a406e9527015b803854c16d012e278"
+        }
+      ]
+    },
+    {
+      "name": "orca-jira",
+      "sourcePath": "skills/orca-jira",
+      "packageDigest": "815931fe3f4b52437ca15db4b512ce4033b84b3ce1639df0882cc4f7adfc005d",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2080,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "ca83c4662fbc2306efb9043674998b0ca5abacc78ec2e5f85e5db80288e6777a",
+          "textNormalizedSha256": "ca83c4662fbc2306efb9043674998b0ca5abacc78ec2e5f85e5db80288e6777a",
+          "identitySha256": "ca83c4662fbc2306efb9043674998b0ca5abacc78ec2e5f85e5db80288e6777a"
         }
       ]
     },

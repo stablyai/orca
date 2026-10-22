@@ -32,4 +32,6 @@ export function prepareFederatedAttachmentAuthority(args: {
     hostScope: authority?.hostScope ? JSON.stringify(authority.hostScope) : null,
     terminalOwnership: args.reusesTerminal ? 'external' : 'created'
   })
+  // Why: a reused pane may hold an earlier agent's exit; only exits after this attach are the worker's.
+  runtime.forgetTerminalAgentExit(terminalHandle)
 }

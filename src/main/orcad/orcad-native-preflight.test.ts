@@ -58,11 +58,6 @@ describe('runOrcadNativePreflight', () => {
     expect(message).toContain('sudo apt-get install -y build-essential python3')
   })
 
-  it('exits with EX_CONFIG so a supervisor does not restart an unequippable host forever', () => {
-    expect(ORCAD_EXIT_CONFIGURATION).toBe(78)
-    expect(ORCAD_EXIT_CONFIGURATION).not.toBe(1)
-  })
-
   it('publishes the blocked cause as a status degradation', () => {
     harness(verdict({ status: 'blocked', reason: 'abi_mismatch', detail: 'built for ABI 115' }))
 

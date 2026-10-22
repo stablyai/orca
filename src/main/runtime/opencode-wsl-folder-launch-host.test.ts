@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -52,9 +53,16 @@ beforeEach(() => {
     resolveTerminalWorkspaceLaunchScope: async () => scope,
     executionOwnerSupportsAgentSessionOperation: async () => true
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers read only the handle.
-  const create = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({ handle: 't' } as never)
-  spawned = () => create.mock.calls.map(([, opts]) => opts?.launchRuntime?.platform)
+  const launches: (string | undefined)[] = []
+  // createTerminal up to its spawn: the runtime the host planner gave each launch.
+  vi.spyOn(runtime, 'createTerminal').mockImplementation(async (selector = '', opts = {}) => {
+    const launchScope = await runtime.resolveTerminalWorkspaceLaunchScope(selector)
+    const planned = await runtime.resolveAgentTerminalCreateOptions(launchScope, opts)
+    launches.push(planned.launchRuntime?.platform)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers read only the handle.
+    return { handle: 't' } as never
+  })
+  spawned = () => launches
 })
 afterEach(() => {
   setPlatform(original)
@@ -86,12 +94,13 @@ it('refuses an agent whose WSL distro is gone, under its own code', async () => 
   expect(response).toMatchObject({ error: { code: PROJECT_RUNTIME_REPAIR_REQUIRED_CODE, message } })
 })
 
-// TEMPORARY parity: in a `\\wsl$` repo set to Windows host, OpenCode's model is checked on Windows,
-// as on main; its command is still written for Linux, where it runs.
-it('checks an OpenCode model on Windows in a WSL-share repo set to Windows host', async () => {
+// OpenCode runs in WSL in a `\\wsl$` repo, where Orca can't verify a model yet, so picking one is
+// refused rather than checked on Windows.
+it('refuses an OpenCode model in a WSL-share repo set to Windows host', async () => {
   const shareScope = { ...scope, id: 's', path: share.path, repo: share, folderWorkspace: null }
   Object.assign(runtime, { resolveTerminalWorkspaceLaunchScope: async () => shareScope })
   const request = { clientOperationId, worktree: 'id:s', agent: 'opencode' } as const
-  await runtime.createAgentSession({ ...request, launchPreferences: { model: 'm' } })
-  expect(spawned()).toEqual(['linux'])
+  const picked = runtime.createAgentSession({ ...request, launchPreferences: { model: 'm' } })
+  await expect(picked).rejects.toThrow('cannot verify this OpenCode')
+  expect(spawned()).toEqual([])
 })

@@ -34,6 +34,10 @@ import {
 import { resolveSettingsHostScope } from './settings-host-scope'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { defaultScopeHost } from '@/lib/default-creation-host'
+import {
+  blockRemovalForUnsavedFiles,
+  projectRemovalTargets
+} from '@/components/sidebar/removal-unsaved-files'
 
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)
@@ -85,8 +89,17 @@ export function useSettingsStoreModel() {
   )
   // Why: removes the entry on every host, not just the selected one; an entry of a split project holds only its own part (clones keep their own entries).
   const removeProjectAllHosts = useCallback(
-    (setups: readonly ProjectHostSetup[]): Promise<void> =>
-      removeSettingsProjectFromAllHosts(setups, removeProject),
+    async (setups: readonly ProjectHostSetup[]): Promise<void> => {
+      // Why block: this inline confirm has no room for a file list, and the folders stay on disk.
+      const targets = projectRemovalTargets(
+        useAppStore.getState(),
+        setups.map((setup) => ({ repoId: setup.repoId, hostId: setup.hostId }))
+      )
+      const name = setups[0]?.displayName ?? ''
+      if (!blockRemovalForUnsavedFiles(useAppStore.getState, targets, name)) {
+        await removeSettingsProjectFromAllHosts(setups, removeProject)
+      }
+    },
     [removeProject]
   )
 

@@ -39,12 +39,15 @@ function toHostScopedSelector(row: CatalogRow, catalog: readonly CatalogRow[]): 
   return sharedId && row.identity?.key ? `identity:${row.identity.key}` : `id:${row.id}`
 }
 
-/** The caller host's innermost worktree enclosing `cwd`, as a selector; undefined when none does. */
-export function selectEnclosingWorktreeOnHost(
+/** A host-scoped selector plus the worktree id it names, which an `identity:` selector hides. */
+export type HostScopedWorktreeSelection = { selector: string; worktreeId: string }
+
+/** The caller host's innermost worktree enclosing `cwd`; undefined when none does. */
+export function selectEnclosingWorktreeSelectionOnHost(
   catalog: readonly CatalogRow[],
   cwd: string,
   hostId: ExecutionHostId
-): string | undefined {
+): HostScopedWorktreeSelection | undefined {
   const currentPath = resolvePath(cwd)
   let enclosing: CatalogRow | undefined
   let enclosingPathLength = -1
@@ -59,7 +62,18 @@ export function selectEnclosingWorktreeOnHost(
     enclosing = row
     enclosingPathLength = rowPath.length
   }
-  return enclosing ? toHostScopedSelector(enclosing, catalog) : undefined
+  return enclosing
+    ? { selector: toHostScopedSelector(enclosing, catalog), worktreeId: enclosing.id }
+    : undefined
+}
+
+/** The caller host's innermost worktree enclosing `cwd`, as a selector; undefined when none does. */
+export function selectEnclosingWorktreeOnHost(
+  catalog: readonly CatalogRow[],
+  cwd: string,
+  hostId: ExecutionHostId
+): string | undefined {
+  return selectEnclosingWorktreeSelectionOnHost(catalog, cwd, hostId)?.selector
 }
 
 /** Scopes a pane's forwarded bare worktree id to the caller's host; undefined when it has none. */

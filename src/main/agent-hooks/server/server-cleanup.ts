@@ -16,6 +16,7 @@ import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
+import { recordAgentExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
   /** The resume-identity remnant of a dropped row: a `providerSessionOnly` entry carries no state
@@ -134,6 +135,17 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      if (options?.endedPresence) {
+        // Why both: cleanup below drops the alias, and a reader may still hold the original key.
+        const paneKeys = new Set([resolvedPaneKey, paneKey])
+        for (const [aliasKey, alias] of this.legacyPaneKeyAliases) {
+          if (alias.stablePaneKey === resolvedPaneKey) {
+            paneKeys.add(aliasKey)
+          }
+        }
+        recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, options.endedPresence)
+        this.scheduleStatusPersist()
+      }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         continue
       }

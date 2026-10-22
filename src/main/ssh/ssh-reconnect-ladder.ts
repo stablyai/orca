@@ -1,5 +1,5 @@
 import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
-import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-utils'
+import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './connection/ssh-connection-timing'
 
 // A connection that held this long is treated as healthy, so the next drop restarts the delay ladder.
 export const STABLE_CONNECTION_MS = 60_000
@@ -19,7 +19,7 @@ export const FLAP_DELAY_CAP_MS = (() => {
   return fitting.length > 0 ? Math.max(...fitting) : RECONNECT_BACKOFF_MS[0]
 })()
 
-export type SshReconnectDecision =
+type SshReconnectDecision =
   | { kind: 'retry'; delayMs: number; attemptIndex: number }
   | { kind: 'give-up' }
 

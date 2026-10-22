@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { Client } from 'ssh2'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { SshConnection } from '../../src/main/ssh/ssh-connection'
+import type { SshConnection } from '../../src/main/ssh/connection/ssh-connection'
 import type { SshProviderEpoch } from '../../src/shared/ssh-types'
 import { ensureDockerSshHostImage } from './helpers/docker-ssh-host-image'
 import {
@@ -13,7 +13,7 @@ import {
   type DockerSshHostTarget
 } from './helpers/docker-ssh-host-target'
 import { resolveSshBrowserNetworkExecutionRoute } from '../../src/main/browser/ssh-browser-network-execution-route'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const runDocker = process.env.ORCA_RUN_DOCKER_SSH_BROWSER_E2E === '1'
 const executionHost = {

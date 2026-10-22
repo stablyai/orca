@@ -14,10 +14,13 @@ import {
   seedStore
 } from '../../store-test-helpers'
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
+  readStructuredAgentLaunchRecord,
   resetStructuredAgentLaunchPersistenceForTests,
   writeStructuredAgentLaunchRecord
 } from '@/lib/structured-agent-session-launch-persistence'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from '@/lib/structured-agent-session-local-launch-cancel'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
@@ -34,6 +37,14 @@ const EXISTING_ID = `${REPO_ID}::/tmp/wt-existing`
 const CREATED_ID = `${REPO_ID}::/tmp/wt-created`
 const SESSION_ID = 'claude_repro_session'
 const AGENT_TAB_ID = `agent-session:${SESSION_ID}`
+
+// A layout-owner build closes a local launch on its host at once and keeps no tombstone.
+function launchWasCancelled(): boolean {
+  return ORCA_LAYOUT_OWNER_IS_MAIN
+    ? wasStructuredAgentLaunchClosedByLocalCancel(SESSION_ID) &&
+        readStructuredAgentLaunchRecord(SESSION_ID) === undefined
+    : hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)
+}
 
 function detected(worktree: Worktree): DetectedWorktree {
   return { ...worktree, ownership: 'orca-managed', selectedCheckout: false, visible: true }
@@ -124,7 +135,7 @@ function applyListing(
   rows: Worktree[],
   catalogVersion?: WorktreeCatalogVersion
 ): WorktreeListingMergeOutcome {
-  return mergeFetchedWorktrees(store.setState, {
+  return mergeFetchedWorktrees(store.setState, store.getState, {
     repoId: REPO_ID,
     hostId: 'local',
     ownerWasMissingAtStart: false,
@@ -160,7 +171,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
     expect(state.tabsByWorktree[CREATED_ID]).toBeUndefined()
@@ -175,7 +186,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(state.activeWorktreeId).toBeNull()
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toBeUndefined()
   })
@@ -188,7 +199,8 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(applyListing(store, [...rows])).toBe('applied')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
+    expect(readStructuredAgentLaunchRecord(SESSION_ID)).toBeDefined()
+    expect(launchWasCancelled()).toBe(false)
     expect(state.activeWorktreeId).toBe(CREATED_ID)
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
   })
@@ -230,7 +242,8 @@ describe('a listing versioned before an applied create', () => {
     expect(applyListing(store, [existingRow], before)).toBe('superseded')
 
     const state = store.getState()
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
+    expect(readStructuredAgentLaunchRecord(SESSION_ID)).toBeDefined()
+    expect(launchWasCancelled()).toBe(false)
     expect(state.activeWorktreeId).toBe(CREATED_ID)
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
     expect(state.worktreesByRepo[REPO_ID]!.map((w) => w.id)).toEqual([EXISTING_ID, CREATED_ID])
@@ -282,7 +295,7 @@ describe('a listing versioned before an applied create', () => {
 
     expect(applyListing(store, [existingRow])).toBe('applied')
 
-    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(launchWasCancelled()).toBe(true)
     expect(store.getState().activeWorktreeId).toBeNull()
   })
 })

@@ -63,4 +63,20 @@ describe('recordPaneIsOwnedByPreservedPane: a pane its host kept asleep', () => 
     expect(recordPaneIsOwnedByPreservedPane(record, state as never)).toBe(true)
     clearPaneSpawnDeferral(paneKey)
   })
+
+  it('owns a legacy-keyed session while its pane holds the resume until shown', async () => {
+    const { holdPaneResumeUntilShown, releasePaneResumeHold } =
+      await import('./pane-spawn-deferral-registry')
+    const { recordPaneIsOwnedByPreservedPane } = await import('./sleeping-agent-pane-ownership')
+    const record = note({ paneKey: 'tab-1:2', tabId: 'tab-1', origin: 'quit' })
+    const holding = (): boolean => true
+    const legacyState = { ...state, sleepingAgentSessionsByPaneKey: { 'tab-1:2': record } }
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the predicate reads only these five store maps.
+    expect(recordPaneIsOwnedByPreservedPane(record, legacyState as never)).toBe(false)
+    holdPaneResumeUntilShown('tab-1:2', holding)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the predicate reads only these five store maps.
+    expect(recordPaneIsOwnedByPreservedPane(record, legacyState as never)).toBe(true)
+    releasePaneResumeHold('tab-1:2', holding)
+  })
 })

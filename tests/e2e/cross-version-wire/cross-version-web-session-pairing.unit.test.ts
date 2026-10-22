@@ -6,17 +6,15 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { DeviceRegistry, type DeviceEntry } from '../../../src/main/runtime/device-registry'
 import { DEVICE_REGISTRY_FILENAME } from '../../../src/main/runtime/mobile-pairing-files'
 import { DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY } from '../../../src/shared/device-key-capability'
-import {
-  importReleaseCheckoutModule,
-  materializeReleaseCheckout,
-  resolveBaselineReleaseRef
-} from './release-checkout'
+import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 /**
  * Session-only browser keys add an `ephemeral` flag to keyed rows. A released host (desktop
  * downgrade) must keep such rows, keep token rows authenticating, and never advertise the
  * capability that makes a browser send `ephemeral` to it.
  */
+// The last release without session-only keys; a newer baseline would itself drop the row.
+const PRE_EPHEMERAL_REF = 'v1.4.224'
 const SUITE_TIMEOUT_MS = 180_000
 
 type RegistryLike = {
@@ -28,7 +26,7 @@ let ReleasedRegistry: new (userDataPath: string) => RegistryLike
 let releasedCapabilities: readonly string[]
 
 beforeAll(async () => {
-  const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
+  const checkout = await materializeReleaseCheckout(PRE_EPHEMERAL_REF)
   const [registryModule, protocolModule] = await Promise.all([
     importReleaseCheckoutModule(checkout, 'src/main/runtime/device-registry.ts'),
     importReleaseCheckoutModule(checkout, 'src/shared/protocol-version.ts')

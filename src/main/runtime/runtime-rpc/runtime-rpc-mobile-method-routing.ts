@@ -6,6 +6,10 @@ import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-meth
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
+  'ui.getJiraQuickFilters',
+  'ui.setJiraQuickFilters',
+  'ui.getJiraSavedFilters',
+  'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
   'agentTeams.prepareLaunch',
@@ -130,6 +134,7 @@ export const EXECUTION_HOST_METHODS = [
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
+  'preflight.refreshAgents',
   'hostedReview.create',
   'hostedReview.createStacked',
   'hostedReview.forBranch',

@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { noteAiVaultScanProgress } from './ai-vault-scan-progress'
+import { noteAiVaultScanWorkChanged } from './ai-vault-scan-progress'
 import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from './session-scanner-service-protocol'
 
 const invalidateSessionParseCacheEntry = vi.hoisted(() => vi.fn())
@@ -19,7 +19,7 @@ vi.mock('./session-subagent-reader', () => ({
   listLocalAiVaultSubagentSessions: vi.fn(() => Promise.resolve({ sessions: [], issues: [] }))
 }))
 
-const sent: { type: string; id?: number; units?: number }[] = []
+const sent: { type: string; id?: number }[] = []
 
 function emit(message: unknown): void {
   process.emit('message', message as never, undefined as never)
@@ -109,20 +109,20 @@ describe('AI Vault service entry cache invalidation', () => {
       emit({ type: 'request', id: 20, operation: 'scan', options: {} })
       await vi.waitFor(() => expect(signal).toBeDefined())
 
-      noteAiVaultScanProgress(signal)
-      noteAiVaultScanProgress(signal)
+      noteAiVaultScanWorkChanged(signal)
       now += 1_000
-      noteAiVaultScanProgress(signal)
+      noteAiVaultScanWorkChanged(signal)
       const progress = (): typeof sent => sent.filter((message) => message.type === 'progress')
+      const work = expect.objectContaining({ stage: 'finding' })
       expect(progress()).toEqual([
-        { type: 'progress', id: 20, units: 1 },
-        { type: 'progress', id: 20, units: 3 }
+        { type: 'progress', id: 20, work },
+        { type: 'progress', id: 20, work }
       ])
 
       releaseScan?.()
       await vi.waitFor(() => expect(sent.some((message) => message.type === 'result')).toBe(true))
       now += 10_000
-      noteAiVaultScanProgress(signal)
+      noteAiVaultScanWorkChanged(signal)
       expect(progress()).toHaveLength(2)
     } finally {
       clock.mockRestore()

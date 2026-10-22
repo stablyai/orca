@@ -20,16 +20,19 @@ export function cachedWorktreePathsForScope(
     }
     paths.push(cache.primary.worktreePath)
   }
-  const pathsByEntryKey = new Map<string, string>()
+  // Why: keys fold case, so on case-sensitive filesystems `Foo` and `foo` are
+  // distinct admin dirs sharing one key; name both rather than drop the writer.
+  const pathsByEntryKey = new Map<string, string[]>()
   for (const [name, identity] of cache.entries) {
-    pathsByEntryKey.set(headIdentityEntryKey(name), identity.worktreePath)
+    const key = headIdentityEntryKey(name)
+    pathsByEntryKey.set(key, [...(pathsByEntryKey.get(key) ?? []), identity.worktreePath])
   }
   for (const key of scope.entryNames) {
-    const path = pathsByEntryKey.get(key)
-    if (path === undefined) {
+    const entryPaths = pathsByEntryKey.get(key)
+    if (entryPaths === undefined) {
       return null
     }
-    paths.push(path)
+    paths.push(...entryPaths)
   }
   return paths
 }

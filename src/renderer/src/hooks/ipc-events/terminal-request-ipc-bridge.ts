@@ -62,7 +62,28 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
-        const tab = store.createTab(worktreeId, data.targetGroupId, data.shellOverride, tabOptions)
+        const pendingStartup = data.command
+          ? {
+              command: data.command,
+              ...(data.env ? { env: data.env } : {}),
+              ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
+              ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+              ...(data.resumeProviderSession
+                ? { resumeProviderSession: data.resumeProviderSession }
+                : {}),
+              ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+              ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+              ...(data.startupCommandDelivery
+                ? { startupCommandDelivery: data.startupCommandDelivery }
+                : {})
+            }
+          : undefined
+        const tab = store.createTab(
+          worktreeId,
+          data.targetGroupId,
+          data.shellOverride,
+          pendingStartup ? { ...tabOptions, pendingStartup } : tabOptions
+        )
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
@@ -88,22 +109,6 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         }
         if (data.title) {
           store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
-        }
-        if (data.command) {
-          store.queueTabStartupCommand(tab.id, {
-            command: data.command,
-            ...(data.env ? { env: data.env } : {}),
-            ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
-            ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
-            ...(data.resumeProviderSession
-              ? { resumeProviderSession: data.resumeProviderSession }
-              : {}),
-            ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-            ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
-            ...(data.startupCommandDelivery
-              ? { startupCommandDelivery: data.startupCommandDelivery }
-              : {})
-          })
         }
         window.api.ui.replyTerminalCreate({
           requestId: data.requestId,

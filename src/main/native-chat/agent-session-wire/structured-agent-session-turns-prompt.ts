@@ -26,6 +26,7 @@ import {
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { settledPrompt, validatePendingPrompt } from './structured-agent-session-prompt-state'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 export type AgentSessionPromptRequest = {
@@ -99,6 +100,14 @@ export async function performPrompt(
     return held ? { ok: true, value: held } : validated
   }
   const { prompt } = validated
+  const work = contextStructuredAgentSessionCurrentWork(ctx)
+  if (!work.isCurrentItem(input.itemId)) {
+    // The agent that asked has ended: an answer would reach whichever agent runs now, or none.
+    return invalid(
+      'promptOwnerEnded',
+      `Item ${input.itemId} was raised by an agent that has ended.`
+    )
+  }
   const choice = readPromptChoice(prompt, input)
   if (!choice) {
     return invalid(
@@ -134,7 +143,7 @@ export async function performPrompt(
           identity,
           { ...prompt, resolution },
           // A revision: the prompt keeps the turn it was raised in.
-          { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() },
+          { fence: ctx.fence, turnScope: work.turnScope() },
           // The answer's identity commits here, before the adapter tells the provider.
           ctx.operationReceipt
         )
@@ -159,7 +168,7 @@ export async function performPrompt(
           surface: 'row'
         })
       },
-      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
+      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
     )
   }
   const appended = committed.item

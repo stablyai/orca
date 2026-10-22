@@ -16,7 +16,7 @@ import {
  */
 
 const BUILT_IN_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|available\s*·|esc\s*skip|enter\s*confirm\s*·|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
+  /update available|choose working directory to|codex just got an upgrade|available\s*\u00B7|esc\s*skip|enter\s*confirm\s*\u00B7|enter\/esc\s*(?:continue|confirm)|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/
 
 /**
  * Matches any line that may carry a blocker; a cheap negative test before the full scan. The same

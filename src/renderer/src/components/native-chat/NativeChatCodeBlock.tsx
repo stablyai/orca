@@ -43,7 +43,10 @@ export function NativeChatCodeBlock({
   ) : null
 
   return (
-    <div className="group/code relative my-3 min-w-0 max-w-full overflow-hidden rounded-lg border border-chat-code-border bg-chat-code-surface">
+    <div
+      data-native-chat-code-block={code ? '' : undefined}
+      className="group/code relative my-3 min-w-0 max-w-full overflow-hidden rounded-lg border border-chat-code-border bg-chat-code-surface"
+    >
       {language ? (
         <div className="flex h-7.5 items-center justify-between px-3">
           <span

@@ -33,9 +33,24 @@ export type WindowLaunchProducer =
   | { kind: 'transcript-continue'; transcript: string; cwd: string | null }
   /** A "+" launch with no prompt, as each "+" entry point calls launchAgentInNewTab. */
   | { kind: 'plus'; agent: 'claude'; via: PlusEntry }
+  /** A work item's "start agent" (launch-work-item-direct.ts): the workspace and its agent at once. */
+  | {
+      kind: 'work-item'
+      agent: 'claude' | 'codex'
+      delivery: 'draft' | 'submit-after-ready'
+      text: string
+    }
+  /** The folder-workspace composer's create with an agent; the note is its prompt. */
+  | { kind: 'folder-composer'; agent: 'claude' | 'codex'; note: string }
 
 /** "+" entry points. Quick Launch items omit launchSource and get `menu`'s source by default. */
 export type PlusEntry = 'menu' | 'shortcut' | 'dashboard'
+const PRODUCER_LAUNCH_SOURCE = {
+  'quick-command': 'quick_command',
+  continuation: 'terminal_context_menu',
+  'work-item': 'task_page',
+  'folder-composer': 'new_workspace_composer'
+} as const
 const PLUS_LAUNCH_SOURCE: Record<PlusEntry, string> = {
   menu: 'tab_bar_quick_launch',
   shortcut: 'shortcut',
@@ -57,10 +72,14 @@ export type WindowRequestFacts = {
   agentEnv?: Record<string, string>
   /** The agent's saved default args; absent = the settings default. */
   agentArgs?: string
+  /** Whether the command waits for the shell to be ready; absent = only Codex does. */
+  shellReady?: boolean
 }
 
 /** What reaches the provider for that request (main half). */
 export type WindowProviderFacts = {
+  /** Default: the request's command. */
+  command?: string
   shellOverride: string | undefined
   terminalWindowsWslDistro?: string | null
 }
@@ -68,7 +87,7 @@ export type WindowProviderFacts = {
 export type WindowLaunchCase = {
   name: string
   /** The launch-convergence producer row. */
-  row: 1 | 2 | 6
+  row: 1 | 2 | 6 | 8
   client: LaunchClient
   workspace: LaunchWorkspace
   settings?: Record<string, unknown>
@@ -118,7 +137,6 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
   return {
     ...PANE_GRID,
     cwd,
-    cwdFallback: 'worktree',
     env: {
       ...request.agentEnv,
       ORCA_WORKSPACE_ID: worktreeId,
@@ -138,7 +156,7 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
     },
     launchToken: LAUNCH_TOKEN,
     launchAgent: agent,
-    ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' } : {}),
+    ...((request.shellReady ?? agent === 'codex') ? { startupCommandDelivery: 'shell-ready' } : {}),
     worktreeId,
     tabId: LAUNCH_TAB_ID,
     leafId: LAUNCH_LEAF_ID,
@@ -153,9 +171,7 @@ export function windowSpawnRequest(c: WindowLaunchCase): Record<string, unknown>
             launch_source:
               producer.kind === 'plus'
                 ? PLUS_LAUNCH_SOURCE[producer.via]
-                : producer.kind === 'quick-command'
-                  ? 'quick_command'
-                  : 'terminal_context_menu',
+                : PRODUCER_LAUNCH_SOURCE[producer.kind],
             request_kind: 'new'
           }
   }
@@ -182,7 +198,7 @@ export function expectedWindowProvider(
   // main adds the terminal handle to the pane's env.
   const env = { ...(typeof request.env === 'object' ? request.env : {}), ORCA_TERMINAL_HANDLE: '' }
   return {
-    command: request.command,
+    command: provider.command ?? request.command,
     // main normalizes the cwd to forward slashes (resolveRuntimePath).
     cwd: String(request.cwd).replaceAll('\\', '/'),
     // The pane's measured size, and never marked hidden before its pane shows.

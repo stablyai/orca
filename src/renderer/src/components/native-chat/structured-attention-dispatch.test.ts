@@ -7,6 +7,7 @@
 // reducers production uses, and the acknowledgement round trip runs through the real reducer too.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
@@ -21,8 +22,13 @@ import {
   TEST_REPO
 } from '@/store/slices/store-test-helpers'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
-import { isStructuredTab, type StructuredTab } from './structured-agent-session-tabs'
+import type { StructuredTab } from './structured-agent-session-tabs'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+
+// The user is present unless a test says otherwise.
+beforeEach(() => setPresenceGated(false))
+afterEach(() => setPresenceGated(true))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
 // The two client-side follow-ups of a delivery are leaf side effects with their own tests; this

@@ -21,16 +21,19 @@ const ROOTED_PATH_PREFIX_PATTERN = /^(?:~[\\/]|\.{1,2}[\\/]|[\\/]|[A-Za-z]:[\\/]
 /** Whether a detected path names a file on the chat's host; the terminal's own check. */
 export type FileLinkExists = (link: ParsedTerminalFileLink) => boolean
 
-// Why: a link is underlined only when it names a path; a bare `name.md` resolves nowhere
-// reliable, so underlining it promises a click that cannot open anything.
-function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): boolean {
+function looksLikeFilePath(link: ParsedTerminalFileLink, isProse: boolean): boolean {
   const hasRootedPrefix = ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)
   const hasLineSuffix = link.line !== null || link.column !== null
   const hasAlphabeticExtension = /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
   const hasPathExtension = /\.[\p{L}\p{N}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
+  return hasRootedPrefix || hasLineSuffix || (isProse ? hasPathExtension : hasAlphabeticExtension)
+}
+
+// Why: prose still needs a path separator; inline code admits exact bare tokens separately.
+function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): boolean {
   return (
     /[\\/]/.test(link.pathText) &&
-    (hasRootedPrefix || hasLineSuffix || (isProse ? hasPathExtension : hasAlphabeticExtension)) &&
+    looksLikeFilePath(link, isProse) &&
     routeNativeChatHref(link.displayText).kind === 'file'
   )
 }
@@ -256,7 +259,15 @@ function inlineCodeFileLink(node: MarkdownNode, exists: FileLinkExists): Markdow
   if (!value) {
     return null
   }
-  const link = exactFileLink(value, exists)
+  // Why: dotted bare names take the slash-path rule, so `v1.2.3` or `glm-5.3` stay plain.
+  const bare = extractTerminalFileLinks(value).find(
+    (candidate) =>
+      candidate.startIndex === 0 &&
+      candidate.endIndex === value.length &&
+      !/[\\/]/.test(candidate.pathText) &&
+      (!candidate.pathText.includes('.') || looksLikeFilePath(candidate, false))
+  )
+  const link = bare ? (exists(bare) ? bare : null) : exactFileLink(value, exists)
   return link ? createFileLinkNode(link, node) : null
 }
 

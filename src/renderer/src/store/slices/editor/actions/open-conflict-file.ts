@@ -122,7 +122,7 @@ export function createOpenConflictFile(
       if (!openedConflictFile) {
         return
       }
-      void openWorkspaceEditorItem(
+      openWorkspaceEditorItem(
         get(),
         absolutePath,
         worktreeId,

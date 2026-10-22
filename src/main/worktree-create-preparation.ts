@@ -1,7 +1,7 @@
 import { worktreePreparationGit } from './git/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import type { Store } from './persistence'
+import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
 import type { Repo } from '../shared/repo-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
@@ -47,6 +47,7 @@ export {
   WORKTREE_CREATE_PREPARATION_LIMIT,
   WORKTREE_CREATE_PREPARATION_TTL_MS
 } from './worktree-create-preparation-pool'
+import { getRepoRoutingConnectionId } from '../shared/execution-host'
 
 /** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingWorktreeCreatePreparations(): boolean {
@@ -93,8 +94,16 @@ function timePhase<T>(
   return args.timing ? args.timing.time(phase, operation) : operation()
 }
 
+export type WorktreePreparationStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> & {
+  getSettings(): Pick<
+    Parameters<typeof getWorktreePathSettings>[1],
+    'workspaceDir' | 'nestWorkspaces'
+  > &
+    ReturnType<NonNullable<ProjectRuntimeResolutionStore['getSettings']>>
+}
+
 export function prepareWorktreeCreateForRepo(
-  store: Store,
+  store: WorktreePreparationStore,
   repo: Repo,
   baseBranch: string,
   beforeMaterialization?: Promise<void>
@@ -105,12 +114,12 @@ export function prepareWorktreeCreateForRepo(
 }
 
 async function prepareWorktreeCreateInBackground(
-  store: Store,
+  store: WorktreePreparationStore,
   repo: Repo,
   baseBranch: string,
   beforeMaterialization?: Promise<void>
 ): Promise<void> {
-  if (repo.connectionId || isFolderRepo(repo)) {
+  if (getRepoRoutingConnectionId(repo) || isFolderRepo(repo)) {
     return
   }
   const options = getLocalProjectWorktreeGitOptions(store, repo)

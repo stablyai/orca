@@ -11,13 +11,14 @@ import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle
 } from './header-event-guards'
+import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 /**
  * Marks a repo whose worktree scan failed, so its rows are retained but cannot be trusted.
  * Click re-runs the scan: the failure is otherwise re-tried only by the next incidental refresh.
  */
 export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JSX.Element | null {
-  const detected = useAppStore((s) => s.detectedWorktreesByRepo[repo.id])
+  const detected = useAppStore((s) => selectDetectedWorktreesByRepo(s)[repo.id])
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [pending, setPending] = React.useState(false)
   const failure = resolveRepoScanFailure(repo, detected)

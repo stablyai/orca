@@ -3,6 +3,7 @@
 // history to store, and recall survives a remount, a reload, and another client's sends.
 
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import { stripSentImagePromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
 import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatCommandMarker } from './native-chat-command-marker'
@@ -13,6 +14,8 @@ export type NativeChatRecallSource = {
   messages: readonly NativeChatMessage[]
   /** Commands sent from this pane that the transcript holds no user turn for. */
   commands?: readonly NativeChatCommandMarker[]
+  /** A structured chat's sends carry `[Image #k]` markers for images recall can't bring back. */
+  withoutImageMarkers?: boolean
 }
 
 export type NativeChatSentPrompt = { id: string; prompt: string }
@@ -72,7 +75,16 @@ export function nativeChatSentPrompts(source: NativeChatRecallSource): NativeCha
       const command = commands[nextCommand++]
       push(`command:${command.id}`, command.command)
     }
-    push(message.id, deriveNativeChatRowContent(message.blocks).markdown)
+    const text = deriveNativeChatRowContent(message.blocks).markdown
+    push(
+      message.id,
+      source.withoutImageMarkers
+        ? stripSentImagePromptMarkers(
+            text,
+            message.blocks.filter((block) => block.type === 'image-ref').length
+          )
+        : text
+    )
   }
   for (const command of commands.slice(nextCommand)) {
     push(`command:${command.id}`, command.command)

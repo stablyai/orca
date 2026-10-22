@@ -95,7 +95,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
   })
 }))
 
-import { importChromiumCookies } from './browser-cookie-chromium-import'
+import { importChromiumCookies } from './cookies/chromium/import-cookies'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 import { DatabaseSync } from 'node:sqlite'
 

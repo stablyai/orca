@@ -15,7 +15,10 @@ import {
   mobileWebAppBuildOptions
 } from './build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-import { createBundleServer, readShellCsp } from './mobile-web-app-render-harness.mjs'
+import {
+  createBundleServer,
+  readShellCsp
+} from './mobile-web-app/preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile', import.meta.url))
 

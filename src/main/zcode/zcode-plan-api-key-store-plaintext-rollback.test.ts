@@ -2,6 +2,7 @@ import type * as fs from 'node:fs'
 import * as os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../shared/secret-store'
 import type * as SecureFile from '../../shared/secure-file'
 import type * as ZcodePlanApiKeyStore from './zcode-plan-api-key-store'
 
@@ -12,7 +13,18 @@ const mocks = vi.hoisted(() => ({
   restrict: vi.fn((_path: string, _directory: boolean) => false)
 }))
 
-vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
+beforeEach(() =>
+  setSecretStore({
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error('unavailable')
+    },
+    decryptString: () => {
+      throw new Error('unavailable')
+    },
+    describeProtectionGap: () => 'unavailable'
+  })
+)
 vi.mock('node:os', async (original) => ({
   ...(await original<typeof os>()),
   homedir: () => mocks.home

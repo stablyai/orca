@@ -69,8 +69,8 @@ export class MobileDesktopRelay {
       hosts: MobileDesktopRelayHosts
       listPhones: () => DelegatedMobileDeviceSyncParams['phones']
       allocateStreamId: () => number
-      /** This desktop's "new agent tabs open as chats" setting. */
-      nativeChatDefault: () => boolean
+      /** Whether this desktop's settings open `agent` as a chat. */
+      nativeChatDefault: (agent: string) => boolean
     }
   ) {
     this.grants = new DelegatedPhoneGrantCache(options.hosts, options.listPhones)
@@ -123,7 +123,7 @@ export class MobileDesktopRelay {
         const outgoing = withRelayedLaunchChatDefault(
           rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
           request.method,
-          this.options.nativeChatDefault()
+          this.options.nativeChatDefault
         )
         if (!socket.send(outgoing)) {
           this.endLink(link, unavailable('The server connection could not take the request.'))

@@ -19,6 +19,7 @@ import {
   journalOpenRefusal
 } from '../agent-session-journal/journal-open-failure'
 import type { JournalStopAcceptanceInput } from '../agent-session-journal/journal-stop-acceptance'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import {
   journalRowReceiptResult,
   type MutationCommandReceipt
@@ -80,12 +81,15 @@ export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Ac
  *  `turnId`: the turn its event names, null when that went unread. */
 export async function acceptChatStop(
   ctx: AgentSessionTurnContext,
-  input: JournalStopAcceptanceInput
+  input: Omit<JournalStopAcceptanceInput, 'liveTurnId'>
 ): Promise<Accepted<{ turnId: string | null }>> {
   const receipt = stopReceipt(ctx)
   const committedBefore = receipt.isCommitted()
   try {
-    const accepted = await ctx.journal.stops.accept(input, committedBefore ? undefined : receipt)
+    const accepted = await ctx.journal.stops.accept(
+      { ...input, liveTurnId: () => contextStructuredAgentSessionCurrentWork(ctx).activeTurnId() },
+      committedBefore ? undefined : receipt
+    )
     return { ok: true, value: { turnId: accepted.turnId } }
   } catch (error) {
     return savedAnyway(ctx, receipt, committedBefore, error)

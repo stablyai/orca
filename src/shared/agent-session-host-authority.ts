@@ -149,6 +149,7 @@ export type RuntimeCreateAgentSessionResult = {
 }
 
 export type RuntimeAgentSessionRpcCaller = {
+  terminalImageViewerSupported?: boolean
   clientId?: string
   clientKind?: 'mobile' | 'runtime'
   signal?: AbortSignal

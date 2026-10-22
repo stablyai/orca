@@ -16,6 +16,7 @@ function createSession(
     requestCredential: vi.fn(async () => 'answer'),
     getCachedPassword: () => null,
     setCachedPassword: vi.fn(),
+    markCachedPasswordRejected: vi.fn(),
     markCancelled: () => {
       cancelled.value = true
     },
@@ -105,10 +106,12 @@ describe('collectKeyboardInteractiveResponses', () => {
   it('re-prompts when the server rejects the auto-answered cached password', async () => {
     const requestCredential = vi.fn(async () => 'corrected-password')
     const setCachedPassword = vi.fn()
+    const markCachedPasswordRejected = vi.fn()
     const session = createSession({
       requestCredential,
       getCachedPassword: () => 'stale-password',
       setCachedPassword,
+      markCachedPasswordRejected,
       state: { passwordAutoAnswered: true }
     })
 
@@ -117,6 +120,7 @@ describe('collectKeyboardInteractiveResponses', () => {
     ])
 
     expect(responses).toEqual(['corrected-password'])
+    expect(markCachedPasswordRejected).toHaveBeenCalledTimes(1)
     expect(requestCredential).toHaveBeenCalledWith('target-1', 'password', 'example.com')
     expect(setCachedPassword).toHaveBeenCalledWith('corrected-password')
   })

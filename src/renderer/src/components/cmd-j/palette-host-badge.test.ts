@@ -120,20 +120,6 @@ describe('getPaletteHostBadge', () => {
     expect(getPaletteHostBadge('local', hosts)).toBeNull()
   })
 
-  it('labels an explicitly local workspace', () => {
-    const hosts = buildSidebarHostOptions({
-      repos: [{ connectionId: 'ssh-1' }],
-      sshTargetLabels: new Map([['ssh-1', 'Builder']]),
-      sshConnectionStates: connectedSshStates('ssh-1'),
-      settings: { activeRuntimeEnvironmentId: null }
-    })
-
-    expect(getPaletteHostBadge('local', hosts)).toEqual({
-      hostId: 'local',
-      label: LOCAL_HOST_LABEL
-    })
-  })
-
   it('returns null when the host is unknown', () => {
     const hosts = buildSidebarHostOptions({
       repos: [{ connectionId: 'ssh-1' }],

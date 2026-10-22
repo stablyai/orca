@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { parseOrcadMigrationManifest } from '../../shared/orcad-migration-manifest'
+import { parseOrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type { SshTarget } from '../../shared/ssh-types'
 import { assertOrcadMigrationManifestDigest } from '../orcad/orcad-migration-manifest-digest'
 import { emptyDormantPayload } from '../persistence/migrating-orcad-catalog/orcad-source-dormant-state'

@@ -36,7 +36,8 @@ export const AGENT_SESSION_VISUAL_READ_ERRORS = [
 
 export type AgentSessionVisualReadError = (typeof AGENT_SESSION_VISUAL_READ_ERRORS)[number]
 
+/** `path`: the visual's absolute path on the owning host. */
 export type AgentSessionReadVisualResult =
-  | { ok: true; revision: string; sizeBytes: number; html: string }
-  | { ok: true; revision: string; sizeBytes: number; unchanged: true }
+  | { ok: true; revision: string; sizeBytes: number; path?: string; html: string }
+  | { ok: true; revision: string; sizeBytes: number; path?: string; unchanged: true }
   | { ok: false; error: AgentSessionVisualReadError }

@@ -39,19 +39,18 @@ async function startSession() {
   io.spawn.mockReturnValue(server)
   io.connect.mockReturnValueOnce(video).mockReturnValueOnce(control)
   const callbacks = { onMeta: vi.fn(), onFrame: vi.fn(), onError: vi.fn(), onClose: vi.fn() }
-  const runner = vi.fn().mockResolvedValue({ code: 0, stdout: '', stderr: '' })
+  const runner = vi.fn().mockResolvedValue({ code: 0, stdout: '41234\n', stderr: '' })
   const started = ScrcpyStreamSession.start(
     {
       runner,
       sdk: { sdkRoot: 'sdk', adb: 'adb', emulator: 'emulator', avdmanager: 'avdmanager' },
       serial: 'test-device',
-      localJarPath: 'server.jar',
-      localPort: 12345
+      localJarPath: 'server.jar'
     },
     callbacks
   )
   await vi.waitFor(() => expect(io.connect).toHaveBeenCalledTimes(1))
-  return { video, control, server, callbacks, started }
+  return { video, control, server, runner, callbacks, started }
 }
 
 beforeEach(() => {
@@ -132,7 +131,7 @@ describe('ScrcpyStreamSession video buffering', () => {
   })
 
   it('does not resolve startup or deliver earlier frames if the first batch is desynced', async () => {
-    const { video, callbacks, started, server } = await startSession()
+    const { video, callbacks, started, server, runner } = await startSession()
     const corrupt = packet(0)
     corrupt.writeUInt32BE(16 * 1024 * 1024 + 1, 8)
     const rejected = expect(started).rejects.toThrow(/desynced/)
@@ -144,6 +143,13 @@ describe('ScrcpyStreamSession video buffering', () => {
     expect(callbacks.onClose).toHaveBeenCalledTimes(1)
     expect(server.kill).toHaveBeenCalledTimes(1)
     expect(video.destroy).toHaveBeenCalledTimes(1)
+    expect(runner).toHaveBeenLastCalledWith('adb', [
+      '-s',
+      'test-device',
+      'forward',
+      '--remove',
+      'tcp:41234'
+    ])
   })
 
   it('does not repeatedly concatenate a growing fragmented frame', async () => {
@@ -170,5 +176,28 @@ describe('ScrcpyStreamSession video buffering', () => {
     expect(Buffer.isBuffer(data)).toBe(true)
     expect(data.equals(frame.subarray(12))).toBe(true)
     expect(concatenatedBytes).toBeLessThanOrEqual(frame.length * 2)
+  })
+})
+
+describe('ScrcpyStreamSession teardown', () => {
+  it('removes only its allocated forward and closes its resources once', async () => {
+    const { video, control, server, runner, callbacks, started } = await startSession()
+    video.emit('data', handshake())
+    const session = await started
+
+    session.close()
+    session.close()
+
+    expect(runner.mock.calls.filter(([, args]) => args.includes('forward'))).toEqual([
+      [
+        'adb',
+        ['-s', 'test-device', 'forward', 'tcp:0', expect.stringMatching(/^localabstract:scrcpy_/)]
+      ],
+      ['adb', ['-s', 'test-device', 'forward', '--remove', 'tcp:41234']]
+    ])
+    expect(video.destroy).toHaveBeenCalledTimes(1)
+    expect(control.destroy).toHaveBeenCalledTimes(1)
+    expect(server.kill).toHaveBeenCalledTimes(1)
+    expect(callbacks.onClose).toHaveBeenCalledTimes(1)
   })
 })

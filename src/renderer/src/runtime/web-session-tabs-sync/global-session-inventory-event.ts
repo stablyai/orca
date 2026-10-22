@@ -2,7 +2,7 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../store'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import {
   recordReceivedWebSessionTabsInventory,
@@ -53,16 +53,6 @@ export function handleGlobalSessionInventoryEvent({
 }: GlobalSessionInventoryEventArgs): void {
   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory.value && !replayed
   awaitingVisibilityResumeInventory.value = false
-  const unchanged = event.snapshots.map((snapshot) => {
-    const key = `${environmentId}:${snapshot.worktree}`
-    const freshness = latestSessionTabsSnapshotByWorktree.get(key)
-    return Boolean(
-      skipUnchangedResumeWork &&
-      !replayableSessionTabsSnapshotByWorktree.has(key) &&
-      freshness?.publicationEpoch === snapshot.publicationEpoch &&
-      freshness.snapshotVersion === snapshot.snapshotVersion
-    )
-  })
   const receivedFrames = event.snapshots.map((snapshot) => {
     const frame = recordReceivedWebSessionTabsSnapshot(
       environmentId,
@@ -72,6 +62,17 @@ export function handleGlobalSessionInventoryEvent({
     )
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
     return frame
+  })
+  // After receipt: a held close dropped at receipt marks its unchanged frame for redraw.
+  const unchanged = event.snapshots.map((snapshot) => {
+    const key = `${environmentId}:${snapshot.worktree}`
+    const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+    return Boolean(
+      skipUnchangedResumeWork &&
+      !replayableSessionTabsSnapshotByWorktree.has(key) &&
+      freshness?.publicationEpoch === snapshot.publicationEpoch &&
+      freshness.snapshotVersion === snapshot.snapshotVersion
+    )
   })
   const inventoryFrame = recordReceivedWebSessionTabsInventory(environmentId)
   const missing = coordinator.recordInventoryReceipt(
@@ -87,7 +88,7 @@ export function handleGlobalSessionInventoryEvent({
     event.snapshots.map((snapshot, index) =>
       unchanged[index]
         ? Promise.resolve(snapshot)
-        : recoverWebSessionTerminalOrphansBeforeApply(
+        : recoverMirroredTerminalOrphansBeforeApply(
             useAppStore.getState(),
             snapshot,
             environmentId,

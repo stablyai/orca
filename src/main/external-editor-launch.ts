@@ -1,4 +1,6 @@
-import { spawn } from 'node:child_process'
+import { quotePosixShellUnlessPlain } from '../shared/shell-argument-quoting'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../shared/wsl-paths'
@@ -42,13 +44,6 @@ export type ExternalEditorLaunchSpec =
   | ExternalEditorExecutableLaunchSpec
   | ExternalEditorShellLaunchSpec
 
-function escapePosixPathForShell(pathValue: string): string {
-  if (/^[a-zA-Z0-9_./@:-]+$/.test(pathValue)) {
-    return pathValue
-  }
-  return `'${pathValue.replace(/'/g, "'\\''")}'`
-}
-
 function escapeWindowsPathForShell(pathValue: string): string {
   return /^[a-zA-Z0-9_./@:\\-]+$/.test(pathValue) ? pathValue : `"${pathValue}"`
 }
@@ -56,7 +51,7 @@ function escapeWindowsPathForShell(pathValue: string): string {
 function escapePathForShell(pathValue: string, platform: NodeJS.Platform): string {
   return platform === 'win32'
     ? escapeWindowsPathForShell(pathValue)
-    : escapePosixPathForShell(pathValue)
+    : quotePosixShellUnlessPlain(pathValue)
 }
 
 function isWindowsExecutablePath(command: string): boolean {
@@ -251,30 +246,41 @@ export function resolveVsCodeRemoteSshLaunchSpec(
   }
 }
 
-function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
-  spawnCmd: string
-  spawnArgs: string[]
-  windowsHide: boolean
-} {
-  // Why: only shims flagged during resolution (JetBrains) take the start /B
-  // detach; every other launcher keeps the waiting form so its argv survives.
-  if (launchSpec.kind === 'executable') {
-    const spawned = getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs, {
-      detachedGui: launchSpec.detachedGui === true
+function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): ChildProcess {
+  if (launchSpec.kind === 'shell') {
+    const { spawnCmd, spawnArgs, hideWindowsConsole } = launchSpec
+    return hideWindowsConsole
+      ? spawnProcess({ program: spawnCmd, args: spawnArgs, detached: true, stdio: 'ignore' })
+      : spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide: false })
+  }
+  if (launchSpec.hideWindowsConsole && !launchSpec.detachedGui) {
+    // Why process-host owns the batch hop: its /s line keeps quoted arguments intact, while a
+    // plain `cmd /c` strips the outer quotes once a spaced code.cmd path meets a spaced argument.
+    return spawnProcess({
+      program: launchSpec.spawnCmd,
+      args: launchSpec.spawnArgs,
+      detached: true,
+      stdio: 'ignore'
     })
-    return { ...spawned, windowsHide: launchSpec.hideWindowsConsole }
   }
-  return {
-    spawnCmd: launchSpec.spawnCmd,
-    spawnArgs: launchSpec.spawnArgs,
-    windowsHide: launchSpec.hideWindowsConsole
+  // Why: only shims flagged during resolution (JetBrains) take the start /B detach.
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+    launchSpec.spawnCmd,
+    launchSpec.spawnArgs,
+    {
+      detachedGui: launchSpec.detachedGui === true
+    }
+  )
+  if (!launchSpec.hideWindowsConsole) {
+    // Why direct: process-host always hides the console, and a terminal editor on Windows needs one.
+    return spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide: false })
   }
+  return spawnProcess({ program: spawnCmd, args: spawnArgs, detached: true, stdio: 'ignore' })
 }
 
 export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
-  const { spawnCmd, spawnArgs, windowsHide } = resolveExternalEditorSpawn(launchSpec)
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide })
+    const child = startExternalEditorProcess(launchSpec)
     let settled = false
     function cleanup(): void {
       child.off('error', onError)

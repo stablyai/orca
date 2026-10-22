@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 
 const NATIVE_CHAT_SCRATCH_DIR_NAME = 'chat-scratch'
+const FOLDER_NAME = /^[0-9a-f]{32}$/
 
 /** Where every chat's scratch folder on this host lives. */
 export function nativeChatScratchRootFor(stateDirectory: string): string {
@@ -14,6 +15,11 @@ export function nativeChatScratchRootFor(stateDirectory: string): string {
 /** The one path segment a chat's folder is named by: hashed so any id is a safe segment. */
 export function nativeChatScratchFolderName(sessionId: string): string {
   return createHash('sha256').update(sessionId, 'utf8').digest('hex').slice(0, 32)
+}
+
+/** A name this host minted for a chat's folder; nothing else under the root is a chat's. */
+export function isNativeChatScratchFolderName(name: string): boolean {
+  return FOLDER_NAME.test(name)
 }
 
 /**

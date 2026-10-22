@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import { looksLikeWindowsPath, normalizeFsPath } from './usage-path-comparison'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'

@@ -6,10 +6,10 @@ import {
   getSidebarHostVisibilityLabel,
   getSidebarHostHealthLabel,
   shouldShowHostScopeControls,
-  toggleVisibleHostRow,
   type SidebarHostOption
 } from './sidebar-host-options'
-import { filterFolderWorkspacesForVisibleHosts } from './worktree-list/listing/host-filtering'
+import { toggleVisibleHostRow } from '../../../../shared/workspace-view/workspace-host-visibility'
+import { filterFolderWorkspacesForVisibleHosts } from '../../../../shared/sidebar-list/host-filtering'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -217,6 +217,8 @@ describe('sidebar host options', () => {
     expect(getSidebarHostHealthLabel('available')).toBe('Connected')
     expect(getSidebarHostHealthLabel('connecting')).toBe('Connecting')
     expect(getSidebarHostHealthLabel('blocked')).toBe('Update needed')
+    expect(getSidebarHostHealthLabel('blocked', 'incompatible')).toBe('Update needed')
+    expect(getSidebarHostHealthLabel('blocked', 'access-revoked')).toBe('Re-pair needed')
     expect(getSidebarHostHealthLabel('error')).toBe('Needs attention')
   })
 

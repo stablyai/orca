@@ -91,6 +91,11 @@ export function initTelemetry(store: Store): void {
     BUILD_IDENTITY as 'stable' | 'rc'
   )
 
+  const languageCohort = settings.telemetry?.onboardingLanguageCohort
+  if (languageCohort === 'control' || languageCohort === 'treatment') {
+    commonProps.onboarding_language_v1 = languageCohort
+  }
+
   // Fail-closed: a bad `install_id` (e.g. empty from a migration bug) would collapse all events into one distinct_id.
   // Validated once here (not per `track()`): `commonProps` is a session-lifetime singleton that can't drift.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)
@@ -202,7 +207,6 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   if (!result.ok) {
     return false
   }
-
   // (5) Capture. `$process_person_profile: false` stops posthog-node creating a person per install_id (no init-time equivalent).
   posthog.capture({
     distinctId: commonProps.install_id,
@@ -221,10 +225,6 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     return
   }
   const settings = storeRef.getSettings()
-  const telemetryBeforeUpdate = settings.telemetry
-  const wasPendingBanner =
-    telemetryBeforeUpdate?.existedBeforeTelemetryRelease === true &&
-    telemetryBeforeUpdate.optedIn === null
   // Deep-merge (persistence.ts:552) so flipping `optedIn` won't clobber `installId` / `existedBeforeTelemetryRelease`.
   storeRef.updateSettings({
     telemetry: {
@@ -238,9 +238,8 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     if (client) {
       await client.optIn()
     }
-    if (wasPendingBanner) {
-      trackAppOpenedOnce()
-    }
+    // Settings opt-in also starts an observable session that needs an adoption denominator.
+    trackAppOpenedOnce()
     track('telemetry_opted_in', { via })
   } else {
     if (!client) {
@@ -303,9 +302,8 @@ export function trackAppOpenedOnce(): void {
   if (appOpenedTrackedThisSession) {
     return
   }
-  appOpenedTrackedThisSession = true
   // Why: `nth_repo_added: 0` marks the session-zero / pre-repo cohort. See docs/onboarding-funnel-cohort-addendum.md.
-  track('app_opened', { ...getCohortAtEmit() })
+  appOpenedTrackedThisSession = track('app_opened', { ...getCohortAtEmit() })
 }
 
 export async function shutdownTelemetry(): Promise<void> {

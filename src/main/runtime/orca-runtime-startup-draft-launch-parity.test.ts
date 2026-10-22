@@ -11,6 +11,7 @@ import type { WorktreeMeta } from './orca-runtime-test-mocks.spec'
 import { makeWorktreeMeta, store } from './orca-runtime-test-fixtures.spec'
 import { createWorktreeWithStartupAgent } from '../agent-launch/startup-agent-worktree-create'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type DraftSettings = {
   defaultTuiAgent: 'claude' | null
@@ -37,9 +38,9 @@ async function runCreate(
     }),
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-    setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
-      metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-      return metaById[worktreeId]
+    setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
+      metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
+      return metaById[id]
     }
   })
   const spawn = vi.fn().mockResolvedValue({ id: `pty-${route}` })

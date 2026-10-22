@@ -1,8 +1,11 @@
 import {
   isWorktreeCreatePreparation,
+  parseWorktreePreparationOwnerMachine,
   parseWorktreePreparationOwnerPid,
   parseWorktreePreparationPathOwnerPid
 } from '../shared/worktree/create-preparation'
+import { orcadDataRootIsOnLocalDisk } from './orcad/orcad-data-root-locality'
+import { profileStateAccessMachineIdentity } from './persistence/profile-state/profile-state-access-identity'
 import type { AddWorktreeOptions } from './git/worktree'
 import { listWorktreeGraph } from './git/worktree'
 import { discardPreparedWorktree, unlockPreparedWorktree } from './git/worktree-create-preparation'
@@ -19,6 +22,40 @@ function isProcessAlive(pid: number): boolean {
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH'
   }
+}
+
+export type PreparationOwnerProbe = {
+  machineIdentity: () => string | null
+  repoIsOnLocalDisk: (repoPath: string) => boolean
+  isProcessAlive: (pid: number) => boolean
+}
+
+const defaultOwnerProbe: PreparationOwnerProbe = {
+  machineIdentity: profileStateAccessMachineIdentity,
+  repoIsOnLocalDisk: orcadDataRootIsOnLocalDisk,
+  isProcessAlive
+}
+
+/**
+ * Exited only when the owner's pid is gone on the machine that issued it. Another machine sharing
+ * the repo's disk, or one this host can't identify, leaves the owner unverifiable.
+ */
+export function preparationOwnerExitedHere(
+  lockReason: string,
+  repoPath: string,
+  options: Pick<AddWorktreeOptions, 'wslDistro'>,
+  probe: PreparationOwnerProbe = defaultOwnerProbe
+): boolean {
+  const ownerPid = parseWorktreePreparationOwnerPid(lockReason)
+  if (!ownerPid) {
+    return false
+  }
+  const ownerMachine = parseWorktreePreparationOwnerMachine(lockReason)
+  // Older reasons name no machine: their pid is evidence only where no other host sees the repo.
+  const judgeable = ownerMachine
+    ? ownerMachine === probe.machineIdentity()
+    : Boolean(options.wslDistro) || probe.repoIsOnLocalDisk(repoPath)
+  return judgeable && !probe.isProcessAlive(ownerPid)
 }
 
 /** Returns after the shared host scan; file reclamation stays tracked in the background. */
@@ -51,7 +88,11 @@ export async function startStalePreparationCleanup(
         nextIndex += 1
         const lockOwnerPid = parseWorktreePreparationOwnerPid(worktree.lockReason)
         const pathOwnerPid = parseWorktreePreparationPathOwnerPid(worktree.path)
-        if (!worktree.lockReason || !lockOwnerPid || isProcessAlive(lockOwnerPid)) {
+        if (
+          !worktree.lockReason ||
+          !lockOwnerPid ||
+          !preparationOwnerExitedHere(worktree.lockReason, repoPath, options)
+        ) {
           continue
         }
         // Preserve a branch-attached final path after a crash; only detached or

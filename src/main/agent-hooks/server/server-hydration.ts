@@ -20,6 +20,7 @@ import {
   sanitizePersistedAuthorityCommitment
 } from './server-persistence-validation'
 import { AgentHookServerTabCleanup } from './server-tab-cleanup'
+import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
   /** Hydrate the durable cache, validating every row before it reaches the live listener state. */
@@ -136,6 +137,9 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
       } else {
         dropped += 1
       }
+    }
+    for (const exit of readPersistedAgentExits(file.agentExits, ttlCutoff)) {
+      recordAgentExit(this.agentExitedAtByPaneKey, exit.paneKeys, exit, exit.at)
     }
     for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)

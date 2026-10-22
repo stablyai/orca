@@ -11,6 +11,7 @@ import {
   STUB_TOPICS,
   assertAliasContract,
   buildArtifacts,
+  composeStubProjection,
   frontmatterBlock,
   normalizeMarkdown,
   parseFrontmatter,
@@ -72,16 +73,19 @@ afterEach(async () => {
 describe('bundled skill guide generator', () => {
   it('projects stub topics as hybrid discovery stubs that reuse the guide frontmatter', async () => {
     expect(STUB_TOPICS.length).toBeGreaterThan(0)
+    const sharedBlocks = await readSharedStubBlocks(projectDir)
     for (const name of STUB_TOPICS) {
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
+      const stubBody = await readFile(path.join(projectDir, 'skill-stubs', `${name}.md`), 'utf8')
 
       // The routing frontmatter is the unchanged discovery surface.
       expect(projection.startsWith(frontmatterBlock(source, `${name}.md`))).toBe(true)
-      // The stub is a thin hybrid pointer, not the full guide.
+      // Shared CLI resolution can be longer than a short topic's full guide.
       expect(projection).not.toEqual(source)
-      expect(projection.length).toBeLessThan(source.length)
-      expect(projection).toContain('discovery stub')
+      expect(projection).toEqual(
+        composeStubProjection(source, stubBody, `skill-stubs/${name}.md`, { sharedBlocks })
+      )
       expect(projection).toContain(`skills get ${name}`)
     }
   })

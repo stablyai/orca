@@ -3,7 +3,6 @@ import type { CodexJournalTranslationAdmission } from './codex-structured-journa
 import type { CodexSession } from './codex-structured-session-state'
 
 const MAX_RETRY_EVENTS = 256
-const MAX_RETRY_BYTES = 8 * 1024 * 1024
 const RETRY_DELAY_MS = 25
 
 type PendingNotification = {
@@ -122,7 +121,7 @@ export function createCodexStructuredNotificationRetry(deps: {
       state = { connection, events: [], bytes: 0, timer: null, running: false, failed: false }
       states.set(sessionId, state)
     }
-    if (state.events.length >= MAX_RETRY_EVENTS || state.bytes + bytes > MAX_RETRY_BYTES) {
+    if (state.events.length >= MAX_RETRY_EVENTS) {
       // A bounded queue cannot retain more traffic. Fail it truthfully so the
       // provider's generation enters host recovery instead of stranding a pause.
       fail(sessionId, state, 'notification retry queue overflow')

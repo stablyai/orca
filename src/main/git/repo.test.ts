@@ -481,7 +481,7 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(result).toBeNull()
   })
 
-  it('still reports a remote conflict for a different tracking ref with the same branch name', async () => {
+  it('allows checking out a remote branch that another remote also carries (#26344)', async () => {
     const sha = getHeadSha(tmpDir)
     // Why register both: a ref only tracks a branch when a remote actually owns its
     // prefix, and this case is about a second *tracking* ref, not an orphan.
@@ -492,7 +492,9 @@ describe('searchBaseRefs (widened glob)', () => {
 
     expect(
       await getBranchConflictKind(tmpDir, 'feature/something', 'origin/feature/something')
-    ).toBe('remote')
+    ).toBeNull()
+    // Any other base still sees the remote branch as taken.
+    expect(await getBranchConflictKind(tmpDir, 'feature/something', 'origin/main')).toBe('remote')
   })
 
   it('ignores a ref whose prefix matches no configured remote', async () => {

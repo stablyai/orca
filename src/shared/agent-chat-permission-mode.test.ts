@@ -20,10 +20,11 @@ describe('agent chat permission modes', () => {
     expect(AGENT_CHAT_PERMISSION_MODES).toEqual(['ask', 'accept-edits', 'auto', 'full-access'])
   })
 
-  it('offers Claude every mode, Codex no edits-only mode, and any other agent none', () => {
+  it('offers Claude every mode, Codex no edits-only mode, ACP agents Ask and Full access', () => {
     expect(agentChatPermissionModes('claude')?.modes).toEqual(AGENT_CHAT_PERMISSION_MODES)
     expect(agentChatPermissionModes('codex')?.modes).toEqual(['ask', 'auto', 'full-access'])
-    expect(agentChatPermissionModes('grok')).toBeNull()
+    expect(agentChatPermissionModes('omp')?.modes).toEqual(['ask', 'full-access'])
+    expect(agentChatPermissionModes('pi')).toBeNull()
   })
 
   it('seeds a new chat from the host setting, narrowed to what its agent offers', () => {
@@ -34,7 +35,9 @@ describe('agent chat permission modes', () => {
     expect(newChatPermissionMode('codex', 'full-access')).toBe('full-access')
     expect(newChatPermissionMode('claude', 'retired-mode')).toBe('ask')
     expect(newChatPermissionMode('claude', undefined)).toBe('ask')
-    expect(newChatPermissionMode('grok', 'full-access')).toBeNull()
+    expect(newChatPermissionMode('omp', 'full-access')).toBe('full-access')
+    expect(newChatPermissionMode('omp', 'accept-edits')).toBe('ask')
+    expect(newChatPermissionMode('pi', 'full-access')).toBeNull()
   })
 })
 
@@ -120,7 +123,7 @@ describe('the new-chat setting as loaded', () => {
     expect(seed(yoloWithArgs({ codex: '--model gpt-5' }))).toBe('ask')
   })
 
-  // Manual leaves custom arguments alone, and the all-agent summary still shows Yolo for them.
+  // Manual leaves custom arguments alone, so the all-agent summary can still be Mixed.
   it('seeds Ask after Manual even when another agent keeps custom arguments', () => {
     const custom = yoloWithArgs({ codex: '--model gpt-5', grok: '--model grok-4' })
     expect(seed(applyAgentPermissionMode({ mode: 'manual', ...custom }))).toBe('ask')
@@ -129,6 +132,18 @@ describe('the new-chat setting as loaded', () => {
   it('seeds a fresh profile from the shipped Yolo defaults', () => {
     expect(seed(getDefaultSettings('/tmp'))).toBe('full-access')
     expect(getDefaultSettings('/tmp').nativeChatPermissionMode).toBe('full-access')
+  })
+
+  it('seeds Auto when both Claude and Codex already use the automatic preset', () => {
+    expect(seed(applyAgentPermissionMode({ mode: 'auto' }))).toBe('auto')
+    expect(seed({ agentDefaultArgs: { claude: '--permission-mode auto', codex: '' } })).toBe('ask')
+    expect(
+      loadedChatPermissionSetting(
+        'accept-edits',
+        applyAgentPermissionMode({ mode: 'auto' }),
+        'darwin'
+      )
+    ).toBe('accept-edits')
   })
 
   it.each(AGENT_CHAT_PERMISSION_MODES)(

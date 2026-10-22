@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
-import type { CustomKey } from './CustomKeyModal'
+import type { CustomKey } from '../terminal/terminal-custom-keys'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { terminalSettingsScreenStyles as baseStyles } from '../terminal/terminal-settings-screen-styles'
 import type { TerminalAccessoryKey } from '../terminal/terminal-accessory-keys'

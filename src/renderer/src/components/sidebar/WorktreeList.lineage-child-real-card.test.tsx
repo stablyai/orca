@@ -51,16 +51,15 @@ function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
   }
 }
 
-vi.mock('@/store', () => {
-  const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
-    selector(mockStore.state)) as ((
-    selector: (state: Record<string, unknown>) => unknown
-  ) => unknown) & {
-    getState: () => Record<string, unknown>
-  }
-  useAppStore.getState = () => mockStore.state
-  return { useAppStore }
-})
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(mockStore.state),
+    {
+      getState: () => mockStore.state,
+      subscribe: () => () => {}
+    }
+  )
+}))
 
 vi.mock('@tanstack/react-virtual', () => ({
   defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
@@ -417,9 +416,15 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     expect(childList!.style.width).toBe(`calc(100% - ${LINEAGE_CHILDREN_INLINE_OFFSET}px)`)
   })
 
-  it('keeps three-level experimental lineage children on the immediate-parent step', async () => {
+  it.each([
+    { newCardStyle: false, showStatus: false },
+    { newCardStyle: false, showStatus: true },
+    { newCardStyle: true, showStatus: false },
+    { newCardStyle: true, showStatus: true }
+  ])('keeps lineage outside the status lane (%j)', async ({ newCardStyle, showStatus }) => {
     setLineageState({ includeGrandchild: true })
-    mockStore.state.settings = { experimentalNewWorktreeCardStyle: true }
+    mockStore.state.settings = { experimentalNewWorktreeCardStyle: newCardStyle }
+    mockStore.state.worktreeCardProperties = showStatus ? ['status'] : []
     const container = await renderWorktreeList()
     const wrappers = [
       ...container.querySelectorAll<HTMLElement>('[data-worktree-lineage-children]')
@@ -444,6 +449,10 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     expect(px(grandchildRow!.style.paddingLeft)).toBe(LINEAGE_NESTED_ROW_SURFACE_INSET)
     expect(px(childSurface!.style.paddingLeft)).toBe(FLUSH_CARD_MIN_CONTENT_INSET)
     expect(px(grandchildSurface!.style.paddingLeft)).toBe(FLUSH_CARD_MIN_CONTENT_INSET)
+    for (const wrapper of wrappers) {
+      expect(wrapper.parentElement?.dataset.worktreeCardSurface).toBe('true')
+      expect(wrapper.closest('[data-worktree-card-parent-content]')).toBeNull()
+    }
 
     expectBoundaryStep({
       wrapper: wrappers[0]!,

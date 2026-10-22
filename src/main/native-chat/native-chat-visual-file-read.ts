@@ -194,9 +194,11 @@ async function readContained(
     const html = decodeVisualText(buffer)
     const revision = nativeChatVisualRevision(buffer)
     const sizeBytes = buffer.length
+    // Under the folder as named, so `path:<its folder>` is the exact selector of this file root.
+    const path = join(folder, file)
     return knownRevision === revision
-      ? { ok: true, revision, sizeBytes, unchanged: true }
-      : { ok: true, revision, sizeBytes, html }
+      ? { ok: true, revision, sizeBytes, path, unchanged: true }
+      : { ok: true, revision, sizeBytes, path, html }
   } finally {
     await handle.close()
   }

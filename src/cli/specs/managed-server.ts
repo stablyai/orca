@@ -4,7 +4,7 @@ import { GLOBAL_FLAGS } from '../args'
 const SELECTOR_NOTE =
   '--environment names a managed Orca server this machine deployed over SSH (see `orca environment list`); it is a selector here, not a routing flag.'
 const DESKTOP_NOTE =
-  'Runs on this machine’s Orca desktop app, the same action as Settings > Managed servers. A runtime without the SSH registry (headless `orca serve`) refuses it.'
+  'Runs on this machine’s Orca desktop app, the same action as Settings > Orca on your SSH hosts. A runtime without the SSH registry (headless `orca serve`) refuses it.'
 
 export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -42,7 +42,7 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
       'orca environment recover --environment <selector> [--accept-changed-state --yes] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'accept-changed-state', 'yes'],
     notes: [
-      'When a rejected build changed profile state, recover refuses rather than restart the previous build over it. --accept-changed-state --yes restores the prelaunch snapshot instead, the same as Restore in Settings > Managed servers; what the rejected build changed is discarded.',
+      'When a rejected build changed profile state, recover refuses rather than restart the previous build over it. --accept-changed-state --yes restores the prelaunch snapshot instead, the same as Restore in Settings > Orca on your SSH hosts; what the rejected build changed is discarded.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],

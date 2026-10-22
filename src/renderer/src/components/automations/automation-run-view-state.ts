@@ -92,7 +92,7 @@ export function getAutomationRunViewState({
   if (run.workspaceId && workspaceExists && run.dispatchedAt !== null) {
     return {
       availability: 'workspace',
-      actionLabel: 'Resume workspace',
+      actionLabel: 'Open workspace',
       statusLabel: 'Workspace is available.',
       canOpen: true
     }

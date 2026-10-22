@@ -5,11 +5,11 @@ import {
   screencastSubscriberDrivesAsMobile,
   type BrowserScreencastSubscriber
 } from './browser-screencast-driver-scope'
-import type { RuntimeBrowserCommands } from './orca-runtime-browser'
+import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 type RuntimeBrowserScreencastControllerDeps = {
-  getCommands: () => RuntimeBrowserCommands
+  getCommands: () => Pick<RuntimeBrowserCommands, 'browserScreencast'>
   registerSubscriptionCleanup: (
     subscriptionId: string,
     cleanup: () => void | Promise<void>,

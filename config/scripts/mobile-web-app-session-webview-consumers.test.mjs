@@ -9,21 +9,21 @@ const SESSION = 'app/h/[hostId]/session/[worktreeId].tsx'
 
 /** Web implementations expected in the session route closure. */
 const ANSWERED = [
-  'src/components/MobileRichMarkdownEditor.web.tsx',
-  'src/components/MobileHtmlPreview.web.tsx',
-  'src/components/pr-sidebar/MermaidDiagram.web.tsx',
+  'src/components/MobileRichMarkdownEditor.tsx',
+  'src/components/MobileHtmlPreview.tsx',
+  'src/components/pr-sidebar/MermaidDiagram.tsx',
   'src/terminal/TerminalWebView.web.tsx'
 ]
 
 describeClosure(
   'the session route web component closure',
   () => {
-    it('resolves all four web components and excludes their native files', async () => {
+    it('resolves all four web components, and the terminal without its native sibling', async () => {
       const closure = await mobileWebAppRouteClosure(SESSION)
       for (const file of ANSWERED) {
         expect(closure.local, file).toContain(file)
-        expect(closure.local, file).not.toContain(file.replace('.web.tsx', '.tsx'))
       }
+      expect(closure.local).not.toContain('src/terminal/TerminalWebView.tsx')
     })
   },
   240_000

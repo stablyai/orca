@@ -5,7 +5,7 @@ import type { WslHostStatus } from '../../shared/wsl-host-types'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 
-/** Saves a relaunch's new device token or a moved bridge; true when the pairing changed. */
+/** Saves an explicit re-pair or a moved bridge; true when the pairing changed. */
 export function persistWslHostConnection(
   userDataPath: string,
   record: WslHostDeploymentRecord,
@@ -33,7 +33,13 @@ export function toWslHostStatus(
     distro: record.distro,
     state: status.state,
     detail: status.state === 'failed' || status.state === 'unverifiable' ? status.reason : null,
-    // Only a ready host is serving the incumbent the deferral describes.
-    deferredUpdate: status.state === 'ready' ? (connection?.deferredUpdate ?? null) : null
+    // A ready host serves the incumbent the deferral describes; a deferred connect serves nothing,
+    // and its deferral is what offers Update or Force.
+    deferredUpdate:
+      status.state === 'ready'
+        ? (connection?.deferredUpdate ?? null)
+        : status.state === 'failed'
+          ? (status.deferredUpdate ?? null)
+          : null
   }
 }

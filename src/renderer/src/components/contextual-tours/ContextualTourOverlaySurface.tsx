@@ -26,6 +26,7 @@ import {
   type ContextualTourFloatingPosition
 } from './contextual-tour-floating-position'
 import { translate } from '@/i18n/i18n'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -70,7 +71,7 @@ function disposeContextualTourGlobalKeyGuard(): void {
   if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
     return
   }
-  window.removeEventListener('keydown', handleContextualTourGlobalKeyDown, true)
+  removeAppKeyListener('keydown', handleContextualTourGlobalKeyDown)
   delete guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled
 }
 
@@ -80,7 +81,7 @@ if (typeof window !== 'undefined') {
   }
   if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
     guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled = true
-    window.addEventListener('keydown', handleContextualTourGlobalKeyDown, true)
+    addAppKeyListener('keydown', handleContextualTourGlobalKeyDown)
   }
 }
 

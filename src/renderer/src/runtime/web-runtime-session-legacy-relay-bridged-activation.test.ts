@@ -1,4 +1,4 @@
-// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay-bridge/.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 // The managed server starts a shell for any unmaterialized pane a client activates. A pane an older
 // relay still runs is served by the bridge, so activating it would leave a second, unseen shell.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

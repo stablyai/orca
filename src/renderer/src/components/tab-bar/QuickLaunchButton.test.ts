@@ -1,7 +1,8 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QuickLaunchAgentMenuItems, shouldShowLaunchWatchdogTimeout } from './QuickLaunchButton'
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 
 const {
   shortcutLabelMock,
@@ -16,6 +17,11 @@ const {
       defaultTuiAgent: 'codex' as 'claude' | 'codex' | 'gemini' | 'blank' | null,
       disabledTuiAgents: [] as string[]
     },
+    runtimeStatusByEnvironmentId: new Map(),
+    detectedAgentIds: null,
+    localDetectedAgentIdsByContext: {},
+    remoteDetectedAgentIds: {},
+    runtimeDetectedAgentIds: {},
     worktreesByRepo: {} as Record<string, unknown[]>,
     repos: [] as unknown[],
     openSettingsPage: vi.fn(),
@@ -123,8 +129,10 @@ beforeEach(() => {
   openSettingsTargetMock.mockReset()
   storeState.settings.defaultTuiAgent = 'codex'
   storeState.settings.disabledTuiAgents = []
-  storeState.worktreesByRepo = {}
-  storeState.repos = []
+  storeState.worktreesByRepo = {
+    [TEST_REPO.id]: [makeWorktree({ id: 'worktree-1', repoId: TEST_REPO.id, hostId: 'local' })]
+  }
+  storeState.repos = [TEST_REPO]
   storeState.openSettingsPage = openSettingsPageMock
   storeState.openSettingsTarget = openSettingsTargetMock
 })
@@ -219,23 +227,5 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     storeState.settings.defaultTuiAgent = 'blank'
     expect(renderAgentMenuItems()).not.toContain('data-dropdown-shortcut="true"')
-  })
-})
-
-describe('shouldShowLaunchWatchdogTimeout', () => {
-  it('does not report slow agent readiness once a PTY exists', () => {
-    expect(
-      shouldShowLaunchWatchdogTimeout({
-        hasPty: true
-      })
-    ).toBe(false)
-  })
-
-  it('reports launches where no PTY appeared', () => {
-    expect(
-      shouldShowLaunchWatchdogTimeout({
-        hasPty: false
-      })
-    ).toBe(true)
   })
 })

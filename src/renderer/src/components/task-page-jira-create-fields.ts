@@ -10,9 +10,6 @@ const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set([
   'assignee'
 ])
 
-/** Jira's own create screen defaults only this field to the authenticated user. */
-export const JIRA_REPORTER_FIELD_KEY = 'reporter'
-
 export const JIRA_ASSIGNEE_FIELD_KEY = 'assignee'
 
 // Jira rejects fields absent from the create screen.

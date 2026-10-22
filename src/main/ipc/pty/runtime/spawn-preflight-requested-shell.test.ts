@@ -63,7 +63,7 @@ function makeDeps(): PtyRuntimeControllerDeps {
     noCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome: async (resumeHome) => resumeHome.codexHomePath,
     stripSequencedStartupResumeArgv: (env) => env,
-    assertFolderWorkspacePtyPathUsable: () => undefined,
+    assertWorkspaceAcceptsNewPty: () => undefined,
     resolvePtySpawnStartupCwd: (_worktreeId, cwd) => cwd,
     requestSerializedBuffer: async () => null,
     shutdownProviderAndDetectExit: async () => false,

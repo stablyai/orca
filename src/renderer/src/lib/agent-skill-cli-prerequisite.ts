@@ -7,9 +7,6 @@ type EnsureOrcaCliAvailableOptions = {
   registrationPromptDelayMs?: number
 }
 
-export const AGENT_SKILL_CLI_PREREQUISITE_NOTICE =
-  'Before opening setup, Orca may show a system prompt to register the Orca CLI command on PATH.'
-
 export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its CLI on PATH.'
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
   'Approve the system prompt so skill setup can use the Orca CLI command.'

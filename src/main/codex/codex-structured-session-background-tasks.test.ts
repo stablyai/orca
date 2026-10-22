@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
@@ -7,7 +8,7 @@ import type {
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
-import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { CodexJournalItems } from './codex-structured-journal-items'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
@@ -99,7 +100,7 @@ async function adapterWithSession(
     onChildWorkEvidence: (sessionId, evidence) =>
       published.push({ sessionId, evidence: evidence.map((edge) => edge.type) })
   })
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identity('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',
@@ -157,7 +158,11 @@ describe("codex background tasks reach the host's child records", () => {
     const published: Published[] = []
     const { adapter, codex } = await adapterWithSession(published)
     const oldExit = codex.handlers().onExit
-    await adapter.acquire({ identity: identity('session-1'), fence: 8, spawnToken: 'spawn-10' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identity('session-1'),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
     codex.handlers().onNotification?.('turn/started', {
       threadId: CHILD_ID,
       turn: { id: 'replacement-child-turn' }
@@ -173,7 +178,7 @@ describe("codex background tasks reach the host's child records", () => {
     await adapter.closeSession('session-1')
   })
 
-  it('recovers the exact provider generation when command metadata cannot be admitted', async () => {
+  it('recovers the exact provider generation when a notification cannot be admitted', async () => {
     const published: Published[] = []
     const observed: CodexStructuredSessionEvent[] = []
     const appendItem = vi.fn()
@@ -185,15 +190,15 @@ describe("codex background tasks reach the host's child records", () => {
     appendItem.mockClear()
     observed.length = 0
     const admission = vi
-      .spyOn(CodexBackgroundTaskTracker.prototype, 'canObserve')
-      .mockReturnValue(false)
+      .spyOn(CodexJournalItems.prototype, 'handle')
+      .mockReturnValue({ handled: true, admission: { accepted: false, reason: 'failed' } })
     try {
       codex.handlers().onNotification?.('item/started', {
         threadId: THREAD_ID,
         turnId: PARENT_TURN,
         item: {
           type: 'commandExecution',
-          id: 'over-budget',
+          id: 'refused',
           command: 'sleep 1',
           source: 'unifiedExecStartup',
           status: 'inProgress'
@@ -218,6 +223,41 @@ describe("codex background tasks reach the host's child records", () => {
       admission.mockRestore()
       await adapter.closeSession('session-1')
     }
+  })
+
+  it('publishes a child whose turn starts while 256 others are running', async () => {
+    const published: Published[] = []
+    const { adapter, codex } = await adapterWithSession(published, {
+      appendItem: () => {},
+      appendTombstone: () => {},
+      publish: () => {}
+    })
+    const startChild = (index: number): void => {
+      const childId = `child-${index}`
+      codex.handlers().onNotification?.('turn/started', {
+        threadId: childId,
+        turn: { id: `turn-${index}`, status: 'inProgress' }
+      })
+      codex.handlers().onNotification?.('item/started', {
+        threadId: THREAD_ID,
+        turnId: PARENT_TURN,
+        item: {
+          type: 'subAgentActivity',
+          id: `call-${index}`,
+          kind: 'started',
+          agentThreadId: childId,
+          agentPath: `/root/worker_${index}`
+        }
+      })
+    }
+    // The parent and its first child already hold two running turns.
+    for (let index = 0; index < 254; index += 1) {
+      startChild(index)
+    }
+    published.length = 0
+    startChild(254)
+    expect(published).toEqual([{ sessionId: 'session-1', evidence: ['live'] }])
+    await adapter.closeSession('session-1')
   })
 
   it('publishes the fan-out while it runs and keeps it past the spawning turn', async () => {

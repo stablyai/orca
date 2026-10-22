@@ -68,6 +68,7 @@ export async function installTerminalTestGlobals(): Promise<void> {
         setHiddenRendererPty: vi.fn(),
         setPtyDeliveryInterest: vi.fn(),
         ackColdRestore: vi.fn(),
+        ackHiddenOutputRestoreApplied: vi.fn(),
         onClearBufferRequest: vi.fn(() => vi.fn()),
         onResetInputModesRequest: vi.fn(() => vi.fn()),
         resetInputModes: vi.fn(),

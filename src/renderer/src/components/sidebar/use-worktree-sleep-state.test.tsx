@@ -16,6 +16,7 @@ type MockState = {
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
+  structuredChatSleptAtByPaneKey: Record<string, number>
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -96,6 +97,7 @@ describe('useIsSleepingWorktree', () => {
       tabsByWorktree: {},
       browserTabsByWorktree: {},
       unifiedTabsByWorktree: {},
+      structuredChatSleptAtByPaneKey: {},
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},

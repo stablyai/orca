@@ -4,7 +4,8 @@ import { runProcessSync } from '@orca/process-host'
 import { CLI_BOOLEAN_FLAGS, findCliCommandIndex } from '../../shared/cli-argument-boundary'
 import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
 import { CLI_COMMAND_NAMES } from './cli-command-names'
-import { VALUE_TAKING_FLAGS } from './serve-mode-argv'
+import { reexecHeadlessServeOnX11IfNeeded } from './headless-serve-x11-reexec'
+import { argvRequestsServeMode, VALUE_TAKING_FLAGS } from './serve-mode-argv'
 
 export type CliLaunchRedirectResult = { redirected: false } | { redirected: true; status: number }
 
@@ -20,6 +21,8 @@ export type CliLaunchRedirectOptions = {
   run?: typeof runProcessSync
   /** Replaces this process; null when the runtime cannot, which keeps serve in-process. */
   execve?: ((file: string, args: string[], env: NodeJS.ProcessEnv) => void) | null
+  /** The Ozone platform Electron resolved before main ran; defaults to Electron's switch. */
+  readOzonePlatform?: () => string
 }
 
 const CLI_EARLY_EXIT_FLAGS = new Set(['--help', '-h', 'help', '--version', '-v'])
@@ -59,6 +62,16 @@ export function maybeRedirectCliLaunch(
     if (serve && execve && exists(cliEntryPath)) {
       execDirectServe(execve, execPath, cliEntryPath, serve, env)
     }
+    // In-process serve (direct `--serve`, or a CLI exec that failed) never got the CLI's X11 pin.
+    reexecHeadlessServeOnX11IfNeeded({
+      isServeMode: argvRequestsServeMode(argv),
+      argv,
+      platform,
+      execPath,
+      env,
+      execve: execve ?? null,
+      readResolvedOzonePlatform: options.readOzonePlatform
+    })
     return { redirected: false }
   }
   if (env[REDIRECT_ATTEMPT_ENV] === '1') {

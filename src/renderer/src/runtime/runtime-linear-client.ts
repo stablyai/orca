@@ -78,7 +78,12 @@ function normalizeLinearIssueCollectionResult(
 export async function linearStatus(
   settings: RuntimeLinearSettings
 ): Promise<LinearConnectionStatus> {
-  const target = getLinearRuntimeTarget(settings)
+  return linearStatusForTarget(getLinearRuntimeTarget(settings))
+}
+
+export async function linearStatusForTarget(
+  target: RuntimeClientTarget
+): Promise<LinearConnectionStatus> {
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectionStatus>(target, 'linear.status', undefined, {
         timeoutMs: 15_000
@@ -162,10 +167,18 @@ export async function linearSearchIssues(
   limit?: number,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
+  return linearSearchIssuesForTarget(getLinearRuntimeTarget(settings), query, limit, workspaceId)
+}
+
+export async function linearSearchIssuesForTarget(
+  target: RuntimeClientTarget,
+  query: string,
+  limit?: number,
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearIssue[]> {
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
-  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue[]>(
         target,

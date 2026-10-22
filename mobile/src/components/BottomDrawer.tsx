@@ -16,6 +16,7 @@ type Props = {
   // letting it take touches, draw a second backdrop, or keyboard-lift.
   interactive?: boolean
   zIndex?: number
+  scrollResetKey?: string | null
 }
 
 const SHOWN = 'shown'

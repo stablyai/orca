@@ -13,13 +13,19 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const setTabGroupSplitRatioMock = vi.fn()
 const recordFeatureInteractionMock = vi.fn()
 
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      recordFeatureInteraction: recordFeatureInteractionMock,
-      setTabGroupSplitRatio: setTabGroupSplitRatioMock
-    })
-}))
+vi.mock('../../store', () => {
+  const state = (): Record<string, unknown> => ({
+    recordFeatureInteraction: recordFeatureInteractionMock,
+    setTabGroupSplitRatio: setTabGroupSplitRatioMock,
+    layoutByWorktree: {}
+  })
+  // The switch-on ratio commit reads the store directly.
+  const useAppStore = Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) => selector(state()),
+    { getState: state }
+  )
+  return { useAppStore }
+})
 
 vi.mock('./TabGroupPanel', () => ({
   default: ({ groupId }: { groupId: string }) => <div data-testid={`panel-${groupId}`} />

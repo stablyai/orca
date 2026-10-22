@@ -8,6 +8,7 @@ import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../shared/terminal-github-pr-link-detector'
 import { setRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS } from '../agent-task-complete-policy'
+import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
 
 import {
   isAgentTaskCompleteNotificationEnabled,
@@ -204,14 +205,18 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     // did not just forward focus/control input. Treat the BEL as authoritative
     // PTY output here; any product-side suppression should be an explicit UX
     // decision higher up, not a transport-layer guess.
-    session.deps.markWorktreeUnread(session.deps.worktreeId)
-    session.deps.markTerminalTabUnread(session.deps.tabId, 'terminal-bell')
-    if (useAppStore.getState().settings?.experimentalTerminalAttention === true) {
-      session.deps.markTerminalPaneUnread(session.cacheKey, 'terminal-bell')
-    }
+    session.deps.markTerminalBell({
+      worktreeId: session.deps.worktreeId,
+      tabId: session.deps.tabId,
+      paneKey: session.cacheKey
+    })
     // Why: agent CLIs often emit BEL in the same completion burst as their
     // working->idle title change. Delay only the OS notification so the richer
     // agent-complete notification can win the main-process worktree cooldown.
+    // Why: this BEL ends a hook-owned turn the hook lane announces; held, it would ring on the next working edge.
+    if (session.hookOwnedIdleAbsorbsBell === true) {
+      return
+    }
     session.pendingTerminalBellNotification = true
     if (!session.hasPendingAgentTaskCompleteNotification()) {
       session.scheduleTerminalBellNotification()
@@ -239,6 +244,13 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
         return
       }
       session.pendingTerminalBellNotification = false
+      // Why: the hook lane's pending Done announces this burst's turn end, superseding the BEL as a pane completion does.
+      if (
+        isAgentTaskCompleteNotificationEnabled() &&
+        hasPendingHookLaneCompletion(session.cacheKey, session.transport.getPtyId())
+      ) {
+        return
+      }
       session.deps.dispatchNotification({
         source: 'terminal-bell',
         paneKey: session.cacheKey,
@@ -264,6 +276,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       clearTimeout(session.agentTaskCompleteNotificationMaxTimer)
       session.agentTaskCompleteNotificationMaxTimer = null
     }
+    session.hookOwnedIdleAbsorbsBell = false
     if (session.agentTaskCompleteStatusUnsubscribe !== null) {
       session.agentTaskCompleteStatusUnsubscribe()
       session.agentTaskCompleteStatusUnsubscribe = null

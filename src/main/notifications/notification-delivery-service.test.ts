@@ -22,6 +22,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     customSoundPath: null,
     customSoundVolume: 1,
     mutedNotificationSourceIds: [],
+    notifyHiddenWorkspaces: true,
     ...overrides
   }
 }

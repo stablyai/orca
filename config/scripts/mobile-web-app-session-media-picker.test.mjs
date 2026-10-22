@@ -22,7 +22,7 @@ import {
   MEDIA_PICKER_SEAM as SEAM,
   mediaPickerOffenders,
   mediaPickerSites
-} from './mobile-web-app-media-picker-seam.mjs'
+} from './mobile-web-app/platform-seams/mobile-web-app-media-picker-seam.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../mobile/', import.meta.url))
 const describeClosure = mobileWebAppDependenciesPresent() ? describe : describe.skip
@@ -46,24 +46,18 @@ describeClosure(
       expect(closure.local).not.toContain('src/session/mobile-image-source-picker.ts')
     })
 
-    it('carries none of the four native media modules at all', async () => {
+    it('carries none of the three native media modules at all', async () => {
       const closure = await mobileWebAppRouteClosure(SESSION)
-      // Beyond the source rule: the seam and the canvas resize together take the pickers, the
-      // manipulator and the file system out of the bundle rather than leaving them in it unused.
-      // Each is a native module whose web build is absent or a stub, and `expo-file-system` was
-      // here only to read a picked file and to hold the manipulator's temp PNG.
-      for (const absent of [
-        'expo-image-picker',
-        'expo-document-picker',
-        'expo-image-manipulator',
-        'expo-file-system'
-      ]) {
+      // Beyond the source rule: the seam and the canvas resize together take the pickers and the
+      // file system out of the bundle rather than leaving them in it unused. Each is a native
+      // module whose web build is absent or a stub.
+      for (const absent of ['expo-image-picker', 'expo-document-picker', 'expo-file-system']) {
         expect(
           closure.modules.filter((module) => module.includes(`/${absent}/`)),
           absent
         ).toEqual([])
       }
-      expect(closure.local).toContain('src/session/mobile-clipboard-image-resize.web.ts')
+      expect(closure.local).toContain('src/session/mobile-clipboard-image-resize.ts')
     })
 
     it('is big enough that finding nothing would mean something', async () => {

@@ -31,10 +31,10 @@ function execute(options = {}) {
     }
   })
   const getPr = vi.fn(async () => ({
-    data: options.current ?? current
+    data: options.nextCurrent ?? options.current ?? current
   }))
-  if (options.reopened) {
-    getPr.mockResolvedValueOnce({ data: current })
+  if (options.reopened || options.nextCurrent) {
+    getPr.mockResolvedValueOnce({ data: options.reopened ? current : options.current })
   }
   const getRun = vi.fn(async () => ({ data: { ...run, ...options.run } }))
   const cancel = vi.fn(async () => {
@@ -45,7 +45,7 @@ function execute(options = {}) {
   const result = runInNewContext(`(async () => { ${step.with.script} })()`, {
     context: {
       repo: { owner: 'owner', repo: 'repo' },
-      payload: { pull_request: options.closed ?? closed }
+      payload: { action: options.action ?? 'closed', pull_request: options.closed ?? closed }
     },
     github: {
       request,
@@ -60,8 +60,10 @@ function execute(options = {}) {
 }
 
 it('uses trusted inline code and only enters cancellation on an unmerged close', () => {
-  expect(workflow.on).toEqual({ pull_request_target: { types: ['closed'] } })
-  expect(step.if).toBe('github.event.pull_request.merged == false')
+  expect(workflow.on).toEqual({ pull_request_target: { types: ['closed', 'synchronize'] } })
+  expect(step.if).toBe(
+    "github.event.action == 'synchronize' || github.event.pull_request.merged == false"
+  )
   expect(step.uses).toBe('actions/github-script@v8')
   expect(
     workflow.jobs.clean.steps.some((entry) => entry.uses?.startsWith('actions/checkout'))
@@ -73,11 +75,33 @@ it('looks up exact PR groups without branch or head-SHA inference', async () => 
   await result
   expect(request.mock.calls.map(([, args]) => args.concurrency_group_name)).toEqual([
     'pr-checks-123',
+    'dependency-security-123',
     'node-server-123',
     'ssh-windows-hosts-123',
     'ssh-hostile-hosts-123',
     'mobile-123',
-    'computer-e2e-123'
+    'computer-e2e-123',
+    'wsl-orcad-e2e-123',
+    'performance-contracts-123',
+    'pr-test-loc-123',
+    'preflight-critical-path-123',
+    'preflight-cli-123',
+    'macos-updater-123',
+    'preflight-comparison-123',
+    'windows-typecheck-parity-123',
+    'zcode-transcript-contract-123',
+    'release-ref-validation-123',
+    'docs-pr-123',
+    'cloud-verify-refs/pull/123/merge',
+    'win-orcad-serve-switch-e2e-123',
+    'pi-provider-runtime-123',
+    'coding-plan-contract-123-credentials',
+    'release-javascript-comparison-123',
+    'ci-cache-warmup-platforms-123',
+    'pi-owner-runtime-123',
+    'git-command-termination-123',
+    'skill-roundtrip-pull_request-123',
+    'ci-cache-warmup-123'
   ])
   expect(
     request.mock.calls.every(
@@ -146,7 +170,59 @@ it('surfaces lookup and cancellation permission failures', async () => {
 
 it('validates the event identity before looking up any work', async () => {
   const { result, request, getPr } = execute({ closed: { ...closed, number: '123' } })
-  await expect(result).rejects.toThrow('Missing closed PR identity')
+  await expect(result).rejects.toThrow('Missing PR identity')
   expect(request).not.toHaveBeenCalled()
   expect(getPr).not.toHaveBeenCalled()
+})
+
+const head = 'a'.repeat(40)
+const pushed = { number: 123, head: { sha: head } }
+const open = { ...pushed, state: 'open' }
+
+it('cancels an older commit even when a path filter prevents a replacement run', async () => {
+  const { result, cancel } = execute({
+    action: 'synchronize',
+    closed: pushed,
+    current: open,
+    run: { head_sha: 'b'.repeat(40) }
+  })
+  await result
+  expect(cancel).toHaveBeenCalledOnce()
+})
+
+it.each([head, undefined, 'invalid'])(
+  'preserves the current or unidentifiable commit: %s',
+  async (sha) => {
+    const { result, cancel } = execute({
+      action: 'synchronize',
+      closed: pushed,
+      current: open,
+      run: { head_sha: sha }
+    })
+    await result
+    expect(cancel).not.toHaveBeenCalled()
+  }
+)
+
+it('ignores a delayed push event after another push', async () => {
+  const { result, request, cancel } = execute({
+    action: 'synchronize',
+    closed: pushed,
+    current: { ...open, head: { sha: 'c'.repeat(40) } }
+  })
+  await result
+  expect(request).not.toHaveBeenCalled()
+  expect(cancel).not.toHaveBeenCalled()
+})
+
+it('rechecks the current head before cancelling when another push arrives during lookup', async () => {
+  const { result, cancel } = execute({
+    action: 'synchronize',
+    closed: pushed,
+    current: open,
+    nextCurrent: { ...open, head: { sha: 'b'.repeat(40) } },
+    run: { head_sha: 'b'.repeat(40) }
+  })
+  await result
+  expect(cancel).not.toHaveBeenCalled()
 })

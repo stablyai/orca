@@ -7,6 +7,7 @@ import type * as GitStatusModule from '../git/status'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type * as WorktreeModule from '../git/worktree'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 const mocks = vi.hoisted(() => ({
   listWorktrees: vi.fn(),
@@ -79,7 +80,7 @@ function makeStore(worktreePath: string) {
           : undefined,
       getAllWorktreeMeta: () => worktreeMeta,
       getWorktreeMeta: (id: string) => worktreeMeta[id],
-      setWorktreeMeta: (id: string, updates: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id }: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => {
         worktreeMeta[id] = { ...worktreeMeta[id], ...updates }
         return worktreeMeta[id]
       },

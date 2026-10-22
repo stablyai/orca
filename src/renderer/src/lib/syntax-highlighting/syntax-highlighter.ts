@@ -1,7 +1,12 @@
 import type { Grammar } from 'shiki/core'
 import type { StateStack } from 'shiki/textmate'
 import { BoundedMap } from '../../../../shared/bounded-map'
-import { createTextMateCore, tokenizeLineWithinLimits, type TextMateCore } from './textmate-core'
+import {
+  COLD_GRAMMAR_LINE_ATTEMPTS,
+  createTextMateCore,
+  tokenizeLineWithinLimits,
+  type TextMateCore
+} from './textmate-core'
 import { withVueTemplateInjections } from './vue-template-injections'
 
 export type SyntaxToken = {
@@ -125,6 +130,8 @@ function plainResult(code: string, outcome: SyntaxHighlightOutcome): SyntaxHighl
 
 type ThemeTokens = { starts: number[]; colors: (string | undefined)[]; styles: number[] }
 
+const warmGrammars = new WeakSet<Grammar>()
+
 /** Tokenizes in one theme up to the first line that is too long or too slow. */
 function tokenizeWithTheme(
   { core, textmate }: TextMateCore,
@@ -139,12 +146,15 @@ function tokenizeWithTheme(
   const tokens: ThemeTokens[] = []
   let stack = initial
   for (const line of lines) {
-    const result = tokenizeLineWithinLimits(line, (text, timeLimitMs) =>
-      grammar.tokenizeLine2(text, stack, timeLimitMs)
+    const result = tokenizeLineWithinLimits(
+      line,
+      (text, timeLimitMs) => grammar.tokenizeLine2(text, stack, timeLimitMs),
+      warmGrammars.has(grammar) ? undefined : COLD_GRAMMAR_LINE_ATTEMPTS
     )
     if (!result) {
       break
     }
+    warmGrammars.add(grammar)
     const lineTokens: ThemeTokens = { starts: [], colors: [], styles: [] }
     for (let index = 0; index < result.tokens.length; index += 2) {
       const metadata = result.tokens[index + 1]

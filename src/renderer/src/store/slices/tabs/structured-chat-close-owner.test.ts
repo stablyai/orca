@@ -1,6 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../../shared/tab-types'
 import { createTestStore, makeWorktree, seedStore } from '../store-test-helpers'
+import { drawTabsFromMain, type TabsDrawnFromMain } from '../tabs-drawn-from-main.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
 const mocks = vi.hoisted(() => ({ beginClose: vi.fn() }))
 
@@ -10,6 +13,17 @@ vi.mock('sonner', () => ({
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: mocks.beginClose
 }))
+// Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 
 // `repoId::path` names both checkouts: this machine's and the paired server's.
 const WORKTREE = 'repo-1::/work/app'
@@ -56,30 +70,49 @@ function storeWith(tab: Tab): ReturnType<typeof createTestStore> {
   return store
 }
 
+let main: TabsDrawnFromMain | undefined
 beforeEach(() => {
   mocks.beginClose.mockReset()
+})
+afterEach(() => {
+  main?.close()
+  main = undefined
 })
 
 describe('closing a structured chat from outside its workspace', () => {
   it('stops it on the host stamped on its tab, not on whichever host shares its id', () => {
     const store = storeWith(chatTab('runtime:server-1'))
 
+    const layoutOwner = store.getState()
     store.getState().closeUnifiedTab('agent-session:chat-1')
 
     expect(mocks.beginClose).toHaveBeenCalledWith(
       expect.objectContaining({
         target: { kind: 'environment', environmentId: 'server-1' },
-        sessionId: 'chat-1'
+        sessionId: 'chat-1',
+        layoutOwner
       })
     )
   })
 
-  it('names no host for an unstamped chat whose workspace two hosts publish', () => {
+  // Switch on, main's layout holds only chats this machine's host placed, so the stamp is a fact.
+  it('an unstamped chat whose workspace two hosts publish: no host off, main’s host on', async () => {
     const store = storeWith(chatTab())
+    main = await drawTabsFromMain(store)
 
     store.getState().closeUnifiedTab('agent-session:chat-1')
+    await main.settle()
 
-    expect(mocks.beginClose).not.toHaveBeenCalled()
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      expect(mocks.beginClose).toHaveBeenCalledWith(
+        expect.objectContaining({ target: { kind: 'local' }, sessionId: 'chat-1' })
+      )
+      expect(layoutApplyTestTransport.sentOfType('closeTabs')).toEqual([
+        expect.objectContaining({ workspace: WORKTREE, tabIds: ['agent-session:chat-1'] })
+      ])
+    } else {
+      expect(mocks.beginClose).not.toHaveBeenCalled()
+    }
     expect(store.getState().unifiedTabsByWorktree[WORKTREE] ?? []).toEqual([])
   })
 })
