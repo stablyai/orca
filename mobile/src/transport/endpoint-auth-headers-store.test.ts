@@ -47,6 +47,100 @@ beforeEach(() => {
 })
 
 describe('endpoint auth header storage', () => {
+  it('refuses a canceled queued write without replacing existing credentials', async () => {
+    let current = true
+    let release: () => void = () => {}
+    const paused = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    secureStoreMock.setItemAsync.mockImplementationOnce(async () => paused)
+    const blocker = writeEndpointAuthHeaders('other-host', { 'X-Token': 'other' }, ENDPOINT)
+    await vi.waitFor(() => expect(secureStoreMock.setItemAsync).toHaveBeenCalled())
+    const mutation = writeEndpointAuthHeaders(
+      'host-1',
+      { 'X-Token': 'new' },
+      ENDPOINT,
+      () => current
+    )
+    const rejected = expect(mutation).rejects.toThrow('cancelled')
+    current = false
+    release()
+    await blocker
+    await rejected
+    expect(secureStoreMock.setItemAsync).toHaveBeenCalledTimes(1)
+    expect(peekEndpointAuthHeaders('host-1', ENDPOINT)).toBeNull()
+  })
+
+  it('restores previous credentials inside the queue when canceled during a native write', async () => {
+    let stored = JSON.stringify({
+      v: 2,
+      hostId: 'host-1',
+      origin: ENDPOINT,
+      headers: { 'X-Token': 'old' }
+    })
+    secureStoreMock.getItemAsync.mockImplementation(async () => stored)
+    let current = true
+    let release: () => void = () => {}
+    const paused = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    secureStoreMock.setItemAsync.mockImplementationOnce(async (_key: string, value: string) => {
+      stored = value
+      await paused
+    })
+    secureStoreMock.setItemAsync.mockImplementation(async (_key: string, value: string) => {
+      stored = value
+    })
+    const mutation = writeEndpointAuthHeaders(
+      'host-1',
+      { 'X-Token': 'new' },
+      ENDPOINT,
+      () => current
+    )
+    const rejected = expect(mutation).rejects.toThrow('cancelled')
+    await vi.waitFor(() => expect(secureStoreMock.setItemAsync).toHaveBeenCalled())
+    current = false
+    release()
+    await rejected
+    expect(await readEndpointAuthHeaders('host-1', ENDPOINT)).toEqual({ 'X-Token': 'old' })
+    expect(peekEndpointAuthHeaders('host-1', ENDPOINT)).toBeNull()
+  })
+
+  it.each(['remove', 'replace'] as const)(
+    'lets a newer %s win over an in-flight guarded save',
+    async (action) => {
+      let stored: string | null = null
+      secureStoreMock.getItemAsync.mockImplementation(async () => stored)
+      secureStoreMock.deleteItemAsync.mockImplementation(async () => {
+        stored = null
+      })
+      let release: () => void = () => {}
+      const paused = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      secureStoreMock.setItemAsync.mockImplementationOnce(async (_key: string, value: string) => {
+        stored = value
+        await paused
+      })
+      secureStoreMock.setItemAsync.mockImplementation(async (_key: string, value: string) => {
+        stored = value
+      })
+      const older = writeEndpointAuthHeaders('host-1', { 'X-Token': 'stale' }, ENDPOINT, () => true)
+      const rejected = expect(older).rejects.toThrow('cancelled')
+      await vi.waitFor(() => expect(secureStoreMock.setItemAsync).toHaveBeenCalled())
+      const newer =
+        action === 'remove'
+          ? deleteEndpointAuthHeaders('host-1')
+          : writeEndpointAuthHeaders('host-1', { 'X-Token': 'newer' }, ENDPOINT)
+      release()
+      await rejected
+      await newer
+      const expected = action === 'remove' ? null : { 'X-Token': 'newer' }
+      expect(await readEndpointAuthHeaders('host-1', ENDPOINT)).toEqual(expected)
+      expect(peekEndpointAuthHeaders('host-1', ENDPOINT)).toEqual(expected)
+    }
+  )
+
   it('does not use legacy credentials without an origin binding', async () => {
     secureStoreMock.getItemAsync.mockResolvedValue(
       JSON.stringify({ v: 1, hostId: 'host-1', headers: { 'X-Token': 'old-secret' } })

@@ -10,7 +10,8 @@ export async function readEndpointAuthHeaders(
 export async function writeEndpointAuthHeaders(
   _hostId: string,
   _headers: Record<string, string>,
-  _endpoint: string
+  _endpoint: string,
+  _isCurrent?: () => boolean
 ): Promise<void> {}
 
 export async function deleteEndpointAuthHeaders(_hostId: string): Promise<void> {}

@@ -68,7 +68,8 @@ export async function readEndpointAuthHeaders(
 export async function writeEndpointAuthHeaders(
   hostId: string,
   headers: EndpointAuthHeaders,
-  endpoint: string
+  endpoint: string,
+  isCurrent?: () => boolean
 ): Promise<void> {
   const origin = endpointAuthOrigin(endpoint)
   if (!origin) {
@@ -87,8 +88,27 @@ export async function writeEndpointAuthHeaders(
     origin,
     headers: normalized.headers
   })
+  if (isCurrent && !isCurrent()) {
+    throw new Error('Credential save cancelled')
+  }
   markHostCredentialWrite(validated.hostId)
-  await writePairingKeychainItem(headersKey(validated.hostId), JSON.stringify(validated))
+  const revision = getHostCredentialWriteRevision(hostId)
+  const epoch = endpointAuthMutationEpoch(hostId)
+  const current = () =>
+    (!isCurrent || isCurrent()) &&
+    getHostCredentialWriteRevision(hostId) === revision &&
+    endpointAuthMutationEpoch(hostId) === epoch
+  await writePairingKeychainItem(
+    headersKey(validated.hostId),
+    JSON.stringify(validated),
+    isCurrent ? current : undefined
+  )
+  if (!current()) {
+    if (isCurrent) {
+      throw new Error('Credential save cancelled')
+    }
+    return
+  }
   noteEndpointAuthHeadersChanged(validated.hostId)
   cacheEndpointAuthSnapshot(validated.hostId, validated.headers, endpoint)
 }
