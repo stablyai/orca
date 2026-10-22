@@ -26,6 +26,7 @@ import {
   shouldClearDivergedLinkedMergedPR
 } from './worktree-refresh'
 import type { WorktreeLookupIndex } from './worktree-refresh'
+import { buildUnselectLinkedReviewUpdate } from './linked-review-unselect'
 
 export const createRefreshEventActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -243,7 +244,9 @@ export const createRefreshEventActions = (
     for (const clear of divergedLinkedPRClears) {
       void get().updateWorktreeMeta(
         clear.worktreeId,
-        { linkedPR: null },
+        buildUnselectLinkedReviewUpdate(
+          findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId)
+        ),
         {
           shouldApply: () =>
             shouldApplyDivergedLinkedPRClear({
@@ -259,7 +262,9 @@ export const createRefreshEventActions = (
     for (const clear of branchMismatchedLinkedPRClears) {
       void get().updateWorktreeMeta(
         clear.worktreeId,
-        { linkedPR: null },
+        buildUnselectLinkedReviewUpdate(
+          findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId)
+        ),
         {
           shouldApply: () =>
             shouldApplyBranchMismatchedLinkedPRClear({

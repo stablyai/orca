@@ -76,7 +76,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      expect.objectContaining({ linkedPR: null, linkedItems: expect.any(Array) }),
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
@@ -126,7 +126,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      expect.objectContaining({ linkedPR: null, linkedItems: expect.any(Array) }),
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()

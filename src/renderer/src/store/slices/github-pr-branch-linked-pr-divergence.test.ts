@@ -142,7 +142,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      expect.objectContaining({ linkedPR: null, linkedItems: expect.any(Array) }),
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
@@ -198,7 +198,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     })
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      expect.objectContaining({ linkedPR: null, linkedItems: expect.any(Array) }),
       {
         suppressHostedReviewRefresh: true,
         shouldApply: expect.any(Function)
@@ -256,7 +256,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      expect.objectContaining({ linkedPR: null, linkedItems: expect.any(Array) }),
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBeNull()
@@ -572,7 +572,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(request).resolves.toMatchObject({ number: 12 })
     expect(updateWorktreeMeta).toHaveBeenCalledWith(
       worktreeId,
-      { linkedPR: null },
+      expect.objectContaining({ linkedPR: null, linkedItems: expect.any(Array) }),
       { shouldApply: expect.any(Function) }
     )
     expect(store.getState().worktreesByRepo[repoId]?.[0]?.linkedPR).toBe(12)
