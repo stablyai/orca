@@ -18,8 +18,16 @@ export function NativeChatSessionGate({
 }: NativeChatSessionGateProps): JSX.Element {
   const lastResolutionRef = useRef<NativeChatPaneResolution | null>(null)
   const currentResolution = resolveNativeChatSession(input)
+  const entry = input.agentStatusEntry
+  const hasSessionBoundary =
+    entry?.sessionBoundary === true ||
+    (!entry?.providerSession &&
+      entry?.observation?.origin === 'launch' &&
+      entry.observation.kind === 'transition')
   const previousResolution =
-    lastResolutionRef.current?.paneKey === input.paneKey ? lastResolutionRef.current : null
+    lastResolutionRef.current?.paneKey === input.paneKey && !hasSessionBoundary
+      ? lastResolutionRef.current
+      : null
   const resolution = (() => {
     if (!currentResolution) {
       return previousResolution

@@ -1,6 +1,7 @@
 // How an agent's status becomes its pane's resume record: the window's rule, shared so main can
 // apply it to the statuses its hook server accepts for panes the window never opened.
 
+import { sameAgentStatusTerminalOwner } from './agent-status-terminal-owner'
 import { agentVerdictFields } from './agent-main-agent-verdict'
 import {
   agentProviderSessionsEqual,
@@ -102,6 +103,32 @@ export function canReuseStatusProviderSession(
     previous.agentType === next.agentType &&
     (previous.state !== 'done' || next.state === 'done')
   )
+}
+
+/** An OSC repaint can add live status before a resumed agent emits its next identity hook. */
+export function providerSessionForResumeSnapshot(
+  record: SleepingAgentSessionRecord | undefined,
+  status: Pick<
+    AgentStatusEntry,
+    'paneKey' | 'agentType' | 'sessionBoundary' | 'observation' | 'connectionId' | 'worktreeId'
+  >
+): AgentProviderSessionMetadata | undefined {
+  if (
+    !record ||
+    record.paneKey !== status.paneKey ||
+    record.agent !== status.agentType ||
+    (record.origin !== 'live' && record.origin !== 'quit') ||
+    status.sessionBoundary ||
+    status.observation?.origin !== 'osc' ||
+    status.observation.kind !== 'snapshot' ||
+    !sameAgentStatusTerminalOwner(
+      { connectionId: record.connectionId ?? null, worktreeId: record.worktreeId },
+      { connectionId: status.connectionId ?? null, worktreeId: status.worktreeId }
+    )
+  ) {
+    return undefined
+  }
+  return record.providerSession
 }
 
 /** A finished turn of a resumable agent still names a session its pane can resume. */
