@@ -78,7 +78,7 @@ export function demandMarkdown(report) {
         `| ${row.workflow} | ${row.runs} | ${(row.runnerMinutes / 60).toFixed(1)} | ${(row.cancelledRunnerMinutes / 60).toFixed(1)} | ${(row.repeatedSuccessfulRunnerMinutes / 60).toFixed(1)} | ${row.runnerMinutesPerCompletedPrRun?.toFixed(1) ?? '—'} |`
     ),
     '',
-    'Repeated green-job hours count assigned, completed jobs with a successful job of the same name in an earlier attempt of that run. This is a review bucket, not guaranteed avoidable work; it overlaps total and cancelled-run hours.',
+    'Completed records with the same job name, runner and execution timestamps across attempts are counted once: GitHub carries successful results forward without running them again. Repeated green-job hours count fresh executions after a successful job of the same name in an earlier attempt. This review bucket is not guaranteed avoidable work; it overlaps total and cancelled-run hours.',
     '',
     '| Runner labels | Hours | Queue/provisioning p95 minutes |',
     '| --- | ---: | ---: |',

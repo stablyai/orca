@@ -79,6 +79,10 @@ it('paginates jobs and bounds run discovery to 24 complete hours', async () => {
 it('counts only later attempts of previously successful jobs, including failed repeats', () => {
   const observation = (name, run_attempt, conclusion, extra = {}) => ({
     ...job,
+    started_at: new Date(Date.parse(job.started_at) + (run_attempt ?? 0) * 600_000).toISOString(),
+    completed_at: new Date(
+      Date.parse(job.completed_at) + (run_attempt ?? 0) * 600_000
+    ).toISOString(),
     name,
     run_attempt,
     conclusion,
@@ -113,6 +117,42 @@ it('counts only later attempts of previously successful jobs, including failed r
     runnerMinutes: 100
   })
   expect(report.incompleteJobs).toBe(1)
+})
+
+it('counts carried-forward results once while retaining fresh executions on the same runner', () => {
+  const first = { ...job, id: 1, name: 'unit', run_attempt: 1, conclusion: 'success' }
+  const carried = { ...first, id: 2, run_attempt: 2 }
+  const fresh = {
+    ...first,
+    id: 3,
+    run_attempt: 3,
+    started_at: '2026-09-27T00:23:00Z',
+    completed_at: '2026-09-27T00:28:00Z'
+  }
+  const failed = { ...first, id: 5, name: 'build', conclusion: 'failure' }
+  const report = runnerDemand(
+    [run],
+    [
+      {
+        run,
+        weight: 2,
+        jobs: [
+          { ...fresh, id: 4, run_attempt: 4 },
+          carried,
+          first,
+          fresh,
+          failed,
+          { ...failed, id: 6, run_attempt: 2 }
+        ]
+      }
+    ]
+  )
+  expect(report.workflows[0]).toMatchObject({
+    runnerMinutes: 30,
+    repeatedSuccessfulJobs: 2,
+    repeatedSuccessfulRunnerMinutes: 10
+  })
+  expect(report.pools[0].runnerMinutes).toBe(30)
 })
 
 it('refuses to publish a silently truncated inventory', async () => {
