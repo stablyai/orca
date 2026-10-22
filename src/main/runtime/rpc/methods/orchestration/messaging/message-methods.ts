@@ -75,11 +75,11 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       const creatorAnswerer =
         question && (params.run === undefined || params.run === question.run_id)
           ? helperQuestionAnswerer(runtime, {
-            question: original,
-            from: params.from,
-            session: orchestrationCaller,
-            evidence: orchestrationCompatibilityEvidence
-          })
+              question: original,
+              from: params.from,
+              session: orchestrationCaller,
+              evidence: orchestrationCompatibilityEvidence
+            })
           : undefined
       if (question && creatorAnswerer) {
         const answered = db.answerQuestion({

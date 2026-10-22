@@ -23,7 +23,9 @@ export function resolveWorkerStartRun(
   }
 ): { run: RunRow; helperCreator?: DispatchContextRow } {
   const db = runtime.getOrchestrationDb()
-  const coordinated = args.coordinator ? db.getCurrentRunForCoordinator(args.coordinator) : undefined
+  const coordinated = args.coordinator
+    ? db.getCurrentRunForCoordinator(args.coordinator)
+    : undefined
   if (coordinated) {
     if (args.runId && args.runId !== coordinated.id) {
       throw fenced(`This caller coordinates Run ${coordinated.id}, not ${args.runId}.`)

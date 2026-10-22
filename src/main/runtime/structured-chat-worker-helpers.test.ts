@@ -109,8 +109,13 @@ describe('a worker starting helpers on the Run it works for', () => {
     await openChat(PEER_CHAT)
     const { runId, taskId } = await coordinatorRunAndTask()
     const parent = idOf(
-      (await call('orchestration.dispatch', { task: taskId, to: WORKER }, { sessionId: COORDINATOR }))
-        .dispatch
+      (
+        await call(
+          'orchestration.dispatch',
+          { task: taskId, to: WORKER },
+          { sessionId: COORDINATOR }
+        )
+      ).dispatch
     )
     vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(2)
 
@@ -133,7 +138,8 @@ describe('a worker starting helpers on the Run it works for', () => {
     await helperSend('escalation', 'Blocked on fixtures', helper)
     const asked = call('orchestration.ask', { from: HELPER, question: 'Which parser?' })
     await vi.waitFor(
-      () => expect(db.db.prepare('SELECT COUNT(*) AS n FROM question_threads').get()).toEqual({ n: 1 }),
+      () =>
+        expect(db.db.prepare('SELECT COUNT(*) AS n FROM question_threads').get()).toEqual({ n: 1 }),
       WAIT
     )
     const inbox = await check(PEER_CHAT)

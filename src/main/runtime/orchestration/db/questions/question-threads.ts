@@ -103,7 +103,8 @@ export function answerQuestion(
     if (answeredBy !== null) {
       const answerer = this.getDispatchContextById(answeredBy.dispatchId)
       if (
-        this.getMessageById(question.message_id)?.to_handle !== `dispatch:${answeredBy.dispatchId}` ||
+        this.getMessageById(question.message_id)?.to_handle !==
+          `dispatch:${answeredBy.dispatchId}` ||
         (answerer?.status !== 'pending' && answerer?.status !== 'dispatched') ||
         answerer.consumer_generation !== answeredBy.consumerGeneration
       ) {

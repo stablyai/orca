@@ -25,9 +25,7 @@ import {
   stripMutationReplayNudge
 } from '../../../orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
-import {
-  handBackReplayTargets
-} from '../../../../orchestration/db/messages/helper-mailbox-hand-back'
+import { handBackReplayTargets } from '../../../../orchestration/db/messages/helper-mailbox-hand-back'
 import { sendRemoteMessage } from './send-remote'
 import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
