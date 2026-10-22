@@ -53,6 +53,7 @@ export function useWorktreeCardFoundation({
     [cardProps, compactWorktreeCards, newCardStyle]
   )
   const { compactCards } = cardDetails
+  const compactCardHover = settings?.compactWorktreeCardHover !== false
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -244,6 +245,7 @@ export function useWorktreeCardFoundation({
     projectGroups,
     newCardStyle,
     compactCards,
+    compactCardHover,
     cardDetails,
     handleEditIssue,
     handleManageLinks,

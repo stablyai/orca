@@ -281,4 +281,25 @@ describe('WorktreeCard compact hover ownership', () => {
     expect(titleRoot.textContent).toContain('Issues & tasks · 1')
     expect(titleRoot.textContent).toContain('58941')
   })
+
+  it('mounts no hover card when the compact hover is turned off', async () => {
+    settings = { compactWorktreeCards: true, compactWorktreeCardHover: false }
+    const worktree = makeWorktree({ linkedPR: 57, comment: 'Reviewer handoff note' })
+    workspacePortScan = makePortScan(worktree)
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    act(() => {
+      root.render(<WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />)
+    })
+
+    expect(container.querySelector('[data-worktree-title-inline-rename]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="1 live port"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-hovercard-root]')).toHaveLength(0)
+    expect(container.querySelectorAll('[data-hover-card-content]')).toHaveLength(0)
+    expect(
+      container
+        .querySelector('[data-worktree-card-hover-trigger]')
+        ?.hasAttribute('data-hover-card-trigger')
+    ).toBe(false)
+  })
 })
