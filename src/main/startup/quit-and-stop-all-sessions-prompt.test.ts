@@ -24,6 +24,5 @@ describe('confirmQuitAndStopAllSessions', () => {
     expect(options.buttons).toEqual(['Stop Sessions and Quit', 'Cancel'])
     expect(options.defaultId).toBe(1)
     expect(options.cancelId).toBe(1)
-    expect(options.detail).toContain("the closed tabs don't come back on next launch")
   })
 })

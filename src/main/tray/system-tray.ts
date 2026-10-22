@@ -300,12 +300,12 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
         ] satisfies Electron.MenuItemConstructorOptions[])
       : []),
     ...(opts.onQuitAndStopAllSessions
-      ? [
+      ? ([
           {
             label: translateMain('menu.quitAndStopAllSessions', 'Quit and Stop All Sessions...'),
-            click: safeMenuAction(() => opts.onQuitAndStopAllSessions?.())
+            click: safeMenuAction(opts.onQuitAndStopAllSessions)
           }
-        ]
+        ] satisfies Electron.MenuItemConstructorOptions[])
       : []),
     { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
   ])

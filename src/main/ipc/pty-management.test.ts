@@ -463,6 +463,44 @@ describe('pty:management IPC handlers', () => {
         killedSessionIds: ['b']
       })
     })
+
+    it('does not count sessions as killed when every later poll fails', async () => {
+      const current = makeAdapter(5, [])
+      current.listSessions = vi
+        .fn()
+        .mockResolvedValueOnce([makeSession('a')].map(({ protocolVersion: _pv, ...rest }) => rest))
+        .mockRejectedValue(new Error('daemon stopped answering'))
+      current.shutdown = vi.fn(async () => {})
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({ killedCount: 0, remainingCount: 1, killedSessionIds: [] })
+    })
+
+    it('flags a sweep whose initial listing missed a daemon generation', async () => {
+      const current = makeAdapter(5, [])
+      const legacy = makeAdapter(3, [])
+      legacy.listSessions = vi.fn(async () => {
+        throw new Error('legacy daemon stopped answering')
+      })
+      const { registerDaemonManagementHandlers } = await importFresh()
+      getDaemonProviderMock.mockReturnValue(await makeRouter(current, [legacy]))
+      registerDaemonManagementHandlers()
+
+      const handlers = buildHandlerMap()
+      const result = await runKillAllWithPolls(handlers['pty:management:killAll'])
+
+      expect(result).toEqual({
+        killedCount: 0,
+        remainingCount: 0,
+        killedSessionIds: [],
+        listingIncomplete: true
+      })
+    })
   })
 
   describe('killOne', () => {

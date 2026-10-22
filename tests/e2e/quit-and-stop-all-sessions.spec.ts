@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
+import { waitForExit } from './helpers/electron-process-shutdown'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
@@ -12,20 +13,16 @@ import {
   waitForActiveTerminalManager,
   waitForPaneCount
 } from './helpers/terminal'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { readDaemonPidRecord } from '../../src/main/daemon/daemon-endpoint-incarnation'
+import { getDaemonPidPath } from '../../src/main/daemon/daemon-spawner'
 
 // The label is localized; the app menu gives the item a stable id.
 const MENU_ITEM_ID = 'quit-and-stop-all-sessions'
 
 function readDaemonPid(userDataDir: string): number {
-  const raw = readFileSync(
-    path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`),
-    'utf8'
-  )
-  const parsed: unknown = JSON.parse(raw)
-  const pid = typeof parsed === 'object' && parsed !== null && 'pid' in parsed ? parsed.pid : null
-  if (typeof pid !== 'number') {
-    throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
+  const pid = readDaemonPidRecord(getDaemonPidPath(path.join(userDataDir, 'daemon')))?.pid
+  if (pid === undefined) {
+    throw new Error('The daemon pid file is missing or unreadable')
   }
   return pid
 }
@@ -87,14 +84,18 @@ test('Quit and Stop All Sessions closes the terminal tab and ends its shell and 
       return match ? Number(match[1]) : null
     }
     await expect.poll(readShellPid, { timeout: 20_000 }).not.toBeNull()
-    const shellPid = (await readShellPid()) ?? 0
+    const shellPid = await readShellPid()
+    if (shellPid === null) {
+      throw new Error('The shell pid vanished from the terminal buffer')
+    }
     const daemonPid = readDaemonPid(session.userDataDir)
     expect(isAlive(shellPid)).toBe(true)
     expect(isAlive(daemonPid)).toBe(true)
 
-    const exited = new Promise<void>((resolve) => first.app.process().once('exit', () => resolve()))
+    // Why the exit event, not a poll: session.close needs app.process(), which Playwright drops soon after exit.
+    const exited = waitForExit(first.app.process(), 60_000)
     await confirmQuitAndStopAllSessionsFromMenu(first.app)
-    await exited
+    expect(await exited, 'Orca stayed open after Quit and Stop All Sessions').toBe(true)
     await session.close(first.app)
     firstApp = null
 

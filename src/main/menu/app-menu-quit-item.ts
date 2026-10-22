@@ -14,7 +14,7 @@ export type AppMenuQuitHandlers = {
  * Why a handler instead of role 'quit': a host that must not exit on a user Quit
  * (`orca serve`, #15537) supplies `onQuit`; the native-quit guard only covers macOS.
  */
-export function createAppMenuQuitItem(
+function createAppMenuQuitItem(
   onQuit: (() => void) | undefined,
   macAppName?: string
 ): Electron.MenuItemConstructorOptions {

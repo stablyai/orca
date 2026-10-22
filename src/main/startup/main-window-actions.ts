@@ -1,4 +1,13 @@
-import { app, clipboard, dialog, type BrowserWindow, type Tray, type WebContents } from 'electron'
+import {
+  app,
+  clipboard,
+  dialog,
+  type BrowserWindow,
+  type MessageBoxOptions,
+  type MessageBoxReturnValue,
+  type Tray,
+  type WebContents
+} from 'electron'
 import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
@@ -102,12 +111,18 @@ let quitAndStopAllSessionsConfirming = false
 // The renderer that consumed the request; only it may then ask main to quit.
 let stoppingAllSessionsWebContentsId: number | null = null
 
+function showMessageBoxOnMainWindow(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
+  const window = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
+  return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
+}
+
 /**
  * Quit and Stop All Sessions (app menu, tray): after confirmation the renderer runs Settings'
- * Kill all sessions (closes every terminal tab and stops every daemon session), then asks main to quit.
+ * Kill all sessions, then asks main to quit. The renderer does the work because Kill all also
+ * retires the tabs, so nothing reopens or resumes them on next launch.
  */
 export function quitAndStopAllSessionsFromUserCommand(): void {
-  // Why: a serve host's daemon holds its paired clients' terminals, and its user Quit never exits.
+  // Why: under orca serve a user Quit only closes the windows (#15537), so this would never quit.
   if (state.isServeMode || quitAndStopAllSessionsConfirming) {
     return
   }
@@ -116,10 +131,7 @@ export function quitAndStopAllSessionsFromUserCommand(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     showMainWindowFromTray()
   }
-  const window = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
-  void confirmQuitAndStopAllSessions((options) =>
-    window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
-  )
+  void confirmQuitAndStopAllSessions(showMessageBoxOnMainWindow)
     .then((confirmed) => {
       if (confirmed) {
         requestRendererStopAllSessionsThenQuit()
@@ -132,13 +144,11 @@ export function quitAndStopAllSessionsFromUserCommand(): void {
 }
 
 function requestRendererStopAllSessionsThenQuit(): void {
-  // Why the renderer: Kill all retires the tabs too, so nothing reopens or resumes them on next launch.
   showMainWindowFromTray()
   const targetWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null
   if (!targetWindow) {
     return
   }
-  // Why mark and push: a window opened for this request pulls it once its listener attaches.
   state.pendingQuitAndStopAllSessions.mark(
     targetWindow.webContents.id,
     QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS
@@ -163,7 +173,8 @@ export function quitAfterRendererStoppedAllSessions(senderWebContentsId: number)
     return
   }
   stoppingAllSessionsWebContentsId = null
-  quitFromUserCommand()
+  // Why reveal: the window may have been hidden while Kill all ran, and a quit-time save prompt must show.
+  quitFromSystemTray()
 }
 
 export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
@@ -257,11 +268,7 @@ export async function showRendererRecoveryPrompt(
     isQuitting: () => state.isQuitting,
     diagnose: describeInstallDirAclPoison,
     probeLaunchCapacity: () => probeRendererLaunchCapacity(),
-    showMessageBox: (options) => {
-      const window =
-        state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
-      return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
-    },
+    showMessageBox: showMessageBoxOnMainWindow,
     copyToClipboard: (text) => clipboard.writeText(text),
     reload: () => {
       if (!state.mainWindow || state.mainWindow.isDestroyed()) {

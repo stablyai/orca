@@ -56,7 +56,10 @@ function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
   return provider ? getCurrentDaemonAdapter(provider).getDaemonIdentity() : null
 }
 
-async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
+// Why `complete`: an adapter that failed to list may still own sessions, so its silence is not "none".
+async function listSessionsOfEveryAdapter(
+  adapters: DaemonPtyAdapter[]
+): Promise<{ sessions: DaemonSessionInfo[]; complete: boolean }> {
   const results = await Promise.allSettled(
     adapters.map(async (adapter) => {
       const sessions = await adapter.listSessions()
@@ -66,7 +69,14 @@ async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSess
       }))
     })
   )
-  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  return {
+    sessions: results.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])),
+    complete: results.every((r) => r.status === 'fulfilled')
+  }
+}
+
+async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
+  return (await listSessionsOfEveryAdapter(adapters)).sessions
 }
 
 export function registerDaemonManagementHandlers(): void {
@@ -159,15 +169,17 @@ export function registerDaemonManagementHandlers(): void {
       killedCount: number
       remainingCount: number
       killedSessionIds: string[]
+      listingIncomplete?: boolean
     }> => {
       const adapters = getDaemonAdapters()
       // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
-      const initial = await collectSessions(adapters)
+      const { sessions: initial, complete } = await listSessionsOfEveryAdapter(adapters)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
+      const incomplete = complete ? {} : { listingIncomplete: true }
 
       if (initialCount === 0) {
-        return { killedCount: 0, remainingCount: 0, killedSessionIds: [] }
+        return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }
       }
 
       // Why: no retry — session.kill() is idempotent and runs its own kill ladder; allSettled so one rejection doesn't abort the rest.
@@ -188,7 +200,12 @@ export function registerDaemonManagementHandlers(): void {
       let remainingOriginalIds = initialIds
       for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
         await sleep(POLL_INTERVAL_MS)
-        const current = await collectSessions(adapters)
+        const { sessions: current, complete: polledEveryAdapter } =
+          await listSessionsOfEveryAdapter(adapters)
+        // Why: a failed listing proves nothing died, so keep the last confirmed remaining set.
+        if (!polledEveryAdapter) {
+          continue
+        }
         remainingOriginalIds = new Set(
           current
             .filter((session) => initialIds.has(session.sessionId))
@@ -206,7 +223,8 @@ export function registerDaemonManagementHandlers(): void {
         remainingCount: remainingOriginalCount,
         killedSessionIds: [...initialIds].filter(
           (sessionId) => !remainingOriginalIds.has(sessionId)
-        )
+        ),
+        ...incomplete
       }
     }
   )

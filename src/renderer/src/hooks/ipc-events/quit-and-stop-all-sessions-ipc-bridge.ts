@@ -25,6 +25,7 @@ function stoppedEverySession(summary: KillAllTerminalSurfacesSummary): boolean {
   return (
     summary.daemon.status === 'fulfilled' &&
     summary.daemon.remainingCount === 0 &&
+    !summary.daemon.listingIncomplete &&
     summary.failedCloseAttemptCount === 0 &&
     summary.exactKillRejectedCount === 0
   )
@@ -40,17 +41,24 @@ async function stopAllSessionsThenQuit(): Promise<void> {
   try {
     // Why hydration too: closed tabs are only persisted once the session restore succeeded.
     const ready = await waitForWorkspaceSessionReady()
-    if (!ready || !useAppStore.getState().hydrationSucceeded) {
+    const { hydrationSucceeded } = useAppStore.getState()
+    if (!ready || !hydrationSucceeded) {
+      console.warn('[quit-and-stop-all-sessions] Workspace session not ready:', {
+        ready,
+        hydrationSucceeded
+      })
       showStopAllFailure()
       return
     }
     const summary = await runKillAllTerminalSurfaces(snapshotKillAllTerminalSurfaceIds())
-    if (!stoppedEverySession(summary)) {
+    // Why re-read: Kill all covers only its snapshot, and a tab opened meanwhile would outlive the quit.
+    if (!stoppedEverySession(summary) || snapshotKillAllTerminalSurfaceIds().length > 0) {
       showStopAllFailure()
       return
     }
     window.api.ui.quitAfterStoppingAllSessions?.()
-  } catch {
+  } catch (error) {
+    console.error('[quit-and-stop-all-sessions] Stopping sessions failed:', error)
     showStopAllFailure()
   } finally {
     stopAllInFlight = false

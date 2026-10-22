@@ -260,11 +260,19 @@ describe('createSystemTray', () => {
 
       createSystemTray(options)
 
-      expect(
-        builtMenuItems()
-          .map((item) => item.label)
-          .slice(-2)
-      ).toEqual(['Quit and Stop All Sessions...', 'Quit'])
+      expect(builtMenuItems().map((item) => item.label)).toEqual(
+        platform === 'darwin'
+          ? [
+              'Open Orca',
+              undefined,
+              'Settings',
+              'Check for Updates...',
+              undefined,
+              'Quit and Stop All Sessions...',
+              'Quit'
+            ]
+          : ['Open Orca', undefined, 'Quit and Stop All Sessions...', 'Quit']
+      )
       builtMenuItems().at(-2)?.click?.()
       expect(options.onQuitAndStopAllSessions).toHaveBeenCalledOnce()
       expect(options.onQuit).not.toHaveBeenCalled()

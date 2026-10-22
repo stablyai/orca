@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { confirmQuitAndStopAllSessions } from './quit-and-stop-all-sessions-prompt'
 
 const electron = vi.hoisted(() => ({ quit: vi.fn(), showMessageBox: vi.fn() }))
-const prompt = vi.hoisted(() => ({ confirm: vi.fn<() => Promise<boolean>>() }))
+const prompt = vi.hoisted(() => ({ confirm: vi.fn<typeof confirmQuitAndStopAllSessions>() }))
 
 vi.mock('electron', () => ({
   app: { quit: electron.quit },
@@ -29,11 +30,13 @@ vi.mock('./windows-install-dir-acl-recovery', () => ({
 vi.mock('../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
 vi.mock('../window/renderer-launch-failure-probe', () => ({ probeRendererLaunchCapacity: vi.fn() }))
 
+import { safelyRevealWindow } from '../window/focus-existing-window'
 import {
   consumeQuitAndStopAllSessionsRequest,
   getSystemTrayOptions,
   quitAfterRendererStoppedAllSessions,
-  quitAndStopAllSessionsFromUserCommand
+  quitAndStopAllSessionsFromUserCommand,
+  setMainWindowOpener
 } from './main-window-actions'
 import { mainProcessState as state } from './main-process-state'
 
@@ -50,28 +53,75 @@ function flushPromptChain(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
 }
 
-describe('quitAndStopAllSessionsFromUserCommand', () => {
-  let mainWindow: ReturnType<typeof fakeMainWindow>
+let mainWindow: ReturnType<typeof fakeMainWindow>
 
-  beforeEach(() => {
-    electron.quit.mockReset()
-    prompt.confirm.mockReset()
-    state.isQuitting = false
-    state.isServeMode = false
-    state.pendingQuitAndStopAllSessions.clear()
-    mainWindow = fakeMainWindow()
-    Object.assign(state, { mainWindow })
+beforeEach(() => {
+  electron.quit.mockReset()
+  electron.showMessageBox.mockReset()
+  prompt.confirm.mockReset()
+  vi.mocked(safelyRevealWindow).mockReset()
+  state.isQuitting = false
+  state.isServeMode = false
+  state.pendingQuitAndStopAllSessions.clear()
+  mainWindow = fakeMainWindow()
+  Object.assign(state, { mainWindow })
+})
+
+describe('quitAndStopAllSessionsFromUserCommand', () => {
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('asks the renderer to stop every session once the user confirms, without quitting yet', async () => {
+  it('reveals the window, confirms on it, then asks its renderer to stop every session without quitting yet', async () => {
+    prompt.confirm.mockImplementation(async (showMessageBox) => {
+      await showMessageBox({ message: 'confirm' })
+      return true
+    })
+
+    quitAndStopAllSessionsFromUserCommand()
+    await flushPromptChain()
+
+    expect(electron.showMessageBox).toHaveBeenCalledWith(mainWindow, { message: 'confirm' })
+    expect(vi.mocked(safelyRevealWindow).mock.invocationCallOrder[0]).toBeLessThan(
+      prompt.confirm.mock.invocationCallOrder[0]
+    )
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('ui:quitAndStopAllSessions')
+    expect(state.pendingQuitAndStopAllSessions.matches(MAIN_WEB_CONTENTS_ID)).toBe(true)
+    expect(electron.quit).not.toHaveBeenCalled()
+  })
+
+  it('opens a window when none is open and queues the request for its renderer', async () => {
+    Object.assign(state, { mainWindow: null })
+    const opened = fakeMainWindow()
+    setMainWindowOpener(() => {
+      Object.assign(state, { mainWindow: opened })
+      return state.mainWindow ?? expect.unreachable()
+    })
+    prompt.confirm.mockImplementation(async (showMessageBox) => {
+      await showMessageBox({ message: 'confirm' })
+      return true
+    })
+
+    quitAndStopAllSessionsFromUserCommand()
+    await flushPromptChain()
+
+    expect(electron.showMessageBox).toHaveBeenCalledWith({ message: 'confirm' })
+    expect(opened.webContents.send).toHaveBeenCalledWith('ui:quitAndStopAllSessions')
+    expect(state.pendingQuitAndStopAllSessions.matches(MAIN_WEB_CONTENTS_ID)).toBe(true)
+  })
+
+  it('lets a request nobody consumed expire', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const confirmedAt = Date.now()
     prompt.confirm.mockResolvedValue(true)
 
     quitAndStopAllSessionsFromUserCommand()
     await flushPromptChain()
 
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('ui:quitAndStopAllSessions')
+    vi.setSystemTime(confirmedAt + 29_000)
     expect(state.pendingQuitAndStopAllSessions.matches(MAIN_WEB_CONTENTS_ID)).toBe(true)
-    expect(electron.quit).not.toHaveBeenCalled()
+    vi.setSystemTime(confirmedAt + 31_000)
+    expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(false)
   })
 
   it('leaves Orca and its sessions alone when the user cancels', async () => {
@@ -80,23 +130,27 @@ describe('quitAndStopAllSessionsFromUserCommand', () => {
     quitAndStopAllSessionsFromUserCommand()
     await flushPromptChain()
 
+    expect(prompt.confirm).toHaveBeenCalledOnce()
     expect(mainWindow.webContents.send).not.toHaveBeenCalled()
     expect(state.pendingQuitAndStopAllSessions.matches(MAIN_WEB_CONTENTS_ID)).toBe(false)
   })
 
-  it('shows one confirmation at a time', async () => {
-    let answer: (confirmed: boolean) => void = () => {}
-    prompt.confirm.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+  it('shows one confirmation at a time, and a new one after it closes', async () => {
+    const answer = Promise.withResolvers<boolean>()
+    prompt.confirm.mockReturnValueOnce(answer.promise).mockResolvedValue(false)
 
     quitAndStopAllSessionsFromUserCommand()
     quitAndStopAllSessionsFromUserCommand()
-    answer(false)
+    answer.resolve(false)
     await flushPromptChain()
-
     expect(prompt.confirm).toHaveBeenCalledOnce()
+
+    quitAndStopAllSessionsFromUserCommand()
+    await flushPromptChain()
+    expect(prompt.confirm).toHaveBeenCalledTimes(2)
   })
 
-  it('never stops the sessions of a serve host, which belong to its paired clients', async () => {
+  it('never stops the sessions of a serve host, whose user Quit does not exit', async () => {
     state.isServeMode = true
 
     quitAndStopAllSessionsFromUserCommand()
@@ -109,20 +163,16 @@ describe('quitAndStopAllSessionsFromUserCommand', () => {
 
 describe('quitAfterRendererStoppedAllSessions', () => {
   beforeEach(async () => {
-    electron.quit.mockReset()
-    prompt.confirm.mockReset().mockResolvedValue(true)
-    state.isQuitting = false
-    state.isServeMode = false
-    state.pendingQuitAndStopAllSessions.clear()
-    Object.assign(state, { mainWindow: fakeMainWindow() })
+    prompt.confirm.mockResolvedValue(true)
     quitAndStopAllSessionsFromUserCommand()
     await flushPromptChain()
   })
 
-  it('quits once the renderer that consumed the request reports every session stopped', () => {
+  it('quits once when the renderer that consumed the request reports every session stopped', () => {
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(false)
 
+    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
     quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
 
     expect(electron.quit).toHaveBeenCalledOnce()
@@ -144,8 +194,9 @@ describe('getSystemTrayOptions', () => {
   })
 
   it('offers Quit and Stop All Sessions on a desktop app only', () => {
-    state.isServeMode = false
-    expect(getSystemTrayOptions()?.onQuitAndStopAllSessions).toBeTypeOf('function')
+    expect(getSystemTrayOptions()?.onQuitAndStopAllSessions).toBe(
+      quitAndStopAllSessionsFromUserCommand
+    )
 
     state.isServeMode = true
     expect(getSystemTrayOptions()?.onQuitAndStopAllSessions).toBeUndefined()
