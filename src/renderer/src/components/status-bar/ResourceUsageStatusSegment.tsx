@@ -90,6 +90,7 @@ export function ResourceUsageStatusSegment({
         iconOnly,
         commitToneClass,
         memBadgeLabel,
+        totalCpu,
         triggerSessionCount,
         orphanCount,
         resourceManagerTooltipLines

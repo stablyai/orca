@@ -1,10 +1,11 @@
 import React from 'react'
-import { AlertTriangle, MemoryStick, Terminal } from 'lucide-react'
+import { AlertTriangle, Cpu, MemoryStick, Terminal } from 'lucide-react'
 import { PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
+import { formatCpu } from './resource-usage-metrics'
 
 export function renderResourceUsageStatusTrigger({
   daemonUnreachable,
@@ -13,6 +14,7 @@ export function renderResourceUsageStatusTrigger({
   iconOnly,
   commitToneClass,
   memBadgeLabel,
+  totalCpu,
   triggerSessionCount,
   orphanCount,
   resourceManagerTooltipLines
@@ -23,6 +25,7 @@ export function renderResourceUsageStatusTrigger({
   iconOnly: boolean
   commitToneClass: string | null
   memBadgeLabel: string
+  totalCpu: number
   triggerSessionCount: number
   orphanCount: number
   resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
@@ -63,6 +66,11 @@ export function renderResourceUsageStatusTrigger({
                   )}
                 >
                   {memBadgeLabel}
+                </span>
+                <span className="text-muted-foreground/50">·</span>
+                <Cpu className="size-3 text-muted-foreground" />
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {formatCpu(totalCpu)}
                 </span>
                 <span className="text-muted-foreground/50">·</span>
                 <Terminal className="size-3 text-muted-foreground" />
