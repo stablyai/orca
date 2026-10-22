@@ -54,6 +54,7 @@
     "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
     "markdown-it": "^14.3.2",
+    "markdown-it-cjk-friendly": "^2.0.3",
     "markdown-it-footnote": "^4.0.0",
     "mermaid": "11.17.2",
     "react": "19.2.8",
