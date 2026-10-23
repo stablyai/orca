@@ -12764,6 +12764,11 @@
           "failed": "Re-pair failed",
           "descriptionShareComputer": "{{name}} 不再接受此电脑。请在 {{name}} 上打开 设置 → 远程 Orca 服务器 → 共享此电脑，为另一个 Orca 创建链接，然后粘贴到这里。"
         },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "编辑器按键绑定",
+          "1b23c01cc6": "默认",
+          "77674e2d1e": "Vim"
+        },
         "usageCredentialHost": {
           "outdated": "请更新 {{host}} 上的 Orca，才能将此密钥保存在那里。",
           "unreachable": "无法连接 {{host}}，因此不确定那里是否已保存密钥。",

@@ -79,3 +79,43 @@ describe('buildShortcutRowVisibility', () => {
     ])
   })
 })
+
+describe('buildShortcutRowVisibility editor status', () => {
+  function quickOpenGroup(): ShortcutGroup {
+    const definition = getKeybindingDefinition('worktree.quickOpen')
+    if (!definition) {
+      throw new Error('Missing keybinding definition: worktree.quickOpen')
+    }
+    return { title: 'Global', items: [definition] }
+  }
+
+  it('flags rows the Emacs preset takes over only while the preset is on', () => {
+    const groups = [quickOpenGroup()]
+    const off = buildShortcutRowVisibility({ ...baseOptions, groups, platform: 'linux' })
+    expect(off.shortcutRows[0]?.editorStatus).toBeUndefined()
+
+    const emacsOnLinux = buildShortcutRowVisibility({
+      ...baseOptions,
+      groups,
+      platform: 'linux',
+      editorKeybindings: 'emacs'
+    })
+    expect(emacsOnLinux.shortcutRows[0]?.editorStatus?.label).toBe('Emacs editor')
+
+    // Cmd+P on macOS is not an Emacs chord, so the badge stays off there.
+    const emacsOnMac = buildShortcutRowVisibility({
+      ...baseOptions,
+      groups,
+      editorKeybindings: 'emacs'
+    })
+    expect(emacsOnMac.shortcutRows[0]?.editorStatus).toBeUndefined()
+
+    const vim = buildShortcutRowVisibility({
+      ...baseOptions,
+      groups,
+      platform: 'linux',
+      editorKeybindings: 'vim'
+    })
+    expect(vim.shortcutRows[0]?.editorStatus).toBeUndefined()
+  })
+})

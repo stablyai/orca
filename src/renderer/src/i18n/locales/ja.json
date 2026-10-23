@@ -12764,6 +12764,11 @@
           "failed": "Re-pair failed",
           "descriptionShareComputer": "{{name}} はこのコンピューターを受け付けなくなりました。{{name}} で「設定 → リモート Orca サーバー → このコンピューターを共有」を開き、別の Orca 用のリンクを作成してここに貼り付けてください。"
         },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "エディターのキーバインド",
+          "1b23c01cc6": "デフォルト",
+          "77674e2d1e": "Vim"
+        },
         "usageCredentialHost": {
           "outdated": "このキーを {{host}} に保存するには、そのホストの Orca を更新してください。",
           "unreachable": "{{host}} に接続できないため、キーが保存されているかどうかは不明です。",

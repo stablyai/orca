@@ -77,6 +77,7 @@ export function ShortcutRowsList({
                 error={errors[row.item.id]}
                 warnings={row.warnings}
                 terminalStatus={row.terminalStatus}
+                editorStatus={row.editorStatus}
                 previousBindings={disableMemory[row.item.id] ?? EMPTY_BINDINGS}
                 recordingBindingIndex={
                   recordingActionId === row.item.id ? recordingBindingIndex : null

@@ -1,11 +1,8 @@
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { activateWorkspaceTab } from '@/lib/activate-workspace-tab'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { dedupeTabOrder } from '../../../shared/workspace-layout/tab-order'
 import type { Tab } from '../../../shared/tab-types'
-import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 
 type TabNumberShortcutState = Pick<
   AppState,
@@ -55,49 +52,5 @@ export function resolveTabNumberShortcutTarget(
 export function activateTabNumberShortcut(index: number): boolean {
   const store = useAppStore.getState()
   const target = resolveTabNumberShortcutTarget(store, index)
-  if (!target) {
-    return false
-  }
-
-  const worktreeId = target.worktreeId
-  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
-  store.focusGroup(worktreeId, target.groupId)
-  store.activateTab(target.id)
-
-  if (target.contentType === 'terminal') {
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-      void activateWebRuntimeSessionTab({
-        worktreeId,
-        tabId: target.entityId,
-        environmentId: runtimeEnvironmentId
-      })
-    }
-    store.setActiveTab(target.entityId)
-    store.setActiveTabType('terminal', worktreeId)
-    focusTerminalTabSurface(target.entityId)
-    return true
-  }
-
-  if (target.contentType === 'browser') {
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-      void activateWebRuntimeSessionTab({
-        worktreeId,
-        tabId: target.id,
-        environmentId: runtimeEnvironmentId
-      })
-    }
-    store.setActiveBrowserTab(target.entityId)
-    store.setActiveTabType('browser', worktreeId)
-    return true
-  }
-
-  if (target.contentType === 'simulator') {
-    store.setActiveTab(target.id)
-    store.setActiveTabType('simulator', worktreeId)
-    return true
-  }
-
-  store.setActiveFile(target.entityId)
-  store.setActiveTabType('editor', worktreeId)
-  return true
+  return target ? activateWorkspaceTab(store, target) : false
 }

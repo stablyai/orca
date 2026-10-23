@@ -8992,6 +8992,8 @@
           "38e86e206a": "Customize shortcuts visually or edit",
           "47f8f7aef9": "Keyboard Shortcuts",
           "f0b35b0b2e": "Disabled while a terminal or TUI has keyboard focus.",
+          "6d2e8b4a1f": "Emacs editor",
+          "9c4f1e7b3d": "Inactive while the file editor has keyboard focus and the Emacs preset is on.",
           "5c65d5db9d": "Terminal first",
           "dfa8ff612f": "Also runs while a terminal or TUI has keyboard focus.",
           "2a0e8aeccf": "Orca first",
@@ -13109,6 +13111,13 @@
           "failed": "Re-pair failed",
           "descriptionShareComputer": "{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this computer, create a link for another Orca, then paste it here."
         },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "Editor Keybindings",
+          "1b23c01cc6": "Default",
+          "77674e2d1e": "Vim",
+          "8b3d6e0f2c": "Emacs",
+          "4f1e9c2a7d": "Use Vim modal or Emacs keybindings in the code editor instead of standard editing."
+        },
         "usageCredentialHost": {
           "outdated": "Update Orca on {{host}} to save this key there.",
           "unreachable": "Could not reach {{host}}, so whether a key is saved there is unknown.",
@@ -16777,6 +16786,40 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "VimCheatsheet": {
+          "title": "Vim command reference",
+          "triggerLabel": "Vim commands",
+          "groupModes": "Modes",
+          "cmdInsert": "Insert before / after the cursor",
+          "cmdOpenLine": "Open a new line below / above",
+          "cmdVisual": "Character / line visual selection",
+          "cmdNormal": "Return to normal mode",
+          "groupMotions": "Move",
+          "cmdArrows": "Left, down, up, right",
+          "cmdWord": "Next / previous / end of word",
+          "cmdLineEnds": "Start, first non-blank, end of line",
+          "cmdFileEnds": "Top / bottom of file",
+          "cmdFindChar": "Jump to / before a character",
+          "cmdMatchPair": "Jump to matching bracket",
+          "groupEdit": "Edit",
+          "cmdDeleteChar": "Delete the character",
+          "cmdDelete": "Delete line / word",
+          "cmdChange": "Change line / word",
+          "cmdYankPaste": "Yank line / paste",
+          "cmdIndent": "Indent / outdent line",
+          "cmdUndoRedo": "Undo / redo",
+          "cmdRepeat": "Repeat the last change",
+          "groupSearch": "Search & command",
+          "cmdSearch": "Search forward / back, next / previous",
+          "cmdSearchWord": "Search word under cursor",
+          "cmdSubstitute": "Substitute (no live preview)",
+          "cmdWrite": "Save the file",
+          "unsupported": "Not supported: gd (go-to-definition), :%s live-preview highlighting, and Backspace replay inside a recorded macro.",
+          "cmdMacro": "Record / replay a macro",
+          "cmdWriteQuit": "Save and close",
+          "cmdQuit": "Close the editor",
+          "cmdSet": "Line numbers, wrap, tab width"
         }
       },
       "diff": {

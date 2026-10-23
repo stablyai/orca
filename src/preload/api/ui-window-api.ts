@@ -52,6 +52,7 @@ export type UiWindowApi = {
   setZoomLevel: (level: number) => void
   syncTrafficLights: (zoomFactor: number) => void
   setMarkdownEditorFocused: (focused: boolean) => void
+  setEditorKeymapFocused: (focused: boolean) => void
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
   markPlainTextContextMenuTarget: () => void
   setTerminalInputFocused: (focused: boolean) => void

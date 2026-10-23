@@ -4,7 +4,9 @@ import {
   type KeybindingOverrides,
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
+import type { EditorKeybindingsPreset } from '../../../../shared/editor-keybindings-preset'
 import { hasOwnBindingOverride } from './keybinding-override-edits'
+import { getShortcutEditorStatus } from './shortcut-editor-status'
 import type { ShortcutGroup } from './shortcut-groups'
 import { getShortcutTerminalStatus } from './shortcut-terminal-status'
 import {
@@ -21,6 +23,7 @@ export function buildShortcutRowVisibility(options: {
   keybindings: KeybindingOverrides
   conflictByAction: Map<KeybindingActionId, string[]>
   terminalShortcutPolicy: TerminalShortcutPolicy
+  editorKeybindings?: EditorKeybindingsPreset
   platform: NodeJS.Platform
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
@@ -60,6 +63,12 @@ export function buildShortcutRowVisibility(options: {
             item,
             options.terminalShortcutPolicy,
             effective.length > 0
+          ),
+          editorStatus: getShortcutEditorStatus(
+            item,
+            options.editorKeybindings,
+            options.platform,
+            options.keybindings
           )
         }
       })

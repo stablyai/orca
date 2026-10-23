@@ -1,5 +1,4 @@
 import type { Tab } from '../../../shared/tab-types'
-import type { KeybindingContext } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -70,8 +69,4 @@ export function isPinnedEditorFileTab(
   )
 }
 
-export function getKeybindingContext(target: EventTarget | null): KeybindingContext {
-  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
-    ? 'terminal'
-    : 'app'
-}
+export { getKeybindingContext } from '@/lib/keybinding-context'

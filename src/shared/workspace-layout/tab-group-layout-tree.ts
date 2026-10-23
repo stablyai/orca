@@ -189,3 +189,14 @@ export function moveGroupLeafBesideBranch(
   const rest = removeGroupLayoutLeaf(root, groupId)
   return rest && besideBranch(rest)
 }
+
+/** Leaf group ids in reading order (first child before second): the order `C-x o` walks. */
+export function collectLayoutLeafGroupIds(node: TabGroupLayoutNode | undefined): string[] {
+  if (!node) {
+    return []
+  }
+  if (node.type === 'leaf') {
+    return [node.groupId]
+  }
+  return [...collectLayoutLeafGroupIds(node.first), ...collectLayoutLeafGroupIds(node.second)]
+}

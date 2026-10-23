@@ -1,4 +1,5 @@
 import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
+import { monacoEditorEsmAlias, toAliasList } from './config/build-plugins/monaco-editor-esm-alias'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -24,11 +25,14 @@ export default defineConfig({
     ORCA_BUILD_COMMIT: JSON.stringify(resolveBuildSourceCommit())
   },
   resolve: {
-    alias: {
-      ...markdownParserAliases,
-      '@renderer': resolve('src/renderer/src'),
-      '@': resolve('src/renderer/src')
-    }
+    alias: toAliasList(
+      {
+        ...markdownParserAliases,
+        '@renderer': resolve('src/renderer/src'),
+        '@': resolve('src/renderer/src')
+      },
+      monacoEditorEsmAlias
+    )
   },
   build: {
     outDir: resolve('out/web'),
