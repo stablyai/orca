@@ -31,6 +31,7 @@ export type LinearIssueListRow =
       key: string
       label: string
       count: number
+      collapsed: boolean
     }
   | {
       type: 'issue'
