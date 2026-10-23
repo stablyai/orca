@@ -9,6 +9,7 @@ import type {
   AutomationRun
 } from '../../../shared/automations-types'
 import type { AgentStateHistoryEntry, AgentStatusEntry } from '../../../shared/agent-status-types'
+import { agentMainAgentVerdict } from '../../../shared/agent-main-agent-verdict'
 import type { AgentTurnOutcome } from '../../../shared/agent-turn-outcome'
 import {
   getAgentStateHistoryOverlap,
@@ -66,9 +67,7 @@ export function createAutomationDispatchCompletion(args: {
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
         precheckResult: args.precheckResult,
-        error: failedOutcome
-          ? `Automation structured session turn ended with ${failedOutcome}.`
-          : null
+        error: failedOutcome ? `Automation agent turn ended with ${failedOutcome}.` : null
       })
     } catch (error) {
       args.releaseTerminalOwnership()
@@ -221,14 +220,15 @@ export function createAutomationDispatchCompletion(args: {
           historicalState.state === 'done' &&
           (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
         ) {
-          if (historicalState.mainAgent?.outcome === 'unconfirmed') {
+          const historicalVerdict = agentMainAgentVerdict(historicalState)
+          if (historicalVerdict === 'unconfirmed') {
             continue
           }
           // Why: this `done` already rolled out of the live entry, so its output
           // survives only in the entry-level completed slot.
           latestAssistantMessage =
             entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
-          handleAgentDone(historicalState.mainAgent?.outcome)
+          handleAgentDone(historicalVerdict ?? undefined)
           return
         }
       }
@@ -244,11 +244,12 @@ export function createAutomationDispatchCompletion(args: {
         entry.sessionBoundary !== true &&
         (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
       ) {
-        if (entry.mainAgent?.outcome === 'unconfirmed') {
+        const liveVerdict = agentMainAgentVerdict(entry)
+        if (liveVerdict === 'unconfirmed') {
           return
         }
         latestAssistantMessage = entry.lastAssistantMessage?.trim() || latestAssistantMessage
-        handleAgentDone(entry.mainAgent?.outcome)
+        handleAgentDone(liveVerdict ?? undefined)
       }
     }
     // Why: Codex/Claude completion normally arrives through the global

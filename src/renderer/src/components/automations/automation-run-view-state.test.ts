@@ -110,6 +110,8 @@ describe('automation run view state', () => {
     const structuredRun = makeRun({
       sessionKind: 'structured',
       chatSessionId: 'sess-1',
+      terminalSessionId: null,
+      terminalPaneKey: null,
       terminalPtyId: null
     })
     expect(
@@ -134,7 +136,19 @@ describe('automation run view state', () => {
     ).toMatchObject({
       availability: 'terminal',
       actionLabel: 'View run',
-      statusLabel: 'Run terminal is on the paired server.',
+      statusLabel: 'Run chat is on the paired server.',
+      canOpen: true
+    })
+    expect(
+      getAutomationRunViewState({
+        run: structuredRun,
+        workspaceExists: true,
+        terminalTargetExists: false
+      })
+    ).toMatchObject({
+      availability: 'terminal',
+      actionLabel: 'View run',
+      statusLabel: 'Run chat is unavailable.',
       canOpen: true
     })
   })

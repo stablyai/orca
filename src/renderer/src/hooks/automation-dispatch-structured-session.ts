@@ -21,6 +21,10 @@ import type {
   AutomationPrecheckResult,
   AutomationRun
 } from '../../../shared/automations-types'
+import {
+  agentMainAgentVerdict,
+  type AgentMainAgentVerdictSource
+} from '../../../shared/agent-main-agent-verdict'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { createAutomationDispatchCompletion } from './automation-dispatch-completion'
 
@@ -148,15 +152,16 @@ export async function tryDispatchReusableAutomationSession(args: {
   if (hasExtraAgentArgs(automation.extraAgentArgs)) {
     return false
   }
+  // Why: the dispatch loop only ever executes for the desktop authority,
+  // so its history read addresses the local runtime explicitly.
+  const runs = await listAutomationRunsForTarget({ kind: 'local' }, automation.id)
   const storeState = useAppStore.getState()
   const reusableSession = findReusableAutomationSession({
     automationId: automation.id,
     agentId: automation.agentId,
     worktreeId: worktree.id,
     currentRunId: run.id,
-    // Why: the dispatch loop only ever executes for the desktop authority,
-    // so its history read addresses the local runtime explicitly.
-    runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
+    runs,
     state: storeState
   })
   if (
@@ -185,16 +190,13 @@ export async function tryDispatchReusableAutomationSession(args: {
       return false
     }
     let reuseSawWorking = false
-    const handleReusableAgentStatus = (payload: {
-      state: string
-      mainAgent?: { outcome?: Parameters<typeof completion.handleAgentDone>[0] }
-    }): void => {
+    const handleReusableAgentStatus = (payload: AgentMainAgentVerdictSource): void => {
       if (payload.state === 'working') {
         reuseSawWorking = true
         return
       }
       if (payload.state === 'done' && reuseSawWorking) {
-        completion.handleAgentDone(payload.mainAgent?.outcome)
+        completion.handleAgentDone(agentMainAgentVerdict(payload) ?? undefined)
       }
     }
     const reuseCompletionStartedAt = Date.now()

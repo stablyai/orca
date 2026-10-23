@@ -3,6 +3,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 import { useAppStore } from '@/store'
 import { captureWorkspaceSelection, restoreWorkspaceSelection } from '@/lib/active-workspace-host'
+import { agentMainAgentVerdict } from '../../../shared/agent-main-agent-verdict'
 import { hasExtraAgentArgs } from '../../../shared/automation-extra-agent-args'
 import type {
   AutomationDispatchRequest,
@@ -141,7 +142,7 @@ export async function handleAutomationDispatchRequest({
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
-        completion.handleAgentDone(payload.mainAgent?.outcome)
+        completion.handleAgentDone(agentMainAgentVerdict(payload) ?? undefined)
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)

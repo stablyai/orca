@@ -4,18 +4,24 @@ const {
   mockMarkDispatchResult,
   mockCreateWorktree,
   mockLaunchAgentBackgroundSession,
+  mockListAutomationRunsForTarget,
   mockFindReusableAutomationSession,
   mockPlanAgentSessionLaunch,
   mockBeginStructuredProvisionalLaunch,
-  mockSendMessageToAgent
+  mockSendMessageToAgent,
+  mockSubmitPromptToAgentPty,
+  mockObserveExistingAutomationSession
 } = vi.hoisted(() => ({
   mockMarkDispatchResult: vi.fn(),
   mockCreateWorktree: vi.fn(),
   mockLaunchAgentBackgroundSession: vi.fn(),
+  mockListAutomationRunsForTarget: vi.fn().mockResolvedValue([]),
   mockFindReusableAutomationSession: vi.fn(),
   mockPlanAgentSessionLaunch: vi.fn(),
   mockBeginStructuredProvisionalLaunch: vi.fn(),
-  mockSendMessageToAgent: vi.fn()
+  mockSendMessageToAgent: vi.fn(),
+  mockSubmitPromptToAgentPty: vi.fn().mockResolvedValue(true),
+  mockObserveExistingAutomationSession: vi.fn().mockResolvedValue(() => {})
 }))
 
 let latestStoreSubscriber: (() => void) | null = null
@@ -60,7 +66,15 @@ vi.mock('@/lib/browser-uuid', () => ({
 }))
 
 vi.mock('@/components/automations/automation-host-client', () => ({
-  listAutomationRunsForTarget: vi.fn().mockResolvedValue([])
+  listAutomationRunsForTarget: mockListAutomationRunsForTarget
+}))
+
+vi.mock('@/lib/agent-paste-draft', () => ({
+  submitPromptToAgentPty: mockSubmitPromptToAgentPty
+}))
+
+vi.mock('@/lib/automation-session-observer', () => ({
+  observeExistingAutomationSession: mockObserveExistingAutomationSession
 }))
 
 vi.mock('@/lib/launch-agent-background-session', () => ({
@@ -83,7 +97,12 @@ vi.mock('@/lib/agent-message-send', () => ({
   sendMessageToAgent: mockSendMessageToAgent
 }))
 
+import type * as AutomationSessionReuseModule from '@/lib/automation-session-reuse'
+import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
 import { handleAutomationDispatchRequest } from './automation-dispatch-handler'
+import { tryDispatchReusableAutomationSession } from './automation-dispatch-structured-session'
+import { resolveAgentStatusLiveEntryMainAgent } from '../store/slices/agent-status-live-entry-main-agent'
+import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../shared/agent-status-live-entry-state-history'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
@@ -91,6 +110,9 @@ import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-
 describe('automation dispatch structured chat session', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockListAutomationRunsForTarget.mockResolvedValue([])
+    mockSubmitPromptToAgentPty.mockResolvedValue(true)
+    mockObserveExistingAutomationSession.mockResolvedValue(() => {})
     latestStoreSubscriber = null
     state.settings = { experimentalNativeChat: true }
     state.agentStatusByPaneKey = {}
@@ -451,7 +473,7 @@ describe('automation dispatch structured chat session', () => {
           expect.objectContaining({
             runId: `run-${outcome}`,
             status: 'dispatch_failed',
-            error: `Automation structured session turn ended with ${outcome}.`
+            error: `Automation agent turn ended with ${outcome}.`
           })
         )
       )
@@ -647,6 +669,169 @@ describe('automation dispatch structured chat session', () => {
       if (outcome !== 'success') {
         expect(finalize).not.toHaveBeenCalled()
       }
+    }
+  )
+
+  it.each(['stays-idle', 'becomes-busy', 'chat-disabled'] as const)(
+    'reads fresh store state after awaiting run history for session reuse (%s)',
+    async (change) => {
+      const { findReusableAutomationSession: realFindReusableAutomationSession } =
+        await vi.importActual<typeof AutomationSessionReuseModule>('@/lib/automation-session-reuse')
+      mockFindReusableAutomationSession.mockImplementation(realFindReusableAutomationSession)
+
+      const structured = change === 'chat-disabled'
+      const tabId = structured ? 'structured-agent-session-sess-1' : `tab-${change}`
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      const paneKey = `${tabId}:${leafId}`
+      const idleStatus = {
+        state: 'done' as const,
+        agentType: 'claude' as const,
+        paneKey,
+        prompt: 'previous',
+        updatedAt: 10,
+        stateStartedAt: 10,
+        stateHistory: []
+      }
+      state.settings = { experimentalNativeChat: true }
+      state.agentStatusByPaneKey = { [paneKey]: idleStatus }
+      state.ptyIdsByTabId = { [tabId]: ['pty-1'] }
+      state.terminalLayoutsByTabId = { [tabId]: { ptyIdsByLeafId: { [leafId]: 'pty-1' } } }
+      state.unifiedTabsByWorktree = {
+        'wt-1': [
+          {
+            id: tabId,
+            contentType: structured ? 'agent-session' : 'terminal',
+            entityId: structured ? 'sess-1' : tabId
+          }
+        ]
+      }
+
+      let finishHistory: ((runs: unknown[]) => void) | undefined
+      mockListAutomationRunsForTarget.mockReturnValue(
+        new Promise((resolve) => {
+          finishHistory = resolve
+        })
+      )
+      mockSendMessageToAgent.mockResolvedValue({ status: 'sent' })
+
+      let releaseTab = () => {}
+      const completion = {
+        setReuseDispatchTabRelease: (fn: () => void) => {
+          releaseTab = fn
+        },
+        cleanupRunObservers: () => releaseTab(),
+        observeAgentStatus: vi.fn(),
+        setSessionObserver: vi.fn(),
+        settlePendingAfterDispatch: vi.fn(async () => {}),
+        appendOutput: vi.fn(),
+        handleExit: vi.fn(),
+        handleAgentDone: vi.fn(),
+        captureAssistantMessage: vi.fn()
+      }
+
+      const promise = tryDispatchReusableAutomationSession({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these automation fields are read by tryDispatchReusableAutomationSession.
+        automation: { id: 'auto-1', agentId: 'claude', prompt: 'automation input' } as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only run.id is read.
+        run: { id: 'current' } as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only worktree.id and displayName are read.
+        worktree: { id: 'wt-1', displayName: 'Workspace' } as never,
+        precheckResult: null,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test stub provides all completion methods used by reuse dispatch.
+        completion: completion as never,
+        markDispatchResult: vi.fn(async () => {})
+      })
+
+      if (change === 'becomes-busy') {
+        state.agentStatusByPaneKey = {
+          [paneKey]: {
+            ...idleStatus,
+            state: 'working',
+            prompt: 'user task',
+            updatedAt: 20,
+            stateStartedAt: 20
+          }
+        }
+      }
+      if (change === 'chat-disabled') {
+        state.settings = { experimentalNativeChat: false }
+      }
+
+      finishHistory?.([
+        {
+          id: 'old',
+          automationId: 'auto-1',
+          workspaceId: 'wt-1',
+          status: 'completed',
+          sessionKind: structured ? 'structured' : 'terminal',
+          chatSessionId: structured ? 'sess-1' : null,
+          terminalSessionId: tabId,
+          terminalPaneKey: paneKey,
+          terminalPtyId: structured ? null : 'pty-1',
+          createdAt: 1,
+          dispatchedAt: 1
+        }
+      ])
+
+      const reused = await promise
+      releaseTab()
+      expect(reused).toBe(change === 'stays-idle')
+      if (change !== 'stays-idle') {
+        expect(mockSubmitPromptToAgentPty).not.toHaveBeenCalled()
+        expect(mockSendMessageToAgent).not.toHaveBeenCalled()
+      }
+    }
+  )
+
+  it.each(['live-cancel', 'history-cancel', 'legacy-done'] as const)(
+    'honors legacy interrupted wire verdict through agentMainAgentVerdict (%s)',
+    async (kind) => {
+      const payload = normalizeAgentStatusPayload({
+        state: 'done',
+        prompt: 'job',
+        agentType: 'claude',
+        ...(kind !== 'legacy-done' ? { interrupted: true } : {})
+      })!
+      const mainAgent = resolveAgentStatusLiveEntryMainAgent(undefined, payload, 'claude')
+      const doneEntry = {
+        ...payload,
+        paneKey: 'pane-legacy',
+        stateStartedAt: 200,
+        updatedAt: 200,
+        stateHistory: [],
+        mainAgent,
+        lastAssistantMessage: 'Turn output'
+      }
+      let entry: Record<string, unknown> = doneEntry
+      if (kind === 'history-cancel') {
+        const next = resolveAgentStatusLiveEntryStateHistory(doneEntry, { state: 'working' }, 300)
+        entry = {
+          state: 'working',
+          prompt: 'next',
+          paneKey: 'pane-legacy',
+          updatedAt: 300,
+          stateStartedAt: 300,
+          stateHistory: next.history,
+          lastCompletedAssistantMessage: next.lastCompletedAssistantMessage
+        }
+      }
+      state.agentStatusByPaneKey = { 'pane-legacy': entry }
+      const writes: { status: string }[] = []
+      const completion = createAutomationDispatchCompletion({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only run.id is read.
+        run: { id: `run-${kind}` } as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only worktree.id and displayName are read.
+        worktree: { id: 'wt-1', displayName: 'Workspace' } as never,
+        precheckResult: null,
+        markDispatchResult: async (result) => {
+          writes.push(result)
+        },
+        releaseTerminalOwnership: () => {},
+        finalizeTerminalOwnership: async () => null
+      })
+      completion.observeAgentStatus('pane-legacy', 100)
+      await completion.settlePendingAfterDispatch()
+      expect(writes[0]?.status).toBe(kind === 'legacy-done' ? 'completed' : 'dispatch_failed')
     }
   )
 })

@@ -82,7 +82,9 @@ export function getAutomationRunViewState({
     return {
       availability: 'terminal',
       actionLabel: 'View run',
-      statusLabel: 'Run terminal is on the paired server.',
+      statusLabel: hasStructuredIdentity
+        ? 'Run chat is on the paired server.'
+        : 'Run terminal is on the paired server.',
       canOpen: true
     }
   }
@@ -91,7 +93,9 @@ export function getAutomationRunViewState({
     return {
       availability: 'terminal',
       actionLabel: 'View run',
-      statusLabel: 'Run terminal is unavailable.',
+      statusLabel: hasStructuredIdentity
+        ? 'Run chat is unavailable.'
+        : 'Run terminal is unavailable.',
       canOpen: true
     }
   }
