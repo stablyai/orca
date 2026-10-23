@@ -6606,7 +6606,7 @@
           "running": "运行中",
           "stopped": "已停止",
           "title": "添加 WSL 发行版",
-          "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。请将其用于新项目；通过 \\\\wsl.localhost 打开的项目会照常工作。",
+          "description": "Orca 在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。通过 \\\\wsl.localhost 打开的项目会照常工作，直到你将它们移到此主机。",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",

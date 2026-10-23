@@ -128,6 +128,29 @@ describe('rows, counts and blockers', () => {
     ).toEqual({ projects: 2, workspaces: 3, terminals: 2, chats: 1 })
   })
 
+  it('counts terminal panes, as the blockers do, not terminal tabs', () => {
+    // "Terminals: 5" sat next to "7 terminals are running a program" (D1b-10 run on awin).
+    const split: WslMoveCatalog = {
+      ...catalog,
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: LEAF },
+            second: { type: 'leaf', leafId: 'other-leaf' }
+          }
+        }
+      }
+    }
+    expect(
+      wslMoveCounts(split, [
+        { kind: 'repo', id: 'api' },
+        { kind: 'folder', id: 'notes' }
+      ]).terminals
+    ).toBe(3)
+  })
+
   it('maps a pane blocker to the selected project that holds it, and ignores run ids', () => {
     const selected = [
       { kind: 'repo' as const, id: 'api' },

@@ -175,7 +175,9 @@ export async function prepareWslMove(
     if (settleInterrupted && (await resetForUnregisteredDistro(deps, request))) {
       return refusal('wsl_move_host_unavailable', { detail: 'distro_unregistered' })
     }
-    throw error
+    // Nothing is recorded yet, so a host that will not connect is the user's to fix, not a failure.
+    console.warn('[wsl-move] The host did not connect:', error)
+    return refusal('wsl_move_host_unavailable', { detail: 'connect_failed' })
   }
   if (!host) {
     if (settleInterrupted && (await resetForUnregisteredDistro(deps, request))) {

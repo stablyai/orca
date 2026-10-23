@@ -6894,7 +6894,7 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "description": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Use it for new projects; projects you opened through \\\\wsl.localhost keep working as they are.",
+          "description": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects you opened through \\\\wsl.localhost keep working as they are until you move them to this host.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",

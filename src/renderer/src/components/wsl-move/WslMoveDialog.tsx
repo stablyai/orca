@@ -45,7 +45,8 @@ function useMoveCatalog(): WslMoveCatalog {
       repos: state.repos,
       folderWorkspaces: state.folderWorkspaces,
       worktreesByRepo: state.worktreesByRepo,
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId
     }))
   )
 }

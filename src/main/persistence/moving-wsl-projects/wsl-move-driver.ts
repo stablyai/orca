@@ -26,6 +26,7 @@ import {
   withSleptSnapshots,
   type WslMoveSleptScrollback
 } from './wsl-move-slept-scrollback'
+import { reportWslMoveRunEnd } from './wsl-move-driver-run-end'
 import {
   exportRequestOf,
   isWslMoveScopeChanged,
@@ -96,14 +97,12 @@ export async function moveProjectsToWslHost(
     return refusal('wsl_move_already_running')
   }
   const migrationId = deps.newMigrationId()
-  try {
-    return await runMove(deps, request, migrationId, running)
-  } catch (error) {
-    // Anything unforeseen: back to zero without the host, which never resets a possible commit.
-    return putBack(deps, null, migrationId, describe(error))
-  } finally {
-    releaseWslMoveRun(request.distro, running)
-  }
+  // Anything unforeseen: back to zero without the host, which never resets a possible commit.
+  return reportWslMoveRunEnd(deps, request.distro, (tracked) =>
+    runMove(tracked, request, migrationId, running)
+      .catch((error: unknown) => putBack(tracked, null, migrationId, describe(error)))
+      .finally(() => releaseWslMoveRun(request.distro, running))
+  )
 }
 
 async function runMove(
