@@ -57,6 +57,8 @@ import {
 import { buildWslMoveShellHistoryBlobs } from '../persistence/moving-wsl-projects/wsl-move-shell-history-blobs'
 import { inspectPtyProviderProcessForRenderer } from '../providers/pty-process-inspection'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { getTrustedUIRendererWebContents } from './ui'
+import { registerWslMoveHandlers } from './wsl-move-handlers'
 import {
   commitRemoteOrcadMigrationCatalog,
   listRemoteOrcadRepositories,
@@ -74,6 +76,15 @@ import { tryGetProviderForPty } from './pty/provider/registry'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from './ui'
 import { registerWslMoveHandlers } from './wsl-move-handlers'
+
+/** The move's IPC handlers; its driver reads every move dependency from this module. */
+export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
+  registerWslMoveHandlers(
+    () => app.getPath('userData'),
+    (senderId) => getTrustedUIRendererWebContents()?.id === senderId,
+    () => createWslMoveDriverDeps(store, runtime)
+  )
+}
 
 /** The move's IPC handlers; its driver reads every move dependency from this module. */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
