@@ -1,4 +1,5 @@
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
+import { buildWindowsScrubSafeEnvRestoreLines } from '../../shared/agent-hook-scrub-safe-env'
 import {
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue
@@ -31,6 +32,7 @@ export function buildWindowsGrokHookScript(): string {
     // value on the curl line is then eaten as a delayed reference — silently mangling
     // paneKey and dropping worktreeId. `!` is legal in a Windows path.
     'setlocal DisableDelayedExpansion',
+    ...buildWindowsScrubSafeEnvRestoreLines(),
     'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
     ...buildWindowsHookEnvironmentGuardLines(),
     'set "ORCA_GROK_HOME="',

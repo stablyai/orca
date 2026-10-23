@@ -6,12 +6,17 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
+import {
+  buildPosixScrubSafeEnvRestoreLines,
+  buildWindowsScrubSafeEnvRestoreLines
+} from '../../shared/agent-hook-scrub-safe-env'
 
 export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
+      ...buildWindowsScrubSafeEnvRestoreLines(),
       // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
@@ -24,6 +29,9 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
+    // Why first: a harness that scrubs KEY/TOKEN-named env drops ORCA_PANE_KEY, and a hook
+    // with no pane to attribute to exits without posting (see agent-hook-scrub-safe-env.ts).
+    ...buildPosixScrubSafeEnvRestoreLines(),
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('codex'),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).

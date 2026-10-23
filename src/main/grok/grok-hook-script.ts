@@ -1,5 +1,6 @@
 import { getSharedManagedScriptPath, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
 import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { buildPosixScrubSafeEnvRestoreLines } from '../../shared/agent-hook-scrub-safe-env'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -32,6 +33,9 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
 
   return [
     '#!/bin/sh',
+    // Why first: a harness that scrubs KEY/TOKEN-named env drops ORCA_PANE_KEY, and a hook
+    // with no pane to attribute to exits without posting (see agent-hook-scrub-safe-env.ts).
+    ...buildPosixScrubSafeEnvRestoreLines(),
     ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_JSON_STDIN),
     ...buildPosixHookSpoolLines('grok'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',

@@ -5,6 +5,10 @@ import {
   buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/hook-stdin-contract'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
+import {
+  buildPosixScrubSafeEnvRestoreLines,
+  buildWindowsScrubSafeEnvRestoreLines
+} from '../../shared/agent-hook-scrub-safe-env'
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -16,6 +20,7 @@ export function getManagedScript(
       // Why (#9358/#9941): inherited delayed expansion eats `!` out of the percent-expanded
       // curl args, mangling paneKey and dropping worktreeId. `!` is legal in a Windows path.
       'setlocal DisableDelayedExpansion',
+      ...buildWindowsScrubSafeEnvRestoreLines(),
       'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
       '  echo {"decision":""}',
       ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
@@ -36,6 +41,9 @@ export function getManagedScript(
 
   return [
     '#!/bin/sh',
+    // Why first: a harness that scrubs KEY/TOKEN-named env drops ORCA_PANE_KEY, and a hook
+    // with no pane to attribute to exits without posting (see agent-hook-scrub-safe-env.ts).
+    ...buildPosixScrubSafeEnvRestoreLines(),
     'case "$ORCA_ANTIGRAVITY_EVENT" in',
     '  Stop)',
     '    printf \'{"decision":""}\\n\'',
@@ -88,6 +96,7 @@ export function getWindowsWrapperScript(eventName: string): string {
     // eats it out of the percent-expanded `%~dp0` — the wrapper then misses the core and
     // silently falls back on every event. Same reason the core disables it.
     'setlocal DisableDelayedExpansion',
+    ...buildWindowsScrubSafeEnvRestoreLines(),
     `set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`,
     'set "ORCA_ANTIGRAVITY_CORE=%~dp0antigravity-hook.cmd"',
     'if exist "%ORCA_ANTIGRAVITY_CORE%" (',
