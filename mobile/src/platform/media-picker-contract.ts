@@ -22,6 +22,9 @@ export type PickedMobileImage = {
   // Local file URI of the picked asset — used only to render a composer preview
   // thumbnail (the host upload uses `base64`); absent when the source can't supply one.
   readonly uri?: string
+  // Original file name when picked from the Files app so non-image terminal
+  // attachments preserve their extension on the host temp file.
+  readonly fileName?: string
 }
 
 /** Any file from the phone's file picker, read whole for the chat attachment upload. */

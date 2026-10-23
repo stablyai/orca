@@ -37,7 +37,8 @@ export const SaveImageAsTempFile = z.object({
     MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
     CLIPBOARD_IMAGE_TOO_LARGE_ERROR
   ),
-  connectionId: z.string().min(1).nullable().optional()
+  connectionId: z.string().min(1).nullable().optional(),
+  fileName: z.string().min(1).max(255).nullable().optional()
 })
 
 export const StartImageUpload = z.object({
@@ -46,7 +47,8 @@ export const StartImageUpload = z.object({
     .int()
     .nonnegative()
     .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
-  connectionId: z.string().min(1).nullable().optional()
+  connectionId: z.string().min(1).nullable().optional(),
+  fileName: z.string().min(1).max(255).nullable().optional()
 })
 
 export const AppendImageUploadChunk = z.object({

@@ -155,20 +155,41 @@ describe('pickMobileImage', () => {
   it('reads a picked file URI into base64 for the files source', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4])
     const file = fileFactory(bytes)
+    const launchFiles = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///doc.png', size: bytes.length }]
+    })
+
+    const result = await pickMobileImage('files', {
+      launchFiles,
+      createFile: file.createFile
+    })
+
+    expect(launchFiles).toHaveBeenCalledWith(expect.objectContaining({ type: '*/*' }))
+    expect(result).toEqual({
+      base64: Buffer.from(bytes).toString('base64'),
+      uri: 'file:///doc.png'
+    })
+    expect(file.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves the picked file name when provided by the document picker', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    const file = fileFactory(bytes)
 
     const result = await pickMobileImage('files', {
       launchFiles: vi.fn().mockResolvedValue({
         canceled: false,
-        assets: [{ uri: 'file:///doc.png', size: bytes.length }]
+        assets: [{ uri: 'file:///book.txt', name: '柴静-看见.txt', size: bytes.length }]
       }),
       createFile: file.createFile
     })
 
     expect(result).toEqual({
       base64: Buffer.from(bytes).toString('base64'),
-      uri: 'file:///doc.png'
+      uri: 'file:///book.txt',
+      fileName: '柴静-看见.txt'
     })
-    expect(file.close).toHaveBeenCalledTimes(1)
   })
 
   it('returns null when the files picker is cancelled', async () => {

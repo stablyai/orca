@@ -10,6 +10,7 @@ import { nativeChatPasteFolder } from './native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {
   connectionId?: string | null
+  fileName?: string | null
   runtimeEnvironmentId?: string | null
   /** With `runtimeEnvironmentId`: store the image as an attachment of this structured chat. */
   agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
@@ -20,13 +21,36 @@ export type SaveClipboardImageAsTempFileArgs = {
   forStructuredChat?: boolean
 }
 
+const MAX_SANITIZED_FILE_NAME_CHARS = 120
+
+function sanitizeTempAttachmentFileName(rawName: string | null | undefined): string | null {
+  if (!rawName) {
+    return null
+  }
+  const baseName = rawName.trim().split(/[/\\]/).pop() ?? ''
+  const cleaned = baseName.replace(/[\p{Cc}<>:"/\\|?*]+/gu, '_').replace(/^[.\s]+|[.\s]+$/g, '')
+  if (!cleaned) {
+    return null
+  }
+  const ext = path.posix.extname(cleaned)
+  const stem = ext ? cleaned.slice(0, -ext.length) : cleaned
+  if (!stem) {
+    return null
+  }
+  const boundedStem = stem.slice(0, Math.max(1, MAX_SANITIZED_FILE_NAME_CHARS - ext.length))
+  return ext ? `${boundedStem}${ext}` : `${boundedStem}.png`
+}
+
 export async function saveClipboardImageBufferAsTempFile(
   buffer: Buffer,
   args?: SaveClipboardImageAsTempFileArgs
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
 
-  const fileName = `orca-paste-${Date.now()}-${randomUUID()}.png`
+  const sanitizedFileName = sanitizeTempAttachmentFileName(args?.fileName)
+  const fileName = sanitizedFileName
+    ? `orca-paste-${Date.now()}-${randomUUID()}-${sanitizedFileName}`
+    : `orca-paste-${Date.now()}-${randomUUID()}.png`
 
   if (args?.connectionId) {
     throw new SshHostNotServedError(args.connectionId)

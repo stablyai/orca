@@ -113,7 +113,7 @@ async function* pickFromFiles(
   createFile: MobileImageFileFactory = defaultMobileImageFileFactory
 ): AsyncGenerator<PickedMobileImage> {
   const result = await launch({
-    type: 'image/*',
+    type: '*/*',
     multiple,
     copyToCacheDirectory: true
   })
@@ -126,7 +126,12 @@ async function* pickFromFiles(
     }
     const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
     if (base64) {
-      yield { base64, uri: asset.uri }
+      const fileName = asset.name?.trim()
+      yield {
+        base64,
+        uri: asset.uri,
+        ...(fileName ? { fileName } : {})
+      }
     }
   }
 }

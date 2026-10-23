@@ -46,7 +46,8 @@ export async function attachMobileImageToTerminal(
   onUploadStart?.()
   const connectionId = await getConnectionId()
   const imagePath = await saveMobileClipboardImageAsTempFile(client, picked.base64, {
-    connectionId
+    connectionId,
+    ...(picked.fileName ? { fileName: picked.fileName } : {})
   })
   // Why: a generated image path is terminal image injection, so it's always
   // bracketed (matching desktop paste) regardless of terminal mode.
