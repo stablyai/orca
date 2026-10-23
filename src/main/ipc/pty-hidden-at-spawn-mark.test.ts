@@ -97,8 +97,8 @@ describe('registerPtyHandlers', () => {
           sessionId: 'daemon-session',
           initiallyHidden: true
         }) as Promise<{ id: string }>
-        // Let the handler run up to the awaited provider.spawn.
-        await Promise.resolve()
+        // The hidden mark must precede the provider, regardless of preparation awaits.
+        await vi.waitFor(() => expect(daemon.spawn).toHaveBeenCalledOnce())
         mainWindow.webContents.send.mockClear()
 
         // Daemon PTYs can emit prompt bytes before spawn() resolves, so the pre-spawn mark must already gate them.

@@ -12,7 +12,7 @@ export function markRuntimeSpawnHiddenBeforeSpawn(ctx: RuntimePtySpawnState): vo
   // Why only fresh sessions: a reattached session id may already back a visible pane.
   if (
     ctx.args.initiallyHidden !== true ||
-    !ctx.isNewDaemonSession ||
+    !ctx.ownsNewIncarnation ||
     ctx.effectiveSessionAppId === undefined
   ) {
     return

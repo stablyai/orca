@@ -5,6 +5,7 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 
 const contracts = [
+  'src/main/ipc/pty-spawn-scaling.performance.test.ts',
   'src/main/sqlite/sync-database.test.ts',
   'src/main/runtime/orchestration/db/row-column-lists.test.ts',
   'src/shared/native-chat-tool-attribution-allocation.test.ts',

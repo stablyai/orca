@@ -6,7 +6,7 @@ import { track } from '../../telemetry/client'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { agentKindSchema } from '../../../shared/telemetry-events'
 import { normalizeNodePtySpawnError } from './provider/liveness'
-import { ptySizes } from './delivery/visibility-state'
+import { restoreProvisionalPtySize, type PtySpawnSizeSeed } from './spawn-options-assembly'
 import { clearProviderPtyState } from './provider/state-cleanup'
 
 /** What both spawn lanes' execute step claims before the provider call, under the same names. */
@@ -14,8 +14,7 @@ type PtySpawnExecuteState = {
   deps: { runtime?: OrcaRuntimeService }
   isClaudeLaunch: boolean
   effectiveSessionAppId: string | undefined
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
+  provisionalPtySize: PtySpawnSizeSeed | undefined
   preparedProvisionalExecutionContext: boolean
   pendingRegistrationPtyId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim
@@ -28,7 +27,7 @@ export function failPtySpawnExecute(
   err: unknown,
   lane: {
     sessionId: string | undefined
-    /** This spawn minted the session id, so the state built for it must go. */
+    /** This start owns the new incarnation, including a fresh process using a supplied id. */
     ownsNewSession: boolean
     telemetry: { agent_kind?: unknown } | undefined
     /** This request awaited another request's claimed start, whose own catch records its failure. */
@@ -54,17 +53,12 @@ export function failPtySpawnExecute(
   }
   const spawnError = normalizeNodePtySpawnError(err)
   const exitedBeforeSpawnReply = ctx.rejectedRegistrationCandidate?.exitedBeforeSpawnReply === true
-  if (ctx.effectiveSessionAppId !== undefined) {
-    if (ctx.hadSessionSizeBeforeAttach && ctx.sessionSizeBeforeAttach && !exitedBeforeSpawnReply) {
-      ptySizes.set(ctx.effectiveSessionAppId, ctx.sessionSizeBeforeAttach)
-    } else {
-      ptySizes.delete(ctx.effectiveSessionAppId)
-    }
-  }
-  // Why: provider state the env build materialized for this minted id leaks if spawn failed.
+  // Preparation for an unaccepted new incarnation must not leak into a later start.
   if (lane.ownsNewSession && lane.sessionId !== undefined) {
     clearProviderPtyState(lane.sessionId)
   }
+  // Restore the pre-start grid after teardown, which also clears its provisional cache entry.
+  restoreProvisionalPtySize(ctx, { exitedBeforeSpawnReply })
   // Why: telemetry-plan.md§agent_error — attribute the error to the threaded agent_kind, else sniff the command for `claude`; raw messages are dropped at the validator boundary.
   const threadedKind =
     lane.telemetry?.agent_kind !== undefined

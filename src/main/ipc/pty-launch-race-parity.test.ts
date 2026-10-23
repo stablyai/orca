@@ -1,3 +1,7 @@
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { TerminalCreateOptions } from '../runtime/runtime-terminal-contracts'
+import { registerPtyHandlers } from './pty/register-handlers'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import { launchWorkspaceId } from '../../shared/launch-parity-window-request.test-fixture'
 import { POSIX_PATH } from '../../shared/launch-parity-window-cases.test-fixture'
 import { statSyncMock } from './pty-ipc-mock-registry'
@@ -18,6 +22,7 @@ import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../runtime/worktree-terminals
 import { RestoredPaneStarter } from '../runtime/terminal/recovery/restored-pane-start'
 import {
   LAUNCH_RACE_LANES,
+  createPaneBindingStore,
   createLaunchRaceRuntime,
   gatedClaudeAuth,
   launchRacePane,
@@ -89,6 +94,281 @@ describe('launch race parity, both spawn lanes', () => {
   const suite = setupPtyIpcSuite()
   const { handlers, mainWindow, installDaemonTestProvider } = suite
 
+  it.each([
+    { winner: 'producer', surface: 'existing' },
+    { winner: 'producer', surface: 'new' },
+    { winner: 'window', surface: 'existing' },
+    { winner: 'producer', surface: 'successor' }
+  ])(
+    '$winner registration exit crosses the real producer/admission barrier ($surface)',
+    async ({ winner, surface }) => {
+      const pane = launchRacePane(
+        `cross-${winner}-${surface}`,
+        '94949494-9494-4494-8494-949494949494'
+      )
+      const store = Object.assign(createPaneBindingStore(), { getSettings: () => ({}) })
+      const runtime = new OrcaRuntimeService()
+      Object.assign(runtime, {
+        store,
+        resolveTerminalWorkspaceLaunchScope: async () => ({
+          id: pane.worktreeId,
+          path: pane.args.cwd,
+          connectionId: null
+        }),
+        resolveAgentTerminalCreateOptions: async (
+          _workspace: unknown,
+          opts: TerminalCreateOptions
+        ) => opts,
+        resolveWorkspaceTerminalStartupCwd: () => pane.args.cwd
+      })
+      // SAFETY: the handler fixture supplies window ports; only the real mutable session and binding store are used.
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const admission = {
+        type: 'createTerminalTab',
+        workspace: pane.worktreeId,
+        tabId: pane.tabId,
+        leafId: pane.leafId
+      } as const
+      if (surface !== 'new') {
+        runtime.attachWindow(1)
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: pane.tabId,
+              worktreeId: pane.worktreeId,
+              title: 'terminal',
+              activeLeafId: pane.leafId,
+              layout: null
+            }
+          ],
+          leaves: [
+            {
+              tabId: pane.tabId,
+              worktreeId: pane.worktreeId,
+              leafId: pane.leafId,
+              paneRuntimeId: 1,
+              ptyId: null
+            }
+          ]
+        })
+        await store.admitTerminalPane(admission)
+      }
+      let release!: () => void
+      const gate = new Promise<void>((done) => {
+        release = done
+      })
+      const spawn = vi.fn(async () => {
+        await gate
+        return {
+          id: 'cross-exited',
+          incarnationId: 'cross-inc',
+          snapshot: 'final output',
+          snapshotKittyKeyboardFlags: 3
+        }
+      })
+      installDaemonTestProvider({ spawn })
+      vi.spyOn(runtime, 'registerPty').mockImplementation(() => {
+        throw new Error('agent_session_exited_during_start')
+      })
+      vi.spyOn(runtime, 'getPtyLivenessVerdict').mockReturnValue({ status: 'exited' })
+      const withdraw = vi.spyOn(store, 'withdrawTerminalPane')
+      const windowStart = () => Promise.resolve(handlers.get('pty:spawn')!(null, pane.args))
+      const producerStart = () =>
+        runtime.createTerminal(`id:${pane.worktreeId}`, { tabId: pane.tabId, leafId: pane.leafId })
+      const first = winner === 'producer' ? producerStart() : windowStart()
+      const firstObserved = first.catch((error: unknown) => error)
+      await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+      const joined = vi.spyOn(paneSpawnReservations, 'joinPaneSpawn')
+      onTestFinished(() => joined.mockRestore())
+      const second = winner === 'producer' ? windowStart() : producerStart()
+      const secondObserved = second.catch((error: unknown) => error)
+      const key = paneSpawnReservations.makePaneSpawnReservationKey(
+        pane.worktreeId,
+        null,
+        makePaneKey(pane.tabId, pane.leafId)
+      )!
+      const canonical = paneSpawnReservations.paneSpawnReservationsByOwnerKey.get(key)!
+      if (winner === 'producer') {
+        const pending = paneSpawnReservations.pendingRuntimePaneCreatesByOwnerKey.get(key)!
+        const barrier = pending.promise
+        const waiting = vi.fn(() => barrier)
+        Object.defineProperty(pending, 'promise', { configurable: true, get: waiting })
+        await vi.waitFor(() => expect(waiting).toHaveBeenCalled())
+      } else {
+        await vi.waitFor(() => expect(joined).toHaveBeenCalledOnce())
+      }
+      if (surface === 'successor') {
+        const mutate = store.runDurableMutation.bind(store)
+        vi.spyOn(store, 'runDurableMutation').mockImplementation(async (write) => {
+          const value = await mutate(write)
+          if (!store.getWorkspaceSession().terminalLayoutsByTabId[pane.tabId]) {
+            await store.admitTerminalPane(admission)
+            await store.persistPtyBinding({
+              worktreeId: pane.worktreeId,
+              tabId: pane.tabId,
+              leafId: pane.leafId,
+              ptyId: 'successor',
+              incarnationId: 'successor-inc'
+            })
+          }
+          return value
+        })
+      }
+      release()
+      const [firstResult, secondResult] = await Promise.all([firstObserved, secondObserved])
+      const host = winner === 'producer' ? firstResult : secondResult
+      const window = winner === 'producer' ? secondResult : firstResult
+      expect(canonical.outcome?.kind).toBe('registration-exited')
+      expect(canonical.outcome?.result).not.toHaveProperty('isReattach')
+      expect(host).toMatchObject({ message: 'agent_session_exited_during_start' })
+      if (surface === 'existing') {
+        expect(window).toMatchObject({
+          id: 'cross-exited',
+          snapshot: 'final output',
+          snapshotKittyKeyboardFlags: undefined,
+          ...(winner === 'producer' ? { isReattach: true } : {})
+        })
+        if (winner === 'window') {
+          expect(window).not.toHaveProperty('isReattach')
+        }
+      } else {
+        expect(window).toMatchObject({ message: 'terminal_pane_owner_changed' })
+      }
+      expect(spawn).toHaveBeenCalledOnce()
+      if (surface === 'new') {
+        expect(withdraw).toHaveBeenCalledOnce()
+        expect(store.getWorkspaceSession().terminalLayoutsByTabId[pane.tabId]).toBeUndefined()
+      }
+      clearProviderPtyState('cross-exited')
+    }
+  )
+  it('restores a persisted window owner without imposing the runtime handle requirement', async () => {
+    const pane = launchRacePane('restore-no-handle', '95959595-9595-4595-8595-959595959595')
+    const id = 'persisted-no-handle'
+    const store = createPaneBindingStore()
+    await store.admitTerminalPane({
+      type: 'createTerminalTab',
+      workspace: pane.worktreeId,
+      tabId: pane.tabId,
+      leafId: pane.leafId
+    })
+    await store.persistPtyBinding({
+      worktreeId: pane.worktreeId,
+      tabId: pane.tabId,
+      leafId: pane.leafId,
+      ptyId: id
+    })
+    const runtime = createLaunchRaceRuntime({
+      resolveTerminalPane: vi.fn(() => {
+        throw new Error('terminal_not_found')
+      })
+    })
+    installDaemonTestProvider({ spawn: vi.fn(async () => ({ id, isReattach: true })) })
+    const lanes = registerLaunchRaceLanes({ handlers, mainWindow, runtime, store })
+    await expect(lanes.spawn.runtime(pane.args)).rejects.toThrow('terminal_pane_owner_unknown')
+    await expect(lanes.spawn.ipc(pane.args)).resolves.toMatchObject({ id, isReattach: true })
+    clearProviderPtyState(id)
+  })
+  it.each(LAUNCH_RACE_LANES)(
+    '%s lane: auth failure before geometry acquisition preserves the existing grid',
+    async (lane) => {
+      const id = `pre-seed-auth-${lane}`
+      const cached = { cols: 180, rows: 50 }
+      ptySizes.set(id, cached)
+      onTestFinished(() => {
+        ptySizes.delete(id)
+      })
+      const spawn = vi.fn()
+      installDaemonTestProvider({ spawn })
+      const prepareClaudeAuth = vi.fn(async () => {
+        throw new Error('auth unavailable')
+      })
+      const lanes = registerLaunchRaceLanes({
+        handlers,
+        mainWindow,
+        runtime: createLaunchRaceRuntime(),
+        prepareClaudeAuth
+      })
+      await expect(
+        lanes.spawn[lane]({ cols: 80, rows: 24, sessionId: id, command: 'claude' })
+      ).rejects.toThrow('auth unavailable')
+      expect(prepareClaudeAuth).toHaveBeenCalledOnce()
+      expect(spawn).not.toHaveBeenCalled()
+      expect(ptySizes.get(id)).toEqual(cached)
+    }
+  )
+
+  it('runtime joins known pane coordinates without workspace before auth preparation', async () => {
+    const id = 'no-workspace-winner'
+    let release!: () => void
+    const gate = new Promise<void>((done) => {
+      release = done
+    })
+    const spawn = vi.fn(async () => {
+      await gate
+      return { id }
+    })
+    installDaemonTestProvider({ spawn })
+    const auth = vi.fn(async () => {
+      throw new Error('duplicate auth')
+    })
+    const lanes = registerLaunchRaceLanes({
+      handlers,
+      mainWindow,
+      runtime: createLaunchRaceRuntime(),
+      prepareClaudeAuth: auth
+    })
+    const args = {
+      cols: 80,
+      rows: 24,
+      tabId: 'tab-no-workspace',
+      leafId: '96969696-9696-4696-8696-969696969696'
+    }
+    const winner = lanes.spawn.runtime(args)
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
+    const joining = vi.spyOn(paneSpawnReservations, 'joinPaneSpawn')
+    onTestFinished(() => joining.mockRestore())
+    const joiner = lanes.spawn.runtime({ ...args, command: 'claude' })
+    const observed = joiner.catch((error: unknown) => error)
+    try {
+      await vi.waitFor(() => expect(joining).toHaveBeenCalledOnce())
+    } finally {
+      release()
+    }
+    await expect(winner).resolves.toMatchObject({ id })
+    await expect(observed).resolves.toMatchObject({ id })
+    expect(auth).not.toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledOnce()
+    clearProviderPtyState(id)
+  })
+
+  it('seeds a fresh same-id incarnation before provider byte zero and restores a failed start', async () => {
+    const id = 'fresh-same-id-grid'
+    const old = { cols: 91, rows: 31 }
+    ptySizes.set(id, old)
+    const spawn = vi.fn(async () => {
+      expect(ptySizes.get(id)).toEqual({ cols: 132, rows: 45 })
+      throw new Error('provider refused')
+    })
+    installDaemonTestProvider({ spawn })
+    const lanes = registerLaunchRaceLanes({
+      handlers,
+      mainWindow,
+      runtime: createLaunchRaceRuntime()
+    })
+    await expect(
+      lanes.spawn.runtime({ cols: 132, rows: 45, sessionId: id, isNewSession: true })
+    ).rejects.toThrow('provider refused')
+    expect(ptySizes.get(id)).toEqual(old)
+    ptySizes.delete(id)
+  })
   it('allows fallback for an unreadable request without healing its saved folder or mobile snapshot', async () => {
     setMainPlatform('darwin')
     onTestFinished(restoreMainPlatform)
@@ -224,7 +504,11 @@ describe('launch race parity, both spawn lanes', () => {
         leafId: pane.leafId
       })
       const automatic = lanes.spawn
-        .runtime({ ...pane.args, refuseSleptWorktree: true })
+        .runtime({
+          ...pane.args,
+          refuseSleptWorktree: true,
+          paneSpawnOperation: { mustExist: false }
+        })
         .finally(release)
       await vi.waitFor(() => expect(lock.acquireWorktreeTerminalSpawn).toHaveBeenCalledOnce())
       const mount = lanes.spawn.ipc(pane.args)

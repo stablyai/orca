@@ -37,7 +37,7 @@ function makeCtx(args: PtySpawnIpcArgs, runtime: ReturnType<typeof makeRuntime>)
   ctx.effectiveSessionId = SESSION_ID
   ctx.effectiveSessionAppId = SESSION_ID
   // Mirrors spawn-preflight: a caller-supplied sessionId is an attach, never a fresh mint.
-  ctx.isMintedSessionId = args.sessionId === undefined
+  ctx.ownsNewIncarnation = args.sessionId === undefined
   return ctx
 }
 

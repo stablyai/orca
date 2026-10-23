@@ -211,6 +211,14 @@ export async function spawnInAdmittedPane(
           startStatus?.keepOnFailure
         )
   } catch (error) {
+    if (
+      admittedAs === 'admitted' &&
+      !startStatus?.keepOnFailure &&
+      !(error instanceof PaneOwnerContentionError) &&
+      args.paneSpawnOperation?.acquisition
+    ) {
+      args.paneSpawnOperation.acquisition.surfaceWithdrawn = true
+    }
     // A pane that stays (kept to show the failure, or one main already held) shows why; one
     // closed while it started is gone, and one another owner won attaches to the winner.
     if (

@@ -17,6 +17,7 @@ import {
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 import { admitProviderReattachLaunchIdentity } from './launch-authority'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
+import { provenSpawnResponse } from '../spawn-outcome'
 import { ptySizes } from '../delivery/visibility-state'
 import {
   resolveCommittedPtySize,
@@ -129,18 +130,23 @@ export async function completePaneAdoption(
         providerReattachLaunchIdentity: admitProviderReattachLaunchIdentity(result) ?? undefined
       }
     )
+    const response = provenSpawnResponse(
+      result,
+      beforeReconcile <= beforeAttach ? snapshotSeq : undefined
+    )
     if (rejected) {
       try {
         await rejected
       } catch (error) {
-        if (
-          !args.renderer ||
-          !(error instanceof Error) ||
-          error.message !== 'agent_session_exited_during_start'
-        ) {
+        if (!(error instanceof Error) || error.message !== 'agent_session_exited_during_start') {
           throw error
         }
-        return { result, owner, materialized: true as const }
+        return {
+          result: response,
+          outcome: { kind: 'registration-exited' as const, result: response },
+          owner,
+          materialized: true as const
+        }
       }
     }
     runtime?.noteTerminalSpawnCommit?.(result)
@@ -176,12 +182,8 @@ export async function completePaneAdoption(
       pendingPtyIdBySerializerGeneration.set(pending.gen, result.id)
     }
     return {
-      result: {
-        ...result,
-        ...(typeof snapshotSeq === 'number' && beforeReconcile <= beforeAttach
-          ? { snapshotSeq }
-          : { snapshotKittyKeyboardFlags: undefined })
-      },
+      result: response,
+      outcome: { kind: 'adopted' as const, result: response },
       owner: { ...owner, ...(terminalHandle ? { handle: terminalHandle } : {}) },
       materialized: true as const
     }

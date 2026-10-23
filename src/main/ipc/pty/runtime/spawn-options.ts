@@ -75,7 +75,7 @@ export async function buildRuntimePtySpawnOptions(
     prevalidatedCwd: ctx.prevalidatedCwd,
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
-    isNewSession: ctx.isNewDaemonSession,
+    isNewSession: ctx.ownsNewIncarnation,
     codexRuntime: ctx.codexSelectionTarget.runtime,
     expectedWslDistro: ctx.expectedWslDistro,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
@@ -92,18 +92,16 @@ export async function buildRuntimePtySpawnOptions(
   ctx.spawnOptions = launch.spawnOptions
   ctx.env = launch.env
   ctx.launchCommand = launch.launchCommand
-  const seeded = seedPtySpawnSize({
+  ctx.provisionalPtySize = seedPtySpawnSize({
     sessionId: ctx.sessionId,
     sessionAppId: ctx.effectiveSessionAppId,
-    isFreshSessionId: ctx.isNewDaemonSession,
+    isFreshSessionId: ctx.ownsNewIncarnation,
     // Why false: runtime callers (CLI, headless serve) have no hidden pane to report, so a
     // cached size is the only source that can outrank their requested grid here.
     requestIsUnmeasured: false,
     cols: args.cols,
     rows: args.rows
   })
-  ctx.hadSessionSizeBeforeAttach = seeded.hadSessionSizeBeforeAttach
-  ctx.sessionSizeBeforeAttach = seeded.sessionSizeBeforeAttach
   if (
     !ctx.preAdoptedStablePane &&
     args.agentSessionEnsure &&
@@ -153,15 +151,7 @@ export async function buildRuntimePtySpawnOptions(
   ctx.stablePaneBindingPersisted = false
   ctx.rejectedRegistrationCandidate = null
   ctx.pendingRegistrationPtyId = null
-  // Why hoisted to the reply scope: main reconciles the provider sequence
-  // deep inside the spawn path, but the pane needs that renderer-domain
-  // boundary beside the daemon snapshot's kitty flags.
-  ctx.reconciledSnapshotSeq = null
-  // False when bytes crossed the data socket during the spawn RPC: the
-  // reconciled boundary covers them, but the daemon proved its kitty flags
-  // before they existed, so the claim must not erase what the pane may
-  // have scanned from those bytes live.
-  ctx.snapshotKittyFlagsCoverReconciledSeq = true
+  ctx.provedSnapshotSeq = undefined
   ctx.preparedProvisionalExecutionContext = false
 
   return null

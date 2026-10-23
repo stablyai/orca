@@ -1,66 +1,56 @@
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { spawnWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { ptyIncarnationById } from '../provider/ownership-state'
-import { tryGetProviderForPty } from '../provider/registry'
-import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
-import { noteWslDistrosRunning } from '../../../wsl-background-distro-gate'
+import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import { ptyIncarnationById } from './provider/ownership-state'
+import { tryGetProviderForPty } from './provider/registry'
+import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
+import { noteWslDistrosRunning } from '../../wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
   reconcileAgentSessionOwnerListings
-} from '../pane/agent-session-owners'
-import { resolveStablePaneOwner } from '../pane/stable-owner'
+} from './pane/agent-session-owners'
+import { resolveStablePaneOwner } from './pane/stable-owner'
 import {
   assertPaneStillExists,
   excludeAbsentOwnerReplay,
   PaneOwnerContentionError
-} from '../pane/pane-spawn-operation'
-import { isProviderAgentSessionOwnerLive } from '../provider/liveness'
-import { failPtySpawnExecute } from '../spawn-execute-failure'
-import type { RuntimePtySpawnState } from './spawn-state'
-import { markRuntimeSpawnHiddenBeforeSpawn } from './spawn-hidden-delivery'
+} from './pane/pane-spawn-operation'
+import { isProviderAgentSessionOwnerLive } from './provider/liveness'
+import { failPtySpawnExecute } from './spawn-execute-failure'
+import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
+import { excludeReplacedPaneOwner } from './pane/replaced-pane-owner'
+import { attachViewWithoutOwner } from './pane/attach-only-view'
 
-export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise<void> {
+export async function executePtySpawn(
+  ctx: PtySpawnOperationState,
+  facts: PtySpawnExecutionFacts
+): Promise<void> {
   const args = ctx.args
-  const runtime = ctx.deps.runtime
-  const acquireWorktreeSpawn = runtime?.acquireWorktreeTerminalSpawn
-  ctx.releaseWorktreeSpawn = acquireWorktreeSpawn
-    ? await acquireWorktreeSpawn.call(
-        runtime,
-        spawnWorktreeTarget(args.worktreeId, args.connectionId),
-        {
-          refuseSleptWorktree: args.refuseSleptWorktree,
-          // A pre-adopted stable pane attaches to its live owner, not a new terminal.
-          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
-          requireAttachOnly: () => {
-            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
-          }
-        }
-      )
-    : undefined
   let awaitingAnotherStart = false
   try {
-    if (args.preAllocatedHandle) {
-      ctx.deps.trustedTerminalHandleEnv.add(args.preAllocatedHandle)
+    if (facts.preAllocatedHandle) {
+      ctx.deps.trustedTerminalHandleEnv.add(facts.preAllocatedHandle)
     }
     const stablePaneOwnerCandidate = ctx.preAdoptedStablePane
       ? ctx.preAdoptedStablePane.owner
       : args.agentSessionEnsure
         ? null
         : excludeAbsentOwnerReplay(
-            resolveStablePaneOwner(
-              ctx.deps.runtime,
-              ctx.deps.store,
-              ctx.spawnIdentityPaneKey,
-              args.worktreeId,
-              args.connectionId
+            excludeReplacedPaneOwner(
+              resolveStablePaneOwner(
+                ctx.deps.runtime,
+                ctx.deps.store,
+                facts.paneKey,
+                args.worktreeId,
+                args.connectionId
+              ),
+              facts.replacedPaneOwner ?? null
             ),
-            args.paneSpawnOperation?.absentOwner
+            ctx.paneSpawnOperation?.absentOwner
           )
     if (stablePaneOwnerCandidate) {
       throw new PaneOwnerContentionError()
     }
-    if (args.paneSpawnOperation?.mustExist && args.worktreeId && args.tabId && args.leafId) {
+    if (ctx.paneSpawnOperation?.mustExist && args.worktreeId && args.tabId && args.leafId) {
       assertPaneStillExists(
         ctx.deps.store,
         args.worktreeId,
@@ -69,9 +59,9 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         args.connectionId
       )
     }
-    const expectedPtyId = ctx.effectiveSessionAppId ?? ctx.sessionId
+    const expectedPtyId = ctx.effectiveSessionAppId ?? facts.sessionId
     if (!stablePaneOwnerCandidate) {
-      markRuntimeSpawnHiddenBeforeSpawn(ctx)
+      facts.beforeProviderSpawn?.()
     }
     if (expectedPtyId) {
       ctx.pendingRegistrationClaim = ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
@@ -80,13 +70,14 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
     if (ctx.isDaemonHostSpawn && expectedPtyId) {
       ctx.preparedProvisionalExecutionContext =
         ctx.deps.runtime?.preparePtyExecutionContext?.(expectedPtyId, ctx.expectedWslDistro, {
-          resetIncarnation: ctx.isNewDaemonSession && !stablePaneOwnerCandidate,
-          preserveExisting: !ctx.isNewDaemonSession || Boolean(stablePaneOwnerCandidate)
+          resetIncarnation: ctx.ownsNewIncarnation && !stablePaneOwnerCandidate,
+          preserveExisting: !ctx.ownsNewIncarnation || Boolean(stablePaneOwnerCandidate)
         }) ?? false
     }
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
+    ctx.spawnTiming?.mark('options')
     const assertClientStillConnected = (): void => {
       if (args.signal?.aborted) {
         throw new Error('client_disconnected')
@@ -120,7 +111,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           providerResult = await ctx.provider.spawn(ctx.spawnOptions)
           ctx.rejectedRegistrationCandidate = providerResult
           // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
-          ctx.reportPtySpawnCommitted()
+          facts.reportPtySpawnCommitted?.()
           assertSpawnReplyWasLive(providerResult)
           ctx.deps.runtime?.assertPtyRegistrationAllowed?.(
             providerResult.id,
@@ -165,8 +156,10 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.result.agentSessionEnsure = ensured
     } else {
       assertClientStillConnected()
-      ctx.result = await ctx.provider.spawn(ctx.spawnOptions)
-      ctx.reportPtySpawnCommitted()
+      ctx.result = facts.attachOnlyView
+        ? await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
+        : await ctx.provider.spawn(ctx.spawnOptions)
+      facts.reportPtySpawnCommitted?.()
       ctx.stablePaneOwner = null
       ctx.rejectedRegistrationCandidate = ctx.result
     }
@@ -204,15 +197,17 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       // Why kept: this is the reattach boundary in the RENDERER's sequence
       // domain, and the daemon snapshot's kitty flags mean nothing without
       // the boundary they were proven at.
-      ctx.reconciledSnapshotSeq =
+      const translatedSnapshotSeq =
         ctx.deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
           ctx.result.id,
           ctx.result.providerSequence,
           sequenceBeforeProviderSpawn
         ) ?? null
-      if (runtimeSequenceBeforeReconcile > sequenceBeforeProviderSpawn) {
-        ctx.snapshotKittyFlagsCoverReconciledSeq = false
-      }
+      ctx.provedSnapshotSeq =
+        runtimeSequenceBeforeReconcile <= sequenceBeforeProviderSpawn &&
+        typeof ctx.result.snapshotKittyKeyboardFlags === 'number'
+          ? (translatedSnapshotSeq ?? undefined)
+          : undefined
     }
     ensureWslHookRelayForReattach(ctx.result)
     const spawnedWslDistro =
@@ -222,16 +217,17 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       noteWslDistrosRunning([spawnedWslDistro])
     }
     ctx.deps.runtime?.preparePtyExecutionContext?.(ctx.result.id, spawnedWslDistro)
+    ctx.spawnTiming?.mark('provider_spawn')
   } catch (err) {
     throw failPtySpawnExecute(ctx, err, {
-      sessionId: ctx.sessionId,
-      ownsNewSession: ctx.isNewDaemonSession,
+      sessionId: facts.sessionId,
+      ownsNewSession: ctx.ownsNewIncarnation,
       telemetry: args.telemetry,
       joinedAnotherStart: awaitingAnotherStart
     })
   } finally {
-    if (args.preAllocatedHandle) {
-      ctx.deps.trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
+    if (facts.preAllocatedHandle) {
+      ctx.deps.trustedTerminalHandleEnv.delete(facts.preAllocatedHandle)
     }
   }
 }

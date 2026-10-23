@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { spawnMock, recordCodexPaneAccountMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
@@ -334,6 +335,55 @@ describe('registerPtyHandlers', () => {
     expect(reply.snapshotKittyKeyboardFlags).toBeUndefined()
     expect(reply.snapshotSeq).toBeUndefined()
   })
+  it.each(['interleaved', 'covered', 'zero', 'no-flags'] as const)(
+    'constructs an image response from real runtime sequence evidence: %s',
+    async (proof) => {
+      const id = `image-${proof}`
+      const runtime = new OrcaRuntimeService()
+      const boundary = proof === 'zero' ? 0 : 900
+      runtime.synchronizePtyOutputSequenceFromProvider(id, {
+        value: boundary,
+        generation: 'continued'
+      })
+      const spawn = vi.fn(async () => {
+        if (proof === 'interleaved') {
+          expect(runtime.onPtyData(id, 'NEW', Date.now())).toBe(903)
+        }
+        return {
+          id,
+          isReattach: true,
+          snapshot: 'OLD',
+          providerSequence: { value: boundary, generation: 'continued' as const },
+          ...(proof !== 'no-flags' ? { snapshotKittyKeyboardFlags: 0 } : {})
+        }
+      })
+      setLocalPtyProvider({
+        spawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      registerPtyHandlers(mainWindow as never, runtime)
+      const reply = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, sessionId: id })
+      expect(reply).toMatchObject({ id, snapshot: 'OLD' })
+      if (proof === 'covered' || proof === 'zero') {
+        expect(reply).toHaveProperty('snapshotSeq', boundary)
+      } else {
+        expect(reply).not.toHaveProperty('snapshotSeq')
+      }
+      expect(reply).toHaveProperty(
+        'snapshotKittyKeyboardFlags',
+        proof === 'covered' || proof === 'zero' ? 0 : undefined
+      )
+      expect(runtime.getPtyOutputSequence(id)).toBe(proof === 'interleaved' ? 903 : boundary)
+      expect(spawn).toHaveBeenCalledOnce()
+    }
+  )
   it('records the launch Codex account for a fresh spawn but not for a reattach', async () => {
     const spawn = vi
       .fn()

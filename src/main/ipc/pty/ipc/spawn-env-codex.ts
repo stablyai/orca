@@ -23,7 +23,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     isDaemonHostSpawn: ctx.isDaemonHostSpawn,
     sessionId: ctx.effectiveSessionId,
     callerNamedSession: args.sessionId !== undefined,
-    mintedSessionId: ctx.isMintedSessionId,
+    mintedSessionId: ctx.ownsNewIncarnation,
     resumeOnSelectedAccount: Boolean(args.replacesPtyId),
     emptySessionIdSkipsHostEnv: false,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
