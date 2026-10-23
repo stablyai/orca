@@ -80,6 +80,7 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
 import {
   mockPtyProcess,
+  platformNativePtyCwd,
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   stubMissingDaemonCwd,
   useDaemonPtySubprocessEnv
@@ -144,6 +145,7 @@ describe('createPtySubprocess', () => {
       sessionId: 'canceled-validation',
       cols: 80,
       rows: 24,
+      cwd: platformNativePtyCwd('/tmp/orca-cwd-fixture', 'C:\\orca-cwd-fixture'),
       isCanceled: () => canceled
     })
     await vi.waitFor(() => expect(validateWorkingDirectoryMock).toHaveBeenCalled())
@@ -169,6 +171,7 @@ describe('createPtySubprocess', () => {
           sessionId: 'test',
           cols: 80,
           rows: 24,
+          cwd: platformNativePtyCwd('/tmp/orca-cwd-fixture', 'C:\\orca-cwd-fixture'),
           env: { SHELL: '/bin/bash' },
           onMacosTccSpawnStrategy
         })
