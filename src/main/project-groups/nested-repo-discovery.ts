@@ -84,11 +84,16 @@ export async function scanNestedRepos(args: {
     args.onProgress?.(buildResult('non_git_folder'))
   }
 
-  if (await filesystem.isSelectedPathGitRepo(args.path)) {
+  if (await filesystem.hasGitMarker(args.path)) {
     return buildResult('git_repo')
   }
+  // Why: a plain folder inside a repo (e.g. app dirs cloned under a meta-repo) can hold its own
+  // sibling repos; only fall back to the enclosing repo when none are found.
+  const isInsideEnclosingRepo = await filesystem.isSelectedPathGitRepo(args.path)
+  const buildFinalResult = (): NestedRepoScanResult =>
+    buildResult(isInsideEnclosingRepo && repos.length === 0 ? 'git_repo' : 'non_git_folder')
   if (noteAbort()) {
-    return buildResult('non_git_folder')
+    return buildFinalResult()
   }
 
   const foldersToTraverse: (TraversalFolder | undefined)[] = [
@@ -189,5 +194,5 @@ export async function scanNestedRepos(args: {
     }
   }
 
-  return buildResult('non_git_folder')
+  return buildFinalResult()
 }

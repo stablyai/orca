@@ -382,6 +382,27 @@ describe('scanNestedRepos', () => {
     expect(result.repos).toEqual([])
   })
 
+  it('scans a plain subfolder of an enclosing repo for its own repos', async () => {
+    const directories = new Map([
+      ['/meta/app-a', ['api', 'web']],
+      ['/meta/app-b', ['docs']]
+    ])
+    const filesystem = {
+      ...posixTestFilesystem({
+        directories,
+        gitRepos: new Set(['/meta', '/meta/app-a/api', '/meta/app-a/web'])
+      }),
+      isSelectedPathGitRepo: () => true
+    }
+
+    const withRepos = await scanNestedRepos({ path: '/meta/app-a', filesystem })
+    const withoutRepos = await scanNestedRepos({ path: '/meta/app-b', filesystem })
+
+    expect(withRepos.selectedPathKind).toBe('non_git_folder')
+    expect(withRepos.repos.map((repo) => repo.displayName)).toEqual(['api', 'web'])
+    expect(withoutRepos.selectedPathKind).toBe('git_repo')
+  })
+
   it.skipIf(process.platform === 'win32')(
     'does not follow symlinked directories outside the selected folder',
     async () => {
