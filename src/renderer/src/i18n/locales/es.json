@@ -20653,6 +20653,12 @@
     }
   },
   "sourceControl": {
+    "branchCompare": {
+      "changesVsBase": "Cambios respecto a {{ref}}",
+      "changesVsSelectedBase": "Cambios respecto a la base",
+      "workingTreeVsTip": "Árbol de trabajo respecto al último commit de {{ref}}",
+      "workingTreeVsAncestor": "Árbol de trabajo respecto al ancestro común con {{ref}}"
+    },
     "discard": {
       "deleteUntrackedFileDescription": "Esto eliminará permanentemente este archivo sin seguimiento. No se puede deshacer.",
       "deleteUntrackedFilesDescription": "Esto eliminará permanentemente estos {{count}} archivos sin seguimiento. No se puede deshacer.",

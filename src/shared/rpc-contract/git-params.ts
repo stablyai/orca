@@ -16,6 +16,7 @@ export const GitStatusParams = WorktreeSelector.extend({
   bypassEffectiveUpstreamNegativeCache: z.boolean().optional(),
   reuseLineStats: z.boolean().optional(),
   // Shape is re-validated host-side before it reaches a git argv.
+  // Legacy wire name for the requested comparison revision, which may be a base tip.
   branchLineTotalMergeBase: z.string().optional()
 })
 
@@ -53,6 +54,8 @@ export const GitDiff = GitFilePath.extend({
 
 export const GitBranchCompare = WorktreeSelector.extend({
   admissionTier: OptionalGitAdmissionTier,
+  // Older clients omit this and retain their common-ancestor comparison.
+  compareBaseTip: z.boolean().optional(),
   baseRef: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

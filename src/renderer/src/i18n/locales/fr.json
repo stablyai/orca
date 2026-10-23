@@ -20235,6 +20235,12 @@
     }
   },
   "sourceControl": {
+    "branchCompare": {
+      "changesVsBase": "Modifications par rapport à {{ref}}",
+      "changesVsSelectedBase": "Modifications par rapport à la base",
+      "workingTreeVsTip": "Arbre de travail par rapport au dernier commit de {{ref}}",
+      "workingTreeVsAncestor": "Arbre de travail par rapport à l’ancêtre commun avec {{ref}}"
+    },
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"
     },

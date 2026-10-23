@@ -713,7 +713,8 @@ describe('git RPC methods', () => {
       makeRequest('git.branchCompare', {
         worktree: 'id:wt-1',
         baseRef: 'origin/main',
-        admissionTier: 'background'
+        admissionTier: 'background',
+        compareBaseTip: true
       })
     )
     const future = await dispatcher.dispatch(
@@ -729,13 +730,15 @@ describe('git RPC methods', () => {
       1,
       'id:wt-1',
       'origin/main',
-      'background'
+      'background',
+      true
     )
     expect(future.ok).toBe(true)
     expect(runtime.getRuntimeGitBranchCompare).toHaveBeenNthCalledWith(
       2,
       'id:wt-1',
       'origin/main',
+      undefined,
       undefined
     )
   })

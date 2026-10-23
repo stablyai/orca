@@ -1,6 +1,6 @@
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
 import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
-import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
+import { getBranchLineTotalComparisonBase } from './branch-line-total-request-gate'
 import {
   clearAutomaticPushTargetUpstreamStatusCache,
   getCachedAutomaticPushTargetUpstreamStatus,
@@ -123,9 +123,9 @@ export async function refreshGitStatusForWorktree({
   }
 }): Promise<void> {
   const refreshOrder = beginAutomaticUpstreamRefresh(worktreeId)
-  // Why: every status path must carry the merge base, or the chip blanks out on
+  // Why: every status path must carry the comparison revision, or the chip blanks out on
   // whichever poll happened to omit it.
-  const branchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
+  const branchLineTotalMergeBase = getBranchLineTotalComparisonBase(worktreeId)
   try {
     const status = await getRuntimeGitStatus(
       {
@@ -253,7 +253,7 @@ export async function refreshGitStatusForWorktreeStrict({
 }): Promise<{ status: GitStatusResult; upstreamStatus: GitUpstreamStatus }> {
   beginStrictUpstreamRefresh(worktreeId)
   clearAutomaticPushTargetUpstreamStatusCache()
-  const strictBranchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
+  const strictBranchLineTotalMergeBase = getBranchLineTotalComparisonBase(worktreeId)
   const status = await getRuntimeGitStatus(
     {
       target,

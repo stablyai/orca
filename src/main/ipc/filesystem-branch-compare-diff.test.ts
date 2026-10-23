@@ -78,10 +78,12 @@ describe('registerFilesystemHandlers', () => {
     await handlers.get('git:branchCompare')!(null, {
       worktreePath: WORKTREE_FEATURE_PATH,
       baseRef: 'origin/main',
+      compareBaseTip: true,
       admissionTier: 'background'
     })
 
     expect(getBranchCompareMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'origin/main', {
+      compareBaseTip: true,
       admissionTier: 'background'
     })
   })

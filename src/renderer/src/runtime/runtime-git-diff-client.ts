@@ -39,6 +39,7 @@ export async function getRuntimeGitBranchCompare(
     return window.api.git.branchCompare({
       worktreePath: resolveLocalWorktreePath(context),
       baseRef,
+      compareBaseTip: true,
       connectionId: context.connectionId,
       admissionTier
     })
@@ -49,6 +50,7 @@ export async function getRuntimeGitBranchCompare(
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       baseRef,
+      compareBaseTip: true,
       admissionTier
     },
     { timeoutMs: 15_000 }

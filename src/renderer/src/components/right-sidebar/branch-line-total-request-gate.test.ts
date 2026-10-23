@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   clearBranchLineTotalRequestGateForTests,
-  getBranchLineTotalMergeBase,
-  setBranchLineTotalMergeBase
+  getBranchLineTotalComparisonBase,
+  setBranchLineTotalComparisonBase
 } from './branch-line-total-request-gate'
 
 describe('branch line total request gate', () => {
@@ -10,43 +10,43 @@ describe('branch line total request gate', () => {
     clearBranchLineTotalRequestGateForTests()
   })
 
-  it('reports no merge base for a worktree that never opened the chip', () => {
-    expect(getBranchLineTotalMergeBase('wt-never-gated')).toBeUndefined()
+  it('reports no comparison revision for a worktree that never opened the chip', () => {
+    expect(getBranchLineTotalComparisonBase('wt-never-gated')).toBeUndefined()
   })
 
-  it('stores the merge base a visible chip asked for', () => {
-    setBranchLineTotalMergeBase('wt-1', 'merge-base-1')
+  it('stores the comparison revision a visible chip asked for', () => {
+    setBranchLineTotalComparisonBase('wt-1', 'comparison-base-1')
 
-    expect(getBranchLineTotalMergeBase('wt-1')).toBe('merge-base-1')
+    expect(getBranchLineTotalComparisonBase('wt-1')).toBe('comparison-base-1')
   })
 
-  it('replaces the merge base when the fork point moves', () => {
-    setBranchLineTotalMergeBase('wt-1', 'merge-base-1')
-    setBranchLineTotalMergeBase('wt-1', 'merge-base-2')
+  it('replaces the comparison revision when the base branch advances', () => {
+    setBranchLineTotalComparisonBase('wt-1', 'comparison-base-1')
+    setBranchLineTotalComparisonBase('wt-1', 'comparison-base-2')
 
-    expect(getBranchLineTotalMergeBase('wt-1')).toBe('merge-base-2')
+    expect(getBranchLineTotalComparisonBase('wt-1')).toBe('comparison-base-2')
   })
 
   it('deletes the entry when the chip is hidden', () => {
-    setBranchLineTotalMergeBase('wt-1', 'merge-base-1')
-    setBranchLineTotalMergeBase('wt-1', null)
+    setBranchLineTotalComparisonBase('wt-1', 'comparison-base-1')
+    setBranchLineTotalComparisonBase('wt-1', null)
 
-    expect(getBranchLineTotalMergeBase('wt-1')).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase('wt-1')).toBeUndefined()
   })
 
-  it('treats an empty merge base as no gate rather than an empty request param', () => {
-    setBranchLineTotalMergeBase('wt-1', 'merge-base-1')
-    setBranchLineTotalMergeBase('wt-1', '')
+  it('treats an empty comparison revision as no gate rather than an empty request param', () => {
+    setBranchLineTotalComparisonBase('wt-1', 'comparison-base-1')
+    setBranchLineTotalComparisonBase('wt-1', '')
 
-    expect(getBranchLineTotalMergeBase('wt-1')).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase('wt-1')).toBeUndefined()
   })
 
   it('keeps entries independent per worktree', () => {
-    setBranchLineTotalMergeBase('wt-1', 'merge-base-1')
-    setBranchLineTotalMergeBase('wt-2', 'merge-base-2')
-    setBranchLineTotalMergeBase('wt-1', null)
+    setBranchLineTotalComparisonBase('wt-1', 'comparison-base-1')
+    setBranchLineTotalComparisonBase('wt-2', 'comparison-base-2')
+    setBranchLineTotalComparisonBase('wt-1', null)
 
-    expect(getBranchLineTotalMergeBase('wt-1')).toBeUndefined()
-    expect(getBranchLineTotalMergeBase('wt-2')).toBe('merge-base-2')
+    expect(getBranchLineTotalComparisonBase('wt-1')).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase('wt-2')).toBe('comparison-base-2')
   })
 })

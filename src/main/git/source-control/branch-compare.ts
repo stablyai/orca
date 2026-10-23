@@ -17,7 +17,7 @@ import {
 export async function getBranchCompare(
   worktreePath: string,
   baseRef: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions & { compareBaseTip?: boolean } = {}
 ): Promise<GitBranchCompareResult> {
   const summary: GitBranchCompareSummary = {
     baseRef,
@@ -84,10 +84,14 @@ export async function getBranchCompare(
     return { summary, entries: [] }
   }
 
-  let mergeBase = ''
+  let comparisonBase = ''
   try {
-    mergeBase = await resolveMergeBase(worktreePath, baseOid, headOid, options)
-    summary.mergeBase = mergeBase
+    // The legacy field pins the left revision for file diffs, totals and older snapshot readers.
+    comparisonBase =
+      options.compareBaseTip && baseOid !== headOid
+        ? baseOid
+        : await resolveMergeBase(worktreePath, baseOid, headOid, options)
+    summary.mergeBase = comparisonBase
   } catch {
     summary.status = 'no-merge-base'
     summary.errorMessage = `This branch and ${baseRef} do not share a merge base, so compare-to-base is unavailable.`
@@ -105,7 +109,7 @@ export async function getBranchCompare(
     }
 
     const [entries, divergence] = await Promise.all([
-      loadBranchChanges(worktreePath, mergeBase, headOid, options),
+      loadBranchChanges(worktreePath, comparisonBase, headOid, options),
       countCompareDivergence(worktreePath, baseOid, headOid, options)
     ])
     summary.changedFiles = entries.length

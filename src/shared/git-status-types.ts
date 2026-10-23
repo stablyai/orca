@@ -52,9 +52,9 @@ export type GitUncommittedEntry = {
 
 export type GitStatusEntry = GitUncommittedEntry
 
-// Merge base → working tree, deduplicated, so committing doesn't move it.
+// Comparison revision → working tree, deduplicated, so committing doesn't move it.
 // Matches the per-file rows rather than git: binary and >2MB untracked count zero.
-// `mergeBase` echoes the common ancestor OID to reject stale totals.
+// `mergeBase` is the legacy wire name; it echoes the requested left revision to reject stale totals.
 export type GitBranchLineTotal = {
   added: number
   removed: number

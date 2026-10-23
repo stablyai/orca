@@ -26,6 +26,7 @@ export type DiffSource =
   | 'combined-branch'
   | 'combined-commit'
 
+// `mergeBase` pins the comparison revision; never recompute it from the current branch refs.
 export type BranchCompareSnapshot = Pick<
   GitBranchCompareSummary,
   'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'

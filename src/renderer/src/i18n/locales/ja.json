@@ -20249,6 +20249,12 @@
     }
   },
   "sourceControl": {
+    "branchCompare": {
+      "changesVsBase": "{{ref}} との差分",
+      "changesVsSelectedBase": "ベースとの差分",
+      "workingTreeVsTip": "作業ツリーと {{ref}} の最新コミットとの差分",
+      "workingTreeVsAncestor": "作業ツリーと {{ref}} の共通祖先との差分"
+    },
     "unlinkedPr": {
       "status": "PR #{{number}} のリンクが解除されました"
     },

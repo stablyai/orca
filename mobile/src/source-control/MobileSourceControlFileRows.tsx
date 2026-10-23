@@ -10,6 +10,7 @@ import {
 } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
+import { formatMobileBranchCompareTitle } from './mobile-branch-compare'
 
 type RowState = Pick<
   MobileSourceControlState,
@@ -163,7 +164,9 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
     <View style={styles.branchCompareBlock}>
       <View style={styles.sectionHeader}>
         <View style={styles.branchSectionTitleBlock}>
-          <Text style={styles.sectionTitle}>Committed on Branch</Text>
+          <Text style={styles.sectionTitle} numberOfLines={1}>
+            {formatMobileBranchCompareTitle(branchCompareResult?.summary.baseRef)}
+          </Text>
           {branchCompareSummaryText ? (
             <Text style={styles.branchSectionSubtitle} numberOfLines={1}>
               {branchCompareSummaryText}
@@ -175,7 +178,7 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
       {branchCompareState.kind === 'loading' ? (
         <View style={styles.branchStateRow}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.branchStateText}>Loading committed changes...</Text>
+          <Text style={styles.branchStateText}>Loading comparison...</Text>
         </View>
       ) : branchCompareState.kind === 'error' ? (
         <View style={styles.branchStateRow}>
@@ -184,7 +187,7 @@ export function BranchCompareHeader({ state }: { state: BranchState }) {
       ) : branchCompareResult && branchCompareResult.summary.status !== 'ready' ? (
         <View style={styles.branchStateRow}>
           <Text style={styles.branchStateText}>
-            {branchCompareResult.summary.errorMessage ?? 'Committed changes unavailable.'}
+            {branchCompareResult.summary.errorMessage ?? 'Branch comparison unavailable.'}
           </Text>
         </View>
       ) : null}

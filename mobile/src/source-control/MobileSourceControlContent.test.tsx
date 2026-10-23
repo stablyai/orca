@@ -259,6 +259,7 @@ describe('committed branch files during commit-message typing', () => {
     }
     const format = vi.spyOn(branchFormat, 'formatMobileBranchEntryMeta')
     render(initial)
+    expect(text()).toContain('Changes vs main')
     expect(format).toHaveBeenCalledTimes(20)
     format.mockClear()
     for (let index = 0; index < 50; index++) {
@@ -355,7 +356,7 @@ describe('committed branch files during commit-message typing', () => {
     patch({ branchCompareResult: initial.branchCompareResult })
     expect(rows()).toHaveLength(1)
     patch({ shouldShowBranchCompareSection: false })
-    expect(text()).not.toContain('Committed on Branch')
+    expect(text()).not.toContain('Changes vs main')
     patch({ shouldShowBranchCompareSection: true })
     expect(rows()).toHaveLength(1)
     format.mockClear()

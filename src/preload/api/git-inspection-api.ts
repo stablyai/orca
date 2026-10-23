@@ -72,6 +72,7 @@ export type GitInspectionApi = {
   branchCompare: (args: {
     worktreePath: string
     baseRef: string
+    compareBaseTip?: boolean
     connectionId?: string
     admissionTier?: 'interactive' | 'status' | 'background'
   }) => Promise<GitBranchCompareResult>

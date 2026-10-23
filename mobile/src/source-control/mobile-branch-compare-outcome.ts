@@ -41,7 +41,8 @@ export async function readBranchCompareOutcome(
     }
     const reply = await gitBranchCompareRead.request(client, {
       worktree: `id:${worktreeId}`,
-      baseRef
+      baseRef,
+      compareBaseTip: true
     })
     // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
     // screen degrades on, and no acceptance policy carries the code and message through.

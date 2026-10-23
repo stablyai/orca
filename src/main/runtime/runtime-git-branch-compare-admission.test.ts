@@ -73,4 +73,13 @@ describe('RuntimeGitDiffCommands branch-compare admission', () => {
     ).rejects.toThrow(SshHostNotServedError)
     expect(mocks.getBranchCompare).not.toHaveBeenCalled()
   })
+
+  it('forwards the selected-tip request with the execution host options', async () => {
+    await makeCommands().getRuntimeGitBranchCompare('id:wt-1', 'selected-base', 'background', true)
+    expect(mocks.getBranchCompare).toHaveBeenCalledWith(expect.any(String), 'selected-base', {
+      wslDistro: 'Ubuntu',
+      admissionTier: 'background',
+      compareBaseTip: true
+    })
+  })
 })

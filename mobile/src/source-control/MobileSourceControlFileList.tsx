@@ -11,6 +11,7 @@ import type {
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
+import { formatMobileBranchCompareTitle } from './mobile-branch-compare'
 
 type FileEntry = MobileGitStatusEntryView | MobileBranchEntryView
 function isWorkingTreeEntry(entry: FileEntry): entry is MobileGitStatusEntryView {
@@ -44,7 +45,7 @@ export function MobileSourceControlFileList({ state }: { state: FileListState })
   if (state.shouldShowBranchCompareSection) {
     sections.push({
       key: 'committed',
-      title: 'Committed on Branch',
+      title: formatMobileBranchCompareTitle(state.branchCompareResult?.summary.baseRef),
       data:
         state.branchCompareState.kind === 'ready' &&
         state.branchCompareResult?.summary.status === 'ready'

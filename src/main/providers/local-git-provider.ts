@@ -104,6 +104,7 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     getBranchCompare: (worktreePath, baseRef, compareOptions) =>
       getBranchCompare(worktreePath, baseRef, {
         ...base,
+        ...(compareOptions?.compareBaseTip === true ? { compareBaseTip: true } : {}),
         admissionTier: compareOptions?.admissionTier ?? 'interactive'
       }),
     getCommitCompare: (worktreePath, commitId) =>

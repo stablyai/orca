@@ -22,6 +22,7 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
       args: {
         worktreePath: string
         baseRef: string
+        compareBaseTip?: boolean
         connectionId?: string
         admissionTier?: GitAdmissionTier
       }
@@ -35,6 +36,7 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
       )
       return getBranchCompare(worktreePath, args.baseRef, {
         ...gitOptions,
+        ...(args.compareBaseTip === true ? { compareBaseTip: true } : {}),
         ...(args.admissionTier ? { admissionTier: args.admissionTier } : {})
       })
     }

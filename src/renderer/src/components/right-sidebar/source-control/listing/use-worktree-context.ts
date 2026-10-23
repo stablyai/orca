@@ -59,8 +59,7 @@ export function useSourceControlWorktreeContext() {
   const publishedBranchLineTotal = useAppStore((s) =>
     activeWorktreeId ? (s.gitBranchLineTotalByWorktree?.[activeWorktreeId] ?? null) : null
   )
-  // Why: status and branch compare refresh on different cadences, so a total can
-  // outlive the fork point it measured. Drop it rather than render a stale number.
+  // Status and compare refresh separately; only show totals for the current comparison revision.
   const branchLineTotal =
     publishedBranchLineTotal && publishedBranchLineTotal.mergeBase === branchSummary?.mergeBase
       ? publishedBranchLineTotal

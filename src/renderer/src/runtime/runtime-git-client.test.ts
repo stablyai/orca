@@ -125,6 +125,7 @@ describe('runtime git client', () => {
     expect(gitBranchCompare).toHaveBeenCalledWith({
       worktreePath: '/repo',
       baseRef: 'origin/main',
+      compareBaseTip: true,
       connectionId: 'ssh-1',
       admissionTier: 'background'
     })

@@ -79,10 +79,13 @@ export function SourceControlBranchSection({
   return (
     <div>
       <SectionHeader
-        label={translate(
-          'auto.components.right.sidebar.SourceControl.d7ae61269b',
-          'Committed on Branch'
-        )}
+        label={
+          baseRef
+            ? translate('sourceControl.branchCompare.changesVsBase', 'Changes vs {{ref}}', {
+                ref: formatSourceControlRefLabel(baseRef)
+              })
+            : translate('sourceControl.branchCompare.changesVsSelectedBase', 'Changes vs base')
+        }
         count={fileCount}
         countTitle={countTitle}
         isCollapsed={collapsedSections.has('branch')}

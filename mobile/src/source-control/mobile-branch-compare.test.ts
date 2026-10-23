@@ -4,6 +4,7 @@ import {
   buildMobileBranchCompareSection,
   canOpenMobileBranchCompareDiff,
   formatMobileBranchCompareSummary,
+  formatMobileBranchCompareTitle,
   type MobileGitBranchCompareResult
 } from './mobile-branch-compare'
 
@@ -18,8 +19,16 @@ describe('mobile branch compare helpers', () => {
       { path: 'alpha.ts', status: 'added' }
     ])
 
-    expect(section?.title).toBe('Committed on Branch')
+    expect(section?.title).toBe('Changes vs base')
     expect(section?.data.map((entry) => entry.path)).toEqual(['alpha.ts', 'zeta.ts'])
+  })
+
+  it('names the selected base without implying branch-only changes', () => {
+    expect(formatMobileBranchCompareTitle('origin/main')).toBe('Changes vs origin/main')
+    expect(formatMobileBranchCompareTitle(null)).toBe('Changes vs base')
+    expect(
+      buildMobileBranchCompareSection([{ path: 'base-only.ts', status: 'deleted' }], 'main')?.title
+    ).toBe('Changes vs main')
   })
 
   it('summarizes ready branch compares', () => {

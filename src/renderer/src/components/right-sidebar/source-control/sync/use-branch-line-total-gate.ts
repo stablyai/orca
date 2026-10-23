@@ -1,11 +1,8 @@
 import { useEffect } from 'react'
-import { setBranchLineTotalMergeBase } from '../../branch-line-total-request-gate'
+import { setBranchLineTotalComparisonBase } from '../../branch-line-total-request-gate'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 
-/**
- * Publishes the merge base the visible branch view wants a line total for, and withdraws it on
- * unmount or worktree switch.
- */
+/** Registers the visible comparison revision until it changes or the view unmounts. */
 export function useSourceControlBranchLineTotalGate({
   activeWorktreeId,
   branchSummary,
@@ -17,9 +14,9 @@ export function useSourceControlBranchLineTotalGate({
   isBranchVisible: boolean
   isFolder: boolean
 }): void {
-  // Why: the merge base IS the request gate — no OID on the status request means
+  // Why: the comparison revision is the request gate — no OID on the status request means
   // the host runs no ranged diff, so a hidden chip costs a background worktree nothing.
-  const requestedBranchLineTotalMergeBase =
+  const comparisonBaseOid =
     isBranchVisible && !isFolder && branchSummary?.status === 'ready'
       ? branchSummary.mergeBase
       : null
@@ -27,9 +24,9 @@ export function useSourceControlBranchLineTotalGate({
     if (!activeWorktreeId) {
       return
     }
-    setBranchLineTotalMergeBase(activeWorktreeId, requestedBranchLineTotalMergeBase)
+    setBranchLineTotalComparisonBase(activeWorktreeId, comparisonBaseOid)
     return () => {
-      setBranchLineTotalMergeBase(activeWorktreeId, null)
+      setBranchLineTotalComparisonBase(activeWorktreeId, null)
     }
-  }, [activeWorktreeId, requestedBranchLineTotalMergeBase])
+  }, [activeWorktreeId, comparisonBaseOid])
 }

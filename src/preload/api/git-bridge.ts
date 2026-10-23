@@ -59,8 +59,12 @@ export const gitApi = {
     compareAgainstHead?: boolean
     connectionId?: string
   }) => ipcRenderer.invoke('git:diff', args),
-  branchCompare: (args: { worktreePath: string; baseRef: string; connectionId?: string }) =>
-    ipcRenderer.invoke('git:branchCompare', args),
+  branchCompare: (args: {
+    worktreePath: string
+    baseRef: string
+    compareBaseTip?: boolean
+    connectionId?: string
+  }) => ipcRenderer.invoke('git:branchCompare', args),
   commitCompare: (args: { worktreePath: string; commitId: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:commitCompare', args),
   upstreamStatus: (args: {

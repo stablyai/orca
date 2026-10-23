@@ -20249,6 +20249,12 @@
     }
   },
   "sourceControl": {
+    "branchCompare": {
+      "changesVsBase": "与 {{ref}} 的差异",
+      "changesVsSelectedBase": "与基准分支的差异",
+      "workingTreeVsTip": "工作区与 {{ref}} 最新提交的差异",
+      "workingTreeVsAncestor": "工作区与 {{ref}} 共同祖先的差异"
+    },
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"
     },

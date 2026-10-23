@@ -171,6 +171,11 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     await settleOldest(calls, 'git.status', STATUS_REPLY)
     await settleBaseRefLookup(calls, 'origin/dev')
     expect(pendingCount(calls, 'git.branchCompare')).toBe(1)
+    expect(calls.find((call) => call.method === 'git.branchCompare')?.params).toEqual({
+      worktree: `id:${WORKTREE}`,
+      baseRef: 'origin/dev',
+      compareBaseTip: true
+    })
 
     // Second attempt, started while the first compare is still out. A forced status load is how the
     // screen reaches a second compare: the unforced one would join the in-flight status instead.

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearBranchLineTotalRequestGateForTests,
-  setBranchLineTotalMergeBase
+  setBranchLineTotalComparisonBase
 } from './branch-line-total-request-gate'
 import {
   clearGitStatusRefreshOrderingForTests,
@@ -70,8 +70,8 @@ describe('branch line total request gate on git status refreshes', () => {
 
   it('omits the merge base for a worktree whose chip was hidden again', async () => {
     const gitStatus = stubGitStatus()
-    setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
-    setBranchLineTotalMergeBase('wt-1', null)
+    setBranchLineTotalComparisonBase('wt-1', MERGE_BASE)
+    setBranchLineTotalComparisonBase('wt-1', null)
 
     await refreshGitStatusForWorktree({
       target: { kind: 'local' },
@@ -89,7 +89,7 @@ describe('branch line total request gate on git status refreshes', () => {
 
   it('does not send one worktree gate on another worktree status pass', async () => {
     const gitStatus = stubGitStatus()
-    setBranchLineTotalMergeBase('wt-visible', MERGE_BASE)
+    setBranchLineTotalComparisonBase('wt-visible', MERGE_BASE)
 
     await refreshGitStatusForWorktree({
       target: { kind: 'local' },
@@ -107,7 +107,7 @@ describe('branch line total request gate on git status refreshes', () => {
 
   it('sends the merge base on a plain refresh that passes no request options', async () => {
     const gitStatus = stubGitStatus()
-    setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
+    setBranchLineTotalComparisonBase('wt-1', MERGE_BASE)
 
     // Why: this path used to build no options object at all, so the gate was
     // silently dropped on the most common (fs-watcher) refresh.
@@ -129,7 +129,7 @@ describe('branch line total request gate on git status refreshes', () => {
 
   it('sends the merge base alongside line-stat reuse', async () => {
     const gitStatus = stubGitStatus()
-    setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
+    setBranchLineTotalComparisonBase('wt-1', MERGE_BASE)
 
     await refreshGitStatusForWorktree({
       target: { kind: 'local' },
@@ -150,7 +150,7 @@ describe('branch line total request gate on git status refreshes', () => {
 
   it('sends the merge base on an abortable refresh', async () => {
     const gitStatus = stubGitStatus()
-    setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
+    setBranchLineTotalComparisonBase('wt-1', MERGE_BASE)
     const controller = new AbortController()
 
     await refreshGitStatusForWorktree({
@@ -171,7 +171,7 @@ describe('branch line total request gate on git status refreshes', () => {
 
   it('re-reads the gate on every pass so a moved fork point is not sent twice', async () => {
     const gitStatus = stubGitStatus()
-    setBranchLineTotalMergeBase('wt-1', MERGE_BASE)
+    setBranchLineTotalComparisonBase('wt-1', MERGE_BASE)
 
     await refreshGitStatusForWorktree({
       target: { kind: 'local' },
@@ -179,7 +179,7 @@ describe('branch line total request gate on git status refreshes', () => {
       worktreePath: '/repo',
       deps: makeDeps()
     })
-    setBranchLineTotalMergeBase('wt-1', 'rebased-merge-base')
+    setBranchLineTotalComparisonBase('wt-1', 'rebased-merge-base')
     await refreshGitStatusForWorktree({
       target: { kind: 'local' },
       worktreeId: 'wt-1',
@@ -223,7 +223,7 @@ describe('branch line total request gate on git status refreshes', () => {
   // skipping the gate there would blank the chip until the next automatic poll.
   it('sends the merge base on a strict refresh', async () => {
     const gitStatus = stubGitStatus()
-    setBranchLineTotalMergeBase('wt-strict', MERGE_BASE)
+    setBranchLineTotalComparisonBase('wt-strict', MERGE_BASE)
 
     await refreshGitStatusForWorktreeStrict({
       target: { kind: 'local' },

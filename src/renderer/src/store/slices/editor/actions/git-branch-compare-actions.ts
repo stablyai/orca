@@ -68,13 +68,21 @@ export function createGitBranchCompareActions(
             (e, i) =>
               e.path === result.entries[i].path &&
               e.status === result.entries[i].status &&
-              e.oldPath === result.entries[i].oldPath
+              e.oldPath === result.entries[i].oldPath &&
+              e.added === result.entries[i].added &&
+              e.removed === result.entries[i].removed
           )
         const summaryUnchanged =
           prevSummary &&
           prevSummary.status === result.summary.status &&
+          prevSummary.baseRef === result.summary.baseRef &&
           prevSummary.baseOid === result.summary.baseOid &&
+          prevSummary.compareRef === result.summary.compareRef &&
           prevSummary.headOid === result.summary.headOid &&
+          prevSummary.mergeBase === result.summary.mergeBase &&
+          prevSummary.commitsAhead === result.summary.commitsAhead &&
+          prevSummary.commitsBehind === result.summary.commitsBehind &&
+          prevSummary.errorMessage === result.summary.errorMessage &&
           prevSummary.changedFiles === result.summary.changedFiles
         if (entriesUnchanged && summaryUnchanged) {
           return s

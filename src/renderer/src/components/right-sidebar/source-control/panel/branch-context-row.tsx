@@ -387,6 +387,18 @@ export function SourceControlBranchContextRow({
   const compareStatNodes = buildSourceControlCompareBaseStats(summary, displayedBaseRef).map(
     (stat) => <ContextStat key={stat.key} stat={stat} />
   )
+  const comparisonLabel =
+    branchLineTotal?.mergeBase === summary.baseOid
+      ? translate(
+          'sourceControl.branchCompare.workingTreeVsTip',
+          'Working tree vs tip of {{ref}}',
+          { ref: baseLabel }
+        )
+      : translate(
+          'sourceControl.branchCompare.workingTreeVsAncestor',
+          'Working tree vs common ancestor with {{ref}}',
+          { ref: baseLabel }
+        )
 
   return (
     <CompareFlowGroup flowLabel={flowLabel} className="min-w-0 text-[11px] text-muted-foreground">
@@ -402,7 +414,12 @@ export function SourceControlBranchContextRow({
             <ManualReviewLinkButton url={manualReviewUrl} />
           </>
         }
-        headTrailing={<SourceControlBranchLineTotalChip branchLineTotal={branchLineTotal} />}
+        headTrailing={
+          <SourceControlBranchLineTotalChip
+            branchLineTotal={branchLineTotal}
+            comparisonLabel={comparisonLabel}
+          />
+        }
       />
     </CompareFlowGroup>
   )

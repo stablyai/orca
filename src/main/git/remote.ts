@@ -40,7 +40,7 @@ export async function gitPush(
     // When no upstream exists, keep the existing first-publish behavior:
     // create/update origin/<current branch> and set it as upstream.
     //
-    // Branch-vs-base reporting (the "Committed on Branch" section) is
+    // Branch-vs-base reporting (the "Changes vs base" section) is
     // unaffected because it uses branchCompare against an explicit baseRef
     // from worktree config, not the upstream relationship.
     const target = pushTarget

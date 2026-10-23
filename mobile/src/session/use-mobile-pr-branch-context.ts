@@ -190,7 +190,8 @@ async function readBranchCompare(
   }
   const reply = await branchContextCompareRead.request(client, {
     worktree: `id:${worktreeId}`,
-    baseRef
+    baseRef,
+    compareBaseTip: true
   })
   const compared = branchContextCompareRead.interpret(reply)
   return compared.accepted ? compared.value : null

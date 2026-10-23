@@ -12,12 +12,13 @@ export type MobileGitBranchCompareResult = MobileGitBranchCompareReply
 export type MobileBranchCompareSection<
   TEntry extends MobileGitBranchChangeEntry = MobileGitBranchChangeEntry
 > = {
-  title: 'Committed on Branch'
+  title: string
   data: TEntry[]
 }
 
 export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchChangeEntry>(
-  entries: readonly TEntry[]
+  entries: readonly TEntry[],
+  baseRef?: string | null
 ): MobileBranchCompareSection<TEntry> | null {
   if (entries.length === 0) {
     return null
@@ -28,9 +29,19 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
     data.sort((a, b) => collator.compare(a.path, b.path))
   }
   return {
-    title: 'Committed on Branch',
+    title: formatMobileBranchCompareTitle(baseRef),
     data
   }
+}
+
+export function formatMobileBranchCompareTitle(baseRef?: string | null): string {
+  return `Changes vs ${baseRef?.trim() || 'base'}`
+}
+
+export function buildMobileBranchCompareEntryViews(result: MobileGitBranchCompareResult | null) {
+  const section = buildMobileBranchCompareSection(result?.entries ?? [], result?.summary.baseRef)
+  const canOpen = result ? canOpenMobileBranchCompareDiff(result.summary) : false
+  return (section?.data ?? []).map((entry) => ({ ...entry, canOpen }))
 }
 
 export function formatMobileBranchCompareSummary(

@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import {
   clearBranchLineTotalRequestGateForTests,
-  getBranchLineTotalMergeBase
+  getBranchLineTotalComparisonBase
 } from './branch-line-total-request-gate'
 import SourceControl from './SourceControl'
 
@@ -217,21 +217,21 @@ describe('SourceControl branch line total request gate', () => {
   it('asks for a total when the panel is visible and compare is ready', () => {
     renderSourceControl()
 
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBe(MERGE_BASE)
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBe(MERGE_BASE)
   })
 
   it('asks for nothing while the sidebar is closed', () => {
     resetState({ rightSidebarOpen: false })
     renderSourceControl()
 
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBeUndefined()
   })
 
   it('asks for nothing while another right-sidebar tab is showing', () => {
     resetState({ rightSidebarTab: 'checks' })
     renderSourceControl()
 
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBeUndefined()
   })
 
   it('asks for nothing until branch compare is ready', () => {
@@ -242,7 +242,7 @@ describe('SourceControl branch line total request gate', () => {
     })
     renderSourceControl()
 
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBeUndefined()
   })
 
   it('asks for nothing when compare has no merge base', () => {
@@ -253,7 +253,7 @@ describe('SourceControl branch line total request gate', () => {
     })
     renderSourceControl()
 
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBeUndefined()
   })
 
   it('asks for nothing in a folder workspace', () => {
@@ -261,16 +261,16 @@ describe('SourceControl branch line total request gate', () => {
     mocks.activeRepo.kind = 'folder'
     renderSourceControl()
 
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBeUndefined()
   })
 
   it('releases the gate when the panel unmounts', () => {
     renderSourceControl()
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBe(MERGE_BASE)
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBe(MERGE_BASE)
 
     act(() => root.render(<TooltipProvider>{null}</TooltipProvider>))
 
-    expect(getBranchLineTotalMergeBase(mocks.activeWorktree.id)).toBeUndefined()
+    expect(getBranchLineTotalComparisonBase(mocks.activeWorktree.id)).toBeUndefined()
   })
 })
 

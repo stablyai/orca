@@ -51,13 +51,13 @@ function render(
 describe('SourceControlBranchSection heading', () => {
   // The heading counts files that differ from the compare base, not every file
   // the branch ever touched — a rebased branch makes those read alike.
-  it('names the compare base on the count, leaving the heading text alone', () => {
+  it('names the compare base in the heading and count', () => {
     const markup = render(readySummary)
 
-    expect(markup).toContain('Committed on Branch')
+    expect(markup).toContain('Changes vs origin/main')
     expect(markup).toContain('title="4 files changed vs origin/main"')
     // No aria-label: inside the section toggle button it would rewrite the
-    // button's accessible name ("Committed on Branch 4 files changed vs …").
+    // button's accessible name ("Changes vs origin/main 4 files changed vs …").
     expect(markup).not.toContain('aria-label="4 files changed vs origin/main"')
   })
 
@@ -74,7 +74,7 @@ describe('SourceControlBranchSection heading', () => {
   it('leaves the count unlabelled when the summary has no base ref', () => {
     const markup = render({ ...readySummary, baseRef: '  ' })
 
-    expect(markup).toContain('Committed on Branch')
+    expect(markup).toContain('Changes vs base')
     expect(markup).not.toContain('files changed vs')
   })
 })

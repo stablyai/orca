@@ -279,6 +279,25 @@ function renderWithLineTotal(
 }
 
 describe('SourceControlBranchContextRow branch line total', () => {
+  it('names the base tip for totals that compare directly with it', () => {
+    const markup = renderWithLineTotal({ added: 1, removed: 2, mergeBase: 'base' })
+
+    expect(markup).toContain('Working tree vs tip of origin/FRONT-192-ZisVoucherStrip')
+    expect(markup).not.toContain('common ancestor')
+  })
+
+  it('names the common ancestor when an older host returns that revision', () => {
+    const markup = renderWithLineTotal(
+      { added: 1, removed: 2, mergeBase: 'ancestor' },
+      { ...readySummary, mergeBase: 'ancestor' }
+    )
+
+    expect(markup).toContain(
+      'Working tree vs common ancestor with origin/FRONT-192-ZisVoucherStrip'
+    )
+    expect(markup).not.toContain('Working tree vs tip of')
+  })
+
   it('renders both halves with grouped digits and a spoken label', () => {
     const markup = renderWithLineTotal({ added: 8259, removed: 670, mergeBase: 'base' })
 
@@ -442,7 +461,7 @@ describe('SourceControlBranchContextRow line total test split', () => {
     })
 
     expect(markup).toContain('Code breakdown')
-    expect(markup).toContain('Lines of code')
+    expect(markup).toContain('Working tree vs tip of origin/FRONT-192-ZisVoucherStrip')
     expect(markup).toContain('data-testid="source-control-branch-line-total-breakdown"')
     expect(markup).toContain('Non-test')
     expect(markup).toContain('>+123<')

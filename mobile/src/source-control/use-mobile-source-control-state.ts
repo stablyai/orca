@@ -12,8 +12,7 @@ import { useMobileSourceControlCreatePrAction } from './use-mobile-source-contro
 import { useMobileSourceControlKeyboardLift } from './use-mobile-source-control-keyboard-lift'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import {
-  buildMobileBranchCompareSection,
-  canOpenMobileBranchCompareDiff,
+  buildMobileBranchCompareEntryViews,
   formatMobileBranchCompareSummary
 } from './mobile-branch-compare'
 
@@ -122,23 +121,12 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const derivedEntries = useMemo(() => buildMobileGitStatusEntryViews(entries), [entries])
   const sections = useMemo(() => buildMobileSourceControlSections(derivedEntries), [derivedEntries])
   const branchCompareResult = branchCompareState.kind === 'ready' ? branchCompareState.result : null
-  const branchCompareSection = useMemo(
-    () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
-    [branchCompareResult]
-  )
   const branchCompareSummaryText = branchCompareResult
     ? formatMobileBranchCompareSummary(branchCompareResult.summary)
     : null
-  const branchCompareCanOpen = branchCompareResult
-    ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
-    : false
   const branchEntries = useMemo<MobileBranchEntryView[]>(
-    () =>
-      (branchCompareSection?.data ?? []).map((entry) => ({
-        ...entry,
-        canOpen: branchCompareCanOpen
-      })),
-    [branchCompareCanOpen, branchCompareSection]
+    () => buildMobileBranchCompareEntryViews(branchCompareResult),
+    [branchCompareResult]
   )
   // Local changes only: dirty files + committed file diffs vs base (not PR/push).
   const shouldShowBranchCompareSection =

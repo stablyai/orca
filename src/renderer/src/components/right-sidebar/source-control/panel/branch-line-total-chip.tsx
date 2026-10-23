@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 
 // Why: raw digits, not the grouped display string — screen readers announce
@@ -27,8 +28,7 @@ function buildAccessibleLabel(added: number, removed: number): string {
   )
 }
 
-// The chip takes no focus; the split still reaches assistive tech through the
-// label rather than the hover-only panel.
+// Keep split counts in the label as well as the hover panel.
 function appendTestSplitToLabel(label: string, testAdded: number, testRemoved: number): string {
   return translate(
     'auto.components.right.sidebar.source.control.branch.line.total.chip.4c1f70ba92',
@@ -70,13 +70,18 @@ function LineCountPair({
 
 function CodeBreakdownPanel({
   rows,
-  locale
+  locale,
+  comparisonLabel
 }: {
   rows: LineTotalSplitRow[]
   locale: string
+  comparisonLabel: string
 }): React.JSX.Element {
   return (
-    <div className="min-w-[14rem]" data-testid="source-control-branch-line-total-breakdown">
+    <div
+      className="min-w-[14rem] max-w-72 break-words"
+      data-testid="source-control-branch-line-total-breakdown"
+    >
       <div className="border-b border-border/60 px-3 py-2.5">
         <div className="text-sm font-semibold text-popover-foreground">
           {translate(
@@ -84,12 +89,7 @@ function CodeBreakdownPanel({
             'Code breakdown'
           )}
         </div>
-        <div className="mt-0.5 text-xs text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.source.control.branch.line.total.chip.b2c3d4e5f6',
-            'Lines of code'
-          )}
-        </div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{comparisonLabel}</div>
       </div>
       <div className="space-y-1.5 px-3 py-2.5">
         {rows.map((row) => (
@@ -111,9 +111,11 @@ function CodeBreakdownPanel({
 // Not clickable — `openBranchAllDiffs` is narrower.
 export const SourceControlBranchLineTotalChip = React.memo(
   function SourceControlBranchLineTotalChip({
-    branchLineTotal
+    branchLineTotal,
+    comparisonLabel
   }: {
     branchLineTotal: GitBranchLineTotal | null | undefined
+    comparisonLabel: string
   }): React.JSX.Element | null {
     const added = branchLineTotal?.added ?? 0
     const removed = branchLineTotal?.removed ?? 0
@@ -219,11 +221,13 @@ export const SourceControlBranchLineTotalChip = React.memo(
       <span
         role="group"
         aria-label={accessibleLabel}
+        aria-description={comparisonLabel}
+        tabIndex={0}
         data-testid="source-control-branch-line-total"
         className={
           hasBreakdown
-            ? 'inline-flex shrink-0 cursor-help items-center gap-1 whitespace-nowrap tabular-nums'
-            : 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap tabular-nums'
+            ? 'inline-flex shrink-0 cursor-help items-center gap-1 whitespace-nowrap rounded-sm tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring'
+            : 'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring'
         }
       >
         {hasAdded ? (
@@ -240,14 +244,21 @@ export const SourceControlBranchLineTotalChip = React.memo(
     )
 
     if (!hasBreakdown) {
-      return chip
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>{chip}</TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6} className="max-w-72 break-words">
+            {comparisonLabel}
+          </TooltipContent>
+        </Tooltip>
+      )
     }
 
     return (
       <HoverCard openDelay={200} closeDelay={100}>
         <HoverCardTrigger asChild>{chip}</HoverCardTrigger>
         <HoverCardContent align="end" side="bottom" sideOffset={6} className="w-auto p-0">
-          <CodeBreakdownPanel rows={splitRows} locale={locale} />
+          <CodeBreakdownPanel rows={splitRows} locale={locale} comparisonLabel={comparisonLabel} />
         </HoverCardContent>
       </HoverCard>
     )

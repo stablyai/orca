@@ -20272,6 +20272,12 @@
     }
   },
   "sourceControl": {
+    "branchCompare": {
+      "changesVsBase": "Changes vs {{ref}}",
+      "changesVsSelectedBase": "Changes vs base",
+      "workingTreeVsTip": "Working tree vs tip of {{ref}}",
+      "workingTreeVsAncestor": "Working tree vs common ancestor with {{ref}}"
+    },
     "discard": {
       "deleteUntrackedFileDescription": "This will permanently delete this untracked file. This cannot be undone.",
       "deleteUntrackedFilesDescription": "This will permanently delete these {{count}} untracked files. This cannot be undone.",

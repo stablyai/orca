@@ -361,8 +361,8 @@ export function CombinedDiffFileTree({
               <div className="py-1">
                 <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
                   {translate(
-                    'auto.components.editor.CombinedDiffFileTree.39b6b9e4e4',
-                    'Committed on Branch'
+                    'sourceControl.branchCompare.changesVsSelectedBase',
+                    'Changes vs base'
                   )}
                 </div>
                 <CombinedDiffFileTreeRows

@@ -108,7 +108,8 @@ describe('loadMobilePrBranchContext', () => {
     const out = await loadMobilePrBranchContext({ sendRequest } as never, 'repo::/wt')
     expect(sendRequest).toHaveBeenCalledWith('git.branchCompare', {
       worktree: 'id:repo::/wt',
-      baseRef: 'main'
+      baseRef: 'main',
+      compareBaseTip: true
     })
     expect(out).toEqual({
       branch: 'feat',

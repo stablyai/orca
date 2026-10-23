@@ -17,6 +17,7 @@ export type GitBranchCompareSummary = {
   baseOid: string | null
   compareRef: string
   headOid: string | null
+  // Legacy wire name for the pinned left revision: base tip or common ancestor, per host/request.
   mergeBase: string | null
   changedFiles: number
   commitsAhead?: number

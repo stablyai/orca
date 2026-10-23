@@ -152,6 +152,12 @@ const cases: ParityCase[] = [
     [WT, 'main', { admissionTier: 'background' }]
   ],
   [
+    'getBranchCompare selected tip',
+    (p) => p.getBranchCompare(WT, 'selected-base', { compareBaseTip: true }),
+    'getBranchCompare',
+    [WT, 'selected-base', { ...interactive, compareBaseTip: true }]
+  ],
+  [
     'getCommitCompare',
     (p) => p.getCommitCompare(WT, 'abc'),
     'getCommitCompare',
