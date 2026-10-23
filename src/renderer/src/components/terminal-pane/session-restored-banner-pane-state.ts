@@ -1,3 +1,4 @@
+import type { AppState } from '@/store/types'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 
 export type SessionRestoredBannerPane = Pick<ManagedPane, 'id' | 'container'>
@@ -9,9 +10,10 @@ export type SessionRestoredBannerReason = 'restored' | 'resume-unavailable'
 export type SessionRestoredBannerPaneReasons = ReadonlyMap<number, SessionRestoredBannerReason>
 
 export type SessionRestoredBannerStartup =
-  | {
-      showSessionRestoredBanner?: boolean
-    }
+  | Pick<
+      NonNullable<AppState['pendingStartupByTabId'][string]>,
+      'showSessionRestoredBanner' | 'launchAgent' | 'resumeProviderSession'
+    >
   | null
   | undefined
 
@@ -85,7 +87,10 @@ export function seedStartupSessionRestoredBanner(
   paneId: number,
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
 ): void {
-  if (startup?.showSessionRestoredBanner === true) {
+  if (
+    startup?.showSessionRestoredBanner === true &&
+    !(startup.launchAgent === 'claude' && startup.resumeProviderSession)
+  ) {
     onShowSessionRestoredBanner(paneId)
   }
 }

@@ -2,7 +2,8 @@ import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 // Test-only: one real OrcaRuntimeService wired into the real pty handlers, so both launch lanes
 // reach the same fake provider. Window lane: pty:spawn. Host lane: createTerminal / createAgentSession
 // through the runtime controller registerPtyHandlers installs. Suites still declare the IPC vi.mock block.
-import { vi } from 'vitest'
+import { onTestFinished, vi } from 'vitest'
+import * as claudeResumeConfig from '../claude/claude-session-resume-config'
 import type { Mock } from 'vitest'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { existsSyncMock, statSyncMock } from './pty-ipc-mock-registry'
@@ -145,8 +146,20 @@ export function startParityLanes(
     workspace: LaunchWorkspace
     settings?: Record<string, unknown>
     spawnError?: Error
+    admitClaudeStore?: boolean
   }
 ): ParityLanes {
+  if (args.admitClaudeStore) {
+    const admission = vi
+      .spyOn(claudeResumeConfig, 'prepareClaudeSessionResumeConfig')
+      .mockResolvedValue({
+        outcome: 'resume',
+        configDir: '/home/test/.claude',
+        userHome: '/home/test',
+        source: 'managed'
+      })
+    onTestFinished(() => admission.mockRestore())
+  }
   const settings = parityMainSettings(args.settings)
   const bindingStore = createPaneBindingStore()
   const persistPtyBinding = bindingStore.bindingWrites

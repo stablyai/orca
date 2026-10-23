@@ -80,7 +80,7 @@ export function normalizeHookPayload(
   const providerSession =
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
-      : extractAgentProviderSession(source, hookPayloadRecord)
+      : extractAgentProviderSession(source, hookPayloadRecord, record)
   if (source === 'opencode' && record.opencodeTui === 1 && !providerSession) {
     return null
   }

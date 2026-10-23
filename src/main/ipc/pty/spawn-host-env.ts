@@ -1,6 +1,10 @@
 // The env a new PTY starts with and the Codex home it runs, for both the window and the host spawn lane.
 
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../shared/agent-session-resume'
+import { agentLaunchQuotingShell } from '../../../shared/agent-launch-runtime'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
@@ -33,9 +37,16 @@ import { inheritOmpLaunchEnvironment } from './host-env/omp-launch-environment'
 import { promoteAgentTeamsShimPath } from './host-env/path'
 import type { GetSelectedCodexHomePath } from './host-env/types'
 import { clearProviderPtyState } from './provider/state-cleanup'
+import { withClaudeProfileTerminalEnv } from '../../claude-accounts/claude-profile-installed-router'
+import {
+  isClaudeResumeRequest,
+  resolveClaudeResumeLaunch,
+  type PrepareClaudeSessionResume
+} from './host-env/claude-resume'
 
 /** The Codex resume steps both lanes are handed (bound in register-handlers). */
 export type PtySpawnCodexResumeDeps = {
+  prepareClaudeSessionResume?: PrepareClaudeSessionResume
   prepareCodexResumeHome: (args: PrepareCodexResumeHomeArgs) => PreparedCodexResumeHome | null
   resolveCodexResumeLaunch: (
     command: string | undefined,
@@ -68,6 +79,7 @@ type PtySpawnHostEnvArgs = {
   launchAgent: TuiAgent | undefined
   command: string | undefined
   resumeProviderSession: AgentProviderSessionMetadata | undefined
+  resumeLaunchConfig?: SleepingAgentLaunchConfig
   /** The lane's spawn env before Orca's host env. */
   env: Record<string, string> | undefined
   cwd: string | undefined
@@ -98,6 +110,26 @@ type PtySpawnHostEnvArgs = {
 
 export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise<PtySpawnHostEnv> {
   const { deps, codexSelectionTarget: target } = args
+  const claudeResume =
+    !args.preAdopted &&
+    isClaudeResumeRequest(args.launchAgent, args.resumeProviderSession) &&
+    args.resumeProviderSession
+      ? await resolveClaudeResumeLaunch({
+          command: args.command,
+          env: args.env,
+          providerSession: args.resumeProviderSession,
+          launchConfig: args.resumeLaunchConfig,
+          shell: agentLaunchQuotingShell({
+            platform: target.runtime === 'wsl' ? 'linux' : process.platform,
+            pty: {
+              shellOverride: args.shellOverride,
+              terminalWindowsWslDistro: args.expectedWslDistro
+            }
+          }),
+          target,
+          prepare: deps.prepareClaudeSessionResume
+        })
+      : null
   const codexResumePreparation = args.preAdopted
     ? null
     : deps.prepareCodexResumeHome({
@@ -110,14 +142,17 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
       })
   const codexResumeLaunch = codexResumePreparation
     ? await deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
-    : deps.noCodexResumeLaunch(args.preAdopted ? undefined : args.command)
+    : deps.noCodexResumeLaunch(
+        args.preAdopted ? undefined : (claudeResume?.command ?? args.command)
+      )
   // Why: these three phases have unrelated costs (session provenance + hook
   // repair, account/auth resolution, then the synchronous env build). One
   // `host_env` label hid all of them behind the name of the cheapest.
   args.mark?.('codex_resume')
   const codexResumeHome = codexResumeLaunch.codexResumeHome
   const launchCommand = codexResumeLaunch.command
-  const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
+  const resumeEnv = claudeResume ? withClaudeProfileTerminalEnv(claudeResume.env, target) : args.env
+  const baseEnv = deps.stripSequencedStartupResumeArgv(resumeEnv, codexResumeLaunch)
   const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null

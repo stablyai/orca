@@ -24,12 +24,23 @@ import { serializeAgentStatusSubject } from '../../../shared/agent-status-subjec
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import type { ClaudeResumeOrigin } from '../../../shared/claude-resume-origin'
 
 // Why: the listing counter starts at 1, so an unassigned row must sort last — never above every ordered row.
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
+  protected claudeResumeOriginForHook:
+    | ((row: AgentHookEventPayload) => ClaudeResumeOrigin | undefined)
+    | null = null
+
+  setClaudeResumeOriginResolver(
+    resolver: (row: AgentHookEventPayload) => ClaudeResumeOrigin | undefined
+  ): void {
+    this.claudeResumeOriginForHook = resolver
+  }
 
   setCliWriterExecutionMatcher(...args: Parameters<typeof cliWriterExecutionMatcher>): void {
     this.cliWriterExecutionMatches = cliWriterExecutionMatcher(...args)
@@ -275,6 +286,12 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
           sessionId: enriched.providerSession.id,
           ...(enriched.providerSession.transcriptPath
             ? { transcriptPath: enriched.providerSession.transcriptPath }
+            : {}),
+          ...(enriched.providerSession.claudeConfig
+            ? { claudeConfig: enriched.providerSession.claudeConfig }
+            : {}),
+          ...(enriched.providerSession.claudeConfigOrigin
+            ? { claudeConfigOrigin: enriched.providerSession.claudeConfigOrigin }
             : {}),
           ...(enriched.worktreeId ? { worktreeId: enriched.worktreeId } : {})
         })

@@ -21,6 +21,7 @@ afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
+// Generic wake rules use Qwen; Claude additionally requires checked store recovery.
 function makeRecord(
   overrides: Partial<SleepingAgentSessionRecord> = {}
 ): SleepingAgentSessionRecord {
@@ -28,7 +29,7 @@ function makeRecord(
     paneKey: 'tab-1:leaf-1',
     tabId: 'tab-1',
     worktreeId: 'wt-1',
-    agent: 'claude',
+    agent: 'qwen-code',
     providerSession: { key: 'session_id', id: 'sess-1' },
     prompt: 'finish the task',
     state: 'working',
@@ -101,7 +102,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(1)
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
@@ -118,7 +119,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(1)
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
@@ -135,7 +136,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(1)
     const state = useAppStore.getState()
     const resumedTab = (state.tabsByWorktree['wt-1'] ?? []).find((tab) => tab.id !== 'tab-1')
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
@@ -373,7 +374,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
     expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
@@ -399,7 +400,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
     expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
@@ -423,7 +424,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
     expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
@@ -685,7 +686,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-active')
     expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.pendingStartupByTabId[resumedTab!.id]?.launchConfig).toMatchObject({
       agentArgs: '--active'
@@ -724,7 +725,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
     expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.sleepingAgentSessionsByPaneKey[invalid.paneKey]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[valid.paneKey]).toBeUndefined()
   })
@@ -750,7 +751,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
       (tab) => tab.id !== 'explicit-tab' && tab.id !== 'parsed-tab'
     )
     expect(launched).toBe(1)
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
@@ -795,7 +796,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
     const state = useAppStore.getState()
     expect(launched).toBe(1)
-    expect(state.tabsByWorktree['wt-1']?.[0]?.launchAgent).toBe('claude')
+    expect(state.tabsByWorktree['wt-1']?.[0]?.launchAgent).toBe('qwen-code')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
@@ -885,7 +886,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(launched).toBe(1)
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
-    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(resumedTab?.launchAgent).toBe('qwen-code')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.command).toContain(
       `'--resume' 'sess-1'"'"'s'`
     )

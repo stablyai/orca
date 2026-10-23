@@ -26,12 +26,13 @@ afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
+// Exercise SSH hydration with a provider that permits direct SSH resume.
 function makeRecord(worktreeId: string): SleepingAgentSessionRecord {
   return {
     paneKey: 'tab-1:leaf-1',
     tabId: 'tab-1',
     worktreeId,
-    agent: 'claude',
+    agent: 'qwen-code',
     providerSession: { key: 'session_id', id: 'sess-remote-1' },
     prompt: 'finish the migration',
     state: 'working',
@@ -116,7 +117,7 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
 
     expect(launched, 'the deferred agent never woke after the target connected').toBe(1)
     const state = useAppStore.getState()
-    expect(state.tabsByWorktree[WORKTREE_ID]?.[0]?.launchAgent).toBe('claude')
+    expect(state.tabsByWorktree[WORKTREE_ID]?.[0]?.launchAgent).toBe('qwen-code')
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 

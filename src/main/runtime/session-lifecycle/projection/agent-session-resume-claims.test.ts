@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ClaudeSessionResumeUnavailableError } from '../../../ipc/pty/host-env/claude-resume'
 import {
   AgentSessionResumeClaims,
   type AgentSessionResumeClaim
@@ -55,6 +56,14 @@ describe('AgentSessionResumeClaims', () => {
     const { claims } = makeClaims()
     claims.claim(SESSION, 'tab:a')?.settleFailure(true, new Error('spawn reply lost'))
     expect(claims.claim(SESSION, 'tab:b')).toBeNull()
+  })
+
+  it('releases a host-refused Claude preflight after dispatch was reported', () => {
+    const { claims } = makeClaims()
+    claims
+      .claim(SESSION, 'tab:a', 'request-1')
+      ?.settleFailure(true, new ClaudeSessionResumeUnavailableError('missing-transcript'))
+    expect(claims.claim(SESSION, 'tab:b')).not.toBeNull()
   })
 
   it('releases a dispatched spawn that proved its exit during start', () => {

@@ -1,3 +1,8 @@
+import { settleResumeSpawn } from './settle-resume-spawn'
+import {
+  claudeResumeHostSupportsCheckedRestore,
+  claudeCheckedResumeUnavailableMessage
+} from '@/lib/claude-checked-resume-host'
 import { armPaneOwnerRetry, isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
@@ -91,7 +96,24 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.transportConnectInFlightSince = Date.now()
     session.pendingSpawnDeferral = null
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
-    const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
+    const effectiveStartup = startupOverride ?? session.paneStartup
+    if (
+      effectiveStartup?.resumeProviderSession &&
+      (coldRestoreOverride?.agent ?? effectiveStartup.launchAgent) === 'claude'
+    ) {
+      session.preserveClaudeResumeRecord = true
+      if (
+        !claudeResumeHostSupportsCheckedRestore(useAppStore.getState(), session.deps.worktreeId, {
+          executionHostId: session.executionHostId ?? null,
+          runtimeEnvironmentId: session.transport.getRuntimeEnvironmentId?.() ?? null
+        })
+      ) {
+        session.reportError(claudeCheckedResumeUnavailableMessage())
+        releaseDeferredCwdFence()
+        clearPreSignaledSerializer()
+        return Promise.resolve(null)
+      }
+    }
     let ownerRefused = false
     const outputCallbacks = session.captureTransportOutputCallbacks(
       (message: string) => {
@@ -172,6 +194,12 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             coldRestoreOverride,
             outputCallbacks.generation
           )
+          if (
+            accepted &&
+            (coldRestoreOverride?.agent ?? effectiveStartup?.launchAgent) === 'claude'
+          ) {
+            settleResumeSpawn(session, effectiveStartup, coldRestoreOverride, connectResult)
+          }
           session.finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
           const gen = await preSignalPromise
           if (accepted && resolvedPtyId && typeof gen === 'number') {
@@ -201,18 +229,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
               foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
             })
           }
-          if (
-            spawnedPtyId &&
-            typeof spawnedPtyId === 'object' &&
-            spawnedPtyId.agentResumeUnavailable
-          ) {
-            // Why: main dropped the resume argv, so this pane is a NEW session —
-            // the plain restored banner would claim the old one came back.
-            session.showSessionRestoredBanner('resume-unavailable')
-          } else if (coldRestoreOverride?.hasSleepingRecord) {
-            session.showSessionRestoredBanner()
-          }
-          session.clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+          settleResumeSpawn(session, effectiveStartup, coldRestoreOverride, connectResult)
         } else if (
           session.paneStartup?.launchConfig ||
           (startupOverride && 'launchConfig' in startupOverride)

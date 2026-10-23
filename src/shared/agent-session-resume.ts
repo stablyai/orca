@@ -1,3 +1,10 @@
+import { normalizeClaudeResumeOrigin, type ClaudeResumeOrigin } from './claude-resume-origin'
+import {
+  normalizeClaudeResumeConfig,
+  readClaudeHookResumeConfig,
+  type ClaudeResumeConfig
+} from './claude-resume-config'
+import { isRecord } from './agent-status-child-work-value-guards'
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
 import type { AgentMainAgentStatus } from './main-agent-status'
@@ -45,6 +52,8 @@ export type AgentProviderSessionMetadata = {
    *  `id` alone fails. Claude/Codex still resume by id; Pi uses its reported
    *  `session_file` as the authoritative `--session` resume locator. */
   transcriptPath?: string
+  claudeConfig?: ClaudeResumeConfig
+  claudeConfigOrigin?: ClaudeResumeOrigin
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -177,10 +186,10 @@ export function isResumableTuiAgent(value: unknown): value is ResumableTuiAgent 
 }
 
 export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessionMetadata | null {
-  if (typeof raw !== 'object' || raw === null) {
+  if (!isRecord(raw)) {
     return null
   }
-  const record = raw as Record<string, unknown>
+  const record = raw
   const key = record.key
   if (key !== 'session_id' && key !== 'conversation_id') {
     return null
@@ -192,7 +201,17 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   // Why: persisted/relay metadata crosses a trust boundary too; apply the same
   // control-character rejection used for hook-reported transcript paths.
   const transcriptPath = readTranscriptPathFromKeys(record, ['transcriptPath'])
-  return transcriptPath ? { key, id, transcriptPath } : { key, id }
+  const claudeConfig = normalizeClaudeResumeConfig(record.claudeConfig)
+  const claudeConfigOrigin = claudeConfig
+    ? normalizeClaudeResumeOrigin(record.claudeConfigOrigin)
+    : undefined
+  return {
+    key,
+    id,
+    ...(transcriptPath ? { transcriptPath } : {}),
+    ...(claudeConfig ? { claudeConfig } : {}),
+    ...(claudeConfigOrigin ? { claudeConfigOrigin } : {})
+  }
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.
@@ -214,7 +233,8 @@ export function agentProviderSessionsEqual(
 
 export function extractAgentProviderSession(
   source: AgentHookSource,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  observedHookMetadata?: Record<string, unknown>
 ): AgentProviderSessionMetadata | null {
   switch (source) {
     // Native-chat agents: also capture the hook's authoritative transcript_path,
@@ -227,7 +247,16 @@ export function extractAgentProviderSession(
     case 'claude':
     case 'codex': {
       const id = readSessionId(payload, ['session_id'])
-      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
+      const claudeConfig =
+        source === 'claude' && observedHookMetadata
+          ? readClaudeHookResumeConfig(observedHookMetadata)
+          : undefined
+      return id
+        ? {
+            ...withTranscriptPath({ key: 'session_id', id }, payload),
+            ...(claudeConfig ? { claudeConfig } : {})
+          }
+        : null
     }
     case 'gemini':
     case 'droid':

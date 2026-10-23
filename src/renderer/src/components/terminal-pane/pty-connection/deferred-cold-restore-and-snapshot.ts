@@ -43,6 +43,13 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   session.clearSleepingRecordAfterColdRestoreSpawn = (
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
+    const claim = useAppStore.getState().automaticAgentResumeClaimsByTabId[session.deps.tabId]
+    if (!startup && claim?.launchAgent === 'claude' && claim.recoveryPaneKey) {
+      const record = session.getSleepingRecordForPane(useAppStore.getState())
+      if (record) {
+        session.clearSleepingRecordProviderDuplicates(useAppStore.getState(), record)
+      }
+    }
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
       // Switch point: main records the wake of this pane alone, the one this window resumed.
       // Before the drop below, whose record-only wake would leave main's wake nothing to wake.

@@ -1,4 +1,6 @@
+import { normalizeClaudeResumeOrigin } from '../claude-resume-origin'
 import { z } from 'zod'
+import { normalizeClaudeResumeConfig } from '../claude-resume-config'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { isTuiAgent } from '../tui-agent-config'
@@ -199,7 +201,9 @@ export const TerminalSetViewerColors = z.object({
 export const ResumeProviderSessionParam = z.object({
   key: z.enum(['session_id', 'conversation_id']),
   id: z.string().min(1).max(512),
-  transcriptPath: z.string().min(1).max(32_768).optional()
+  transcriptPath: z.string().min(1).max(32_768).optional(),
+  claudeConfig: z.unknown().transform(normalizeClaudeResumeConfig).optional(),
+  claudeConfigOrigin: z.unknown().transform(normalizeClaudeResumeOrigin).optional()
 })
 
 export const TerminalCreateParams = z.object({

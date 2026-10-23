@@ -36,6 +36,11 @@ export function buildAgentStatusModuleMock(
 }
 
 export async function installTerminalTestGlobals(): Promise<void> {
+  const capabilities = await import('@/runtime/local-runtime-capabilities')
+  const { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } =
+    await import('../../../../shared/agent-session-resume-runtime-capabilities')
+  capabilities.setLocalRuntimeCapabilitiesForTests(AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES)
+
   statusSnapshot?.dispose()
   resetStatusSnapshot?.dispose()
   statusSnapshot = agentStatusStartupSnapshot.registerAgentStatusStartupSnapshot()

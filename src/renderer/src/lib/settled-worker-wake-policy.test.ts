@@ -21,7 +21,7 @@ it('resumes a settled worker and an ordinary agent once each in the same wake sw
     paneKey: `${id}:leaf`,
     tabId: id,
     worktreeId: 'wt-1',
-    agent: 'claude' as const,
+    agent: 'qwen-code' as const,
     providerSession: { key: 'session_id' as const, id },
     prompt: 'continue the session',
     state: 'working' as const,

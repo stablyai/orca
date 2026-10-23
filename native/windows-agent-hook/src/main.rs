@@ -75,7 +75,7 @@ fn run(agent: &Agent) {
     }
     let mut payload = Vec::new();
     let _ = stdin.read_to_end(&mut payload);
-    let form = [
+    let mut form = vec![
         ("paneKey", var("ORCA_PANE_KEY")),
         ("tabId", var("ORCA_TAB_ID")),
         ("launchToken", var("ORCA_AGENT_LAUNCH_TOKEN")),
@@ -83,6 +83,28 @@ fn run(agent: &Agent) {
         ("env", coordinate("ORCA_AGENT_HOOK_ENV")),
         ("version", coordinate("ORCA_AGENT_HOOK_VERSION")),
     ];
+    if agent.source == "claude" {
+        let config_dir = var("CLAUDE_CONFIG_DIR");
+        let home = var("HOME");
+        form.push((
+            "claudeConfigKind",
+            if config_dir.is_empty() {
+                "default"
+            } else {
+                "explicit"
+            }
+            .to_owned(),
+        ));
+        form.push(("claudeConfigDir", config_dir));
+        form.push((
+            "claudeUserHome",
+            if home.is_empty() {
+                var("USERPROFILE")
+            } else {
+                home
+            },
+        ));
+    }
     post(agent.source, &port, &token, &form, &payload);
 }
 

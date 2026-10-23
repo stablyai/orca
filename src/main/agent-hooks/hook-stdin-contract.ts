@@ -124,12 +124,22 @@ export function buildPosixHookPayloadCapture(
 export function buildPosixHookSpoolLines(source: string, eventNameVar?: string): string[] {
   // Why: the event name must be a printf ARG, not inlined in the single-quoted format,
   // where a command substitution would be emitted literally.
+  const claudeFormat =
+    source === 'claude'
+      ? '"claudeConfigKind":"%s","claudeConfigEncoding":"base64","claudeConfigDir":"%s","claudeUserHome":"%s",'
+      : ''
+  const claudeArgs =
+    source === 'claude'
+      ? ' "$(spool_json_escape "${orca_claude_config_kind:-}")" "$(printf %s "${CLAUDE_CONFIG_DIR:-}" | base64 | tr -d \'\\n\')" "$(printf %s "${HOME:-}" | base64 | tr -d \'\\n\')"'
+      : ''
   const eventFormat = eventNameVar ? '"hookEventName":"%s",' : ''
   const eventArg = eventNameVar ? ` "$(spool_json_escape "\${${eventNameVar}:-}")"` : ''
   const spoolRecordLine = "  { printf '\\n{".concat(
     eventFormat,
+    claudeFormat,
     '"paneKey":"%s","tabId":"%s","worktreeId":"%s","env":"%s","version":"%s","launchToken":"%s","source":"%s","receivedAt":%s,"agentProcess":"%s","payload":%s}\\n\'',
     eventArg,
+    claudeArgs,
     ' "$(spool_json_escape "${ORCA_PANE_KEY:-}")" "$(spool_json_escape "${ORCA_TAB_ID:-}")" "$(spool_json_escape "${ORCA_WORKTREE_ID:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_ENV:-}")" "$(spool_json_escape "${ORCA_AGENT_HOOK_VERSION:-}")" "$(spool_json_escape "${ORCA_AGENT_LAUNCH_TOKEN:-}")" "$(spool_json_escape "',
     source,
     '")" "$spool_now" "$(spool_json_escape "${orca_agent_process:-}")" "$payload"; } >> "$spool_file" 2>/dev/null || :'

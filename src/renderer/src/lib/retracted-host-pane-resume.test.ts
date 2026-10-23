@@ -26,7 +26,7 @@ function makeRecord(
     paneKey,
     ...(tabId ? { tabId } : {}),
     worktreeId,
-    agent: 'claude',
+    agent: 'qwen-code',
     providerSession: { key: 'session_id', id: 'host-conversation' },
     origin: 'live',
     state: 'working',

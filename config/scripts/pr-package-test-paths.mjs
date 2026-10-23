@@ -19,6 +19,7 @@ export const LINUX_PACKAGE_TESTS = [
 
 // The package (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
 export const WINDOWS_BOUNDARY_TESTS = [
+  'src/main/ipc/pty/host-env/claude-resume.windows.test.ts',
   'src/main/zcode/zcode-plan-api-key-store-native-windows.test.ts',
   'config/scripts/rebuild-native-deps.test.mjs',
   'config/scripts/rebuild-native-deps-windows-process-tree.test.mjs',

@@ -57,6 +57,15 @@ export function getManagedScript(
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
+      ...(source === 'claude'
+        ? [
+            'setlocal EnableDelayedExpansion',
+            'set "orca_claude_config_kind=default"',
+            'if defined CLAUDE_CONFIG_DIR set "orca_claude_config_kind=explicit"',
+            'set "orca_claude_user_home=!HOME!"',
+            'if not defined orca_claude_user_home set "orca_claude_user_home=!USERPROFILE!"'
+          ]
+        : []),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand(source),
       'exit /b 0',
@@ -86,7 +95,13 @@ export function getManagedScript(
     'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  exit 0',
     'fi',
-    ...(source === 'claude' ? buildHookProcessCapture() : []),
+    ...(source === 'claude'
+      ? [
+          'orca_claude_config_kind=default',
+          '[ -z "${CLAUDE_CONFIG_DIR:-}" ] || orca_claude_config_kind=explicit',
+          ...buildHookProcessCapture()
+        ]
+      : []),
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',

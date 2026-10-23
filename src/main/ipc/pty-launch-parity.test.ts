@@ -656,7 +656,7 @@ describe('launch facts outside the tables', () => {
   it('host lane: concurrent resumes of one Claude session count one failed start once', async () => {
     setMainPlatform('darwin')
     classifyErrorMock.mockReturnValue({ error_class: 'binary_not_found' })
-    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO, admitClaudeStore: true })
     lanes.provider.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100))
       throw new Error('spawn boom')
@@ -683,7 +683,7 @@ describe('launch facts outside the tables', () => {
   it('host lane: a Claude resume its claim refuses counts one failed start', async () => {
     setMainPlatform('darwin')
     classifyErrorMock.mockReturnValue({ error_class: 'unknown' })
-    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO, admitClaudeStore: true })
     vi.spyOn(agentSessionOwners, 'ensure').mockRejectedValueOnce(
       new Error('agent_session_conflict')
     )

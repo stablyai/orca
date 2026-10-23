@@ -12,6 +12,7 @@ import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-st
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
+import { createClaudeSessionResumePreparation } from '../../../claude/claude-session-resume-preparation'
 
 const { regQueryStdout } = vi.hoisted(() => ({ regQueryStdout: { value: '' } }))
 
@@ -93,6 +94,59 @@ async function resolveSpawnOptions(
 async function resolveSpawnShell(shellOverride: string | undefined): Promise<string | undefined> {
   return (await resolveSpawnOptions({ cols: 120, rows: 40, shellOverride })).shellOverride
 }
+
+describe('runtime Claude recovery preflight', () => {
+  it('refuses an unavailable original store before preparing the selected account', async () => {
+    const deps = makeDeps()
+    const prepareClaudeAuth = vi.fn()
+    deps.prepareClaudeAuth = prepareClaudeAuth
+    deps.prepareClaudeSessionResume = createClaudeSessionResumePreparation({
+      dataRoot: join(tmpdir(), 'unavailable-claude-recovery'),
+      getSettings: deps.getSettings
+    })
+    const ctx = createRuntimePtySpawnState(deps, {
+      cols: 80,
+      rows: 24,
+      launchAgent: 'claude',
+      command: 'claude --resume missing',
+      resumeProviderSession: {
+        key: 'session_id',
+        id: 'missing',
+        transcriptPath: join(
+          tmpdir(),
+          'unregistered-claude-store',
+          'projects',
+          'p',
+          'missing.jsonl'
+        )
+      }
+    })
+    await expect(prepareRuntimePtySpawn(ctx)).rejects.toMatchObject({
+      code: 'claude_resume_unavailable'
+    })
+    expect(prepareClaudeAuth).not.toHaveBeenCalled()
+  })
+
+  it('leaves a warm adopted pane untouched by Claude recovery admission', async () => {
+    const deps = makeDeps()
+    const prepareClaudeSessionResume = vi.fn()
+    deps.prepareClaudeSessionResume = prepareClaudeSessionResume
+    const ctx = createRuntimePtySpawnState(deps, {
+      cols: 80,
+      rows: 24,
+      launchAgent: 'claude',
+      command: 'claude --resume missing',
+      resumeProviderSession: { key: 'session_id', id: 'missing' }
+    })
+    ctx.preAdoptedStablePane = {
+      result: { id: 'existing-pty' },
+      owner: { tabId: 'tab', leafId: 'leaf', ptyId: 'existing-pty', hasPersistedBinding: true }
+    }
+    await expect(prepareRuntimePtySpawn(ctx)).resolves.toBeNull()
+    expect(prepareClaudeSessionResume).not.toHaveBeenCalled()
+    expect(ctx.launchCommand).toBeUndefined()
+  })
+})
 
 describe('runtime pty spawn options: declared spawn intent', () => {
   it("hands a paired client's intent to the provider and omits it when undeclared", async () => {

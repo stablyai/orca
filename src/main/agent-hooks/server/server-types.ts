@@ -1,3 +1,4 @@
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
@@ -82,6 +83,8 @@ export type AgentHookProviderSessionIdentity = {
   paneKey: string
   sessionId: string
   transcriptPath?: string
+  claudeConfig?: AgentProviderSessionMetadata['claudeConfig']
+  claudeConfigOrigin?: AgentProviderSessionMetadata['claudeConfigOrigin']
   worktreeId?: string
 }
 

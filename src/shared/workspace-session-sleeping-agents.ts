@@ -1,4 +1,6 @@
+import { normalizeClaudeResumeOrigin } from './claude-resume-origin'
 import { z } from 'zod'
+import { normalizeClaudeResumeConfig } from './claude-resume-config'
 import {
   getAgentResumeArgv,
   normalizeAgentProviderSession,
@@ -20,7 +22,9 @@ const agentProviderSessionSchema = z.preprocess(
     id: z.string().min(1).max(512),
     // Why: Pi resumes by its authoritative session file, so dropping this
     // field during hydration makes an otherwise valid record unusable.
-    transcriptPath: z.string().min(1).optional()
+    transcriptPath: z.string().min(1).optional(),
+    claudeConfig: z.unknown().transform(normalizeClaudeResumeConfig).optional(),
+    claudeConfigOrigin: z.unknown().transform(normalizeClaudeResumeOrigin).optional()
   })
 )
 

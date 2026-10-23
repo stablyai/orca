@@ -22,6 +22,7 @@ export type ReattachPayloadSession = Pick<
   | 'setRestoredSnapshotBaseline'
   | 'shouldPreserveAgentReattachModes'
   | 'showSessionRestoredBanner'
+  | 'preserveClaudeResumeRecord'
   | 'suppressStructuralReplayPtyResize'
   | 'transport'
   | 'writeFreshShellViewportBlanking'

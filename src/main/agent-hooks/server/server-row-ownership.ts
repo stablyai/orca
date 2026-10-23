@@ -9,6 +9,9 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
+import { bindClaudeResumeContext, readAdmittedClaudeResumeConfig } from './claude-resume-context'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type { ClaudeResumeOrigin } from '../../../shared/claude-resume-origin'
 
 function toMutationIdentity(
   row: EnrichedAgentHookEventPayload | null | undefined
@@ -51,6 +54,31 @@ function semanticRowsEqual(
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  getAdmittedClaudeResumeConfig(session: AgentProviderSessionMetadata, origin: ClaudeResumeOrigin) {
+    return readAdmittedClaudeResumeConfig(this.state.lastStatusByPaneKey.values(), session, origin)
+  }
+
+  protected bindTerminalResumeContext<T extends AgentHookEventPayload>(
+    payload: T,
+    incoming: AgentHookEventPayload,
+    previous: EnrichedAgentHookEventPayload | undefined,
+    newRun: boolean
+  ): T {
+    const terminalHandle =
+      payload.terminalHandle ??
+      (previous?.terminalHandle && this.sameTerminalOwner(previous, payload)
+        ? previous.terminalHandle
+        : undefined)
+    return bindClaudeResumeContext(
+      terminalHandle === payload.terminalHandle ? payload : { ...payload, terminalHandle },
+      previous,
+      this.claudeResumeOriginForHook?.(incoming),
+      this.cliWriterExecutionMatches?.(incoming, previous) === true,
+      newRun,
+      incoming.agentPresence?.process
+    )
+  }
+
   _resetRowOwnershipForTests(): void {
     this.paneKeyByTerminalHandle.clear()
   }

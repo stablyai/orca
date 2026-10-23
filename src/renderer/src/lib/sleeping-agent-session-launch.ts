@@ -13,6 +13,10 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  claudeResumeHostSupportsCheckedRestore,
+  claudeCheckedResumeUnavailableMessage
+} from './claude-checked-resume-host'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
@@ -54,6 +58,13 @@ export function launchSleepingAgentSession(
   options?: ResumeSleepingAgentSessionsOptions
 ): boolean {
   const state = useAppStore.getState()
+  if (
+    record.agent === 'claude' &&
+    !claudeResumeHostSupportsCheckedRestore(state, record.worktreeId)
+  ) {
+    toast.error(claudeCheckedResumeUnavailableMessage())
+    return false
+  }
   const launchConfig = record.launchConfig
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
@@ -96,11 +107,14 @@ export function launchSleepingAgentSession(
     automaticResumeClaim: {
       worktreeId: record.worktreeId,
       launchAgent: record.agent,
-      providerSession: record.providerSession
+      providerSession: record.providerSession,
+      ...(record.agent === 'claude' ? { recoveryPaneKey: record.paneKey } : {})
     },
     ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
   })
-  state.clearSleepingAgentSession(record.paneKey)
+  if (record.agent !== 'claude') {
+    state.clearSleepingAgentSession(record.paneKey)
+  }
   if (!options?.suppressNavigation) {
     state.setActiveTabType('terminal', record.worktreeId)
   }

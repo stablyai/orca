@@ -68,6 +68,8 @@ import {
 } from './host-env/codex-resume'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { createClaudeSessionResumePreparation } from '../../claude/claude-session-resume-preparation'
+import { agentHookServer } from '../../agent-hooks/server'
 
 export function registerPtyHandlers(
   mainWindow?: PtyRendererDelivery,
@@ -234,9 +236,17 @@ export function registerPtyHandlers(
       ...args,
       onAdopted: (result) => session.sendPtySpawnedToRenderer(result.id)
     })
+  const prepareClaudeSessionResume = createClaudeSessionResumePreparation({
+    getSettings,
+    dataRoot: getAppEnvironment().getPath('userData'),
+    runtime,
+    getAdmittedConfig: (session, origin) =>
+      agentHookServer.getAdmittedClaudeResumeConfig(session, origin)
+  })
 
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   installPtyRuntimeController({
+    prepareClaudeSessionResume,
     runtime,
     store,
     adoptStablePane: adoptStablePaneBound,
@@ -279,6 +289,7 @@ export function registerPtyHandlers(
   }
   installPtyLeafMoveIpcHandler({ store, runtime })
   installPtySpawnIpcHandler({
+    prepareClaudeSessionResume,
     runtime,
     store,
     getSettings,

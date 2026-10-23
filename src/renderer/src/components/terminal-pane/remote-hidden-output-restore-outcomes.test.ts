@@ -491,6 +491,7 @@ describe('remote hidden-output restore outcomes', () => {
       agentStatusByPaneKey: {} as Record<string, unknown>,
       retainedAgentsByPaneKey: {},
       paneForegroundAgentByPaneKey: {} as Record<string, unknown>,
+      automaticAgentResumeClaimsByTabId: {},
       sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
       suppressedPtyExitIds: {},
       agentLaunchConfigByPaneKey: {} as Record<string, { launchConfig: unknown }>,

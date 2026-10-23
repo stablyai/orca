@@ -168,6 +168,13 @@ export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): s
     '--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"',
     '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
     '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
+    ...(source === 'claude'
+      ? [
+          '--data-urlencode "claudeConfigKind=!orca_claude_config_kind!"',
+          '--data-urlencode "claudeConfigDir=!CLAUDE_CONFIG_DIR!"',
+          '--data-urlencode "claudeUserHome=!orca_claude_user_home!"'
+        ]
+      : []),
     '--data-urlencode "payload@-"',
     '>nul 2>&1'
   ].join(' ')

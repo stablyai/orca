@@ -17,7 +17,10 @@ import type { PtyBindingSourceExpectation } from '../../../persistence'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
@@ -116,6 +119,7 @@ export type RuntimePtySpawnArgs = {
   env?: Record<string, string>
   envToDelete?: string[]
   resumeProviderSession?: AgentProviderSessionMetadata
+  launchConfig?: SleepingAgentLaunchConfig
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string

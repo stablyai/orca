@@ -195,7 +195,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       const isHibernationWakeRecord =
         (ptyId && state.suppressedPtyExitIds[ptyId]) ||
         (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
-      if (sleepingRecord && !isHibernationWakeRecord) {
+      if (sleepingRecord && !isHibernationWakeRecord && !session.preserveClaudeResumeRecord) {
         session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
       }
       session.clearStaleAgentTabTitleOnConfirmedShell()

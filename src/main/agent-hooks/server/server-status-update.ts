@@ -86,13 +86,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       | EnrichedAgentHookEventPayload
       | undefined
     const rowBefore = mutationBefore ?? previous
-    const terminalHandle =
-      payload.terminalHandle ??
-      (previous?.terminalHandle && this.sameTerminalOwner(previous, payload)
-        ? previous.terminalHandle
-        : undefined)
-    const terminalOwnedPayload =
-      terminalHandle === payload.terminalHandle ? payload : { ...payload, terminalHandle }
+    const terminalOwnedPayload = this.bindTerminalResumeContext(payload, incoming, previous, newRun)
     if (previous && isStaleGrokTurnEnd(previous, terminalOwnedPayload)) {
       // Why: Grok turn-end hooks may arrive after the next prompt, including across relay restart.
       this.commitStatusRowMutation(rowBefore, previous)
