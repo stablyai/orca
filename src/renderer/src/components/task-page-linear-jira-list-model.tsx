@@ -101,7 +101,30 @@ export function groupLinearIssues(
       })
     }
   }
+  if (groupBy === 'status') {
+    // Why: sections are created in the order their first issue sorts, so a recently updated
+    // Canceled issue would put that column before Todo. Use Linear's workflow order instead.
+    return [...sections.values()].sort(compareLinearStatusSections)
+  }
   return [...sections.values()]
+}
+const LINEAR_STATE_TYPE_RANK: ReadonlyMap<string, number> = new Map([
+  ['triage', 0],
+  ['backlog', 1],
+  ['unstarted', 2],
+  ['started', 3],
+  ['completed', 4],
+  ['canceled', 5]
+])
+function getLinearStateTypeRank(section: LinearGroupSection): number {
+  const type = section.issues[0]?.state.type ?? ''
+  return LINEAR_STATE_TYPE_RANK.get(type) ?? LINEAR_STATE_TYPE_RANK.size
+}
+function compareLinearStatusSections(a: LinearGroupSection, b: LinearGroupSection): number {
+  return (
+    getLinearStateTypeRank(a) - getLinearStateTypeRank(b) ||
+    compareNumericLocaleText(a.label, b.label)
+  )
 }
 export function TaskPageJiraErrorBanner({
   error,
