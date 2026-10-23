@@ -10,6 +10,7 @@ const PortsPanel = lazy(() => import('./PortsPanel'))
 const AiVaultSidebarPanel = lazy(() => import('./AiVaultSidebarPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
+const QuickTasksPanel = lazy(() => import('./QuickTasksPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
 
 type RightSidebarPanelContentProps = {
@@ -34,6 +35,9 @@ export function RightSidebarPanelContent({
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
         {effectiveTab === 'vault' && <AiVaultSidebarPanel />}
+        {effectiveTab === 'tasks' && (
+          <QuickTasksPanel isVisible={rightSidebarOpen && effectiveTab === 'tasks'} />
+        )}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
           <FolderWorkspacePrChecksPanel

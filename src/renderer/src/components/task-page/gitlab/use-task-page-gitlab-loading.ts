@@ -16,7 +16,7 @@ import {
 // foreground concurrency (8) leaves headroom for other callers on the same selector, such as the sidebar.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
 
-function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
+export function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
   return {
     repoPath: repo.path,
     repoId: repo.id,

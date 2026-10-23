@@ -14197,7 +14197,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "quickTasks": "Tasks"
           },
           "right": {
             "panel": {
@@ -17991,6 +17992,16 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "QuickTasksPanel": {
+          "createWorkspace": "Create workspace",
+          "openInBrowser": "Open in browser",
+          "loadFailed": "Could not load tasks.",
+          "empty": "No open issues.",
+          "noRepos": "Open a git workspace to see its tasks here.",
+          "title": "Open issues",
+          "refresh": "Refresh",
+          "noSource": "Sign in to GitHub or GitLab to see this project’s issues."
         }
       },
       "link": {
