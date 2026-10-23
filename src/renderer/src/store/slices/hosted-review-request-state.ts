@@ -9,6 +9,7 @@ export const inflightHostedReviewRequests = new Map<
   {
     promise: Promise<HostedReviewInfo | null>
     force: boolean
+    currentHeadOid: string | null
     generation: number
     startedAt: number
   }
@@ -26,6 +27,32 @@ const hostedReviewRevalidationLanes = new Map<string, HostedReviewRevalidationLa
 
 export function hostedReviewRequestKey(cacheKey: string, hintKey: string): string {
   return `${cacheKey}\0${hintKey}`
+}
+
+export function inflightHostedReviewRequestKey(requestKey: string, currentHeadOid?: string | null) {
+  return JSON.stringify([requestKey, currentHeadOid ?? null])
+}
+
+/** Only requests for the same Git head can supply a current merged-review result. */
+export function getHostedReviewRequestForHead(requestKey: string, currentHeadOid?: string | null) {
+  return inflightHostedReviewRequests.get(
+    inflightHostedReviewRequestKey(requestKey, currentHeadOid)
+  )
+}
+
+export function finishInflightHostedReviewRequest(
+  requestKey: string,
+  currentHeadOid: string | null | undefined,
+  cacheKey: string,
+  generation: number
+): void {
+  const inflightKey = inflightHostedReviewRequestKey(requestKey, currentHeadOid)
+  if (inflightHostedReviewRequests.get(inflightKey)?.generation === generation) {
+    inflightHostedReviewRequests.delete(inflightKey)
+    if (hostedReviewRequestGenerations.get(cacheKey) === generation) {
+      hostedReviewRequestGenerations.delete(cacheKey)
+    }
+  }
 }
 
 function requiredHostedReviewRevalidationIdleMs(lane: HostedReviewRevalidationLane): number {
@@ -177,13 +204,18 @@ export function registerInflightHostedReviewRequest(
   entry: {
     promise: Promise<HostedReviewInfo | null>
     force: boolean
+    currentHeadOid: string | null
     generation: number
     startedAt: number
   }
-): void {
-  inflightHostedReviewRequests.set(requestKey, entry)
+): Promise<HostedReviewInfo | null> {
+  inflightHostedReviewRequests.set(
+    inflightHostedReviewRequestKey(requestKey, entry.currentHeadOid),
+    entry
+  )
   supersedeHostedReviewRevalidation(requestKey, {
     promise: entry.promise,
     startedAt: entry.startedAt
   })
+  return entry.promise
 }
