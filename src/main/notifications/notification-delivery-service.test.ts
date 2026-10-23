@@ -334,52 +334,79 @@ describe('bringing forward only an eligible completed reply', () => {
     await settle()
     expect(harness.deps.bringSubjectToFront).toHaveBeenCalledWith(request)
   })
-  it.each(['disabled', 'linux', 'bell', 'focused', 'cooldown'] as const)(
-    'S2/S12: %s does not read provenance',
-    async (gate) => {
-      const settings = makeSettings({ bringToFrontOnAgentTaskComplete: gate !== 'disabled' })
-      const harness = makeHarness(settings)
-      const window = background(harness)
-      if (gate === 'linux') {
-        harness.deps.platform = 'linux'
-      }
-      if (gate === 'focused') {
-        window.focus()
-      }
-      const service = createNotificationDeliveryService(harness.deps)
-      if (gate === 'cooldown') {
-        await service.dispatch(makeRequest({ source: 'terminal-bell' }))
-      }
-      await service.dispatch(
-        makeRequest({ source: gate === 'bell' ? 'terminal-bell' : 'agent-task-complete' })
-      )
-      await settle()
-      expect(harness.deps.canBringAgentReply).not.toHaveBeenCalled()
-      expect(harness.deps.bringSubjectToFront).not.toHaveBeenCalled()
-    }
-  )
-  it.each(['ineligible', 'focus', 'setting-off', 'current-turn'] as const)(
-    'keeps banners and rejects a late reveal after %s',
-    async (reason) => {
-      const settings = makeSettings({ bringToFrontOnAgentTaskComplete: true })
-      const harness = makeHarness(settings)
-      const window = background(harness)
-      const waiting = Promise.withResolvers<boolean>()
-      harness.deps.canBringAgentReply = () => waiting.promise
-      await createNotificationDeliveryService(harness.deps).dispatch(makeRequest())
-      if (reason === 'current-turn') {
-        harness.deps.isAgentReplyCurrent = () => false
-      }
-      if (reason === 'focus') {
-        window.focus()
-      }
-      if (reason === 'setting-off') {
+  type RevealSetup = {
+    settings: NotificationSettings
+    harness: Harness
+    window: ReturnType<typeof background>
+    service: ReturnType<typeof createNotificationDeliveryService>
+  }
+  it.each<{
+    gate: string
+    setup: (context: RevealSetup) => void | Promise<unknown>
+    request?: Partial<NotificationDispatchRequest>
+  }>([
+    {
+      gate: 'disabled',
+      setup: ({ settings }) => {
         settings.bringToFrontOnAgentTaskComplete = false
       }
-      waiting.resolve(reason !== 'ineligible')
-      await settle()
-      expect(harness.deliverNative).toHaveBeenCalledOnce()
-      expect(harness.deps.bringSubjectToFront).not.toHaveBeenCalled()
+    },
+    {
+      gate: 'linux',
+      setup: ({ harness }) => {
+        harness.deps.platform = 'linux'
+      }
+    },
+    { gate: 'bell', setup: () => {}, request: { source: 'terminal-bell' } },
+    { gate: 'focused', setup: ({ window }) => window.focus() },
+    {
+      gate: 'cooldown',
+      setup: ({ service }) => service.dispatch(makeRequest({ source: 'terminal-bell' }))
     }
-  )
+  ])('S2/S12: $gate does not read provenance', async ({ setup, request }) => {
+    const settings = makeSettings({ bringToFrontOnAgentTaskComplete: true })
+    const harness = makeHarness(settings)
+    const window = background(harness)
+    const service = createNotificationDeliveryService(harness.deps)
+    await setup({ settings, harness, window, service })
+    await service.dispatch(makeRequest(request))
+    await settle()
+    expect(harness.deps.canBringAgentReply).not.toHaveBeenCalled()
+    expect(harness.deps.bringSubjectToFront).not.toHaveBeenCalled()
+  })
+  it.each<{
+    reason: string
+    eligible: boolean
+    setup: (context: RevealSetup) => void
+  }>([
+    { reason: 'ineligible', eligible: false, setup: () => {} },
+    { reason: 'focus', eligible: true, setup: ({ window }) => window.focus() },
+    {
+      reason: 'setting-off',
+      eligible: true,
+      setup: ({ settings }) => {
+        settings.bringToFrontOnAgentTaskComplete = false
+      }
+    },
+    {
+      reason: 'current-turn',
+      eligible: true,
+      setup: ({ harness }) => {
+        harness.deps.isAgentReplyCurrent = () => false
+      }
+    }
+  ])('keeps banners and rejects a late reveal after $reason', async ({ setup, eligible }) => {
+    const settings = makeSettings({ bringToFrontOnAgentTaskComplete: true })
+    const harness = makeHarness(settings)
+    const window = background(harness)
+    const waiting = Promise.withResolvers<boolean>()
+    harness.deps.canBringAgentReply = () => waiting.promise
+    const service = createNotificationDeliveryService(harness.deps)
+    await service.dispatch(makeRequest())
+    setup({ settings, harness, window, service })
+    waiting.resolve(eligible)
+    await settle()
+    expect(harness.deliverNative).toHaveBeenCalledOnce()
+    expect(harness.deps.bringSubjectToFront).not.toHaveBeenCalled()
+  })
 })
