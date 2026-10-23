@@ -7,6 +7,8 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
  * switch the panel invisibly behind the board.
  */
 test.describe('Workspace board right-sidebar tab dismiss', () => {
+  test.skip(process.platform !== 'darwin', 'Linux and Windows draw the tab strip under the board')
+
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)

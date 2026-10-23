@@ -1,5 +1,11 @@
+// @vitest-environment happy-dom
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isWorkspaceBoardKeepOpenTarget } from './use-workspace-kanban-outside-dismiss'
+import { renderHook } from '@testing-library/react'
+import {
+  isWorkspaceBoardKeepOpenTarget,
+  useWorkspaceKanbanOutsideDismiss
+} from './use-workspace-kanban-outside-dismiss'
 
 class FakeNode {
   parentElement: FakeElement | null = null
@@ -57,5 +63,38 @@ describe('workspace kanban outside dismiss keep-open targets', () => {
     const target = new FakeElement()
 
     expect(isWorkspaceBoardKeepOpenTarget(target as unknown as EventTarget)).toBe(false)
+  })
+})
+
+describe('workspace kanban outside dismiss', () => {
+  afterEach(() => {
+    document.body.replaceChildren()
+  })
+
+  it('closes the board from a right-sidebar tab, even inside a portalled menu', () => {
+    const sheet = document.createElement('div')
+    sheet.setAttribute('data-slot', 'sheet-content')
+    const board = document.createElement('div')
+    sheet.append(board)
+    const menu = document.createElement('div')
+    menu.setAttribute('data-slot', 'dropdown-menu-content')
+    const tab = document.createElement('div')
+    tab.setAttribute('data-workspace-board-dismiss', '')
+    menu.append(tab)
+    document.body.append(sheet, menu)
+    const onOpenChange = vi.fn()
+    renderHook(() =>
+      useWorkspaceKanbanOutsideDismiss({
+        open: true,
+        boardRef: { current: board },
+        preserveOpenForMenu: false,
+        onOpenChange
+      })
+    )
+
+    menu.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    expect(onOpenChange).not.toHaveBeenCalled()
+    tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })
