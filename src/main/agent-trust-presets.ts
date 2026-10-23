@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
@@ -152,6 +153,56 @@ export function markAntigravityWorkspaceTrusted(workspacePath: string, home: str
     mkdirSync(configDir, { recursive: true })
   }
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+/**
+ * Kimi Code keeps one trust record per workspace root in
+ * ~/.kimi-code/workspace-trust/<key>, where <key> is
+ * `wd_<basename-slug>_<12 hex of sha256(canonical root)>` and the payload is
+ * `{"root": <path>, "trustedAt": <epoch ms>}`.
+ *
+ * Verified against the Kimi Code CLI source (MoonshotAI/kimi-code,
+ * packages/agent-core-v2): workspaceTrust/trustRecord.ts keys the record on
+ * `encodeWorkDirKey(canonicalWorkspaceRoot(root))`, `_base/utils/workdir-slug.ts`
+ * derives the key (basename slugified lowercase, sha256 of the slashed path),
+ * `_base/utils/paths.ts` canonicalizes to `path.resolve` on posix and the
+ * lowercase slashed form on Windows roots, and the node-fs document store maps
+ * scope/key to `<home>/.kimi-code/workspace-trust/<key>` with unindented JSON.
+ *
+ * Trust is exact-root and not inherited (the service reads it only for the
+ * launch cwd), so every new worktree needs its own record — precisely what
+ * this per-worktree preflight provides. The CLI also still accepts the
+ * un-canonicalized legacy key and migrates it, so a resolved-path record
+ * written here matches the canonical lookup on launch.
+ */
+export function markKimiWorkspaceTrusted(workspacePath: string, home: string): void {
+  const absPath = canonicalize(workspacePath)
+  const slashed = absPath.replaceAll('\\', '/')
+  // Why lowercase only for Windows-shaped roots: the CLI's workspaceRootKey
+  // folds drive-letter and UNC spellings to one key, so C:\Users\Foo\Repo and
+  // c:/users/foo/repo must land on the same record.
+  const winShaped = /^(?:[A-Za-z]:[\\/]|\\\\|\/\/)/.test(slashed)
+  const normalized = slashed.replace(/\/+$/, '')
+  const keyRoot = winShaped ? normalized.toLowerCase() : normalized
+  const base = keyRoot.split('/').pop() ?? keyRoot
+  const slug =
+    base
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9._-]+/g, '-')
+      .replaceAll(/^-+|-+$/g, '')
+      .slice(0, 40)
+      .replaceAll(/^-+|-+$/g, '') || 'workspace'
+  const hash = createHash('sha256').update(keyRoot).digest('hex').slice(0, 12)
+  const trustDir = join(home, '.kimi-code', 'workspace-trust')
+  const trustFile = join(trustDir, `wd_${slug}_${hash}`)
+  if (existsSync(trustFile)) {
+    return
+  }
+  mkdirSync(trustDir, { recursive: true })
+  // Why owner-only: kimi-code's own storage creates the dir 0o700 and records 0o600.
+  writeFileAtomically(trustFile, JSON.stringify({ root: absPath, trustedAt: Date.now() }), {
+    mode: 0o600
+  })
 }
 
 /**

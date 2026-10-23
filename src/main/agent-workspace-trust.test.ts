@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   copilot: vi.fn<(path: string, home: string) => void>(),
   antigravity: vi.fn<(path: string, home: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
+  kimi: vi.fn<(path: string, home: string) => void>(),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
@@ -28,7 +29,8 @@ vi.mock('./agent-trust-presets', () => ({
   markCodexProjectTrusted: mocks.codex,
   markCursorWorkspaceTrusted: mocks.cursor,
   markCopilotFolderTrusted: mocks.copilot,
-  markAntigravityWorkspaceTrusted: mocks.antigravity
+  markAntigravityWorkspaceTrusted: mocks.antigravity,
+  markKimiWorkspaceTrusted: mocks.kimi
 }))
 vi.mock('./codex/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
@@ -78,7 +80,8 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     ['copilot', mocks.copilot],
     ['qoder', mocks.qoder],
     // Why: one of the old copied switches omitted Antigravity, so workers launched there asked.
-    ['antigravity', mocks.antigravity]
+    ['antigravity', mocks.antigravity],
+    ['kimi', mocks.kimi]
   ] as const)('writes the %s preset for the workspace', async (preset, writer) => {
     await expect(applyAgentWorkspaceTrust(preset, WORKSPACE, local)).resolves.toEqual({})
     expect(writer).toHaveBeenCalledWith(
@@ -89,11 +92,17 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
 
   it('writes per-user trust under the home the launch env names, where the agent reads it', async () => {
     const context = { ...local, env: { HOME: '/home/agent', USERPROFILE: '/home/agent' } }
-    for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity'] as const) {
+    for (const preset of ['codex', 'cursor', 'copilot', 'qoder', 'antigravity', 'kimi'] as const) {
       await applyAgentWorkspaceTrust(preset, WORKSPACE, context)
     }
     expect(mocks.codexConfigFiles).toHaveBeenCalledWith('/home/agent')
-    for (const writer of [mocks.cursor, mocks.copilot, mocks.qoder, mocks.antigravity]) {
+    for (const writer of [
+      mocks.cursor,
+      mocks.copilot,
+      mocks.qoder,
+      mocks.antigravity,
+      mocks.kimi
+    ]) {
       expect(writer).toHaveBeenCalledWith(WORKSPACE, '/home/agent')
     }
   })

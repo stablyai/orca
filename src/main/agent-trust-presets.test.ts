@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -36,7 +37,8 @@ const {
   markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
+  markCursorWorkspaceTrusted,
+  markKimiWorkspaceTrusted
 } = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
@@ -250,6 +252,122 @@ describe('markAntigravityWorkspaceTrusted', () => {
       expect(parsed.trustedWorkspaces).toContain(realpathSync(child))
     } finally {
       rmSync(parent, { recursive: true, force: true })
+    }
+  })
+})
+
+// Mirrors kimi-code's workspaceRootKey normalization (backslashes to slashes,
+// trailing-slash strip, lowercase for Windows-shaped roots), which the writer
+// replicates too. win32's realpathSync returns backslash spellings, so the
+// expected keys below must normalize the same way to stay oracle-accurate.
+function expectedKeyRoot(resolved: string): string {
+  const slashed = resolved.replaceAll('\\', '/')
+  const winShaped = /^(?:[A-Za-z]:[\\/]|\\\\|\/\/)/.test(slashed)
+  const normalized = slashed.replace(/\/+$/, '')
+  return winShaped ? normalized.toLowerCase() : normalized
+}
+
+describe('markKimiWorkspaceTrusted', () => {
+  // The key contract: Kimi Code looks its trust record up by
+  // `wd_<basename-slug>_<12 hex of sha256(canonical root)>` under
+  // ~/.kimi-code/workspace-trust/, so the file name must match the CLI's own
+  // derivation byte for byte or the trust menu still fires. The expectations
+  // below mirror MoonshotAI/kimi-code's trustRecord.ts + workdir-slug.ts +
+  // paths.ts (canonicalWorkspaceRoot → workspaceRootKey).
+  it('writes the trust record under the CLI-derived key with the cwd payload', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-kimi-ws-'))
+    try {
+      markKimiWorkspaceTrusted(workspace, testState.fakeHomeDir)
+      const trustDir = join(testState.fakeHomeDir, '.kimi-code', 'workspace-trust')
+      const entries = readdirSync(trustDir)
+      expect(entries).toHaveLength(1)
+
+      // canonicalWorkspaceRoot is path.resolve on posix; the record lands under
+      // the resolved spelling Kimi's own launch cwd produces, keyed after
+      // workspaceRootKey normalization.
+      const resolved = realpathSync(workspace)
+      const keyRoot = expectedKeyRoot(resolved)
+      const base = keyRoot.split('/').pop() ?? keyRoot
+      const slug =
+        base
+          .toLowerCase()
+          .replaceAll(/[^a-z0-9._-]+/g, '-')
+          .replaceAll(/^-+|-+$/g, '')
+          .slice(0, 40)
+          .replaceAll(/^-+|-+$/g, '') || 'workspace'
+      const hash = createHash('sha256').update(keyRoot).digest('hex').slice(0, 12)
+      expect(entries[0]).toBe(`wd_${slug}_${hash}`)
+
+      const payload = JSON.parse(readFileSync(join(trustDir, entries[0]), 'utf-8'))
+      expect(payload.root).toBe(resolved)
+      expect(typeof payload.trustedAt).toBe('number')
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  // Why: Kimi slugifies the folder name (lowercase, non [a-z0-9._-] runs become
+  // '-'), so a worktree named "My Repo!" must land under my-repo's key.
+  it('slugifies a folder name with spaces and punctuation the way the CLI does', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'orca-kimi-parent-'))
+    const workspace = join(parent, 'My Repo!')
+    try {
+      mkdirSync(workspace, { recursive: true })
+      markKimiWorkspaceTrusted(workspace, testState.fakeHomeDir)
+      const trustDir = join(testState.fakeHomeDir, '.kimi-code', 'workspace-trust')
+      const entries = readdirSync(trustDir)
+      const hash = createHash('sha256')
+        .update(expectedKeyRoot(realpathSync(workspace)))
+        .digest('hex')
+        .slice(0, 12)
+      expect(entries).toEqual([`wd_my-repo_${hash}`])
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
+    }
+  })
+
+  // Why: Windows roots are canonicalized to the lowercase slashed spelling the
+  // CLI keys on (workspaceRootKey), so both drive-letter spellings share one
+  // record — the same contract kimi-code's own tests pin.
+  it('shares one key across Windows drive-letter spelling variants', () => {
+    const mixed = 'C:\\Users\\Foo\\Repo'
+    const lower = 'c:/users/foo/repo'
+    markKimiWorkspaceTrusted(mixed, testState.fakeHomeDir)
+    markKimiWorkspaceTrusted(lower, testState.fakeHomeDir)
+    const trustDir = join(testState.fakeHomeDir, '.kimi-code', 'workspace-trust')
+    expect(readdirSync(trustDir)).toEqual(['wd_repo_d96422186418'])
+    const payload = JSON.parse(readFileSync(join(trustDir, 'wd_repo_d96422186418'), 'utf-8'))
+    expect(payload.root).toBe(mixed)
+  })
+
+  it('is idempotent — re-marking the same workspace does not overwrite trustedAt', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-kimi-ws-'))
+    try {
+      markKimiWorkspaceTrusted(workspace, testState.fakeHomeDir)
+      const trustDir = join(testState.fakeHomeDir, '.kimi-code', 'workspace-trust')
+      const firstPayload = readFileSync(join(trustDir, readdirSync(trustDir)[0]), 'utf-8')
+      markKimiWorkspaceTrusted(workspace, testState.fakeHomeDir)
+      const secondPayload = readFileSync(join(trustDir, readdirSync(trustDir)[0]), 'utf-8')
+      expect(secondPayload).toBe(firstPayload)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the record owner-only', () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-kimi-ws-'))
+    const originalUmask = process.umask(0o022)
+    try {
+      markKimiWorkspaceTrusted(workspace, testState.fakeHomeDir)
+      const trustDir = join(testState.fakeHomeDir, '.kimi-code', 'workspace-trust')
+      const entry = readdirSync(trustDir)[0]
+      expect(statSync(join(trustDir, entry)).mode & 0o777).toBe(0o600)
+    } finally {
+      process.umask(originalUmask)
+      rmSync(workspace, { recursive: true, force: true })
     }
   })
 })

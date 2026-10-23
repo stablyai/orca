@@ -259,9 +259,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   kimi: {
     // Why: the `kimi` launcher runs as `kimi-code`, so foreground-process recognition never
     // matches the agent without the alias — terminal reuse and `dispatch --inject` fail.
+    // preflightTrust keys the worktree root itself (#26680): every fresh worktree hits Kimi's trust menu.
     detectCmd: 'kimi',
     detectCmdAliases: ['kimi-code'],
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    preflightTrust: 'kimi'
   },
   'mistral-vibe': {
     // Why: installer exposes binary `vibe` though the package is mistral-vibe; keep old name as alias for wrapped installs.
@@ -360,22 +362,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEnt
   ])
 ) as Record<TuiAgent, TuiAgentConfig>
 
-export function isTuiAgent(value: unknown): value is TuiAgent {
-  return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
-}
-
-export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
-  return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
-}
-
-export function getTuiAgentLaunchCommand(
-  config: TuiAgentConfig,
-  platform: NodeJS.Platform,
-  opts?: { isRemote?: boolean }
-): string {
-  // Why: local-only orca-ide rename (avoids GNOME Orca clash) must not leak to Linux remotes, whose relay shim is always `orca`.
-  if (opts?.isRemote && platform === 'linux') {
-    return config.launchCmd
-  }
-  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
-}
+// Why: the read-side helpers live in tui-agent-config-queries.ts to stay under the
+// max-lines ratchet; every importer keeps importing them from here.
+export {
+  getTuiAgentDetectCommands,
+  getTuiAgentLaunchCommand,
+  isTuiAgent
+} from './tui-agent-config-queries'
