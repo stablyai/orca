@@ -11,6 +11,7 @@ import {
 } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import { readString } from '../tool-input-preview'
+import { resolveDshLeadEvent } from './dsh-lead-session'
 
 /**
  * DeepSeek Harness reaches Orca through its own `@deepseek-ai/dsh-hooks-claude-code`
@@ -36,12 +37,14 @@ export function normalizeDshEvent(
     return null
   }
 
-  // Why: the bridge stamps the *child's* session id on both subagent events and labels
-  // every child `general-purpose`, so a child turn cannot be told from the lead's. Muse
-  // (#22216) showed what that costs: child hooks flip a finished pane back to working.
-  if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
+  // Why: child agents post every lifecycle hook under their own session id; only the lead's may
+  // drive the pane or become its resume target. Subagent edges only record children.
+  const lead = resolveDshLeadEvent(state, paneKey, eventName, promptText, hookPayload)
+  if (lead.kind === 'drop') {
     return null
   }
+  const effectivePrompt =
+    lead.kind === 'adopted' && !promptText && lead.heldPrompt ? lead.heldPrompt : promptText
 
   const toolName = readString(hookPayload, 'tool_name')
 
@@ -71,7 +74,7 @@ export function normalizeDshEvent(
 
   return normalizeAgentStatusPayload({
     state: stateName,
-    prompt: resolvePrompt(state, paneKey, promptText, {
+    prompt: resolvePrompt(state, paneKey, effectivePrompt, {
       resetOnNewTurn: isNewTurnEvent('dsh', eventName)
     }),
     agentType: 'dsh',

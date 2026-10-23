@@ -71,6 +71,8 @@ export type HookListenerState = {
   grokMainAgentStatusByPaneKey: Map<string, AgentMainAgentStatus>
   /** Muse child-session filter and session-log cursor per pane. */
   musePaneStateByPaneKey: Map<string, MusePaneState>
+  /** DSH lead-session filter per pane; see resolveDshLeadEvent. */
+  dshPaneStateByPaneKey: Map<string, DshPaneState>
   /**
    * OpenCode session id -> owning pane, observed from the client side. The
    * shared v2 server stamps every post with its own frozen pane, so ingest
@@ -88,6 +90,19 @@ export type MusePaneState = {
   log?: MuseSessionLogState
   /** Muse emits PermissionRequest for auto-approved calls too; only Notification confirms a visible prompt. */
   pendingApproval?: { toolName?: string; toolInput?: unknown }
+}
+
+export type DshPaneState = {
+  /** The session whose hooks speak for the pane; the resume target. */
+  leadSessionId?: string
+  /** The lead before the last switch, so a switch to a session later named a child can be undone. */
+  previousLead?: { sessionId: string; turnOpen: boolean }
+  /** Whether the lead is between a prompt and its Stop; children only start inside a lead turn. */
+  leadTurnOpen: boolean
+  /** Sessions a SubagentStart/SubagentStop named; their hooks never reach the pane. */
+  childSessionIds: Set<string>
+  /** Unknown sessions first heard mid-turn, held until a Subagent edge claims them or the grace lapses. */
+  candidates: Map<string, { heldSince: number; heldPrompt?: string }>
 }
 
 export type GrokActiveTurn = {
@@ -132,6 +147,7 @@ export function createHookListenerState(
     grokActiveTurnByPaneKey: new Map(),
     grokMainAgentStatusByPaneKey: new Map(),
     musePaneStateByPaneKey: new Map(),
+    dshPaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map()
   }
@@ -224,6 +240,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
   state.musePaneStateByPaneKey.delete(paneKey)
+  state.dshPaneStateByPaneKey.delete(paneKey)
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
 }
@@ -277,6 +294,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.grokActiveTurnByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokMainAgentStatusByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.musePaneStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.dshPaneStateByPaneKey, fromPaneKey, toPaneKey)
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
 }
@@ -313,6 +331,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.codexLeadStateByPaneKey.clear()
   state.grokActiveTurnByPaneKey.clear()
   state.grokMainAgentStatusByPaneKey.clear()
+  state.dshPaneStateByPaneKey.clear()
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
 }
