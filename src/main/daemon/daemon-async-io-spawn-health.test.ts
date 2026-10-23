@@ -20,10 +20,18 @@ it('reports asynchronous progress and logs only transitions into and out of a st
   const handler = new DaemonHealthRequests(vi.fn(), { log })
   const request = { id: 'health', type: 'asyncIoHealth' } as const
   health.mockResolvedValue({ state: 'healthy', pendingMs: 0 })
-  expect(await handler.handle(request)).toEqual({ state: 'healthy', pendingMs: 0 })
+  expect(await handler.handle(request)).toEqual({
+    state: 'healthy',
+    pendingMs: 0,
+    recoverySupported: true
+  })
   expect(log).not.toHaveBeenCalled()
   health.mockResolvedValue({ state: 'stalled', pendingMs: 5000 })
-  expect(await handler.handle(request)).toEqual({ state: 'stalled', pendingMs: 5000 })
+  expect(await handler.handle(request)).toEqual({
+    state: 'stalled',
+    pendingMs: 5000,
+    recoverySupported: true
+  })
   await handler.handle(request)
   health.mockResolvedValue({ state: 'healthy', pendingMs: 0 })
   await handler.handle(request)

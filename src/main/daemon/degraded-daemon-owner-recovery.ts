@@ -13,12 +13,26 @@ export class DegradedDaemonOwnerRecovery {
 
   constructor(
     providers: readonly IPtyProvider[],
-    private readonly daemonAdapters: readonly DaemonPtyAdapter[],
+    private daemonAdapters: readonly DaemonPtyAdapter[],
     private readonly routes: Map<string, IPtyProvider>,
     private readonly spawnFresh: (opts: PtySpawnOptions) => Promise<PtySpawnResult>
   ) {
     this.attachResolver = new DaemonSessionOwnerResolver(providers, routes)
     this.livenessResolver = new DaemonSessionOwnerResolver(daemonAdapters, routes)
+  }
+
+  removeRetiredAdapter(
+    adapter: DaemonPtyAdapter,
+    current: DaemonPtyAdapter,
+    legacy: DaemonPtyAdapter[]
+  ): DaemonPtyAdapter[] {
+    if (adapter === current || !adapter.hasRetiredForIdle()) {
+      return legacy
+    }
+    this.attachResolver.removeRetiredProvider(adapter)
+    this.livenessResolver.removeRetiredProvider(adapter)
+    this.daemonAdapters = this.daemonAdapters.filter((owner) => owner !== adapter)
+    return legacy.filter((owner) => owner !== adapter)
   }
 
   resolveFencedOwner = (id: string, incarnationId: string) =>

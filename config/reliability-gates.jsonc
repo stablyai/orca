@@ -21087,8 +21087,9 @@
       "coverageNotes": "Deterministic probe, adapter and rendered notice tests; the production probe also returned stalled in the affected macOS daemon. Physical Linux/Windows/WSL/SSH and remote notices remain gaps.",
       "motivatingLinks": ["docs/bug-reproductions/daemon-async-io-stall.md"],
       "invariant": "An authenticated responsive daemon must not pass its full spawn health check while asynchronous I/O is stalled. Detection owns at most one unfinished probe and never infers exit, replays input or restarts processes.",
-      "oracle": "An uncompleted operation yields stalled while timers keep running; repeated checks add no work; completion restores healthy. The notice explains restart consequences and opens the existing review. Old and unreachable peers never yield a stalled verdict.",
+      "oracle": "An uncompleted operation yields stalled while timers keep running; repeated checks add no work; completion restores healthy. The notice explains restart consequences and reviews the exact affected owner inventory. Confirmation is fenced by daemon identity, session incarnations, current stalled evidence and admission state; legacy recovery never restarts the healthy current owner. A stalled preserved owner is reported beside a healthy current daemon; recovery requires all supported retained owners to answer healthy, while unreachable owners prevent a healthy verdict. Known unsupported old peers do not pin a recovered warning. Removed, replaced and newly adopted owners cannot inherit stale health. Old and unreachable peers never yield a stalled verdict.",
       "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-async-io-probe.test.ts src/main/daemon/daemon-async-io-spawn-health.test.ts src/main/daemon/daemon-pty-adapter-async-io-health.test.ts src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx src/main/ipc/pty-management-async-io-health.test.ts src/main/daemon/daemon-stalled-owner-fencing.test.ts src/main/daemon/daemon-stalled-owner-recovery.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-async-io-probe.test.ts src/main/daemon/daemon-async-io-spawn-health.test.ts src/main/daemon/daemon-pty-adapter-async-io-health.test.ts src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx src/main/ipc/pty-management-async-io-health.test.ts --maxWorkers=2"
       ],
       "testFiles": [
@@ -21096,7 +21097,9 @@
         "src/main/daemon/daemon-async-io-spawn-health.test.ts",
         "src/main/daemon/daemon-pty-adapter-async-io-health.test.ts",
         "src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx",
-        "src/main/ipc/pty-management-async-io-health.test.ts"
+        "src/main/ipc/pty-management-async-io-health.test.ts",
+        "src/main/daemon/daemon-stalled-owner-fencing.test.ts",
+        "src/main/daemon/daemon-stalled-owner-recovery.test.ts"
       ],
       "assertionRefs": [
         {
@@ -21115,18 +21118,46 @@
         {
           "file": "src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx",
           "assertions": [
-            "shows a persistent explanation and opens the existing restart review without stopping anything",
+            "reviews the exact affected terminals before targeting their service",
             "clears a proven stall on recovery, and does no work while hidden or after unmount"
           ]
         },
         {
           "file": "src/main/ipc/pty-management-async-io-health.test.ts",
           "assertions": [
-            "discards health evidence if the daemon changes while the check is pending"
+            "discards health evidence if the daemon changes while the check is pending",
+            "reports a stalled legacy owner even when the current daemon is healthy",
+            "does not certify a newly adopted owner from an older health snapshot",
+            "discards a removed legacy owner without hiding recovery of the remaining owner"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-stalled-owner-fencing.test.ts",
+          "assertions": [
+            "refuses a new incarnation with the same reviewed session ID",
+            "refuses a terminal added after review without fencing the owner",
+            "shuts down exactly the reviewed live inventory through the real daemon RPC",
+            "does not acknowledge recovery when native session disposal fails after admission closes"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-stalled-owner-recovery.test.ts",
+          "assertions": [
+            "removes only the recovered legacy owner and never restarts the healthy current daemon",
+            "refuses an older peer without fenced recovery support"
           ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-async-io-probe.test.ts src/main/daemon/daemon-async-io-spawn-health.test.ts src/main/daemon/daemon-pty-adapter-async-io-health.test.ts src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.test.tsx src/main/ipc/pty-management-async-io-health.test.ts --maxWorkers=2",
+          "result": "passed",
+          "durationSeconds": 1.91,
+          "summary": "36 focused tests pass. The original current-only handler fails added assertions for missed legacy stalls and incorrect healthy verdicts with an unknown or newly adopted owner. The revised handler passes without session enumeration or restart. A further red/green assertion prevents an unsupported old peer from pinning a recovered warning."
+        },
         {
           "date": "2026-10-15",
           "runner": "local",
@@ -21147,15 +21178,15 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Forcing a healthy timeout verdict caused 2 failing tests; restoring the detector passed focused tests. Initial native trigger remains a separate unproved gap."
+        "evidence": "Forcing a healthy timeout verdict caused 2 failing tests; restoring the detector passed focused tests. The current-only handler also fails five generation-coverage assertions; the all-owner check passes. Runtime mitigation and exact job-producer investigation remain separate."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "One outstanding stat per daemon even after timeout, 30-second healthy cache, no session inventory or subprocesses; UI checks coalesce, stop while hidden and dispose on unmount."
+        "evidence": "One optional health RPC per already-adopted daemon per visible UI check; adapter calls are concurrent and identity-fenced, with no connections opened. One outstanding stat per daemon even after timeout, 30-second healthy cache, no session inventory or subprocesses; UI checks coalesce, stop while hidden and dispose on unmount."
       },
       "knownGaps": [
-        "Initial runtime/native trigger and prevention fix remain unproved.",
-        "Older preserved daemons require a deliberate restart before supporting this probe.",
+        "Runtime prevention is tracked in #29133; the exact Orca job-producer sequence remains unproved.",
+        "Older preserved daemons require a deliberate restart before supporting this probe; health-capable peers without the new fenced shutdown RPC and degraded current owners decline targeted recovery.",
         "Physical Linux, Windows, WSL and SSH; remote notices; collapsed sidebar surfacing."
       ],
       "promotionCriteria": [

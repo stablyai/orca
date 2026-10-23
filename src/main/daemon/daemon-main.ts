@@ -1,3 +1,4 @@
+import type { DaemonRpcShutdownMode } from './daemon-rpc-process-exit'
 import { DaemonServer } from './daemon-server'
 import type { DaemonServerOptions } from './daemon-server-options'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -26,7 +27,7 @@ export type DaemonStartOptions = {
   automaticWorkMarkerPath?: string
   hostTerminalLedgerDir?: string
   onIdleShutdown?: () => void
-  onRpcShutdown?: () => void
+  onRpcShutdown?: (mode?: DaemonRpcShutdownMode) => void
   onShutdownRequested?: () => void
   initialAdoptionTestConfig?: DaemonServerOptions['initialAdoptionTestConfig']
 }

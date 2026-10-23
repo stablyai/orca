@@ -9,11 +9,16 @@ const HEALTH_CACHE_MS = 30_000
 export class DaemonAsyncIoProbe {
   private pending: Promise<DaemonAsyncIoHealth> | null = null
   private healthyUntil = 0
+  private stalled = false
 
   constructor(
     private readonly probe: (done: () => void) => void = (done) => stat(process.execPath, done),
     private readonly now: () => number = () => performance.now()
   ) {}
+
+  isStalled(): boolean {
+    return this.stalled
+  }
 
   check(): Promise<DaemonAsyncIoHealth> {
     if (this.pending) {
@@ -30,6 +35,7 @@ export class DaemonAsyncIoProbe {
     })
     this.pending = pending
     const timer = setTimeout(() => {
+      this.stalled = true
       settle({ state: 'stalled', pendingMs: Math.max(0, this.now() - startedAt) })
     }, DAEMON_ASYNC_IO_TIMEOUT_MS)
     const done = (): void => {
@@ -37,6 +43,7 @@ export class DaemonAsyncIoProbe {
         return
       }
       complete = true
+      this.stalled = false
       clearTimeout(timer)
       this.pending = null
       this.healthyUntil = this.now() + HEALTH_CACHE_MS
@@ -58,4 +65,8 @@ const daemonAsyncIoProbe = new DaemonAsyncIoProbe()
 
 export function checkDaemonAsyncIo(): Promise<DaemonAsyncIoHealth> {
   return daemonAsyncIoProbe.check()
+}
+
+export function isDaemonAsyncIoStalled(): boolean {
+  return daemonAsyncIoProbe.isStalled()
 }

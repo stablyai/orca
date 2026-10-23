@@ -1,3 +1,5 @@
+import type { ShutdownRequest, ShutdownStalledOwnerRequest } from './daemon-stalled-owner-shutdown'
+export type { ShutdownRequest } from './daemon-stalled-owner-shutdown'
 import type {
   AsyncIoHealthRequest,
   FullDiskAccessStatusRequest,
@@ -223,14 +225,6 @@ export type TerminalBufferActionRequest = {
   }
 }
 
-export type ShutdownRequest = {
-  id: string
-  type: 'shutdown'
-  payload: {
-    killSessions: boolean
-  }
-}
-
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
@@ -317,6 +311,7 @@ export type DaemonRequest =
   | ConfirmShellForegroundRequest
   | TerminalBufferActionRequest
   | ShutdownRequest
+  | ShutdownStalledOwnerRequest
   | PingRequest
   | SystemResolverHealthRequest
   | PtySpawnHealthRequest

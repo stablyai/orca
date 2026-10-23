@@ -20485,8 +20485,22 @@
     },
     "stalledDaemonBanner": {
       "body": "Background work on this computer is stalled. Typing and new terminals may not work. Restarting the terminal service ends its running terminals and commands.",
+      "cancel": "Cancel",
+      "confirmBody": "This ends the terminals and running commands listed below. Unsaved terminal work may be lost.",
+      "confirmTitle": "Restart affected terminal service?",
+      "noSessions": "No running terminals were reported by this service.",
+      "pid": "PID",
+      "recoveryUnavailable": "This terminal service cannot be safely restarted from this app version.",
+      "restart": "Restart affected service",
+      "restartChanged": "The terminal service or its terminals changed. Review the affected terminals again.",
+      "restartUnknown": "Restart could not be confirmed. Review the affected terminals again.",
       "review": "Review restart options",
-      "title": "Terminal service may need a restart"
+      "reviewChanged": "The terminal service changed or could not be verified. Check again before restarting.",
+      "reviewFailed": "Could not review the affected terminals. Try again.",
+      "terminal": "Terminal",
+      "title": "Terminal service may need a restart",
+      "unknownDirectory": "Working directory unavailable",
+      "unknownPid": "unavailable"
     },
     "severedDaemonBanner": {
       "unknownCount": "its running terminals",

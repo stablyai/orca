@@ -1,3 +1,4 @@
+import type { DaemonRpcShutdownMode } from './daemon-rpc-process-exit'
 import { createServer, type Server, type Socket } from 'node:net'
 import type { DaemonEndpointLifecycle } from './daemon-endpoint-lifecycle'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -18,7 +19,7 @@ type DaemonServerLifecycleOptions = {
   isIdle: () => boolean
   disposeResources: () => Promise<void>
   onIdleShutdown: () => void
-  onRpcShutdown: () => void
+  onRpcShutdown: (mode?: DaemonRpcShutdownMode) => void
   onShutdownRequested: () => void
 }
 
@@ -31,6 +32,7 @@ export class DaemonServerLifecycle {
   private initialAdoptionDeadlineMs: number | null = null
   private retirementRequested = false
   private shutdownPromise: Promise<void> | null = null
+  private rpcShutdownMode: DaemonRpcShutdownMode | undefined
   private ordinaryShutdownServerClose: Promise<void> | null = null
   private readonly pendingShutdownReplies = new Map<string, PendingShutdownReply>()
 
@@ -160,13 +162,16 @@ export class DaemonServerLifecycle {
     clientId: string,
     requestId: string,
     socket: Socket,
-    serverClose: Promise<void>
+    serverClose: Promise<void>,
+    mode?: DaemonRpcShutdownMode
   ): void {
+    this.rpcShutdownMode ??= mode
     this.deferShutdownUntilReply(clientId, requestId, socket, () =>
       this.finishRpcShutdown(serverClose)
     )
   }
-  finishRpcShutdownWithoutReply(serverClose: Promise<void>): void {
+  finishRpcShutdownWithoutReply(serverClose: Promise<void>, mode?: DaemonRpcShutdownMode): void {
+    this.rpcShutdownMode ??= mode
     this.shutdownPromise ??= this.finishRpcShutdown(serverClose)
   }
 
@@ -223,7 +228,7 @@ export class DaemonServerLifecycle {
 
   private async finishRpcShutdown(serverClose: Promise<void>): Promise<void> {
     await this.finishOrdinaryShutdown(serverClose)
-    this.options.onRpcShutdown()
+    this.options.onRpcShutdown(this.rpcShutdownMode)
   }
 
   private async finishIdleShutdown(serverClose: Promise<void>): Promise<void> {

@@ -1,3 +1,4 @@
+import { shutdownStalledOwner } from './daemon-stalled-owner-shutdown'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
@@ -17,6 +18,7 @@ import type { TerminalHost } from './terminal-host'
 import { SessionNotFoundError, type DaemonRequest } from './types'
 
 type DaemonRequestRouterOptions = {
+  identity?: { pid: number; startedAtMs: number | null; launchNonce: string | null }
   host: TerminalHost
   connections: DaemonClientConnections
   lifecycle: DaemonServerLifecycle
@@ -170,6 +172,13 @@ export class DaemonRequestRouter {
       case 'ptySpawnHealth':
       case 'asyncIoHealth':
         return this.health.handle(request)
+      case 'shutdownStalledOwner':
+        return shutdownStalledOwner(request, {
+          ...this.options,
+          health: this.health,
+          isAcceptingWork: () => this.options.lifecycle.isAcceptingWork(),
+          shutdown: () => this.shutdown(clientId, request.id, true, true)
+        })
       case 'shutdown':
         return this.shutdown(clientId, request.id, request.payload.killSessions)
     }
@@ -246,32 +255,37 @@ export class DaemonRequestRouter {
   private async shutdown(
     clientId: string,
     requestId: string,
-    killSessions: boolean
+    killSessions: boolean,
+    requireDisposal = false
   ): Promise<Record<string, never>> {
-    this.options.log.log('shutdown', {
-      reason: 'rpc',
-      killSessions: killSessions === true
-    })
+    this.options.log.log('shutdown', { reason: 'rpc', killSessions: killSessions === true })
     const serverClose = this.options.lifecycle.beginOrdinaryShutdownFence()
+    let disposalFailed = false
     if (killSessions) {
       try {
         await this.options.host.dispose()
       } catch (error) {
+        disposalFailed = true
         this.options.log.log('shutdown-dispose-failed', {
           error: error instanceof Error ? error.message : String(error)
         })
       }
     }
+    const mode = requireDisposal && !disposalFailed ? 'verified-stalled-owner' : undefined
     const controlSocket = this.options.connections.get(clientId)?.controlSocket
     if (controlSocket) {
       this.options.lifecycle.deferRpcShutdownUntilReply(
         clientId,
         requestId,
         controlSocket,
-        serverClose
+        serverClose,
+        mode
       )
     } else {
-      this.options.lifecycle.finishRpcShutdownWithoutReply(serverClose)
+      this.options.lifecycle.finishRpcShutdownWithoutReply(serverClose, mode)
+    }
+    if (requireDisposal && disposalFailed) {
+      throw new Error('Terminal service disposal could not be verified')
     }
     return {}
   }

@@ -61,6 +61,11 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     }
   }
 
+  removeRetiredProvider(provider: T): void {
+    this.invalidateProvider(provider)
+    this.forgetProvider(provider)
+  }
+
   invalidateProvider(provider: T): void {
     this.invalidateInventory()
     this.forgetRoutesOf(provider)

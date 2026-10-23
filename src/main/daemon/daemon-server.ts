@@ -32,8 +32,6 @@ import {
 import { encodeNdjson } from './ndjson'
 
 export class DaemonServer {
-  private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
-
   private readonly log: DaemonFileLog
   readonly automaticWork: DaemonAutomaticWorkGuard
   private readonly host: TerminalHost
@@ -190,8 +188,7 @@ export class DaemonServer {
     }
     this.lifecycle = new DaemonServerLifecycle({
       protocolVersion,
-      initialAdoptionTimeoutMs:
-        options.initialAdoptionTestConfig?.timeoutMs ?? DaemonServer.INITIAL_ADOPTION_TIMEOUT_MS,
+      initialAdoptionTimeoutMs: options.initialAdoptionTestConfig?.timeoutMs ?? 2 * 60 * 1000,
       clock: lifecycleClock,
       endpoint: this.endpoint,
       log: this.log,
@@ -216,6 +213,7 @@ export class DaemonServer {
       reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown()
     })
     this.requestRouter = new DaemonRequestRouter({
+      identity: { pid: process.pid, startedAtMs, launchNonce },
       host: this.host,
       connections: this.connections,
       lifecycle: this.lifecycle,

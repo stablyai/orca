@@ -1,3 +1,4 @@
+import { exitDaemonAfterRpcShutdown } from './daemon-rpc-process-exit'
 /**
  * Daemon entry point — runs as a standalone Node.js process.
  *
@@ -327,10 +328,10 @@ async function main(): Promise<void> {
       daemonLog.close()
       process.exit(0)
     },
-    onRpcShutdown: () => {
+    onRpcShutdown: (mode) => {
       shutdownDeadline.cancel()
       daemonLog.close()
-      process.exit(0)
+      exitDaemonAfterRpcShutdown(mode)
     },
     onShutdownRequested: beginShutdown
   })

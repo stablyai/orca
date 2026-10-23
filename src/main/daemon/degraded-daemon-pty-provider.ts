@@ -72,6 +72,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.unsubscribers.push(...this.ownerRecovery.subscribeIdentityChanges())
   }
 
+  removeRecoveredLegacyAdapter(adapter: DaemonPtyAdapter): void {
+    this.legacy = this.ownerRecovery.removeRetiredAdapter(adapter, this.current, this.legacy)
+  }
+
   async discoverDaemonSessions(): Promise<void> {
     await this.ownerRecovery.discoverRoutes()
   }

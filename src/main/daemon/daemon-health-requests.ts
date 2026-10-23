@@ -64,7 +64,7 @@ export class DaemonHealthRequests {
             pendingMs: health.pendingMs
           })
         }
-        return health
+        return { ...health, recoverySupported: true }
       }
     }
   }

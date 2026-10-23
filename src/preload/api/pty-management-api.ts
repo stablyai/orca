@@ -1,5 +1,11 @@
 import type { DaemonPtyCwdClass } from '../../shared/daemon-adoption-telemetry'
-import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
+import type {
+  StalledDaemonOwner,
+  StalledDaemonReview,
+  StalledDaemonRestartRequest,
+  StalledDaemonRestartResult,
+  DaemonAsyncIoStatus
+} from '../../shared/daemon-async-io-health'
 
 // Mirrors DaemonSessionInfo; preload cannot import main-only daemon protocol types.
 export type PtyManagementSession = {
@@ -50,6 +56,10 @@ export type PtyManagementSeveredDaemonRestartResult =
   | { status: 'refused'; reason: 'not-severed' | 'replaced' | 'unverifiable' }
 
 export type PtyManagementApi = {
+  reviewStalledDaemon: (owner: StalledDaemonOwner) => Promise<StalledDaemonReview>
+  restartStalledDaemon: (
+    request: StalledDaemonRestartRequest
+  ) => Promise<StalledDaemonRestartResult>
   asyncIoHealth: () => Promise<DaemonAsyncIoStatus>
   // degraded: new PTYs fall back to local spawning without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>

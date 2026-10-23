@@ -168,6 +168,9 @@ export const ptyStreamAndSerializationApi = {
   reportRendererSerializerReady: (ptyId: string): Promise<void> =>
     ipcRenderer.invoke('pty:reportRendererSerializerReady', { ptyId }),
   management: {
+    reviewStalledDaemon: (owner) => ipcRenderer.invoke('pty:management:reviewStalledDaemon', owner),
+    restartStalledDaemon: (request) =>
+      ipcRenderer.invoke('pty:management:restartStalledDaemon', request),
     asyncIoHealth: () => ipcRenderer.invoke('pty:management:asyncIoHealth'),
     listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
     killAll: () => ipcRenderer.invoke('pty:management:killAll'),

@@ -59,6 +59,13 @@ export async function restartDaemon(
   )
 }
 
+// Caller holds the shared restart barrier after the owner-specific shutdown completed.
+export function replaceCurrentDaemonAfterVerifiedShutdown(
+  expectedDaemonPid: number
+): Promise<RestartDaemonResult> {
+  return runRestartDaemon(expectedDaemonPid, true)
+}
+
 async function runRestartDaemon(
   expectedDaemonPid?: number,
   endpointMayBeGone = false

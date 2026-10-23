@@ -1,3 +1,4 @@
+import type { DaemonRpcShutdownMode } from './daemon-rpc-process-exit'
 import type { DaemonFileLog } from './daemon-file-log'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalSpawnAdmissionMode } from './terminal-spawn-gate'
@@ -14,7 +15,7 @@ export type DaemonServerOptions = {
   spawnerExecPath?: string
   protocolVersion?: number
   onIdleShutdown?: () => void
-  onRpcShutdown?: () => void
+  onRpcShutdown?: (mode?: DaemonRpcShutdownMode) => void
   onShutdownRequested?: () => void
   initialAdoptionTestConfig?: {
     timeoutMs: number

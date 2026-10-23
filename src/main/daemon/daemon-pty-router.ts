@@ -51,6 +51,15 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.legacyExitProof.record(this.legacy)
   }
 
+  removeRecoveredLegacyAdapter(adapter: DaemonPtyAdapter): void {
+    if (adapter === this.current || !adapter.hasRetiredForIdle()) {
+      return
+    }
+    this.legacy = this.legacy.filter((owner) => owner !== adapter)
+    this.subscriptions.dropAdapter(adapter)
+    this.ownerResolver.removeRetiredProvider(adapter)
+  }
+
   async discoverLegacySessions(): Promise<void> {
     await this.ownerResolver.discoverRoutes()
     this.legacyExitProof.record(this.legacy)

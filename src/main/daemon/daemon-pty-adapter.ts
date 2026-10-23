@@ -19,7 +19,11 @@ import {
 } from '../../shared/host-spawn-admission'
 import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from './daemon-automatic-work-protocol'
-import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
+import type {
+  StalledDaemonRestartRequest,
+  StalledDaemonRestartResult,
+  DaemonAsyncIoStatus
+} from '../../shared/daemon-async-io-health'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
   constructor(opts: DaemonPtyAdapterOptions) {
@@ -86,7 +90,13 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         Number.isFinite(health.pendingMs) &&
         health.pendingMs >= 0
       ) {
-        return { state: health.state, pendingMs: health.pendingMs }
+        return {
+          state: health.state,
+          pendingMs: health.pendingMs,
+          ...('recoverySupported' in health && health.recoverySupported === true
+            ? { recoverySupported: true }
+            : {})
+        }
       }
     } catch (error) {
       if (isUnknownRequestTypeError(error)) {
@@ -94,6 +104,47 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
       }
     }
     return { state: 'unverifiable' }
+  }
+
+  async shutdownStalledOwner(
+    request: StalledDaemonRestartRequest
+  ): Promise<StalledDaemonRestartResult> {
+    const identity = this.getDaemonIdentity()
+    if (
+      !identity ||
+      request.owner.protocolVersion !== this.protocolVersion ||
+      request.owner.pid !== identity.pid ||
+      request.owner.startedAtMs !== identity.startedAtMs ||
+      request.owner.launchNonce !== identity.launchNonce
+    ) {
+      return { status: 'refused' }
+    }
+    const wasClosed = this.respawnAdoptionClosed
+    this.respawnAdoptionClosed = true
+    try {
+      const result = await this.client.request<unknown>('shutdownStalledOwner', request, 30_000)
+      if (
+        result &&
+        typeof result === 'object' &&
+        'status' in result &&
+        result.status === 'restarted' &&
+        'killedCount' in result &&
+        typeof result.killedCount === 'number' &&
+        Number.isSafeInteger(result.killedCount) &&
+        result.killedCount >= 0
+      ) {
+        this.idleRetirementState = 'retiring'
+        this.fanoutSyntheticExits(-1, { replacedByRestart: true })
+        return { status: 'restarted', killedCount: result.killedCount }
+      }
+    } catch (error) {
+      // Keep recovery closed when shutdown may already have crossed its admission fence.
+      if (!isUnknownRequestTypeError(error)) {
+        return { status: 'refused' }
+      }
+    }
+    this.respawnAdoptionClosed = wasClosed
+    return { status: 'refused' }
   }
 
   async getFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {
