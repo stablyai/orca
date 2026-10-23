@@ -416,6 +416,45 @@ describe('useSystemSleepHold', () => {
     expect(read).toHaveBeenCalledTimes(3)
   })
 
+  it('keeps a scheduled re-ask that fires while the 30 s poll is in flight with an older value', async () => {
+    let calls = 0
+    const read = vi.fn().mockImplementation(() => {
+      calls += 1
+      if (calls <= 2) {
+        return Promise.resolve(hold('yes'))
+      }
+      if (calls === 3) {
+        // Why: the poll gets main's cached value from the focus read, answered late by a busy main.
+        const cached = { sleepDisabled: 'yes', observedAt: Date.now() - 4_000 } as const
+        return new Promise((resolve) => setTimeout(() => resolve(cached), 2_000))
+      }
+      return Promise.resolve(hold('no'))
+    })
+    installApi(read)
+    const { result } = renderHook(() => useSystemSleepHold())
+    await advance(26_000)
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(read).toHaveBeenCalledTimes(2)
+
+    await advance(1_000)
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await advance(3_000)
+    expect(read).toHaveBeenCalledTimes(3)
+
+    await advance(2_100)
+    expect(read).toHaveBeenCalledTimes(4)
+    expect(result.current.state).toBe('none')
+
+    await advance(20_000)
+    expect(read).toHaveBeenCalledTimes(4)
+  })
+
   it('leaves no pending timer when it unmounts during an unresolved read', async () => {
     const read = vi.fn().mockImplementation(() => new Promise(() => {}))
     installApi(read)

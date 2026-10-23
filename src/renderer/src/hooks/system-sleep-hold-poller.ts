@@ -80,6 +80,11 @@ export function startSystemSleepHoldPoller({ read, onHold }: PollerOptions): Sys
       if (observedAt !== null && observedAt >= reaskSince) {
         return
       }
+      if (pending) {
+        // Why: the in-flight read must answer this event or schedule its own re-ask.
+        eventAt = Math.max(eventAt ?? 0, reaskSince)
+        return
+      }
       readNow()
     }, delay)
   }
