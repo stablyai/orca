@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -15,8 +15,18 @@ import { claudeProviderHandle } from '../../shared/agent-session-provider-handle
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 
+import { canonicalOrcaSessionId } from './orchestration/canonical-orca-session-id'
+import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
+import { createSessionCallerHarness } from './rpc/orchestration-session-caller-test-fixture'
+import { bindAfterProbe } from './rpc/methods/orchestration/runs/run-coordinator-liveness'
+import { issueRunHandover } from './orchestration/db/runs/run-handover'
+import { getRunHandover } from './orchestration/db/runs/run-authority-store'
+const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
+vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => hostRef.current
+}))
 const NOW = 1_800_000_000_000
-const SOURCE = 'session-alpha'
+const SOURCE = testOrcaSessionId('11111111-1111-4111-8111-111111111111')
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
 let directory: string
@@ -26,6 +36,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  hostRef.current = null
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -210,4 +222,82 @@ describe('clear transaction', () => {
     expect(journal.cursor()).toEqual(before)
     expect(store.getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
   })
+})
+
+it('derives only published clears, including reopened stores across a coordinator probe', async () => {
+  const { store, completed, operation } = await prepare()
+  const next = testOrcaSessionId('22222222-2222-4222-8222-222222222222')
+  const last = testOrcaSessionId('33333333-3333-4333-8333-333333333333')
+  const snapshot = store.getRecordSnapshot()
+  const receipt = () =>
+    store.conversationReceipts.clear(
+      () => ({ ...completed, command: { ...completed.command, replacementSessionId: next } }),
+      operation
+    )
+  expect(canonicalOrcaSessionId(next, store)).toBe(next)
+  expect(() =>
+    openTestJournalHostDatabase(directory).transaction((db) => {
+      receipt().write(db)
+      expect(store.getRecordSnapshot()).toBe(snapshot)
+      expect(canonicalOrcaSessionId(next, store)).toBe(next)
+      throw new Error('rollback')
+    })
+  ).toThrow('rollback')
+  expect(canonicalOrcaSessionId(next, store)).toBe(next)
+  const committed = receipt()
+  openTestJournalHostDatabase(directory).transaction((db) => committed.write(db))
+  expect(store.getRecordSnapshot()).toBe(snapshot)
+  expect(canonicalOrcaSessionId(next, store)).toBe(next)
+  committed.committed()
+  expect(store.getRecordSnapshot()).not.toBe(snapshot)
+  expect(canonicalOrcaSessionId(next, store)).toBe(SOURCE)
+  const reopened = await open()
+  const h = createSessionCallerHarness(hostRef)
+  try {
+    hostRef.current = { deps: { store: reopened } }
+    expect(canonicalOrcaSessionId(next)).toBe(SOURCE)
+    expect(canonicalOrcaSessionId(last)).toBe(last)
+    const issuer = {
+      terminalHandle: 'issuer',
+      paneKey: 'issuer',
+      processIncarnation: 'issuer',
+      orcaSessionId: null
+    }
+    const run = h.db.createRun({
+      objective: 'probe',
+      coordinatorHandle: 'issuer',
+      coordinatorPaneKey: 'issuer',
+      processIncarnation: 'issuer'
+    })
+    const claimant = { ...issuer, terminalHandle: null, paneKey: null, orcaSessionId: SOURCE }
+    issueRunHandover(h.db, { runId: run.id, caller: issuer, target: { caller: claimant } })
+    const op = { ...operation, operationId: `${NOW}-${'3'.repeat(32)}` }
+    await reopened.admitOperation({ ...op, fingerprint: 'second-clear', now: NOW })
+    let id = SOURCE
+    vi.spyOn(h.runtime, 'coordinatorAgentPresence').mockImplementation(async () => {
+      const clearReceipt = reopened.conversationReceipts.clear(
+        () => ({
+          ...completed,
+          command: { ...completed.command, ...op, replacementSessionId: last }
+        }),
+        op
+      )
+      openTestJournalHostDatabase(directory).transaction((db) => clearReceipt.write(db))
+      clearReceipt.committed()
+      id = last
+      return 'live'
+    })
+    expect(
+      await bindAfterProbe(h.runtime, h.db, () => ({
+        runId: run.id,
+        coordinatorHandle: null,
+        coordinatorPaneKey: null,
+        coordinatorOrcaSessionId: id
+      }))
+    ).toMatchObject({ coordinator_orca_session_id: last })
+    expect(canonicalOrcaSessionId(last)).toBe(SOURCE)
+    expect(getRunHandover(h.db, run.id)).toBeUndefined()
+  } finally {
+    h.close()
+  }
 })

@@ -9,6 +9,7 @@ import {
   createRunCoordinatorAddressTriggers,
   rememberCurrentRunCoordinatorHandles
 } from './runs/run-coordinator-mail-routing'
+import { createRunAuthorityTriggers } from './schema/run-authority-schema'
 import { createTables } from './schema/create-tables'
 import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
@@ -37,6 +38,7 @@ class OrchestrationDbCore {
     this.db.pragma('busy_timeout = 5000')
     createTables.call(this as unknown as OrchestrationDb)
     migrate.call(this as unknown as OrchestrationDb)
+    createRunAuthorityTriggers(this.db)
     createRunCoordinatorAddressTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
     backfillStructuredWorkerOrcaSessionIds(this.db)

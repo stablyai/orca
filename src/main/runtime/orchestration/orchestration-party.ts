@@ -30,6 +30,7 @@ export const ORCHESTRATION_TARGET_PARAM: Readonly<
   Record<string, 'to' | 'terminal' | 'sessionId' | 'address'>
 > = {
   'orchestration.send': 'to',
+  'orchestration.runHandover': 'to',
   'orchestration.ask': 'to',
   'orchestration.dispatch': 'to',
   'orchestration.inbox': 'terminal',

@@ -147,7 +147,10 @@ describe('adopted Run binding without --takeover-legacy', () => {
       })
       throw new Error('Expected the legacy bind to be fenced')
     } catch (error) {
-      expect(error).toMatchObject({ code: 'consumer_fenced', data: { effectsApplied: false } })
+      expect(error).toMatchObject({
+        code: 'run_ownership_required',
+        data: { effectsApplied: false }
+      })
       expect(JSON.stringify(error)).not.toContain('run-use')
     }
     expect(db.getRun(adoptedRunId)?.coordinator_handle).toBeNull()

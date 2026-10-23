@@ -9,6 +9,7 @@ import {
 } from './helpers/golden-stub-agent'
 import {
   getFirstWslDistro,
+  observeWslAgentDetection,
   removeWslGoldenStubAgent,
   stageWslGoldenStubAgent,
   useWslRuntimeForActiveProject
@@ -75,7 +76,9 @@ test.describe('Windows runtimes', () => {
     const stage = stageWslGoldenStubAgent(distro!)
     test.skip(!stage, 'WSL distro would not accept the staged stub agent')
 
+    let diagnostic: Awaited<ReturnType<typeof observeWslAgentDetection>> | undefined
     try {
+      diagnostic = await observeWslAgentDetection(orcaPage)
       // WSL must retarget both agent detection and the PTY.
       await useWslRuntimeForActiveProject(orcaPage, distro!)
       await configureGoldenStubAgent(orcaPage, { agent: 'codex' })
@@ -83,7 +86,19 @@ test.describe('Windows runtimes', () => {
 
       // The distro-only marker proves the agent ran in WSL.
       expect(await getTerminalContent(orcaPage)).toContain(GOLDEN_STUB_READY_MARKER)
+    } catch (error) {
+      const history = await diagnostic?.evaluate((stop) => stop()).catch(() => null)
+      await test
+        .info()
+        .attach('wsl-agent-detection.json', {
+          body: JSON.stringify(history ?? { unavailable: true }),
+          contentType: 'application/json'
+        })
+        .catch(() => undefined)
+      throw error
     } finally {
+      await diagnostic?.evaluate((stop) => stop()).catch(() => undefined)
+      await diagnostic?.dispose().catch(() => undefined)
       removeWslGoldenStubAgent(distro!, stage!)
     }
   })

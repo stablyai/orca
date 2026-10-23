@@ -1,4 +1,9 @@
 import './unused-default-rpc-methods.test-fixture'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { issueRunHandover } from '../orchestration/db/runs/run-handover'
+import { getRunHandover } from '../orchestration/db/runs/run-authority-store'
+import { bindAfterProbe } from './methods/orchestration/runs/run-coordinator-liveness'
+import { resolveRunCallerKey } from './methods/orchestration/runs/run-caller-key'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mintStructuredWorkerHandle,
@@ -13,6 +18,7 @@ import {
   idOf,
   SESSION_X,
   SESSION_Y,
+  PROVIDER_ID_X,
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
@@ -31,7 +37,6 @@ function deliveryId(result: Record<string, unknown>): string {
 describe('structured lead Run binding through the RPC dispatcher', () => {
   let h: SessionCallerHarness
   let dispatchId: string
-  let leadHandle: string
 
   function call(sessionId: string, method: string, params: Record<string, unknown> = {}) {
     return h
@@ -42,7 +47,6 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
   beforeEach(async () => {
     h = createSessionCallerHarness(hostRef)
     const handle = mintStructuredWorkerHandle()
-    leadHandle = handle
     const paneKey = mintStructuredWorkerPaneKey(SESSION_Y)
     structuredWorkerIdentities.register({
       handle,
@@ -63,16 +67,6 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
       maxDepth: Number.MAX_SAFE_INTEGER
     }).id
   })
-  // A Run this lead created earlier and that lost its binding: the one kind a worker may resume.
-  function orphanedOwnRun(): string {
-    const id = h.db.createRun({
-      objective: 'resume',
-      coordinatorHandle: leadHandle,
-      coordinatorPaneKey: null
-    }).id
-    h.db.db.prepare('UPDATE runs SET coordinator_handle = NULL WHERE id = ?').run(id)
-    return id
-  }
   afterEach(() => {
     h.runtime.cancelMessageWaiters(`dispatch:${dispatchId}`)
     h.close()
@@ -82,7 +76,15 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
   it.each(['runCreate', 'runUse'] as const)(
     'cancels a parked session Dispatch check on %s',
     async (method) => {
-      const params = method === 'runCreate' ? { objective: 'child' } : { id: orphanedOwnRun() }
+      const params =
+        method === 'runCreate'
+          ? { objective: 'child' }
+          : {
+              id: idOf((await call(SESSION_X, 'runCreate', { objective: 'transfer' })).run)
+            }
+      if (method === 'runUse') {
+        await call(SESSION_X, 'runHandover', { id: params.id, to: `orca_session_id:${SESSION_Y}` })
+      }
       const wait = vi.spyOn(h.runtime, 'waitForMessage')
       const waiting = call(SESSION_Y, 'check', { wait: true, timeoutMs: 500 })
       await vi.waitFor(() =>
@@ -99,6 +101,116 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
         messages: [{ subject: 'after bind' }]
       })
       expect(h.db.getInbox()).toHaveLength(1)
+    }
+  )
+
+  it('preserves a usable hand-over when a replacement names no Orca session', async () => {
+    const runId = idOf((await call(SESSION_X, 'runCreate', { objective: 'transfer' })).run)
+    await call(SESSION_X, 'runHandover', { id: runId, to: `orca_session_id:${SESSION_Y}` })
+    const grant = getRunHandover(h.db, runId)
+    for (const recipient of ['11111111-1111-4111-8111-111111111111', PROVIDER_ID_X]) {
+      const response = await h.dispatch(
+        orchestrationRequest(
+          'orchestration.runHandover',
+          { id: runId, to: `orca_session_id:${recipient}` },
+          { sessionId: SESSION_X }
+        )
+      )
+      expect(response).toMatchObject({ ok: false, error: { data: { effectsApplied: false } } })
+      expect(getRunHandover(h.db, runId)).toEqual(grant)
+    }
+    expect((await call(SESSION_Y, 'runUse', { id: runId })).run).toMatchObject({ id: runId })
+    expect(getRunHandover(h.db, runId)).toBeUndefined()
+  })
+
+  it('keeps a parked Run check when its worker confirms the unchanged seat', async () => {
+    const child = idOf((await call(SESSION_Y, 'runCreate', { objective: 'child' })).run)
+    const wait = vi.spyOn(h.runtime, 'waitForMessage')
+    const waiting = call(SESSION_Y, 'check', { wait: true, timeoutMs: 500 })
+    await vi.waitFor(() => expect(wait).toHaveBeenCalledWith(`run:${child}`, expect.anything()))
+    await call(SESSION_Y, 'runUse', { id: child })
+    await call(SESSION_X, 'send', { to: `dispatch:${dispatchId}`, subject: 'still waiting' })
+    expect(await waiting).toMatchObject({
+      cancelled: false,
+      messages: [{ subject: 'still waiting' }]
+    })
+  })
+
+  it.each(['replaced', 'missing', 'reminted'] as const)(
+    'revalidates the original claimant after a probe when its authority is %s',
+    async (change) => {
+      const caller = (name: string) => ({
+        terminalHandle: name,
+        paneKey: name,
+        orcaSessionId: null,
+        processIncarnation: name
+      })
+      const issuer = caller('issuer')
+      const claimant = caller('claimant')
+      const parent = h.db.createRun({
+        objective: 'work',
+        coordinatorHandle: 'parent',
+        coordinatorPaneKey: 'parent-pane'
+      })
+      const task = h.db.createTask({ runId: parent.id, spec: 'claim Run' })
+      createRootDispatch(
+        h.db,
+        task.id,
+        claimant.terminalHandle,
+        claimant.paneKey,
+        undefined,
+        claimant.processIncarnation
+      )
+      const target = h.db.createRun({
+        objective: 'transfer',
+        coordinatorHandle: issuer.terminalHandle,
+        coordinatorPaneKey: issuer.paneKey,
+        processIncarnation: issuer.processIncarnation
+      })
+      issueRunHandover(h.db, { runId: target.id, caller: issuer, target: { caller: claimant } })
+      let handle = claimant.terminalHandle
+      let incarnation: string | null = claimant.processIncarnation
+      vi.spyOn(h.runtime, 'getOrchestrationDispatchAuthority').mockImplementation(() =>
+        incarnation === null
+          ? null
+          : {
+              runtimeId: 'runtime',
+              terminalHandle: handle,
+              ptyId: 'pty',
+              worktreeId: 'folder',
+              paneKey: claimant.paneKey,
+              processIncarnation: incarnation,
+              launchTokenHash: null,
+              hostScope: { kind: 'local', hostId: 'local' }
+            }
+      )
+      vi.spyOn(h.runtime, 'coordinatorAgentPresence').mockImplementation(async () => {
+        if (change === 'reminted') {
+          handle = 'reminted'
+        } else {
+          incarnation = change === 'missing' ? null : 'replacement-process'
+        }
+        return 'unverifiable'
+      })
+      const grant = getRunHandover(h.db, target.id)
+      const before = h.db.getRun(target.id)
+      const binding = bindAfterProbe(h.runtime, h.db, () => {
+        const key = resolveRunCallerKey(h.runtime, { ...claimant, terminalHandle: handle })
+        return {
+          runId: target.id,
+          coordinatorHandle: key.terminalHandle,
+          coordinatorPaneKey: key.paneKey,
+          processIncarnation: key.processIncarnation
+        }
+      })
+      if (change === 'reminted') {
+        expect(await binding).toMatchObject({ coordinator_handle: 'reminted' })
+        expect(getRunHandover(h.db, target.id)).toBeUndefined()
+      } else {
+        await expect(binding).rejects.toMatchObject({ code: 'run_ownership_required' })
+        expect(h.db.getRun(target.id)).toEqual(before)
+        expect(getRunHandover(h.db, target.id)).toEqual(grant)
+      }
     }
   )
 

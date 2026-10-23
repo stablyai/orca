@@ -256,6 +256,7 @@ describe('Run coordinator Orca session address', () => {
       maxDepth: Number.MAX_SAFE_INTEGER
     })
     const first = db.createRun({
+      processIncarnation: structuredWorkerProcessIncarnation(WORKER_SESSION_ID),
       objective: 'first',
       coordinatorHandle: handle,
       coordinatorPaneKey: pane
@@ -265,6 +266,7 @@ describe('Run coordinator Orca session address', () => {
 
     // A second Run from the same pane unbinds the first.
     const second = db.createRun({
+      processIncarnation: structuredWorkerProcessIncarnation(WORKER_SESSION_ID),
       objective: 'second',
       coordinatorHandle: handle,
       coordinatorPaneKey: pane

@@ -58,6 +58,11 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
   })
   if (version === 'v41') {
     writer.db.exec(`
+      DROP TRIGGER trg_run_authority_insert;
+      DROP TRIGGER trg_run_authority_update;
+      DROP TRIGGER trg_run_authority_delete;
+      DROP TABLE run_handovers;
+      DROP TABLE run_authority;
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
       DROP TRIGGER trg_runs_remember_coordinator_insert;

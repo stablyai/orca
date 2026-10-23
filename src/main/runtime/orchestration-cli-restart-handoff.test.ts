@@ -188,9 +188,14 @@ it('retains CLI work and mail across restart, refuses takeover, and completes a 
       result: { acknowledged: retainedBatch.deliveryId, count: 0 }
     })
     expect(await cli(worker, ['run-use', '--id', separate], 1)).toMatchObject({
-      error: { code: 'run_coordinator_live', data: { effectsApplied: false } }
+      error: { code: 'run_ownership_required', data: { effectsApplied: false } }
     })
     predecessorPresence = 'exited'
+    expect(await cli(worker, ['run-use', '--id', separate], 1)).toMatchObject({
+      error: { code: 'run_ownership_required', data: { effectsApplied: false } }
+    })
+    await cli(predecessor, ['run-handover', '--id', separate, '--to-task', task])
+    predecessorPresence = 'live'
     expect(await cli(worker, ['run-use', '--id', separate])).toMatchObject({
       result: { run: { id: separate } }
     })

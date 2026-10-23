@@ -109,6 +109,7 @@ function seedStructuredAndPtyRows(db: OrchestrationDb): SeededRows {
   })
   const structuredRun = db.createRun({
     objective: 'structured worker coordinates a nested run',
+    processIncarnation: structuredWorkerProcessIncarnation(SESSION_ID),
     coordinatorHandle: workerHandle,
     coordinatorPaneKey: workerPane
   })
@@ -133,6 +134,11 @@ function seedStructuredAndPtyRows(db: OrchestrationDb): SeededRows {
 function stripOrcaSessionSchema(path: string, version: number): void {
   const raw = new Database(path)
   raw.exec(`
+    DROP TRIGGER trg_run_authority_insert;
+    DROP TRIGGER trg_run_authority_update;
+    DROP TRIGGER trg_run_authority_delete;
+    DROP TABLE run_handovers;
+    DROP TABLE run_authority;
     DROP INDEX idx_runs_coordinator_orca_session_id;
     DROP INDEX idx_dispatch_assignee_orca_session_id;
     DROP TRIGGER trg_runs_remember_coordinator_insert;

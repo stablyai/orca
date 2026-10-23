@@ -44,6 +44,8 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 37, table: 'dispatch_contexts', column: 'creator_handle' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_pane_key' },
   { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' },
+  { version: 44, table: 'run_authority', column: 'last_process_incarnation' },
+  { version: 44, table: 'run_handovers', column: 'target_caller_key' },
   { version: 42, table: 'runs', column: 'coordinator_orca_session_id' },
   { version: 42, table: 'runs', column: 'coordinator_orca_session_id_generation' },
   { version: 42, table: 'dispatch_contexts', column: 'assignee_orca_session_id' },

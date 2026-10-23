@@ -123,6 +123,9 @@ export class AgentSessionRecordStore {
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
+  /** Published Maps and rows are replaced on commit, never mutated in place. */
+  getRecordSnapshot = (): ReadonlyMap<string, AgentSessionRecord> => this.state.records
+
   /** The runtimes this one replaced for a chat, as found at load; absent for a chat it began. */
   replacedRuntime = (sessionId: string) => this.transactions.replacedRuntimes.get(sessionId)
 

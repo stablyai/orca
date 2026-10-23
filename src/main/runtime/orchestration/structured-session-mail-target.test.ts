@@ -518,6 +518,7 @@ describe('a structured worker continued by /clear', () => {
       dispatchId: dispatch.id
     })
     const workerRun = db.createRun({
+      processIncarnation: structuredWorkerProcessIncarnation(WORKER),
       objective: 'o',
       coordinatorHandle: handle,
       coordinatorPaneKey: paneKey

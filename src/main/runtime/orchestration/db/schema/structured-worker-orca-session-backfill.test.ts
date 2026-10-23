@@ -132,6 +132,7 @@ describe('structured worker Orca session id backfill', () => {
       const paneKey = mintStructuredWorkerPaneKey(sessionId)
       dispatch({ handle, paneKey, incarnation: structuredWorkerProcessIncarnation(sessionId) })
       return db.createRun({
+        processIncarnation: structuredWorkerProcessIncarnation(sessionId),
         objective: sessionId,
         coordinatorHandle: handle,
         coordinatorPaneKey: paneKey

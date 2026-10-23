@@ -39,6 +39,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
+    DELETE FROM run_handovers WHERE target_task_id IS NOT NULL;
     DELETE FROM tasks;
     DELETE FROM messages;
     DELETE FROM run_coordinator_handles;
@@ -72,6 +73,7 @@ export function resetTasks(this: OrchestrationDb): void {
     DELETE FROM structured_pointer_operations;
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
+    DELETE FROM run_handovers WHERE target_task_id IS NOT NULL;
     DELETE FROM tasks;
   `)
   this.hasAnyDispatchContextsCache = undefined

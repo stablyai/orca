@@ -454,6 +454,7 @@ import { RequestShowParams } from './orchestration-runs-mutation-request-show-pa
 import {
   RunCreateParams,
   RunCurrentParams,
+  RunHandoverParams,
   RunListParams,
   RunShowParams,
   RunUseParams
@@ -1214,6 +1215,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.run': RunParams,
   'orchestration.runCreate': RunCreateParams,
   'orchestration.runCurrent': RunCurrentParams,
+  'orchestration.runHandover': RunHandoverParams,
   'orchestration.runList': RunListParams,
   'orchestration.runShow': RunShowParams,
   'orchestration.runStop': RunStopParams,

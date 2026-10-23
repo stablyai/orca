@@ -1,9 +1,24 @@
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import {
   clearedInto,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
+
+type CanonicalLineage = { predecessors: Map<string, string>; roots: Map<string, OrcaSessionId> }
+const publishedLineages = new WeakMap<ReadonlyMap<string, AgentSessionRecord>, CanonicalLineage>()
+
+function buildLineage(records: Iterable<AgentSessionRecord>): CanonicalLineage {
+  const predecessors = new Map<string, string>()
+  for (const record of records) {
+    const next = clearedInto(record)
+    if (next) {
+      predecessors.set(next, record.sessionId)
+    }
+  }
+  return { predecessors, roots: new Map() }
+}
 
 /**
  * The Orca session id orchestration addresses a session by: the first session of its `/clear`
@@ -17,22 +32,41 @@ export function canonicalOrcaSessionId(
   if (!store) {
     return orcaSessionId
   }
-  const clearedFrom = new Map<string, string>()
-  for (const record of store.listRecords()) {
-    const next = clearedInto(record)
-    if (next) {
-      clearedFrom.set(next, record.sessionId)
+  const snapshot = store.getRecordSnapshot?.()
+  let lineage = snapshot ? publishedLineages.get(snapshot) : undefined
+  if (!lineage) {
+    lineage = buildLineage(snapshot ? snapshot.values() : store.listRecords())
+    if (snapshot) {
+      publishedLineages.set(snapshot, lineage)
     }
   }
-  // A clear chain is acyclic by construction; the visited set only bounds a corrupt store.
   let root: string = orcaSessionId
-  const earlier = new Set([root])
-  let prior = clearedFrom.get(root)
-  while (prior && !earlier.has(prior)) {
-    earlier.add(prior)
+  const path = new Set<string>()
+  for (;;) {
+    const known = lineage.roots.get(root)
+    if (known) {
+      root = known
+      break
+    }
+    path.add(root)
+    const prior = lineage.predecessors.get(root)
+    if (!prior) {
+      break
+    }
+    // Corrupt cycles have start-dependent answers; never compress them.
+    if (path.has(prior)) {
+      return isOrcaSessionId(root) ? root : orcaSessionId
+    }
     root = prior
-    prior = clearedFrom.get(root)
   }
-  // Record ids are minted as Orca session ids; one that is not cannot name the conversation.
-  return isOrcaSessionId(root) ? root : orcaSessionId
+  if (!isOrcaSessionId(root)) {
+    return orcaSessionId
+  }
+  for (const node of path) {
+    // Unknown caller strings must not grow a snapshot's retained memo.
+    if (lineage.predecessors.has(node)) {
+      lineage.roots.set(node, root)
+    }
+  }
+  return root
 }

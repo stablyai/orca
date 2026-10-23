@@ -1,7 +1,7 @@
 /**
  * A structured session's `/clear` lineage, read off the durable session records. `/clear` continues
  * a chat in a new session; the committed clear on the old record names the session that replaced it.
- * Derived from the records every time; nothing is rewritten at a clear.
+ * Derived from published records; nothing is rewritten at a clear.
  */
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
@@ -11,6 +11,7 @@ import { structuredWorkerHostScope } from '../structured-worker-identity'
 export type AgentSessionRecordReader = {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   listRecords: () => AgentSessionRecord[]
+  getRecordSnapshot?: () => ReadonlyMap<string, AgentSessionRecord>
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
 }

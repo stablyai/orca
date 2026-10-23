@@ -121,6 +121,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/schema/migrate-v35.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate-v39.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate.ts': 'orchestration',
+  'src/main/runtime/orchestration/db/schema/run-authority-schema.ts': 'orchestration',
   'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/session-scanner-opencode-sqlite-fixture.ts': 'test-fixture',
@@ -175,6 +176,8 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'dispatch_contexts',
         'coordinator_runs',
         'run_coordinator_handles',
+        'run_authority',
+        'run_handovers',
         'runs',
         'tasks',
         'decision_gates',

@@ -9,6 +9,7 @@ import {
   makePaneKey,
   tmpdir
 } from '../orca-runtime-test-mocks.spec'
+import { reattachDispatchConsumer } from '../orchestration/db/root-dispatch-test-fixture'
 import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
@@ -228,7 +229,7 @@ describe('OrcaRuntimeService', () => {
       expect(creatorAuthority?.processIncarnation).toBeTruthy()
       expect(coordinatorAuthority?.processIncarnation).toBeTruthy()
       const creatorTask = db.createTask({ spec: 'create nested work', runId: runA.id })
-      createRootDispatch(
+      const creatorDispatch = createRootDispatch(
         db,
         creatorTask.id,
         handles.creator,
@@ -278,11 +279,27 @@ describe('OrcaRuntimeService', () => {
       terminalByName.creator.ptyId = 'pty-creator-reminted'
       const remintedCreatorHandle = runtime.preAllocateHandleForPty(terminalByName.creator.ptyId)
       runtime.syncWindowGraph(1, graph())
-      const runB = db.createRun({
+      const incarnation =
+        runtime.getOrchestrationDispatchAuthority(remintedCreatorHandle)?.processIncarnation
+      if (!incarnation) {
+        throw new Error('Missing reminted creator authority')
+      }
+      const runBParams = {
         objective: 'rebind the creator pane',
         coordinatorHandle: remintedCreatorHandle,
-        coordinatorPaneKey: paneKey('creator')
+        coordinatorPaneKey: paneKey('creator'),
+        processIncarnation: incarnation
+      }
+      expect(() => db.createRun(runBParams)).toThrow(
+        expect.objectContaining({ code: 'run_ownership_required', data: { effectsApplied: false } })
+      )
+      expect(db.getRun(runA.id)?.coordinator_handle).toBe(handles.coordinator)
+      reattachDispatchConsumer(db, {
+        dispatchId: creatorDispatch.id,
+        paneKey: paneKey('creator'),
+        processIncarnation: incarnation
       })
+      const runB = db.createRun(runBParams)
       const reboundContext = runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[
         paneKey('worker')
       ]

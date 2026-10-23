@@ -19,6 +19,7 @@ import {
   SESSION_X,
   SESSION_Y,
   WORKER_HANDLE,
+  WORKER_PANE,
   type SessionCallerHarness
 } from '../../../orchestration-session-caller-test-fixture'
 
@@ -141,11 +142,31 @@ describe('run-use against a Run whose coordinator is still running', () => {
     expect(h.db.getRunRaw(runId)?.coordinator_orca_session_id).toBe(SESSION_Y)
   })
 
-  it('lets a worker resume a separate Run with plain run-use, never by takeover', async () => {
+  it('requires a hand-over for a foreign Run regardless of coordinator presence', async () => {
+    vi.spyOn(h.runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_previous' ? COORD_PANE : handle === WORKER_HANDLE ? WORKER_PANE : null
+    )
+    vi.spyOn(h.runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) => {
+      const paneKey = handle === 'term_previous' ? COORD_PANE : WORKER_PANE
+      if (handle !== 'term_previous' && handle !== WORKER_HANDLE) {
+        return null
+      }
+      return {
+        runtimeId: 'runtime',
+        terminalHandle: handle,
+        ptyId: 'pty',
+        worktreeId: 'folder',
+        paneKey,
+        processIncarnation: handle === 'term_previous' ? 'previous-process' : 'worker-process',
+        launchTokenHash: null,
+        hostScope: { kind: 'local', hostId: 'local' }
+      }
+    })
     const stranger = h.db.createRun({
       objective: 'predecessor sub-Run',
       coordinatorHandle: 'term_previous',
-      coordinatorPaneKey: COORD_PANE
+      coordinatorPaneKey: COORD_PANE,
+      processIncarnation: 'previous-process'
     })
     const presence = vi.spyOn(h.runtime, 'coordinatorAgentPresence').mockResolvedValue('live')
     const home = h.db.createRun({
@@ -153,7 +174,8 @@ describe('run-use against a Run whose coordinator is still running', () => {
       coordinatorHandle: null,
       coordinatorPaneKey: null
     })
-    createRootDispatch(h.db, h.db.createTask({ spec: 'w', runId: home.id }).id, WORKER_HANDLE)
+    const task = h.db.createTask({ spec: 'w', runId: home.id })
+    createRootDispatch(h.db, task.id, WORKER_HANDLE, WORKER_PANE, undefined, 'worker-process')
     const runUse = (id: string, takeover: boolean) =>
       as(undefined, 'orchestration.runUse', { id, from: WORKER_HANDLE, takeover })
     const sub = idOf(
@@ -180,10 +202,24 @@ describe('run-use against a Run whose coordinator is still running', () => {
     })
     expect(foreignRead).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
     expect(JSON.stringify(foreignRead)).not.toContain('run-use')
-    const liveRefusal = await runUse(stranger.id, false)
-    expect(liveRefusal).toMatchObject({ ok: false, error: { code: 'run_coordinator_live' } })
-    expect(JSON.stringify(liveRefusal)).not.toContain('run-use --id')
-    presence.mockResolvedValue('exited')
+    const before = h.db.getRunRaw(stranger.id)
+    for (const state of ['live', 'exited', 'unverifiable', null] as const) {
+      presence.mockResolvedValue(state)
+      const refused = await runUse(stranger.id, false)
+      expect(refused).toMatchObject({
+        ok: false,
+        error: { code: 'run_ownership_required', data: { effectsApplied: false } }
+      })
+      expect(h.db.getRunRaw(stranger.id)).toEqual(before)
+    }
+    resultOf(
+      await as(undefined, 'orchestration.runHandover', {
+        id: stranger.id,
+        from: 'term_previous',
+        toTask: task.id
+      })
+    )
+    presence.mockResolvedValue('live')
     resultOf(await runUse(stranger.id, false))
     expect(await runUse(sub, true)).toMatchObject({
       error: { code: 'worker_cannot_take_over_run' }
@@ -211,7 +247,10 @@ describe('run-use against a Run whose coordinator is still running', () => {
 
     expect(await as(SESSION_Y, 'orchestration.runUse', { id: runId })).toMatchObject({
       ok: false,
-      error: { code: 'run_binding_changed', data: { effectsApplied: false, retryable: true } }
+      error: {
+        code: 'run_binding_changed',
+        data: { effectsApplied: false, retryable: true, runId }
+      }
     })
     expect(probe).toHaveBeenCalledTimes(3)
     expect(h.db.getRunRaw(runId)?.coordinator_handle).toBe('term_racer3')

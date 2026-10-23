@@ -1,13 +1,38 @@
 import { DatabaseSync } from 'node:sqlite'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
+import {
+  openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore
+} from '../agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { canonicalOrcaSessionId } from './canonical-orca-session-id'
+import { sameExactCaller } from './db/runs/run-actor'
+import { findCallerWorkerDispatches } from './db/runs/worker-run-binding'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
+const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
+vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => hostRef.current
+}))
+const homes: string[] = []
 const databases: OrchestrationDb[] = []
 afterEach(() => {
   vi.restoreAllMocks()
+  hostRef.current = null
+  closeTestJournalHostDatabases()
+  for (const home of homes.splice(0)) {
+    rmSync(home, { recursive: true, force: true })
+  }
   for (const db of databases.splice(0)) {
     db.close()
   }
@@ -48,8 +73,69 @@ function historyWork(db: OrchestrationDb) {
 }
 
 describe('Run binding scaling contracts', () => {
+  it('confirms the current Task owner without materializing prior attempts at N and 10N', () => {
+    const counts: number[] = []
+    for (const history of [4, 40]) {
+      const db = openDatabase()
+      const parent = db.createRun({
+        objective: 'parent',
+        coordinatorHandle: 'root',
+        coordinatorPaneKey: null
+      })
+      const task = db.createTask({ runId: parent.id, spec: 'retained Task' })
+      const insert = db.db.prepare(`INSERT INTO dispatch_contexts
+        (id, task_id, run_id, assignee_handle, creator_handle, status)
+        VALUES (?, ?, ?, ?, 'root', 'completed')`)
+      for (let row = 0; row < history; row++) {
+        insert.run(`history_${row}`, task.id, parent.id, `old_${row}`)
+      }
+      createRootDispatch(db, task.id, 'worker', 'pane-worker', undefined, 'process-worker')
+      const child = db.createRun({
+        objective: 'child',
+        coordinatorHandle: 'worker',
+        coordinatorPaneKey: 'pane-worker',
+        processIncarnation: 'process-worker'
+      })
+      const before = db.getRunRaw(child.id)
+      let rows = 0
+      const observed = new WeakSet<object>()
+      const originalPrepare = db.db.prepare.bind(db.db)
+      const prepare = vi.spyOn(db.db, 'prepare').mockImplementation((sql) => {
+        const statement = originalPrepare(sql)
+        if (sql.includes('FROM dispatch_contexts') && !observed.has(statement)) {
+          observed.add(statement)
+          const all = statement.all.bind(statement)
+          vi.spyOn(statement, 'all').mockImplementation((...params) => {
+            const result = all(...params)
+            rows += result.length
+            return result
+          })
+        }
+        return statement
+      })
+      expect(
+        db.bindRun({
+          runId: child.id,
+          coordinatorHandle: 'worker',
+          coordinatorPaneKey: 'pane-worker',
+          processIncarnation: 'process-worker'
+        })
+      ).toMatchObject({ id: child.id })
+      expect(rows).toBe(1)
+      counts.push(prepare.mock.calls.length)
+      expect(db.getRunRaw(child.id)).toEqual(before)
+      prepare.mockRestore()
+    }
+    expect(counts[1]).toBe(counts[0])
+  })
+
   it('walks to the root with one indexed ancestor read per link at N and 10N', () => {
-    for (const depth of [4, 40]) {
+    for (const [depth, vertices] of [
+      [4, 4],
+      [40, 4],
+      [4, 40],
+      [40, 40]
+    ]) {
       const db = openDatabase()
       const root = db.createRun({
         objective: 'root',
@@ -61,6 +147,19 @@ describe('Run binding scaling contracts', () => {
         coordinatorHandle: null,
         coordinatorPaneKey: null
       })
+      let ancestor = child
+      for (let n = 1; n < vertices; n++) {
+        const next = db.createRun({
+          objective: 'ancestor',
+          coordinatorHandle: null,
+          coordinatorPaneKey: null
+        })
+        const task = db.createTask({ runId: next.id, spec: 'joined owner' })
+        db.db
+          .prepare('UPDATE run_authority SET parent_run_id = ?, owner_task_id = ? WHERE run_id = ?')
+          .run(next.id, task.id, ancestor.id)
+        ancestor = next
+      }
       let parent = createRootDispatch(
         db,
         db.createTask({ spec: 'root work', runId: root.id }).id,
@@ -80,6 +179,7 @@ describe('Run binding scaling contracts', () => {
         coordinatorPaneKey: null
       })
       const before = db.getRunRaw(root.id)
+      const taskReads = vi.spyOn(db, 'getTask')
       const reads: string[] = []
       const observed = new WeakSet<object>()
       const originalPrepare = db.db.prepare.bind(db.db)
@@ -103,7 +203,8 @@ describe('Run binding scaling contracts', () => {
         })
       const assertWalk = () => {
         expect(reads).toHaveLength(depth)
-        expect(prepare.mock.calls.length).toBeLessThanOrEqual(depth + 50)
+        expect(taskReads).toHaveBeenCalledTimes(depth * (vertices - 1))
+        expect(prepare.mock.calls.length).toBeLessThanOrEqual(6 * depth * vertices + 50)
         const sql = reads[0]
         expect(sql).toBeDefined()
         expect(db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all('absent')).toContainEqual(
@@ -119,8 +220,17 @@ describe('Run binding scaling contracts', () => {
       expect(db.getRunRaw(root.id)).toEqual(before)
       prepare.mockClear()
       reads.length = 0
-      expect(bind(separate.id)?.coordinator_handle).toBe(parent.assignee_handle)
+      taskReads.mockClear()
+      expect(() => bind(separate.id)).toThrow(
+        expect.objectContaining({ code: 'run_ownership_required' })
+      )
       assertWalk()
+      db.db
+        .prepare('UPDATE run_authority SET parent_run_id = ? WHERE run_id = ?')
+        .run(child.id, ancestor.id)
+      expect(() => bind(separate.id)).toThrow(/cycle/)
+      expect(db.getRunRaw(separate.id)?.coordinator_handle).toBeNull()
+      taskReads.mockRestore()
       prepare.mockRestore()
     }
   })
@@ -262,4 +372,257 @@ describe('Run binding scaling contracts', () => {
       }
     }
   )
+})
+
+it.each([
+  [100, 4, 4],
+  [1000, 4, 4],
+  [100, 40, 4],
+  [100, 4, 40],
+  [100, 40, 40]
+])(
+  'bounds published identity work at S=%i H=%i L=%i through binding and ambiguity',
+  async (size, history, length) => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-run-snapshot-'))
+    homes.push(home)
+    const ids = Array.from({ length: size }, (_, n) =>
+      testOrcaSessionId(`${String(n).padStart(8, '0')}-1111-4111-8111-111111111111`)
+    )
+    const records = ids.map((sessionId) =>
+      agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+    )
+    for (let n = 0; n < length; n++) {
+      records[n].conversationCommand = {
+        command: 'clear',
+        state: 'completed',
+        phase: 'committed',
+        replacementSessionId: ids[n + 1],
+        operationId: `clear-${n}`,
+        callerKey: 'test'
+      }
+    }
+    await seedTestAgentSessionRecordStore(home, { records })
+    const store = await openTestAgentSessionRecordStore(home)
+    const db = openDatabase()
+    const parent = db.createRun({
+      objective: 'parent',
+      coordinatorHandle: 'root',
+      coordinatorPaneKey: null
+    })
+    const task = db.createTask({ runId: parent.id, spec: 'retained work' })
+    const insert = db.db.prepare(`INSERT INTO dispatch_contexts
+        (id, task_id, run_id, assignee_handle, assignee_orca_session_id, creator_handle, status)
+        VALUES (?, ?, ?, ?, ?, 'root', ?)`)
+    for (let n = 0; n < history; n++) {
+      insert.run(
+        `old_${n}`,
+        task.id,
+        parent.id,
+        `old_${n}`,
+        n === history - 1 ? ids[length + 1] : ids[(n % length) + 1],
+        'completed'
+      )
+    }
+    const current = createRootDispatch(db, task.id, 'worker', 'pane', undefined, 'process')
+    db.db
+      .prepare('UPDATE dispatch_contexts SET assignee_orca_session_id = ? WHERE id = ?')
+      .run(ids[length + 2], current.id)
+    const caller = {
+      coordinatorHandle: 'worker',
+      coordinatorPaneKey: 'pane',
+      coordinatorOrcaSessionId: ids[length + 2],
+      processIncarnation: 'process'
+    }
+    const child = db.createRun({ objective: 'child', ...caller })
+    const seat = (id: (typeof ids)[number]) =>
+      db.bindRun({
+        runId: child.id,
+        coordinatorHandle: null,
+        coordinatorPaneKey: null,
+        coordinatorOrcaSessionId: id
+      })
+    seat(ids[length + 3])
+    const snapshot = store.getRecordSnapshot()
+    let visits = 0,
+      edgeWork = 0,
+      historyRows = 0,
+      candidates = 0
+    const values = snapshot.values.bind(snapshot)
+    vi.spyOn(snapshot, 'values').mockImplementation(function* () {
+      for (const record of values()) {
+        visits++
+        yield record
+      }
+      return undefined
+    })
+    const copies = vi.spyOn(store, 'listRecords')
+    const maps = new WeakSet<object>(),
+      identityIds = new Set<string>(ids)
+    const set = Map.prototype.set,
+      get = Map.prototype.get
+    const memoWrites = vi.spyOn(Map.prototype, 'set').mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key,
+      value
+    ) {
+      if (typeof value === 'string' && typeof key === 'string' && identityIds.has(key)) {
+        maps.add(this)
+      }
+      return set.call(this, key, value)
+    })
+    vi.spyOn(Map.prototype, 'get').mockImplementation(function (this: Map<unknown, unknown>, key) {
+      if (maps.has(this)) {
+        edgeWork++
+      }
+      return get.call(this, key)
+    })
+    const prepare = db.db.prepare.bind(db.db),
+      observed = new WeakSet<object>()
+    vi.spyOn(db.db, 'prepare').mockImplementation((sql) => {
+      const statement = prepare(sql)
+      if (sql.includes('FROM dispatch_contexts') && !observed.has(statement)) {
+        observed.add(statement)
+        const all = statement.all.bind(statement)
+        vi.spyOn(statement, 'all').mockImplementation((...args) => {
+          const rows = all(...args)
+          if (sql.includes('WHERE task_id = ? AND id != ?')) {
+            historyRows += rows.length
+          } else {
+            candidates += rows.length
+          }
+          return rows
+        })
+      }
+      return statement
+    })
+    hostRef.current = { deps: { store } }
+    db.bindRun({ runId: parent.id, coordinatorHandle: 'root', coordinatorPaneKey: null })
+    expect(visits).toBe(0)
+    const bind = () =>
+      db.bindRun({
+        runId: child.id,
+        ...caller,
+        probed: {
+          consumerGeneration: db.getRunRaw(child.id)?.consumer_generation ?? -1,
+          liveLabel: 'live'
+        }
+      })
+    const before = db.getRunRaw(child.id)
+    expect(bind).toThrow(expect.objectContaining({ code: 'run_coordinator_live' }))
+    expect(db.getRunRaw(child.id)).toEqual(before)
+    expect([visits, historyRows, candidates]).toEqual([size, history, 1])
+    seat(ids[length + 1])
+    historyRows = candidates = 0
+    expect(bind()).toMatchObject({ coordinator_handle: 'worker' })
+    expect([historyRows, candidates]).toEqual([history, 1])
+    historyRows = candidates = 0
+    expect(bind()).toMatchObject({ coordinator_handle: 'worker' })
+    expect([visits, historyRows, candidates]).toEqual([size, 0, 1])
+    const priorWork = edgeWork
+    for (let n = 0; n < 40; n++) {
+      expect(canonicalOrcaSessionId(ids[length])).toBe(ids[0])
+    }
+    expect(edgeWork - priorWork).toBeLessThanOrEqual(2 * length + 80)
+    expect(edgeWork).toBeLessThan(20 * (length + history + 20))
+    for (const count of [4, 40]) {
+      db.db.exec("DELETE FROM dispatch_contexts WHERE id LIKE 'ambiguous_%'")
+      for (let n = 1; n < count; n++) {
+        insert.run(
+          `ambiguous_${n}`,
+          task.id,
+          parent.id,
+          `ambiguous_${n}`,
+          ids[length + 2],
+          'dispatched'
+        )
+      }
+      db.db
+        .prepare(`UPDATE dispatch_contexts SET creator_orca_session_id = ?, assignee_handle = 'worker'
+          WHERE id LIKE 'ambiguous_%'`)
+        .run(ids[length])
+      const candidateWork = edgeWork
+      candidates = 0
+      expect(bind).toThrow(expect.objectContaining({ code: 'run_ownership_required' }))
+      expect(candidates).toBe(count)
+      expect(edgeWork - candidateWork).toBeLessThanOrEqual(8 * count + 20)
+      expect(db.getRunRaw(child.id)?.coordinator_handle).toBe('worker')
+      db.db
+        .prepare(`UPDATE dispatch_contexts SET assignee_orca_session_id = ?
+          WHERE id LIKE 'ambiguous_%'`)
+        .run(ids[1])
+      const selfContextWork = edgeWork
+      candidates = 0
+      expect(
+        findCallerWorkerDispatches(db, {
+          terminalHandle: 'worker',
+          paneKey: 'pane',
+          orcaSessionId: ids[length + 2]
+        }).map((row) => row.id)
+      ).toEqual([current.id])
+      expect(candidates).toBe(count)
+      expect(edgeWork - selfContextWork).toBeLessThanOrEqual(4 * count)
+    }
+    expect(visits).toBe(size)
+    expect(copies).not.toHaveBeenCalled()
+    const writes = memoWrites.mock.calls.length
+    for (const id of ids.slice(length + 4)) {
+      expect(canonicalOrcaSessionId(id)).toBe(id)
+    }
+    expect(memoWrites).toHaveBeenCalledTimes(writes)
+  }
+)
+
+it('preserves exceptional lineage, old readers, and exact-caller parity', () => {
+  const [a, b, c] = [1, 2, 3].map((n) =>
+    testOrcaSessionId(`${n}1111111-1111-4111-8111-111111111111`)
+  )
+  const cases = [
+    { paths: [[a, b, c]], answers: [a, a, a] },
+    {
+      paths: [
+        [a, c],
+        [b, c]
+      ],
+      answers: [a, b, b]
+    },
+    { paths: [['invalid', b, c]], answers: [a, b, c] },
+    { paths: [[a, b, a]], answers: [b, a, c] }
+  ]
+  for (const { paths, answers } of cases) {
+    const edges = paths.flatMap((path) => path.slice(1).map((next, n) => [path[n], next]))
+    const records = edges.map(([sessionId, replacementSessionId]) => ({
+      ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId })),
+      conversationCommand: {
+        command: 'clear' as const,
+        state: 'completed' as const,
+        phase: 'committed' as const,
+        replacementSessionId,
+        operationId: 'clear',
+        callerKey: 'test'
+      }
+    }))
+    const old = { getRecord: () => null, listRecords: vi.fn(() => records) }
+    const snapshot = new Map(records.map((record) => [record.sessionId, record]))
+    for (const reader of [old, { ...old, getRecordSnapshot: () => snapshot }]) {
+      for (let repeat = 0; repeat < 2; repeat++) {
+        expect([a, b, c].map((id) => canonicalOrcaSessionId(id, reader))).toEqual(answers)
+      }
+    }
+    expect(old.listRecords).toHaveBeenCalledTimes(6)
+    const prepared = records.map((record) => ({
+      ...record,
+      conversationCommand: { ...record.conversationCommand, phase: 'prepared' as const }
+    }))
+    expect(canonicalOrcaSessionId(c, { ...old, listRecords: () => prepared })).toBe(c)
+  }
+  expect(canonicalOrcaSessionId(a, null)).toBe(a)
+  const key = (
+    orcaSessionId: typeof a | null,
+    paneKey = 'pane',
+    processIncarnation: string | null = 'p'
+  ) => ({ terminalHandle: null, orcaSessionId, paneKey, processIncarnation })
+  expect(sameExactCaller(key(a), key(a, 'other', 'other'))).toBe(true)
+  expect(sameExactCaller(key(a), key(b))).toBe(false)
+  expect(sameExactCaller(key(null), key(null))).toBe(true)
+  expect(sameExactCaller(key(null), key(null, 'pane', null))).toBe(false)
 })

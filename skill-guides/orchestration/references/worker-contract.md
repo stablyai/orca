@@ -52,8 +52,10 @@ cancellation lands before the Task settles. `check` names its caller with
 `--terminal`, never `--from`. Stop checking after `worker_done`.
 
 Do not use `run-use` to check your Dispatch's mail or bind the Run you work for.
-You may resume a separate Run when your coordinator directs a handoff, but you
-cannot use either takeover flag. Plain `check` returns your Dispatch's mail
+You may resume a separate Run owned by your Task. Otherwise its current or last
+coordinator must authorize you with `run-handover --id <run_id> --to-task <task_id>`
+or `--to <address>` before you accept with `run-use`, even if the prior coordinator
+is absent or unverifiable. You cannot use either takeover flag. Plain `check` returns your Dispatch's mail
 unless you are coordinating a Run; report to your coordinator with `send`.
 
 If a plain `check` (no `--run`) returns `consumer_fenced`, this process no longer owns its Dispatch:

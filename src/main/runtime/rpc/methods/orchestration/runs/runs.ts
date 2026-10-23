@@ -1,7 +1,10 @@
+import { RUN_HANDOVER_METHOD } from './run-handover-method'
+import { resolveRunCallerKey } from './run-caller-key'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
-import { exposeRun } from './run-receipt'
+import { getRunAuthority } from '../../../../orchestration/db/runs/run-authority-store'
+import { exposeRunOwnership, exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 import { bindAfterProbe } from './run-coordinator-liveness'
@@ -27,11 +30,15 @@ function cancelBoundDispatchWaiters(
 }
 
 export const ORCHESTRATION_RUN_METHODS = [
+  RUN_HANDOVER_METHOD,
   defineMethod({
     name: 'orchestration.runCreate',
     permission: 'workspace',
     params: RunCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, recordMutationReceipt }
+    ) => {
       const caller = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
         callerEvidence: orchestrationCompatibilityEvidence,
@@ -40,8 +47,14 @@ export const ORCHESTRATION_RUN_METHODS = [
       })
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForCoordinator(caller)
+      const key = resolveRunCallerKey(runtime, caller)
       const run = db.createRun({
         objective: params.objective,
+        processIncarnation: key.processIncarnation,
+        recordReceipt: (run) =>
+          recordMutationReceipt?.({
+            run: { ...exposeRun(run), ownership: exposeRunOwnership(getRunAuthority(db, run.id)) }
+          }),
         coordinatorHandle: caller.terminalHandle,
         coordinatorPaneKey: caller.paneKey,
         coordinatorOrcaSessionId: caller.orcaSessionId
@@ -51,7 +64,9 @@ export const ORCHESTRATION_RUN_METHODS = [
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
-      return { run: exposeRun(run) }
+      return {
+        run: { ...exposeRun(run), ownership: exposeRunOwnership(getRunAuthority(db, run.id)) }
+      }
     }
   }),
   defineMethod({
@@ -65,7 +80,8 @@ export const ORCHESTRATION_RUN_METHODS = [
         legacyCoordinatorAuthority,
         orchestrationCompatibilityEvidence,
         orchestrationCompatibilityCallerAuthority: callerAuthority,
-        orchestrationCaller
+        orchestrationCaller,
+        recordMutationReceipt
       }
     ) => {
       const caller = resolveOrchestrationCaller(runtime, {
@@ -90,28 +106,44 @@ export const ORCHESTRATION_RUN_METHODS = [
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForCoordinator(caller)
-      const run = await bindAfterProbe(runtime, db, () => ({
-        runId: params.id,
-        coordinatorHandle: caller.terminalHandle,
-        coordinatorPaneKey: caller.paneKey,
-        coordinatorOrcaSessionId: caller.orcaSessionId,
-        takeoverLegacy: params.takeoverLegacy,
-        takeover: params.takeover,
-        legacyCoordinatorAuthority
-      }))
+      let unchangedWorker = false
+      const run = await bindAfterProbe(runtime, db, () => {
+        const key = resolveRunCallerKey(runtime, caller)
+        return {
+          onUnchangedWorker: () => {
+            unchangedWorker = true
+          },
+          runId: params.id,
+          coordinatorHandle: caller.terminalHandle,
+          coordinatorPaneKey: key.paneKey,
+          coordinatorOrcaSessionId: caller.orcaSessionId,
+          processIncarnation: key.processIncarnation,
+          recordReceipt: (run) =>
+            recordMutationReceipt?.({
+              run: { ...exposeRun(run), ownership: exposeRunOwnership(getRunAuthority(db, run.id)) }
+            }),
+          takeover: params.takeover,
+          takeoverLegacy: params.takeoverLegacy,
+          legacyCoordinatorAuthority
+        }
+      })
       if (!run) {
         throw new OrchestrationError(
           'run_not_found',
           `Run ${params.id} was not found or is inspect-only.`
         )
       }
-      runtime.cancelMessageWaiters(params.from)
-      cancelBoundDispatchWaiters(runtime, caller, run.id)
-      runtime.cancelMessageWaiters(`run:${params.id}`)
-      if (priorRun && priorRun.id !== params.id) {
-        runtime.cancelMessageWaiters(`run:${priorRun.id}`)
+      if (!unchangedWorker) {
+        runtime.cancelMessageWaiters(params.from)
+        cancelBoundDispatchWaiters(runtime, caller, run.id)
+        runtime.cancelMessageWaiters(`run:${params.id}`)
+        if (priorRun && priorRun.id !== params.id) {
+          runtime.cancelMessageWaiters(`run:${priorRun.id}`)
+        }
       }
-      return { run: exposeRun(run) }
+      return {
+        run: { ...exposeRun(run), ownership: exposeRunOwnership(getRunAuthority(db, run.id)) }
+      }
     }
   }),
   defineMethod({
@@ -147,7 +179,12 @@ export const ORCHESTRATION_RUN_METHODS = [
       if (!run) {
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
-      return { run: exposeRun(run) }
+      return {
+        run: {
+          ...exposeRun(run),
+          ownership: exposeRunOwnership(getRunAuthority(runtime.getOrchestrationDb(), run.id))
+        }
+      }
     }
   })
 ]

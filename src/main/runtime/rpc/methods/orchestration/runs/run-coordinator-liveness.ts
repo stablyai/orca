@@ -1,10 +1,18 @@
+import {
+  getRunAuthority,
+  lastRunCaller
+} from '../../../../orchestration/db/runs/run-authority-store'
+import {
+  refuseRunAuthority,
+  sameExactCaller,
+  type RunCallerKey
+} from '../../../../orchestration/db/runs/run-actor'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RunRow } from '../../../../orchestration/types'
 import {
   mailboxAddressOf,
-  runBoundToCoordinator,
   runCoordinatorKey,
   type OrchestrationCoordinatorKey
 } from '../../../../orchestration/orchestration-caller-identity'
@@ -30,21 +38,35 @@ export async function bindAfterProbe(
   db: OrchestrationDb,
   params: () => Omit<BindParams, 'probed'>
 ): Promise<RunRow | undefined> {
+  const initial = params()
+  const claimant = bindingCaller(initial)
   for (let attempt = 1; ; attempt++) {
-    const bind = params()
+    const bind = attempt === 1 ? initial : params()
     const target = db.getRunRaw(bind.runId)
-    const caller = {
-      terminalHandle: bind.coordinatorHandle,
-      paneKey: bind.coordinatorPaneKey,
-      orcaSessionId: bind.coordinatorOrcaSessionId ?? null
-    }
+    const caller = bindingCaller(bind)
     const coordinator = target ? runCoordinatorKey(target) : null
+    const authority = target ? getRunAuthority(db, target.id) : undefined
+    const unchanged = authority && sameExactCaller(lastRunCaller(authority), caller)
     const liveLabel =
-      coordinator && target && !runBoundToCoordinator(target, caller)
+      coordinator && target && !unchanged
         ? await liveCoordinatorLabel(runtime, db, coordinator)
         : null
+    const fresh = params()
+    if (
+      (claimant.orcaSessionId || claimant.processIncarnation) &&
+      !sameExactCaller(claimant, bindingCaller(fresh))
+    ) {
+      refuseRunAuthority(
+        'This caller’s agent process changed while the coordinator was checked. Run the command again from the current agent.'
+      )
+    }
     try {
-      return db.bindRun({ ...bind, ...(coordinator ? { probed: { coordinator, liveLabel } } : {}) })
+      return db.bindRun({
+        ...fresh,
+        ...(coordinator && target
+          ? { probed: { consumerGeneration: target.consumer_generation, liveLabel } }
+          : {})
+      })
     } catch (error) {
       if (
         attempt >= PROBE_ATTEMPTS ||
@@ -54,6 +76,15 @@ export async function bindAfterProbe(
         throw error
       }
     }
+  }
+}
+
+function bindingCaller(bind: Omit<BindParams, 'probed'>): RunCallerKey {
+  return {
+    terminalHandle: bind.coordinatorHandle,
+    paneKey: bind.coordinatorPaneKey,
+    orcaSessionId: bind.coordinatorOrcaSessionId ?? null,
+    processIncarnation: bind.processIncarnation ?? null
   }
 }
 

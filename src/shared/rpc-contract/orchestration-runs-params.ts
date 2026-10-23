@@ -10,8 +10,8 @@ export const RunCreateParams = z.object({
 export const RunUseParams = z.object({
   id: requiredString('Missing --id'),
   from: requiredString('Missing coordinator terminal'),
-  takeoverLegacy: OptionalBoolean,
-  takeover: OptionalBoolean
+  takeover: OptionalBoolean,
+  takeoverLegacy: OptionalBoolean
 })
 
 export const RunCurrentParams = z.object({ from: requiredString('Missing coordinator terminal') })
@@ -22,3 +22,14 @@ export const RunListParams = z.object({
 })
 
 export const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
+
+export const RunHandoverParams = z
+  .object({
+    id: requiredString('Missing --id'),
+    from: requiredString('Missing coordinator terminal'),
+    toTask: OptionalString,
+    to: OptionalString
+  })
+  .refine((params) => Boolean(params.toTask) !== Boolean(params.to), {
+    message: 'Provide exactly one of --to-task or --to'
+  })
