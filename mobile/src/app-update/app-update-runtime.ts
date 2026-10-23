@@ -10,6 +10,7 @@ import {
 } from '../storage/app-update-preferences'
 import { appStoreUpdateSource } from './app-store-update-source'
 import { createAppUpdateChecker, type AppUpdateState } from './app-update-checker'
+import { openAndroidAppUpdate } from './android-update-runtime'
 import type { AppUpdateSource } from './app-update-source'
 import {
   ANDROID_RELEASE_TAG_PREFIX,
@@ -73,7 +74,10 @@ export function useAppUpdateState(): AppUpdateState {
   return useSyncExternalStore(appUpdateChecker.subscribe, appUpdateChecker.getSnapshot)
 }
 
-/** Opens the channel's page for the update: the GitHub release (Android) or App Store (iOS). */
+/** Android downloads in-app when the native updater is present; older shells keep the page fallback. */
 export function openAppUpdate(url: string): void {
+  if (!isGooglePlayInstall && openAndroidAppUpdate(url)) {
+    return
+  }
   void Linking.openURL(url).catch(() => {})
 }
