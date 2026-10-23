@@ -6,7 +6,7 @@ import {
   expireOrcadMigrationStages,
   findOrcadMigrationImportReceipt,
   ORCAD_MIGRATION_STAGE_TTL_MS,
-  recordOrcadMigrationImportReceipt,
+  recordOrcadMigrationImportReceipt
 } from './orcad-catalog-receipt-ledger'
 
 const empty = { repositories: [], projectGroups: [], folderWorkspaces: [] }
