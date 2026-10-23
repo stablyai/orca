@@ -327,4 +327,17 @@ describe('Claude accounts section', () => {
     expect(own).toContain('System default: me@example.test')
     expect(own).not.toContain('An earlier Orca version')
   })
+
+  it('offers auto-switching only once there is another account to switch to', () => {
+    const one = render({ accounts: [account('a', 'a@example.test')] })
+    const two = render(
+      { accounts: [account('a', 'a@example.test'), account('b', 'b@example.test')] },
+      { claudeAutoSwitchEnabled: true }
+    )
+    expect(one).not.toContain('Switch accounts before a usage limit')
+    expect(two).toContain('Switch accounts before a usage limit')
+    expect(two).toMatch(
+      /aria-label="Switch accounts before a usage limit"[^>]*aria-checked="true"|aria-checked="true"[^>]*aria-label="Switch accounts before a usage limit"/
+    )
+  })
 })

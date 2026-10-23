@@ -8,6 +8,10 @@ import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import { CodexAccountService } from './codex-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { ClaudeAccountService } from './claude-accounts/service'
+import {
+  createClaudeAccountAutoSwitch,
+  type ClaudeAutoSwitched
+} from './claude-accounts/claude-account-auto-switch'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
@@ -34,6 +38,7 @@ export function createProviderAccountServices(
   options: {
     codexAccountLifecycle?: ConstructorParameters<typeof CodexAccountService>[3]
     setClaudeStatusLineListener: (listener: (event: ClaudeStatusLineRateLimits) => void) => void
+    onClaudeAutoSwitched?: (switched: ClaudeAutoSwitched) => void
   }
 ): ProviderAccountServices {
   const rateLimits = new RateLimitService()
@@ -46,6 +51,14 @@ export function createProviderAccountServices(
   )
   const claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   const claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
+  rateLimits.onStateChange(
+    createClaudeAccountAutoSwitch({
+      getSettings: () => store.getSettings(),
+      rateLimits,
+      accounts: claudeAccounts,
+      onSwitched: (switched) => options.onClaudeAutoSwitched?.(switched)
+    })
+  )
   // Why: quota polls are background work and must not boot a stopped distro; user-driven
   // resets call prepareForRateLimitFetch directly.
   rateLimits.setCodexHomePathResolver(async (target) =>

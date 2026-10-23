@@ -17,6 +17,9 @@ import { browserManager } from '../browser/browser-manager'
 import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent-model-catalog-wiring'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
+import { getRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import { translateMain } from '../i18n/main-i18n'
+import type { ClaudeAutoSwitchedEvent } from '../../shared/managed-account-types'
 import { mainProcessState as state } from './main-process-state'
 
 // Settings that change which account or binary a new chat's agent runs under.
@@ -56,7 +59,29 @@ export function initializeMainProcessAccountServices(): void {
   })
   const services = createProviderAccountServices(store, {
     codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration.requestRun },
-    setClaudeStatusLineListener: (listener) => agentHookServer.setClaudeStatusLineListener(listener)
+    setClaudeStatusLineListener: (listener) =>
+      agentHookServer.setClaudeStatusLineListener(listener),
+    onClaudeAutoSwitched: ({ accounts, from, to, target }) => {
+      // Why: running sessions follow the running-session setting, as after a switch by hand.
+      const switched: ClaudeAutoSwitchedEvent = {
+        accounts,
+        fromAccountId: from.id,
+        toAccountId: to.id,
+        target
+      }
+      state.mainWindow?.webContents.send('claudeAccounts:autoSwitched', switched)
+      if (!store.getSettings().notifications.enabled) {
+        return
+      }
+      getRuntimeDesktopSurface().showNotification({
+        title: translateMain('accounts.claude.autoSwitchedTitle', 'Claude account switched'),
+        body: translateMain(
+          'accounts.claude.autoSwitchedBody',
+          '{{from}} is near its usage limit. New Claude sessions start on {{to}}.',
+          { from: from.email, to: to.email }
+        )
+      })
+    }
   })
   state.rateLimits = services.rateLimits
   state.codexRuntimeHome = services.codexRuntimeHome

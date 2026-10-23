@@ -21,6 +21,7 @@ export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
+  private userActionCount = 0
   private openWslSignInLink: ((signInLink: string) => void) | null = null
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
@@ -121,6 +122,23 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.selection.select(accountId, target))
   }
 
+  /** A usage-driven switch waits behind a pending sign-in instead of cancelling it. */
+  autoSelectAccountForTarget(
+    accountId: string,
+    target: ClaudeAccountSelectionTarget,
+    stillWanted: () => boolean
+  ): Promise<boolean> {
+    const userActionCountWhenQueued = this.userActionCount
+    return this.serializeMutation(async () => {
+      // Why: anything the user did while this waited in the queue outranks it.
+      if (this.userActionCount !== userActionCountWhenQueued || !stillWanted()) {
+        return false
+      }
+      await this.selection.select(accountId, target)
+      return true
+    })
+  }
+
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }
@@ -158,8 +176,10 @@ export class ClaudeAccountService {
   }
 
   // Why before the queue, not inside it: the abandoned login owns the queue slot every later
-  // account action waits for. Only user-driven actions supersede it.
+  // account action waits for. Only user-driven actions supersede it, and each one also outranks a
+  // queued automatic switch.
   private supersedePendingLogin(): void {
+    this.userActionCount += 1
     if (this.cancelPendingLogin()) {
       console.info(
         '[claude-accounts] Cancelled a pending Claude login superseded by a new request.'

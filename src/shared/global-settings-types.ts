@@ -331,6 +331,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
   /** Dismissed the "System default may hold a copied login" notice in Settings > Accounts. */
   claudeCopiedSystemDefaultNoticeDismissed?: boolean
+  /** Opt-in: new Claude sessions move to the managed account with the most room before a usage limit; optional for legacy settings. */
+  claudeAutoSwitchEnabled?: boolean
   /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
    *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean

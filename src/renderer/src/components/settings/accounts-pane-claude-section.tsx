@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { ButtonGroup } from '../ui/button-group'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { ClaudeIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
@@ -383,6 +384,38 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
           )}
         </div>
       </SearchableSetting>
+
+      {!isRemoteAccountScope && visibleClaudeAccounts.length > 1 ? (
+        <SearchableSetting
+          title={translate('accounts.claude.autoSwitch', 'Switch accounts before a usage limit')}
+          description={translate(
+            'accounts.claude.autoSwitchDescription',
+            'When the selected account passes 90% of its 5-hour or weekly limit, Orca switches to the account with the most room left, as if you had switched by hand.'
+          )}
+          keywords={['claude', 'account', 'auto', 'switch', 'rate limit', 'quota', 'usage']}
+          className="flex items-center justify-between gap-4 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>
+              {translate('accounts.claude.autoSwitch', 'Switch accounts before a usage limit')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'accounts.claude.autoSwitchDescription',
+                'When the selected account passes 90% of its 5-hour or weekly limit, Orca switches to the account with the most room left, as if you had switched by hand.'
+              )}
+            </p>
+          </div>
+          <Switch
+            aria-label={translate(
+              'accounts.claude.autoSwitch',
+              'Switch accounts before a usage limit'
+            )}
+            checked={settings.claudeAutoSwitchEnabled === true}
+            onCheckedChange={(checked) => updateSettings({ claudeAutoSwitchEnabled: checked })}
+          />
+        </SearchableSetting>
+      ) : null}
       {isRemoteAccountScope ? null : (
         <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
       )}
