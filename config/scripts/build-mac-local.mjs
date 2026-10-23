@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readFileSync, rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 export function createLocalBuildVersion(baseVersion, timestamp, commit) {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(baseVersion)) {
@@ -28,19 +28,29 @@ export function getLocalBuildIdentity() {
   }
 }
 
+export function removeUnpackedMacApps(outputDir = 'dist') {
+  for (const architecture of ['mac', 'mac-arm64']) {
+    rmSync(join(outputDir, architecture, 'Orca.app'), { recursive: true, force: true })
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
   const identity = getLocalBuildIdentity()
   console.log(`[build:mac] local update version ${identity.version}`)
-  execFileSync(
-    process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-    ['exec', 'electron-builder', '--config', 'config/electron-builder.config.cjs', '--mac'],
-    {
-      env: {
-        ...process.env,
-        ORCA_BUILD_COMMIT: identity.commit,
-        ORCA_LOCAL_BUILD_VERSION: identity.version
-      },
-      stdio: 'inherit'
-    }
-  )
+  try {
+    execFileSync(
+      process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+      ['exec', 'electron-builder', '--config', 'config/electron-builder.config.cjs', '--mac'],
+      {
+        env: {
+          ...process.env,
+          ORCA_BUILD_COMMIT: identity.commit,
+          ORCA_LOCAL_BUILD_VERSION: identity.version
+        },
+        stdio: 'inherit'
+      }
+    )
+  } finally {
+    removeUnpackedMacApps()
+  }
 }

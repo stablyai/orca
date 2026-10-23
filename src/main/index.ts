@@ -28,6 +28,8 @@ import {
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
+import { relocateThisProcessMacAppBackups } from './updater/macos-app-backup-relocation'
+import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -132,6 +134,25 @@ if (preflightReady) {
   registerMainProcessIpcHandlers()
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
+    const backupRelocation = relocateThisProcessMacAppBackups(app.getPath('userData'))
+    if (backupRelocation) {
+      void backupRelocation
+        .then(({ moved, skipped }) => {
+          if (moved.length > 0 || skipped.length > 0) {
+            recordUpdaterLifecycle('macos_app_backups_relocated', {
+              moved: moved.join(','),
+              skipped: skipped.join(',')
+            })
+          }
+        })
+        .catch((error: unknown) => {
+          recordUpdaterLifecycle(
+            'macos_app_backups_relocation_failed',
+            { errorType: error instanceof Error ? error.name : typeof error },
+            { level: 'warn', message: 'Could not relocate macOS app backups' }
+          )
+        })
+    }
     try {
       await initializeMainProcessReady({
         openMainWindow,
