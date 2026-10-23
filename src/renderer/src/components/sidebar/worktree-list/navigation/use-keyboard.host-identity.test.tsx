@@ -9,14 +9,21 @@ import type { RenderRow } from '../listing/render-row'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
 const activateAndRevealWorktree = vi.fn()
+const storeActions = vi.hoisted(() => ({
+  clearPendingRevealSidebarRow: vi.fn(),
+  clearPendingRevealWorktreeId: vi.fn()
+}))
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activateAndRevealWorktree(...args)
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: { keybindings: undefined }) => unknown) =>
-    selector({ keybindings: undefined })
+  useAppStore: Object.assign(
+    (selector: (state: { keybindings: undefined }) => unknown) =>
+      selector({ keybindings: undefined }),
+    { getState: () => storeActions }
+  )
 }))
 
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')
