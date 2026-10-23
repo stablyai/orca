@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
+import { resolveEditorKeybindings } from '../../../../shared/editor-keybindings'
+import { shouldAttachEditorVim } from './monaco-vim-mode'
+import { useMonacoVimAttachment } from './use-monaco-vim-attachment'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
@@ -81,7 +84,15 @@ export default function DiffViewer({
   useLayoutEffect(() => {
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
-  const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  const [modifiedEditor, setModifiedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
+  const vimEnabled =
+    editable &&
+    shouldAttachEditorVim({
+      preset: resolveEditorKeybindings(settings?.editorKeybindings),
+      readOnly: false,
+      autoHeight: false
+    })
+  const [vimStatusNode, setVimStatusNode] = useState<HTMLElement | null>(null)
 
   const renderLimit = useMemo(
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
@@ -311,6 +322,17 @@ export default function DiffViewer({
       wordWrapOptionsSubRef.current = null
     }
   }, [diffWordWrap, sideBySide])
+  useMonacoVimAttachment({
+    editor: modifiedEditor,
+    enabled: vimEnabled,
+    statusNode: vimStatusNode,
+    onWrite: () => {
+      if (!modifiedEditor) {
+        return
+      }
+      onSaveRef.current?.(modifiedEditor.getValue())
+    }
+  })
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -361,6 +383,14 @@ export default function DiffViewer({
           />
         )}
       </div>
+      {vimEnabled ? (
+        <div
+          ref={setVimStatusNode}
+          data-vim-status
+          aria-live="polite"
+          className="min-h-6 shrink-0 border-t border-border bg-editor-surface px-2 text-xs text-muted-foreground"
+        />
+      ) : null}
       {toastNode}
     </div>
   )

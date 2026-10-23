@@ -61,7 +61,8 @@ const testOptions = {
     ? { fsModuleCachePath: process.env.ORCA_UNIT_MODULE_CACHE_PATH }
     : {}),
   env: { ORCA_VITEST_RUNTIME: 'node' },
-  server: { deps: { inline: ['zod'] } },
+  // Why: monaco-vim must be inlined so vite resolves its extensionless monaco internal imports; externalized deps bypass vite resolution.
+  server: { deps: { inline: ['zod', 'monaco-vim'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
   execArgv: ['--no-experimental-webstorage', '--expose-gc'],
   setupFiles: UNIT_SETUP_FILES.map((file) => resolve(file)),

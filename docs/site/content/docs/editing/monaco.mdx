@@ -22,6 +22,14 @@ Toggle **Changes view mode** in any editor tab to flip the file into an in-tab H
 
 File editors wrap long lines by default. Toggle **Word Wrap** from the editor tab's **⋯** menu, press `Alt+Z` (same as VS Code; remappable under [Settings → Shortcuts](/docs/settings)), or set the default under [Settings → General → Editor Word Wrap](/docs/settings). This setting is separate from **Diff Word Wrap**, which only affects diff editors.
 
+## Vim keybindings
+
+Choose **Vim** under **Settings → General → Editor → Editor Keybindings** to enable modal editing in writable file editors and the writable side of single-file diffs. Default keybindings remain the default.
+
+The status row shows the current mode. Use `i` to enter Insert mode, Escape to return to Normal mode, and `:w` to save the editor that issued the command—even in split panes. Save and Find shortcuts still work. Switching back to Default preserves undo history.
+
+Read-only views, auto-height previews, combined diffs, rich Markdown, notebooks, and terminals are unaffected.
+
 ## Minimap
 
 A minimap is available in the file editor under [Settings → Appearance](/docs/settings). It's off by default; turn it on if you prefer the VS Code-style overview rail.

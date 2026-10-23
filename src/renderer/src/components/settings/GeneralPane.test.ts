@@ -83,6 +83,13 @@ describe('GeneralPane search entries', () => {
     expect(matchesSettingsSearch('horizontal scroll', entries)).toBe(true)
   })
 
+  it('includes file-editor vim keybinding keywords', () => {
+    const entries = getGeneralPaneSearchEntries()
+
+    expect(matchesSettingsSearch('vim', entries)).toBe(true)
+    expect(matchesSettingsSearch('keybindings', entries)).toBe(true)
+  })
+
   it('includes rich Markdown spellcheck keywords', () => {
     const entries = getGeneralPaneSearchEntries()
 

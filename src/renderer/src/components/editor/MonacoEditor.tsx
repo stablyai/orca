@@ -5,6 +5,9 @@ import type { editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
+import { resolveEditorKeybindings } from '../../../../shared/editor-keybindings'
+import { shouldAttachEditorVim } from './monaco-vim-mode'
+import { useMonacoVimAttachment } from './use-monaco-vim-attachment'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
@@ -102,6 +105,12 @@ export default function MonacoEditor({
   )
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
+  const vimEnabled = shouldAttachEditorVim({
+    preset: resolveEditorKeybindings(settings?.editorKeybindings),
+    readOnly,
+    autoHeight
+  })
+  const [vimStatusNode, setVimStatusNode] = useState<HTMLElement | null>(null)
   const modelOwnerKey = useAppStore((state) => {
     const file = state.openFiles?.find((entry) => entry.id === fileId)
     return file
@@ -259,13 +268,21 @@ export default function MonacoEditor({
     fileId,
     viewStateId
   ])
+  useMonacoVimAttachment({
+    editor: mountedEditor,
+    enabled: vimEnabled,
+    statusNode: vimStatusNode,
+    onWrite: () => {
+      const editor = editorRef.current
+      if (!editor) {
+        return
+      }
+      propsRef.current.onSave(editor.getValue())
+    }
+  })
 
-  return (
-    <div
-      ref={editorContainerRef}
-      className={autoHeight ? 'relative' : 'relative h-full'}
-      style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
-    >
+  const editorSurface = (
+    <>
       <MonacoMarkdownAnnotationOverlay
         shouldShowMarkdownAnnotations={annotations.shouldShowMarkdownAnnotations}
         commentPopover={annotations.commentPopover}
@@ -330,6 +347,35 @@ export default function MonacoEditor({
         filePath={filePath}
         relativePath={relativePath}
       />
+    </>
+  )
+
+  if (autoHeight) {
+    return (
+      <div
+        ref={editorContainerRef}
+        className="relative"
+        style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
+      >
+        {editorSurface}
+      </div>
+    )
+  }
+
+  return (
+    // Why: the status row is a sibling, so toggling Vim does not remount Monaco and drop undo.
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={editorContainerRef} className="relative min-h-0 flex-1">
+        {editorSurface}
+      </div>
+      {vimEnabled ? (
+        <div
+          ref={setVimStatusNode}
+          data-vim-status
+          aria-live="polite"
+          className="min-h-6 shrink-0 border-t border-border bg-editor-surface px-2 text-xs text-muted-foreground"
+        />
+      ) : null}
     </div>
   )
 }

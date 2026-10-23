@@ -208,6 +208,7 @@
     "fflate": "0.8.3",
     "i18next": "^26.4.2",
     "jsonc-parser": "^3.3.1",
+    "monaco-vim": "0.4.4",
     "node-pty": "^1.1.0",
     "posthog-node": "^5.52.5",
     "proper-lockfile": "4.1.2",
