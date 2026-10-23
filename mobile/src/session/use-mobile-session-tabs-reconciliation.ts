@@ -79,15 +79,12 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     return hasRecoveryNeed() || contextKey !== null
   }, [getPendingTerminalRecoveryContextKey, hasRecoveryNeed, pendingTerminalRecoveryBudget])
   const allowRecoveryPoll = useCallback(() => {
-    if (hasRecoveryNeed()) {
-      return true
-    }
     const contextKey = getPendingTerminalRecoveryContextKey?.() ?? null
     const attempt = pendingTerminalRecoveryBudget.take(contextKey)
     if (attempt.parked) {
       onPendingTerminalRecoveryParkedRef.current?.(contextKey)
     }
-    return attempt.allowed
+    return attempt.allowed || hasRecoveryNeed()
   }, [getPendingTerminalRecoveryContextKey, hasRecoveryNeed, pendingTerminalRecoveryBudget])
   const resetPendingTerminalRecovery = useCallback(() => {
     pendingTerminalRecoveryBudget.reset()

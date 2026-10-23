@@ -5,7 +5,6 @@ import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
 import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
 import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
-import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
@@ -14,8 +13,8 @@ import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
-  activateExistingLeafInLayout,
   addSplitLeafToLayout,
+  bindCreatedTerminalLeafInLayout,
   focusTerminalInitiatedTab,
   resolveTerminalPresentation
 } from './terminal-command-state'
@@ -227,20 +226,14 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
               // Switch point: this title is the tab's name; main holds no pane title for it.
               const paneTitle = ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : title
               // Why: CLI/runtime PTYs emit hook events before the tab mounts, so the leaf must exist in layout for paneKey validation.
-              const existingLayout = reusedTab
-                ? activateExistingLeafInLayout(
-                    store.terminalLayoutsByTabId?.[tab.id],
-                    leafId,
-                    ptyId,
-                    paneTitle
-                  )
-                : null
-              if (existingLayout) {
-                store.updateTabPtyId(tab.id, ptyId)
-                store.setTabLayout(tab.id, existingLayout)
-              } else {
-                store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, paneTitle))
-              }
+              bindCreatedTerminalLeafInLayout({
+                tabId: tab.id,
+                worktreeId,
+                leafId,
+                ptyId,
+                paneTitle,
+                reusedTab
+              })
             }
           }
           if (command) {

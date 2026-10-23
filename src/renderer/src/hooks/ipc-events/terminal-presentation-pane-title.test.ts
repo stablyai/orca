@@ -55,6 +55,7 @@ vi.mock('../../store', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
+import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 
 const WORKTREE = 'repo1::/repo1/main'
 const TAB = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
@@ -172,5 +173,61 @@ describe('a revealed terminal’s title, while the window owns the layout', () =
     const state = await setup(windowHoldsTab)
 
     expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toEqual({ [LEAF]: 'Build' })
+  })
+
+  it('updates tab.ptyId and remounts an already-mounted split-group tab when reused with a new PTY', () => {
+    const listeners = new Map<string, Listener>()
+    const ui = new Proxy(
+      {},
+      {
+        get: (_target, name) =>
+          typeof name === 'string' && name.startsWith('on')
+            ? (listener: Listener) => {
+                listeners.set(name, listener)
+                return () => {}
+              }
+            : vi.fn()
+      }
+    )
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      api: { ...createStoreSessionMockApi(), ui }
+    })
+    const store = createTestStore()
+    mocks.store.current = store
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WORKTREE, repoId: 'repo1', path: '/repo1/main' })]
+      },
+      tabsByWorktree: {
+        [WORKTREE]: [makeTab({ id: TAB, worktreeId: WORKTREE, ptyId: 'pty-old' })]
+      }
+    })
+    const unregister = registerRuntimeTerminalTab({
+      tabId: TAB,
+      worktreeId: WORKTREE,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test stub provides getNumericIdForLeaf
+      getManager: () => ({ getNumericIdForLeaf: () => 1 }) as never,
+      getContainer: () => null,
+      getPtyIdForPane: () => 'pty-old',
+      getTabWideAgentHintLeafId: () => null
+    })
+    onTestFinished(unregister)
+
+    registerTerminalPresentationIpcBridge([])
+    listeners.get('onCreateTerminal')?.({
+      requestId: 'request-remount',
+      worktreeId: WORKTREE,
+      ptyId: 'pty-new',
+      tabId: TAB,
+      leafId: LEAF,
+      title: 'Build',
+      presentation: 'background'
+    })
+
+    const nextState = store.getState()
+    expect(nextState.tabsByWorktree[WORKTREE]?.[0]?.ptyId).toBe('pty-new')
+    expect(nextState.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-new' })
+    expect(nextState.tabsByWorktree[WORKTREE]?.[0]?.generation).toBe(1)
   })
 })

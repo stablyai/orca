@@ -1,6 +1,11 @@
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
+import {
+  findRegisteredTerminalTab,
+  focusRuntimeTerminalSurface
+} from '@/runtime/mounted-terminal-tab-registry'
+import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { useAppStore } from '../../store'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-types'
 import type {
   TerminalLayoutSnapshot,
@@ -122,5 +127,40 @@ export function activateExistingLeafInLayout(
     expandedLeafId: null,
     ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId },
     ...(title ? { titlesByLeafId: { ...layout.titlesByLeafId, [leafId]: title } } : {})
+  }
+}
+
+export function bindCreatedTerminalLeafInLayout(args: {
+  tabId: string
+  worktreeId: string
+  leafId: string
+  ptyId: string
+  paneTitle?: string | null
+  reusedTab: { id: string; ptyId?: string | null } | null
+}): void {
+  const store = useAppStore.getState()
+  const { tabId, worktreeId, leafId, ptyId, paneTitle, reusedTab } = args
+  const previousLeafPtyId = reusedTab
+    ? (store.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId] ??
+      reusedTab.ptyId ??
+      undefined)
+    : undefined
+  const existingLayout = reusedTab
+    ? activateExistingLeafInLayout(store.terminalLayoutsByTabId?.[tabId], leafId, ptyId, paneTitle)
+    : null
+  if (reusedTab) {
+    store.updateTabPtyId(tabId, ptyId, previousLeafPtyId)
+  }
+  store.setTabLayout(tabId, existingLayout ?? singlePaneLayoutSnapshot(leafId, ptyId, paneTitle))
+  if (!reusedTab) {
+    return
+  }
+  const registered = findRegisteredTerminalTab(tabId, worktreeId)?.tab
+  const manager = registered?.getManager()
+  const mountedPaneId = manager ? manager.getNumericIdForLeaf(leafId) : null
+  const mountedPtyId =
+    mountedPaneId !== null && registered ? registered.getPtyIdForPane(mountedPaneId) : null
+  if (registered && mountedPtyId !== ptyId) {
+    useAppStore.getState().remountTerminalTabForRecovery?.(tabId)
   }
 }
