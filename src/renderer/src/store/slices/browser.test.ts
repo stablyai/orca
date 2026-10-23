@@ -4,6 +4,8 @@ import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/brow
 import { makeAnnotation } from './browser-annotation-test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { ManagedBrowserProfileOwner } from '../../../../shared/browser-profile-scope'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   createBrowserMockApi,
@@ -281,6 +283,69 @@ describe('createBrowserSlice annotations', () => {
 
     expect(localFallback.sessionProfileId).toBe('local-profile')
     expect(remoteTab.sessionProfileId).toBe('runtime-profile')
+  })
+
+  it('gives each repo its own profile under the per-repo scope and holds pages until main has it', async () => {
+    const created = new Map<string, (profile: BrowserSessionProfile) => void>()
+    const ensureMock = vi.fn(
+      ({ owner }: { owner: ManagedBrowserProfileOwner }) =>
+        new Promise<BrowserSessionProfile>((resolve) => created.set(owner.id, resolve))
+    )
+    Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
+    const { store, main } = await createTestStoreDrawnFromMain({
+      repos: [],
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the browser keys are read.
+      settings: { browserProfileScope: 'repo' } as AppState['settings'],
+      defaultBrowserSessionProfileId: 'user-default'
+    })
+
+    const first = store.getState().createBrowserTab('repo-a::/a/one', 'about:blank')
+    const sibling = store.getState().createBrowserTab('repo-a::/a/two', 'about:blank')
+    const other = store.getState().createBrowserTab('repo-b::/b/one', 'about:blank')
+    await main.settle()
+
+    const placeholderId = first.sessionProfileId ?? ''
+    expect(sibling.sessionProfileId).toBe(placeholderId)
+    expect(other.sessionProfileId).not.toBe(placeholderId)
+    expect(placeholderId).not.toBe('user-default')
+    expect(ensureMock.mock.calls.map(([args]) => args.owner)).toEqual([
+      { kind: 'repo', id: 'repo-a' },
+      { kind: 'repo', id: 'repo-b' }
+    ])
+    expect(store.getState().managedBrowserProfileStatusById[placeholderId]).toBe('pending')
+    // A placeholder that outlives this run must load nowhere, never on the shared Default jar.
+    expect(first.sessionPartition).toBe(`persist:orca-browser-unminted-${placeholderId}`)
+    store.getState().closeBrowserTab(sibling.id)
+    await main.settle()
+
+    const profile: BrowserSessionProfile = {
+      id: 'minted-by-main',
+      scope: 'isolated',
+      partition: 'persist:orca-browser-session-minted-by-main',
+      label: 'Repo: repo-a',
+      source: null,
+      owner: { kind: 'repo', id: 'repo-a' }
+    }
+    created.get('repo-a')?.(profile)
+    await vi.waitFor(() =>
+      expect(store.getState().managedBrowserProfileStatusById[placeholderId]).toBeUndefined()
+    )
+    // A tab closed while it waited reopens on the profile main made, not the placeholder.
+    expect(store.getState().reopenClosedBrowserTab('repo-a::/a/two')).not.toBeNull()
+    await main.settle()
+    const repoATabs = ['repo-a::/a/one', 'repo-a::/a/two'].flatMap(
+      (worktreeId) => store.getState().browserTabsByWorktree[worktreeId] ?? []
+    )
+    expect(repoATabs.map((tab) => tab.sessionPartition ?? null)).toEqual([null, null])
+    expect(repoATabs.map((tab) => tab.sessionProfileId)).toEqual([
+      'minted-by-main',
+      'minted-by-main'
+    ])
+    expect(store.getState().browserSessionProfilesByHostId.local).toEqual([profile])
+
+    const later = store.getState().createBrowserTab('repo-a::/a/three', 'about:blank')
+    expect(later.sessionProfileId).toBe('minted-by-main')
+    expect(store.getState().managedBrowserProfileStatusById['minted-by-main']).toBeUndefined()
   })
 
   it('preserves browser map references when a page-state update is unchanged', async () => {

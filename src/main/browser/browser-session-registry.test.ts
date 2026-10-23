@@ -47,6 +47,11 @@ vi.mock('./browser-manager', () => ({
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
+import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
+import {
+  deleteManagedBrowserProfile,
+  ensureManagedBrowserProfile
+} from './browser-managed-session-profiles'
 import {
   configureBrowserSitePermissionStore,
   listBrowserSitePermissions,
@@ -346,6 +351,29 @@ describe('BrowserSessionRegistry', () => {
     finishClose?.()
     await expect(deletion).resolves.toBe(true)
     expect(removeCertificateRequestGuardMock).not.toHaveBeenCalled()
+  })
+
+  it('creates one managed profile per owner and a fresh one after its owner is removed', async () => {
+    const owner = { kind: 'worktree' as const, id: 'repo-1::/work/feature' }
+    const [first, concurrent] = await Promise.all([
+      ensureManagedBrowserProfile(owner, 'Workspace: feature'),
+      ensureManagedBrowserProfile(owner, 'Workspace: feature')
+    ])
+    const repoProfile = await ensureManagedBrowserProfile({ kind: 'repo', id: 'repo-1' }, 'Repo')
+    if (!first || !repoProfile) {
+      throw new Error('Expected managed profiles')
+    }
+
+    expect(concurrent).toBe(first)
+    expect(repoProfile.partition).not.toBe(first.partition)
+    expect(isValidPersistedBrowserSessionProfile(first, DEFAULT_LOCAL_ORCA_PROFILE_ID)).toBe(true)
+
+    expect(await deleteManagedBrowserProfile(owner)).toBe(true)
+    expect(browserSessionRegistry.isAllowedPartition(first.partition)).toBe(false)
+    expect(browserSessionRegistry.getProfile(repoProfile.id)).not.toBeNull()
+    // A workspace recreated at the same path must not land on the deleted, retired session.
+    const recreated = await ensureManagedBrowserProfile(owner, 'Workspace: feature')
+    expect(recreated?.partition).not.toBe(first.partition)
   })
 
   it('refuses to delete the default profile', async () => {

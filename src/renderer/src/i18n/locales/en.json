@@ -178,6 +178,9 @@
         "pending": "Checks pending"
       },
       "runningElsewhere": "{{count}} running in other workspaces"
+    },
+    "managedProfile": {
+      "createFailed": "Couldn't create this workspace's browser profile. Close this tab and open a new one to try again."
     }
   },
   "editor": {
@@ -405,6 +408,20 @@
           "notifications": "notifications",
           "clipboard": "clipboard"
         }
+      },
+      "profileScope": {
+        "optionShared": "Shared",
+        "optionSharedTooltip": "New tabs use the Default profile (or the one picked under Session & Cookies).",
+        "optionRepo": "Per repo",
+        "optionRepoTooltip": "Each repo's workspaces share one profile, created on first use.",
+        "optionWorktree": "Per workspace",
+        "optionWorktreeTooltip": "Each workspace gets its own profile, deleted with the workspace.",
+        "title": "Profile for new tabs",
+        "description": "Share one Default profile everywhere, or give each repo or workspace its own cookies and storage, so local dev servers stop sharing logins.",
+        "keywordRepo": "repo",
+        "keywordIsolate": "isolate",
+        "repoProfileLabel": "Repo: {{name}}",
+        "worktreeProfileLabel": "Workspace: {{name}}"
       }
     },
     "agents": {

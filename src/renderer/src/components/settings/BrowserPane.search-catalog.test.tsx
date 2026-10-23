@@ -84,6 +84,9 @@ vi.mock('./BrowserClientHostedRemoteSetting', () => ({
 vi.mock('./BrowserSshWorkspaceRoutingSetting', () => ({
   BrowserSshWorkspaceRoutingSetting: () => <span>SSH row</span>
 }))
+vi.mock('./BrowserProfileScopeSetting', () => ({
+  BrowserProfileScopeSetting: () => <span>Profile scope row</span>
+}))
 vi.mock('./BrowserUserAgentSetting', () => ({
   BrowserUserAgentSetting: () => <span>Identity row</span>
 }))

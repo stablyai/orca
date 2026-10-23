@@ -1,4 +1,5 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
@@ -196,6 +197,10 @@ export type BrowserApi = {
     scope: BrowserSessionProfileScope
     label: string
   }) => Promise<BrowserSessionProfile | null>
+  sessionEnsureManagedProfile: (args: {
+    owner: ManagedBrowserProfileOwner
+    label: string
+  }) => Promise<BrowserSessionProfile>
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>

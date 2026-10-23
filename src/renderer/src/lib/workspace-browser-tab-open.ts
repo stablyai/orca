@@ -1,6 +1,7 @@
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-browser-creation'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { resolveNewBrowserTabProfile } from '@/store/slices/browser/browser-new-tab-profile'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -180,9 +181,7 @@ function createClientBrowserTab(
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
       executionHostId: ownerHostId,
-      sessionProfileId:
-        state.defaultBrowserSessionProfileIdByHostId[hostId] ??
-        state.defaultBrowserSessionProfileId,
+      ...resolveNewBrowserTabProfile(state, request.workspaceId, hostId),
       targetGroupId: request.targetGroupId,
       ...(request.afterTabId ? { afterTabId: request.afterTabId } : {}),
       title: presentation.title
