@@ -21,8 +21,8 @@ import {
 } from './state-equality-files'
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/structured-agent-session-launch-registry'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 import { resolveStructuredAgentSessionOwner } from '../structured-agent-session-owner'
+import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
