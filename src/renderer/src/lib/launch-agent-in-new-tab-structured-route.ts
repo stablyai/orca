@@ -2,7 +2,11 @@ import {
   adoptAgentSessionLaunchVerdict,
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
-import type { AgentLaunchSurface, LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
+import type {
+  AgentLaunchSurface,
+  LaunchAgentInNewTabArgs,
+  LaunchAgentInNewTabResult
+} from '@/lib/launch-agent-in-new-tab'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
@@ -31,11 +35,7 @@ export function launchStructuredAgentFromNewTab(args: {
   openTerminal: (
     terminalPlan: AgentSessionLaunchPlan,
     activate?: false
-  ) => {
-    surface: AgentLaunchSurface
-    terminalCompletion?: StructuredLaunchTerminal['completion']
-    promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
-  } | null
+  ) => LaunchAgentInNewTabResult
 }): StructuredFromNewTab | null {
   const { plan, beforeSurfaceOpen } = args
   if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
@@ -47,7 +47,7 @@ export function launchStructuredAgentFromNewTab(args: {
     ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
     target: { worktreeId: args.worktreeId },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),
-    onHostDeclined: (_target, activate) => {
+    onHostDeclined: async (_target, activate) => {
       if (args.onHostDeclined) {
         return args.onHostDeclined()
       }
@@ -60,8 +60,15 @@ export function launchStructuredAgentFromNewTab(args: {
         }),
         activate
       )
+      const surface =
+        terminal === null
+          ? 'none'
+          : terminal.surface.kind === 'host-published'
+            ? await (terminal.surfaceReady ?? Promise.resolve<'none'>('none'))
+            : 'agent'
       return {
-        opened: terminal !== null,
+        opened: surface === 'agent',
+        surface,
         ...(terminal?.surface.kind === 'local-terminal' ? { tabId: terminal.surface.tabId } : {}),
         ...(terminal?.terminalCompletion ? { completion: terminal.terminalCompletion } : {}),
         ...(terminal?.promptDeliveryResult

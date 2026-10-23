@@ -37,7 +37,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   envelope?: RuntimeOrchestrationEnvelope,
   validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   signal?: AbortSignal,
-  clientCapabilities: readonly RuntimeCapability[] = []
+  clientCapabilities: readonly RuntimeCapability[] = [],
+  beforeSend?: () => void
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
@@ -151,7 +152,12 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         )
         return
       }
-      ws?.send(handshake.channel.sealText(request))
+      try {
+        beforeSend?.()
+        ws?.send(handshake.channel.sealText(request))
+      } catch (error) {
+        finishError(error instanceof Error ? error : new Error(String(error)))
+      }
     }
 
     router = new RemoteRuntimeRequestResponseRouter({

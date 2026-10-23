@@ -34,21 +34,21 @@ type LaunchStructuredWorktreeSessionArgs = {
  * background terminal create does: in place, without selecting the workspace (#23974). A create the
  * user is still watching keeps the default, which opens it as a new agent tab there.
  */
-function openBackgroundDeclinedTerminal(
+async function openBackgroundDeclinedTerminal(
   args: LaunchStructuredWorktreeSessionArgs,
   host: RuntimeClientTarget
-): StructuredLaunchTerminal {
+): Promise<StructuredLaunchTerminal> {
   const startup = buildWorktreeCreationStartupOpt(args.request, false)
   if (host.kind === 'environment') {
-    ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
+    const opened = await ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
       startup,
       agent: args.request.agent,
       activate: false
     })
-    return { opened: true }
+    return { opened, surface: opened ? 'agent' : 'none' }
   }
   if (!startup) {
-    return { opened: false }
+    return { opened: false, surface: 'none' }
   }
   // This machine seeds the agent terminal itself; a background workspace mounts it without showing it.
   const tabId = ensureWorktreeHasInitialTerminal(
@@ -61,7 +61,7 @@ function openBackgroundDeclinedTerminal(
     { activateCreatedTabs: false, createNewTerminalForStartup: true }
   )
   mountCreatedWorktreeStartupTabsInBackground(args.worktreeId)
-  return { opened: tabId !== null }
+  return { opened: tabId !== null, surface: tabId !== null ? 'agent' : 'none' }
 }
 
 export async function launchStructuredWorktreeSession(

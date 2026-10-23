@@ -15,6 +15,7 @@ type PinnedCall = {
   timeoutMs: number
   envelope?: RuntimeOrchestrationEnvelope
   signal?: AbortSignal
+  beforeSend?: () => void
 }
 
 /** A one-shot socket that sends only after its own `status.get` names `expectedRuntimeId`; null otherwise. */
@@ -38,7 +39,8 @@ async function sendOneShotRequestOnRuntime(
       },
       call.envelope,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-      call.signal
+      call.signal,
+      call.beforeSend
     )
   } catch (error) {
     if (otherRuntime) {
@@ -68,7 +70,8 @@ export async function sendSupportRoutedCallOnRuntime(
           call.timeoutMs,
           expectedRuntimeId,
           call.envelope,
-          call.signal
+          call.signal,
+          call.beforeSend
         )
       : await sendOneShotRequestOnRuntime(route.connection, call, expectedRuntimeId)
   return response ?? runtimeEnvironmentChangedFailure(route.environment, call.method)

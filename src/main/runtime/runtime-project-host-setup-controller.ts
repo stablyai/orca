@@ -16,7 +16,6 @@ import type { Repo } from '../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
-  parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
@@ -30,6 +29,9 @@ import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidato
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../folder-repo-git-conversion'
 import type { RuntimeStore } from './runtime-store-contract'
+import { placeExistingFolderSetup } from '../wsl/wsl-project-host-setup'
+import { UNNAMED_REGISTRATION_CALLER, type PlacedProjectWriter } from '../wsl/project-placement'
+import { assertCloneHostIsSupported } from './runtime-repository-clone-controller'
 import { readAllWorktreeMetaForRepo } from '../persistence/host-qualified-worktree-meta'
 import { readCurrentGitRemoteIdentity } from '../repo-git-remote-identity'
 import {
@@ -50,23 +52,12 @@ import {
 type RuntimeProjectHostSetupDependencies = {
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
-  addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
+  addRepo: PlacedProjectWriter
   cloneRepo: (url: string, destination: string, hostId: ExecutionHostId) => Promise<Repo>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
   countLiveTerminalsForRepo: (repo: Repo) => number
-}
-
-// Why clone refuses up front: `cloneRepo` runs `git clone` on the client, so accepting `ssh:*`
-// here would register the client's copy as the host's repo — a local answer to a remote question.
-function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
-  if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
-    return
-  }
-  throw new Error(
-    'Cloning onto an SSH host is not supported. Clone the repository on the host, then set the project up from that existing folder.'
-  )
 }
 
 export const SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE =
@@ -123,18 +114,24 @@ export class RuntimeProjectHostSetupController {
   }
 
   async setupExistingFolder(
-    args: ProjectHostSetupExistingFolderArgs
+    args: ProjectHostSetupExistingFolderArgs,
+    caller = UNNAMED_REGISTRATION_CALLER
   ): Promise<ProjectHostSetupResult> {
-    if (!this.deps.getStore()) {
+    const store = this.deps.getStore()
+    if (!store) {
       throw new Error('runtime_unavailable')
     }
-    const kind = args.kind === 'folder' ? 'folder' : 'git'
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     const sshTargetId = getSshTargetIdForExecutionHost(args.hostId)
     if (sshTargetId) {
       throw sshTargetNotServedError(sshTargetId)
     }
-    const repo = await this.deps.addRepo(args.path, kind, args.hostId)
+    const placed = await placeExistingFolderSetup(store, args, { owner: 'runtime', ...caller })
+    if ('hosted' in placed) {
+      return placed.hosted
+    }
+    const kind = args.kind === 'folder' ? 'folder' : 'git'
+    const repo = await this.deps.addRepo(placed.placement, kind, args.hostId)
     const repoWasCreated = !knownRepoIds.has(repo.id)
     // Why: a registered row's stored remote can predate a remote the user has since added.
     const folderRemote =

@@ -97,19 +97,18 @@ export type AgentLaunchSurface =
 
 export type LaunchAgentInNewTabResult = {
   surface: AgentLaunchSurface
-  startupPlan: AgentStartupPlan
+  /** Present only when this client planned a terminal command. */
+  startupPlan?: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  /** Resolves after a host terminal creation receipt, when this was host-published. */
+  surfaceReady?: Promise<'agent' | 'none'>
   /** Structured route only: what the launch did once it settled. The call stays synchronous. */
   terminalCompletion?: StructuredLaunchTerminal['completion']
   structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
 } | null
 
-export function shouldQueueTerminalFocusAfterMenuClose(
-  result: NonNullable<LaunchAgentInNewTabResult>
-): boolean {
-  return result.surface.kind === 'host-published'
-}
+export { shouldQueueTerminalFocusAfterMenuClose } from '@/lib/launch-agent-in-new-tab-host-agents'
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -119,7 +118,7 @@ export function shouldQueueTerminalFocusAfterMenuClose(
  * prompt into the launch command; followup-path agents launch empty and get a
  * post-ready draft paste. Callers can override via `promptDelivery`.
  *
- * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
+ * Returns `null` when a terminal launch cannot build its startup command.
  */
 function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
   const {
@@ -140,45 +139,12 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     activate
   } = args
   const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
-  if (!executionContext) {
-    args.focusIntent?.cancel()
-    return null
-  }
-  const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
   // Why: a followup-path agent gets its prompt pasted unsubmitted after start, so route it as a draft.
   const routePromptDelivery =
     hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
-  const startupPlanBase = {
-    agent,
-    cmdOverrides: store.settings?.agentCmdOverrides ?? {},
-    platform: resolvedLaunchPlatform,
-    shell: queuedShell,
-    isRemote,
-    agentArgs: effectiveAgentArgs,
-    agentEnv
-  }
-  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
-    base: startupPlanBase,
-    prompt: trimmedPrompt,
-    promptDelivery,
-    isFollowupPath
-  })
-  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
-
-  if (!startupPlan) {
-    args.focusIntent?.cancel()
-    return null
-  }
-
   // Why first: a structured chat is created on whichever runtime owns the workspace, a paired
   // server included, so only a non-structured route falls through to the host-published terminal.
   const route = routeNewTabLaunch(store, args, {
@@ -193,7 +159,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     ...(args.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
   })
   if ('awaited' in route) {
-    return launchOnceHostAnswered(route, args, startupPlan, launchAgentInNewTabInternal)
+    return launchOnceHostAnswered(route, args, launchAgentInNewTabInternal)
   }
   const { plan } = route
   if (plan?.route === 'structured-native-chat') {
@@ -218,10 +184,42 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       args.focusIntent?.cancel()
       return null
     }
-    return { ...structured, startupPlan }
+    return structured
   }
 
   args.focusIntent?.cancel()
+  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  if (!executionContext) {
+    return null
+  }
+  const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
+  const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const effectiveAgentArgs =
+    agentArgs !== undefined
+      ? agentArgs
+      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const startupPlanBase = {
+    agent,
+    cmdOverrides,
+    platform: resolvedLaunchPlatform,
+    shell: queuedShell,
+    isRemote,
+    agentArgs: effectiveAgentArgs,
+    agentEnv
+  }
+  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
+    base: startupPlanBase,
+    prompt: trimmedPrompt,
+    promptDelivery,
+    isFollowupPath
+  })
+  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
+
+  if (!startupPlan) {
+    return null
+  }
+
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
@@ -250,6 +248,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       terminalCompletion: webHostDelivery,
       startupPlan,
       pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
+      surfaceReady: webHostDelivery.then((result) =>
+        result.outcome.status === 'created' ? 'agent' : 'none'
+      ),
       ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
         ? { promptDeliveryResult: webHostDelivery }
         : {})

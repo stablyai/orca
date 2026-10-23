@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -127,15 +128,13 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const hostOptions = useMemo(
     () =>
-      buildExecutionHostRegistry({
+      buildComposerHostOptions({
         repos,
         settings,
-        hostSource: 'configured-only',
         sshTargetLabels,
         sshConnectionStates,
         runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides: getHostDisplayLabelOverrides(settings)
+        runtimeStatusByEnvironmentId
       }),
     [
       repos,
@@ -210,4 +209,35 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     actionableHostIds,
     seedActiveRepoId
   }
+}
+
+export function buildComposerHostOptions(
+  state: Pick<
+    AppState,
+    | 'repos'
+    | 'settings'
+    | 'sshTargetLabels'
+    | 'sshConnectionStates'
+    | 'runtimeEnvironments'
+    | 'runtimeStatusByEnvironmentId'
+  >
+) {
+  const {
+    repos,
+    settings,
+    sshTargetLabels,
+    sshConnectionStates,
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId
+  } = state
+  return buildExecutionHostRegistry({
+    repos,
+    settings,
+    sshTargetLabels,
+    sshConnectionStates,
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId,
+    hostSource: 'configured-only',
+    hostLabelOverrides: getHostDisplayLabelOverrides(settings)
+  })
 }

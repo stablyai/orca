@@ -6,9 +6,15 @@ import type {
   ProjectGroupImportResult
 } from '../../../../shared/project-group-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import {
+  getRuntimeTargetHostId,
+  ipcOrRuntimeTargetForHostId,
+  runtimeTargetEnvironmentId,
+  runtimeTargetForOwnerEnvironment
+} from '../../runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import type { RepoSlice } from '../repos/repo-state'
+import { awaitRepoOwnerHostKnown } from '../repos/repo-owner-host-readiness'
 
 export function normalizeNestedRepoScanResult(scan: NestedRepoScanResult): NestedRepoScanResult {
   return {
@@ -96,14 +102,25 @@ export function createNestedRepositoryActions(
                 },
                 { timeoutMs: 60_000 }
               )
-        const catalogOptions = { runtimeEnvironmentId: args.runtimeEnvironmentId }
+        // Why: this app may answer from the server that now owns the folder (a WSL distro's); a
+        // paired server's owner field names a host in its own catalog, so only ours is read.
+        const answeredBy =
+          (target.kind === 'local' && ipcOrRuntimeTargetForHostId(result.executionHostId)) || target
+        const runtimeEnvironmentId = runtimeTargetEnvironmentId(answeredBy)
+        if (runtimeEnvironmentId !== runtimeTargetEnvironmentId(target)) {
+          await awaitRepoOwnerHostKnown(get, { executionHostId: result.executionHostId })
+        }
+        const catalogOptions = { runtimeEnvironmentId }
         await get().fetchProjectGroups(catalogOptions)
         await get().fetchFolderWorkspaces(catalogOptions)
-        await (args.runtimeEnvironmentId
-          ? get().fetchRuntimeEnvironmentRepos(args.runtimeEnvironmentId)
+        await (runtimeEnvironmentId
+          ? get().fetchRuntimeEnvironmentRepos(runtimeEnvironmentId)
           : get().fetchRepos(catalogOptions))
         set({ folderWorkspacePathStatuses: {} })
-        return result
+        // Why only off this app: a local answer keeps main's result shape; a server's names its host.
+        return answeredBy.kind === 'local'
+          ? result
+          : { ...result, executionHostId: getRuntimeTargetHostId(answeredBy) }
       } catch (err) {
         console.error('Failed to import nested repos:', err)
         toast.error(

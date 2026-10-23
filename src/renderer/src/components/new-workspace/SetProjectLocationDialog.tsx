@@ -171,7 +171,8 @@ function SetProjectLocationDialogBody({
         displayName: projectName
       })
       if (result && !abandoned.current) {
-        onReady(getProjectHostSetupSelectionKey({ id: result.setup.id, hostId: option.hostId }))
+        // Why the result's host: a WSL folder is set up on its distro's server, not the picked host.
+        onReady(getProjectHostSetupSelectionKey(result.setup))
       }
     } finally {
       setIsSubmitting(false)

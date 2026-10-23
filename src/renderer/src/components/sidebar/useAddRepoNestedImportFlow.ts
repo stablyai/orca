@@ -16,10 +16,10 @@ import type {
 } from '../../../../shared/project-group-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { nestedImportRefreshTargets } from './add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
 import { defaultProjectGroupNameForPath } from './add-repo-dialog-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -159,11 +159,9 @@ export function useAddRepoNestedImportFlow({
         if (!result) {
           return
         }
-        const importedRepoIds = result.projects
-          .map((entry) => entry.projectId)
-          .filter((projectId): projectId is string => typeof projectId === 'string')
-        const firstRepoId = importedRepoIds[0]
-        if (!firstRepoId) {
+        const imported = nestedImportRefreshTargets(result, nestedConnectionId)
+        const first = imported[0]
+        if (!first) {
           const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
           if (gen === nestedImportGenRef.current) {
             toast.error(
@@ -178,10 +176,8 @@ export function useAddRepoNestedImportFlow({
           }
           return
         }
-        const completionOwner = nestedConnectionId === null ? nestedRuntimeEnvironmentId : undefined
-        const completionOwnerOptions = worktreeRefreshOptions(completionOwner, nestedConnectionId)
-        for (const projectId of importedRepoIds) {
-          await fetchWorktrees(projectId, completionOwnerOptions)
+        for (const { projectId, options } of imported) {
+          await fetchWorktrees(projectId, options)
         }
         if (gen !== nestedImportGenRef.current) {
           return
@@ -201,14 +197,20 @@ export function useAddRepoNestedImportFlow({
             }
           )
         }
-        const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
+        const repo = useAppStore
+          .getState()
+          .repos.find(
+            (entry) =>
+              entry.id === first.projectId &&
+              getRepoExecutionHostId(entry) === first.options.executionHostId
+          )
         if (repo) {
           const source: AddRepoExistingWorkspaceSource = nestedConnectionId
             ? 'ssh_remote_path'
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(repo.id, source, completionOwnerOptions.executionHostId)
+          await onGitRepoReady(repo.id, source, first.options.executionHostId)
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {

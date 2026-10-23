@@ -24,6 +24,10 @@ import {
   prepareProjectHostSetupMutation,
   upsertProjectHostSetup
 } from './project-host-routing'
+import {
+  awaitRepoOwnerHostKnown,
+  refreshWslRegistrationAfterFailure
+} from '../repos/repo-owner-host-readiness'
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -87,11 +91,13 @@ export function createProjectHostSetupActions(
             projectHostSetups: nextSetups
           }
         })
+        await awaitRepoOwnerHostKnown(get, repo)
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
           description: repo.displayName
         })
         return { ...result, project, repo, setup }
       } catch (err) {
+        await refreshWslRegistrationAfterFailure(get, args.path)
         console.error('Failed to set up project on host:', err)
         const message = err instanceof Error ? err.message : String(err)
         toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {

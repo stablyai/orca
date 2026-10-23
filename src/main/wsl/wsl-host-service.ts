@@ -16,7 +16,6 @@ import type {
   WslHostServerStop,
   WslHostStatus
 } from '../../shared/wsl-host-types'
-import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import { persistWslHostConnection, toWslHostStatus } from './wsl-host-connection-record'
 import {
@@ -28,39 +27,11 @@ import {
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import { registerWslHost } from './wsl-host-registration'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
+import { WslProjectHostEnsurer } from './wsl-project-host-ensurer'
+import { toWslHostDistroList } from './wsl-host-distro-list'
 
-/** The WSL side the service drives: C3 holder, C5 connections, C6 liveness (or an e2e fake). */
-export type WslHostConnector = {
-  listDistros(): Promise<WslHostDistroCandidate[]>
-  /** Runs in the distro, so it boots a stopped one: only after the user chose to. */
-  readOrcadPublicKey(distro: string): Promise<string | null>
-  /** User-initiated; may boot the distro. An intent retries or forces a skipped update. */
-  connect(distro: string, options?: { intent?: WslHostConnectIntent }): Promise<WslOrcadConnection>
-  /** The user asked again: a standing pairing-repair failure or spent cap must not answer it. */
-  forgetPairingFailures?(environmentId: string): void
-  get(distro: string): WslOrcadConnection | null
-  /** Checks the paired server without starting a stopped or unconfirmed distro. */
-  isReachable(distro: string, environmentId: string): Promise<boolean>
-  disconnect(distro: string): Promise<void>
-  /** Ends the host's terminals, orcad and its terminal daemon; never boots a stopped distro. */
-  stopServer(distro: string, environmentId: string): Promise<WslHostServerStop>
-  releaseHolder(distro: string): Promise<void>
-  adoptHolders(): Promise<void>
-  dispose(): Promise<void>
-}
-
-export type WslHostServiceDependencies = {
-  userDataPath: () => string
-  isEnabled: () => boolean
-  /** Whether this build ships the orcad template a WSL host deploys from. */
-  hasServerFiles: () => boolean
-  publish: (status: WslHostStatus) => void
-  /** The environment's pairing changed: transports that authenticate with the old one retire. */
-  pairingChanged: (environmentId: string) => void
-  /** A connection came up: verify the server now rather than on the status owner's backoff. */
-  ready: (environmentId: string) => void
-  removed: (environmentId: string) => Promise<void> | void
-}
+import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-service-contract'
+export type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-service-contract'
 
 export class WslHostService {
   private connector: WslHostConnector | null = null
@@ -71,6 +42,15 @@ export class WslHostService {
   // Bumped on disable so an Add that started before it cannot finish as a ready host.
   private disableGeneration = 0
   private readonly statusListeners = new Set<() => void>()
+
+  private readonly projectHosts = new WslProjectHostEnsurer({
+    userDataPath: () => this.deps.userDataPath(),
+    isEnabled: () => this.deps.isEnabled(),
+    hasServerFiles: () => this.deps.hasServerFiles(),
+    listDistros: () => this.wsl.listDistros(),
+    add: (distro) => this.add({ distro, startIfStopped: true }),
+    connect: (environmentId) => this.connect(environmentId)
+  })
 
   constructor(private readonly deps: WslHostServiceDependencies) {}
 
@@ -126,11 +106,7 @@ export class WslHostService {
   async listDistros(): Promise<WslHostDistro[]> {
     const records = this.records()
     const candidates = await this.wsl.listDistros()
-    return candidates.map(({ id: _id, ...distro }) => ({
-      ...distro,
-      environmentId:
-        records.find((record) => sameWslDistro(record.distro, distro.name))?.environmentId ?? null
-    }))
+    return toWslHostDistroList(candidates, records)
   }
 
   add(args: { distro: string; startIfStopped?: boolean }): Promise<WslHostAddResult> {
@@ -153,6 +129,27 @@ export class WslHostService {
     ).finally(() => this.adding.delete(key))
     this.adding.set(key, operation)
     return operation
+  }
+
+  isEnabled(): boolean {
+    return this.deps.isEnabled()
+  }
+
+  /** Explicit project actions may start their distro, and wait for its paired server. */
+  ensure(distro: string): Promise<string> {
+    return this.projectHosts.ensure(distro)
+  }
+
+  callProject(
+    environmentId: string,
+    method: string,
+    params: unknown,
+    beforeSend?: () => void
+  ): Promise<unknown> {
+    if (!this.deps.call) {
+      throw new Error('WSL host project operations are not available.')
+    }
+    return this.deps.call(environmentId, method, params, 10 * 60_000, beforeSend)
   }
 
   async remove(environmentId: string): Promise<WslHostServerStop> {

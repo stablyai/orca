@@ -153,7 +153,7 @@ export function useAddRepoCloneFlow({
       if (!isCurrent()) {
         return
       }
-      const { repo: ownedRepo } = upsertAddedRepoWithProjectHostSetup(repo, {
+      const { repo: ownedRepo } = await upsertAddedRepoWithProjectHostSetup(repo, {
         runtimeEnvironmentId: activeRuntimeEnvironmentId
       })
       toast.success(

@@ -259,7 +259,7 @@ describe('selected Add Project owner routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
 
-    await expect(importing).resolves.toEqual(result)
+    await expect(importing).resolves.toEqual({ ...result, executionHostId: 'runtime:env-1' })
     expect(store.getState().repos).toEqual(
       expect.arrayContaining([
         { ...localRepo, executionHostId: 'local' },

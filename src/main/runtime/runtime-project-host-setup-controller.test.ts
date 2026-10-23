@@ -27,6 +27,7 @@ function makeController(): {
   projectId: string
 } {
   const store = {
+    getRepos: () => [repo],
     getProjects: () => projectHostSetupProjectionFromRepos([repo]).projects,
     getProjectHostSetups: () => [],
     updateRepo: (_target: unknown, updates: Record<string, unknown>) => ({ ...repo, ...updates })
@@ -97,10 +98,14 @@ describe('RuntimeProjectHostSetupController host routing', () => {
       projectId,
       hostId: 'local',
       path: REPO_PATH,
-      kind: 'git'
+      kind: 'folder'
     })
 
-    expect(addRepo).toHaveBeenCalledWith(REPO_PATH, 'git', 'local')
+    expect(addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'saved', repo }),
+      'folder',
+      'local'
+    )
   })
 
   it('refuses to clone onto an SSH host, because nothing here clones remotely', async () => {

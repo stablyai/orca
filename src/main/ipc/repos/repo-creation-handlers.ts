@@ -3,7 +3,7 @@ import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, posix } from 'node:path'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
@@ -18,6 +18,9 @@ import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cac
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
+import { placeProject } from '../../wsl/project-placement'
+import { requireSavedProject } from '../../repository-checkout-admission'
+import { registerOnWslOwner } from '../../wsl/wsl-project-registration'
 
 const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
@@ -111,10 +114,27 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       const targetPath = join(parentPath, name)
 
       // Dedup by path so a double-click on Create doesn't make two entries for one folder (first of three dedup checks).
-      const existing = store.getRepos().find((r) => r.path === targetPath)
-      if (existing) {
+      const placement = await placeProject(store, {
+        operation: 'create',
+        parentPath,
+        name,
+        domain: LOCAL_EXECUTION_HOST_ID,
+        fromPairedClient: false,
+        sameTarget: (repo) => repo.path === targetPath
+      })
+      if (placement.kind === 'saved') {
         emitRepoAdded('folder_picker', true, repoKind === 'git')
-        return { repo: existing }
+        return { repo: requireSavedProject(store, placement.repo) }
+      }
+      if (placement.kind === 'wsl') {
+        const result = await registerOnWslOwner(placement.authority, {
+          kind: 'create',
+          path: posix.dirname(placement.linuxPath),
+          name,
+          repoKind
+        })
+        notifyReposChanged(mainWindow)
+        return { repo: result.repo }
       }
 
       // Empty pre-existing dirs are allowed (e.g. made in Finder first); non-empty ones are rejected so we don't overwrite files.
@@ -166,7 +186,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
               : undefined
           const isEexist = code === 'EEXIST' || (err instanceof Error && /EEXIST/.test(err.message))
           if (isEexist) {
-            const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+            const raceWinner = placement.admission.findSaved()
             if (raceWinner) {
               return { repo: raceWinner }
             }
@@ -211,7 +231,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       // Why: ipcMain.handle doesn't serialize calls, so re-check dedup here to close the race between the first check and addRepo.
-      const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+      const raceWinner = placement.admission.findSaved()
       if (raceWinner) {
         // Why: don't rm even if we made the dir — the race winner owns it; leaking an empty folder beats deleting a dir in use.
         emitRepoAdded('folder_picker', true, repoKind === 'git')

@@ -28,8 +28,9 @@ import {
   ProjectHostSetupUpdateIpcArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
-import { addLocalRepoFromPath } from './local-repo-registration'
+import { registerPlacedDesktopProject } from './local-repo-registration'
 import { sshTargetNotConnectedMessage } from '../../providers/ssh-host-not-served-error'
+import { placeExistingFolderSetup } from '../../wsl/wsl-project-host-setup'
 import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable
@@ -166,15 +167,30 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
       if (!parsedHost) {
         throw new Error(`Unsupported host: ${args.hostId}`)
       }
-      const result =
+      const placed =
         parsedHost.kind === 'local'
-          ? await addLocalRepoFromPath(store, args.path, args.kind)
-          : parsedHost.kind === 'ssh'
-            ? { error: sshTargetNotConnectedMessage(parsedHost.targetId) }
-            : {
-                error:
-                  'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'
-              }
+          ? await placeExistingFolderSetup(
+              store,
+              { ...args, hostId: parsedHost.id },
+              { owner: 'desktop' }
+            )
+          : null
+      if (placed && 'hosted' in placed) {
+        notifyReposChanged(mainWindow)
+        return placed.hosted
+      }
+      const result = placed
+        ? await registerPlacedDesktopProject(
+            store,
+            placed.placement,
+            args.kind === 'folder' ? 'folder' : 'git'
+          )
+        : parsedHost.kind === 'ssh'
+          ? { error: sshTargetNotConnectedMessage(parsedHost.targetId) }
+          : {
+              error:
+                'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'
+            }
       if ('error' in result) {
         throw new Error(result.error)
       }

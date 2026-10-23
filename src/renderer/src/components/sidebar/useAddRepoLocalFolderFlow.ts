@@ -14,7 +14,7 @@ import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import type { RepoSlice } from '@/store/repos/repo-state'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { addedRepoRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type ShowNestedRepoReview = (args: {
@@ -172,7 +172,7 @@ export function useAddRepoLocalFolderFlow({
         }
         if (isGitRepoKind(repo)) {
           // Why: a transient non-authoritative refresh must not strand a persisted repo.
-          const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
+          const ownerOptions = addedRepoRefreshOptions(repo)
           await fetchWorktrees(repo.id, ownerOptions)
           if (gen !== localAddGenRef.current) {
             return { status: 'cancelled' }
@@ -231,7 +231,7 @@ export function useAddRepoLocalFolderFlow({
 
   const handleAddLocalPaths = useCallback(
     async (paths: string[], source: AddRepoExistingWorkspaceSource, gen: number): Promise<void> => {
-      const gitRepoIds: string[] = []
+      const gitRepos: Repo[] = []
       const shouldDeferGitRepoReady = paths.length > 1
       let skippedCount = 0
       for (const path of paths) {
@@ -249,7 +249,7 @@ export function useAddRepoLocalFolderFlow({
           return
         }
         if (isGitRepoKind(result.repo)) {
-          gitRepoIds.push(result.repo.id)
+          gitRepos.push(result.repo)
         }
       }
       if (gen !== localAddGenRef.current) {
@@ -269,15 +269,15 @@ export function useAddRepoLocalFolderFlow({
           }
         )
       }
-      if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
+      if (shouldDeferGitRepoReady && gitRepos.length > 0) {
         await onGitRepoReady(
-          gitRepoIds[0],
+          gitRepos[0].id,
           source,
-          worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null).executionHostId
+          addedRepoRefreshOptions(gitRepos[0]).executionHostId
         )
       }
     },
-    [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]
+    [addLocalPathForGeneration, onGitRepoReady]
   )
 
   useEffect(() => {

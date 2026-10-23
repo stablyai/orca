@@ -15,6 +15,7 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './e2ee-crypto'
+import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
@@ -291,6 +292,45 @@ describe('subscribeRemoteRuntimeRequest', () => {
 })
 
 describe('sendRemoteRuntimeRequest', () => {
+  it.each(['shared', 'one-shot'])(
+    'blocks an ineligible mutation after authentication on %s',
+    async (transport) => {
+      let eligible = true
+      const onRequest = vi.fn()
+      const server = await createOneShotServer({
+        onAuth: () => {
+          eligible = false
+        },
+        onRequest
+      })
+      const shared = new RemoteRuntimeSharedControlConnection(server.pairing)
+      const beforeSend = () => {
+        if (!eligible) {
+          throw new Error('Project eligibility changed')
+        }
+      }
+      try {
+        await expect(
+          transport === 'shared'
+            ? shared.request('repo.add', { path: '/repo' }, 1000, undefined, undefined, beforeSend)
+            : sendRemoteRuntimeRequest(
+                server.pairing,
+                'repo.add',
+                { path: '/repo' },
+                1000,
+                undefined,
+                undefined,
+                [],
+                beforeSend
+              )
+        ).rejects.toThrow('eligibility changed')
+        expect(onRequest).not.toHaveBeenCalled()
+      } finally {
+        shared.close()
+      }
+    }
+  )
+
   it('keeps generic native authentication free of Electron placement support', async () => {
     let receivedAuth: Record<string, unknown> | null = null
     const server = await createOneShotServer({

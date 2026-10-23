@@ -1,6 +1,10 @@
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { classifyRejectedWindowsPath } from '../../../../shared/windows-path-access'
+import {
+  classifyRejectedWindowsPath,
+  normalizeWindowsWslPath
+} from '../../../../shared/windows-path-access'
 import type { WslHostWindowsPathAccess } from '@/lib/windows-path-access'
 import { translate } from '@/i18n/i18n'
 
@@ -45,7 +49,13 @@ export function routeSidebarProjectDrop(args: {
   path: string
   focusedRuntimeId: string | null
   wslHosts: readonly WslHostWindowsPathAccess[]
+  wslRoutingEnabled?: boolean
 }): SidebarProjectDropRoute {
+  // Both UNC spellings enter as one; desktop admission decides the owner, never this route.
+  const wslPath = args.wslRoutingEnabled ? normalizeWindowsWslPath(args.path) : null
+  if (wslPath && parseWslUncPath(wslPath)) {
+    return { kind: 'local', path: wslPath }
+  }
   for (const host of args.wslHosts) {
     const linuxPath = host.access.fromWindows(args.path)
     if (linuxPath) {

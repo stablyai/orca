@@ -12,7 +12,7 @@ import type { NestedRepoScanResult } from '../../../../shared/project-group-type
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { addedRepoRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type ShowNestedRepoReview = (args: {
@@ -167,7 +167,7 @@ export function useAddRepoServerPathFlow({
         if (repo && isGitRepoKind(repo)) {
           // Why: once the repo exists, a transient non-authoritative refresh
           // should fall through to project reveal instead of leaving the add flow open.
-          const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
+          const ownerOptions = addedRepoRefreshOptions(repo)
           await fetchWorktrees(repo.id, ownerOptions)
           if (gen !== serverAddGenRef.current) {
             return

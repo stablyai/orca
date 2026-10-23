@@ -72,7 +72,7 @@ beforeEach(() => {
   storeMocks.setupProjectExistingFolder.mockReset()
   storeMocks.setupProjectClone.mockReset()
   storeMocks.setupProjectExistingFolder.mockResolvedValue({
-    setup: { id: 'setup-openclaw' }
+    setup: { id: 'setup-openclaw', hostId: 'ssh:openclaw' }
   })
   storeMocks.setupProjectClone.mockResolvedValue({
     setup: { id: 'setup-openclaw-clone' }

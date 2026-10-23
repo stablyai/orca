@@ -59,8 +59,6 @@ const args: LaunchAgentInNewTabArgs = {
   agent: 'opencode',
   worktreeId: 'wt-1'
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wait path only hands the startup plan back to its caller; nothing here reads its fields.
-const startupPlan = { launchCommand: 'opencode' } as never
 
 function storeWithSettings(settings: Record<string, unknown>) {
   mocks.state.current = {
@@ -77,7 +75,6 @@ function storeWithSettings(settings: Record<string, unknown>) {
 function fakeRelaunch() {
   return vi.fn((relaunched: LaunchAgentInNewTabArgs) => ({
     surface: { kind: 'host-published' as const },
-    startupPlan,
     pasteDraftAfterLaunch: false,
     structuredSettlement: Promise.resolve(
       relaunched.agentSessionLaunchPlan?.route === 'structured-native-chat'
@@ -109,7 +106,7 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     const relaunch = fakeRelaunch()
     const focusIntent = { request: vi.fn(), cancel: vi.fn() }
 
-    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, { ...args, focusIntent }, relaunch)
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(relaunch).not.toHaveBeenCalled()
@@ -162,11 +159,10 @@ describe('a new tab whose chat route waits on the host agent list', () => {
     }
     const relaunch = vi.fn((_relaunched: LaunchAgentInNewTabArgs) => ({
       surface: { kind: 'local-terminal' as const, tabId: 'tab-1' },
-      startupPlan,
       pasteDraftAfterLaunch: false
     }))
 
-    const result = launchOnceHostAnswered(route, args, startupPlan, relaunch)
+    const result = launchOnceHostAnswered(route, args, relaunch)
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -230,7 +226,7 @@ describe("a new tab during startup, before this computer's runtime answered", ()
       const route = awaitingRoute(agent)
       const relaunch = fakeRelaunch()
 
-      const result = launchOnceHostAnswered(route, { ...args, agent }, startupPlan, relaunch)
+      const result = launchOnceHostAnswered(route, { ...args, agent }, relaunch)
       // The failed probe has answered; the launch is still waiting for one that lands.
       await new Promise((resolve) => setTimeout(resolve, 20))
       expect(relaunch).not.toHaveBeenCalled()
@@ -251,12 +247,7 @@ describe("a new tab during startup, before this computer's runtime answered", ()
     const route = awaitingRoute('claude')
     const relaunch = fakeRelaunch()
 
-    const result = launchOnceHostAnswered(
-      route,
-      { ...args, agent: 'claude' },
-      startupPlan,
-      relaunch
-    )
+    const result = launchOnceHostAnswered(route, { ...args, agent: 'claude' }, relaunch)
     await vi.advanceTimersByTimeAsync(HOST_ANSWER_WAIT_MS - 1)
     expect(relaunch).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)

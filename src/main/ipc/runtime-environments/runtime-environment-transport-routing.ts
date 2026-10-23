@@ -38,7 +38,7 @@ export async function callRuntimeEnvironment(
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  options?: { signal?: AbortSignal; expectedEnvironmentRuntimeId?: string }
+  options?: { signal?: AbortSignal; expectedEnvironmentRuntimeId?: string; beforeSend?: () => void }
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
     const environment = resolveEnvironment(userDataPath, selector)
@@ -83,6 +83,22 @@ export async function callRuntimeEnvironment(
         if (revisionFailure) {
           return revisionFailure
         }
+        const beforeSend = options?.beforeSend
+          ? () => {
+              const failure = runtimeEnvironmentRevisionFailure(
+                resolveEnvironment(userDataPath, currentEnvironment.id),
+                expectedEnvironmentPairingRevision ??
+                  currentEnvironment.pairingRevision ??
+                  currentEnvironment.createdAt,
+                method,
+                options.expectedEnvironmentRuntimeId
+              )
+              if (failure && !failure.ok) {
+                throw new Error(failure.error.message)
+              }
+              options.beforeSend?.()
+            }
+          : undefined
         const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
         endpoint = pairedConnection.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
@@ -95,7 +111,8 @@ export async function callRuntimeEnvironment(
             effectiveTimeoutMs,
             envelope,
             options?.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            beforeSend
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
@@ -122,7 +139,8 @@ export async function callRuntimeEnvironment(
             expectedPairingRevision: expectedEnvironmentPairingRevision,
             expectedRuntimeId: options?.expectedEnvironmentRuntimeId,
             envelope: sharedControlEnvelope,
-            signal: options?.signal
+            signal: options?.signal,
+            beforeSend
           })
         }
         // Why: startup/control-plane RPCs use the proven one-shot path so repo
@@ -134,7 +152,8 @@ export async function callRuntimeEnvironment(
           effectiveTimeoutMs,
           sharedControlEnvelope,
           options?.signal,
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+          beforeSend
         )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response

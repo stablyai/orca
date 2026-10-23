@@ -1,4 +1,7 @@
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
+import {
+  pairedRuntimeConnectionKey,
+  type PairedRuntimeConnection
+} from '../../../shared/paired-runtime-connection'
 import { resolveEnvironment } from '../../../shared/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
@@ -48,7 +51,7 @@ export function isRemoteRuntimeConnectionReady(
   environmentId: string,
   pairedConnection: PairedRuntimeConnection
 ): boolean {
-  const pairingKey = getPairingKey(pairedConnection)
+  const pairingKey = pairedRuntimeConnectionKey(pairedConnection)
   return [sharedControlConnections.get(environmentId), requestConnections.get(environmentId)].some(
     (cached) => cached?.pairingKey === pairingKey && cached.connection.isReady()
   )
@@ -60,7 +63,7 @@ export function getRuntimeEnvironmentStatusOwner(
 ): RuntimeHostStatusOwner {
   const environment = resolveEnvironment(userDataPath, selector)
   const pairedConnection = getPreferredPairedRuntimeConnection(environment)
-  const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairedConnection)}`
+  const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${pairedRuntimeConnectionKey(pairedConnection)}`
   let cached = statusOwners.get(environment.id)
   if (!cached || cached.key !== key || cached.owner.read().retired) {
     if (cached) {
@@ -111,7 +114,7 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
-  const pairingKey = getPairingKey(pairedConnection)
+  const pairingKey = pairedRuntimeConnectionKey(pairedConnection)
   let cached = requestConnections.get(environmentId)
   if (!cached || cached.pairingKey !== pairingKey) {
     cached?.connection.close()
@@ -144,14 +147,16 @@ export function sendRemoteRuntimeSharedControlRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  beforeSend?: () => void
 ): Promise<RuntimeRpcResponse<TResult>> {
   return getSharedControlConnection(environmentId, pairedConnection).request(
     method,
     params,
     timeoutMs,
     envelope,
-    signal
+    signal,
+    beforeSend
   )
 }
 
@@ -167,7 +172,8 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
   timeoutMs: number,
   expectedRuntimeId: string,
   envelope?: RuntimeOrchestrationEnvelope,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  beforeSend?: () => void
 ): Promise<RuntimeRpcResponse<TResult> | null> {
   const shared = getSharedControlConnection(environmentId, pairedConnection)
   let statusSocket: number | undefined
@@ -191,6 +197,7 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
       if (socketChanged) {
         throw new Error('Runtime connection changed before sending')
       }
+      beforeSend?.()
     })
   } catch (error) {
     if (socketChanged) {
@@ -270,7 +277,7 @@ function getSharedControlConnection(
   environmentId: string,
   pairedConnection: PairedRuntimeConnection
 ): RemoteRuntimeSharedControlConnection {
-  const pairingKey = getPairingKey(pairedConnection)
+  const pairingKey = pairedRuntimeConnectionKey(pairedConnection)
   let cached = sharedControlConnections.get(environmentId)
   if (!cached || cached.pairingKey !== pairingKey) {
     advanceRuntimeEnvironmentTransportGeneration(environmentId)
@@ -318,12 +325,4 @@ function getSharedControlConnection(
     )
   }
   return cached.connection
-}
-
-function getPairingKey(pairedConnection: PairedRuntimeConnection): string {
-  return [
-    pairedConnection.endpoint,
-    pairedConnection.credential.deviceToken,
-    pairedConnection.hostPublicKeyB64
-  ].join('\0')
 }

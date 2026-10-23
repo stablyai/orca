@@ -134,7 +134,8 @@ describe('federated read RPC transport routing', () => {
       15_000,
       envelope,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -178,7 +179,8 @@ describe('federated read RPC transport routing', () => {
       15_000,
       envelope,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })

@@ -95,7 +95,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
     launchSource: 'unknown',
     agentSessionLaunchPlan,
     pendingActivationSpawn: true,
-    onStructuredHostDeclined: () => ({ opened: seedShell() })
+    onStructuredHostDeclined: () => ({ opened: seedShell(), surface: 'shell' })
   })
   if (!result) {
     return null

@@ -17,7 +17,7 @@ import {
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
-import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { addedRepoRefreshOptions } from './add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
 import type { Repo } from '../../../../shared/repo-types'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
@@ -30,7 +30,7 @@ async function addSshFolderProject(args: {
   displayName: string
 }): Promise<{
   repo: Repo
-  ownerOptions: ReturnType<typeof worktreeRefreshOptions>
+  ownerOptions: ReturnType<typeof addedRepoRefreshOptions>
 }> {
   if (!args.runtimeEnvironmentId) {
     throw new Error(`SSH connection "${args.connectionId}" not found or not connected`)
@@ -41,12 +41,10 @@ async function addSshFolderProject(args: {
     kind: 'folder',
     ...(args.displayName ? { displayName: args.displayName } : {})
   })
-  return {
-    repo: upsertAddedRepoWithProjectHostSetup(added, {
-      runtimeEnvironmentId: args.runtimeEnvironmentId
-    }).repo,
-    ownerOptions: worktreeRefreshOptions(args.runtimeEnvironmentId)
-  }
+  const { repo } = await upsertAddedRepoWithProjectHostSetup(added, {
+    runtimeEnvironmentId: args.runtimeEnvironmentId
+  })
+  return { repo, ownerOptions: addedRepoRefreshOptions(repo) }
 }
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
@@ -112,7 +110,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               store: useAppStore.getState(),
               onboarding: onboardingBeforeAdd,
               hasExistingProject: hadProjectBeforeAdd,
-              executionHostId: ownerOptions.executionHostId ?? connectionId
+              executionHostId: ownerOptions.executionHostId
             })
             await revealOnboardingFolderWithAgentLaunch({
               worktreeId: folderWorktree.id,

@@ -21,6 +21,7 @@ import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { ProjectGroupImportNestedArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
 import { getCompletedNestedRepoScan, scanNestedReposForIpc } from './nested-repo-scan-ipc'
+import { placeNestedImport } from '../../wsl/wsl-nested-project-import'
 
 function sanitizeNestedRepoImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
@@ -46,6 +47,16 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           options: { timeoutMs: 15_000 }
         }))
       const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
+      const placement = await placeNestedImport(
+        store,
+        args,
+        { domain: LOCAL_EXECUTION_HOST_ID, fromPairedClient: false },
+        scan
+      )
+      if (placement.kind === 'done') {
+        notifyReposChanged(mainWindow)
+        return placement.result
+      }
       const groupResolver = createNestedProjectGroupResolver({
         parentPath: scan.selectedPath,
         groupName: args.groupName ?? '',
@@ -69,6 +80,16 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           // Why: an SSH target is not served here; never inspect its path with local git.
           if (args.connectionId) {
             results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+            continue
+          }
+          if (placement.kind === 'saved-windows') {
+            const saved = placement.savedRow(repoPath)
+            const group = groupResolver.getGroupForRepo(repoPath)
+            if (group && !importedProjectIdsByRepoPath.has(saved.path)) {
+              store.moveProjectToGroup(saved, group.id, projectGroupOrder)
+            }
+            importedProjectIdsByRepoPath.set(saved.path, saved.id)
+            results.push({ path: repoPath, projectId: saved.id, status: 'already-known' })
             continue
           }
           await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })

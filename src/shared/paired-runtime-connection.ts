@@ -31,3 +31,11 @@ export function pairedRuntimeConnectionFromOffer(
 export function pairedRuntimeConnectionToken(connection: PairedRuntimeConnection): string {
   return connection.credential.deviceToken
 }
+
+export function pairedRuntimeConnectionKey(pairedConnection: PairedRuntimeConnection): string {
+  return [
+    pairedConnection.endpoint,
+    pairedConnection.credential.deviceToken,
+    pairedConnection.hostPublicKeyB64
+  ].join('\0')
+}

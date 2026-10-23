@@ -76,7 +76,7 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     const onDeclined = mocks.launchAgentInNewTab.mock.calls[0]?.[0]?.onStructuredHostDeclined
 
     expect(mocks.seedShell).not.toHaveBeenCalled()
-    expect(onDeclined()).toEqual({ opened: true })
+    expect(onDeclined()).toEqual({ opened: true, surface: 'shell' })
     expect(mocks.seedShell).toHaveBeenCalledOnce()
   })
 

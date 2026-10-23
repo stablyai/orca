@@ -26,18 +26,18 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     /** The caller knows an unlisted workspace is empty: it just created it, or the host never answers. */
     unknownHostCountIsEmpty?: boolean
   }
-): void {
+): Promise<boolean> {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   if (!worktree) {
-    return
+    return Promise.resolve(false)
   }
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
       : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    return
+    return Promise.resolve(false)
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
@@ -50,26 +50,26 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         (isWebTerminalSurfaceTabId(tab.id) || tabHasLivePty(state.ptyIdsByTabId, tab.id))
     )
   ) {
-    return
+    return Promise.resolve(false)
   }
 
   if (!launchAgent) {
     const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
     if (hasLivePty) {
-      return
+      return Promise.resolve(false)
     }
 
     const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
     if (hasMirroredHostTabs) {
       // Why: the host session still owns these tabs — wait for the mirror to repopulate PTY handles instead of duplicating a terminal.
-      return
+      return Promise.resolve(false)
     }
 
     const hostTerminalTabCount =
       getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) ??
       (opts?.unknownHostCountIsEmpty ? 0 : null)
     if (hostTerminalTabCount !== null && hostTerminalTabCount > 0) {
-      return
+      return Promise.resolve(false)
     }
     if (hostTerminalTabCount === null && !opts?.startup) {
       // Why: the host has not listed this workspace yet; its first real answer seeds the terminal if
@@ -91,7 +91,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         .catch((error) => {
           console.error('web runtime terminal after wake failed', worktreeId, error)
         })
-      return
+      return Promise.resolve(false)
     }
 
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
@@ -102,18 +102,24 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           Object.hasOwn(state.tabsByWorktree, worktreeId)
         )
       ) {
-        return
+        return Promise.resolve(false)
       }
     } else if (renderableTabCount === 0) {
-      return
+      return Promise.resolve(false)
     }
   }
 
   if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
-    return
+    return Promise.resolve(false)
   }
 
   const startup = opts?.startup
+  // Why a separate promise: the caller learns only whether a terminal opened, never the host the
+  // create resolved, so routing stays with the explicit environment above.
+  let settle: (opened: boolean) => void = () => {}
+  const opened = new Promise<boolean>((resolve) => {
+    settle = resolve
+  })
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
   void createWebRuntimeSessionTerminal(
     {
@@ -145,8 +151,11 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
         })
       }
+      settle(outcome.status === 'created')
     })
     .finally(() => {
+      settle(false)
       endWebRuntimeWakeTerminalRespawn(worktreeId)
     })
+  return opened
 }

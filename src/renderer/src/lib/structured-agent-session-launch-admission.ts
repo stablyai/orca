@@ -36,6 +36,8 @@ export type AgentTerminalLaunchCompletion = {
 /** What a host's "no" opens instead: the terminal the launch would have opened had it known. */
 export type StructuredLaunchTerminal = {
   opened: boolean
+  /** A scheduled host publication is not proof that an agent terminal opened. */
+  surface?: 'agent' | 'shell' | 'none' | 'scheduled'
   tabId?: string
   completion?: Promise<AgentTerminalLaunchCompletion>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
@@ -146,8 +148,15 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
       worktreeId: args.worktreeId
     })
   })
+  const surface =
+    result === null
+      ? 'none'
+      : result.surface.kind === 'host-published'
+        ? await (result.surfaceReady ?? Promise.resolve<'none'>('none'))
+        : 'agent'
   return {
-    opened: result !== null,
+    opened: surface === 'agent',
+    surface,
     ...(result?.surface.kind === 'local-terminal' ? { tabId: result.surface.tabId } : {}),
     ...(result?.terminalCompletion ? { completion: result.terminalCompletion } : {}),
     ...(result?.promptDeliveryResult ? { promptDeliveryResult: result.promptDeliveryResult } : {})
@@ -236,7 +245,8 @@ export function beginHostAdmittedStructuredLaunch(args: {
           )
         }
         const terminal = await args.onHostDeclined(args.target)
-        if (paired && terminal.opened) {
+        const openedAgent = terminal.opened && terminal.surface === 'agent'
+        if (paired && openedAgent) {
           notifyHostDeclined(plan.agent)
         }
         void (

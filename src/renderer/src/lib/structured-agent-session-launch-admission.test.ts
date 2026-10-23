@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../shared/worktree/types'
+import type * as LaunchAgentInNewTabModule from './launch-agent-in-new-tab'
 
 const mocks = vi.hoisted(() => ({
   createSupport: vi.fn(),
@@ -132,10 +133,51 @@ afterEach(() => main.close())
 describe('a structured chat launch on a paired server', () => {
   beforeEach(seedPairedServerWorkspace)
 
+  it('opens the requested chat before renderer host status has hydrated', async () => {
+    let answer!: (support: { supported: boolean }) => void
+    mocks.createSupport.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    useAppStore.setState({
+      settings: { ...INITIAL_SETTINGS!, experimentalNativeChat: true },
+      activeWorkspaceExecutionHostId: 'runtime:server-1',
+      runtimeStatusByEnvironmentId: new Map()
+    })
+    const { launchAgentInNewTab } = await vi.importActual<typeof LaunchAgentInNewTabModule>(
+      './launch-agent-in-new-tab'
+    )
+
+    const launch = launchAgentInNewTab({
+      requestId: 'before-host-status',
+      agent: 'claude',
+      worktreeId: WORKTREE
+    })
+
+    expect(launch?.surface).toEqual({ kind: 'host-published' })
+    expectNoChatCommitted()
+    expect(mocks.createSupport).toHaveBeenCalledOnce()
+    answer({ supported: true })
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
+        expect.objectContaining({
+          contentType: 'agent-session',
+          executionHostId: 'runtime:server-1'
+        })
+      ])
+    )
+    expect(useAppStore.getState().runtimeStatusByEnvironmentId.size).toBe(0)
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    const { cancelStructuredAgentLaunch } = await import('./structured-agent-session-launch')
+    cancelStructuredAgentLaunch(
+      WORKTREE,
+      useAppStore.getState().unifiedTabsByWorktree[WORKTREE]![0]!.entityId
+    )
+  })
+
   it('opens only the terminal when the server declines, keeping the workspace selected', async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const onHostDeclined = vi.fn(() => ({
       opened: true,
+      surface: 'agent' as const,
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
     }))
     const reveal = vi.fn()
@@ -303,6 +345,7 @@ describe('a structured chat launch on this machine', () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const onHostDeclined = vi.fn(() => ({
       opened: true,
+      surface: 'agent' as const,
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
     }))
     const reveal = vi.fn()
@@ -475,7 +518,7 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
 
   it('keeps its terminal fallback, as before', async () => {
     mocks.createSupport.mockRejectedValue(new Error('selector_not_found'))
-    const onHostDeclined = vi.fn(() => ({ opened: true }))
+    const onHostDeclined = vi.fn(() => ({ opened: true, surface: 'agent' as const }))
 
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan: pairedPlan(),
@@ -511,4 +554,17 @@ it('keeps explicit refusal owned by admission and keeps an opened chat failure o
       })
     }
   }
+})
+
+it('does not report an agent notice when a declined fallback opens a shell', async () => {
+  seedPairedServerWorkspace()
+  mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+  const launch = beginStructuredAgentSessionProvisionalLaunch({
+    plan: pairedPlan(),
+    hooks: {},
+    onHostDeclined: () => ({ opened: true, surface: 'shell' })
+  })
+
+  await expect(launch?.settlement).resolves.toEqual({ kind: 'terminal' })
+  expect(mocks.toastInfo).not.toHaveBeenCalled()
 })

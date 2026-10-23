@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from './execution-host'
+
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {
@@ -49,9 +51,13 @@ export type ProjectGroupImportProjectResult = {
   projectId?: string
   status: 'imported' | 'already-known' | 'failed'
   error?: string
+  /** Which host owns this row when one import spans two (saved Windows rows beside new WSL ones). */
+  executionHostId?: ExecutionHostId
 }
 
 export type ProjectGroupImportResult = {
+  /** Present when an explicit local import was handled by another execution host. */
+  executionHostId?: ExecutionHostId
   group?: ProjectGroup
   projects: ProjectGroupImportProjectResult[]
   importedCount: number

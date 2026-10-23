@@ -1,10 +1,12 @@
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
+  clientChoosesStructuredLaunches,
   isNativeChatDefaultFor,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
 } from '../../../shared/structured-native-chat-launch-route'
+import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceLaunchKind } from '../../../shared/workspace-launch-kind'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
@@ -15,6 +17,8 @@ export type AgentLaunchRoutingInput = {
   agent: TuiAgent
   settings: NativeChatDefaultSettings | null | undefined
   executionHostId: string
+  /** Verified existing-workspace owner used for capability admission; never a focused fallback. */
+  admissionHostId?: string
   /** Capabilities of the target host; `null` = not yet established. */
   hostCapabilities: readonly string[] | null
   /** What this client advertises to a paired host. */
@@ -30,10 +34,17 @@ export type AgentLaunchRoutingInput = {
 }
 
 export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLaunchRoute {
-  return isNativeChatDefaultFor(input.settings, input.agent) &&
-    structuredAgentLaunchSupported(input)
-    ? 'structured-native-chat'
-    : 'terminal-tui'
+  if (!isNativeChatDefaultFor(input.settings, input.agent)) {
+    return 'terminal-tui'
+  }
+  const support = structuredAgentLaunchSupport(input)
+  // The existing host admission waits for its answer before opening either surface.
+  const awaitingHost =
+    !support.supported &&
+    support.blocker === 'runtime-capability-unknown' &&
+    parseRoutableExecutionHostId(input.admissionHostId ?? '')?.kind === 'runtime' &&
+    clientChoosesStructuredLaunches(input.clientCapabilities)
+  return support.supported || awaitingHost ? 'structured-native-chat' : 'terminal-tui'
 }
 
 // Explicit chat requests (resume history in a new chat) do not depend on the Chat UI switch.

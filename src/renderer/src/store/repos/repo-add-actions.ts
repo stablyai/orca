@@ -11,8 +11,7 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
+  getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
@@ -21,6 +20,10 @@ import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
+import {
+  awaitRepoOwnerHostKnown,
+  refreshWslRegistrationAfterFailure
+} from './repo-owner-host-readiness'
 import { selectWorktreesByRepo } from '../workspace-record-selectors'
 
 export function createRepoAddActions(
@@ -115,6 +118,7 @@ export function createRepoAddActions(
             folderWorkspacePathStatuses: {}
           }
         })
+        await awaitRepoOwnerHostKnown(get, repo)
         if (alreadyAdded) {
           toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
             description: repo.displayName
@@ -135,6 +139,7 @@ export function createRepoAddActions(
         }
         return repo
       } catch (err) {
+        await refreshWslRegistrationAfterFailure(get, path)
         console.error('Failed to add project:', err)
         const message = err instanceof Error ? err.message : String(err)
         const duration = ERROR_TOAST_DURATION
@@ -175,15 +180,11 @@ export function createRepoAddActions(
         }
         const onboardingBeforeAdd = await markOnboardingProjectAdded('addedFolder')
         // Why: focus the new folder so the add is visible; lazy-import worktree-activation to avoid a circular module load (it imports the store root).
-        const executionHostId =
-          options?.runtimeEnvironmentId === undefined
-            ? undefined
-            : options.runtimeEnvironmentId
-              ? toRuntimeExecutionHostId(options.runtimeEnvironmentId)
-              : LOCAL_EXECUTION_HOST_ID
-        await get().fetchWorktrees(repo.id, executionHostId ? { executionHostId } : undefined)
+        // The returned row names its owner; a WSL path's is its distro's server, not the picked host.
+        const executionHostId = getRepoExecutionHostId(repo)
+        await get().fetchWorktrees(repo.id, { executionHostId })
         const folderWorktree = selectWorktreesByRepo(get())[repo.id]?.find(
-          (worktree) => executionHostId === undefined || worktree.hostId === executionHostId
+          (worktree) => getWorktreeExecutionHostId(worktree, repo) === executionHostId
         )
         if (folderWorktree) {
           // Why: lazy-import to avoid a circular module load (the launch graph imports the store root).
@@ -197,7 +198,7 @@ export function createRepoAddActions(
             store: get(),
             onboarding: onboardingBeforeAdd,
             hasExistingProject: hadProjectBeforeAdd,
-            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID
+            executionHostId
           })
           await revealOnboardingFolderWithAgentLaunch({
             worktreeId: folderWorktree.id,

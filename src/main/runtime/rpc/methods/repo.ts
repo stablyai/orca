@@ -1,4 +1,5 @@
 import { defineMethod } from '../core'
+import { isPairedWslRoutingCaller } from '../../../wsl/wsl-project-registration'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import {
@@ -100,7 +101,10 @@ export const REPO_METHODS = [
     name: 'projectGroup.importNested',
     permission: 'workspace',
     params: ProjectGroupImportNested,
-    handler: async (params, { runtime }) => runtime.importNestedRepos(params)
+    handler: async (params, context) =>
+      context.runtime.importNestedRepos(params, {
+        fromPairedClient: isPairedWslRoutingCaller(context.caller)
+      })
   }),
   defineMethod({
     name: 'repo.sparsePresets',
@@ -128,7 +132,9 @@ export const REPO_METHODS = [
     params: RepoPath,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.addRepo(params.path, params.kind, undefined, params.displayName),
+        await context.runtime.addRepo(params.path, params.kind, undefined, params.displayName, {
+          fromPairedClient: isPairedWslRoutingCaller(context.caller)
+        }),
         context
       )
     })
@@ -149,7 +155,9 @@ export const REPO_METHODS = [
     params: RepoCreate,
     handler: async (params, context) =>
       projectRepoResultVisibilityForClient(
-        await context.runtime.createRepo(params.parentPath, params.name, params.kind),
+        await context.runtime.createRepo(params.parentPath, params.name, params.kind, {
+          fromPairedClient: isPairedWslRoutingCaller(context.caller)
+        }),
         context
       )
   }),

@@ -153,7 +153,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       75,
       undefined,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined
     )
     expect(sendRemoteRuntimeConnectionRequestMock).not.toHaveBeenCalled()
   })

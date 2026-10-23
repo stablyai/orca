@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import {
   awaitStructuredRouteHostAnswer,
   planAgentSessionLaunch,
@@ -53,7 +52,6 @@ export function routeNewTabLaunch(
 export function launchOnceHostAnswered(
   route: AwaitingHostAnswer,
   args: LaunchAgentInNewTabArgs,
-  startupPlan: AgentStartupPlan,
   relaunch: (args: LaunchAgentInNewTabArgs) => LaunchAgentInNewTabResult
 ): LaunchAgentInNewTabResult {
   if (args.beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
@@ -82,7 +80,6 @@ export function launchOnceHostAnswered(
     Boolean(args.prompt?.trim()) && (args.promptDelivery ?? 'auto-submit') !== 'draft'
   return {
     surface: { kind: 'host-published' },
-    startupPlan,
     pasteDraftAfterLaunch: false,
     structuredSettlement,
     ...(deliversPrompt
@@ -94,4 +91,10 @@ export function launchOnceHostAnswered(
         }
       : {})
   }
+}
+
+export function shouldQueueTerminalFocusAfterMenuClose(
+  result: NonNullable<LaunchAgentInNewTabResult>
+): boolean {
+  return result.surface.kind === 'host-published'
 }

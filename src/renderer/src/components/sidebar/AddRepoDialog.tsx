@@ -58,7 +58,8 @@ export default React.memo(function AddRepoDialog({
   const hostSelection = useAddRepoHostSelection({
     isOpen,
     setStep,
-    preferredHostId: droppedHostPath?.hostId ?? null
+    preferredHostId: droppedHostPath?.hostId ?? null,
+    droppedLocalPath
   })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'

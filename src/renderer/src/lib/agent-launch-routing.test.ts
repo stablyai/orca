@@ -166,8 +166,19 @@ describe('new agent launch routing', () => {
     // A client that never told the server it reads structured sessions keeps the host terminal.
     expect(route({ ...server, clientCapabilities: [] })).toBe('terminal-tui')
     expect(route({ ...server, clientCapabilities: undefined })).toBe('terminal-tui')
-    // The server has not answered yet, or answered without structured sessions.
-    expect(route({ ...server, hostCapabilities: null })).toBe('terminal-tui')
+    // An unanswered server gets the existing admission handshake; only its answer can decline.
+    const unanswered = {
+      ...server,
+      hostCapabilities: null,
+      admissionHostId: server.executionHostId
+    }
+    for (const agent of ['claude', 'codex', 'grok'] as const) {
+      expect(route({ ...unanswered, agent })).toBe('structured-native-chat')
+    }
+    // A guessed (focused) owner is not evidence the workspace lives on that server.
+    expect(route({ ...unanswered, admissionHostId: undefined })).toBe('terminal-tui')
+    expect(route({ ...unanswered, clientCapabilities: [] })).toBe('terminal-tui')
+    expect(route({ ...unanswered, settings: null })).toBe('terminal-tui')
     expect(route({ ...server, hostCapabilities: [] })).toBe('terminal-tui')
   })
 })

@@ -3,6 +3,8 @@
  * which also says WSL 1 vs 2 without a localized `wsl --list --verbose` parse), with whether it
  * is running from a probe that never boots one. Docker Desktop's internal distros are not hosts.
  */
+import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
+import { sameWslDistro } from './wsl-host-add-admission'
 import type { WslHostDistro } from '../../shared/wsl-host-types'
 import { filterUserWslDistros } from '../wsl-distro-list-output'
 import { listConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
@@ -36,4 +38,15 @@ export async function listWslHostDistros(
       state: runningKeys.has(distro.toLowerCase()) ? ('running' as const) : ('stopped' as const)
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export function toWslHostDistroList(
+  candidates: readonly WslHostDistroCandidate[],
+  records: readonly WslHostDeploymentRecord[]
+): WslHostDistro[] {
+  return candidates.map(({ id: _id, ...distro }) => ({
+    ...distro,
+    environmentId:
+      records.find((record) => sameWslDistro(record.distro, distro.name))?.environmentId ?? null
+  }))
 }

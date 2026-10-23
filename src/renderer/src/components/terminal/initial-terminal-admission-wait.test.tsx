@@ -234,7 +234,7 @@ describe('a local chat launch waiting on its host', () => {
   })
 
   it('stops owning the surface once the host has answered and its surface opened', async () => {
-    const onHostDeclined = vi.fn(() => ({ opened: true }))
+    const onHostDeclined = vi.fn(() => ({ opened: true, surface: 'agent' as const }))
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan: localChatPlan(),
       hooks: {},

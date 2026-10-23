@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/telemetry-events'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -169,15 +170,23 @@ async function findDetectedDefaultCheckout(
   }
 }
 
+// Why: the returned owner decides; a WSL selection registered on its distro has Linux checkout paths.
+function selectedPathOnOwner(selectedPath: string, executionHostId?: ExecutionHostId): string {
+  const ownerIsRuntime = parseExecutionHostId(executionHostId)?.kind === 'runtime'
+  return (ownerIsRuntime && parseWslUncPath(selectedPath)?.linuxPath) || selectedPath
+}
+
 function resolveInitialCwdForDefaultCheckout(
   defaultCheckout: Worktree,
-  selectedPath: string | undefined
+  selectedPath: string | undefined,
+  executionHostId?: ExecutionHostId
 ): string | undefined {
   if (!selectedPath) {
     return undefined
   }
-  const relativePath = relativePathInsideRoot(defaultCheckout.path, selectedPath)
-  return relativePath && relativePath.length > 0 ? selectedPath : undefined
+  const cwd = selectedPathOnOwner(selectedPath, executionHostId)
+  const relativePath = relativePathInsideRoot(defaultCheckout.path, cwd)
+  return relativePath && relativePath.length > 0 ? cwd : undefined
 }
 
 export async function openProjectDefaultCheckout({
@@ -231,7 +240,11 @@ export async function openProjectDefaultCheckout({
       result: 'opened_default_checkout',
       reason
     })
-    const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
+    const initialCwd = resolveInitialCwdForDefaultCheckout(
+      defaultCheckout,
+      selectedPath,
+      executionHostId
+    )
     if (initialCwd || executionHostId) {
       activateAndRevealWorktree(defaultCheckout.id, {
         ...(initialCwd ? { initialCwd } : {}),

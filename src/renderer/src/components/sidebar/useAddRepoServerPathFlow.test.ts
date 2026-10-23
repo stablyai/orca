@@ -100,7 +100,11 @@ describe('useAddRepoServerPathFlow', () => {
   })
 
   it('routes the nested Git pre-scan and add through the selected runtime', async () => {
-    const repo = makeRepo({ id: 'server-git', kind: 'git' })
+    const repo = makeRepo({
+      id: 'server-git',
+      kind: 'git',
+      executionHostId: 'runtime:box1-environment-id'
+    })
     mocks.getNestedRepoRuntimeKind.mockReturnValue('runtime')
     mocks.scanNestedRepos.mockResolvedValue({
       selectedPath: '/server/docs',

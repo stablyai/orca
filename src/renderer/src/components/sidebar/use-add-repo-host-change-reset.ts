@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 
 export function useAddRepoHostChangeReset({
   isOpen,
@@ -20,7 +20,7 @@ export function useAddRepoHostChangeReset({
     }
   }, [isOpen, onResetClosed, selectedHostId])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen || previousSelectedHostIdRef.current === selectedHostId) {
       return
     }

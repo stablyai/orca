@@ -94,6 +94,27 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('waits for first-use server setup when adding a local WSL path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_add', {
+        repo: {
+          id: 'guest',
+          path: '/home/me/repo',
+          displayName: 'repo',
+          executionHostId: 'runtime:wsl:ubuntu'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const repoPath = '\\\\wsl$\\Ubuntu\\home\\me\\repo'
+    await main(['repo', 'add', '--path', repoPath, '--json'], '/tmp')
+    // Why: the budget follows the resolved path, which is only a UNC path on Windows.
+    const resolved = path.resolve('/tmp', repoPath)
+    const budget = process.platform === 'win32' ? [{ timeoutMs: 600_000 }] : []
+    expect(callMock).toHaveBeenCalledWith('repo.add', { path: resolved }, ...budget)
+  })
+
   it('lists projects through the project-first runtime API', async () => {
     queueFixtures(
       callMock,

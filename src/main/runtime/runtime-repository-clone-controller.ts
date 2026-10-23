@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
@@ -28,6 +32,17 @@ type RuntimeRepositoryCloneDependencies = {
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
+}
+
+// Why clone refuses up front: `cloneRepo` runs `git clone` on the client, so accepting `ssh:*`
+// here would register the client's copy as the host's repo — a local answer to a remote question.
+export function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined): void {
+  if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
+    return
+  }
+  throw new Error(
+    'Cloning onto an SSH host is not supported. Clone the repository on the host, then set the project up from that existing folder.'
+  )
 }
 
 export class RuntimeRepositoryCloneController {

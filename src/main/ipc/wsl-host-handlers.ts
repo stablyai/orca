@@ -118,6 +118,22 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
     userDataPath: args.getUserDataPath,
     isEnabled: () => args.store.getSettings().experimentalWslHosts === true,
     hasServerFiles: fake ? () => fake.serverFiles !== 'missing' : hasOrcadTemplate,
+    call: async (environmentId, method, params, timeoutMs, beforeSend) => {
+      const response = await callRuntimeEnvironment(
+        args.getUserDataPath(),
+        environmentId,
+        method,
+        params,
+        timeoutMs,
+        undefined,
+        undefined,
+        { beforeSend }
+      )
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      return response.result
+    },
     publish,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
     ready: (environmentId) => {
