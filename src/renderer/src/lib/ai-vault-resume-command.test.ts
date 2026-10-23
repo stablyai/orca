@@ -74,6 +74,29 @@ function buildQueuedAiVaultResumeCommand(
 }
 
 describe('ai vault resume command runtime', () => {
+  it.each(['C:\\custom', '\\\\server\\custom'])(
+    'recovers an older remote Hermes row platform from %s',
+    (sourceHome) => {
+      const state = makeState({ worktreePath: 'C:\\workspace' })
+      state.repos = state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:remote' }))
+      const startup = buildAiVaultResumeStartupForWorktree({
+        state,
+        session: {
+          agent: 'hermes',
+          sessionId: 'same-id',
+          cwd: 'C:\\workspace',
+          codexHome: null,
+          executionHostId: 'runtime:remote',
+          filePath: `${sourceHome}\\sessions\\session_same-id.json`,
+          resumeCommand: 'hermes --resume same-id'
+        }
+      })
+      expect(startup.command).toBe(
+        `$env:HERMES_HOME='${sourceHome}'; & hermes --profile 'default' --resume 'same-id'`
+      )
+    }
+  )
+
   it.each(['local', 'ssh:reference-host'] as const)(
     'starts a fresh IDE reference on %s with model and environment preserved',
     (executionHostId) => {

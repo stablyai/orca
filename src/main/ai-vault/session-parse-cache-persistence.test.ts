@@ -485,6 +485,31 @@ describe('session parse cache persistence', () => {
     expect(stat.mock.calls.map(([path]) => String(path))).not.toContain(recent)
   })
 
+  it('keeps aged Hermes synthetic rows while their backing database exists', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    const dbPath = join(root, 'state.db')
+    const path = `${dbPath}#same%23id%25`
+    await writeFile(dbPath, '')
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    storeSessionParseCacheEntry(path, {
+      mtimeMs: 1,
+      sizeBytes: null,
+      platform: process.platform,
+      session: null,
+      resume: null
+    })
+    await flushSessionParseCachePersist()
+    resetSessionParseCachePersistenceForTests()
+    setSeenAt(cacheFile, path, Date.now() - 31 * DAY_MS)
+    simulateRestart(cacheFile)
+    invalidateSessionParseCacheEntry(join(root, 'opens-the-database.jsonl'))
+    await vi.waitFor(() =>
+      expect(databaseRows(cacheFile)[0]?.seen_at).toBeGreaterThan(Date.now() - DAY_MS)
+    )
+    expect(databaseRows(cacheFile).map((row) => row.path)).toEqual([path])
+  })
+
   it('invalidating before the first lookup does not bring the row back', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')

@@ -151,6 +151,47 @@ describe('validateAiVaultSessionDeleteTarget', () => {
     expect(result.allowed).toBe(true)
   })
 
+  it('allows named Hermes legacy sessions only beneath a known owning home', () => {
+    const profileRoot = join(HOME, '.hermes', 'profiles', 'work', 'sessions')
+    const filePath = join(profileRoot, 'session_same.json')
+    const args = {
+      agent: 'hermes' as const,
+      filePath,
+      executionHostId: 'local' as const,
+      rootOptions: { hermesSessionsDir: HERMES_ROOT }
+    }
+    expect(validateAiVaultSessionDeleteTarget(args)).toMatchObject({
+      allowed: true,
+      removals: [{ path: filePath, kind: 'file', roots: [HERMES_ROOT, profileRoot] }]
+    })
+    expect(
+      validateAiVaultSessionDeleteTarget({
+        ...args,
+        filePath: join(profileRoot, 'session_same.JSON')
+      }).allowed
+    ).toBe(true)
+    for (const home of [join(HOME, 'other'), join(HOME, '.hermes', 'profiles', 'work')]) {
+      expect(
+        validateAiVaultSessionDeleteTarget({
+          ...args,
+          filePath: join(home, 'profiles', 'work', 'sessions', 'session_same.json')
+        }).allowed
+      ).toBe(false)
+    }
+    expect(
+      validateAiVaultSessionDeleteTarget({
+        ...args,
+        filePath: join(HOME, '.hermes', 'profiles', '.deleted', 'sessions', 'session_same.json')
+      }).allowed
+    ).toBe(false)
+    expect(
+      validateAiVaultSessionDeleteTarget({
+        ...args,
+        filePath: join(HOME, '.hermes', 'profiles', 'work', 'state.db#same')
+      }).allowed
+    ).toBe(false)
+  })
+
   it('allows an openclaw path under <stateDir>/agents/.../sessions/...', () => {
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'openclaw',

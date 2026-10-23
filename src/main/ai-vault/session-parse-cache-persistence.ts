@@ -8,6 +8,7 @@ import { stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
+import { splitHermesSqliteCandidate } from './session-scanner-hermes-sqlite-paths'
 import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {
@@ -151,12 +152,14 @@ async function dropRowsForMissingTranscripts(db: SessionParseCacheDatabase): Pro
   }
 }
 
-// SQLite-backed sessions (OpenCode and its forks) are keyed `<db>#<id>`, so for
+// SQLite-backed sessions are keyed `<db>#<id>`, so for
 // those the database file stands in for the transcript.
 async function transcriptMissing(path: string): Promise<boolean> {
-  const sqliteSession = SQLITE_SESSION_AGENTS.map((agent) =>
-    splitOpenCodeSqliteCandidate(path, agent)
-  ).find((split) => split !== null)
+  const sqliteSession =
+    splitHermesSqliteCandidate(path) ??
+    SQLITE_SESSION_AGENTS.map((agent) => splitOpenCodeSqliteCandidate(path, agent)).find(
+      (split) => split !== null
+    )
   return (await pathMissing(path)) && (!sqliteSession || (await pathMissing(sqliteSession.dbPath)))
 }
 

@@ -2,6 +2,12 @@ import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
 } from '../native-chat/transcript-opencode-sqlite-query'
+import {
+  listHermesSqliteSessions,
+  listHermesSqliteSessionIds,
+  parseHermesSqliteSession,
+  captureHermesSqliteSession
+} from './session-scanner-hermes-sqlite'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
@@ -28,6 +34,32 @@ export async function handleOpenCodeSqliteRequest(
           ? readOpenCodeTranscriptSignal(request.dbPath, request.sessionId, request.agent)
           : readOpenCodeTranscriptPage({ ...request, limit: request.limit ?? 50 })
       return { id: request.id, ok: true, value }
+    }
+    if (request.kind === 'list' && request.agent === 'hermes') {
+      const issues: AiVaultScanIssue[] = []
+      const candidates = await listHermesSqliteSessions({
+        ...request,
+        limit: request.limit ?? Infinity,
+        issues
+      })
+      const representedSessionIds = listHermesSqliteSessionIds(
+        request.dbPaths,
+        request.legacySessionIds ?? []
+      )
+      return { id: request.id, ok: true, value: { candidates, issues, representedSessionIds } }
+    }
+    if (request.kind === 'capture' && request.agent === 'hermes') {
+      return { id: request.id, ok: true, value: await captureHermesSqliteSession(request) }
+    }
+    if (request.kind === 'parse' && request.agent === 'hermes') {
+      const parse = () => parseHermesSqliteSession(request)
+      return {
+        id: request.id,
+        ok: true,
+        value: request.fullFirstUserPrompt
+          ? await withFullFirstUserPromptCapture(parse)
+          : await parse()
+      }
     }
     if (request.kind === 'list') {
       const issues: AiVaultScanIssue[] = []

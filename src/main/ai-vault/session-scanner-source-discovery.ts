@@ -1,6 +1,7 @@
 import { delimiter } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
+import { hermesDiscoveries } from './session-scanner-hermes-sources'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import { zcodeDiscoveries } from './session-scanner-zcode-sources'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
@@ -31,9 +32,10 @@ export async function discoverAiVaultSessionSources(args: {
     // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...hermesDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
-      source
+      source && agent !== 'hermes'
         ? agentDiscoveries(
             agent as AiVaultAgent,
             source,

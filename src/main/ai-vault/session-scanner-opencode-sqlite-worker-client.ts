@@ -101,8 +101,10 @@ export class OpenCodeSqliteWorkerClient {
     dbPaths: readonly string[]
     limit: number
     issues: AiVaultScanIssue[]
-    agent?: 'opencode2' | 'zcode'
+    agent?: 'opencode2' | 'zcode' | 'hermes'
     scopePaths?: readonly string[]
+    legacySessionIds?: readonly string[]
+    onRepresentedSessionIds?: (ids: readonly string[]) => void
     signal?: AbortSignal
   }): Promise<SessionFileCandidate[]> {
     if (args.dbPaths.length === 0) {
@@ -117,13 +119,15 @@ export class OpenCodeSqliteWorkerClient {
           dbPaths: args.dbPaths,
           limit: Number.isFinite(args.limit) ? args.limit : null,
           ...(args.agent ? { agent: args.agent } : {}),
-          ...(args.scopePaths?.length ? { scopePaths: args.scopePaths } : {})
+          ...(args.scopePaths?.length ? { scopePaths: args.scopePaths } : {}),
+          ...(args.legacySessionIds?.length ? { legacySessionIds: args.legacySessionIds } : {})
         }),
         LIST_TIMEOUT_MS,
         args.signal,
         args.agent
       )) as OpenCodeSqliteListValue
       args.issues.push(...value.issues)
+      args.onRepresentedSessionIds?.(value.representedSessionIds ?? [])
       return value.candidates
     } catch (err) {
       if (args.signal?.aborted) {
@@ -167,7 +171,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
-    agent?: 'opencode2' | 'zcode'
+    agent?: 'opencode2' | 'zcode' | 'hermes'
     signal?: AbortSignal
   }): Promise<AiVaultSession | null> {
     try {
@@ -208,7 +212,7 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
-    agent?: 'opencode2' | 'zcode'
+    agent?: 'opencode2' | 'zcode' | 'hermes'
     signal?: AbortSignal
   }): Promise<OpenCodeSqliteCaptureValue> {
     try {
@@ -253,7 +257,7 @@ export class OpenCodeSqliteWorkerClient {
     buildRequest: (id: number) => OpenCodeSqliteWorkerRequest,
     timeoutMs: number,
     signal?: AbortSignal,
-    agent?: 'opencode2' | 'zcode' | 'native-chat'
+    agent?: 'opencode2' | 'zcode' | 'hermes' | 'native-chat'
   ): Promise<unknown> {
     const deadline = this.requestTimeoutMs ?? timeoutMs
     const response = await runOpenCodeSqliteScanRequest(

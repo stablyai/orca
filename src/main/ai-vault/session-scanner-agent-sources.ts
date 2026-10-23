@@ -5,6 +5,7 @@ import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
+import { hermesHostHomes } from './session-scanner-hermes-stores'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import {
@@ -40,7 +41,6 @@ const COPILOT_SESSIONS_DIR = join(
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
-const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 export function piSessionHistorySessionsDir(): string {
   return normalizeAgentSessionsDir(
@@ -206,10 +206,10 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   hermes: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.hermesSessionsDir ?? HERMES_SESSIONS_DIR, wslHomeDirs, [
-        '.hermes',
-        'sessions'
-      ]),
+      options.hermesSessionsDir
+        ? [options.hermesSessionsDir]
+        : hermesHostHomes(options, wslHomeDirs).map((home) => join(home, 'sessions')),
+    mergeRootDiscoveries: true,
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath).startsWith('session_')
   },

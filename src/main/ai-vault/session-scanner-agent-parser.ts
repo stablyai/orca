@@ -26,6 +26,8 @@ import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
 import { parseCopilotSessionFile } from './session-scanner-copilot-parser'
 import { parseCursorSessionFile } from './session-scanner-cursor-parser'
+import { splitHermesSqliteCandidate } from './session-scanner-hermes-sqlite-paths'
+import { readHermesSqliteSessionViaWorker } from './session-scanner-hermes-worker'
 import { parseHermesSessionFile } from './session-scanner-hermes-parser'
 import { parseOpenCodeSessionFile } from './session-scanner-opencode-parser'
 import type { SessionFileCandidate } from './session-scanner-types'
@@ -141,8 +143,12 @@ export async function parseAgentSessionFile(
     }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages)
-    case 'hermes':
-      return parseHermesSessionFile(candidate.file, platform, messages, signal)
+    case 'hermes': {
+      const sqlite = splitHermesSqliteCandidate(candidate.file.path)
+      return sqlite
+        ? readHermesSqliteSessionViaWorker({ ...sqlite, platform, signal }, messages)
+        : parseHermesSessionFile(candidate.file, platform, messages, signal)
+    }
     case 'rovo':
       return parseRovoSessionFile(candidate.file, platform, messages)
     case 'openclaw':

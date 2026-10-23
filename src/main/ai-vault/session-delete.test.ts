@@ -74,6 +74,38 @@ describe('deleteAiVaultSessionFile', () => {
     expect(trashItemMock).toHaveBeenCalledWith(filePath)
   })
 
+  it('keeps named Hermes deletion subject to host and realpath containment guards', async () => {
+    const home = join(HOME, '.hermes')
+    const filePath = join(home, 'profiles', 'work', 'sessions', 'session_same.json')
+    const args = {
+      agent: 'hermes' as const,
+      filePath,
+      executionHostId: 'local' as const,
+      rootOptions: { hermesSessionsDir: join(home, 'sessions') }
+    }
+    lstatMock.mockResolvedValue({ isFile: () => true })
+    realpathMock.mockImplementation(async (path: string) =>
+      path === filePath ? join(HOME, 'Documents', 'escaped.json') : path
+    )
+    expect(await deleteAiVaultSessionFile(args)).toMatchObject({
+      outcome: 'rejected',
+      reason: 'path-outside-known-roots'
+    })
+    expect(
+      await deleteAiVaultSessionFile({ ...args, executionHostId: 'runtime:remote' })
+    ).toMatchObject({
+      outcome: 'rejected',
+      reason: 'non-local-host'
+    })
+    expect(lstatMock).toHaveBeenCalledOnce()
+    lstatMock.mockResolvedValue({ isFile: () => false })
+    expect(await deleteAiVaultSessionFile(args)).toMatchObject({
+      outcome: 'rejected',
+      reason: 'unexpected-target-kind'
+    })
+    expect(trashItemMock).not.toHaveBeenCalled()
+  })
+
   it('rejects a directory instead of trashing it', async () => {
     const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
     lstatMock.mockResolvedValue({ isFile: () => false })

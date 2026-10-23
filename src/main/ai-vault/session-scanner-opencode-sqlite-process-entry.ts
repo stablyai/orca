@@ -16,7 +16,10 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
     !('id' in value) ||
     !Number.isSafeInteger(value.id) ||
     !('kind' in value) ||
-    ('agent' in value && value.agent !== 'opencode2' && value.agent !== 'zcode') ||
+    ('agent' in value &&
+      value.agent !== 'opencode2' &&
+      value.agent !== 'zcode' &&
+      value.agent !== 'hermes') ||
     ('timeoutMs' in value &&
       (typeof value.timeoutMs !== 'number' ||
         !Number.isFinite(value.timeoutMs) ||
@@ -26,6 +29,7 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
   }
   if (value.kind === 'native-page' || value.kind === 'native-signal') {
     return (
+      (!('agent' in value) || value.agent === 'zcode') &&
       'dbPath' in value &&
       typeof value.dbPath === 'string' &&
       'sessionId' in value &&
@@ -46,6 +50,12 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
       'dbPaths' in value &&
       Array.isArray(value.dbPaths) &&
       value.dbPaths.every((path) => typeof path === 'string') &&
+      (!('legacySessionIds' in value) ||
+        (Array.isArray(value.legacySessionIds) &&
+          value.legacySessionIds.every((id) => typeof id === 'string'))) &&
+      (!('scopePaths' in value) ||
+        (Array.isArray(value.scopePaths) &&
+          value.scopePaths.every((path) => typeof path === 'string'))) &&
       'limit' in value &&
       (value.limit === null ||
         (typeof value.limit === 'number' && Number.isSafeInteger(value.limit) && value.limit >= 0))

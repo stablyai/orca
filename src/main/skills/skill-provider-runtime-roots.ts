@@ -1,4 +1,5 @@
 import { statSync } from 'node:fs'
+import { resolveDefaultHermesHomeDir } from '../../shared/hermes-home'
 import { homedir } from 'node:os'
 import path, { isAbsolute, join, posix, resolve } from 'node:path'
 import { SKILL_INSTALL_PROVIDERS } from '../../shared/skill-install-providers'
@@ -76,36 +77,28 @@ export function resolveEnvironmentHermesSkillsRoot(
   return hermesHome ? join(hermesHome, 'skills') : null
 }
 
-function isExistingDirectory(candidate: string): boolean {
-  return statSync(candidate, { throwIfNoEntry: false })?.isDirectory() === true
-}
-
-/**
- * The Hermes home when `HERMES_HOME` is unset. Windows installs land in
- * `%LOCALAPPDATA%\hermes`, not a dotfolder in the user profile, so the POSIX
- * `~/.hermes` default discovers nothing there. The dotfolder still wins on
- * Windows when it exists and the LOCALAPPDATA tree does not, which is the
- * pre-LOCALAPPDATA install Hermes itself keeps honouring rather than orphaning.
- */
 export function resolveDefaultHermesSkillsRoot(input: {
   homeDir: string
   env?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
   directoryExists?: (candidate: string) => boolean
 }): string {
+  const platform = input.platform ?? process.platform
   const dotfolderHome = join(input.homeDir, '.hermes')
-  if ((input.platform ?? process.platform) !== 'win32') {
+  const env = input.env ?? process.env
+  if (platform === 'win32' && !normalizedRoot(env.LOCALAPPDATA)) {
     return join(dotfolderHome, 'skills')
   }
-  const localAppData = normalizedRoot((input.env ?? process.env).LOCALAPPDATA)
-  if (!localAppData) {
-    return join(dotfolderHome, 'skills')
-  }
-  const localAppDataHome = join(localAppData, 'hermes')
+  const home = resolveDefaultHermesHomeDir(input)
   const directoryExists = input.directoryExists ?? isExistingDirectory
-  return !directoryExists(localAppDataHome) && directoryExists(dotfolderHome)
+  // Preserve existing Windows skill installs independently of history defaults.
+  return platform === 'win32' && !directoryExists(home) && directoryExists(dotfolderHome)
     ? join(dotfolderHome, 'skills')
-    : join(localAppDataHome, 'skills')
+    : join(home, 'skills')
+}
+
+function isExistingDirectory(candidate: string): boolean {
+  return statSync(candidate, { throwIfNoEntry: false })?.isDirectory() === true
 }
 
 export function withClaudeSkillProviderRoot(

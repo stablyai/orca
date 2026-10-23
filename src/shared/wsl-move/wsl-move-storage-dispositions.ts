@@ -123,6 +123,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/schema/migrate.ts': 'orchestration',
   'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
+  'src/main/ai-vault/session-scanner-hermes-sqlite-fixtures.ts': 'test-fixture',
   'src/main/ai-vault/session-scanner-opencode-sqlite-fixture.ts': 'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/browser-cookie-import-test-database.ts': 'test-fixture',
@@ -249,11 +250,15 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'backfill_state',
         'cookies',
         'message',
+        'messages',
         'part',
         'project',
+        'schema_version',
         'session',
         'session_message',
-        'session_v2'
+        'session_v2',
+        'sessions',
+        'system_prompts'
       ],
       notApplicableDisposition(56, "A third-party agent's own database, inside the distro.")
     )

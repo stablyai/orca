@@ -4,6 +4,8 @@ import {
 } from './ai-vault-antigravity-reference-startup'
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
 import { realHomeCodexResumeEnvDeletion } from '../../../shared/ai-vault-resume-command'
+import { hermesSessionSourceFromFilePath } from '../../../shared/hermes-session-source'
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
@@ -115,6 +117,7 @@ function buildAiVaultResumeForWorktree(
     args.session.resumeCommand &&
     !isAntigravityReferenceSession(args.session) &&
     args.session.agent !== 'omp' &&
+    !(args.session.agent === 'hermes' && hermesSessionSourceFromFilePath(args.session.filePath)) &&
     !(args.session.agent === 'codex' && args.session.codexHome === null) &&
     !args.commandOverride?.trim()
   ) {
@@ -156,10 +159,17 @@ function buildAiVaultResumeForWorktree(
 export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVaultResumeHostShell {
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
+  const sourcePath = args.session.filePath ?? ''
+  const hasWindowsHermesSource =
+    args.session.agent === 'hermes' &&
+    (/^[A-Za-z]:[\\/]/.test(sourcePath) ||
+      (sourcePath.startsWith('\\\\') && !parseWslUncPath(sourcePath)))
   const platform =
     !isLocalSession && args.session.executionHostPlatform
       ? args.session.executionHostPlatform
-      : getAiVaultResumePlatform(args.state, args.worktreeId)
+      : !isLocalSession && hasWindowsHermesSource
+        ? 'win32'
+        : getAiVaultResumePlatform(args.state, args.worktreeId)
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =

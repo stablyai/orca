@@ -16,9 +16,10 @@ export type OpenCodeSqliteListRequest = {
   dbPaths: readonly string[]
   limit: number | null
   /** When 'opencode2', lists from the v2 channel-scoped DB schema (session_v2). */
-  agent?: 'opencode2' | 'zcode'
+  agent?: 'opencode2' | 'zcode' | 'hermes'
   /** Lists only sessions whose directory is in scope; an older reader ignores it and lists unfiltered. */
   scopePaths?: readonly string[]
+  legacySessionIds?: readonly string[]
 }
 
 export type OpenCodeSqliteParseRequest = {
@@ -29,7 +30,7 @@ export type OpenCodeSqliteParseRequest = {
   sessionId: string
   platform: NodeJS.Platform
   /** When 'opencode2', parses from the v2 channel-scoped DB schema (session_v2). */
-  agent?: 'opencode2' | 'zcode'
+  agent?: 'opencode2' | 'zcode' | 'hermes'
 }
 
 // Same arguments as `parse`, different answer: the session plus every message
@@ -42,7 +43,7 @@ export type OpenCodeSqliteCaptureRequest = {
   sessionId: string
   platform: NodeJS.Platform
   /** When 'opencode2', captures from the v2 channel-scoped schema. */
-  agent?: 'opencode2' | 'zcode'
+  agent?: 'opencode2' | 'zcode' | 'hermes'
 }
 
 export type OpenCodeNativeChatReadRequest = {
@@ -71,6 +72,7 @@ export type OpenCodeSqliteWorkerRequest = (
 export type OpenCodeSqliteListValue = {
   candidates: SessionFileCandidate[]
   issues: AiVaultScanIssue[]
+  representedSessionIds?: string[]
 }
 
 // The session the panel shows, and the transcript the search index folds. Both

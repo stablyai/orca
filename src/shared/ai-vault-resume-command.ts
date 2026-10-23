@@ -7,6 +7,10 @@ import {
   antigravityTranscriptReferencePrompt
 } from './antigravity-session-origin'
 import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
+import {
+  hermesSessionSourceFromFilePath,
+  buildSourceAwareHermesCommand
+} from './hermes-session-source'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   clearEnvCommand,
@@ -31,7 +35,13 @@ export function buildAiVaultResumeCommand(args: {
 }): string {
   const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
     args
-  const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
+  const hermesSource =
+    agent === 'hermes' ? hermesSessionSourceFromFilePath(resumeFilePath, platform) : null
+  const dialect = shell ?? (platform === 'win32' ? 'cmd' : 'posix')
+  const configuredCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
+  const baseCommand = hermesSource
+    ? buildSourceAwareHermesCommand(configuredCommand, hermesSource, dialect, platform)
+    : configuredCommand
   // Why: OMP's and Prime Agent's `--resume` accept an absolute transcript path,
   // which resolves regardless of which session-dir root (custom
   // OMP_CODING_AGENT_DIR / PRIME_AGENT_CODING_AGENT_DIR / WSL home) the file was

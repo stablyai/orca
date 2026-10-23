@@ -14,6 +14,7 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { hermesSessionSourceFromFilePath } from '../../shared/hermes-session-source'
 import { AI_VAULT_AGENT_SOURCES, isDiscoverableSessionFile } from './session-scanner-agent-sources'
 import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
@@ -72,6 +73,18 @@ export function validateAiVaultSessionDeleteTarget(
     // process cwd — an empty root would silently allowlist it.
     .filter((rootDir) => rootDir.trim().length > 0)
     .map((rootDir) => resolve(rootDir))
+  const hermesSource = agent === 'hermes' ? hermesSessionSourceFromFilePath(resolvedPath) : null
+  if (hermesSource && hermesSource.profileName !== 'default') {
+    const ownerSessions = join(hermesSource.rootDir, 'sessions')
+    if (
+      roots.some(
+        (root) =>
+          isPathInsideOrEqual(root, ownerSessions) && isPathInsideOrEqual(ownerSessions, root)
+      )
+    ) {
+      roots.push(join(hermesSource.homeDir, 'sessions'))
+    }
+  }
   // Keep the root that actually contains this path: companion roots are derived
   // from it, so a WSL-home session can't pair with the local host's companions.
   const matchedRoot = roots.find((root) => isPathInsideOrEqual(root, resolvedPath))

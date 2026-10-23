@@ -16,6 +16,8 @@ import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-
 import type { FileWithMtime } from './session-scanner-types'
 import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
 import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
+import { splitHermesSqliteCandidate } from './session-scanner-hermes-sqlite-paths'
+import { readHermesSqliteSessionViaWorker } from './session-scanner-hermes-worker'
 
 export type ReadAiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent
@@ -76,6 +78,12 @@ async function parseSessionForFullFirstUserPrompt(args: {
   sessionId?: string
   codexHome: string | null
 }): Promise<AiVaultSession | null> {
+  if (args.agent === 'hermes') {
+    const source = splitHermesSqliteCandidate(args.filePath)
+    if (source) {
+      return readHermesSqliteSessionViaWorker({ ...source, platform: process.platform })
+    }
+  }
   // Full capture belongs inside the reader, including the guest reader for WSL.
   if (args.agent === 'opencode' || args.agent === 'opencode2' || args.agent === 'zcode') {
     const parse =

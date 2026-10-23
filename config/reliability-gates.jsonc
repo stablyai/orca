@@ -11,6 +11,140 @@
   },
   "gates": [
     {
+      "id": "agent-session.hermes-source-qualified-history",
+      "title": "Hermes history retains its store and resumes the selected profile",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "history-source-and-startup-contract",
+      "surfaces": [
+        "AI Vault discovery",
+        "Hermes SQLite and legacy JSON",
+        "default and named profile resume",
+        "remote history resume",
+        "legacy JSON deletion"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Production SQLite reader process and temporary authentic schema-31 fixtures on macOS. Generated Windows commands, mocked WSL guest routing and old remote-row builders are covered; no live Windows, distro, remote runtime or mobile execution is claimed.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/10860",
+        "https://github.com/stablyai/orca/issues/28266"
+      ],
+      "invariant": "Discover supported root and live named-profile stores without collapsing equal session IDs across homes. Deduplicate legacy snapshots only against a nonempty SQLite session in the same store, retain scoped rows within the merged recency budget, and pin resume to the recorded home and explicit default or named profile despite sticky active_profile. Named legacy JSON deletion must derive its profile root only from an already trusted owning home and retain existing host, lstat and realpath containment guards.",
+      "oracle": "Read real temporary SQLite WAL and schema-31 messages through the deployed reader process. Compare equal-ID root/profile stores, hidden history, migration shells, bounded discovery, directory links, scoped overflow and encoded IDs. Execute generated portable-shell startup against an argv/environment recorder; verify old remote rows rebuild a source-qualified command.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ai-vault/session-scanner-hermes-sources.test.ts src/main/ai-vault/session-scanner-hermes-stores.test.ts src/main/ai-vault/session-scanner-hermes-sqlite.test.ts src/shared/hermes-home.test.ts src/shared/hermes-session-resume.test.ts src/renderer/src/lib/hermes-vault-resume.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ai-vault/session-scanner-hermes-sources.test.ts src/main/ai-vault/session-scanner-hermes-stores.test.ts src/main/ai-vault/session-scanner-hermes-sqlite.test.ts src/shared/hermes-home.test.ts src/shared/hermes-session-resume.test.ts src/renderer/src/lib/hermes-vault-resume.test.ts src/renderer/src/lib/ai-vault-resume-command.test.ts src/shared/ai-vault-resume-command.test.ts src/main/skills/skill-provider-runtime-roots.test.ts src/main/ai-vault/session-scanner.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ai-vault/session-scanner-hermes-sources.test.ts src/main/ai-vault/session-first-user-prompt-read.test.ts src/main/ai-vault/session-first-user-prompt-opencode.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-provider-runtime-roots.test.ts src/main/ai-vault/session-delete-target.test.ts src/main/ai-vault/session-delete.test.ts src/shared/hermes-home.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ai-vault/session-scanner-hermes-sources.test.ts",
+        "src/main/ai-vault/session-scanner-hermes-stores.test.ts",
+        "src/main/ai-vault/session-scanner-hermes-sqlite.test.ts",
+        "src/shared/hermes-home.test.ts",
+        "src/shared/hermes-session-resume.test.ts",
+        "src/renderer/src/lib/hermes-vault-resume.test.ts",
+        "src/main/ai-vault/session-parse-cache-persistence.test.ts",
+        "src/main/ai-vault/session-delete-target.test.ts",
+        "src/main/ai-vault/session-delete.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ai-vault/session-scanner-hermes-sources.test.ts",
+          "assertions": [
+            "discovers default and named stores with equal IDs and pins their resume sources",
+            "deduplicates within each store beyond the recency cap and keeps migration shells and other homes",
+            "preserves displaced in-scope legacy rows across profile budgets",
+            "routes WSL SQLite through the guest reader and preserves the encoded source path"
+          ]
+        },
+        {
+          "file": "src/main/ai-vault/session-scanner-hermes-stores.test.ts",
+          "assertions": [
+            "counts live identity-bearing profiles toward the store budget and reports truncation",
+            "discovers directory links while preserving the profile source path and tombstones"
+          ]
+        },
+        {
+          "file": "src/main/ai-vault/session-scanner-hermes-sqlite.test.ts",
+          "assertions": [
+            "reads uncheckpointed live WAL sessions without changing the database",
+            "keeps compacted display history, suppresses rewind/scaffolding and chooses the current display row"
+          ]
+        },
+        {
+          "file": "src/main/ai-vault/session-parse-cache-persistence.test.ts",
+          "assertions": ["keeps aged Hermes synthetic rows while their backing database exists"]
+        },
+        {
+          "file": "src/main/ai-vault/session-delete.test.ts",
+          "assertions": [
+            "keeps named Hermes deletion subject to host and realpath containment guards"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ai-vault/session-scanner-hermes-sources.test.ts src/main/ai-vault/session-scanner-hermes-stores.test.ts src/main/ai-vault/session-scanner-hermes-sqlite.test.ts src/shared/hermes-home.test.ts src/shared/hermes-session-resume.test.ts src/renderer/src/lib/hermes-vault-resume.test.ts src/renderer/src/lib/ai-vault-resume-command.test.ts src/shared/ai-vault-resume-command.test.ts src/main/skills/skill-provider-runtime-roots.test.ts src/main/ai-vault/session-scanner.test.ts",
+          "result": "passed",
+          "durationSeconds": 32.25,
+          "summary": "120 tests across 10 files pass, including real schema-31 SQLite process fixtures and local startup shell recording. Supplemental worker/process/scope regression suite passes 31 tests; source review passes 11 independent callers and 40 portable-shell cases."
+        },
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ai-vault/session-scanner-hermes-sources.test.ts src/main/ai-vault/session-first-user-prompt-read.test.ts src/main/ai-vault/session-first-user-prompt-opencode.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.67,
+          "summary": "40 tests across four files pass after routing public Copy first prompt through the Hermes reader and preserving aged synthetic cache rows while their database exists."
+        },
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-provider-runtime-roots.test.ts src/main/ai-vault/session-delete-target.test.ts src/main/ai-vault/session-delete.test.ts src/shared/hermes-home.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.14,
+          "summary": "65 tests across four files pass, preserving Windows legacy skills fallback and restricting named JSON deletion to trusted owners with host and symlink/realpath rejection controls."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused deterministic Hermes fixtures including bundling the deployed SQLite reader"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local development runs pass; CI soak has not been collected."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Production-function baseline probes reproduce missing SQLite/default home/profile stores. Independent probes reproduce displaced scoped legacy rows, omitted linked profiles and public Copy first prompt returning null before correction. Integrated and supplemental affected suites now pass; native platform and live provider evidence remain outside this gate."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "At most 256 identity-bearing profiles and 4096 directory checks per root, four concurrent profile probes per root and four store scans. Reuses the persistent foreign SQLite reader with 64 queued-call cap, 15/30s request deadlines, 45s scan scope and 30s idle teardown. Legacy ID checks use requested IDs in batches of 500. Canonical preview/capture byte and record caps remain in force; no new polling or per-profile process."
+      },
+      "promotionCriteria": [
+        "Collect 100 CI passes or 14 days without unexplained flakes.",
+        "Validate live Windows, WSL and independently versioned remote runtime profiles with the Hermes CLI."
+      ],
+      "knownGaps": [
+        "No real Hermes/provider process, credentials or user transcript is read by these tests.",
+        "No live Windows, WSL, remote runtime or mobile execution proof; fixture command grammar and shared startup paths cover only their deterministic contracts.",
+        "Named profile discovery follows current upstream identity markers and tombstones; obsolete marker-less profile shells are omitted.",
+        "Ambiguous custom shell commands or homes that Hermes would expand differently refuse source-aware resume. SQLite synthetic rows retain existing read-only history actions."
+      ],
+      "demotionRule": "Keep experimental until platform and runtime coverage and soak criteria are met; demote protection if a fixture stops exercising production reader or startup paths."
+    },
+    {
       "id": "agent-session.detached-account-restart-progress",
       "title": "Independent hidden account restarts progress within a shared spawn limit",
       "maturity": "experimental",
