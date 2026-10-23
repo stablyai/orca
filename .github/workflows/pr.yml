@@ -1562,6 +1562,8 @@ jobs:
         with:
           name: orca-win-unpacked
           path: dist/win-unpacked
+          # Relay version markers are dotfiles.
+          include-hidden-files: true
           retention-days: 5
           if-no-files-found: error
 
