@@ -33,6 +33,8 @@ export class AgentReplySubmissions {
       }
       return
     }
+    const author =
+      event.hookEventName === 'UserPromptSubmit' ? this.takeAuthor(event.paneKey) : undefined
     if (event.source !== 'claude' && event.source !== 'codex') {
       this.clear(event.paneKey)
       return
@@ -41,20 +43,20 @@ export class AgentReplySubmissions {
       this.clear(event.paneKey)
       return
     }
-    const sessionId = event.providerSession?.id
+    let pane = this.panes.get(event.paneKey)
+    const sessionId =
+      event.providerSession?.id ?? (pane?.source === event.source ? pane.sessionId : undefined)
     if (!sessionId) {
+      this.clear(event.paneKey)
       return
     }
-    let pane = this.panes.get(event.paneKey)
-    // Only a submission hook spends an Enter: Codex sends SessionStart after the first prompt's
-    // Enter, and stale PTY input ends with its process in TerminalRunFacts.
+    // Codex's first SessionStart follows Enter; only a submission spends its author.
     if (!pane || pane.sessionId !== sessionId || pane.source !== event.source) {
       pane = { sessionId, source: event.source, turns: new Map() }
       this.panes.set(event.paneKey, pane)
     }
     const promptId = event.providerPromptId
     if (event.hookEventName === 'UserPromptSubmit') {
-      const author = this.takeAuthor(event.paneKey)
       pane.completion = undefined
       if (promptId) {
         if (pane.stoppedPromptId === promptId) {
@@ -78,7 +80,7 @@ export class AgentReplySubmissions {
         transcriptPath: event.providerSession?.transcriptPath,
         human
       }
-    } else if (mainState === 'working') {
+    } else if (event.hookEventName === 'Stop' || mainState === 'working') {
       pane.completion = undefined
     }
   }

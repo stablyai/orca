@@ -288,6 +288,39 @@ describe('live submit keys joined to exact main-agent hook turns', () => {
     r.hook('Stop')
     expect(r.human()).toBe(false)
   })
+  it.each(['codex', 'claude'] as const)(
+    'a sessionless %s automated turn replaces the current human completion',
+    (source) => {
+      const r = rig(source)
+      r.input('human')
+      r.hook('UserPromptSubmit')
+      r.hook('Stop')
+      expect(r.human()).toBe(true)
+      r.input('programmatic')
+      r.hook('UserPromptSubmit', CLAUDE_PREVIOUS_PROMPT_ID, { session_id: undefined })
+      expect(r.tracker.completion(PANE_KEY)).toBeUndefined()
+      expect(r.facts.takeSubmitAuthor('pty')).toBeUndefined()
+      r.hook('Stop', CLAUDE_PREVIOUS_PROMPT_ID, { session_id: undefined })
+      expect(r.human()).toBe(false)
+    }
+  )
+  it('a sessionless submission without a current session spends its author without evidence', () => {
+    const r = rig('claude')
+    r.tracker.clear()
+    r.input('human')
+    r.hook('UserPromptSubmit', CLAUDE_PROMPT_ID, { session_id: undefined })
+    expect(r.facts.takeSubmitAuthor('pty')).toBeUndefined()
+    r.hook('Stop')
+    expect(r.human()).toBe(false)
+  })
+  it('a sessionless Stop completes a human submission in the current session', () => {
+    const r = rig()
+    r.input('human')
+    r.hook('UserPromptSubmit')
+    r.hook('Stop', CLAUDE_PROMPT_ID, { session_id: undefined })
+    expect(r.human()).toBe(true)
+  })
+
   it('does not spend a main-agent Enter on a child submission hook', () => {
     const r = rig()
     r.input('human')

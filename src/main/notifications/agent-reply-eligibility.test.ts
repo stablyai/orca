@@ -83,18 +83,20 @@ function rig(source: 'claude' | 'codex' = 'codex', enabled = true) {
     'darwin'
   )
   disposals.push(policy.dispose)
-  const hook = (hookEventName: string, promptId = 'turn-A') =>
+  const hook = (hookEventName: string, promptId = 'turn-A', sessionless = false) =>
     callbacks.listeners.status?.({
       paneKey: 'pane',
       connectionId: null,
       source,
       hookEventName,
       providerPromptId: promptId,
-      providerSession: {
-        key: 'session_id',
-        id: 'session',
-        transcriptPath: '/invented/transcript.jsonl'
-      },
+      providerSession: sessionless
+        ? undefined
+        : {
+            key: 'session_id',
+            id: 'session',
+            transcriptPath: '/invented/transcript.jsonl'
+          },
       payload: { state: hookEventName === 'Stop' ? 'done' : 'working', prompt: 'invented' },
       receivedAt: 1,
       stateStartedAt: 1
@@ -137,6 +139,19 @@ describe('host reply eligibility and asynchronous invalidation', () => {
     callbacks.read.mockReturnValueOnce(waiting.promise)
     const verdict = r.policy.canBring(r.request)
     r.hook('UserPromptSubmit', 'turn-B')
+    waiting.resolve(true)
+    expect(await verdict).toBe(false)
+    expect(r.policy.stillEligible(r.request)).toBe(false)
+  })
+  it('a sessionless working hook invalidates a pending Claude completion read', async () => {
+    const r = rig('claude')
+    r.input('human')
+    r.hook('UserPromptSubmit')
+    r.hook('Stop')
+    const waiting = Promise.withResolvers<boolean>()
+    callbacks.read.mockReturnValueOnce(waiting.promise)
+    const verdict = r.policy.canBring(r.request)
+    r.hook('PreToolUse', 'turn-A', true)
     waiting.resolve(true)
     expect(await verdict).toBe(false)
     expect(r.policy.stillEligible(r.request)).toBe(false)
