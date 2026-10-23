@@ -72,7 +72,7 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
 
     // Positive, not just "not dead": a bare `not.toMatchObject` would also pass on a bailed-out
     // connect that returned undefined. A healthy fresh spawn resolves to its pty id.
-    expect(result).toBe(RECYCLED_PTY_ID)
+    expect(result).toMatchObject({ id: RECYCLED_PTY_ID, incarnationId: FRESH_INCARNATION_ID })
     expect(paneExit).not.toHaveBeenCalled()
   })
 

@@ -1,9 +1,8 @@
+import { useTerminalTabShell } from './use-terminal-tab-shell'
 import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { basename } from '@/lib/path'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
@@ -124,8 +123,7 @@ export default function SortableTab({
   )
   const { activityStatus, programProgress } = useTerminalTabActivity(tab)
 
-  // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
-  const shellForIcon = tab.shellOverride
+  const { shell: shellForIcon, programName } = useTerminalTabShell(tab, tabAgent)
 
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
   const displayTitle =
@@ -379,13 +377,7 @@ export default function SortableTab({
         ) : (
           <TabHoverCard
             title={displayTitle}
-            programName={
-              tabAgent
-                ? getAgentLabel(tabAgent)
-                : shellForIcon
-                  ? basename(shellForIcon)
-                  : translate('tabHoverCard.terminal', 'Terminal')
-            }
+            programName={programName}
             icon={
               <TerminalTabLeadingIcon
                 agent={tabAgent}

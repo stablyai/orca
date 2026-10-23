@@ -365,10 +365,11 @@ describe('registerPtyHandlers', () => {
         worktreeId: 'repo-1::/tmp'
       })
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         id: expect.any(String),
         pid: 12345,
-        incarnationId: expect.any(String)
+        incarnationId: expect.any(String),
+        shellPath: '/bin/zsh'
       })
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(spawnMock).toHaveBeenCalledWith(

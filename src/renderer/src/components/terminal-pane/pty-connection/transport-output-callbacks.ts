@@ -1,3 +1,4 @@
+import { refreshPaneProcessCapabilities } from './pane-host-capability-flags'
 import { isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { createTerminalStartupTiming } from '../terminal-startup-timing'
@@ -42,6 +43,11 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     return {
       generation,
       callbacks: {
+        onSessionMetadataChanged: (): void => {
+          if (isCurrent()) {
+            refreshPaneProcessCapabilities(session)
+          }
+        },
         onReattachDetermined: (): void => {
           if (isCurrent()) {
             session.beginReattachLiveDataDeferralIfUnowned(generation)

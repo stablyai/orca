@@ -67,10 +67,11 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 
 describe('desktop Qoder execution-host selection', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
-  const { setupDaemonAdapter, withWin32Platform } = createDaemonActiveProviderFixtures({
-    handlers,
-    mainWindow
-  })
+  const { setupDaemonAdapter, withWin32Platform, makeProjectRuntimeStore } =
+    createDaemonActiveProviderFixtures({
+      handlers,
+      mainWindow
+    })
   const nativeProbe = vi.mocked(isCommandOnPath)
   const wslProbe = vi.mocked(detectWslCommandsOnPath)
   beforeEach(() => {
@@ -173,21 +174,15 @@ describe('desktop Qoder execution-host selection', () => {
   })
   it('uses the selected project WSL distro rather than installed native legacy', async () => {
     await withWin32Platform(async () => {
-      const { providerSpawn } = await spawn({
-        cwd: '/work/project',
-        worktreeId: 'repo-review::/work/project',
-        projectRuntime: {
-          status: 'resolved',
-          runtime: {
-            kind: 'wsl',
-            hostPlatform: 'wsl',
-            projectId: 'project-review',
-            distro: 'Debian',
-            reason: 'project-override',
-            cacheKey: 'review'
-          }
-        }
-      })
+      const { providerSpawn } = await spawn(
+        {
+          cwd: '/work/project',
+          worktreeId: 'repo-1::/work/project'
+        },
+        makeProjectRuntimeStore({
+          projectRuntimePreference: { kind: 'wsl', distro: 'Debian' }
+        })
+      )
       expect(providerSpawn).toHaveBeenCalledWith(
         expect.objectContaining({
           command: 'qoder --resume original-id',

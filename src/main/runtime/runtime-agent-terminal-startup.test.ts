@@ -79,6 +79,44 @@ describe('host agent planner', () => {
     })
   })
 
+  it('discovers caller-authored Qoder in the shell selected by the canonical project pin', async () => {
+    vi.mocked(detectAgentCommandsOnHost).mockClear()
+    _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+    const repo = { id: 'r', path: 'C:\\src' }
+    const store = {
+      getSettings: () => ({ terminalWindowsShell: 'powershell.exe' }),
+      getProjects: () => [
+        {
+          id: 'pinned',
+          sourceRepoIds: [],
+          localWindowsRuntimePreference: { kind: 'windows-host' }
+        },
+        {
+          id: 'source',
+          sourceRepoIds: ['r'],
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      getRepo: () => repo,
+      getRepos: () => [repo],
+      getWorktreeMetaForHost: () => ({ projectId: 'pinned', hostId: 'local' })
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only these scope and store fields.
+    const scope = { ...workspace, id: 'r::C:\\src', path: repo.path, repo } as never
+    const command = String.raw`qodercli --prompt-interactive "inspect C:\src\"`
+    const launch = await resolveAgentTerminalCreateOptions(
+      scope,
+      { launchAgent: 'qoder', command },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads only the store members defined above.
+      { ...host, store: store as never }
+    )
+    expect(launch.command).toBe(command.replace(/^qodercli/, 'qoder'))
+    expect(detectAgentCommandsOnHost).toHaveBeenCalledExactlyOnceWith(['qodercli', 'qoder'], {
+      context: {},
+      shell: 'powershell'
+    })
+  })
+
   // A `\\wsl$` cwd runs in WSL whatever the project says, so a WSL shell is what this agent gets.
   it('applies --shell wsl.exe for an agent in a WSL-share repo set to Windows host', async () => {
     const repo = { id: 'r', path: '\\\\wsl$\\Ubuntu\\r' }

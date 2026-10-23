@@ -1,17 +1,21 @@
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { createIpcPtyProcessDescription } from './ipc-pty-process-description'
 import { attachIpcPty } from './ipc-pty-attach'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
+import { ensurePtyDispatcher } from './pty-dispatcher'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
-import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
+import {
+  createPtyPreconnectInputBuffer,
+  dropPtyPreconnectInput
+} from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     connectionId,
-    shellOverride,
     onPtyExit,
     onTitleChange,
     onBell,
@@ -74,22 +78,25 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ptyId = null
       preconnectInputBuffer?.clear()
     },
-    onPtyExit
+    captureProcessRetirement: () => description.captureRetirement(),
+    onPtyExit: (id, code) => {
+      description.detach()
+      onPtyExit?.(id, code)
+    }
   })
-  const bind = (id: string): void => {
+  const description = createIpcPtyProcessDescription(
+    !connectionId,
+    () => ptyId,
+    () => storedCallbacks.onSessionMetadataChanged?.(),
+    opts
+  )
+  const bind = (id: string, incarnationId?: string): void => {
     ptyId = id
     connected = true
+    description.bind(incarnationId)
   }
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
-  }
-  const dropPreconnectInput = (reason: string): void => {
-    if (preconnectInputBuffer?.hasPendingInput()) {
-      console.warn(
-        `[pty-transport] dropped keys typed while the terminal was connecting: ${reason}`
-      )
-    }
-    preconnectInputBuffer?.clear()
   }
   const flushPreconnectInput = async (): Promise<void> => {
     if (!preconnectInputBuffer?.isBuffering()) {
@@ -101,7 +108,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (destroyed) {
         preconnectInputBuffer.clear()
       } else {
-        dropPreconnectInput('the terminal did not attach')
+        dropPtyPreconnectInput(preconnectInputBuffer, 'the terminal did not attach')
       }
       return
     }
@@ -124,6 +131,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       const connectGeneration = advancePtyLifecycle()
       pendingConnectGeneration = connectGeneration
       try {
+        ensurePtyDispatcher()
+        const publishDescription = description.capture()
         return await connectIpcPty(options, {
           transportOptions: opts,
           handlers,
@@ -134,6 +143,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             lifecycleGeneration === connectGeneration + 1,
           ownsPtyId: (id) => !destroyed && connected && ptyId === id,
           handleExplicitlyClosedConnect: (id) => destroyed && (onAbandonedConnect?.(id) ?? false),
+          adoptMetadata: publishDescription,
           bind,
           isCurrent: (id) => lifecycleGeneration === connectGeneration && connected && ptyId === id,
           setCallbacks,
@@ -155,6 +165,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     attach: (options) => {
       const attachGeneration = advancePtyLifecycle()
       try {
+        ensurePtyDispatcher()
+        const publishDescription = description.capture()
         attachIpcPty(options, {
           handlers,
           outputProcessor,
@@ -166,6 +178,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             suppressAttentionEvents = value
           }
         })
+        description.hydrate(
+          options.existingPtyId,
+          publishDescription,
+          () => !destroyed && lifecycleGeneration === attachGeneration
+        )
       } catch (error) {
         preconnectInputBuffer?.clear()
         throw error
@@ -176,19 +193,24 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     abandonPreconnectInput() {
-      dropPreconnectInput('its pending connection was abandoned')
+      dropPtyPreconnectInput(preconnectInputBuffer, 'its pending connection was abandoned')
     },
 
     disconnect() {
       advancePtyLifecycle()
       preconnectInputBuffer?.clear()
       const id = ptyId
+      const retire = description.captureRetirement()
       connected = false
       ptyId = null
+      description.detach()
       handlers.clearAccumulatedState()
       if (id) {
         try {
-          window.api.pty.kill(id)
+          void window.api.pty
+            .kill(id)
+            ?.then(retire)
+            .catch((error) => console.warn('[pty-transport] could not close terminal', error))
         } finally {
           handlers.unregisterAll(id)
           storedCallbacks.onDisconnect?.()
@@ -197,6 +219,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     detach(options) {
+      description.detach()
       advancePtyLifecycle()
       outputProcessor.disposePendingSideEffectGauge()
       handlers.clearAccumulatedState()
@@ -274,10 +297,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getConnectionId: () => connectionId ?? null,
     getExecutionHostId: () => getConnectionExecutionHostId(connectionId),
     getRuntimeEnvironmentId: () => null,
-    getLocalSessionMetadata: () =>
-      connectionId
-        ? null
-        : { ...(opts.cwd ? { cwd: opts.cwd } : {}), ...(shellOverride ? { shellOverride } : {}) },
+    getLocalSessionMetadata: description.getContext,
     resetCrossChunkParserState: outputProcessor.resetAgentStatusCarry,
 
     destroy(options) {

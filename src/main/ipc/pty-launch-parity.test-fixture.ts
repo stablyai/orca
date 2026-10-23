@@ -3,6 +3,8 @@ import { createPaneBindingStore } from './pty-launch-race-test-fixture'
 // reach the same fake provider. Window lane: pty:spawn. Host lane: createTerminal / createAgentSession
 // through the runtime controller registerPtyHandlers installs. Suites still declare the IPC vi.mock block.
 import { vi } from 'vitest'
+import type { Project } from '../../shared/project-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Mock } from 'vitest'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { existsSyncMock, statSyncMock } from './pty-ipc-mock-registry'
@@ -145,6 +147,9 @@ export function startParityLanes(
     workspace: LaunchWorkspace
     settings?: Record<string, unknown>
     spawnError?: Error
+    projects?: Pick<Project, 'id' | 'sourceRepoIds' | 'localWindowsRuntimePreference'>[]
+    legacyMeta?: { projectId: string; hostId: ExecutionHostId }
+    localMeta?: { projectId: string; hostId: ExecutionHostId }
   }
 ): ParityLanes {
   const settings = parityMainSettings(args.settings)
@@ -160,19 +165,22 @@ export function startParityLanes(
   const store = {
     ...bindingStore,
     getSettings: () => settings,
-    getProjects: () => [
-      {
-        id: 'project-1',
-        sourceRepoIds: ['repo-1'],
-        ...(args.workspace.projectRuntime
-          ? { localWindowsRuntimePreference: args.workspace.projectRuntime }
-          : {})
-      }
-    ],
+    getProjects: () =>
+      args.projects ?? [
+        {
+          id: 'project-1',
+          sourceRepoIds: ['repo-1'],
+          ...(args.workspace.projectRuntime
+            ? { localWindowsRuntimePreference: args.workspace.projectRuntime }
+            : {})
+        }
+      ],
     getRepo: (id: string) => (repo && id === repo.id ? repo : undefined),
     getRepos: () => (repo ? [repo] : []),
     getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined,
+    getWorktreeMeta: () => args.legacyMeta,
+    getWorktreeMetaForHost: (_id: string, host: ExecutionHostId) =>
+      host === 'local' ? args.localMeta : undefined,
     getFolderWorkspace: () => folderWorkspace ?? undefined,
     getFolderWorkspaces: () => (folderWorkspace ? [folderWorkspace] : []),
     getProjectGroups: () => [{ id: 'pg-1', name: 'group', parentPath: null, connectionId: null }]

@@ -104,7 +104,7 @@ describe('TerminalHost WSL context', () => {
   })
 
   it('returns authoritative null when a native session is attached with a WSL preference', async () => {
-    const spawnSubprocess = vi.fn(() => createSubprocess())
+    const spawnSubprocess = vi.fn(() => ({ ...createSubprocess(), shellPath: 'cmd.exe' }))
     host = new TerminalHost({ spawnSubprocess })
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -128,6 +128,11 @@ describe('TerminalHost WSL context', () => {
 
       expect(created.wslDistro).toBeNull()
       expect(attached.wslDistro).toBeNull()
+      expect(created.shellPath).toBe('cmd.exe')
+      expect(attached.shellPath).toBe('cmd.exe')
+      expect(host.listSessions()).toMatchObject([
+        { shellPath: 'cmd.exe', incarnationId: created.incarnationId }
+      ])
       expect(spawnSubprocess).toHaveBeenCalledOnce()
     } finally {
       if (platform) {

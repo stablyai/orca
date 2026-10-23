@@ -1,3 +1,5 @@
+import { installPtyProcessExitObserver } from '@/components/terminal-pane/pty-process-observation'
+import { observeTerminalProcessExit } from './terminals/terminal-process-metadata'
 import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
@@ -149,6 +151,11 @@ export const useAppStore = create<AppState>()(
   )
 )
 
+installPtyProcessExitObserver((payload) => {
+  useAppStore.setState((state) =>
+    observeTerminalProcessExit(state, payload.id, payload.incarnationId)
+  )
+})
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
 attachEditorBufferIdentityEvents(() => useAppStore.getState())
 registerWindowsPathAccessEnvironments(() => useAppStore.getState().runtimeEnvironments)

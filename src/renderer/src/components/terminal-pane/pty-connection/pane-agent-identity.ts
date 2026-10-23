@@ -153,17 +153,21 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     const tab = (state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
       (candidate) => candidate.id === session.deps.tabId
     )
+    const metadata =
+      session.transport.getPtyId() === id ? session.transport.getLocalSessionMetadata?.() : null
     // Why: WSL and remote-runtime panes can never authorize native ConPTY
     // bytes, so do not pay for Windows process scans that cannot affect routing.
     return isLocalNativeWindowsConpty({
       userAgent: navigator.userAgent,
-      connectionId: getConnectionId(session.deps.worktreeId) ?? null,
-      cwd: session.deps.cwd,
-      shellOverride: resolveWindowsShellOverride(
-        tab?.shellOverride,
-        state.settings?.terminalWindowsShell
-      ),
-      executionHostId: getExecutionHostIdForWorktree(state, session.deps.worktreeId)
+      connectionId: metadata ? null : (getConnectionId(session.deps.worktreeId) ?? null),
+      cwd: metadata?.cwd ?? session.deps.cwd,
+      shellOverride:
+        metadata?.shellOverride ??
+        resolveWindowsShellOverride(tab?.shellOverride, state.settings?.terminalWindowsShell),
+      wslDistro: metadata?.wslDistro,
+      executionHostId: metadata
+        ? 'local'
+        : getExecutionHostIdForWorktree(state, session.deps.worktreeId)
     })
   }
   session.paneForegroundAgentTracker = createPaneForegroundAgentTracker({

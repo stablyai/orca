@@ -9,6 +9,7 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { _setWslCachesForTests } from '../wsl'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
+import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { join } from 'node:path'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
@@ -62,6 +63,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
+  const { makeProjectRuntimeStore } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
 
   it('passes floating terminal cwds through to the spawned shell', async () => {
     // Why: the floating sentinel has no worktree root; its cwd is validated against trusted-directory grants before reaching pty:spawn.
@@ -192,23 +194,21 @@ describe('registerPtyHandlers', () => {
 
       try {
         installDaemonTestProvider({ spawn: providerSpawn })
-        registerPtyHandlers(mainWindow as never)
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          makeProjectRuntimeStore({
+            projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu-24.04' }
+          })
+        )
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: startupCwd,
-          worktreeId: 'repo-1::C:\\Users\\alice\\repo',
-          projectRuntime: {
-            status: 'resolved',
-            runtime: {
-              kind: 'wsl',
-              hostPlatform: 'wsl',
-              projectId: 'repo-1',
-              distro: 'Ubuntu-24.04',
-              reason: 'project-override',
-              cacheKey: 'repo-1:wsl'
-            }
-          }
+          worktreeId: 'repo-1::C:\\Users\\alice\\repo'
         })
 
         const expectedValidationCwd = `\\\\wsl.localhost\\Ubuntu-24.04${startupCwd.replaceAll('/', '\\')}`
@@ -240,24 +240,25 @@ describe('registerPtyHandlers', () => {
 
     try {
       installDaemonTestProvider({ spawn: providerSpawn })
-      registerPtyHandlers(mainWindow as never)
-      const result = (await handlers.get('pty:spawn')!(null, {
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        makeProjectRuntimeStore({
+          projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu-24.04' }
+        })
+      )
+      const result = await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/a',
-        worktreeId: `repo-1::${worktreePath}`,
-        projectRuntime: {
-          status: 'resolved',
-          runtime: {
-            kind: 'wsl',
-            hostPlatform: 'wsl',
-            projectId: 'repo-1',
-            distro: 'Ubuntu-24.04',
-            reason: 'project-override',
-            cacheKey: 'repo-1:wsl'
-          }
-        }
-      })) as { startupCwdFallback?: { kind: string; cwd: string } }
+        worktreeId: `repo-1::${worktreePath}`
+      })
+      if (!result || typeof result !== 'object' || !('startupCwdFallback' in result)) {
+        throw new Error('Expected a startup cwd fallback result')
+      }
 
       expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(1)
       expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: worktreePath }))

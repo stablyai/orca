@@ -79,6 +79,8 @@ export type PtyApi = {
     id: string
     /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
     incarnationId?: string
+    wslDistro?: string | null
+    shellPath?: string
     launchAgent?: TuiAgent
     launchConfig?: SleepingAgentLaunchConfig
     snapshot?: string

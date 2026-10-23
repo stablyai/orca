@@ -31,6 +31,8 @@ export type PtySpawnResult = {
   launchAgent?: TuiAgent
   /** Local WSL context: null is native; undefined is unavailable/legacy. */
   wslDistro?: string | null
+  /** Actual top-level executable reported by the process owner; absent on older hosts. */
+  shellPath?: string
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string

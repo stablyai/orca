@@ -179,6 +179,7 @@ export class DaemonTerminalAdmission {
       incarnationId: result.incarnationId,
       ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
       wslDistro: result.wslDistro,
+      ...(result.shellPath ? { shellPath: result.shellPath } : {}),
       ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
       ...(result.cwdReadableByDaemon !== undefined

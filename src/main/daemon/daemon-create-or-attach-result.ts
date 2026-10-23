@@ -12,6 +12,8 @@ export type DaemonCreateOrAttachResult = {
   launchAgent?: TuiAgent
   /** Undefined only when talking to a daemon predating WSL session context. */
   wslDistro?: string | null
+  /** Actual top-level executable reported by the process owner; absent on older hosts. */
+  shellPath?: string
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   incarnationId?: PtyIncarnationId
   /**
@@ -26,16 +28,19 @@ export function getDaemonSessionResultMetadata(session: {
   launchAgent: TuiAgent | null
   historySeeded: boolean | undefined
   wslDistro: string | null
+  shellPath?: string
 }): {
   launchAgent?: TuiAgent
   historySeeded?: boolean
   wslDistro: string | null
+  shellPath?: string
 } {
   return {
     ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
     ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
     // Why: null authoritatively identifies a native session; omission is
     // reserved for older daemons that predate this wire field.
-    wslDistro: session.wslDistro
+    wslDistro: session.wslDistro,
+    ...(session.shellPath ? { shellPath: session.shellPath } : {})
   }
 }

@@ -77,6 +77,7 @@ export function isLocalWindowsConptyPaneForCtrlArrow({
     connectionId,
     cwd: sessionMetadata?.cwd ?? paneCwd.get(paneId)?.cwd ?? fallbackCwd,
     shellOverride: sessionMetadata?.shellOverride ?? tabShellOverride,
+    wslDistro: sessionMetadata?.wslDistro,
     executionHostId
   })
 }

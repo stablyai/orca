@@ -21,6 +21,8 @@ export type PtyProcessInfo = {
   terminalHandle?: string
   /** Exact WSL owner reported by the PTY provider; null means native Windows. */
   wslDistro?: string | null
+  /** Actual top-level executable reported by the process owner; absent on older hosts. */
+  shellPath?: string
   /** Optional host-side process evidence attached to an inventory seed. */
   foregroundProcessEvidence?: ForegroundProcessEvidence
   agentSessionOwners?: AgentSessionOwnerBinding[]

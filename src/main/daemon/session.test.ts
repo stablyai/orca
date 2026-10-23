@@ -310,7 +310,7 @@ describe('Session', () => {
       for (const ownerBackend of ['posix-pty', 'windows-conpty'] as const) {
         subprocess = createMockSubprocess()
         createSession({ ownerBackend })
-        session.closeStartupQueryAuthority()
+        session.startupIngress.closeQueryAuthority()
         const downstreamReplies: string[] = []
         const onData = vi.fn((data: string) => {
           if (data.includes(query)) {

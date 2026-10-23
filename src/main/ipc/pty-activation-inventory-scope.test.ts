@@ -52,7 +52,9 @@ describe('scoped activation PTY inventory', () => {
   const { handlers, mainWindowIpcEvent, installDaemonTestProvider } = setupPtyIpcSuite()
 
   function install() {
-    const localList = vi.fn(async () => [{ id: 'local', cwd: '/', title: 'shell' }])
+    const localList = vi.fn(async (): Promise<PtyProcessInfo[]> => [
+      { id: 'local', cwd: '/', title: 'shell' }
+    ])
     installDaemonTestProvider({ listProcesses: localList })
     const startup = vi.fn(async () => {})
     installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise: startup })
@@ -95,9 +97,23 @@ describe('scoped activation PTY inventory', () => {
     expect(localList).not.toHaveBeenCalled()
   })
 
-  it('lists only the local inventory without a scope', async () => {
+  it.each([
+    { wslDistro: null, shellPath: 'cmd.exe' },
+    { wslDistro: 'Debian', shellPath: 'wsl.exe' },
+    {}
+  ])('lists only the local inventory and preserves owner facts %j', async (facts) => {
     const { list, localList } = install()
-    expect(await list()).toHaveLength(1)
+    localList.mockResolvedValueOnce([{ id: 'local', cwd: '/', title: 'shell', ...facts }])
+    expect(await list()).toEqual([
+      {
+        id: 'local',
+        cwd: '/',
+        title: 'shell',
+        fencedTermination: false,
+        agentOwnership: 'unknown',
+        ...facts
+      }
+    ])
     expect(localList).toHaveBeenCalledOnce()
   })
 

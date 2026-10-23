@@ -24,7 +24,7 @@ import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-i
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
 import {
-  resolveLocalProjectRuntimeForWorktreeId,
+  resolveLocalTerminalRuntime,
   resolvePlainTerminalPtyOptions
 } from '../local-project-runtime-resolution'
 import {
@@ -88,7 +88,7 @@ export async function resolveAgentTerminalCreateOptions(
       opts.shellOverride && store
         ? plannedAgent || opts.launchRuntime
           ? agentLaunchProjectRuntime(store, workspace, plannedAgent ?? opts.launchAgent)
-          : resolveLocalProjectRuntimeForWorktreeId(store, workspace.id)
+          : resolveLocalTerminalRuntime(store, workspace.id, opts.tabId)
         : undefined,
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     workspacePath: workspace.path
@@ -262,23 +262,23 @@ function resolveQoderLaunchCommand(
     })
   }
   // A command its caller quoted runs under the spawn's own rule; its tokens are what is searched.
-  const fact = runtime ?? {
-    platform: agentLaunchPlatformForScope(store, workspace),
-    pty: resolvePlainTerminalPtyOptions(
+  const pty =
+    runtime?.pty ??
+    resolvePlainTerminalPtyOptions(
       store,
       store.getSettings(),
       workspace.id,
-      launch.shellOverride
+      launch.shellOverride,
+      launch.tabId
     )
-  }
   // Where the process runs: a `\\wsl$` cwd first, then a WSL shell, as the spawn decides it.
   const wsl = resolveWslSessionContext({
     cwd: resolveTerminalStartupCwd(workspace.path, launch.cwd) ?? workspace.path,
-    shellOverride: fact.pty.shellOverride,
-    terminalWindowsWslDistro: fact.pty.terminalWindowsWslDistro
+    shellOverride: pty.shellOverride,
+    terminalWindowsWslDistro: pty.terminalWindowsWslDistro
   })
   return resolveQoderTerminalCommand(launch, {
     context: wsl ? { wslDistro: wsl.distro } : {},
-    shell: agentLaunchQuotingShell(fact)
+    shell: agentLaunchQuotingShell(runtime ?? { platform: wsl ? 'linux' : process.platform, pty })
   })
 }

@@ -162,7 +162,8 @@ export class TerminalHost {
   }
 
   closeStartupQueryAuthority(sessionId: string): number {
-    return getAliveTerminalHostSession(this.sessions, sessionId).closeStartupQueryAuthority()
+    const session = getAliveTerminalHostSession(this.sessions, sessionId)
+    return session.startupIngress.closeQueryAuthority()
   }
 
   resize(sessionId: string, cols: number, rows: number): void {

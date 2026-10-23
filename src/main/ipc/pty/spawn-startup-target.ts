@@ -7,24 +7,20 @@ import {
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../shared/terminal-startup-cwd'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
 import { isWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import { resolveWslSessionContext } from '../../daemon/wsl-session-context'
 import {
-  resolveLocalProjectRuntimeForWorktreeId,
+  resolveLocalTerminalRuntime,
   resolveLocalPtyOptions,
-  type ProjectRuntimeResolutionStore
+  type LocalTerminalRuntimeStore
 } from '../../local-project-runtime-resolution'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import { normalizeWindowsTerminalCwd } from '../../providers/windows-shell-args'
 import { wslUncDirectoryExistsAsync } from '../../wsl'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
 import { probeLocalStartupCwdDirectory } from './host-env/startup-cwd-directory-exists'
-
-// TEMPORARY (row 13b removes it): the window uses the renderer's runtime; the host reads the store.
-export type PtySpawnProjectRuntimeSource =
-  | { kind: 'sent'; projectRuntime: ProjectExecutionRuntimeResolution | undefined }
-  | { kind: 'store'; store: ProjectRuntimeResolutionStore | undefined }
 
 export type PtySpawnStartupTarget = {
   cwd: string | undefined
@@ -47,7 +43,10 @@ type PtySpawnStartupArgs = {
   shellOverride: string | undefined
   /** The PTY an agent launch's command was quoted for. */
   plannedPty?: LocalWindowsTerminalRuntimeOptions
-  projectRuntimeSource: PtySpawnProjectRuntimeSource
+  store: LocalTerminalRuntimeStore | undefined
+  tabId?: string
+  /** Setup actions have no workspace and carry their explicit install target. */
+  projectRuntime?: ProjectExecutionRuntimeResolution
   /** A known live pane never uses the cwd, so it skips the existence probe. */
   preAdopted: boolean
   getSettings: (() => Parameters<typeof resolveLocalPtyOptions>[0]) | undefined
@@ -61,14 +60,13 @@ type PtySpawnStartupArgs = {
 export async function resolvePtySpawnStartupTarget(
   args: PtySpawnStartupArgs
 ): Promise<PtySpawnStartupTarget> {
-  const source = args.projectRuntimeSource
   const terminalRuntimeOptions =
     args.plannedPty ??
     resolveLocalPtyOptions(
       args.getSettings?.(),
-      source.kind === 'sent'
-        ? source.projectRuntime
-        : resolveLocalProjectRuntimeForWorktreeId(source.store, args.worktreeId),
+      args.worktreeId && isEphemeralSetupTerminalWorktreeId(args.worktreeId)
+        ? args.projectRuntime
+        : resolveLocalTerminalRuntime(args.store, args.worktreeId, args.tabId),
       args.shellOverride,
       process.env.COMSPEC || 'powershell.exe'
     )

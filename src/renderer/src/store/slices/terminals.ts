@@ -35,6 +35,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   activeTabId: null,
   activeTabIdByWorktree: {},
   ptyIdsByTabId: {},
+  ptyProcessMetadataById: {},
+  ptyProcessObservationRevision: 0,
   runtimePaneTitlesByTabId: {},
   suppressedPtyExitIds: {},
   pendingPtyShutdownIds: {},

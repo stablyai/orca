@@ -1,4 +1,8 @@
 import { vi } from 'vitest'
+import { Store } from '../persistence'
+import type { LocalWindowsRuntimePreference } from '../../shared/project-execution-runtime'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { setLocalPtyProvider } from './pty/provider/registry'
@@ -70,26 +74,31 @@ export function createDaemonActiveProviderFixtures(ctx: {
   }
 
   function makeProjectRuntimeStore(args: {
-    projectRuntimePreference: unknown
-    settings?: Record<string, unknown>
-  }) {
-    const settings = {
-      localWindowsRuntimeDefault: { kind: 'windows-host' },
-      ...args.settings
-    }
-    return {
-      getRepo: vi.fn((repoId: string) =>
-        repoId === 'repo-1' ? { id: 'repo-1', path: 'C:\\repo' } : undefined
-      ),
-      getProjects: vi.fn(() => [
-        {
-          id: 'project-1',
-          sourceRepoIds: ['repo-1'],
-          localWindowsRuntimePreference: args.projectRuntimePreference
-        }
-      ]),
-      getSettings: vi.fn(() => settings)
-    }
+    projectRuntimePreference: LocalWindowsRuntimePreference
+    settings?: Partial<GlobalSettings>
+  }): Store {
+    const store = vi.mockObject(Store.prototype)
+    const repo = { id: 'repo-1', path: 'C:\\repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
+    store.getRepo.mockImplementation((repoId) => (repoId === repo.id ? repo : undefined))
+    store.getRepos.mockReturnValue([repo])
+    store.getProjects.mockReturnValue([
+      {
+        id: 'project-1',
+        displayName: 'project',
+        badgeColor: '',
+        sourceRepoIds: ['repo-1'],
+        localWindowsRuntimePreference: args.projectRuntimePreference,
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ])
+    store.getSettings.mockReturnValue(
+      createGlobalSettingsFixture({
+        localWindowsRuntimeDefault: { kind: 'windows-host' },
+        ...args.settings
+      })
+    )
+    return store
   }
 
   async function daemonSpawnAndGetOptions(

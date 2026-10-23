@@ -11,7 +11,10 @@ import {
   POWERSHELL_OSC133_ARGS
 } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
+import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty/register-handlers'
+import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -59,6 +62,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
+  const { makeProjectRuntimeStore } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
 
   describe('Windows UTF-8 code page', () => {
     let originalPlatform: string
@@ -214,24 +218,17 @@ describe('registerPtyHandlers', () => {
         undefined,
         undefined,
         () =>
-          ({
+          createGlobalSettingsFixture({
             terminalWindowsShell: 'wsl.exe',
             terminalWindowsWslDistro: 'Debian'
-          }) as never
+          }),
+        undefined,
+        makeProjectRuntimeStore({ projectRuntimePreference: { kind: 'windows-host' } })
       )
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        projectRuntime: {
-          status: 'resolved',
-          runtime: {
-            kind: 'windows-host',
-            hostPlatform: 'win32',
-            projectId: 'repo-1',
-            source: 'project-override',
-            cacheKey: 'repo-1:windows-host'
-          }
-        }
+        worktreeId: 'repo-1::C:\\repo'
       })
 
       expect(spawnMock).toHaveBeenCalledWith(
@@ -248,26 +245,20 @@ describe('registerPtyHandlers', () => {
         undefined,
         undefined,
         () =>
-          ({
+          createGlobalSettingsFixture({
             terminalWindowsShell: 'powershell.exe',
             terminalWindowsWslDistro: 'Debian'
-          }) as never
+          }),
+        undefined,
+        makeProjectRuntimeStore({
+          projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        })
       )
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: 'C:\\Users\\test\\repo',
-        projectRuntime: {
-          status: 'resolved',
-          runtime: {
-            kind: 'wsl',
-            hostPlatform: 'wsl',
-            projectId: 'repo-1',
-            distro: 'Ubuntu',
-            source: 'project-override',
-            cacheKey: 'repo-1:wsl:Ubuntu'
-          }
-        }
+        worktreeId: 'repo-1::C:\\repo'
       })
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
@@ -276,31 +267,27 @@ describe('registerPtyHandlers', () => {
     })
     it('blocks terminal spawn when project runtime requires repair', async () => {
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      _setWslCachesForTests({ available: true, distros: ['Debian'] })
 
       registerPtyHandlers(
         mainWindow as never,
         undefined,
         undefined,
         () =>
-          ({
+          createGlobalSettingsFixture({
             terminalWindowsShell: 'powershell.exe'
-          }) as never
+          }),
+        undefined,
+        makeProjectRuntimeStore({
+          projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        })
       )
 
       await expect(
         handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
-          projectRuntime: {
-            status: 'repair-required',
-            repair: {
-              projectId: 'repo-1',
-              reason: 'wsl-distro-missing',
-              requestedDistro: 'Ubuntu',
-              fallbackRuntime: null,
-              cacheKey: 'repo-1:repair:wsl-distro-missing:Ubuntu'
-            }
-          }
+          worktreeId: 'repo-1::C:\\repo'
         })
       ).rejects.toThrow('Project runtime requires repair before terminal spawn')
       expect(spawnMock).not.toHaveBeenCalled()

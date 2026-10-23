@@ -1,3 +1,5 @@
+import { shouldDisableKittyKeyboardForTerminal } from '@/lib/pane-manager/terminal-keyboard-protocol'
+import { resolvePaneKeyboardProtocolAgent } from '../terminal-keyboard-protocol-pane-agent'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
@@ -10,6 +12,7 @@ import {
 import { requestTerminalWritePipelineProbe } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { subscribeToTerminalUserInput } from '../terminal-user-input-signal'
 import {
+  buildWindowsPtyCompatibilityOptions,
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
 } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -66,10 +69,11 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
   session.shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   session.shouldProtectNativeWindowsSynchronizedOutput = session.isNativeWindowsConpty
   session.unsubscribeWindowsDoneTerminalModeReset = null
-  if (session.isNativeWindowsConpty) {
+  {
     const initialAgentStatus = session.state.agentStatusByPaneKey[session.cacheKey]
     let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
     if (
+      session.isNativeWindowsConpty &&
       !initialAgentStatus &&
       session.paneStartup?.telemetry?.launch_source === 'sidebar' &&
       session.paneStartup.telemetry.request_kind === 'resume' &&
@@ -80,10 +84,13 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
       // row, so arm the same Windows stale-focus guard until work starts again.
       session.suppressNativeWindowsIdleCodexFocusReports = true
     }
-    if (initialAgentStatus?.state === 'done') {
+    if (session.isNativeWindowsConpty && initialAgentStatus?.state === 'done') {
       session.setFocusReportSuppressionForAgentCompletion(undefined, initialAgentStatus.agentType)
     }
     session.unsubscribeWindowsDoneTerminalModeReset = useAppStore.subscribe((nextState) => {
+      if (!session.isNativeWindowsConpty) {
+        return
+      }
       const nextAgentStatus = nextState.agentStatusByPaneKey[session.cacheKey]
       const nextAgentStatusState = nextAgentStatus?.state
       if (nextAgentStatusState === 'done') {
@@ -266,5 +273,54 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
     if (session.userInputActivityDisposable === null) {
       session.recordTerminalInputForHibernation()
     }
+  }
+}
+
+/** Refresh before the transport drains replay or lets xterm answer the first query. */
+export function refreshPaneProcessCapabilities(session: ConnectPanePtySession): void {
+  const metadata = session.transport.getLocalSessionMetadata?.()
+  if (
+    !metadata ||
+    !session.transport.getPtyId() ||
+    (!metadata.shellPath && metadata.wslDistro === undefined)
+  ) {
+    return
+  }
+  const context = {
+    userAgent: navigator.userAgent,
+    osRelease: window.api.platform?.get?.()?.osRelease,
+    connectionId: session.transport.getConnectionId?.(),
+    ...metadata,
+    executionHostId: session.transport.getExecutionHostId?.() ?? session.executionHostId,
+    tuiAgent: resolvePaneKeyboardProtocolAgent(session.paneStartup, session.tab?.launchAgent)
+  }
+  session.executionHostId = context.executionHostId
+  const wasNative = session.isNativeWindowsConpty
+  session.isNativeWindowsConpty = isLocalNativeWindowsConpty(context)
+  session.shouldApplyNativeWindowsRewriteRefresh = session.isNativeWindowsConpty
+  session.shouldProtectNativeWindowsSynchronizedOutput = session.isNativeWindowsConpty
+  session.pane.terminal.options.windowsPty =
+    buildWindowsPtyCompatibilityOptions(context).windowsPty ?? {}
+  session.pane.terminal.options.vtExtensions = {
+    ...session.pane.terminal.options.vtExtensions,
+    kittyKeyboard: !shouldDisableKittyKeyboardForTerminal(context)
+  }
+  if (!session.isNativeWindowsConpty) {
+    session.suppressNativeWindowsIdleCodexFocusReports = false
+  }
+  const status = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+  if (
+    !wasNative &&
+    session.isNativeWindowsConpty &&
+    !status &&
+    session.paneStartup?.telemetry?.launch_source === 'sidebar' &&
+    session.paneStartup.telemetry.request_kind === 'resume' &&
+    (session.paneStartup.launchAgent === 'codex' ||
+      session.paneStartup.telemetry.agent_kind === 'codex')
+  ) {
+    session.suppressNativeWindowsIdleCodexFocusReports = true
+  }
+  if (!wasNative && session.isNativeWindowsConpty && status?.state === 'done') {
+    session.setFocusReportSuppressionForAgentCompletion(undefined, status.agentType)
   }
 }

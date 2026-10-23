@@ -56,6 +56,7 @@ export class PtyProcessListAdmission {
     const foregroundProcessBytes = retainedOptionalStringBytes(value.foregroundProcess)
     const inventorySourceBytes = retainedOptionalStringBytes(value.inventorySourceId)
     const worktreeIdBytes = retainedOptionalStringBytes(value.worktreeId)
+    const shellPathBytes = retainedOptionalStringBytes(value.shellPath)
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
     const wslDistroBytes =
       value.wslDistro === null ? 0 : retainedOptionalStringBytes(value.wslDistro)
@@ -75,6 +76,7 @@ export class PtyProcessListAdmission {
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
       wslDistroBytes === null ||
+      shellPathBytes === null ||
       evidenceBytes === null ||
       (value.rootProcessId !== undefined &&
         (!Number.isSafeInteger(value.rootProcessId) || value.rootProcessId <= 0)) ||
@@ -111,6 +113,7 @@ export class PtyProcessListAdmission {
       worktreeIdBytes +
       terminalHandleBytes +
       wslDistroBytes +
+      shellPathBytes +
       evidenceBytes +
       ownerBytes
     if (
@@ -140,6 +143,7 @@ export class PtyProcessListAdmission {
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
+      ...(value.shellPath !== undefined ? { shellPath: value.shellPath } : {}),
       ...(value.exiting === true ? { exiting: true as const } : {}),
       ...(value.foregroundProcessEvidence !== undefined
         ? {

@@ -83,8 +83,10 @@ export function resolveTerminalInputHostPlatform(args: {
   const localSessionMetadata = args.transport?.getLocalSessionMetadata?.()
   if (ptyId !== null && localSessionMetadata != null) {
     const isWslSession =
-      isWslUncPath(localSessionMetadata.cwd ?? '') ||
-      isWslShellOverride(localSessionMetadata.shellOverride)
+      localSessionMetadata.wslDistro === undefined
+        ? isWslUncPath(localSessionMetadata.cwd ?? '') ||
+          isWslShellOverride(localSessionMetadata.shellOverride)
+        : localSessionMetadata.wslDistro !== null
     return args.clientPlatform === 'win32' && isWslSession ? 'linux' : args.clientPlatform
   }
 

@@ -97,6 +97,8 @@ export function installPtySessionListingIpcHandler(deps: {
                 ? { rootProcessId: session.rootProcessId }
                 : {}),
               ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+              ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+              ...(session.shellPath ? { shellPath: session.shellPath } : {}),
               fencedTermination:
                 !duplicated.has(session.id) &&
                 hostId === LOCAL_EXECUTION_HOST_ID &&

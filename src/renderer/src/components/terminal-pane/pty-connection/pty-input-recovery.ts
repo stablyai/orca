@@ -134,7 +134,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
         session.runtimeEnvironmentId,
         PROGRAM_STATUS_RUNTIME_CAPABILITY
       ) === true,
-    ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
+    da1Response: () => (session.isNativeWindowsConpty ? CONPTY_DA1_RESPONSE : undefined)
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
     session.pane.terminal,

@@ -80,7 +80,9 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     sessionId: ctx.effectiveSessionId,
     shellOverride: args.shellOverride,
     plannedPty: ctx.paneAgentLaunch?.launchRuntime?.pty,
-    projectRuntimeSource: { kind: 'sent', projectRuntime: args.projectRuntime },
+    store: ctx.deps.store,
+    tabId: args.tabId,
+    projectRuntime: args.projectRuntime,
     preAdopted: ctx.preAdoptedStablePane !== null,
     getSettings: ctx.deps.getSettings,
     resolveStartupCwd: ctx.deps.resolvePtySpawnStartupCwd

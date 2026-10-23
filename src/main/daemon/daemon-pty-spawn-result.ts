@@ -120,7 +120,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         ...daemonSpawnResultIdentity(result),
         pid,
         coldRestore: cachedRestore,
-        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
+        ...(result.wslDistro !== undefined ? { wslDistro: result.wslDistro } : {}),
+        ...(result.shellPath ? { shellPath: result.shellPath } : {}),
         ...(!result.isNew ? { isReattach: true } : {})
       })
     }
@@ -212,7 +213,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
           ...daemonSpawnResultIdentity(result),
           pid,
           coldRestore,
-          ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
+          ...(result.wslDistro !== undefined ? { wslDistro: result.wslDistro } : {}),
+          ...(result.shellPath ? { shellPath: result.shellPath } : {}),
           ...(providerSequence ? { providerSequence } : {}),
           ...(!result.isNew ? { isReattach: true } : {})
         })
@@ -221,7 +223,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         id: sessionId,
         ...daemonSpawnResultIdentity(result),
         pid,
-        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
+        ...(result.wslDistro !== undefined ? { wslDistro: result.wslDistro } : {}),
+        ...(result.shellPath ? { shellPath: result.shellPath } : {}),
         ...(providerSequence ? { providerSequence } : {})
       })
     }
@@ -267,7 +270,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         id: sessionId,
         ...daemonSpawnResultIdentity(result),
         pid,
-        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
+        ...(result.wslDistro !== undefined ? { wslDistro: result.wslDistro } : {}),
+        ...(result.shellPath ? { shellPath: result.shellPath } : {}),
         ...(providerSequence ? { providerSequence } : {}),
         ...(isReattach ? { isReattach: true } : {})
       })
@@ -292,7 +296,8 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       id: sessionId,
       ...daemonSpawnResultIdentity(result),
       pid,
-      ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
+      ...(result.wslDistro !== undefined ? { wslDistro: result.wslDistro } : {}),
+      ...(result.shellPath ? { shellPath: result.shellPath } : {}),
       snapshot: snapshotPayload,
       snapshotCols: reattachSnapshot.cols,
       snapshotRows: reattachSnapshot.rows,

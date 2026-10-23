@@ -1,3 +1,4 @@
+import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import type { ITerminalOptions } from '@xterm/xterm'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -8,6 +9,7 @@ export type WindowsPtyCompatibilityContext = {
   connectionId: string | null | undefined
   cwd?: string | null
   shellOverride?: string | null
+  wslDistro?: string | null
 }
 
 function isWindowsUserAgent(userAgent: string | undefined): boolean {
@@ -16,10 +18,6 @@ function isWindowsUserAgent(userAgent: string | undefined): boolean {
 
 function isWslCwd(cwd: string | null | undefined): boolean {
   return isWslUncPath(cwd ?? '')
-}
-
-function isWslShellOverride(shellOverride: string | null | undefined): boolean {
-  return /(?:^|[/\\])wsl(?:\.exe)?$/i.test(shellOverride ?? '')
 }
 
 function parseWindowsBuildNumber(osRelease: string | null | undefined): number | undefined {
@@ -84,12 +82,13 @@ export function resolveWindowsShellOverride(
  * local pane from a serve pane, so callers gate it with `isLocalNativeWindowsConpty`.
  */
 export function isLocalNativeWindowsPty(context: WindowsPtyCompatibilityContext): boolean {
-  return (
-    isWindowsUserAgent(context.userAgent) &&
-    context.connectionId === null &&
-    !isWslCwd(context.cwd) &&
-    !isWslShellOverride(context.shellOverride)
-  )
+  if (!isWindowsUserAgent(context.userAgent) || context.connectionId !== null) {
+    return false
+  }
+  if (context.wslDistro !== undefined) {
+    return context.wslDistro === null
+  }
+  return !isWslCwd(context.cwd) && !isWslShellName(context.shellOverride ?? undefined)
 }
 
 /**

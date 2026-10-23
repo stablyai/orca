@@ -40,6 +40,8 @@ export type PtyListedSession = {
   foregroundProcess?: string
   cwd: string
   title: string
+  wslDistro?: string | null
+  shellPath?: string
   worktreeId?: string
   /**
    * Agent ownership as the listing provider could establish it. Destructive actions must treat

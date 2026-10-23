@@ -305,7 +305,7 @@ describe('placement on the binding write is inert', () => {
         sessionId: undefined,
         shellOverride: 'wsl.exe',
         plannedPty: { shellOverride: 'wsl.exe', terminalWindowsWslDistro: 'Ubuntu' },
-        projectRuntimeSource: { kind: 'sent', projectRuntime: undefined },
+        store: undefined,
         preAdopted: false,
         getSettings: undefined,
         resolveStartupCwd: (_id, cwd, fallback) =>

@@ -10,13 +10,12 @@ import { resolveProcessCwd } from './process-cwd'
 import {
   dataListeners,
   exitListeners,
-  ptyIncarnations,
+  readLocalPtyProcessFacts,
   ptyInitialCwd,
   ptyProcesses,
   getPtyShellName,
   ptyTerminalHandle,
   ptyWorktreeId,
-  ptyWslDistroById,
   startupIngressByPty,
   type DataCallback,
   type ExitCallback
@@ -124,13 +123,12 @@ export function closeLocalPtyStartupQueryAuthority(id: string): number {
 export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
   return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
     id,
-    ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
+    ...readLocalPtyProcessFacts(id),
     ...(proc.pid > 0 ? { rootProcessId: proc.pid } : {}),
     cwd: ptyInitialCwd.get(id) ?? '',
     title: proc.process || getPtyShellName(id) || 'shell',
     ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
-    ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
-    ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
+    ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
   }))
 }
 

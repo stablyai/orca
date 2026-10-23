@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -96,6 +96,36 @@ function baseState(): DashboardSnapshotState {
 }
 
 describe('buildDashboardSnapshot rows cache', () => {
+  it('republishes a quiet card input profile from live process facts with the same row cache and epoch', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    try {
+      const { dashboardSnapshotInputsChanged } = await import('./useDashboardPopoutBridge')
+      const cache = createWorktreeAgentRowsCache()
+      const state = { ...baseState(), agentStatusEpoch: 1, ptyProcessMetadataById: {} }
+      state.tabsByWorktree.w1[0].shellOverride = 'wsl.exe'
+      const before = buildDashboardSnapshot(state, NOW, { rowsCache: cache, rowsGeneration: 1 })
+      expect(before.cards.find((card) => card.tabId === 'tab1')?.terminalInput).toMatchObject({
+        hostPlatform: 'linux',
+        localWindowsConpty: false
+      })
+      const changed = {
+        ...state,
+        ptyProcessMetadataById: {
+          ['local\0pty-tab1']: { shellPath: 'cmd.exe', wslDistro: null, observationRevision: 1 }
+        }
+      }
+      expect(dashboardSnapshotInputsChanged(changed, state)).toBe(true)
+      const after = buildDashboardSnapshot(changed, NOW, { rowsCache: cache, rowsGeneration: 1 })
+      expect(cache.lastComputedWorktreeIds).toEqual([])
+      expect(after.cards.find((card) => card.tabId === 'tab1')?.terminalInput).toMatchObject({
+        hostPlatform: 'win32',
+        localWindowsConpty: true
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('matches the uncached snapshot exactly across unrelated and targeted writes', () => {
     const cache = createWorktreeAgentRowsCache()
     const first = baseState()

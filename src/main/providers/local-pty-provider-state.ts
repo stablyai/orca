@@ -113,6 +113,16 @@ export function runPtyCleanup(id: string): void {
   cleanup()
 }
 
+export function readLocalPtyProcessFacts(id: string) {
+  const incarnationId = ptyIncarnations.get(id)
+  const shellPath = ptyShellPath.get(id)
+  return {
+    ...(incarnationId ? { incarnationId } : {}),
+    ...(shellPath ? { shellPath } : {}),
+    ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
+  }
+}
+
 export function getPtyShellName(id: string): string | undefined {
   const shellPath = ptyShellPath.get(id)
   return shellPath === undefined ? undefined : getSpawnedShellName(shellPath)

@@ -222,3 +222,25 @@ export function getFolderWorkspaceHostId(
   }
   return matchingHostId ?? LOCAL_EXECUTION_HOST_ID
 }
+
+/** The one local repo whose project runs a folder workspace on this machine; none for a folder
+ *  pinned to another host or spanning several repos. */
+export function findLocalFolderWorkspaceRuntimeRepo(
+  state: FolderWorkspaceHostState,
+  folderWorkspaceId: string
+): Repo | undefined {
+  const folder = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+  if (!folder || resolveFolderWorkspaceHost(state, folder.id).kind !== 'local') {
+    return undefined
+  }
+  const group = state.projectGroups.find((entry) => entry.id === folder.projectGroupId)
+  if (
+    (folder.executionHostId ?? group?.executionHostId ?? LOCAL_EXECUTION_HOST_ID) !==
+    LOCAL_EXECUTION_HOST_ID
+  ) {
+    return undefined
+  }
+  const candidates = findFolderWorkspaceCandidateRepos(state, folder.id)
+  const repo = candidates.length === 1 ? candidates[0] : undefined
+  return repo && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID ? repo : undefined
+}

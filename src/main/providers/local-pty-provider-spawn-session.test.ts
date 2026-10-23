@@ -213,13 +213,24 @@ describe('LocalPtyProvider', () => {
     })
 
     it('reattaches to an existing caller-supplied session id without spawning', async () => {
-      const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
+      const first = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'serve-session-1',
+        shellOverride: '/bin/zsh'
+      })
       spawnMock.mockClear()
 
-      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+      const second = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        shellOverride: '/bin/bash'
+      })
 
       expect(second).toEqual({
         id: 'serve-session-1',
+        shellPath: '/bin/zsh',
         incarnationId: first.incarnationId,
         pid: 12345,
         isReattach: true,
@@ -335,7 +346,12 @@ describe('LocalPtyProvider', () => {
       const first = await provider.spawn({ cols: 80, rows: 24 })
       spawnMock.mockClear()
 
-      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+      const second = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        shellOverride: '/bin/bash'
+      })
 
       expect(second.id).not.toBe(first.id)
       expect(second.isReattach).toBeUndefined()

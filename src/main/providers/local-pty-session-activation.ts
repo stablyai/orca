@@ -217,6 +217,7 @@ export function activateLocalPtySession(args: {
   return {
     id,
     incarnationId,
+    shellPath: plan.shellPath,
     pid,
     startupCwdSource: 'request',
     ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {}),

@@ -1,3 +1,4 @@
+import type { TerminalProcessMetadata } from './terminal-process-metadata'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type {
@@ -32,6 +33,9 @@ export type TerminalState = {
   /** Per-worktree focus survives workspace switches independently of the global active tab. */
   activeTabIdByWorktree: Record<string, string | null>
   ptyIdsByTabId: Record<string, string[]>
+  /** Live owner observations, including retirement fences; never persisted. */
+  ptyProcessMetadataById: Record<string, TerminalProcessMetadata>
+  ptyProcessObservationRevision: number
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   /** Scoped exit suppression and reference-counted shutdown ownership prevent teardown races. */
   suppressedPtyExitIds: Record<string, true>

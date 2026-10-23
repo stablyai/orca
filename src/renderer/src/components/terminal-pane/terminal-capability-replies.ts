@@ -20,7 +20,7 @@ type TerminalCapabilityRepliesDeps = {
   parser: Pick<IParser, 'registerCsiHandler' | 'registerOscHandler'>
   sendInput: (data: string) => boolean | void
   isReplaying: () => boolean
-  da1Response?: string
+  da1Response?: string | (() => string | undefined)
   // Resolved per query so a live inline-images toggle changes what the next DA1 advertises.
   sixelSupported?: () => boolean
   /** Why a thunk, like sixelSupported: the pane's launch agent may not be registered
@@ -159,7 +159,9 @@ export function installTerminalCapabilityReplyHandlers(
           // Why: restored scrollback may contain old DA1 queries; answering those
           // into the fresh shell recreates the stray-input leak this handler fixes.
           if (!deps.isReplaying()) {
-            const base = deps.da1Response ?? DEFAULT_DA1_RESPONSE
+            const response =
+              typeof deps.da1Response === 'function' ? deps.da1Response() : deps.da1Response
+            const base = response ?? DEFAULT_DA1_RESPONSE
             deps.sendInput(deps.sixelSupported?.() ? withSixelDa1Attribute(base) : base)
           }
           return true

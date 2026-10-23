@@ -25,6 +25,7 @@ type IpcPtySessionHandlersOptions = {
   getCallbacks: () => PtyCallbacks
   getSuppressAttentionEvents: () => boolean
   markExited: () => void
+  captureProcessRetirement?: () => () => void
   onPtyExit?: IpcPtyTransportOptions['onPtyExit']
 }
 
@@ -42,6 +43,7 @@ export function createIpcPtySessionHandlers({
   getCallbacks,
   getSuppressAttentionEvents,
   markExited,
+  captureProcessRetirement,
   onPtyExit
 }: IpcPtySessionHandlersOptions): IpcPtySessionHandlers {
   const ownedDataHandlers = new Map<
@@ -52,7 +54,13 @@ export function createIpcPtySessionHandlers({
       writeUnavailable: () => void
     }
   >()
-  const ownedExitHandlers = new Map<string, (code: number) => void>()
+  const ownedExitHandlers = new Map<
+    string,
+    {
+      exit: (code: number) => void
+      lifecycle: { pause: () => void; rollback: () => void; commit: () => void }
+    }
+  >()
 
   function clearAccumulatedState(): void {
     outputProcessor.clearAccumulatedState()
@@ -83,14 +91,14 @@ export function createIpcPtySessionHandlers({
   function unregisterAll(id: string): void {
     unregisterData(id)
     const ownedExit = ownedExitHandlers.get(id)
-    if (ownedExit && ptyExitHandlers.get(id) === ownedExit) {
+    if (ownedExit && ptyExitHandlers.get(id) === ownedExit.exit) {
       ptyExitHandlers.delete(id)
     }
     ownedExitHandlers.delete(id)
     if (ptyTeardownHandlers.get(id) === clearAccumulatedState) {
       ptyTeardownHandlers.delete(id)
     }
-    if (ptyShutdownLifecycleHandlers.get(id) === shutdownLifecycle) {
+    if (ptyShutdownLifecycleHandlers.get(id) === ownedExit?.lifecycle) {
       ptyShutdownLifecycleHandlers.delete(id)
     }
   }
@@ -135,7 +143,14 @@ export function createIpcPtySessionHandlers({
 
   function registerExit(id: string, incarnationId?: string): boolean {
     const hadBufferedExit = hasPreHandlerPtyExit(id, incarnationId)
+    const retireProcess = captureProcessRetirement?.()
     const exit = (code: number): void => {
+      if (
+        ownedExitHandlers.get(id)?.exit !== exit ||
+        (ptyExitHandlers.has(id) && ptyExitHandlers.get(id) !== exit)
+      ) {
+        return
+      }
       const currentId = getPtyId()
       if (currentId !== null && currentId !== id) {
         unregisterAll(id)
@@ -150,9 +165,16 @@ export function createIpcPtySessionHandlers({
       onPtyExit?.(id, code)
     }
     ptyExitHandlers.set(id, exit)
-    ownedExitHandlers.set(id, exit)
+    const lifecycle = {
+      ...shutdownLifecycle,
+      commit: () => {
+        clearAccumulatedState()
+        retireProcess?.()
+      }
+    }
+    ownedExitHandlers.set(id, { exit, lifecycle })
     ptyTeardownHandlers.set(id, clearAccumulatedState)
-    ptyShutdownLifecycleHandlers.set(id, shutdownLifecycle)
+    ptyShutdownLifecycleHandlers.set(id, lifecycle)
     try {
       drainPreHandlerPtyExit(id, exit, incarnationId)
     } catch (error) {

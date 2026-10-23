@@ -86,14 +86,18 @@ export type PtyReplayDataMeta = {
 }
 
 export type LocalPtySessionMetadata = {
+  shellPath?: string
   cwd?: string
   shellOverride?: string
+  wslDistro?: string | null
 }
 
 export type PtyConnectResult = {
   id: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string
+  shellPath?: string
+  wslDistro?: string | null
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
@@ -134,6 +138,7 @@ type PtyCallbacks = {
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
+  onSessionMetadataChanged?: () => void
   /** A stream re-established after loss carries only new bytes, so the pane must
    *  re-pull the host's retained buffer or an idle/exited pane paints nothing. */
   onStreamRecovered?: () => void

@@ -292,3 +292,13 @@ export function createPtyPreconnectInputBuffer(
     clear
   }
 }
+
+export function dropPtyPreconnectInput(
+  preconnectInputBuffer: PtyPreconnectInputBuffer | null,
+  reason: string
+): void {
+  if (preconnectInputBuffer?.hasPendingInput()) {
+    console.warn(`[pty-transport] dropped keys typed while the terminal was connecting: ${reason}`)
+  }
+  preconnectInputBuffer?.clear()
+}

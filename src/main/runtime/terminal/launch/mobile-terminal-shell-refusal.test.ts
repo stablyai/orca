@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 
-const resolveLocalLaunchScopeRuntime = vi.hoisted(() => vi.fn())
-vi.mock('../../../local-project-runtime-resolution', () => ({ resolveLocalLaunchScopeRuntime }))
+const resolveLocalTerminalRuntime = vi.hoisted(() => vi.fn())
+vi.mock('../../../local-project-runtime-resolution', () => ({ resolveLocalTerminalRuntime }))
 
 const { assertMobileTerminalShellSupported } = await import('./mobile-terminal-shell-refusal')
 
@@ -20,7 +20,7 @@ describe('assertMobileTerminalShellSupported', () => {
 
   beforeEach(() => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    resolveLocalLaunchScopeRuntime.mockReset()
+    resolveLocalTerminalRuntime.mockReset()
   })
 
   afterEach(() => {
@@ -28,7 +28,7 @@ describe('assertMobileTerminalShellSupported', () => {
   })
 
   it('refuses a Windows shell for a folder workspace whose project runs in WSL', () => {
-    resolveLocalLaunchScopeRuntime.mockReturnValue({
+    resolveLocalTerminalRuntime.mockReturnValue({
       status: 'resolved',
       runtime: {
         kind: 'wsl',
@@ -44,11 +44,11 @@ describe('assertMobileTerminalShellSupported', () => {
     expect(() =>
       assertMobileTerminalShellSupported(store, folderScope, 'cmd.exe', undefined)
     ).toThrow(/in WSL/)
-    expect(resolveLocalLaunchScopeRuntime).toHaveBeenCalledWith(store, folderScope)
+    expect(resolveLocalTerminalRuntime).toHaveBeenCalledWith(store, folderScope.id)
   })
 
   it('accepts the shell when the folder runs on the Windows host', () => {
-    resolveLocalLaunchScopeRuntime.mockReturnValue(undefined)
+    resolveLocalTerminalRuntime.mockReturnValue(undefined)
 
     expect(() =>
       assertMobileTerminalShellSupported({}, folderScope, 'cmd.exe', undefined)
@@ -58,6 +58,6 @@ describe('assertMobileTerminalShellSupported', () => {
   it('skips resolution when no shell was picked', () => {
     assertMobileTerminalShellSupported({}, folderScope, undefined, undefined)
 
-    expect(resolveLocalLaunchScopeRuntime).not.toHaveBeenCalled()
+    expect(resolveLocalTerminalRuntime).not.toHaveBeenCalled()
   })
 })

@@ -54,6 +54,7 @@ export function dashboardSnapshotInputsChanged(
     state.runtimeAgentOrchestrationByPaneKey !== previousState.runtimeAgentOrchestrationByPaneKey ||
     state.terminalLayoutsByTabId !== previousState.terminalLayoutsByTabId ||
     state.ptyIdsByTabId !== previousState.ptyIdsByTabId ||
+    state.ptyProcessMetadataById !== previousState.ptyProcessMetadataById ||
     state.runtimePaneTitlesByTabId !== previousState.runtimePaneTitlesByTabId ||
     state.acknowledgedAgentsByPaneKey !== previousState.acknowledgedAgentsByPaneKey ||
     state.hostedReviewCache !== previousState.hostedReviewCache ||

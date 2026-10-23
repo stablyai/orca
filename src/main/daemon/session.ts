@@ -130,6 +130,9 @@ export class Session {
     return this.termination.beginTermination()
   }
 
+  // oxfmt-ignore
+  get shellPath(): string | undefined { return this.subprocess.shellPath }
+
   get pid(): number {
     return this.subprocess.pid
   }
@@ -392,9 +395,5 @@ export class Session {
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
     this.onSessionExit?.(code)
-  }
-
-  closeStartupQueryAuthority(): number {
-    return this.startupIngress.closeQueryAuthority()
   }
 }

@@ -1,3 +1,4 @@
+import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -211,12 +212,12 @@ describe('registerPtyHandlers', () => {
             onPtyExit: vi.fn(),
             onPtyData: vi.fn()
           }
-          const settings = {
+          const settings = createGlobalSettingsFixture({
             localWindowsRuntimeDefault: { kind: 'windows-host' },
             terminalWindowsShell: 'powershell.exe',
             terminalWindowsWslDistro: 'Debian',
             terminalWindowsPowerShellImplementation: 'auto'
-          }
+          })
           const store = makeProjectRuntimeStore({
             projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
             settings
@@ -389,10 +390,10 @@ describe('registerPtyHandlers', () => {
             onPtyExit: vi.fn(),
             onPtyData: vi.fn()
           }
-          const settings = {
+          const settings = createGlobalSettingsFixture({
             localWindowsRuntimeDefault: { kind: 'windows-host' },
             terminalWindowsShell: 'powershell.exe'
-          }
+          })
           const store = makeProjectRuntimeStore({
             projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
             settings
