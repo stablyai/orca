@@ -39,7 +39,7 @@ export function useImeEnterGestureOwnership(): {
   isComposing: () => boolean
   ownsKeyDown: (event: ImeEnterGestureEvent) => boolean
   onKeyUp: (event: ImeEnterGestureEvent) => void
-  onCompositionEnd: () => void
+  onCompositionEnd: (committedText?: string) => void
   reset: () => void
   setComposing: (active: boolean, committedText?: string) => void
 } {
@@ -109,10 +109,12 @@ export function useImeEnterGestureOwnership(): {
         // Any keyup can precede the redispatch, including an IME-owned Process/229 release.
         expirePendingEnter()
       },
-      onCompositionEnd: () => {
+      onCompositionEnd: (committedText = '') => {
         const compositionWasActive = stateRef.current.composing
         stateRef.current.composing = false
-        if (compositionWasActive && !stateRef.current.pendingEnter) {
+        if (HANGUL_ONLY.test(committedText)) {
+          stateRef.current.pendingEnter = null
+        } else if (compositionWasActive && !stateRef.current.pendingEnter) {
           // IBus can finish composition before its only unmarked confirming Enter.
           stateRef.current.pendingEnter = {}
           expirePendingEnter()
