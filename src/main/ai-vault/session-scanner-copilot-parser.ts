@@ -55,8 +55,7 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
       accumulator.sessionId = sessionId
     }
     updateTimeline(accumulator, extractString(data.startTime))
-    // Why: the folder-trust notice that used to be the only location source is not emitted
-    // for every session, while the start context always names the launch directory.
+    // Folder-trust notices are optional; session.start records the launch directory.
     const context = asRecord(data.context)
     if (context) {
       accumulator.cwd ??= extractString(context.cwd) ?? extractString(context.gitRoot)

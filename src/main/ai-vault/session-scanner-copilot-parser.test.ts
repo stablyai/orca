@@ -49,8 +49,10 @@ async function parse(
     { path, mtimeMs: Date.now(), modifiedAt: new Date().toISOString() },
     platform
   )
-  expect(session).not.toBeNull()
-  return session!
+  if (!session) {
+    throw new Error('Missing Copilot fixture session')
+  }
+  return session
 }
 
 describe('parseCopilotSessionFile location', () => {
@@ -110,7 +112,7 @@ describe('parseCopilotSessionFile titles', () => {
       startRecord({ cwd: '/repo' }),
       userRecord({
         content: 'fix the login bug',
-        transformedContent: `${DATETIME}\nfix the login bug`
+        transformedContent: `${DATETIME}\nmodel-only context\nfix the login bug`
       })
     ])
 
@@ -125,6 +127,7 @@ describe('parseCopilotSessionFile titles', () => {
     ])
 
     expect(session.title).toBe('refactor the parser')
+    expect(session.previewMessages[0]?.text).toBe('refactor the parser')
     expect(session.title).not.toContain('current_datetime')
   })
 })
