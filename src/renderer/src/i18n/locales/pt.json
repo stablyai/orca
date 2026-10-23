@@ -20926,6 +20926,8 @@
     "detail": "O Orca fecha todas as abas de terminal e encerra suas sessões, incluindo os agentes em execução nos terminais, e depois sai. As sessões de terminal em hosts remotos podem continuar em execução neles. O trabalho de terminal não salvo é perdido, e as abas fechadas não voltam na próxima inicialização. Isso não pode ser desfeito.",
     "confirm": "Encerrar sessões e sair",
     "cancel": "Cancelar",
-    "failed": "Não foi possível encerrar todas as sessões de terminal, então o Orca continuou aberto."
+    "failed": "Não foi possível encerrar todas as sessões de terminal, então o Orca continuou aberto.",
+    "newerVersionMessage": "Uma versão mais recente do Orca ainda está executando alguns terminais.",
+    "newerVersionDetail": "Esta versão não consegue encerrá-los, então nada foi encerrado. Reabra esses terminais aqui ou encerre-os na versão mais recente e tente novamente."
   }
 }

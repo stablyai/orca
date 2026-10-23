@@ -1,15 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { confirmQuitAndStopAllSessions } from './quit-and-stop-all-sessions-prompt'
+import type {
+  confirmQuitAndStopAllSessions,
+  explainNewerOrcaTerminalsBlockStopAll
+} from './quit-and-stop-all-sessions-prompt'
 
 const electron = vi.hoisted(() => ({ quit: vi.fn(), showMessageBox: vi.fn() }))
-const prompt = vi.hoisted(() => ({ confirm: vi.fn<typeof confirmQuitAndStopAllSessions>() }))
+const prompt = vi.hoisted(() => ({
+  confirm: vi.fn<typeof confirmQuitAndStopAllSessions>(),
+  explain: vi.fn<typeof explainNewerOrcaTerminalsBlockStopAll>()
+}))
+const daemonHold = vi.hoisted(() => ({ holdingNewer: vi.fn(() => false) }))
 
 vi.mock('electron', () => ({
   app: { quit: electron.quit },
   dialog: { showMessageBox: electron.showMessageBox }
 }))
 vi.mock('./quit-and-stop-all-sessions-prompt', () => ({
-  confirmQuitAndStopAllSessions: prompt.confirm
+  confirmQuitAndStopAllSessions: prompt.confirm,
+  explainNewerOrcaTerminalsBlockStopAll: prompt.explain
+}))
+vi.mock('../daemon/daemon-newer-protocol-hold', () => ({
+  isHoldingForNewerProtocolDaemon: daemonHold.holdingNewer
 }))
 vi.mock('../updater', () => ({ checkForUpdatesFromMenu: vi.fn(), isQuittingForUpdate: vi.fn() }))
 vi.mock('../tray/system-tray', () => ({
@@ -61,6 +72,8 @@ beforeEach(() => {
   electron.quit.mockReset()
   electron.showMessageBox.mockReset()
   prompt.confirm.mockReset()
+  prompt.explain.mockReset().mockResolvedValue(false)
+  daemonHold.holdingNewer.mockReset().mockReturnValue(false)
   vi.mocked(safelyRevealWindow).mockReset()
   state.isQuitting = false
   state.isServeMode = false
@@ -167,6 +180,18 @@ describe('quitAndStopAllSessionsFromUserCommand', () => {
       expect.any(Error)
     )
     expect(prompt.confirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('explains instead of asking, and stops nothing, while a newer version runs some terminals', async () => {
+    daemonHold.holdingNewer.mockReturnValue(true)
+
+    quitAndStopAllSessionsFromUserCommand()
+    await flushPromptChain()
+
+    expect(prompt.explain).toHaveBeenCalledOnce()
+    expect(prompt.confirm).not.toHaveBeenCalled()
+    expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+    expect(state.pendingQuitAndStopAllSessions.matches(MAIN_WEB_CONTENTS_ID)).toBe(false)
   })
 
   it('never stops the sessions of a serve host, whose user Quit does not exit', async () => {

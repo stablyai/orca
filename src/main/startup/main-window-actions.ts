@@ -35,7 +35,11 @@ import {
   type RendererRecoveryPromptFailure
 } from '../window/renderer-recovery-prompt'
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
-import { confirmQuitAndStopAllSessions } from './quit-and-stop-all-sessions-prompt'
+import {
+  confirmQuitAndStopAllSessions,
+  explainNewerOrcaTerminalsBlockStopAll
+} from './quit-and-stop-all-sessions-prompt'
+import { isHoldingForNewerProtocolDaemon } from '../daemon/daemon-newer-protocol-hold'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -146,7 +150,11 @@ export function quitAndStopAllSessionsFromUserCommand(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     showMainWindowFromTray()
   }
-  void confirmQuitAndStopAllSessions(showMessageBoxOnMainWindow)
+  // Why before asking: Kill all can't list a newer version's terminals, so it would close every tab, then refuse.
+  const ask: typeof confirmQuitAndStopAllSessions = isHoldingForNewerProtocolDaemon()
+    ? explainNewerOrcaTerminalsBlockStopAll
+    : confirmQuitAndStopAllSessions
+  void ask(showMessageBoxOnMainWindow)
     .then((confirmed) => {
       if (confirmed) {
         sendOneShotToMainWindow(

@@ -20797,6 +20797,8 @@
     "detail": "Orca cierra todas las pestañas de terminal y detiene sus sesiones, incluidos los agentes que se ejecutan en terminales, y luego se cierra. Las sesiones de terminal en hosts remotos pueden seguir ejecutándose allí. Se pierde el trabajo de terminal no guardado y las pestañas cerradas no vuelven en el próximo inicio. Esta acción no se puede deshacer.",
     "confirm": "Detener sesiones y salir",
     "cancel": "Cancelar",
-    "failed": "No se pudieron detener todas las sesiones de terminal, así que Orca sigue abierto."
+    "failed": "No se pudieron detener todas las sesiones de terminal, así que Orca sigue abierto.",
+    "newerVersionMessage": "Una versión más reciente de Orca todavía está ejecutando algunas terminales.",
+    "newerVersionDetail": "Esta versión no puede detenerlas, así que no se detuvo nada. Vuelve a abrir esas terminales aquí o ciérralas desde la versión más reciente y vuelve a intentarlo."
   }
 }

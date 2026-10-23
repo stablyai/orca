@@ -30,3 +30,23 @@ export async function confirmQuitAndStopAllSessions(
   })
   return response === CONFIRM_BUTTON_INDEX
 }
+
+/** Explains why nothing will be stopped while a newer Orca version runs some terminals; never confirms. */
+export async function explainNewerOrcaTerminalsBlockStopAll(
+  showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
+): Promise<false> {
+  await showMessageBox({
+    type: 'info',
+    noLink: true,
+    title: translateMain('quitAndStopAllSessions.title', 'Quit and Stop All Sessions'),
+    message: translateMain(
+      'quitAndStopAllSessions.newerVersionMessage',
+      'A newer version of Orca is still running some terminals.'
+    ),
+    detail: translateMain(
+      'quitAndStopAllSessions.newerVersionDetail',
+      "This version can't stop them, so nothing was stopped. Reopen those terminals here, or quit them from the newer version, then try again."
+    )
+  })
+  return false
+}

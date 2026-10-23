@@ -490,6 +490,8 @@ describe('pty:management IPC handlers', () => {
       const result = buildHandlerMap()['pty:management:killAll']({})
       await vi.advanceTimersByTimeAsync(40_000)
 
+      // The initial listing, then one poll that times out past the 6.5 s window.
+      expect(current.listSessions).toHaveBeenCalledTimes(2)
       await expect(result).resolves.toEqual({
         killedCount: 0,
         remainingCount: 1,
