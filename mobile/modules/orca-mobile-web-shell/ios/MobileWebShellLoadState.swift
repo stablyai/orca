@@ -20,7 +20,7 @@ struct MobileWebShellLoadEmission: Equatable {
 ///
 /// Pure, and the same rule as the Kotlin copy, so `swiftc` can check it without a device.
 final class MobileWebShellLoadStateMachine {
-  private var isTerminal = false
+  private(set) var isTerminal = false
   private var last: MobileWebShellLoadEmission?
 
   /// Whether a document under the current prop triple has committed. The document a load replaces

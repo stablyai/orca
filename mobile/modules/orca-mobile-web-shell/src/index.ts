@@ -69,6 +69,11 @@ export type OrcaMobileWebShellViewHandle = {
    * hear that from the page.
    */
   postBridgeMessage: (json: string) => Promise<void>
+  /**
+   * Hands the page's last `ready` to `onBridgeMessage` again when the view adopted a spare and the
+   * shell has not spoken to it since. Absent in a binary built before spares existed.
+   */
+  replayPageReady?: () => Promise<void>
 }
 
 /**
@@ -89,3 +94,5 @@ export {
   type MobileWebShellLoadState,
   type MobileWebShellLoadStatePayload
 } from './load-state'
+
+export { OrcaMobileWebShellSpares, type OrcaMobileWebShellSparesModule } from './spares'

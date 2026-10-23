@@ -8,7 +8,7 @@ import Foundation
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
 //     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
 //     ios/MobileWebShellBridge.swift ios/MobileWebShellAppliedProps.swift \
-//     ios/MobileWebShellNavigationPolicy.swift \
+//     ios/MobileWebShellNavigationPolicy.swift ios/MobileWebShellSpareSlots.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -634,6 +634,93 @@ import Foundation
     precondition(decide(machine) == .cancel)
   }
 
+  static func checkSpareSlots() {
+    final class FakePage: MobileWebShellSparePage {
+      var isUsable = true
+      var destroyed = false
+      func destroy() {
+        destroyed = true
+        isUsable = false
+      }
+    }
+    func park(
+      _ slots: MobileWebShellSpareSlots<FakePage>,
+      _ id: String,
+      host: String = "host-a",
+      directory: String = "/gen/1"
+    ) -> FakePage {
+      let page = FakePage()
+      slots.park(hostKey: host, directory: directory, sessionId: id) { page }
+      return page
+    }
+
+    // Taken once, and only for the host and directory it was booted from.
+    var slots = MobileWebShellSpareSlots<FakePage>()
+    _ = park(slots, "s1")
+    precondition(slots.take(hostKey: "host-b", directory: "/gen/1") == nil)
+    precondition(slots.take(hostKey: "host-a", directory: "/gen/2") == nil)
+    precondition(slots.take(hostKey: "host-a", directory: "/gen/1")?.sessionId == "s1")
+    precondition(slots.take(hostKey: "host-a", directory: "/gen/1") == nil)
+
+    // A dead spare is never handed out; a live one for the same place is not booted twice.
+    slots = MobileWebShellSpareSlots<FakePage>()
+    let dying = park(slots, "s1")
+    precondition(!slots.wants(hostKey: "host-a", directory: "/gen/1"))
+    precondition(slots.wants(hostKey: "host-a", directory: "/gen/2"))
+    dying.isUsable = false
+    precondition(slots.wants(hostKey: "host-a", directory: "/gen/1"))
+    precondition(slots.take(hostKey: "host-a", directory: "/gen/1") == nil)
+
+    // One spare app-wide: parking for another host destroys the one it replaces.
+    slots = MobileWebShellSpareSlots<FakePage>()
+    let first = park(slots, "s1")
+    _ = park(slots, "s2", host: "host-b")
+    precondition(first.destroyed)
+
+    // An id is never booted twice, even after its page is gone.
+    slots.discardAll()
+    var booted = false
+    precondition(!slots.park(hostKey: "host-a", directory: "/gen/1", sessionId: "s1") {
+      booted = true
+      return FakePage()
+    })
+    precondition(!booted && !slots.reserve(sessionId: "s1"))
+
+    // An id a view already loads is never parked.
+    precondition(slots.reserve(sessionId: "s9"))
+    precondition(!slots.park(hostKey: "host-a", directory: "/gen/1", sessionId: "s9") {
+      booted = true
+      return FakePage()
+    })
+    precondition(!booted)
+
+    // Claimed: adopted once; an expiry after adoption does nothing, one before it destroys.
+    slots = MobileWebShellSpareSlots<FakePage>()
+    let adopted = park(slots, "s1")
+    _ = slots.take(hostKey: "host-a", directory: "/gen/1")
+    precondition(slots.adopt(sessionId: "s1")?.page === adopted)
+    precondition(slots.adopt(sessionId: "s1") == nil)
+    slots.expire(sessionId: "s1")
+    precondition(!adopted.destroyed)
+    let abandoned = park(slots, "s2")
+    _ = slots.take(hostKey: "host-a", directory: "/gen/1")
+    slots.expire(sessionId: "s2")
+    precondition(abandoned.destroyed && slots.adopt(sessionId: "s2") == nil)
+
+    // Discarding a host takes its claimed spare and leaves another host's; everything takes all.
+    slots = MobileWebShellSpareSlots<FakePage>()
+    let claimed = park(slots, "s1")
+    _ = slots.take(hostKey: "host-a", directory: "/gen/1")
+    let parked = park(slots, "s2", host: "host-b")
+    slots.discard(hostKey: "host-a")
+    precondition(claimed.destroyed && slots.adopt(sessionId: "s1") == nil && !parked.destroyed)
+    let otherClaim = park(slots, "s3")
+    _ = slots.take(hostKey: "host-a", directory: "/gen/1")
+    let lastParked = park(slots, "s4", host: "host-b")
+    slots.discardAll()
+    precondition(otherClaim.destroyed && lastParked.destroyed)
+  }
+
   static func main() {
     checkSessionIds()
     checkRequestResolution()
@@ -651,6 +738,7 @@ import Foundation
     checkBridgePostTarget()
     checkBridgeTargetLifecycle()
     checkBridgeByteCap()
+    checkSpareSlots()
     print("mobile web shell checks OK")
   }
 }

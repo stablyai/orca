@@ -189,6 +189,8 @@ final class MobileWebShellPage: NSObject, WKNavigationDelegate, WKUIDelegate {
   private var bridgeInstalled = false
   private var bridgeTarget = MobileWebShellBridgeTarget<WKFrameInfo>()
   let webView: WKWebView
+  /// An id issued for a spare whose page is gone: nothing loads, and the first apply says so.
+  private var dead: Bool
   private var applied: MobileWebShellAppliedProps?
   private var appliedSessionId: String? { applied?.sessionId }
   private var pendingDocumentUrl: URL?
@@ -196,7 +198,8 @@ final class MobileWebShellPage: NSObject, WKNavigationDelegate, WKUIDelegate {
   private var isolationFailed = false
   private let loadState = MobileWebShellLoadStateMachine()
 
-  override init() {
+  init(dead: Bool = false) {
+    self.dead = dead
     let configuration = WKWebViewConfiguration()
     configuration.allowsInlineMediaPlayback = true
     configuration.mediaTypesRequiringUserActionForPlayback = .all
@@ -228,6 +231,18 @@ final class MobileWebShellPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     installNetworkBlock(into: configuration.userContentController)
   }
 
+  /// A page that can still be shown: its content process is alive and no load failure was reported.
+  var isUsable: Bool { !dead && !loadState.isTerminal }
+
+  /// The spare pool's teardown: nothing loads in it again, and the content process goes with it.
+  func destroy() {
+    dead = true
+    clearBridgeTarget()
+    pendingDocumentUrl = nil
+    webView.stopLoading()
+    webView.removeFromSuperview()
+  }
+
   /// A repeat of the same triple is not a retry: a retry is a remount under a new React key.
   /// `bridgeEnabled` is in the record because a document-start script only takes effect at the next
   /// document start: toggling it has to reload, or the prop would silently do nothing.
@@ -239,6 +254,10 @@ final class MobileWebShellPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     )
     guard applied?.matches(next) != true else { return }
     applied = next
+    if dead {
+      emit(loadState.failed(.renderProcessGone))
+      return
+    }
     clearBridgeTarget()
     loadState.reset()
     pendingDocumentUrl = nil
