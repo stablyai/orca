@@ -130,7 +130,7 @@ export function BrowserLinkStatusBubble({
       aria-hidden
       data-browser-link-status={side}
       className={cn(
-        'pointer-events-none absolute bottom-1 z-30 flex rounded-md border border-border bg-popover/95 px-2 py-0.5 text-xs text-popover-foreground shadow-xs transition-[opacity,max-width] ease-out',
+        'pointer-events-none absolute bottom-1 z-30 flex rounded-md border border-border bg-popover/95 px-2 py-0.5 text-xs text-popover-foreground shadow-xs transition-opacity ease-out',
         side === 'left' ? 'left-1' : 'right-1',
         expanded ? 'max-w-[calc(100%-0.5rem)]' : 'max-w-[min(calc(100%-0.5rem),max(33%,20rem))]',
         status.visible ? 'opacity-100 duration-100' : 'opacity-0 duration-200'

@@ -63,6 +63,8 @@ export function setupGuestTargetUrlForwarding(args: {
       clearTimeout(refreshTimer)
     }
     try {
+      // Unregistering a guest drops its renderer route before 'destroyed' can clear the bubble.
+      handleGuestGone()
       guest.off('update-target-url', handleTargetUrl)
       guest.off('render-process-gone', handleGuestGone)
       guest.off('destroyed', handleGuestGone)

@@ -11,12 +11,13 @@ import { setupGuestTargetUrlForwarding } from './browser-guest-target-url'
 
 let guest: EventEmitter
 let send: ReturnType<typeof vi.fn>
+let teardown: () => void
 
 beforeEach(() => {
   vi.useFakeTimers()
   guest = new EventEmitter()
   send = vi.fn()
-  setupGuestTargetUrlForwarding({
+  teardown = setupGuestTargetUrlForwarding({
     browserTabId: 'page-1',
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder only uses on/off, which EventEmitter implements with Electron's semantics.
     guest: guest as unknown as Electron.WebContents,
@@ -56,9 +57,14 @@ it('tracks the pointer only while a link is targeted, at most once per interval'
   expect(sentUrls()).toEqual(['https://example.com/a', 'https://example.com/a', ''])
 })
 
-it('clears the target when the guest dies under a hovered link', () => {
+it('clears the target when the guest dies or is unregistered under a hovered link', () => {
   guest.emit('update-target-url', {}, 'https://example.com/a')
   guest.emit('render-process-gone', {}, { reason: 'crashed' })
   expect(sentUrls()).toEqual(['https://example.com/a', ''])
+  expect(guest.listenerCount('before-mouse-event')).toBe(0)
+
+  guest.emit('update-target-url', {}, 'https://example.com/b')
+  teardown()
+  expect(sentUrls()).toEqual(['https://example.com/a', '', 'https://example.com/b', ''])
   expect(guest.listenerCount('before-mouse-event')).toBe(0)
 })
