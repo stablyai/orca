@@ -5,8 +5,18 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('lucide-react-native', () => ({ GitBranch: vi.fn() }))
 vi.mock('react-native-svg', () => ({ default: vi.fn(), Path: vi.fn() }))
 
+import type { RouteHandoff } from '../navigation/route-handoff'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
-import { buildWorktreeNavigationActions } from './worktree-navigation-actions'
+import { buildWorktreeNavigationActions, openHistorySession } from './worktree-navigation-actions'
+
+function historyRouter(): { replace: ReturnType<typeof vi.fn>; handoff: RouteHandoff } {
+  const replace = vi.fn()
+  return {
+    replace,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: openHistorySession only calls replace and back.
+    handoff: { replace, back: vi.fn() } as RouteHandoff
+  }
+}
 
 /** Every target these actions build, in the order they offer them. */
 function targetsFor(hostId: string, worktreeId = 'wt-1'): string[] {
@@ -87,5 +97,35 @@ describe('the worktree row action sheet', () => {
       '/h/host-a/source-control/wt%2F1?name=my+worktree&origin=host',
       '/h/host-a/agent-history/wt%2F1?name=my+worktree'
     ])
+  })
+})
+
+describe('openHistorySession', () => {
+  it('keeps the resolved execution host on the replacement session route', () => {
+    const { replace, handoff } = historyRouter()
+    openHistorySession(
+      handoff,
+      'host',
+      'host a?b',
+      'from/wt',
+      'to/wt',
+      'resumed name',
+      'ssh:builder'
+    )
+    expect(replace).toHaveBeenCalledWith(
+      '/h/host%20a%3Fb/session/to%2Fwt?name=resumed%20name&executionHost=ssh%3Abuilder'
+    )
+  })
+
+  it('adds the execution host as the only query when the session has no name', () => {
+    const { replace, handoff } = historyRouter()
+    openHistorySession(handoff, undefined, 'host-a', 'from-wt', 'to-wt', undefined, 'runtime:vm')
+    expect(replace).toHaveBeenCalledWith('/h/host-a/session/to-wt?executionHost=runtime%3Avm')
+  })
+
+  it('leaves a local resume on the route host when the resolved execution host is null', () => {
+    const { replace, handoff } = historyRouter()
+    openHistorySession(handoff, 'host', 'host-a', 'from-wt', 'to-wt', 'resumed', null)
+    expect(replace).toHaveBeenCalledWith('/h/host-a/session/to-wt?name=resumed')
   })
 })

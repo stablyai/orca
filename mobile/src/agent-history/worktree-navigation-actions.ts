@@ -24,18 +24,20 @@ export function openHistorySession(
   hostId: string,
   fromWorktreeId: string,
   toWorktreeId: string,
-  name?: string
+  name?: string,
+  executionHost?: ExecutionHostId | null
 ): void {
   if (origin === 'session' && toWorktreeId === fromWorktreeId) {
     router.back()
     return
   }
   const query = name === undefined ? '' : `?name=${encodeURIComponent(name)}`
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Expo Router's typed Href union does not model the optional `?name=` query suffix on `/h/[hostId]/session/[worktreeId]`.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Expo Router's typed Href union does not model the optional `?name=` and `executionHost` query suffixes on `/h/[hostId]/session/[worktreeId]`.
   router.replace(
-    `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(toWorktreeId)}${query}` as Parameters<
-      RouteHandoff['replace']
-    >[0]
+    workspaceRouteHref(
+      `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(toWorktreeId)}${query}`,
+      executionHost ?? undefined
+    ) as Parameters<RouteHandoff['replace']>[0]
   )
 }
 

@@ -242,7 +242,15 @@ export function MobileAgentSessionHistoryPanel({
           resumeWorktrees.find((item) => item.worktreeId === target.worktreeId)?.displayName,
           target.worktreeId
         )
-        openHistorySession(router, origin, hostId, worktreeId, target.worktreeId, resumedName)
+        openHistorySession(
+          router,
+          origin,
+          hostId,
+          worktreeId,
+          target.worktreeId,
+          resumedName,
+          target.targetExecutionHostId
+        )
       } catch (err) {
         triggerError()
         setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
