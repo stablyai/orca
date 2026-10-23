@@ -70,6 +70,7 @@ export function registerJournalEpochReplacementTests(): void {
       fence: 1,
       items: input.items,
       queuePause: { lifted: false, liveStop: null, reopened: false },
+      queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
       now,
       mintEpoch: () => `epoch-${clock}`,
       onPublished: input.onPublished ?? (() => undefined)

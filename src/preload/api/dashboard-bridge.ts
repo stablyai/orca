@@ -8,10 +8,8 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const dashboardApi = {
-  // Open the pop-out dashboard window, or focus it if already open.
   openPopout: (): Promise<void> => ipcRenderer.invoke('dashboardPopout:open'),
 
-  // ── Producer side (main window) ──────────────────────────────────────
   publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>
     ipcRenderer.invoke('dashboard:publishSnapshot', snapshot),
   getPopoutOpen: (): Promise<boolean> => ipcRenderer.invoke('dashboard:getPopoutOpen'),
@@ -52,7 +50,6 @@ export const dashboardApi = {
     return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
   },
 
-  // ── Consumer side (pop-out window) ───────────────────────────────────
   requestSnapshot: (): Promise<void> => ipcRenderer.invoke('dashboard:requestSnapshot'),
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: DashboardSnapshot): void =>

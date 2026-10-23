@@ -182,14 +182,8 @@ const linuxOnly = describe.skipIf(process.platform !== 'linux')
 linuxOnly('lsof blindness to another uid', () => {
   const BLIND_LSOF = '#!/bin/sh\nexit 1\n'
 
-  it('has the evidence these assertions depend on', () => {
-    // Why asserted rather than assumed: without /proc/net/unix every case below passes
-    // vacuously, and a silently degraded suite would stop covering the only thing that
-    // separates "lsof could not see" from "nothing holds it".
-    expect(existsSync('/proc/net/unix')).toBe(true)
-  })
-
   async function withBoundSocket<T>(run: (sockPath: string) => Promise<T>): Promise<T> {
+    expect(existsSync('/proc/net/unix')).toBe(true)
     const dir = mkdtempSync(join(tmpdir(), 'orca-lsof-bound-'))
     const sockPath = join(dir, 'held.sock')
     const server = createServer(() => {})

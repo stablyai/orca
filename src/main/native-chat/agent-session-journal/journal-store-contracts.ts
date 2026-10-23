@@ -18,6 +18,7 @@ import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalReducerState } from './journal-reducer'
+import type { JournalRowWriter } from './journal-row-writer'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
 
@@ -139,15 +140,11 @@ export type JournalSubmissionInput = {
   options?: AgentSessionExecutionOptions
 }
 
-/** A submission append that converts a queued draft, in one transaction. */
+/** A submission append that hands off a queued card: the submission names it, and that row is
+ *  the whole hand-off. */
 export type JournalSubmissionConsume = {
   messageId: string
   expect: 'waiting' | 'returned'
-  /** The operation ledger's caller-scoped key; null for the host's own drain. */
-  settledByOp: string | null
-  /** The host process handing it off, stamped on the draft so a hand-off withdrawn back to
-   *  waiting belongs to the process that sent it, not the one that first wrote the card. */
-  hostInstance?: string
   /** The queue's own send: refused in the consume's transaction while the queue's pause holds
    *  the card. Send-now omits it. */
   yieldsToPause?: true
@@ -162,18 +159,17 @@ export type JournalItemAppendInput = {
 /** What `JournalQueuedMessages` reads from the journal that owns it. */
 export type JournalQueuedMessagesDeps = {
   sessionId: string
-  now: () => number
   serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
   database: () => JournalHostDatabase
   readOnly: () => boolean
   state: () => JournalReducerState
   /** Where the reopen's pause begins when this handle could not mark it (`reopenFloor`). */
   reopenFloor: () => AgentJournalCursor | null
-  /** The journal's own commit notification. Every standalone draft-table
-   *  transaction that changed rows fires it after COMMIT, so a draft or hold
-   *  change publishes and wakes the drain through the same path a journal row
-   *  does — no call site can forget. In-transaction consume and the returned
-   *  transition already ride their row's own commit. */
+  /** The journal's own writer: every card change is a journal row, published and waking the drain
+   *  through the row's own commit. */
+  writer: JournalRowWriter
+  /** The journal's commit notification, for the one write that appends no row: an import that
+   *  only deletes legacy rows. */
   committed: () => void
   claimAttachments: JournalAttachmentClaim
 }

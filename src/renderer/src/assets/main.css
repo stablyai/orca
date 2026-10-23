@@ -3395,6 +3395,9 @@ html.native-shell .app-layout {
   position: absolute;
   top: -8px;
   right: -5px;
+}
+
+.icon-superscript-count {
   z-index: 3;
   font-size: 11px;
   font-weight: 600;
@@ -3403,6 +3406,6 @@ html.native-shell .app-layout {
   text-shadow: 0px 1px 1px var(--background);
 }
 
-.workspace-reference-stack-count[data-multiple-digits='true'] {
+.icon-superscript-count[data-multiple-digits='true'] {
   letter-spacing: -0.02em;
 }

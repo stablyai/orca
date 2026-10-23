@@ -66,20 +66,16 @@ export type UiCommandEventApi = {
   mutateJiraSavedFilters?: (mutation: JiraSavedFilterMutation) => Promise<JiraSavedFilterState>
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
-  /** Like set, but REJECTS when the update did not reach the host (the web preload's set
-   *  swallows transport failures for offline use). The diff writer needs the distinction:
-   *  folding an unacked patch into its baseline would silently stop retrying it (STA-5781). */
+  /** Unlike web set, rejects transport failures so the diff writer retries unacknowledged patches. */
   setWithAck?: (args: Partial<PersistedUIState>) => Promise<void>
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
-  /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
   consumePendingOpenSettings: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
   /** OS "Open With" Markdown/CSV/TSV documents; the local IPC name is retained. */
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void) => () => void
-  /** Drains the "Open With" paths queued before this renderer's listener attached. */
   consumePendingMarkdownFileOpens: () => Promise<MarkdownDocument[]>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
@@ -248,7 +244,7 @@ export type UiCommandEventApi = {
     callback: (data: {
       tabId: string
       worktreeId: string
-      /** The user clicked a notification, so revealing the tab is navigation and not a courtesy. */
+      /** A notification click authorizes revealing the tab. */
       userInitiated?: boolean
     }) => void
   ) => () => void
@@ -268,7 +264,6 @@ export type UiCommandEventApi = {
       position?: RuntimeFileOpenPosition
     }) => void
   ) => () => void
-  /** Layout-owner builds: shows a tab main wrote for a file it opened. */
   onRevealEditorTabFromRuntime: (callback: (data: RuntimeEditorTabReveal) => void) => () => void
   onOpenDiffFromMobile: (
     callback: (data: {
@@ -283,7 +278,7 @@ export type UiCommandEventApi = {
   onCloseTerminal: (callback: (target: TerminalSurfaceCloseTarget) => void) => () => void
   onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
   respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
-  /** A sleep main runs on this window's workspace, whoever asked; the window follows it. */
+  /** Follow main's workspace sleep even when another client requested it. */
   onWorkspaceSleep: (callback: (notice: WorkspaceSleepNotice) => void) => () => void
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void

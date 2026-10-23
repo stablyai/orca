@@ -140,9 +140,7 @@ describe('rewind behind a clear boundary', () => {
     const target = agentJournalSubmissionKey(later)
     const newer = await journal().queuedMessages.insert({
       messageId: 'queued-after-stop',
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] },
-      fingerprint: 'newer-card',
-      hostInstance: 'test'
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'newer card' }] }
     })
     const originalPause = structuredQueuePauses(journal()).find(
       (entry) => entry.reason === 'stopped'

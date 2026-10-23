@@ -65,7 +65,7 @@ import type {
 } from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
-  /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
+  /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
     callback: (
@@ -111,7 +111,7 @@ export type BrowserApi = {
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
   getPageSiteDisplay: (args: { browserPageId: string }) => Promise<BrowserPageSiteDisplay | null>
-  /** Zooms the page's site in its browser profile, or resets it to Default Zoom. */
+  /** Site zoom is scoped to the browser profile. */
   zoomPage: (args: {
     browserPageId: string
     direction: BrowserPageZoomDirection
@@ -126,7 +126,7 @@ export type BrowserApi = {
     state: BrowserViewportScrollState
   }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
-  /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
+  /** Uses the owning runtime's host lease. */
   publishClientPageMetadata: (args: {
     environmentId: string
     params: BrowserClientPageMetadataParams
@@ -218,14 +218,14 @@ export type BrowserApi = {
     browserFamily: string
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult | null>
-  /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
+  /** Import sources keyed by browser profile ID. */
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>
   sessionClearDefaultCookies: () => Promise<boolean>
-  /** Remembered Allow and Block answers for one browser profile on this computer, by site. */
+  /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
-  /** Null forgets the answer so the site is asked again; resolves the profile's updated list. */
+  /** Null forgets the answer so the site is asked again. */
   sitePermissionsSet: (args: {
     profileId: string
     origin: string

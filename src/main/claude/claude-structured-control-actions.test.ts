@@ -95,6 +95,7 @@ describe('cancelClaudeTurn', () => {
         {
           clientMessageId: 'client-1',
           state: 'rejected',
+          unrun: true,
           reason: 'provider_cancelled_before_start',
           rejection: { kind: 'cancelled' }
         }
@@ -136,6 +137,7 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenNthCalledWith(1, {
       clientMessageId: 'client-0',
       state: 'rejected',
+      unrun: true,
       reason: 'provider_cancelled_before_start',
       rejection: { kind: 'cancelled' }
     })
@@ -170,6 +172,7 @@ describe('cancelClaudeTurn', () => {
     expect(settled).toHaveBeenCalledWith({
       clientMessageId: 'client-ambiguous',
       state: 'rejected',
+      unrun: true,
       reason: 'provider_cancelled_before_start',
       rejection: { kind: 'cancelled' }
     })

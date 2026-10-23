@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isAbortSignalReason } from '../../shared/abort-signal-reason'
 import {
   forgetRetiredWaiter,
   forgetWaiter,
@@ -65,6 +66,7 @@ export function rejectClaudeDispatchWaiters(
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
+        unrun: true,
         ...claudeDispatchRejection(fact)
       })
     }
@@ -121,6 +123,7 @@ export async function dispatchClaudeTurn(
     requestedAt?: number
     /** The frame's uuid, for a caller that correlates the provider's answer to it. */
     sentUuid?: string
+    signal?: AbortSignal
   },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
@@ -174,7 +177,11 @@ export async function dispatchClaudeTurn(
   } catch (error) {
     const replay = pending.replay
     if (!replay) {
-      if (error instanceof AgentSessionPreDispatchError) {
+      // A Stop during authorization, before the SDK took the frame, stays the abort the host reads.
+      if (
+        error instanceof AgentSessionPreDispatchError ||
+        isAbortSignalReason(input.signal, error)
+      ) {
         throw error
       }
       if (isAgentSessionOptionRejectedError(error)) {

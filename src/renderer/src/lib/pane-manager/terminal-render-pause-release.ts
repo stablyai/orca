@@ -157,6 +157,10 @@ export function isSynchronizedOutputHeld(terminal: unknown): boolean {
  * One synchronous full-viewport present when xterm would otherwise swallow it:
  * IntersectionObserver pause, or DEC 2026 synchronized output.
  *
+ * Why so few callers: painting mid DEC 2026 publishes a half-built TUI frame
+ * (#32198). Only a keystroke echo inside a held frame and the replay hold cap
+ * may do that; reveals and recovery use requestFullViewportPresent.
+ *
  * Why not on every paint: a forced renderer.renderRows on a fresh, unpaused
  * splash paints before cell metrics settle and leaves a 1px black gutter under
  * a TUI composer — production never does that. Callers fall back to

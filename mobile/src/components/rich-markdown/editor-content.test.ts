@@ -19,12 +19,10 @@ const started: RichMarkdownEditorDocument[] = []
 function editorDocument() {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const posted: MobileRichMarkdownEditorMessage[] = []
-  const cleared: (number | null)[] = []
   const document_ = createRichMarkdownEditorDocument(
     quietRichMarkdownEditorHost({
       postToHost: (message) => posted.push(message),
-      keyboardInsetSource: () => null,
-      clearTimer: (handle) => cleared.push(handle)
+      keyboardInsetSource: () => null
     })
   )
   started.push(document_)
@@ -32,7 +30,6 @@ function editorDocument() {
   return {
     handle: document_.send,
     posted,
-    cleared,
     editor: document.getElementById('editor')!,
     type: () => document.getElementById('editor')!.dispatchEvent(new Event('input'))
   }
@@ -66,8 +63,6 @@ describe('the editor document content', () => {
   })
 
   it('posts the change on the spot, with no timer between the edit and the host', () => {
-    // There is no debounce, and the pending handle is cleared before every replacement so that
-    // adding one later cannot leak a change from the content it has already replaced.
     const editor = editorDocument()
     vi.useFakeTimers()
     try {
@@ -78,7 +73,6 @@ describe('the editor document content', () => {
     } finally {
       vi.useRealTimers()
     }
-    expect(editor.cleared).toEqual([null, null])
   })
 
   it('says nothing while it is rewriting itself', () => {

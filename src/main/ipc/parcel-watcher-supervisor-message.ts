@@ -34,7 +34,7 @@ type WatcherSupervisorMessageContext = {
 }
 
 export function handleWatcherSupervisorMessage(
-  message: WatcherToHostMessage,
+  message: Exclude<WatcherToHostMessage, { op: 'delivery-health' }>,
   context: WatcherSupervisorMessageContext
 ): void {
   const record = context.records.get(message.id)

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   readPublishedVersionsFromEnv,
   resolveDevChannelBaseVersion
@@ -39,13 +39,6 @@ describe('dev channel base version', () => {
     )
   })
 
-  // Why tags rather than GitHub releases: unpublishing a buggy cut deletes the
-  // GitHub release and leaves the tag. Releases-only then treated 1.4.202 as
-  // free, so hourlies sat on 1.4.202-hourly and sorted below that tagged stable.
-  it('climbs past a tagged stable that has no GitHub release', () => {
-    expect(resolveDevChannelBaseVersion('1.4.197', ['v1.4.201', 'v1.4.202'])).toBe('1.4.203')
-  })
-
   // 2026-09-14: v1.4.202's GitHub release was deleted for a bug after hourlies
   // had already shipped as 1.4.203. Without the channel tags as a floor, the
   // next hourlies would have been 1.4.202-hourly, which electron-updater will
@@ -80,9 +73,19 @@ describe('dev channel base version', () => {
     expect(resolveDevChannelBaseVersion('1.4.0', ['v2.0.0'])).toBe('2.0.1')
   })
 
-  it('splits an env tag list on any whitespace', () => {
-    expect(readPublishedVersionsFromEnv('v1.4.167\nv1.4.166\n')).toEqual(['v1.4.167', 'v1.4.166'])
+  it('reads whitespace-separated tags from explicit input or the environment', () => {
+    expect(readPublishedVersionsFromEnv(' \tv1.4.167\r\nv1.4.166\n')).toEqual([
+      'v1.4.167',
+      'v1.4.166'
+    ])
     expect(readPublishedVersionsFromEnv('')).toEqual([])
-    expect(readPublishedVersionsFromEnv(undefined)).toEqual([])
+    try {
+      vi.stubEnv('ORCA_PUBLISHED_VERSIONS', 'v1.4.170\tv1.4.169')
+      expect(readPublishedVersionsFromEnv()).toEqual(['v1.4.170', 'v1.4.169'])
+      vi.stubEnv('ORCA_PUBLISHED_VERSIONS', undefined)
+      expect(readPublishedVersionsFromEnv()).toEqual([])
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })

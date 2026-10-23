@@ -13,9 +13,12 @@ function quoteParity(line: string): number {
 }
 
 describe('quoteWindowsArgument', () => {
-  it.each(WINDOWS_ARGUMENT_CORPUS)('round-trips $name through CommandLineToArgvW', ({ value }) => {
-    expect(parseWindowsCommandLine(quoteWindowsArgument(value))).toEqual([value])
-  })
+  it.each(WINDOWS_ARGUMENT_CORPUS)(
+    'round-trips $name through the command-line parser',
+    ({ value }) => {
+      expect(parseWindowsCommandLine(quoteWindowsArgument(value))).toEqual([value])
+    }
+  )
 
   it('round-trips the whole corpus as a single multi-argument line', () => {
     const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)

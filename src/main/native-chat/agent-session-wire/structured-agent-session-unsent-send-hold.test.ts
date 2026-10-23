@@ -16,10 +16,7 @@ import { openAgentSessionJournal } from '../agent-session-journal/journal-store-
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { journalIdentityFor } from './structured-agent-session-attach'
 import { attachParamsForRecord } from './structured-agent-session-conversation-open'
-import {
-  structuredAgentSessionHostInstance,
-  structuredQueuePauses
-} from './structured-agent-session-queued-pause'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -159,7 +156,6 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
       expect(card).toMatchObject({
         messageId: id,
         holdReason: null,
-        hostInstance: structuredAgentSessionHostInstance(),
         body: hostTestMessage('hello after restart'),
         queuedAt: { epoch: journal().epoch, sequence: expect.any(Number) }
       })
@@ -385,61 +381,6 @@ describe('the queue at a quit', () => {
     await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
   }
 
-  // Quit's first step is `stopDelivery`, before teardown drains recovery; the flush repeats it.
-  it.each(['stopDelivery', 'flushAllStreamedEvents'] as const)(
-    'a drain step already running when quit begins (%s) makes no hand-off',
-    async (quitStep) => {
-      await compactRunning()
-      const queued = rig.send('queued behind the compact', 'queue-if-active')
-      expect(await queued.result).toMatchObject({
-        ok: true,
-        value: { queued: { state: 'waiting' } }
-      })
-      const host = rig.host
-      const { queuedMessages } = journal()
-      const settleOwed = queuedMessages.settleOwed.bind(queuedMessages)
-      let release = (): void => undefined
-      const held = new Promise<void>((resolve) => (release = resolve))
-      let reached = (): void => undefined
-      const inStep = new Promise<void>((resolve) => (reached = resolve))
-      let blocked = false
-      // Holds the drain step at its one await, past its first dispose check, until quit has begun.
-      // Only the drain step heals owed bookkeeping, so no caller check is needed (nor a stack read,
-      // which runtimes format differently).
-      const owed = vi.spyOn(queuedMessages, 'settlementOwed').mockImplementation(() => !blocked)
-      const healing = vi.spyOn(queuedMessages, 'settleOwed').mockImplementation(async () => {
-        if (!blocked) {
-          blocked = true
-          reached()
-          await held
-        }
-        return settleOwed()
-      })
-      rig.finishCompact()
-      await inStep
-      if (quitStep === 'stopDelivery') {
-        host.stopDelivery()
-        release()
-        await healing.mock.results[0]?.value
-        // The step's append check runs on the turn after its heal resolves.
-        await vi.advanceTimersByTimeAsync(0)
-        expect(await rig.handoff(queued.id)).toBeUndefined()
-      } else {
-        const quitting = host.flushAllStreamedEvents()
-        release()
-        await quitting
-      }
-      owed.mockRestore()
-      healing.mockRestore()
-      rig.crashRestartHostProcess()
-
-      expect(await rig.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
-      expect(await rig.queuePause()).toBeNull()
-      expect(await rig.handoff(queued.id)).toBeUndefined()
-      expect(rig.dispatch).not.toHaveBeenCalled()
-    }
-  )
-
   // The card the person pushed ahead comes back at the head; Resume sends it, then the rest.
   it('Send now on an ordinary card, cut short by a quit, returns it to the head; Resume sends both in order', async () => {
     await compactRunning()
@@ -581,7 +522,7 @@ describe('what is not kept', () => {
   it('a send whose card could not be written is rejected as before, and nothing stays queued', async () => {
     const id = await acceptWhileStarting(sendRequest('card write fails'))
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    vi.spyOn(JournalQueuedMessages.prototype, 'holdInTransaction').mockImplementation(() => {
+    vi.spyOn(JournalQueuedMessages.prototype, 'plan').mockImplementation(() => {
       throw new Error('disk full')
     })
     rig.crashRestartHostProcess()

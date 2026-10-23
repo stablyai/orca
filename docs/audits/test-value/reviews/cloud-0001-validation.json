@@ -1,0 +1,41 @@
+{
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_PUSH_DURABLE_TEST_POSTGRES_URL=<isolated PostgreSQL> pnpm test (cloud/apps/push)",
+      "result": "196 tests passed across 39 suites",
+      "log": "/tmp/orca-audit-cloud-0001-final-postgres.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test (cloud/apps/push, SQLite)",
+      "result": "180 passed; 16 intentional PostgreSQL-only skips",
+      "log": "/tmp/orca-audit-cloud-0001-complete-sqlite.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/push/push-host-proof.test.ts",
+      "result": "11 passed",
+      "log": "/tmp/orca-audit-cloud-0001-desktop-proof.log"
+    },
+    {
+      "command": "pnpm run typecheck (cloud/apps/push)",
+      "result": "passed",
+      "log": "/tmp/orca-audit-cloud-0001-complete-typecheck.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 vitest run <two edited concurrency suites>",
+      "result": "6 passed after final cleanup edits",
+      "log": "/tmp/orca-audit-cloud-0001-final-concurrency.log"
+    }
+  ],
+  "regressions_caught": [
+    "leased payload corrupted",
+    "spoofable client IP selected",
+    "challenge expiry given clock skew allowance"
+  ],
+  "batch": "cloud-0001",
+  "platform": "Linux",
+  "reviewed_files": 35,
+  "format_and_lint": "passed",
+  "temporary_production_mutations": "restored; no production diff",
+  "root_review": "All 22 changed test diffs independently inspected; retained serializer integration, previous-revision SQL boundary and failure controls checked.",
+  "log_note": "Local log paths are evidence pointers for this session; results are retained here for durable review."
+}

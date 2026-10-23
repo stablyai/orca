@@ -1,0 +1,43 @@
+{
+  "batch": "root-0002",
+  "platform": "Linux",
+  "reviewed_files": 20,
+  "reviewed_original_declarations": 87,
+  "changes": "Five test files: remove a conditional no-op file-drop test, consolidate platform-cache reads/freezing, exercise installed document link listeners, and remove redundant restart-listener and SSH-state assertions.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/preload",
+      "result": "102 passed across 19 suites",
+      "log": "/tmp/orca-root-0002-final-validation.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:node",
+      "result": "No type errors in 17,623 files",
+      "log": "/tmp/orca-root-0002-typecheck.log"
+    },
+    {
+      "command": "pnpm exec oxlint <four retained changed preload tests>",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm exec oxfmt --check <four retained changed preload tests>",
+      "result": "passed"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/preload",
+      "result": "102 passed across 19 suites after rebase and comment-only reconciliation",
+      "log": "/tmp/orca-root-0002-rebased-validation.log"
+    }
+  ],
+  "regressions_caught": [
+    "installed click callback disconnected",
+    "installed middle-click callback disconnected",
+    "recoverable subscription error incorrectly removes dispatch ownership"
+  ],
+  "mutation_log": "/tmp/orca-root-0002-mutations.log",
+  "temporary_production_mutations": "restored; diff contains test files only",
+  "upstream_reconciliation": {
+    "commit": "551108aea82245cdc77c41986a15542f52bed20b",
+    "changes": "Reviewed all seven upstream test diffs as comment-only cleanup. Resolved installer overlap by preserving the real installed listeners and finally cleanup; kept all other upstream comment changes. Refreshed final hashes only, preserving original locations/content hashes."
+  }
+}

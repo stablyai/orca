@@ -43,7 +43,6 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { recordingProductionStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
-import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
 
 /** What `interruptedRestart('queued-cards')` queues behind the running turn, in order. */
 export const QUEUED_BEFORE_QUIT = ['card A', 'card B'] as const
@@ -147,10 +146,6 @@ export async function interruptedRestart(
     }
   }
   await previous.host.flushAllStreamedEvents()
-  if (work === 'queued-cards') {
-    // The relaunch is a new process: the cards it finds were written by the one that quit.
-    rotateStructuredAgentSessionHostInstanceForTests()
-  }
   const store = await openTestAgentSessionRecordStore(previous.root)
   const closeSession = vi.fn(async () => true)
   // The relaunch comes after the quit that recorded the offer.

@@ -2,26 +2,10 @@
 // (`queued-message-pause.ts`), never stored. A Stop's event, a Resume and a reopen that found
 // waiting cards are journal rows; an explicit Resume lifts any pause.
 
-import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { DerivedQueuePause } from '../agent-session-journal/queued-message-pause'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-
-/** A per-process id, minted once per host process like the runtime's own
- *  `runtimeId` (`orca-runtime-runtime-id.ts`), stamped on the cards this process writes or hands
- *  off. No pause reads it: an older build holds every card another instance wrote. */
-let hostInstance = randomUUID()
-
-export function structuredAgentSessionHostInstance(): string {
-  return hostInstance
-}
-
-/** A new stamp, as a new host process mints. Tests only; no pause reads it. */
-export function rotateStructuredAgentSessionHostInstanceForTests(): string {
-  hostInstance = randomUUID()
-  return hostInstance
-}
 
 type PauseJournal = Pick<AgentSessionJournal, 'queuedMessages'>
 

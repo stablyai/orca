@@ -53,3 +53,56 @@ export function structuredChatTabBySessionId(
 ): Tab | undefined {
   return indexTabs(workspaceTabs(tabsByWorkspace, workspaceId))?.bySessionId.get(sessionId)
 }
+
+type WorkspaceTab = Pick<Tab, 'id'> & Partial<Pick<Tab, 'contentType' | 'entityId'>>
+type WorkspaceTabMap = Readonly<Record<string, readonly WorkspaceTab[] | undefined>>
+const workspaceIndexes = new WeakMap<
+  WorkspaceTabMap,
+  {
+    byTabId: Map<string, string>
+    bySessionId: Map<string, string[]>
+  }
+>()
+
+function indexWorkspaces(tabsByWorkspace: WorkspaceTabMap | undefined) {
+  if (!tabsByWorkspace) {
+    return undefined
+  }
+  let index = workspaceIndexes.get(tabsByWorkspace)
+  if (!index) {
+    const byTabId = new Map<string, string>()
+    const bySessionId = new Map<string, string[]>()
+    for (const [workspaceId, tabs] of Object.entries(tabsByWorkspace)) {
+      for (const { id, contentType, entityId } of tabs ?? []) {
+        if (contentType && contentType !== 'agent-session') {
+          continue
+        }
+        if (!byTabId.has(id)) {
+          byTabId.set(id, workspaceId)
+        }
+        if (entityId === undefined) {
+          continue
+        }
+        const candidates = bySessionId.get(entityId) ?? []
+        if (candidates.at(-1) !== workspaceId) {
+          candidates.push(workspaceId)
+        }
+        bySessionId.set(entityId, candidates)
+      }
+    }
+    index = { byTabId, bySessionId }
+    workspaceIndexes.set(tabsByWorkspace, index)
+  }
+  return index
+}
+
+export function structuredChatWorkspacesBySessionId(
+  tabsByWorkspace: TabsByWorkspace,
+  sessionId: string
+): readonly string[] {
+  return indexWorkspaces(tabsByWorkspace)?.bySessionId.get(sessionId) ?? []
+}
+
+export function chatWorkspaceByTabId(tabsByWorkspace: WorkspaceTabMap | undefined, tabId: string) {
+  return indexWorkspaces(tabsByWorkspace)?.byTabId.get(tabId) ?? null
+}

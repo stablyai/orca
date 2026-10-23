@@ -15,6 +15,34 @@ import { imageReferenceToken } from '../../../../shared/native-chat-image-refere
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime-pty-id'
 
 import { useAppStore } from '@/store'
+import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import type { Tab } from '../../../../shared/tab-types'
+
+const initialStoreState = useAppStore.getInitialState()
+function publishOwner(
+  scopeKey: string,
+  owner: draftStorage.NativeChatComposerDraftOwner | undefined
+): void {
+  const sessionId = draftStore.structuredAgentSessionIdOfDraftScope(scopeKey)
+  const tab: Tab = {
+    id: scopeKey,
+    entityId: sessionId ?? scopeKey,
+    worktreeId: owner?.workspaceId ?? 'unknown',
+    groupId: 'group',
+    contentType: 'agent-session',
+    label: 'Chat',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+  useAppStore.setState({
+    unifiedTabsByWorktree: owner ? { [owner.workspaceId]: [tab] } : {},
+    activeWorktreeId: owner?.workspaceId ?? null,
+    activeWorkspaceExecutionHostId: owner?.executionHostId ?? null
+  })
+}
+
 import * as draftStore from './native-chat-composer-draft-store'
 import * as draftStorage from './native-chat-composer-draft-storage'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
@@ -55,6 +83,7 @@ function publishUnrelatedStatuses(): void {
 
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
+    useAppStore.setState(initialStoreState, true)
     runtimeTarget.remote = false
     clearNativeChatAttachmentCacheForTests()
     document.body.replaceChildren()
@@ -167,8 +196,10 @@ describe('useNativeChatComposerAttachments', () => {
     const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
     storage.drafts.set(scope, { text: '', images: [image], owner: storedOwner, savedAt: 1 })
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-    let owner = storedOwner
-    const resolveOwner = vi.fn(() => owner)
+    publishOwner(scope, storedOwner)
+    const resolveOwner = vi.fn((key: string) =>
+      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+    )
     draftStore.setNativeChatComposerDraftOwnerResolver(resolveOwner)
     const old = Promise.withResolvers<boolean>()
     const next = Promise.withResolvers<boolean>()
@@ -182,12 +213,12 @@ describe('useNativeChatComposerAttachments', () => {
       probe = await renderProbe(scope, true)
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
       expect(pathExists).toHaveBeenCalledTimes(1)
-      owner = { ...storedOwner, executionHostId: 'runtime:remote' }
+      publishOwner(scope, { ...storedOwner, executionHostId: 'runtime:remote' })
       await act(async () => old.resolve(false))
       expect(draftStore.readNativeChatComposerDraft(scope).images).toEqual([image])
       await act(async () => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
-      owner = storedOwner
+      publishOwner(scope, storedOwner)
       await act(async () => useAppStore.setState({}))
       expect(pathExists).toHaveBeenCalledTimes(2)
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
@@ -217,8 +248,10 @@ describe('useNativeChatComposerAttachments', () => {
     const paste = { id: 'paste', path: '/state/native-chat-pastes/orca-paste-1-a.png' }
     storage.drafts.set('pty-1', { text: '', images: [image, paste], savedAt: 1 })
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-    let owner: draftStorage.NativeChatComposerDraftOwner | undefined
-    draftStore.setNativeChatComposerDraftOwnerResolver(() => owner)
+    publishOwner(scope, undefined)
+    draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
+      resolveNativeChatDraftOwner(useAppStore.getState(), key)
+    )
     const exists = Promise.withResolvers<boolean>()
     const pathExists = vi.fn(() => exists.promise)
     const originalApi = window.api
@@ -237,16 +270,16 @@ describe('useNativeChatComposerAttachments', () => {
       expect(nativeChatImagesHoldSend(terminal.latest().imageAttachments)).toBe(false)
       act(() => terminal.root.unmount())
       const probe = await renderProbe(scope, true)
-      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
       act(() => useAppStore.setState({}))
       expect(pathExists).not.toHaveBeenCalled()
-      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
       act(() => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(true)
-      owner = { workspaceId: 'wt', executionHostId: 'runtime:remote' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'runtime:remote' })
       await act(async () => useAppStore.setState({}))
       expect(nativeChatImagesHoldSend(probe.latest().imageAttachments)).toBe(false)
-      owner = { workspaceId: 'wt', executionHostId: 'local' }
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
       act(() => useAppStore.setState({}))
       const newer = { id: 'edit', path: '/repo/new.png' }
       await act(async () => {
@@ -272,10 +305,10 @@ describe('useNativeChatComposerAttachments', () => {
       const storage = draftStorage.createMemoryNativeChatComposerDraftStorage()
       storage.drafts.set(scope, { text: 'hi', images: [image, other], savedAt: 1 })
       draftStorage.setNativeChatComposerDraftStorageForTests(storage)
-      draftStore.setNativeChatComposerDraftOwnerResolver(() => ({
-        workspaceId: 'wt',
-        executionHostId: 'local'
-      }))
+      publishOwner(scope, { workspaceId: 'wt', executionHostId: 'local' })
+      draftStore.setNativeChatComposerDraftOwnerResolver((key) =>
+        resolveNativeChatDraftOwner(useAppStore.getState(), key)
+      )
       let present = true
       const pathExists = vi.fn(async () => present)
       const originalApi = window.api
@@ -505,6 +538,7 @@ describe('useNativeChatComposerAttachments', () => {
     act(() => probe.latest().attachResolvedPaths(refused))
     expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
 
+    useAppStore.setState(initialStoreState, true)
     runtimeTarget.remote = false
     act(() => probe.latest().attachResolvedPaths(['/local/allowed.txt']))
     composing = false
