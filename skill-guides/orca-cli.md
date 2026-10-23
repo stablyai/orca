@@ -233,6 +233,14 @@ Terminal rules:
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
 
+### Terminal titles vs agent panes
+
+`terminal create --title`, `terminal rename`, and the GUI rename all set the **tab** title — not `terminals[].title`. `terminal set-pane-title` sets the pane title. Tab title and pane title are not the same thing `terminal list` reports:
+
+- `terminals[].title` is the pane OSC/PTY title (agents repaint it constantly). On newer builds it may fall back to the tab title when the PTY title is empty; older builds only show the PTY title. Do **not** treat create/rename as a reliable key for later `terminals[].title` greps.
+- The tab title is visible under `visualLayouts`. `terminal list --json` omits that field unless you pass `--include-visual-layouts`.
+- For **agent** panes, prefer the agent registry join instead of titles: `worktree ps --json` → `.result.worktrees[].agents[]` gives `agentType` + `paneKey` (`tabId:leafId`). Match that against `terminal list`'s `tabId`/`leafId` (or handle) to find the live agent terminal.
+
 ## Artifacts
 
 Artifacts publish HTML or Markdown files through the signed-in Orca account. Anyone can view
