@@ -64,8 +64,11 @@ export function normalizeClaudeSubagentLifecycleEvent(
       idleClaudeTeammateByName(roster, teammateName)
       endedChildWork = wasWorking
     }
-    clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
-      claudeTeammateIdMatchesName(waitingAgentId, teammateName)
+    clearClaudePendingWaitForAgent(
+      state,
+      paneKey,
+      (waitingAgentId) => claudeTeammateIdMatchesName(waitingAgentId, teammateName),
+      readString(hookPayload, 'session_id')
     )
   } else {
     const agentId = lifecycleId
@@ -102,7 +105,12 @@ export function normalizeClaudeSubagentLifecycleEvent(
         oweClaudeAgentTaskNotification(tasks, agentId, Date.now())
       }
       // Why: a blocked child that dies without another tool event would pin its permission/question wait on the pane forever — nothing else references that agent again.
-      clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
+      clearClaudePendingWaitForAgent(
+        state,
+        paneKey,
+        (waitingAgentId) => waitingAgentId === agentId,
+        readString(hookPayload, 'session_id')
+      )
     }
   }
   const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster)

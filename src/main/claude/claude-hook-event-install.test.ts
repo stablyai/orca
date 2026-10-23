@@ -150,7 +150,14 @@ describe('Claude managed hook events by resolved version', () => {
 
     const downgraded = install(current, '2.1.32')
 
-    for (const event of ['StopFailure', 'PostCompact', 'TeammateIdle', 'SessionEnd']) {
+    for (const event of [
+      'StopFailure',
+      'PostCompact',
+      'TeammateIdle',
+      'SessionEnd',
+      'Elicitation',
+      'ElicitationResult'
+    ]) {
       expect(downgraded.hooks?.[event], event).toBeUndefined()
     }
   })
@@ -163,15 +170,23 @@ describe('Claude managed hook events by resolved version', () => {
     expect(managedEvents(downgraded)).toEqual([])
   })
 
-  it.each(['1.0.22', '1.0.52', '1.0.81', '2.1.32', '2.1.77', '2.1.78', '2.1.261', undefined])(
-    'keeps every user-written entry and setting when installing for %s',
-    (version) => {
-      const fresh = install(userOwnedSettings(), version)
-      expectUserSettingsKept(fresh)
-      // Why: a downgrade from the newest set is the path that removes Orca entries.
-      expectUserSettingsKept(install(install(userOwnedSettings(), '2.1.261'), version))
-    }
-  )
+  it.each([
+    '1.0.22',
+    '1.0.52',
+    '1.0.81',
+    '2.1.32',
+    '2.1.62',
+    '2.1.63',
+    '2.1.77',
+    '2.1.78',
+    '2.1.261',
+    undefined
+  ])('keeps every user-written entry and setting when installing for %s', (version) => {
+    const fresh = install(userOwnedSettings(), version)
+    expectUserSettingsKept(fresh)
+    // Why: a downgrade from the newest set is the path that removes Orca entries.
+    expectUserSettingsKept(install(install(userOwnedSettings(), '2.1.261'), version))
+  })
 
   it('leaves a user value it cannot parse under an unknown event untouched', () => {
     const settings: HooksConfig = JSON.parse('{"hooks":{"StopFailure":[],"PostCompact":"mine"}}')

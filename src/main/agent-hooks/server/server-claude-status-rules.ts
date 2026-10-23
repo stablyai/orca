@@ -71,7 +71,13 @@ export function shouldKeepClaudePermissionVisible(
     previous.payload.state !== 'waiting' ||
     previous.hookEventName !== 'PermissionRequest' ||
     next.payload.agentType !== 'claude' ||
-    next.payload.state !== 'working'
+    (next.payload.state !== 'working' && next.payload.state !== 'waiting')
+  ) {
+    return false
+  }
+  if (
+    next.payload.state === 'waiting' &&
+    (next.hookEventName === 'PermissionRequest' || isAskUserQuestionTool(next.payload.toolName))
   ) {
     return false
   }

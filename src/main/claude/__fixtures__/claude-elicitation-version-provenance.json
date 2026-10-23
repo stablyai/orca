@@ -1,0 +1,69 @@
+{
+  "source": "Settings hook enum extracted from package/cli.js in integrity-verified @anthropic-ai/claude-code npm tarballs. The previous published version rejects either new hook and discards the whole settings file; 2.1.63 accepts both. Real CLI probes used isolated config, empty stream-json input and a harmless SessionStart marker; no model prompt or credentials.",
+  "versions": {
+    "2.1.62": {
+      "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.62.tgz",
+      "published": "2026-02-27T01:24:31.775Z",
+      "integrity": "sha512-IzslR/dbIlQj0W1bqd9opLaSsSknhwLZVZ3i03LlanWbe1MczBskQn6Veg5CgzmZeWEwKJR1kR3+5t4bCUmLmg==",
+      "integrityVerified": true,
+      "sha256": "4eda20a6fc9d048b684988100d7bb7841542d54a26412185692b9b65f925cd2e",
+      "bytes": 30035799,
+      "cliJsSha256": "2b1f9e85c86b00133fe5e211748bcba8aba14b65a2c37f2269e3918086c1d230",
+      "settingsEnum": [
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "Notification",
+        "UserPromptSubmit",
+        "SessionStart",
+        "SessionEnd",
+        "Stop",
+        "SubagentStart",
+        "SubagentStop",
+        "PreCompact",
+        "PermissionRequest",
+        "Setup",
+        "TeammateIdle",
+        "TaskCompleted",
+        "ConfigChange",
+        "WorktreeCreate",
+        "WorktreeRemove"
+      ],
+      "elicitationSettingsAccepted": false,
+      "elicitationResultSettingsAccepted": false
+    },
+    "2.1.63": {
+      "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.63.tgz",
+      "published": "2026-02-28T02:43:42.865Z",
+      "integrity": "sha512-pjxGFtOWc6SW4qv/c2F8hc+QFJ36+OlevYsnUvBVqr4B+4mJjH+8inSF8sH2Uf9SQd99kG5CxkkHxmUg2rakow==",
+      "integrityVerified": true,
+      "sha256": "787ced0566b1d11a7900cb9226f77d2afe5d022b9ebba85e7fd5cd07be7cba77",
+      "bytes": 30057992,
+      "cliJsSha256": "12809142119cce671afbd9d422b524778de786752aeef2ba1f70879b5d4dce0d",
+      "settingsEnum": [
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "Notification",
+        "UserPromptSubmit",
+        "SessionStart",
+        "SessionEnd",
+        "Stop",
+        "SubagentStart",
+        "SubagentStop",
+        "PreCompact",
+        "PermissionRequest",
+        "Setup",
+        "TeammateIdle",
+        "TaskCompleted",
+        "Elicitation",
+        "ElicitationResult",
+        "ConfigChange",
+        "WorktreeCreate",
+        "WorktreeRemove"
+      ],
+      "elicitationSettingsAccepted": true,
+      "elicitationResultSettingsAccepted": true
+    }
+  }
+}

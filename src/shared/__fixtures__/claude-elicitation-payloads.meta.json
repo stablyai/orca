@@ -1,0 +1,63 @@
+{
+  "source": "Actual Elicitation and ElicitationResult payload construction functions extracted from integrity-verified Claude Code providers, executed in isolated VM with dispatch and common-context stubs. No authenticated MCP UI delivery was exercised.",
+  "versions": ["2.1.63", "2.1.69", "2.1.76", "2.1.309"],
+  "sha256": "55c98aec7d6a412c68aedfe569cf1e8a1ab2e6e6f331a6d9253d7a24d49a831f",
+  "cases": 24,
+  "limitations": "Emitter-specific fields are real; common session/cwd/transcript values are fixture values. Child agent_id variants in tests are synthetic ownership adversaries.",
+  "documentation": "https://code.claude.com/docs/en/hooks",
+  "emitterProvenance": {
+    "2.1.63": {
+      "emitterSourceSha256": {
+        "Elicitation": "f354017384b4ff91a65ffb5dfdcf9f2eab3a9562a06596e0d1d6160b9a5f9346",
+        "ElicitationResult": "4c0205c9b379b4638ecbe53e8d8de75b4a21fda1ef2437a5c785b9516dec050c"
+      },
+      "commonContext": "Session/cwd/transcript stubbed during isolated VM execution; emitters called their actual payload constructors.",
+      "package": {
+        "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.63.tgz",
+        "published": "2026-02-28T02:43:42.865Z",
+        "integrity": "sha512-pjxGFtOWc6SW4qv/c2F8hc+QFJ36+OlevYsnUvBVqr4B+4mJjH+8inSF8sH2Uf9SQd99kG5CxkkHxmUg2rakow==",
+        "integrityVerified": true,
+        "sha256": "787ced0566b1d11a7900cb9226f77d2afe5d022b9ebba85e7fd5cd07be7cba77",
+        "bytes": 30057992
+      }
+    },
+    "2.1.69": {
+      "emitterSourceSha256": {
+        "Elicitation": "4b72c68dc60f04f1ff023b13af783cbc462421895ebc17e37f4f4a414f65cb54",
+        "ElicitationResult": "0d5a0e193b8b6b413ab509e9031894e7d6f71b214f5cc07754723b3dbfb8207e"
+      },
+      "commonContext": "Session/cwd/transcript stubbed during isolated VM execution; emitters called their actual payload constructors.",
+      "package": {
+        "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.69.tgz",
+        "published": "2026-03-04T21:46:46.306Z",
+        "integrity": "sha512-H7KFlgeGQ2LM/2Cy1Aref58NxWUwaxxtC/XMdgGy7du3jD3uVP6C9MD498YZLzHECUTCSwUyTosfi87tGioD2g==",
+        "integrityVerified": true,
+        "sha256": "45b4021cf34174bacc4f40d2200672448a2f4a40dff0904f25ba5b2150f910ad",
+        "bytes": 30132749
+      }
+    },
+    "2.1.76": {
+      "emitterSourceSha256": {
+        "Elicitation": "b4df9fe09d757f27548b9a307a77c5ba6906b0c4f1442a0a3ef5905505cb5009",
+        "ElicitationResult": "1bcd4f508491b1b431bc218a6405239bb30f16ef7e629259e6eede388f9b7601"
+      },
+      "commonContext": "Session/cwd/transcript stubbed during isolated VM execution; emitters called their actual payload constructors.",
+      "package": {
+        "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.76.tgz",
+        "published": "2026-03-14T00:14:17.770Z",
+        "integrity": "sha512-T6Uyl5Jw7fWiFaBqGZ1Faexm1nVc4P92KLLGbILoX4I/q3sRQrkDqrgwt0Jw45vMyfi794OrCP+BBSM267INZA==",
+        "integrityVerified": true,
+        "sha256": "f6364b77b650378f6c9082d837848750c59fdb0fdeb02a78f9cae88702bb7aa5",
+        "bytes": 20547135
+      }
+    },
+    "2.1.309": {
+      "emitterSourceSha256": {
+        "Elicitation": "23ea6e8d830f5f6382ee0bc38c5c4680d1ec8ccd12391d42ccc9f563192962d9",
+        "ElicitationResult": "01009d911f9cff419bce7cca9722bfdbb3a182a70058502fb64f74dbf536581f"
+      },
+      "commonContext": "Session/cwd/transcript stubbed during isolated VM execution; emitters called their actual payload constructors.",
+      "nativeBinarySha256": "5eadc0009cdcdbc0d06e58110d7b2baf88ced6088b1c33a60a21217fe410619c"
+    }
+  }
+}

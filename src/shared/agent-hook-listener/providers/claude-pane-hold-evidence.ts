@@ -3,6 +3,7 @@ import { agentChildWorkLivenessFromEvidence } from '../../agent-status-child-wor
 import { claudeLiveOwedTaskNotificationKinds } from '../../claude-owed-task-notifications'
 import { claudeRosterHasWorkingSubagent } from '../../claude-subagent-roster'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
+import { claudePaneHasPendingElicitation } from './claude-elicitation-state'
 import { mainAgentIdleSince } from '../main-agent-turn-state'
 
 /** Everything that can hold a pane whose main agent's own turn is over. */
@@ -72,9 +73,7 @@ export function resolveClaudePaneStatus(
     ...foldAgentLeadStatus({
       leadState: lead.state,
       childWorkLiveness: agentChildWorkLivenessFromEvidence({
-        // A child's permission wait displaces the main agent record itself (`waitingAgentId`,
-        // `stateBeforeWait`) instead of living on the roster, so the roster never carries one.
-        hasWaitingChildWork: false,
+        hasWaitingChildWork: claudePaneHasPendingElicitation(state, paneKey),
         hasLiveAgentWork: held.runningAgent || held.owedAgent,
         hasLiveNonAgentWork: held.runningNonAgent || held.owedShell
       })

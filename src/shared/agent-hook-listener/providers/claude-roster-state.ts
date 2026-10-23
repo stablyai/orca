@@ -8,6 +8,7 @@ import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-l
 import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
+import { clearClaudeElicitationsForOwner } from './claude-elicitation-state'
 import { readString } from '../tool-input-preview'
 import { resolveClaudePaneStatus } from './claude-pane-hold-evidence'
 export {
@@ -78,6 +79,7 @@ export function voidClaimsOfReplacedClaudeSession(
   if (eventName === 'SessionStart') {
     return
   }
+  state.claudeElicitationByPaneKey.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   // Why: the replaced conversation's notifications will never reach this one.
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
@@ -172,6 +174,7 @@ export function markClaudeLeadTurnInterrupted(
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
+  clearClaudeElicitationsForOwner(state, paneKey, (agentId) => agentId === undefined)
   const record = setClaudeMainAgentTurnState(state, paneKey, {
     state: 'done',
     outcome: 'cancellation'
@@ -253,8 +256,17 @@ export function seedClaudeLeadTurnFromPersistedStatus(
 export function clearClaudePendingWaitForAgent(
   state: HookListenerState,
   paneKey: string,
-  ownsWait: (waitingAgentId: string) => boolean
+  ownsWait: (waitingAgentId: string) => boolean,
+  sessionId?: string
 ): void {
+  if (sessionId !== undefined) {
+    clearClaudeElicitationsForOwner(
+      state,
+      paneKey,
+      (agentId) => agentId !== undefined && ownsWait(agentId),
+      sessionId
+    )
+  }
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
     return

@@ -10,6 +10,7 @@ import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
+import elicitationPayloads from '../../shared/__fixtures__/claude-elicitation-payloads.json'
 import { hookAt, loadCapture } from './claude-cancel-capture.test-fixture'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -181,4 +182,37 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
     )
     expect(row(pane.desktop)).toMatchObject({ state: 'waiting' })
   })
+})
+
+describe('relayed Claude elicitation attention across reconnect', () => {
+  it.each(['pending', 'settled'])(
+    'replays the current %s attention after unrelated tool progress',
+    async (phase) => {
+      const pane = await startSshPane()
+      const { request, result } = elicitationPayloads[0]
+      await pane.post({
+        hook_event_name: 'UserPromptSubmit',
+        session_id: request.session_id,
+        prompt: 'Original task'
+      })
+      await pane.post(request)
+      expect(row(pane.desktop).state).toBe('waiting')
+      pane.connected = false
+      if (phase === 'settled') {
+        await pane.post(result)
+      }
+      await pane.post({
+        hook_event_name: 'PostToolUse',
+        session_id: request.session_id,
+        tool_name: 'Read',
+        tool_use_id: 'sibling'
+      })
+      reconnect(pane)
+      expect(row(pane.desktop)).toMatchObject({
+        state: phase === 'pending' ? 'waiting' : 'working',
+        prompt: 'Original task'
+      })
+      expect(pane.forwarded.at(-1)?.isReplay).toBe(true)
+    }
+  )
 })

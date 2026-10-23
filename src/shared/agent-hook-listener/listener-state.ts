@@ -1,3 +1,7 @@
+import {
+  claudePaneHasPendingElicitation,
+  type ClaudeElicitationState
+} from './providers/claude-elicitation-state'
 import type { AgentMainAgentStatus } from '../agent-status-types'
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 
@@ -45,6 +49,7 @@ export type HookListenerState = {
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `outcome` persists so the eventual done still carries it. Published on every row as `mainAgent`. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
+  claudeElicitationByPaneKey: Map<string, ClaudeElicitationState>
   /** One-normalization provenance marker for a status backed only by restored child state. */
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
@@ -120,6 +125,7 @@ export function createHookListenerState(
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
+    claudeElicitationByPaneKey: new Map(),
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
     claudeActiveSessionCronPaneKeys: new Set(),
@@ -213,6 +219,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedCacheEntry(state.claudeConsumedCompactPromptIdByPaneKey, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
+  state.claudeElicitationByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -240,6 +247,7 @@ export function paneHasStateClaims(state: HookListenerState, paneKey: string): b
     state.lastStatusByPaneKey.has(paneKey) ||
     state.claudeSubagentRosterByPaneKey.has(paneKey) ||
     state.claudeLeadStateByPaneKey.has(paneKey) ||
+    claudePaneHasPendingElicitation(state, paneKey) ||
     state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
     state.claudeActiveSessionCronPaneKeys.has(paneKey) ||
     state.claudeLaunchedBackgroundTasksByPaneKey.has(paneKey) ||
@@ -266,6 +274,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeElicitationByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
@@ -303,6 +312,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
+  state.claudeElicitationByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
   state.claudeRunningNonAgentTaskPaneKeys.clear()
   state.claudeActiveSessionCronPaneKeys.clear()

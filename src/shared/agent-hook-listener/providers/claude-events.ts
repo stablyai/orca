@@ -30,6 +30,11 @@ import {
   claudeRowHasUnlistedLiveWork
 } from './claude-pane-hold-evidence'
 import { buildClaudeStatusPayload } from './claude-status-build'
+import {
+  applyClaudeElicitationEvent,
+  clearClaudeElicitationsForOwner,
+  trackClaudeElicitationToolBoundary
+} from './claude-elicitation-state'
 import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
 
 export function normalizeClaudeEvent(
@@ -48,6 +53,25 @@ export function normalizeClaudeEvent(
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
+  if (eventName === 'Elicitation' || eventName === 'ElicitationResult') {
+    if (!applyClaudeElicitationEvent(state, paneKey, eventName, hookPayload)) {
+      return null
+    }
+    if (eventName === 'Elicitation' && eventAgentId) {
+      upsertWorkingClaudeSubagent(
+        getOrCreateClaudeSubagentRoster(state, paneKey),
+        eventAgentId,
+        { agentType: readString(hookPayload, 'agent_type') },
+        Date.now()
+      )
+    }
+    const lead = state.claudeLeadStateByPaneKey.get(paneKey) ?? { state: 'working' as const }
+    return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
+      ...resolveClaudePaneStatus(state, paneKey, lead),
+      updateToolSnapshot: false
+    })
+  }
+  trackClaudeElicitationToolBoundary(state, paneKey, eventName, hookPayload)
   if (eventName === 'SessionStart') {
     // Why: SessionStart is the only signal a resumed session emits before its first prompt
     // (STA-3386). Land it as a session-boundary 'done' row: 'working' would show a phantom
@@ -67,6 +91,7 @@ export function normalizeClaudeEvent(
     }
     // Why: a new process owns the pane; stale children/tasks/crons must not gate the
     // fresh session's idle row back up to 'working' (same reset Codex does on SessionStart).
+    state.claudeElicitationByPaneKey.delete(paneKey)
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -84,6 +109,9 @@ export function normalizeClaudeEvent(
   // other event starts a fresh turn and drops it. The verdict is a fact about the main agent's turn and
   // nothing else: a cancel never touches the shell, cron or subagent the turn left running.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+  if (eventAgentId === undefined && (isTurnBoundary || eventName === 'UserPromptSubmit')) {
+    clearClaudeElicitationsForOwner(state, paneKey, (agentId) => agentId === undefined)
+  }
   // Why: absent means unknown — a plain Stop never becomes `success`, so a cancel can never read as a
   // success. Current Claude sends NO hook on a cancel and no `is_interrupt` on Stop, so the
   // cancellation normally arrives through Orca's own inferred interrupt

@@ -1,0 +1,758 @@
+[
+  {
+    "version": "2.1.63",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.63",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.63",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "cancel"
+    }
+  },
+  {
+    "version": "2.1.63",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.63",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.63",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "cancel"
+    }
+  },
+  {
+    "version": "2.1.69",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.69",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.69",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "cancel"
+    }
+  },
+  {
+    "version": "2.1.69",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.69",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.69",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "cancel"
+    }
+  },
+  {
+    "version": "2.1.76",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.76",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.76",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "cancel"
+    }
+  },
+  {
+    "version": "2.1.76",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.76",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.76",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "cancel"
+    }
+  },
+  {
+    "version": "2.1.309",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.309",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.309",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "form",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "mode": "form",
+      "action": "cancel"
+    }
+  },
+  {
+    "version": "2.1.309",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "accept",
+      "content": {
+        "approve": true
+      }
+    }
+  },
+  {
+    "version": "2.1.309",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "decline"
+    }
+  },
+  {
+    "version": "2.1.309",
+    "request": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "Elicitation",
+      "mcp_server_name": "audit-mcp",
+      "message": "Confirm fixture action",
+      "mode": "url",
+      "url": "https://example.invalid/auth",
+      "elicitation_id": "audit-url-request",
+      "requested_schema": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "result": {
+      "session_id": "audit-session",
+      "transcript_path": "/tmp/audit.jsonl",
+      "cwd": "/tmp/audit",
+      "hook_event_name": "ElicitationResult",
+      "mcp_server_name": "audit-mcp",
+      "elicitation_id": "audit-url-request",
+      "mode": "url",
+      "action": "cancel"
+    }
+  }
+]

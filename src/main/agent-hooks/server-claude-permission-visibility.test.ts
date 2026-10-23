@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { buildBody, PANE } from './server.test-fixtures'
+import providerPayloads from '../../shared/__fixtures__/claude-elicitation-payloads.json'
+import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -588,4 +589,97 @@ describe('AgentHookServer listener replay', () => {
       server.stop()
     }
   })
+})
+
+describe('Claude elicitation alongside permission attention', () => {
+  it.each([false, true])(
+    'keeps a real permission after sibling completion with elicitation=%s',
+    async (overlay) => {
+      const server = new AgentHookServer()
+      await server.start({ env: 'production' })
+      try {
+        const post = async (payload: Record<string, unknown>): Promise<void> => {
+          const response = await postHookEvent(
+            server,
+            buildBody({ session_id: 'elicitation-session', ...payload })
+          )
+          expect(response.status).toBe(204)
+        }
+        await post({
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_use_id: 'approval',
+          tool_input: { command: 'fixture' }
+        })
+        await post({
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'Bash',
+          tool_use_id: 'approval',
+          tool_input: { command: 'fixture' }
+        })
+        if (overlay) {
+          const fixture = providerPayloads[0]
+          await post({ ...fixture.request, session_id: 'elicitation-session' })
+          await post({ ...fixture.result, session_id: 'elicitation-session' })
+        }
+        await post({
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Read',
+          tool_use_id: 'sibling',
+          tool_input: { file_path: '/tmp/fixture' }
+        })
+        expect(server.getStatusSnapshot()[0]).toMatchObject({
+          state: 'waiting',
+          toolName: 'Bash',
+          toolInput: 'fixture'
+        })
+        await post({
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_use_id: 'approval',
+          tool_input: { command: 'fixture' }
+        })
+        expect(server.getStatusSnapshot()[0]?.state).toBe('working')
+      } finally {
+        server.stop()
+      }
+    }
+  )
+
+  it.each(providerPayloads.filter((row) => row.version === '2.1.309'))(
+    'ingests actual $request.mode/$result.action provider payloads through HTTP',
+    async ({ request, result }) => {
+      const server = new AgentHookServer()
+      await server.start({ env: 'production' })
+      try {
+        const post = async (payload: Record<string, unknown>): Promise<void> => {
+          expect((await postHookEvent(server, buildBody(payload))).status).toBe(204)
+        }
+        await post({
+          session_id: request.session_id,
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'Original task'
+        })
+        await post(request)
+        expect(server.getStatusSnapshot()[0]).toMatchObject({
+          state: 'waiting',
+          prompt: 'Original task'
+        })
+        await post({
+          session_id: request.session_id,
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Read',
+          tool_use_id: 'sibling'
+        })
+        expect(server.getStatusSnapshot()[0]?.state).toBe('waiting')
+        await post(result)
+        expect(server.getStatusSnapshot()[0]).toMatchObject({
+          state: 'working',
+          prompt: 'Original task'
+        })
+      } finally {
+        server.stop()
+      }
+    }
+  )
 })
