@@ -5,7 +5,8 @@ description: >-
   skill sharing, worktree comments, and Orca's embedded browser through the `orca` CLI. Use
   when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
   worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
-  agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
+  agent", "Orca Tab ID", "orcaTabId", "Orca browser", "orca artifacts", or "share skills".
+  Prefer it over raw git
   worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
   when a visible window needs GUI control that a CLI, filesystem, or API cannot do.
 ---
@@ -186,6 +187,12 @@ source/remote identity prevents URL validation and may leave provider links unav
 Old runtimes that predate these existing fields may ignore them; verify with `worktree show --json`.
 
 ## Terminals
+
+When a message contains `orcaTabId: <id>`, the value is an Orca Tab ID. Run
+`terminal list --json` in the relevant worktree and match `tabId` exactly. Use the
+matching terminal entry's handle with `terminal show` or `terminal read` to retrieve
+session context. Add `--include-visual-layouts` only when pane or tab topology is needed.
+Do not treat the ID as a terminal handle or ask what kind of ID it is.
 
 Common commands:
 
