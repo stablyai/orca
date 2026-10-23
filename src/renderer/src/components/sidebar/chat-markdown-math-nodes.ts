@@ -12,6 +12,12 @@ declare module 'vfile' {
 
 export const chatMathFromMarkdown: FromMarkdownExtension = {
   enter: {
+    codeFencedFence() {
+      const node = this.stack.at(-2)
+      if (this.data.flowCodeInside && node?.type === 'code' && node.lang === 'math') {
+        node.data = { ...node.data, mathComplete: true }
+      }
+    },
     chatMath(token) {
       this.enter({ type: 'inlineMath', value: '' }, token)
       this.buffer()
@@ -84,19 +90,10 @@ function displayMath(node: Nodes): void {
 export function chatMathCodeFences(node: Nodes, source: string): void {
   if (node.type === 'code' && node.lang === 'math' && node.position) {
     const authored = source.slice(node.position.start.offset, node.position.end.offset)
-    const opening = /^(?:`{3,}|~{3,})/.exec(authored)?.[0]
-    const closing = /(?:^|\r\n|\r|\n)[ \t>]*(`{3,}|~{3,})[ \t\r]*$/.exec(authored)?.[1]
-    const complete = Boolean(
-      opening &&
-      closing &&
-      opening[0] === closing[0] &&
-      closing.length >= opening.length &&
-      authored.replace(/\r$/, '').split(/\r\n|\r|\n/).length > node.value.split(/\r\n|\r|\n/).length
-    )
     node.data = {
       ...node.data,
       mathSource: authored,
-      mathComplete: complete
+      mathComplete: node.data?.mathComplete === true
     }
   }
   if ('children' in node) {
