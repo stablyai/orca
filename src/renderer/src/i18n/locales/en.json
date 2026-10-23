@@ -17999,9 +17999,11 @@
           "loadFailed": "Could not load tasks.",
           "empty": "No open issues.",
           "noRepos": "Open a git workspace to see its tasks here.",
-          "title": "Open issues",
           "refresh": "Refresh",
-          "noSource": "Sign in to GitHub or GitLab to see this project’s issues."
+          "noSource": "Sign in to GitHub or GitLab to see this project’s issues.",
+          "emptyReviews": "No open merge requests.",
+          "issues": "Issues",
+          "mergeRequests": "MRs"
         }
       },
       "link": {

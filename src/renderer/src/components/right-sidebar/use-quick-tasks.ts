@@ -16,10 +16,12 @@ import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 const QUICK_TASKS_DISPLAY_LIMIT = 50
-const GITLAB_ISSUE_LIMIT = 50
+const GITLAB_LIST_LIMIT = 50
 
 type ProviderList<Item> = {
   enabled: boolean
+  /** Kind + repos the items belong to; a refresh keeps them, a switch drops them. */
+  listKey: string
   items: readonly Item[]
   loading: boolean
   failed: boolean
@@ -33,15 +35,30 @@ export type QuickTasks = {
 }
 
 function emptyList<Item>(enabled: boolean): ProviderList<Item> {
-  return { enabled, items: [], loading: enabled, failed: false }
+  return { enabled, listKey: '', items: [], loading: enabled, failed: false }
 }
+
+function startLoading<Item>(previous: ProviderList<Item>, listKey: string): ProviderList<Item> {
+  return {
+    enabled: true,
+    listKey,
+    items: previous.listKey === listKey ? previous.items : [],
+    loading: true,
+    failed: false
+  }
+}
+
+/** `reviews` lists GitLab merge requests and GitHub pull requests. */
+export type QuickTasksKind = 'issues' | 'reviews'
 
 export function useQuickTasks({
   repos,
+  kind,
   isVisible,
   refreshNonce
 }: {
   repos: readonly Repo[]
+  kind: QuickTasksKind
   isVisible: boolean
   refreshNonce: number
 }): QuickTasks {
@@ -52,6 +69,7 @@ export function useQuickTasks({
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const reposKey = useMemo(() => repos.map((repo) => `${repo.id}:${repo.path}`).join('|'), [repos])
+  const listKey = `${kind}|${reposKey}`
   const [github, setGithub] = useState<ProviderList<GitHubWorkItem>>(() => emptyList(false))
   const [gitlab, setGitlab] = useState<ProviderList<GitLabWorkItem>>(() => emptyList(false))
 
@@ -64,7 +82,7 @@ export function useQuickTasks({
       return
     }
     let stale = false
-    setGithub((previous) => ({ ...previous, enabled: true, loading: true, failed: false }))
+    setGithub((previous) => startLoading(previous, listKey))
     // Why: same per-repo limit and preset query as the Tasks page, so both share the SWR cache.
     void fetchWorkItemsAcrossRepos(
       repos.map((repo) => ({
@@ -75,19 +93,19 @@ export function useQuickTasks({
       })),
       PER_REPO_FETCH_LIMIT,
       QUICK_TASKS_DISPLAY_LIMIT,
-      getTaskPresetQuery('issues'),
+      getTaskPresetQuery(kind === 'issues' ? 'issues' : 'prs'),
       { force: refreshNonce > 0 }
     )
       .then((result) => {
         if (!stale) {
           // Why: GitLab-hosted repos in a mixed group fail GitHub lookups; only report total failure.
           const failed = result.items.length === 0 && result.failedCount === repos.length
-          setGithub({ enabled: true, items: result.items, loading: false, failed })
+          setGithub({ enabled: true, listKey, items: result.items, loading: false, failed })
         }
       })
       .catch(() => {
         if (!stale) {
-          setGithub({ enabled: true, items: [], loading: false, failed: true })
+          setGithub({ enabled: true, listKey, items: [], loading: false, failed: true })
         }
       })
     return () => {
@@ -98,6 +116,7 @@ export function useQuickTasks({
     fetchWorkItemsAcrossRepos,
     githubEnabled,
     isVisible,
+    kind,
     refreshNonce,
     reposKey,
     workItemsInvalidationNonce
@@ -112,14 +131,13 @@ export function useQuickTasks({
       return
     }
     let stale = false
-    setGitlab((previous) => ({ ...previous, enabled: true, loading: true, failed: false }))
+    setGitlab((previous) => startLoading(previous, listKey))
     void mapSettledWithConcurrency(repos, GITLAB_TASK_FETCH_CONCURRENCY, (repo) => {
       const selector = gitLabTaskRepoSelector(repo)
-      return gitLabApiFor(selector).listIssues({
-        ...selector,
-        state: 'opened',
-        limit: GITLAB_ISSUE_LIMIT
-      })
+      const api = gitLabApiFor(selector)
+      return kind === 'issues'
+        ? api.listIssues({ ...selector, state: 'opened', limit: GITLAB_LIST_LIMIT })
+        : api.listMRs({ ...selector, state: 'opened', page: 1, perPage: GITLAB_LIST_LIMIT })
     }).then((results) => {
       if (stale) {
         return
@@ -147,6 +165,7 @@ export function useQuickTasks({
       items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
       setGitlab({
         enabled: true,
+        listKey,
         items: items.slice(0, QUICK_TASKS_DISPLAY_LIMIT),
         loading: false,
         failed: items.length === 0 && failures === repos.length
@@ -156,7 +175,7 @@ export function useQuickTasks({
       stale = true
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- reposKey covers every repos field read above; keying off the array ref would refetch on every parent render.
-  }, [gitlabEnabled, isVisible, refreshNonce, reposKey])
+  }, [gitlabEnabled, isVisible, kind, refreshNonce, reposKey])
 
   return { checking, github, gitlab }
 }

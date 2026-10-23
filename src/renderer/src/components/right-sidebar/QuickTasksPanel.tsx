@@ -10,6 +10,7 @@ import {
   RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -24,11 +25,12 @@ import {
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { getQuickTasksRepos } from './quick-tasks-repos'
-import { useQuickTasks } from './use-quick-tasks'
+import { useQuickTasks, type QuickTasksKind } from './use-quick-tasks'
 
 type QuickTaskRowProps = {
   icon: React.ReactNode
-  number: number
+  /** Provider-style reference, e.g. `#12` for issues or `!7` for GitLab merge requests. */
+  reference: string
   title: string
   repoName: string | null
   onOpen: () => void
@@ -38,7 +40,7 @@ type QuickTaskRowProps = {
 
 function QuickTaskRow({
   icon,
-  number,
+  reference,
   title,
   repoName,
   onOpen,
@@ -56,7 +58,7 @@ function QuickTaskRow({
         <span className="min-w-0 flex-1">
           <span className="line-clamp-2 text-sm text-foreground">{title}</span>
           <span className="block truncate text-xs text-muted-foreground">
-            #{number}
+            {reference}
             {repoName ? ` · ${repoName}` : ''}
           </span>
         </span>
@@ -115,6 +117,7 @@ function QuickTasksSection({
   loading,
   failed,
   count,
+  emptyLabel,
   children
 }: {
   icon: React.ReactNode
@@ -122,6 +125,7 @@ function QuickTasksSection({
   loading: boolean
   failed: boolean
   count: number
+  emptyLabel: string
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -139,9 +143,7 @@ function QuickTasksSection({
           )}
         </div>
       ) : !loading && count === 0 ? (
-        <div className="px-3 py-2 text-xs text-muted-foreground">
-          {translate('auto.components.rightSidebar.QuickTasksPanel.empty', 'No open issues.')}
-        </div>
+        <div className="px-3 py-2 text-xs text-muted-foreground">{emptyLabel}</div>
       ) : (
         children
       )}
@@ -162,6 +164,7 @@ export default function QuickTasksPanel({
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const [refreshNonce, setRefreshNonce] = useState(0)
+  const [kind, setKind] = useState<QuickTasksKind>('issues')
 
   const taskRepos = useMemo(
     () =>
@@ -176,9 +179,17 @@ export default function QuickTasksPanel({
   )
   const { checking, github, gitlab } = useQuickTasks({
     repos: taskRepos,
+    kind,
     isVisible,
     refreshNonce
   })
+  const emptyLabel =
+    kind === 'issues'
+      ? translate('auto.components.rightSidebar.QuickTasksPanel.empty', 'No open issues.')
+      : translate(
+          'auto.components.rightSidebar.QuickTasksPanel.emptyReviews',
+          'No open merge requests.'
+        )
   const showRepoName = taskRepos.length > 1
   const repoName = (repoId: string | undefined): string | null =>
     showRepoName && repoId
@@ -222,9 +233,26 @@ export default function QuickTasksPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-        <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {translate('auto.components.rightSidebar.QuickTasksPanel.title', 'Open issues')}
-        </div>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          spacing={0}
+          className="min-w-0 flex-1"
+          value={kind}
+          onValueChange={(value) => {
+            if (value === 'issues' || value === 'reviews') {
+              setKind(value)
+            }
+          }}
+        >
+          <ToggleGroupItem value="issues">
+            {translate('auto.components.rightSidebar.QuickTasksPanel.issues', 'Issues')}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="reviews">
+            {translate('auto.components.rightSidebar.QuickTasksPanel.mergeRequests', 'MRs')}
+          </ToggleGroupItem>
+        </ToggleGroup>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -266,12 +294,19 @@ export default function QuickTasksPanel({
             loading={gitlab.loading}
             failed={gitlab.failed}
             count={gitlab.items.length}
+            emptyLabel={emptyLabel}
           >
             {gitlab.items.map((item) => (
               <QuickTaskRow
                 key={`${item.repoId}:${item.id}`}
-                icon={<CircleDot className="size-3.5" />}
-                number={item.number}
+                icon={
+                  item.type === 'mr' ? (
+                    <GitPullRequest className="size-3.5" />
+                  ) : (
+                    <CircleDot className="size-3.5" />
+                  )
+                }
+                reference={`${item.type === 'mr' ? '!' : '#'}${item.number}`}
                 title={item.title}
                 repoName={repoName(item.repoId)}
                 onOpen={() => openGitLabItem(item)}
@@ -289,6 +324,7 @@ export default function QuickTasksPanel({
             loading={github.loading}
             failed={github.failed}
             count={github.items.length}
+            emptyLabel={emptyLabel}
           >
             {github.items.map((item) => (
               <QuickTaskRow
@@ -300,7 +336,7 @@ export default function QuickTasksPanel({
                     <CircleDot className="size-3.5" />
                   )
                 }
-                number={item.number}
+                reference={`#${item.number}`}
                 title={item.title}
                 repoName={repoName(item.repoId)}
                 onOpen={() => openGitHubItem(item)}
