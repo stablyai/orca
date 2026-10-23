@@ -6,6 +6,9 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
+import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
+import type { AutomationActionNotice } from './automation-row-action-dispatch'
+import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import { getAutomationRunContent } from './automation-run-content'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
@@ -25,6 +28,8 @@ export function AutomationRunDetailsPage({
   isRerunPending,
   onRerun,
   onOpenWorkspace,
+  notice,
+  onRecoverHistory,
   onBack
 }: {
   automation: Automation | null
@@ -36,6 +41,8 @@ export function AutomationRunDetailsPage({
   isRerunPending: boolean
   onRerun: () => void
   onOpenWorkspace: () => void
+  notice?: AutomationActionNotice | null
+  onRecoverHistory?: (action: AutomationHostRecoveryAction) => void
   onBack: () => void
 }): React.JSX.Element {
   return (
@@ -83,6 +90,11 @@ export function AutomationRunDetailsPage({
         }
         onBack={onBack}
       >
+        <AutomationOwnerConflictNotice
+          notice={notice ?? null}
+          onRecover={onRecoverHistory}
+          className="mb-3"
+        />
         <CommentMarkdown
           variant="document"
           content={getAutomationRunContent(run)}

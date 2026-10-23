@@ -51,6 +51,7 @@ function Harness({ enabled, detail = false }: { enabled: boolean; detail?: boole
     selected: detail ? row : null,
     context,
     legacyTarget,
+    authorityForRow,
     navigation: null,
     reloadToken: 0,
     onSettled: recordSelected

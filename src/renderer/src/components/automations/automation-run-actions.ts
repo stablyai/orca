@@ -64,7 +64,9 @@ export function createAutomationRunActions({
     }
     useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')
-    await pageRefresh.hydratePersistedUIState()
+    await pageRefresh.hydratePersistedUIState().catch((error) => {
+      console.warn('[automations] Failed to refresh workspace state after run:', error)
+    })
     await pageRefresh.refresh()
     toast.message(
       translate('auto.components.automations.AutomationsPage.a1bdb57008', 'Automation run queued.')
@@ -91,7 +93,9 @@ export function createAutomationRunActions({
         return
       }
       invalidateRowHost(row.key, 'run')
-      await pageRefresh.hydratePersistedUIState()
+      await pageRefresh.hydratePersistedUIState().catch((error) => {
+        console.warn('[automations] Failed to refresh workspace state after run:', error)
+      })
       await pageRefresh.refresh()
       toast.message(
         translate(

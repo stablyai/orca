@@ -304,6 +304,8 @@ describe('automation host query controller', () => {
       catalogOf([entry(RUNTIME_SELF, legacy), entry(RUNTIME_SSH, legacy)])
     )
     expect(listLegacy).toHaveBeenCalledTimes(1)
+    const listener = vi.fn()
+    const unsubscribe = controller.subscribeInvalidation(listener)
 
     controller.handleAuthorityEvent({ authority: RUNTIME, selector: { kind: 'self' } })
     controller.handleAuthorityEvent({ authority: RUNTIME, reason: 'definition' })
@@ -312,6 +314,18 @@ describe('automation host query controller', () => {
     await Promise.resolve()
 
     expect(listLegacy).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenCalledExactlyOnceWith([
+      hostStableKey(RUNTIME_SELF),
+      hostStableKey(RUNTIME_SSH)
+    ])
+    unsubscribe()
+    controller.handleAuthorityEvent({ authority: RUNTIME })
+    await Promise.resolve()
+    expect(listener).toHaveBeenCalledTimes(1)
+    controller.subscribeInvalidation(listener)
     controller.dispose()
+    controller.handleAuthorityEvent({ authority: RUNTIME })
+    await Promise.resolve()
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 })

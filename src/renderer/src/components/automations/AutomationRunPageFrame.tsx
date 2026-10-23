@@ -7,8 +7,8 @@ import { translate } from '@/i18n/i18n'
 type AutomationRunPageFrameProps = {
   title: string
   breadcrumbs: string[]
-  statusLabel: string
-  statusVariant: React.ComponentProps<typeof Badge>['variant']
+  statusLabel?: string
+  statusVariant?: React.ComponentProps<typeof Badge>['variant']
   detail?: string | null
   actions?: React.ReactNode
   children: React.ReactNode
@@ -75,7 +75,7 @@ export function AutomationRunPageFrame({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={statusVariant}>{statusLabel}</Badge>
+          {statusLabel ? <Badge variant={statusVariant}>{statusLabel}</Badge> : null}
           {actions}
         </div>
       </div>

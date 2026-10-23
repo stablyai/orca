@@ -10,6 +10,7 @@ import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
 import { AutomationRunsDashboardSurface } from './AutomationRunsDashboardSurface'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import { AutomationRunUnavailablePage } from './AutomationRunUnavailablePage'
 import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
 import { AutomationsPageListPanel } from './AutomationsPageListPanel'
 export function AutomationsPageSurface({
@@ -65,7 +66,6 @@ export function AutomationsPageSurface({
     activePaneTab,
     setActivePaneTab,
     setSelectedAutomationRunPageId,
-    setSelectedAutomationRuns,
     setRunHistoryReloadToken,
     isDetailOpen,
     setIsDetailOpen,
@@ -132,6 +132,12 @@ export function AutomationsPageSurface({
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(true)
     setActivePaneTab('runs')
+  }
+  const recoverSelectedRuns = (action: AutomationHostRecoveryAction): void => {
+    hostCatalog.recover(action, destination.rowRecoveryHost(selectedRow?.key ?? null))
+    if (selectedRow) {
+      pageRefresh.refreshRunHistory(selectedRow.key)
+    }
   }
   return (
     <main className="relative flex h-full min-h-0 flex-col bg-background pt-5 text-foreground md:pt-6">
@@ -237,6 +243,8 @@ export function AutomationsPageSurface({
           viewState={runPage.selectedAutomationRunPageViewState}
           canRerun={runPage.canRerunSelectedAutomationRunPage}
           isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
+          notice={setup.selectedRunsNotice}
+          onRecoverHistory={recoverSelectedRuns}
           onRerun={() =>
             runSelectedRowAction((row) =>
               runActions.rerunAutomationRun(row, selectedAutomationRunPage)
@@ -245,8 +253,15 @@ export function AutomationsPageSurface({
           onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
           onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
         />
-      ) : pageView === 'run' ? (
+      ) : pageView === 'run' && !setup.selectedRunsMatchSelection && selectedRow ? (
         <AutomationsPageSkeleton />
+      ) : pageView === 'run' ? (
+        <AutomationRunUnavailablePage
+          automationName={selected?.name}
+          notice={setup.selectedRunsNotice}
+          onRecover={recoverSelectedRuns}
+          onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
+        />
       ) : isLoading && !hasListItems ? (
         <AutomationsPageSkeleton />
       ) : isDetailOpen && (selected || selectedExternal) ? (
@@ -256,11 +271,7 @@ export function AutomationsPageSurface({
           selectedRuns={setup.selectedRuns}
           selectedRunsNotice={setup.selectedRunsNotice}
           selectedHostEntry={destination.rowRecoveryHost(selectedRow?.key ?? null)}
-          recoverSelectedRuns={(action) => {
-            hostCatalog.recover(action, destination.rowRecoveryHost(selectedRow?.key ?? null))
-            setSelectedAutomationRuns((current) => ({ ...current, notice: null }))
-            setRunHistoryReloadToken((token) => token + 1)
-          }}
+          recoverSelectedRuns={recoverSelectedRuns}
           activePaneTab={activePaneTab}
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}

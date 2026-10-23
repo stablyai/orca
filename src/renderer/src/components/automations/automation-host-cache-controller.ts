@@ -69,6 +69,7 @@ export type AutomationHostQueryController = {
   ) => Promise<void>
   /** Feeds one `automationsChanged` event in; bursts coalesce into one refresh. */
   handleAuthorityEvent: (event: AutomationAuthorityChangeEvent) => void
+  subscribeInvalidation: (listener: (stableKeys: readonly string[]) => void) => () => void
   /** Latest orphan count the authority reported, so the next catalog can show its orphan entry. */
   authorityOrphanCount: (authority: StableAutomationAuthorityRef) => number | null
   /** True once disposed. A disposed controller drops every event and refresh, so a mounted owner must replace it. */
@@ -133,6 +134,7 @@ export function createAutomationHostQueryController(
   let latest: AutomationHostCatalog | null = null
   let selected: string | null = null
   let disposed = false
+  const invalidationListeners = new Set<(stableKeys: readonly string[]) => void>()
 
   const targetsFor = (
     catalog: AutomationHostCatalog,
@@ -160,6 +162,9 @@ export function createAutomationHostQueryController(
     cache,
     schedule: options.schedule,
     onInvalidated: (stableKeys) => {
+      for (const listener of invalidationListeners) {
+        listener(stableKeys)
+      }
       void refreshKeys(stableKeys)
     }
   })
@@ -203,6 +208,10 @@ export function createAutomationHostQueryController(
       options.onSettled?.()
     },
     handleAuthorityEvent: invalidation.handle,
+    subscribeInvalidation: (listener) => {
+      invalidationListeners.add(listener)
+      return () => invalidationListeners.delete(listener)
+    },
     authorityOrphanCount: (authority) => {
       let newest: { fetchedAt: number; orphanCount: number } | null = null
       for (const key of cache.keysForAuthority(authority)) {
@@ -221,6 +230,7 @@ export function createAutomationHostQueryController(
       disposed = true
       unsubscribe?.()
       invalidation.dispose()
+      invalidationListeners.clear()
       scheduler.dispose()
     }
   }

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '@/store'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
+import { hostStableKey } from '../../../../shared/automation-owner-key'
 import {
   getAutomationHostTargetKey,
   getAutomationTargetFromHostId,
@@ -36,12 +37,31 @@ export function useAutomationsPageRefresh({
     isLoading,
     automationHostTargetKey,
     setRelativeNow,
-    runHistoryReloadToken,
+    setSelectedAutomationRuns,
     workspaceNameCacheRef
   } = local
   const { scopedExternal, selectedRow } = list
+  const subscribeInvalidation = list.hostCatalog.subscribeInvalidation
   const { automationHostTargetFor } = destination
   const reloadExternalManagers = scopedExternal.reload
+  const [selectedRunHistoryReloadToken, setSelectedRunHistoryReloadToken] = useState(0)
+  // Async completions and host events must use the current selection.
+  const selectedRowRef = useRef(selectedRow)
+  selectedRowRef.current = selectedRow
+
+  const refreshRunHistory = useCallback(
+    (rowKey: string): void => {
+      if (rowKey === selectedRowRef.current?.key) {
+        setSelectedAutomationRuns((current) =>
+          current.rowKey === rowKey && current.notice
+            ? { ...current, notice: null, rowKey: current.runs.length > 0 ? rowKey : null }
+            : current
+        )
+        setSelectedRunHistoryReloadToken((token) => token + 1)
+      }
+    },
+    [setSelectedAutomationRuns]
+  )
 
   const refresh = useCallback(
     async (options?: { awaitExternalManagers?: boolean }): Promise<void> => {
@@ -135,10 +155,19 @@ export function useAutomationsPageRefresh({
     selected: selectedRow,
     context: destination.automationDispatchContext,
     legacyTarget: automationHostTargetFor,
+    authorityForRow: destination.automationAuthorityForRow,
     navigation: pendingAutomationRunNavigation,
-    reloadToken: runHistoryReloadToken,
+    reloadToken: selectedRunHistoryReloadToken,
     onSettled: local.setSelectedAutomationRuns
   })
+  useEffect(() => {
+    return subscribeInvalidation((stableKeys) => {
+      const row = selectedRowRef.current
+      if (row && (!row.catalogRef || stableKeys.includes(hostStableKey(row.catalogRef)))) {
+        refreshRunHistory(row.key)
+      }
+    })
+  }, [subscribeInvalidation, refreshRunHistory])
   useEffect(() => {
     const onAutomationsChanged = (): void => {
       void refresh()
@@ -160,7 +189,12 @@ export function useAutomationsPageRefresh({
     }
   }, [refresh])
 
-  return { getDefaultTarget: destination.getDefaultTarget, refresh, hydratePersistedUIState }
+  return {
+    getDefaultTarget: destination.getDefaultTarget,
+    refresh,
+    refreshRunHistory,
+    hydratePersistedUIState
+  }
 }
 
 export type AutomationsPageRefresh = ReturnType<typeof useAutomationsPageRefresh>

@@ -111,6 +111,9 @@ export function AutomationsPageListPanel({
       canCreateAutomation={destination.canCreateAutomation}
       onOpenDetail={onOpenDetail}
       onRefresh={() => {
+        if (selectedRow) {
+          pageRefresh.refreshRunHistory(selectedRow.key)
+        }
         hostCatalog.refreshHosts()
         void pageRefresh.refresh()
       }}

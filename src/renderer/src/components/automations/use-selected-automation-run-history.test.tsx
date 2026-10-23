@@ -48,6 +48,7 @@ function makeInput(
     selected: DESKTOP_ROW,
     context: { capturedOwners: new Map(), authority: { kind: 'desktop' } },
     legacyTarget: () => ({ kind: 'local' }),
+    authorityForRow: () => ({ kind: 'desktop' }),
     navigation: null,
     reloadToken: 0,
     onSettled: vi.fn(),
@@ -88,6 +89,100 @@ afterEach(async () => {
 })
 
 describe('useSelectedAutomationRunHistory', () => {
+  it('reads remote orphan history through the row authority under All hosts', async () => {
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+    const authority = { kind: 'runtime', environmentId: 'gpu', pairingRevision: 2 } as const
+    const input = makeInput({
+      context: {
+        capturedOwners: new Map([
+          [DESKTOP_ROW.key, { owner: null, selector: { kind: 'orphan', issue: 'target_removed' } }]
+        ]),
+        authority: { kind: 'desktop' }
+      },
+      authorityForRow: () => authority,
+      legacyTarget: () => ({ kind: 'environment', environmentId: 'gpu' })
+    })
+
+    await render(input)
+
+    expect(mocks.dispatch.mock.calls[0]?.[3]).toEqual(authority)
+  })
+
+  it('keys an uncaptured read by its actual target rather than the host filter', async () => {
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+    const input = makeInput()
+    const rerender = await render(input)
+    const filtered: SelectedAutomationRunHistoryInput = {
+      ...input,
+      context: {
+        ...input.context,
+        authority: { kind: 'runtime', environmentId: 'other', pairingRevision: 3 }
+      }
+    }
+    await rerender(filtered)
+    expect(mocks.dispatch).toHaveBeenCalledTimes(1)
+
+    await rerender({
+      ...filtered,
+      legacyTarget: () => ({ kind: 'environment', environmentId: 'gpu' })
+    })
+    expect(mocks.dispatch).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    { severity: 'failure', moved: false, preserves: true },
+    { severity: 'owner', moved: false, preserves: false },
+    { severity: 'failure', moved: true, preserves: false }
+  ] as const)(
+    'retains good data only for the same request: $severity, moved=$moved',
+    async (test) => {
+      const runs = [makeRun()]
+      mocks.dispatch.mockResolvedValueOnce({ ok: true, value: runs })
+      const input = makeInput()
+      const rerender = await render(input)
+      mocks.dispatch.mockResolvedValue({
+        ok: false,
+        notice: { message: 'Host unavailable', severity: test.severity, recovery: 'retry' }
+      })
+
+      await rerender({
+        ...input,
+        reloadToken: 1,
+        ...(test.moved
+          ? { legacyTarget: () => ({ kind: 'environment' as const, environmentId: 'gpu' }) }
+          : {})
+      })
+
+      expect(settled(input).at(-1)?.runs).toEqual(test.preserves ? runs : [])
+      expect(settled(input).at(-1)?.notice?.message).toBe('Host unavailable')
+    }
+  )
+
+  it.each(['desktop', 'runtime'] as const)(
+    'does not refetch when the same %s owner is reconstructed',
+    async (kind) => {
+      mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+      const owner: AutomationOwnerRef = {
+        authority:
+          kind === 'runtime'
+            ? { kind: 'runtime', environmentId: 'gpu', pairingRevision: 2 }
+            : { kind: 'desktop' },
+        selector: { kind: 'self' }
+      }
+      const input = makeInput({
+        context: {
+          capturedOwners: new Map([[DESKTOP_ROW.key, { owner, selector: { kind: 'self' } }]]),
+          authority: owner.authority
+        }
+      })
+      const rerender = await render(input)
+
+      await rerender({ ...input, context: structuredClone(input.context) })
+
+      expect(mocks.dispatch).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it('reports the refusal instead of leaving the pane on the previous automation', async () => {
     mocks.dispatch.mockResolvedValue({
       ok: false,

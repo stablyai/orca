@@ -71,6 +71,7 @@ export type AutomationHostCatalogView = {
    * removes is the round trip between the save returning and the list agreeing.
    */
   notifyAuthorityChange: (event: AutomationAuthorityChangeEvent) => void
+  subscribeInvalidation: AutomationHostQueryController['subscribeInvalidation']
 }
 
 export type AutomationHostCatalogOptions = {
@@ -274,6 +275,7 @@ export function useAutomationHostCatalog(
     selectHost: setAutomationHostFilter,
     recover,
     refreshHosts,
+    subscribeInvalidation: controller.subscribeInvalidation,
     notifyAuthorityChange: controller.handleAuthorityEvent
   }
 }

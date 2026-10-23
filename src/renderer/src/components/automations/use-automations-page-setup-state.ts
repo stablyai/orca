@@ -188,6 +188,7 @@ export function useAutomationsPageSetupState({
     markSetupDecisionTouched,
     selectedRuns,
     selectedRunsNotice,
+    selectedRunsMatchSelection,
     selectedAutomationRunPage,
     worktrees,
     automationHostTarget

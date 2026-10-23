@@ -8,9 +8,10 @@
  * the host a navigation named — so those, and only those, are the key.
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import { ownerKey } from '../../../../shared/automation-owner-key'
 import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
@@ -20,6 +21,7 @@ import {
 } from './automation-row-action-dispatch'
 import {
   getAutomationTargetFromHostId,
+  getAutomationHostTargetKey,
   listAutomationRunsForTarget,
   type AutomationHostTarget
 } from './automation-host-client'
@@ -36,10 +38,7 @@ export type SelectedAutomationRunHistoryOutcome = {
   /** Which incarnation answered; a re-pairing makes the same row's answer stale. */
   ownerKey: string | null
   runs: AutomationRun[]
-  /**
-   * Non-null when the host refused or failed the read. The runs are then unknown
-   * rather than absent, and the caller must say so instead of showing zero runs.
-   */
+  /** A failed refresh may retain last known runs; the notice records their uncertainty. */
   notice: AutomationActionNotice | null
 }
 
@@ -48,6 +47,7 @@ export type SelectedAutomationRunHistoryInput = {
   context: AutomationDispatchContext
   /** The row's own host, used only when no owner was captured for it. */
   legacyTarget: (row: AutomationListRow) => AutomationHostTarget | null
+  authorityForRow: (row: AutomationListRow) => AutomationAuthorityRef
   navigation: SelectedAutomationRunNavigation
   /** Changing this re-asks the host; it is how a failed read offers Retry. */
   reloadToken: number
@@ -64,37 +64,42 @@ function navigationHostId(
 export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHistoryInput): void {
   const inputRef = useRef(input)
   inputRef.current = input
+  const lastGoodRuns = useRef<{ fetchKey: string; runs: AutomationRun[] } | null>(null)
 
-  const automationId = input.selected?.automation.id ?? null
-  const rowKey = input.selected?.key ?? null
+  const selected = input.selected
+  const automationId = selected?.automation.id ?? null
+  const rowKey = selected?.key ?? null
   const reloadToken = input.reloadToken
+  const captured = capturedAutomationOwner(input.context.capturedOwners, rowKey)
+  const authority =
+    captured.owner?.authority ??
+    (selected ? input.authorityForRow(selected) : input.context.authority)
   const fetchKey =
-    automationId && rowKey
+    selected && automationId && rowKey
       ? [
           rowKey,
-          capturedAutomationOwnerKey(capturedAutomationOwner(input.context.capturedOwners, rowKey)),
-          navigationHostId(input.navigation, automationId) ?? ''
+          capturedAutomationOwnerKey(captured),
+          ownerKey({
+            authority,
+            selector: { kind: 'self' }
+          }),
+          navigationHostId(input.navigation, automationId) ?? '',
+          getAutomationHostTargetKey(input.legacyTarget(selected) ?? { kind: 'local' })
         ].join('|')
       : ''
-  const captured = input.selected
-    ? capturedAutomationOwner(input.context.capturedOwners, input.selected.key).owner
-    : null
-  const authority = captured?.authority ?? input.context.authority
-  const rowAuthority = useMemo<AutomationAuthorityRef>(
-    () => (authority?.kind === 'runtime' ? authority : { kind: 'desktop' }),
-    [authority]
-  )
 
   useEffect(() => {
-    const { selected, context, legacyTarget, navigation, onSettled } = inputRef.current
+    const { selected, context, legacyTarget, authorityForRow, navigation, onSettled } =
+      inputRef.current
     if (!selected || !automationId || !rowKey) {
+      lastGoodRuns.current = null
       onSettled({ automationId: null, rowKey: null, ownerKey: null, runs: [], notice: null })
       return
     }
     let cancelled = false
-    const owner = capturedAutomationOwnerKey(
-      capturedAutomationOwner(context.capturedOwners, rowKey)
-    )
+    const captured = capturedAutomationOwner(context.capturedOwners, rowKey)
+    const owner = capturedAutomationOwnerKey(captured)
+    const rowAuthority = captured.owner?.authority ?? authorityForRow(selected)
     const navigationHost = navigationHostId(navigation, automationId)
     const target = navigationHost
       ? getAutomationTargetFromHostId(navigationHost)
@@ -108,16 +113,27 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
       if (cancelled) {
         return
       }
+      if (result.ok) {
+        lastGoodRuns.current = { fetchKey, runs: result.value }
+      } else if (result.notice.severity === 'owner') {
+        lastGoodRuns.current = null
+      }
       // A refused or failed read still settles: leaving the previous automation's
       // ID in place strands anything waiting on this one and shows its runs as zero.
       onSettled(
         result.ok
           ? { automationId, rowKey, ownerKey: owner, runs: result.value, notice: null }
-          : { automationId, rowKey, ownerKey: owner, runs: [], notice: result.notice }
+          : {
+              automationId,
+              rowKey,
+              ownerKey: owner,
+              runs: lastGoodRuns.current?.fetchKey === fetchKey ? lastGoodRuns.current.runs : [],
+              notice: result.notice
+            }
       )
     })
     return () => {
       cancelled = true
     }
-  }, [automationId, rowAuthority, rowKey, fetchKey, reloadToken])
+  }, [automationId, rowKey, fetchKey, reloadToken])
 }

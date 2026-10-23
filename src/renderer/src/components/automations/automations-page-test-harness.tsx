@@ -15,7 +15,7 @@
  * guarantees.
  */
 
-import { act, createElement, StrictMode, type ReactNode } from 'react'
+import { act, createElement, StrictMode, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
@@ -25,7 +25,7 @@ import {
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY
 } from '../../../../shared/protocol-version'
 import type { AppState } from '@/store'
-import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { AutomationsDetailPane } from './AutomationsDetailPane'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
@@ -64,6 +64,7 @@ export type ListPanelProps = {
   selectAutomationRow: (rowKey: string | null) => void
   selectExternalKey: (entryKey: string | null) => void
   onOpenDetail: () => void
+  onOpenRuns: () => void
   onRefresh: () => void
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
@@ -73,16 +74,7 @@ export type ListPanelProps = {
   canCreateAutomation: boolean
 }
 
-export type DetailPaneProps = {
-  selected: Automation | null
-  selectedHostEntry: AutomationHostCatalogEntry | null
-  selectedRuns: AutomationRun[]
-  selectedRunsNotice: { message: string } | null
-  runNow: (automation: Automation) => void
-  toggleAutomation: (automation: Automation) => void
-  requestDeleteAutomation: (automation: Automation) => void
-  openEditDialog: (automation: Automation) => void
-}
+export type DetailPaneProps = ComponentProps<typeof AutomationsDetailPane>
 
 export type EditorDialogProps = {
   open: boolean
@@ -108,6 +100,7 @@ type AutomationsPageMocks = {
   worktreeMap: Map<string, unknown>
   listPanel: ListPanelProps | null
   detailPane: DetailPaneProps | null
+  detailPaneComponent: typeof AutomationsDetailPane | null
   editorDialog: EditorDialogProps | null
   deleteDialog: DeleteDialogProps | null
   callRuntimeRpc: Mock
@@ -127,6 +120,7 @@ export const mocks: AutomationsPageMocks = {
   worktreeMap: new Map<string, unknown>(),
   listPanel: null,
   detailPane: null,
+  detailPaneComponent: null,
   editorDialog: null,
   deleteDialog: null,
   callRuntimeRpc: vi.fn(),
@@ -199,6 +193,7 @@ vi.mock('./AutomationsListPanel', () => ({
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
+        <button onClick={props.onOpenRuns}>Runs</button>
         {props.sortedListItems.map((item) =>
           item.kind === 'local' ? (
             <button
@@ -233,6 +228,9 @@ vi.mock('./AutomationsListPanel', () => ({
 vi.mock('./AutomationsDetailPane', () => ({
   AutomationsDetailPane: (props: DetailPaneProps) => {
     mocks.detailPane = props
+    if (mocks.detailPaneComponent) {
+      return createElement(mocks.detailPaneComponent, props)
+    }
     return (
       <div data-testid="detail-pane">
         <span data-testid="detail-name">{props.selected?.name ?? 'none'}</span>
@@ -356,10 +354,14 @@ export function scopedList(automations: Automation[]): void {
 
 const roots: Root[] = []
 
-export async function renderPage(options?: { strict?: boolean }): Promise<{
+export async function renderPage(options?: {
+  strict?: boolean
+  detailPaneComponent?: typeof AutomationsDetailPane
+}): Promise<{
   container: HTMLDivElement
   rerender: () => Promise<void>
 }> {
+  mocks.detailPaneComponent = options?.detailPaneComponent ?? null
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -411,6 +413,7 @@ export function installAutomationsPageHarness(): void {
     mocks.callRuntimeRpc.mockImplementation(answerAutomationRpc)
     mocks.listPanel = null
     mocks.detailPane = null
+    mocks.detailPaneComponent = null
     mocks.editorDialog = null
     mocks.deleteDialog = null
     const fixtures = makeStoreState()
