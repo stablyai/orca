@@ -112,6 +112,8 @@ export abstract class DaemonPtyRuntimeState {
   protected removeEventListener: (() => void) | null = null
   protected initialCwds = new Map<string, string>()
   protected wslDistrosBySessionId = new Map<string, string>()
+  /** A sleeping WSL pane's shell folder, read before its final checkpoint; the checkpoint keeps it. */
+  protected sleepShellCwds = new Map<string, string>()
   protected killedSessionTombstones = new Map<string, number>()
   protected sleepRestoreSessionIds = new Set<string>()
   protected coldRestoreCache = new ColdRestorePayloadCache(undefined, (sessionId) => {

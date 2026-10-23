@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises'
 import { hostname as getHostname } from 'node:os'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 
@@ -34,4 +35,19 @@ export function normalizeWslColdRestoreCwd(args: {
   }
 
   return args.requestedCwd
+}
+
+/**
+ * The restored folder, or `fallback` when it is gone: a WSL pane's folder may be deleted while it
+ * sleeps, and spawning into it would fail the wake instead of opening at the workspace root.
+ */
+export async function existingWslColdRestoreCwd(cwd: string, fallback: string): Promise<string> {
+  if (cwd === fallback) {
+    return cwd
+  }
+  try {
+    return (await stat(cwd)).isDirectory() ? cwd : fallback
+  } catch {
+    return fallback
+  }
 }

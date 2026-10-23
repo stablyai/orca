@@ -1,5 +1,8 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { existingWslColdRestoreCwd, normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 
 const base = {
   platform: 'win32' as const,
@@ -36,5 +39,17 @@ describe('normalizeWslColdRestoreCwd', () => {
     expect(
       normalizeWslColdRestoreCwd({ ...base, wslDistro: undefined, recoveredCwd: '\\\\server\\x' })
     ).toBe('\\\\server\\x')
+  })
+})
+
+describe('existingWslColdRestoreCwd', () => {
+  it('wakes at the workspace root when the folder the pane slept in was deleted', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'wsl-wake-'))
+    try {
+      expect(await existingWslColdRestoreCwd(root, '/fallback')).toBe(root)
+      expect(await existingWslColdRestoreCwd(join(root, 'gone'), '/fallback')).toBe('/fallback')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

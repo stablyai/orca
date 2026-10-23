@@ -29,11 +29,13 @@ export type WslGuestProcessRow = {
   argc: number
   paneKey: string | null
   comm: string
+  /** The process's working directory, from /proc/<pid>/cwd; absent when it could not be read. */
+  cwd?: string
 }
 
 /**
- * One line per process: pid, ppid, sid, argc, comm and the pane key, tab-separated. Fields come
- * after the last `)` of /proc/<pid>/stat because comm may hold spaces or parens. POSIX sh and
+ * One line per process: pid, ppid, sid, argc, comm, the pane key and the cwd, tab-separated. Fields
+ * come after the last `)` of /proc/<pid>/stat because comm may hold spaces or parens. POSIX sh and
  * BusyBox tools only.
  */
 export const WSL_GUEST_PANE_PROCESS_SCRIPT = [
@@ -45,14 +47,16 @@ export const WSL_GUEST_PANE_PROCESS_SCRIPT = [
   '  c=$(cat "$d/comm" 2>/dev/null)',
   `  n=$(tr '\\0' '\\n' < "$d/cmdline" 2>/dev/null | wc -l)`,
   `  k=$(tr '\\0' '\\n' < "$d/environ" 2>/dev/null | sed -n 's/^ORCA_PANE_KEY=//p' | head -n 1)`,
-  `  printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' "$p" "$2" "$4" "$n" "$c" "$k"`,
+  '  w=$(readlink "$d/cwd" 2>/dev/null)',
+  `  printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' "$p" "$2" "$4" "$n" "$c" "$k" "$w"`,
   'done'
 ].join('\n')
 
 export function parseWslGuestPaneProcesses(stdout: string): WslGuestProcessRow[] {
   const rows: WslGuestProcessRow[] = []
   for (const line of stdout.split('\n')) {
-    const [pid, ppid, sid, argc, comm, paneKey] = line.split('\t')
+    // The cwd is last and may itself hold a tab.
+    const [pid, ppid, sid, argc, comm, paneKey, ...cwd] = line.split('\t')
     const numbers = [pid, ppid, sid, argc].map((value) => Number(value?.trim()))
     if (comm === undefined || numbers.some((value) => !Number.isInteger(value))) {
       continue
@@ -63,7 +67,8 @@ export function parseWslGuestPaneProcesses(stdout: string): WslGuestProcessRow[]
       sid: numbers[2],
       argc: numbers[3],
       comm: comm.trim(),
-      paneKey: paneKey?.trim() || null
+      paneKey: paneKey?.trim() || null,
+      ...(readableCwd(cwd.join('\t')) ? { cwd: cwd.join('\t') } : {})
     })
   }
   return rows
@@ -75,12 +80,7 @@ export function classifyWslGuestPaneForeground(
   paneKey: string
 ): WslGuestPaneForeground {
   const byPid = new Map(rows.map((row) => [row.pid, row]))
-  const tagged = rows.filter((row) => row.paneKey === paneKey)
-  // The pane's shell: the topmost tagged shell. The WSL relay above it may carry the key too, so
-  // tagged non-shell ancestors don't hide it.
-  const shells = tagged.filter(
-    (row) => isShellProcess(row.comm) && !hasTaggedShellAncestor(row, paneKey, byPid)
-  )
+  const shells = paneShells(rows, paneKey, byPid)
   if (shells.length !== 1) {
     // None, or a second root (a tagged daemon that is itself a shell): never read as idle.
     return shells.length === 0 ? 'unverifiable' : 'process-running'
@@ -115,6 +115,35 @@ export function classifyWslGuestPaneForeground(
     return { agent: agents[0].agent }
   }
   return 'process-running'
+}
+
+/** The folder the pane's shell is in; null unless exactly one shell owns the pane. */
+export function readWslGuestPaneShellCwd(
+  rows: readonly WslGuestProcessRow[],
+  paneKey: string
+): string | null {
+  const shells = paneShells(rows, paneKey, new Map(rows.map((row) => [row.pid, row])))
+  return shells.length === 1 ? (shells[0].cwd ?? null) : null
+}
+
+// The pane's shell: the topmost tagged shell. The WSL relay above it may carry the key too, so
+// tagged non-shell ancestors don't hide it.
+function paneShells(
+  rows: readonly WslGuestProcessRow[],
+  paneKey: string,
+  byPid: ReadonlyMap<number, WslGuestProcessRow>
+): WslGuestProcessRow[] {
+  return rows.filter(
+    (row) =>
+      row.paneKey === paneKey &&
+      isShellProcess(row.comm) &&
+      !hasTaggedShellAncestor(row, paneKey, byPid)
+  )
+}
+
+// A removed folder reads back as `<path> (deleted)`, which no shell can return to.
+function readableCwd(cwd: string): boolean {
+  return cwd.startsWith('/') && !cwd.endsWith(' (deleted)')
 }
 
 function descendsFrom(

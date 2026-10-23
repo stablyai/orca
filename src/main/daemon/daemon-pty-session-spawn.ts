@@ -16,7 +16,7 @@ import { shellPathSupportsPtyStartupBarrier, resolvePtyShellPath } from './shell
 import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
-import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { existingWslColdRestoreCwd, normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
@@ -171,14 +171,19 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       if (!restoreInfo) {
         return null
       }
+      const requestedCwd = opts.cwd ?? resolveSafePtyDefaultCwd()
+      const cwd =
+        normalizeWslColdRestoreCwd({
+          recoveredCwd: restoreInfo.cwd,
+          requestedCwd,
+          wslDistro: recoveryWslDistro
+        }) ?? ''
       return {
         ...restoreInfo,
         cwd:
-          normalizeWslColdRestoreCwd({
-            recoveredCwd: restoreInfo.cwd,
-            requestedCwd: opts.cwd ?? resolveSafePtyDefaultCwd(),
-            wslDistro: recoveryWslDistro
-          }) ?? ''
+          recoveryWslDistro && cwd && process.platform === 'win32'
+            ? await existingWslColdRestoreCwd(cwd, requestedCwd)
+            : cwd
       }
     }
 

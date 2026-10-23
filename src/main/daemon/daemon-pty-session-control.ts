@@ -7,6 +7,7 @@ import { DaemonPtySessionInput } from './daemon-pty-session-input'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { readDaemonWslSleepCwd } from './daemon-wsl-sleep-cwd'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/pty-provider-contract'
@@ -131,9 +132,21 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
     // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
+      const sleepWslDistro = this.wslDistrosBySessionId.get(id)
+      const sleepCwd = sleepWslDistro
+        ? await readDaemonWslSleepCwd(id, sleepWslDistro, opts.deadlineMs)
+        : null
       const committed = await this.runExclusiveCheckpoint(
         async () => {
-          await this.checkpointSessions([id], { final: true, teardown: true })
+          // Set inside: a caller past its deadline leaves this checkpoint running without it.
+          if (sleepCwd) {
+            this.sleepShellCwds.set(id, sleepCwd)
+          }
+          try {
+            await this.checkpointSessions([id], { final: true, teardown: true })
+          } finally {
+            this.sleepShellCwds.delete(id)
+          }
         },
         { callerDeadlineMs: opts.deadlineMs }
       )
