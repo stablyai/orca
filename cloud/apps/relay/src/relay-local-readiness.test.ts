@@ -55,7 +55,7 @@ describe('local readiness verdict', () => {
     })
     verdict()
     await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise<void>((resolve) => setImmediate(resolve))
     verdict()
     expect(reload).toHaveBeenCalledTimes(2)
   })

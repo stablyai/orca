@@ -1,0 +1,25 @@
+{
+  "original_declaration_sites": 0,
+  "manual_driver_phases": 2,
+  "review_scope": "Complete historical driver, expected phase oracles and current supporting ownership path. Permanent suites remain pending their own case-level review.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/headless-hydration-retention/reproduce.mjs",
+      "exit_code": 1,
+      "result": "ENOENT for retired src/main/runtime/orca-runtime-capture-provider-terminal-buffer.ts before test runner/suites. No current proof pass.",
+      "log": "/tmp/orca-root-0022-hydration.log"
+    }
+  ],
+  "limitations": [
+    "Historical headless-seed-ownership suite and old process-runner path have retired.",
+    "Combined oracle checks counts but does not assert subprocess exit code or timeout, and baseline accepts any nonzero failures within total 22.",
+    "Current renderer hydration checks object ownership before and after awaited reply/write; supporting source read does not mark permanent suite separately reviewed."
+  ],
+  "batch": "root-0022",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 1,
+  "case_records": 2,
+  "production_changes": false,
+  "test_source_changes": false
+}

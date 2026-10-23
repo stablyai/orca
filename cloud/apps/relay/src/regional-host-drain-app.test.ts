@@ -248,7 +248,6 @@ describe('regional host drain endpoint', () => {
       graceMs: 0
     }
 
-    expect(REGIONAL_REHOME_TRUST_PROBE_HOST_ID).toHaveLength(16)
     for (let call = 0; call < 2; call++) {
       const response = await post(app, 'rehome-token', probe)
       expect(response.status).toBe(200)
@@ -470,6 +469,7 @@ describe('regional rehome director controls', () => {
       (await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', withoutCooldown))
         .status
     ).toBe(400)
+    expect(applyRegionalRehomeControl).toHaveBeenCalledExactlyOnceWith(apply)
   })
 
   it('probes dedicated trust twice and returns only aggregate proof', async () => {

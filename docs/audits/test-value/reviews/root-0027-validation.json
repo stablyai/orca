@@ -1,0 +1,29 @@
+{
+  "original_declaration_sites": 0,
+  "retention_cases": 117,
+  "driver_case_records": 123,
+  "behavior_case_records": 26,
+  "review_scope": "Complete four-file graph, every parameter combination and Unicode split; current shared scanner/copier/relay and title-tracker scanner call/reset sites read as supporting evidence.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 timeout 65s node --expose-gc --max-old-space-size=192 docs/audits/osc133-carry-retention/reproduce.cjs /tmp/orca-root-0027-osc133-results.json",
+      "exit_code": 1,
+      "result": "Fixed scanner drift rejects f329ed0c... versus recorded 92bc1aa5... before any bundle/control/heap experiment; no current pass.",
+      "log": "/tmp/orca-root-0027-osc133.log"
+    }
+  ],
+  "limitations": [
+    "117 retention experiments are manual parameter combinations, not static test declarations; additional 32 case records enumerate copier/parity/loader/behavior controls.",
+    "Heap deltas are GC-sensitive, use explicit thresholds and synthetic large-prefix placement; not RSS or exact allocation attribution.",
+    "Fish capture contains complete sequence syntax; large input and cut-before-terminator are deliberately synthetic.",
+    "Only one last incomplete-parent cost per live owner is demonstrated; distinct owners may share backing storage and cannot be summed into process totals.",
+    "No live PTY, renderer, network, historical packaged application or field incident is reproduced; Bufferless helper execution does not prove rendered mobile/desktop behavior."
+  ],
+  "batch": "root-0027",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 4,
+  "case_records": 149,
+  "production_changes": false,
+  "test_source_changes": false
+}

@@ -1,0 +1,33 @@
+{
+  "original_declaration_sites": 0,
+  "expanded_parity_cases": 47,
+  "driver_controls": 3,
+  "review_scope": "Complete mutation driver and separately discovered parity support script; current minidump source/parser read as supporting evidence only.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/crashpad-read-limit/reproduce.mjs",
+      "exit_code": 1,
+      "result": "Source manifest rejects package.json before any suite/mutation; archived results unchanged.",
+      "log": "/tmp/orca-root-0016-crashpad.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 timeout 60s node docs/audits/crashpad-read-limit/stream-signature-parity.cjs",
+      "exit_code": 1,
+      "result": "Build rejects unavailable baseline parser path at pinned 09dbe227547fadaec8d9163f35fd127b0dc1c3ed; no current parity or timing results.",
+      "log": "/tmp/orca-root-0016-crashpad-parity.log"
+    }
+  ],
+  "limitations": [
+    "Parity script itself does not enforce the manifest; the manifest-checking driver must precede any claimed combined proof.",
+    "Parity compares complete result objects to independent old implementation; current parser has evolved and the historical source graph is not updated here.",
+    "Two synthetic timing sizes are measurements with five warm samples per variant, not asserted performance guarantees.",
+    "No native Crashpad process or user incident is reproduced; Windows O_NOFOLLOW skip is platform dependent."
+  ],
+  "batch": "root-0016",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 2,
+  "case_records": 50,
+  "production_changes": false,
+  "test_source_changes": false
+}

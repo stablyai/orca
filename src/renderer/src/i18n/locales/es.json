@@ -16366,7 +16366,13 @@
         "editor": {
           "save": {
             "notUtf8": {
-              "notice": "La función de guardado automático está pausada para {{name}} porque no es texto UTF-8. Guárdalo manualmente para convertirlo a UTF-8."
+              "notice": "El autoguardado está en pausa para {{name}} porque no es texto UTF-8. Si lo guardas tú, se reescribe como UTF-8 y se reemplazan los caracteres que no son UTF-8 válido.",
+              "refused": "Este archivo no es texto UTF-8, así que no se guardó.",
+              "confirm": {
+                "title": "¿Guardar {{name}} como UTF-8?",
+                "description": "Este archivo no es texto UTF-8. Al guardarlo como UTF-8, los caracteres que no son UTF-8 válido se reemplazan por � y los bytes originales no se pueden recuperar.",
+                "action": "Guardar como UTF-8"
+              }
             },
             "failure": {
               "notice": {

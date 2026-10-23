@@ -1,0 +1,28 @@
+{
+  "original_declaration_sites": 0,
+  "repeated_scenario_cycles": 32,
+  "additional_scenario_controls": 5,
+  "driver_controls": 3,
+  "review_scope": "Complete driver, scenario, source loader and baseline Vitest overlay; actual current owner resolver/recovery/identity publication read as supporting evidence only.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 timeout 60s node docs/audits/daemon-shared-owner-incarnation-retention/reproduce.cjs /tmp/orca-root-0018-shared-owner-results.json",
+      "exit_code": 1,
+      "result": "Exact fixed resolver hash rejects e5f1297a... versus recorded 8f62a181... before bundling/scenario/CRLF phases; no current proof pass.",
+      "log": "/tmp/orca-root-0018-shared-owner.log"
+    }
+  ],
+  "limitations": [
+    "Counts are resolver metadata entries, not retained bytes, RSS or incident attribution.",
+    "Finite authenticated transport replies are inert; no native PTY, network, process liveness or historical application runtime is reproduced.",
+    "Current source/dependency graph has evolved; source fences and archived results remain unchanged.",
+    "Thirty-two cycle records enumerate repeated manual inputs, not separate runtime test declarations."
+  ],
+  "batch": "root-0018",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 4,
+  "case_records": 40,
+  "production_changes": false,
+  "test_source_changes": false
+}

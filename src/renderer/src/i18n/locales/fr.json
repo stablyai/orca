@@ -16481,7 +16481,13 @@
         "editor": {
           "save": {
             "notUtf8": {
-              "notice": "L’enregistrement automatique est suspendu pour {{name}} car ce n’est pas du texte UTF-8. Enregistrez-le vous-même pour le convertir en UTF-8."
+              "notice": "L’enregistrement automatique est suspendu pour {{name}}, car ce n’est pas du texte UTF-8. L’enregistrer vous-même le réécrit en UTF-8 et remplace les caractères qui ne sont pas de l’UTF-8 valide.",
+              "refused": "Ce fichier n’est pas du texte UTF-8, il n’a donc pas été enregistré.",
+              "confirm": {
+                "title": "Enregistrer {{name}} en UTF-8 ?",
+                "description": "Ce fichier n’est pas du texte UTF-8. L’enregistrer en UTF-8 remplace par � les caractères qui ne sont pas de l’UTF-8 valide, et les octets d’origine ne pourront pas être récupérés.",
+                "action": "Enregistrer en UTF-8"
+              }
             },
             "failure": {
               "notice": {

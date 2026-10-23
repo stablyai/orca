@@ -425,6 +425,9 @@
         },
         "editor": {
           "save": {
+            "notUtf8": {
+              "refused": "This file isn't UTF-8 text, so it wasn't saved."
+            },
             "sectionStale": {
               "notice": "This file changed on disk since this section loaded."
             },
