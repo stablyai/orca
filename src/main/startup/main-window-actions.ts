@@ -65,15 +65,28 @@ export function showMainWindowFromTray(): void {
   }
 }
 
-export function openSettingsFromSystemMenu(): void {
+/** Shows the main window and sends it a one-shot intent, also queued for a renderer that mounts later. */
+function sendOneShotToMainWindow(
+  channel: string,
+  pending: typeof state.pendingOpenSettings,
+  durationMs: number
+): boolean {
   showMainWindowFromTray()
   const targetWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null
   if (!targetWindow) {
-    return
+    return false
   }
-  recordCrashBreadcrumb('settings_opened')
-  targetWindow.webContents.send('ui:openSettings')
-  state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
+  pending.mark(targetWindow.webContents.id, durationMs)
+  targetWindow.webContents.send(channel)
+  return true
+}
+
+export function openSettingsFromSystemMenu(): void {
+  if (
+    sendOneShotToMainWindow('ui:openSettings', state.pendingOpenSettings, Number.POSITIVE_INFINITY)
+  ) {
+    recordCrashBreadcrumb('settings_opened')
+  }
 }
 
 /**
@@ -134,26 +147,17 @@ export function quitAndStopAllSessionsFromUserCommand(): void {
   void confirmQuitAndStopAllSessions(showMessageBoxOnMainWindow)
     .then((confirmed) => {
       if (confirmed) {
-        requestRendererStopAllSessionsThenQuit()
+        sendOneShotToMainWindow(
+          'ui:quitAndStopAllSessions',
+          state.pendingQuitAndStopAllSessions,
+          QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS
+        )
       }
     })
     .catch((error) => console.error('[quit] Quit and Stop All Sessions failed:', error))
     .finally(() => {
       quitAndStopAllSessionsConfirming = false
     })
-}
-
-function requestRendererStopAllSessionsThenQuit(): void {
-  showMainWindowFromTray()
-  const targetWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null
-  if (!targetWindow) {
-    return
-  }
-  state.pendingQuitAndStopAllSessions.mark(
-    targetWindow.webContents.id,
-    QUIT_AND_STOP_ALL_SESSIONS_REQUEST_TTL_MS
-  )
-  targetWindow.webContents.send('ui:quitAndStopAllSessions')
 }
 
 /** One-shot: true only for the renderer the confirmed request was sent to, before it expires. */

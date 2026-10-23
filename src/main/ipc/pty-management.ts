@@ -28,7 +28,8 @@ import type { DaemonSessionInfo } from '../daemon/types'
 import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
 
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
-const MAX_POLL_ATTEMPTS = 65
+// Why a window, not an attempt count: a wedged generation fails each listing only after the request timeout.
+const POLL_WINDOW_MS = 6_500
 const POLL_INTERVAL_MS = 100
 
 function sleep(ms: number): Promise<void> {
@@ -56,10 +57,10 @@ function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
   return provider ? getCurrentDaemonAdapter(provider).getDaemonIdentity() : null
 }
 
-// Why `complete`: an adapter that failed to list may still own sessions, so its silence is not "none".
+// Why `unlistedVersions`: a generation that failed to list may still own sessions, so its silence is not "none".
 async function listSessionsOfEveryAdapter(
   adapters: DaemonPtyAdapter[]
-): Promise<{ sessions: DaemonSessionInfo[]; complete: boolean }> {
+): Promise<{ sessions: DaemonSessionInfo[]; unlistedVersions: Set<number> }> {
   const results = await Promise.allSettled(
     adapters.map(async (adapter) => {
       const sessions = await adapter.listSessions()
@@ -71,7 +72,11 @@ async function listSessionsOfEveryAdapter(
   )
   return {
     sessions: results.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])),
-    complete: results.every((r) => r.status === 'fulfilled')
+    unlistedVersions: new Set(
+      adapters
+        .filter((_, index) => results[index].status === 'rejected')
+        .map((adapter) => adapter.protocolVersion)
+    )
   }
 }
 
@@ -171,12 +176,14 @@ export function registerDaemonManagementHandlers(): void {
       killedSessionIds: string[]
       listingIncomplete?: boolean
     }> => {
-      const adapters = getDaemonAdapters()
+      const provider = getDaemonProvider()
+      const adapters = provider ? [...getAllDaemonAdapters(provider)] : []
       // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
-      const { sessions: initial, complete } = await listSessionsOfEveryAdapter(adapters)
+      const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
-      const incomplete = complete ? {} : { listingIncomplete: true }
+      // Why no provider counts: a daemon from an earlier run can own sessions when startup here failed.
+      const incomplete = provider && unlistedVersions.size === 0 ? {} : { listingIncomplete: true }
 
       if (initialCount === 0) {
         return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }
@@ -196,27 +203,29 @@ export function registerDaemonManagementHandlers(): void {
       )
 
       // Why: count only the initial-snapshot intersection so renderer respawns mid-kill aren't counted as remaining.
-      let remainingOriginalCount = initialCount
       let remainingOriginalIds = initialIds
-      for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
+      const pollDeadline = Date.now() + POLL_WINDOW_MS
+      while (Date.now() < pollDeadline) {
         await sleep(POLL_INTERVAL_MS)
-        const { sessions: current, complete: polledEveryAdapter } =
-          await listSessionsOfEveryAdapter(adapters)
-        // Why: a failed listing proves nothing died, so keep the last confirmed remaining set.
-        if (!polledEveryAdapter) {
-          continue
-        }
+        const polled = await listSessionsOfEveryAdapter(adapters)
+        const listedIds = new Set(polled.sessions.map((session) => session.sessionId))
+        // Why per generation: an answer proves its own sessions' state; a failed one keeps the last confirmed state.
         remainingOriginalIds = new Set(
-          current
-            .filter((session) => initialIds.has(session.sessionId))
+          initial
+            .filter(
+              (session) =>
+                remainingOriginalIds.has(session.sessionId) &&
+                (polled.unlistedVersions.has(session.protocolVersion) ||
+                  listedIds.has(session.sessionId))
+            )
             .map((session) => session.sessionId)
         )
-        remainingOriginalCount = remainingOriginalIds.size
-        if (remainingOriginalCount === 0) {
+        if (remainingOriginalIds.size === 0) {
           break
         }
       }
 
+      const remainingOriginalCount = remainingOriginalIds.size
       const killedCount = initialCount - remainingOriginalCount
       return {
         killedCount,

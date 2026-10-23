@@ -37,7 +37,9 @@ Session restore runs on every launch. What comes back depends on what happened t
 
 **Sessions stopped before quitting → agents and terminal tabs are gone:**
 
-- **Quit and Stop All Sessions** — in the Orca menu (the File menu on Windows and Linux), and in the menu bar icon on macOS or the tray icon on Windows. After you confirm, Orca closes every terminal tab and stops its session, as **Settings → Terminal → Manage Sessions → Kill all sessions** does, then quits. Projects and worktrees stay in the sidebar; the closed terminal tabs don't come back on next launch. Terminal sessions on remote hosts may keep running there, and a tab from a paired Orca server can come back if the server never received the close. If a session on this computer can't be stopped, Orca shows an error and stays open.
+- **Quit and Stop All Sessions** — after you confirm, Orca closes every terminal tab and stops its session, as **Settings → Terminal → Manage Sessions → Kill all sessions** does, then quits. Projects and worktrees stay in the sidebar; the closed terminal tabs don't come back on next launch.
+
+The item is in the Orca menu on macOS, and under **File** in the application menu (the **···** button in the title bar) on Windows and Linux. It is also in the menu bar icon menu on macOS and the tray icon menu on Windows. Terminal sessions on remote hosts may keep running there, and a tab from a paired Orca server can come back if the server never received the close. If a session on this computer can't be stopped, Orca shows an error and stays open.
 
 <Callout title="Starting fresh">
   If you want a clean slate, close worktrees explicitly before quitting. There is no "open in a new

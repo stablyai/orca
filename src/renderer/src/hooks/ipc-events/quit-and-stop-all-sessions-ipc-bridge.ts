@@ -51,8 +51,17 @@ async function stopAllSessionsThenQuit(): Promise<void> {
       return
     }
     const summary = await runKillAllTerminalSurfaces(snapshotKillAllTerminalSurfaceIds())
+    if (!stoppedEverySession(summary)) {
+      showStopAllFailure()
+      return
+    }
     // Why re-read: Kill all covers only its snapshot, and a tab opened meanwhile would outlive the quit.
-    if (!stoppedEverySession(summary) || snapshotKillAllTerminalSurfaceIds().length > 0) {
+    const leftoverTabIds = snapshotKillAllTerminalSurfaceIds()
+    if (leftoverTabIds.length > 0) {
+      console.warn(
+        '[quit-and-stop-all-sessions] Terminal tabs opened during Kill all:',
+        leftoverTabIds
+      )
       showStopAllFailure()
       return
     }

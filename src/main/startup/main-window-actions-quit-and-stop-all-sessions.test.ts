@@ -67,11 +67,12 @@ beforeEach(() => {
   Object.assign(state, { mainWindow })
 })
 
-describe('quitAndStopAllSessionsFromUserCommand', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
+describe('quitAndStopAllSessionsFromUserCommand', () => {
   it('reveals the window, confirms on it, then asks its renderer to stop every session without quitting yet', async () => {
     prompt.confirm.mockImplementation(async (showMessageBox) => {
       await showMessageBox({ message: 'confirm' })
@@ -150,6 +151,22 @@ describe('quitAndStopAllSessionsFromUserCommand', () => {
     expect(prompt.confirm).toHaveBeenCalledTimes(2)
   })
 
+  it('offers the confirmation again after one fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    prompt.confirm.mockRejectedValueOnce(new Error('dialog failed')).mockResolvedValue(false)
+
+    quitAndStopAllSessionsFromUserCommand()
+    await flushPromptChain()
+    quitAndStopAllSessionsFromUserCommand()
+    await flushPromptChain()
+
+    expect(error).toHaveBeenCalledWith(
+      '[quit] Quit and Stop All Sessions failed:',
+      expect.any(Error)
+    )
+    expect(prompt.confirm).toHaveBeenCalledTimes(2)
+  })
+
   it('never stops the sessions of a serve host, whose user Quit does not exit', async () => {
     state.isServeMode = true
 
@@ -175,6 +192,30 @@ describe('quitAfterRendererStoppedAllSessions', () => {
     quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
     quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
 
+    expect(electron.quit).toHaveBeenCalledOnce()
+  })
+
+  it('reveals the window before the final user Quit', () => {
+    expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
+    vi.mocked(safelyRevealWindow).mockClear()
+
+    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+
+    expect(safelyRevealWindow).toHaveBeenCalledWith(mainWindow)
+    expect(vi.mocked(safelyRevealWindow).mock.invocationCallOrder[0]).toBeLessThan(
+      electron.quit.mock.invocationCallOrder[0]
+    )
+    expect(state.isQuitting).toBe(true)
+  })
+
+  it('ignores a renderer other than the one that consumed the request', () => {
+    expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
+
+    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID + 1)
+    expect(electron.quit).not.toHaveBeenCalled()
+
+    // The stray sender must not use up the consumer's authorization either.
+    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
     expect(electron.quit).toHaveBeenCalledOnce()
   })
 

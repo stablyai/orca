@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KillAllTerminalSurfacesSummary } from '@/components/shared/kill-all-terminal-surfaces'
 
 type KillAllSummary = Pick<
@@ -76,6 +76,10 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
     installUiApi()
   })
 
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('waits for the restored session, stops every terminal surface, then asks main to quit', async () => {
     registerQuitAndStopAllSessionsIpcBridge([])
     await settle()
@@ -132,16 +136,21 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
   })
 
   it.each([
-    ['the restored tabs never became ready', () => mocks.waitReady.mockResolvedValue(false)],
+    [
+      'the restored tabs never became ready',
+      () => mocks.waitReady.mockResolvedValue(false),
+      { ready: false, hydrationSucceeded: true }
+    ],
     [
       'the session restore failed, so closed tabs would not be saved',
       () => {
         mocks.storeState.hydrationSucceeded = false
-      }
+      },
+      { ready: true, hydrationSucceeded: false }
     ]
-  ])('stops nothing and stays open when %s', async (_name, arrange) => {
+  ])('stops nothing and stays open when %s', async (_name, arrange, logged) => {
     arrange()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     pending.push(true)
 
     registerQuitAndStopAllSessionsIpcBridge([])
@@ -149,6 +158,10 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
 
     expect(mocks.runKillAll).not.toHaveBeenCalled()
     expectStayedOpen()
+    expect(warn).toHaveBeenCalledWith(
+      '[quit-and-stop-all-sessions] Workspace session not ready:',
+      logged
+    )
   })
 
   it.each<[string, KillAllSummary]>([
@@ -178,22 +191,55 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
 
   it('stays open when a terminal tab opened while Kill all ran', async () => {
     mocks.snapshotIds.mockReset().mockReturnValueOnce(['tab-1']).mockReturnValue(['tab-new'])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     pending.push(true)
 
     registerQuitAndStopAllSessionsIpcBridge([])
     await settle()
 
     expectStayedOpen()
+    expect(warn).toHaveBeenCalledWith(
+      '[quit-and-stop-all-sessions] Terminal tabs opened during Kill all:',
+      ['tab-new']
+    )
   })
 
   it('stays open and says so when stopping the sessions throws', async () => {
     mocks.runKillAll.mockRejectedValue(new Error('IPC failed'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     pending.push(true)
 
     registerQuitAndStopAllSessionsIpcBridge([])
     await settle()
 
     expectStayedOpen()
+    expect(error).toHaveBeenCalledWith(
+      '[quit-and-stop-all-sessions] Stopping sessions failed:',
+      expect.any(Error)
+    )
+  })
+
+  it('runs again on the next request after a failed attempt', async () => {
+    mocks.runKillAll
+      .mockResolvedValueOnce({ ...CLEAN_SUMMARY, failedCloseAttemptCount: 1 })
+      .mockResolvedValue(CLEAN_SUMMARY)
+    // The failed sweep returns before its re-check; the second sweep leaves no tab behind.
+    mocks.snapshotIds
+      .mockReset()
+      .mockReturnValueOnce(['tab-1'])
+      .mockReturnValueOnce(['tab-1'])
+      .mockReturnValue([])
+    pending.push(true)
+
+    registerQuitAndStopAllSessionsIpcBridge([])
+    await settle()
+    expectStayedOpen()
+
+    pending.push(true)
+    pushListener?.()
+    await settle()
+
+    expect(mocks.runKillAll).toHaveBeenCalledTimes(2)
+    expect(quitAfterStoppingAllSessions).toHaveBeenCalledOnce()
   })
 })
