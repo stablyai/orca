@@ -18517,8 +18517,8 @@
         "usageLimitReached": "{{agent}} が使用量の上限に達しました。",
         "usageLimitReachedNamed": "{{agent}} が{{window}}の上限に達しました。",
         "usageLimitWindowSession": "セッション",
-        "usageLimitWindowWeekly": "週間",
-        "usageLimitWindowWeeklyModel": "モデル別の週間",
+        "usageLimitWindowWeekly": "週あたり",
+        "usageLimitWindowWeeklyModel": "モデルごとの週あたり",
         "usageLimitWindowCredits": "追加使用量",
         "usageLimitResetsAt": "{{when}} にリセットされます。",
         "usageLimitSendAfterReset": "リセット後にメッセージを送信すると続行できます。",
@@ -18548,7 +18548,7 @@
         "capacity": "このチャットを実行しているコンピューターの Orca がリクエストの上限に達しました。そのコンピューターで Orca を更新してから、もう一度お試しください。",
         "outcomeUnknown": "Orca は何が起きたかを確認できませんでした。チャットを確認してください。",
         "sendOutcomeLost": "Orca はメッセージが Agent に届いたことを確認できませんでした。チャットを確認し、必要であればもう一度送信してください。",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
+        "continuationSuperseded": "このチャットにはすでに新しい動きがあります。続ける前に最新のメッセージを確認してください。",
         "questionChanged": "この質問はすでに回答済みか、変更されています。",
         "cancelNotSaved": "この質問または承認をキャンセルできませんでした。",
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
@@ -19146,7 +19146,7 @@
         "continue": "続行",
         "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
         "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
+        "unconfirmed": "{{agent}} が「続行」を受け取ったか確認できませんでした。もう一度試す前にチャットを確認してください。",
         "usageLimitExplanation": "中断したところから続けるよう Agent に依頼します。上限がリセットされてから使ってください。"
       },
       "rewind": {

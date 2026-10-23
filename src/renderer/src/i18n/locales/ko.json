@@ -18548,7 +18548,7 @@
         "capacity": "이 채팅을 실행하는 컴퓨터의 Orca가 요청 한도에 도달했습니다. 해당 컴퓨터에서 Orca를 업데이트한 다음 다시 시도하세요.",
         "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
         "sendOutcomeLost": "Orca가 메시지가 에이전트에 전달되었는지 확인하지 못했습니다. 채팅을 확인하고 필요하면 다시 보내세요.",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
+        "continuationSuperseded": "이 채팅에 새 메시지가 있습니다. 계속하기 전에 최신 메시지를 확인하세요.",
         "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
         "cancelNotSaved": "이 질문 또는 승인을 취소하지 못했습니다.",
         "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
@@ -19146,7 +19146,7 @@
         "continue": "계속",
         "failed": "이 채팅을 계속할 수 없습니다. 다시 시도하거나 메시지를 보내세요.",
         "explanation": "계속하면 에이전트가 먼저 마지막 단계가 완료되었는지 확인합니다.",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
+        "unconfirmed": "{{agent}}에게 ‘계속’이 전달되었는지 확인할 수 없습니다. 다시 시도하기 전에 채팅을 확인하세요.",
         "usageLimitExplanation": "중단한 곳부터 계속하도록 에이전트에 요청합니다. 한도가 초기화된 후 사용하세요."
       },
       "rewind": {

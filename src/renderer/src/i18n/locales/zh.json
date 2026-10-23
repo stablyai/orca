@@ -18483,7 +18483,7 @@
         "usageLimitReachedNamed": "{{agent}} 已达到{{window}}上限。",
         "usageLimitWindowSession": "会话",
         "usageLimitWindowWeekly": "每周",
-        "usageLimitWindowWeeklyModel": "模型每周",
+        "usageLimitWindowWeeklyModel": "每个模型每周",
         "usageLimitWindowCredits": "额外用量",
         "usageLimitResetsAt": "将在 {{when}} 重置。",
         "usageLimitSendAfterReset": "重置后发送消息即可继续。",
@@ -18513,7 +18513,7 @@
         "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限。请在那台计算机上更新 Orca，然后重试。",
         "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
         "sendOutcomeLost": "Orca 无法确认你的消息已送达智能体。请查看聊天，如有需要请重新发送。",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
+        "continuationSuperseded": "此聊天已有新进展。继续前请查看最新消息。",
         "questionChanged": "此问题已被回答或已更改。",
         "cancelNotSaved": "无法取消此问题或审批。",
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录。",
@@ -19115,7 +19115,7 @@
         "continue": "继续",
         "failed": "无法继续此聊天。请重试，或发送一条消息。",
         "explanation": "继续后，智能体会先检查其上一步是否已完成。",
-        "unconfirmed": "Couldn't confirm whether {{agent}} received Continue. Check the chat before trying again.",
+        "unconfirmed": "无法确认 {{agent}} 是否收到了“继续”。请先查看聊天，再重试。",
         "usageLimitExplanation": "让智能体从中断处继续。请在上限重置后使用。"
       },
       "rewind": {
