@@ -131,6 +131,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               agentTeamsPlan?.envToDelete
             ),
             resumeProviderSession: launchOpts.resumeProviderSession,
+            launchConfig: effectiveLaunchConfig,
             telemetry: launchOpts.telemetry,
             connectionId: workspace.connectionId,
             worktreeId: workspace.id,
@@ -246,8 +247,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               pty.titleUpdatedAt = observedAt
               this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
             } else {
-              pty.title = null
-              pty.titleUpdatedAt = null
+              Object.assign(pty, { title: null, titleUpdatedAt: null })
             }
             pty.launchConfig = effectiveLaunchConfig
               ? dependencies.copySleepingAgentLaunchConfig(effectiveLaunchConfig)

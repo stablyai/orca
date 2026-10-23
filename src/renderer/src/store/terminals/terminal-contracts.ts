@@ -9,6 +9,7 @@ export type AutomaticAgentResumeClaim = {
   worktreeId: string
   launchAgent: TuiAgent
   providerSession: AgentProviderSessionMetadata
+  recoveryPaneKey?: string
 }
 
 /** Agents whose panes restart in place onto a newly selected account. */

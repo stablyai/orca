@@ -12,7 +12,7 @@ function readHookHeader(headers: IncomingHttpHeaders, name: string): string | un
   return Array.isArray(value) ? value[0] : value
 }
 
-function decodeBase64HookHeader(value: string): string | undefined {
+export function decodeBase64HookHeader(value: string): string | undefined {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 === 1) {
     return undefined
   }
@@ -84,6 +84,9 @@ export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHtt
   return {
     ...metadata,
     agentProcess: readHookHeader(headers, 'x-orca-agent-process'),
+    claudeConfigKind: readHookHeader(headers, 'x-orca-claude-config-kind'),
+    claudeConfigDir: readHookMetadataHeader(headers, 'x-orca-claude-config-dir', metadataEncoding),
+    claudeUserHome: readHookMetadataHeader(headers, 'x-orca-claude-user-home', metadataEncoding),
     payload: body
   }
 }

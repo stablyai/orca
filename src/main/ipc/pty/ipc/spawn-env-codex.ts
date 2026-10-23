@@ -14,6 +14,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     launchAgent: args.launchAgent,
     command: args.command,
     resumeProviderSession: args.resumeProviderSession,
+    resumeLaunchConfig: args.launchConfig,
     env: ctx.baseEnv,
     cwd: ctx.cwd,
     shellOverride: ctx.effectiveShellOverride,

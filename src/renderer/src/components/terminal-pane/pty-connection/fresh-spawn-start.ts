@@ -1,3 +1,7 @@
+import {
+  claudeResumeHostSupportsCheckedRestore,
+  claudeCheckedResumeUnavailableMessage
+} from '@/lib/claude-checked-resume-host'
 import { armPaneOwnerRetry, isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
@@ -92,6 +96,23 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.pendingSpawnDeferral = null
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
     const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
+    if (
+      effectiveStartup?.resumeProviderSession &&
+      (coldRestoreOverride?.agent ?? effectiveStartup.launchAgent) === 'claude'
+    ) {
+      session.preserveClaudeResumeRecord = true
+      if (
+        !claudeResumeHostSupportsCheckedRestore(useAppStore.getState(), session.deps.worktreeId, {
+          executionHostId: session.executionHostId ?? null,
+          runtimeEnvironmentId: session.transport.getRuntimeEnvironmentId?.() ?? null
+        })
+      ) {
+        session.reportError(claudeCheckedResumeUnavailableMessage())
+        releaseDeferredCwdFence()
+        clearPreSignaledSerializer()
+        return Promise.resolve(null)
+      }
+    }
     let ownerRefused = false
     const outputCallbacks = session.captureTransportOutputCallbacks(
       (message: string) => {
@@ -201,18 +222,21 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
               foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
             })
           }
-          if (
-            spawnedPtyId &&
-            typeof spawnedPtyId === 'object' &&
-            spawnedPtyId.agentResumeUnavailable
-          ) {
+          if (connectResult?.agentResumeUnavailable) {
             // Why: main dropped the resume argv, so this pane is a NEW session —
             // the plain restored banner would claim the old one came back.
+            session.preserveClaudeResumeRecord = true
             session.showSessionRestoredBanner('resume-unavailable')
           } else if (coldRestoreOverride?.hasSleepingRecord) {
             session.showSessionRestoredBanner()
           }
-          session.clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+          if (
+            !connectResult?.agentResumeUnavailable &&
+            (coldRestoreOverride || effectiveStartup?.resumeProviderSession)
+          ) {
+            session.preserveClaudeResumeRecord = false
+            session.clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
+          }
         } else if (
           session.paneStartup?.launchConfig ||
           (startupOverride && 'launchConfig' in startupOverride)

@@ -181,6 +181,28 @@ describe.skipIf(process.platform !== 'win32' || !tempIsCmdSafe)('native agent ho
     expect(reference.type).toBe('application/x-www-form-urlencoded')
   })
 
+  it.each([undefined, '', 'C:\\Users\\用户 !x! &root\\custom.claude'])(
+    'captures the same executed store in native and cmd hooks (%s)',
+    async (configDir) => {
+      const listener = await listen()
+      const home = 'C:\\Users\\Original 用户'
+      const env = paneEnv(listener, { HOME: home, CLAUDE_CONFIG_DIR: configDir })
+      for (const [program, args] of [
+        ['cmd.exe', ['/d', '/c', join(dir, 'claude-hook.cmd')]],
+        [exePath, ['claude']]
+      ] as const) {
+        const result = await run(program, [...args], env)
+        expect(result.code).toBe(0)
+      }
+      expect(listener.posts).toHaveLength(2)
+      expect(listener.posts[1]).toEqual(listener.posts[0])
+      const fields = JSON.parse(listener.posts[0]!.form)
+      expect(fields).toContainEqual(['claudeConfigKind', configDir ? 'explicit' : 'default'])
+      expect(fields).toContainEqual(['claudeConfigDir', configDir ?? ''])
+      expect(fields).toContainEqual(['claudeUserHome', home])
+    }
+  )
+
   it('exits 0 without reading stdin outside an Orca pane or in a background job (#11549, #9236)', async () => {
     const listener = await listen()
     for (const env of [

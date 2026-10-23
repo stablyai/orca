@@ -51,6 +51,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     retainedAgentsByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
+    automaticAgentResumeClaimsByTabId: {},
     suppressedPtyExitIds: {},
     agentLaunchConfigByPaneKey: {},
     getAgentLaunchConfigForStatusEntry: vi.fn((entry: { paneKey: string }) => {

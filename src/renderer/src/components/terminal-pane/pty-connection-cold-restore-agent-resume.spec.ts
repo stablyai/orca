@@ -337,69 +337,81 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
 
-    it('marks the pane as freshly started when main declined an unverifiable resume', async () => {
-      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('fresh-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-        if (sessionId) {
-          // Why: main dropped `resume <id>` because it could not verify which Codex
-          // account owns the rollout, so this PTY is a new session, not a restore.
-          return {
-            id: 'fresh-pty',
-            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' },
-            agentResumeUnavailable: true as const
+    it.each(['codex', 'claude'] as const)(
+      'keeps the %s recovery record when the host declines its resume',
+      async (agent) => {
+        vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('fresh-pty')
+        transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+          if (sessionId) {
+            // Why: main dropped `resume <id>` because it could not verify which Codex
+            // account owns the rollout, so this PTY is a new session, not a restore.
+            return {
+              id: 'fresh-pty',
+              coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' },
+              agentResumeUnavailable: true as const
+            }
+          }
+          return 'fresh-pty'
+        })
+        transportFactoryQueue.push(transport)
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        mockStoreState = {
+          ...mockStoreState,
+          tabsByWorktree: {
+            'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+          },
+          settings: {
+            ...mockStoreState.settings,
+            agentCmdOverrides: {}
+          },
+          agentStatusByPaneKey: {},
+          sleepingAgentSessionsByPaneKey: {
+            [paneKey]: {
+              paneKey,
+              tabId: 'tab-1',
+              worktreeId: 'wt-1',
+              agent,
+              providerSession: { key: 'session_id', id: `${agent}-session-1` },
+              prompt: 'finish the task',
+              state: 'working',
+              capturedAt: 1,
+              updatedAt: 1
+            }
           }
         }
-        return 'fresh-pty'
-      })
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
-        },
-        settings: {
-          ...mockStoreState.settings,
-          agentCmdOverrides: {}
-        },
-        agentStatusByPaneKey: {},
-        sleepingAgentSessionsByPaneKey: {
-          [paneKey]: {
-            paneKey,
-            tabId: 'tab-1',
-            worktreeId: 'wt-1',
-            agent: 'codex',
-            providerSession: { key: 'session_id', id: 'codex-session-1' },
-            prompt: 'finish the task',
-            state: 'working',
-            capturedAt: 1,
-            updatedAt: 1
-          }
+
+        const pane = createPane(1)
+        const manager = createManager(1)
+        const deps = createDeps({
+          restoredLeafId: LEAF_1,
+          restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+        })
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks(20)
+        await vi.advanceTimersByTimeAsync(70)
+
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
+          expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
+          return
         }
-      } as StoreState
 
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps({
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
-      })
-
-      connectPanePty(pane as never, manager as never, deps as never)
-      await flushAsyncTicks(20)
-      await vi.advanceTimersByTimeAsync(70)
-
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Main resumes the agent; the window attaches, paints the host's history, and resumes nothing.
-        expectWindowPaintsColdRestoreOnly(pane, transport, deps, mockStoreState, 'lost-pty')
-        return
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          providerSession: { id: `${agent}-session-1` }
+        })
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(paneKey)
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeProviderSession: expect.objectContaining({ id: `${agent}-session-1` })
+          })
+        )
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'resume-unavailable')
       }
-
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'resume-unavailable')
-    })
+    )
 
     it('resumes from an unambiguous legacy sleeping record when cold-restoring a preserved pane', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })

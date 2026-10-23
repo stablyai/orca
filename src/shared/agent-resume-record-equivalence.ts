@@ -1,4 +1,6 @@
+import { claudeResumeOriginsEqual } from './claude-resume-origin'
 import type { SleepingAgentSessionRecord, SleepingAgentLaunchConfig } from './agent-session-resume'
+import { claudeResumeConfigsEqual } from './claude-resume-config'
 import { agentProviderSessionsEqual } from './agent-session-resume'
 import { agentMainAgentVerdict } from './agent-main-agent-verdict'
 
@@ -34,6 +36,16 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.worktreeId === next.worktreeId &&
     existing.agent === next.agent &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
+    claudeResumeConfigsEqual(
+      existing.providerSession.claudeConfig,
+      next.providerSession.claudeConfig
+    ) &&
+    ((existing.providerSession.claudeConfigOrigin === undefined &&
+      next.providerSession.claudeConfigOrigin === undefined) ||
+      claudeResumeOriginsEqual(
+        existing.providerSession.claudeConfigOrigin,
+        next.providerSession.claudeConfigOrigin
+      )) &&
     existing.prompt === next.prompt &&
     existing.state === next.state &&
     existing.updatedAt === next.updatedAt &&
@@ -61,6 +73,16 @@ export function recoveryRecordMatches(
     existing.state === next.state &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
+    claudeResumeConfigsEqual(
+      existing.providerSession.claudeConfig,
+      next.providerSession.claudeConfig
+    ) &&
+    ((existing.providerSession.claudeConfigOrigin === undefined &&
+      next.providerSession.claudeConfigOrigin === undefined) ||
+      claudeResumeOriginsEqual(
+        existing.providerSession.claudeConfigOrigin,
+        next.providerSession.claudeConfigOrigin
+      )) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
 }

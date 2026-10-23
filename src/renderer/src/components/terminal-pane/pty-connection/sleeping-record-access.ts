@@ -27,6 +27,23 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     if (stableRecord) {
       return { paneKey: session.cacheKey, record: stableRecord }
     }
+    const claim = state.automaticAgentResumeClaimsByTabId[session.deps.tabId]
+    const claimedRecord = claim?.recoveryPaneKey
+      ? state.sleepingAgentSessionsByPaneKey[claim.recoveryPaneKey]
+      : undefined
+    if (
+      claimedRecord &&
+      claim?.recoveryPaneKey &&
+      claimedRecord.worktreeId === session.deps.worktreeId &&
+      claimedRecord.agent === claim.launchAgent &&
+      agentProviderSessionsEqual(
+        claimedRecord.agent,
+        claimedRecord.providerSession,
+        claim.providerSession
+      )
+    ) {
+      return { paneKey: claim.recoveryPaneKey, record: claimedRecord }
+    }
     const legacy = findLegacyNumericSleepingRecord(
       state.sleepingAgentSessionsByPaneKey,
       { tabId: session.deps.tabId, numericPaneId: String(session.pane.id) },

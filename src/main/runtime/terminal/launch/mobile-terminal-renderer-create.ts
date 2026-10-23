@@ -5,7 +5,10 @@ import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-t
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
@@ -35,6 +38,7 @@ export type MobileTerminalCreateOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  resumeProviderSession?: AgentProviderSessionMetadata
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   clientNavigationId?: string
@@ -152,13 +156,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         opts.activate !== false,
         afterTabId,
         {
-          command: startupCommand.command,
+          ...startupCommand,
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           cwd,
-          env: startupCommand.env,
-          envToDelete: startupCommand.envToDelete,
-          startupCommandDelivery: startupCommand.startupCommandDelivery,
-          launchAgent: startupCommand.launchAgent,
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
@@ -166,8 +166,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             afterDesktopTabId
           ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
-          launchConfig: startupCommand.launchConfig,
-          launchRuntime: startupCommand.launchRuntime,
           signal: opts.signal
         }
       )
@@ -224,6 +222,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(startupCommand.resumeProviderSession
+            ? { resumeProviderSession: startupCommand.resumeProviderSession }
+            : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
@@ -284,19 +285,13 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           opts.activate !== false,
           afterTabId,
           {
-            command: startupCommand.command,
+            ...startupCommand,
             ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
             cwd,
-            env: startupCommand.env,
-            envToDelete: startupCommand.envToDelete,
-            startupCommandDelivery: startupCommand.startupCommandDelivery,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
-            launchAgent: startupCommand.launchAgent,
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
-            launchConfig: startupCommand.launchConfig,
-            launchRuntime: startupCommand.launchRuntime,
             signal: opts.signal
           }
         )

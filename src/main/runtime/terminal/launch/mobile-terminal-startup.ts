@@ -29,6 +29,7 @@ export type MobileTerminalCommandOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  resumeProviderSession?: AgentProviderSessionMetadata
 }
 
 /** What a resume reads from a recorded session; a SleepingAgentSessionRecord is one. */
@@ -49,6 +50,7 @@ export type MobileTerminalCommand = {
   launchAgent?: TuiAgent
   /** What the command was quoted for; the create spawns with it. */
   launchRuntime?: AgentLaunchRuntime
+  resumeProviderSession?: AgentProviderSessionMetadata
 }
 
 export type MobileTerminalResumeCommand = MobileTerminalCommand & {
@@ -118,6 +120,9 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
         envToDelete: opts.envToDelete,
         launchConfig: opts.launchConfig,
         launchAgent: opts.launchAgent,
+        ...(opts.command && opts.resumeProviderSession
+          ? { resumeProviderSession: opts.resumeProviderSession }
+          : {}),
         startupCommandDelivery: opts.startupCommandDelivery
       }
     }

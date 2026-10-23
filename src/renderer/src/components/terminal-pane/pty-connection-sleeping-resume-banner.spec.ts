@@ -185,93 +185,118 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
 
-    it('says the fresh-spawn resume started fresh when main declined it', async () => {
-      // Why: the primary #10757 path — the sidebar resumes a sleeping agent into a new tab,
-      // so there is no restored PTY and the spawn is fresh, not a cold restore.
-      const { connectPanePty } = await import('./pty-connection')
-      const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
-      const transport = createMockTransport()
-      transport.connect.mockImplementation(() => spawn.promise)
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_2)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: null }]
-        },
-        ptyIdsByTabId: {
-          'tab-1': []
-        },
-        terminalLayoutsByTabId: {
-          'tab-1': {
-            root: { type: 'leaf', leafId: LEAF_2 },
-            activeLeafId: LEAF_2,
-            expandedLeafId: null,
-            ptyIdsByLeafId: {}
-          }
-        },
-        settings: {
-          ...mockStoreState.settings,
-          agentCmdOverrides: {}
-        },
-        agentStatusByPaneKey: {},
-        sleepingAgentSessionsByPaneKey: {
-          [paneKey]: {
-            paneKey,
-            tabId: 'tab-1',
-            worktreeId: 'wt-1',
-            agent: 'codex',
-            providerSession: { key: 'session_id', id: 'codex-session-1' },
-            prompt: 'finish the task',
-            state: 'working',
-            capturedAt: 1,
-            updatedAt: 1
+    it.each(['codex', 'claude'] as const)(
+      'retains the %s recovery record when a fresh resume is declined',
+      async (agent) => {
+        // Why: the primary #10757 path — the sidebar resumes a sleeping agent into a new tab,
+        // so there is no restored PTY and the spawn is fresh, not a cold restore.
+        const { connectPanePty } = await import('./pty-connection')
+        const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
+        const transport = createMockTransport()
+        transport.connect.mockImplementation(() => spawn.promise)
+        transportFactoryQueue.push(transport)
+        const paneKey = makePaneKey('tab-1', LEAF_2)
+        const recordPaneKey = agent === 'claude' ? 'original-tab:original-leaf' : paneKey
+        mockStoreState = {
+          ...mockStoreState,
+          tabsByWorktree: {
+            'wt-1': [{ id: 'tab-1', ptyId: null }]
+          },
+          ptyIdsByTabId: {
+            'tab-1': []
+          },
+          terminalLayoutsByTabId: {
+            'tab-1': {
+              root: { type: 'leaf', leafId: LEAF_2 },
+              activeLeafId: LEAF_2,
+              expandedLeafId: null,
+              ptyIdsByLeafId: {}
+            }
+          },
+          settings: {
+            ...mockStoreState.settings,
+            agentCmdOverrides: {}
+          },
+          automaticAgentResumeClaimsByTabId:
+            agent === 'claude'
+              ? {
+                  'tab-1': {
+                    recoveryPaneKey: recordPaneKey,
+                    worktreeId: 'wt-1',
+                    launchAgent: 'claude',
+                    providerSession: { key: 'session_id', id: 'claude-session-1' }
+                  }
+                }
+              : {},
+          agentStatusByPaneKey: {},
+          sleepingAgentSessionsByPaneKey: {
+            [recordPaneKey]: {
+              paneKey: recordPaneKey,
+              tabId: 'tab-1',
+              worktreeId: 'wt-1',
+              agent,
+              providerSession: { key: 'session_id', id: `${agent}-session-1` },
+              prompt: 'finish the task',
+              state: 'working',
+              capturedAt: 1,
+              updatedAt: 1
+            }
           }
         }
-      } as StoreState
 
-      const pane = createPane(2)
-      const manager = createManager(2)
-      const deps = createDeps({
-        restoredLeafId: LEAF_2,
-        restoredPtyIdByLeafId: {}
-      })
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        await mainStartsPaneAs({
-          ptyId: 'pty-main',
-          bind: (ptyId) => {
-            bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
-            publishesResumeOutcomeInStore(
-              () => mockStoreState,
-              paneKey,
-              'resume-unavailable'
-            )(ptyId)
-          },
-          transport
+        const pane = createPane(2)
+        const manager = createManager(2)
+        const deps = createDeps({
+          restoredLeafId: LEAF_2,
+          restoredPtyIdByLeafId: {}
         })
-      }
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          await mainStartsPaneAs({
+            ptyId: 'pty-main',
+            bind: (ptyId) => {
+              bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)(ptyId)
+              publishesResumeOutcomeInStore(
+                () => mockStoreState,
+                paneKey,
+                'resume-unavailable'
+              )(ptyId)
+            },
+            transport
+          })
+        }
 
-      connectPanePty(pane as never, manager as never, deps as never)
-      await flushAsyncTicks(4)
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks(4)
 
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        // Main starts the pane and declines its resume; the window attaches and says so.
-        await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          // Main starts the pane and declines its resume; the window attaches and says so.
+          await expectWindowStartAskedMain(transport, paneKey, mockStoreState)
+          await flushAsyncTicks(10)
+          expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+          expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
+          return
+        }
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.not.objectContaining({ sessionId: expect.any(String) })
+        )
+
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[recordPaneKey]).toBeDefined()
+        spawn.resolve({ id: 'fresh-pty', agentResumeUnavailable: true })
         await flushAsyncTicks(10)
+
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[recordPaneKey]).toMatchObject({
+          providerSession: { id: `${agent}-session-1` }
+        })
+        expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalledWith(recordPaneKey)
+        expect(transport.connect).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeProviderSession: expect.objectContaining({ id: `${agent}-session-1` })
+          })
+        )
         expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
         expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
-        return
       }
-      expect(transport.connect).toHaveBeenCalledWith(
-        expect.not.objectContaining({ sessionId: expect.any(String) })
-      )
-
-      spawn.resolve({ id: 'fresh-pty', agentResumeUnavailable: true })
-      await flushAsyncTicks(10)
-
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'resume-unavailable')
-    })
+    )
 
     it('lets a declined resume replace an already-shown restored banner', async () => {
       // Why: the banner latch is one-shot per pane. A pane that showed "session restored"

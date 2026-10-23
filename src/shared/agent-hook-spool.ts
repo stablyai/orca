@@ -1,3 +1,4 @@
+import { decodeBase64HookHeader } from './agent-hook-listener/hook-envelope'
 import { createHash } from 'node:crypto'
 import {
   closeSync,
@@ -40,6 +41,19 @@ export function buildSpoolHookBody(record: SpoolRecord): Record<string, unknown>
     launchToken: record.launchToken,
     hookEventName: record.hookEventName,
     agentProcess: record.agentProcess,
+    claudeConfigKind: record.claudeConfigKind,
+    claudeConfigDir:
+      record.claudeConfigEncoding === 'base64'
+        ? typeof record.claudeConfigDir === 'string'
+          ? decodeBase64HookHeader(record.claudeConfigDir)
+          : undefined
+        : record.claudeConfigDir,
+    claudeUserHome:
+      record.claudeConfigEncoding === 'base64'
+        ? typeof record.claudeUserHome === 'string'
+          ? decodeBase64HookHeader(record.claudeUserHome)
+          : undefined
+        : record.claudeUserHome,
     opencodeMajor: record.opencodeMajor,
     opencodeTui: record.opencodeTui,
     opencodeSharedServer: record.opencodeSharedServer,

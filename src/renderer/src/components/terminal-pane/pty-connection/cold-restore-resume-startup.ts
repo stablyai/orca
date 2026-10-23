@@ -1,3 +1,7 @@
+import {
+  claudeResumeHostSupportsCheckedRestore,
+  claudeCheckedResumeUnavailableMessage
+} from '@/lib/claude-checked-resume-host'
 import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
@@ -35,6 +39,9 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     if (!agent || !isResumableTuiAgent(agent)) {
       return null
     }
+    if (agent === 'claude') {
+      session.preserveClaudeResumeRecord = true
+    }
     const providerSession = normalizeAgentProviderSession(
       useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
     )
@@ -58,6 +65,17 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       ) ||
       (sleepingRecord && sleepingRecordNamesAnotherExecutionHost(sleepingRecord, state))
     ) {
+      return null
+    }
+    if (
+      agent === 'claude' &&
+      !claudeResumeHostSupportsCheckedRestore(state, session.deps.worktreeId, {
+        executionHostId: session.executionHostId ?? null,
+        runtimeEnvironmentId: session.transport.getRuntimeEnvironmentId?.() ?? null
+      })
+    ) {
+      session.preserveClaudeResumeRecord = true
+      session.reportError(claudeCheckedResumeUnavailableMessage())
       return null
     }
     const matchingSleepingLaunchConfig =

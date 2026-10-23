@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { startupNeedsWindowSpawn } from '@/store/terminals/window-tab-start-in-main'
 import { seedStartupSessionRestoredBanner } from '@/components/terminal-pane/session-restored-banner-pane-state'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { AGENT_SESSION_CLAUDE_CHECKED_RESUME_RUNTIME_CAPABILITY } from '../../../shared/agent-session-resume-runtime-capabilities'
 import type { AppState } from '@/store/types'
 
 type TabStartup = AppState['pendingStartupByTabId'][string]
@@ -18,6 +20,7 @@ vi.mock('@/store', () => ({
     getState: () => ({
       settings: { agentCmdOverrides: {}, agentDefaultArgs: {}, agentDefaultEnv: {} },
       repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo/wt' }] },
       getKnownWorktreeById: () => ({ id: 'wt-1', repoId: 'repo-1', path: '/repo/wt' }),
       sshConnectionStates: new Map(),
       sshStateByEnvironment: new Map(),
@@ -70,6 +73,7 @@ async function sidebarResumeStartup(): Promise<TabStartup | undefined> {
 describe("the sidebar's resume of a sleeping agent (layout-owner build)", () => {
   beforeEach(() => {
     mockCreateTab.mockClear()
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_CLAUDE_CHECKED_RESUME_RUNTIME_CAPABILITY])
   })
 
   it('keeps the window spawn, whose pane shows the session restored banner', async () => {

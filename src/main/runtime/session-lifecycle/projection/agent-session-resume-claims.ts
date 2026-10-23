@@ -3,6 +3,7 @@ import {
   type AgentProviderSessionMetadata
 } from '../../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { ClaudeSessionResumeUnavailableError } from '../../../ipc/pty/host-env/claude-resume'
 
 export type ResumedAgentSession = {
   agent: TuiAgent
@@ -166,7 +167,11 @@ export class AgentSessionResumeClaims {
         if (!open) {
           return
         }
-        if (dispatched && !exitedDuringStart) {
+        if (
+          dispatched &&
+          !exitedDuringStart &&
+          !(error instanceof ClaudeSessionResumeUnavailableError)
+        ) {
           // Held until a retry of the same request binds the create it reconciles, or forever.
           if (request) {
             open = false

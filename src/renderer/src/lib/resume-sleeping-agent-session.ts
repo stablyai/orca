@@ -308,6 +308,17 @@ export function resumeSleepingAgentSessionsForWorktree(
       }
       continue
     }
+    if (
+      Object.values(currentState.automaticAgentResumeClaimsByTabId).some(
+        (claim) =>
+          claim.recoveryPaneKey === record.paneKey &&
+          claim.worktreeId === record.worktreeId &&
+          claim.launchAgent === record.agent &&
+          agentProviderSessionsEqual(record.agent, claim.providerSession, record.providerSession)
+      )
+    ) {
+      continue
+    }
     if (activeOrQueuedResumeClaimsProviderSession(record, currentState, isPaneOwned)) {
       // Why: main can replay the old wake record after the same provider
       // session was already queued in a fresh tab; clear the stale replay.

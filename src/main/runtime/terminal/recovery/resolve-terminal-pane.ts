@@ -27,8 +27,13 @@ import {
 import { getTerminalState } from '../../terminal-wait-results'
 import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { resolveClaudeHookResumeOrigin } from '../../../claude/claude-resume-origin'
+import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listener/listener-event'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {
+  getClaudeResumeOriginForHook(row: AgentHookEventPayload) {
+    return resolveClaudeHookResumeOrigin(this, row, this.getPtyRecordForPaneKey(row.paneKey))
+  }
   protected abstract assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void
   abstract createTerminal(
     ...args: Parameters<OrcaRuntimeWithCreateTerminal['createTerminal']>
