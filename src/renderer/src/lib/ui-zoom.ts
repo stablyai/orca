@@ -17,6 +17,11 @@ export function windowDipToCssPx(dip: number): number {
   return dip / getUIZoomFactor()
 }
 
+/** Renderer CSS px -> window DIP. Inverse of `windowDipToCssPx`. */
+export function cssPxToWindowDip(px: number): number {
+  return px * getUIZoomFactor()
+}
+
 function publishZoomFactor(zoomFactor: number): void {
   document.documentElement.style.setProperty(UI_ZOOM_FACTOR_CSS_VAR, String(zoomFactor))
   if (isMac) {

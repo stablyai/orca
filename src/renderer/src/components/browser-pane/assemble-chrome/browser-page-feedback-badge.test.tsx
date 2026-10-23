@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { BrowserPageZoomIndicator } from './browser-page-zoom-indicator'
+import { BrowserPageFeedbackBadge } from './browser-page-feedback-badge'
 
 afterEach(cleanup)
 
 it('preserves zoom feedback visibility and accessible status as it updates', () => {
   const view = render(
-    <BrowserPageZoomIndicator
+    <BrowserPageFeedbackBadge
       state={{ ariaHidden: false, opacityClassName: 'opacity-100' }}
-      percent={125}
+      label="125%"
     />
   )
   const indicator = screen.getByRole('status')
@@ -20,14 +20,14 @@ it('preserves zoom feedback visibility and accessible status as it updates', () 
   expect(indicator.classList.contains('pointer-events-none')).toBe(true)
 
   view.rerender(
-    <BrowserPageZoomIndicator
+    <BrowserPageFeedbackBadge
       state={{ ariaHidden: true, opacityClassName: 'opacity-0' }}
-      percent={100}
+      label="1024 × 768"
     />
   )
   expect(screen.queryByRole('status')).toBeNull()
   expect(screen.getByRole('status', { hidden: true })).toBe(indicator)
-  expect(indicator.textContent).toBe('100%')
+  expect(indicator.textContent).toBe('1024 × 768')
   expect(indicator.getAttribute('aria-hidden')).toBe('true')
   expect(indicator.classList.contains('opacity-0')).toBe(true)
   expect(indicator.classList.contains('opacity-100')).toBe(false)

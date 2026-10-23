@@ -1,11 +1,12 @@
 import { cn } from '@/lib/utils'
 
-export function BrowserPageZoomIndicator({
+/** Transient corner badge for page zoom and viewport size changes. */
+export function BrowserPageFeedbackBadge({
   state,
-  percent
+  label
 }: {
   state: { ariaHidden: boolean; opacityClassName: string }
-  percent: number
+  label: string
 }): React.JSX.Element {
   return (
     <div
@@ -17,7 +18,7 @@ export function BrowserPageZoomIndicator({
         state.opacityClassName
       )}
     >
-      {percent}%
+      {label}
     </div>
   )
 }

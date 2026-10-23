@@ -1,5 +1,5 @@
 import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
-import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
+import { BrowserPageFeedbackBadge } from './assemble-chrome/browser-page-feedback-badge'
 import { useAppStore } from '@/store'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import { toHttpsRecoveryUrl } from '../../../../shared/browser-url'
@@ -358,9 +358,9 @@ export function ClientHostedBrowserPagePane({
       </div>
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
         {markup.overlay}
-        <BrowserPageZoomIndicator
+        <BrowserPageFeedbackBadge
           state={browserZoomIndicatorState}
-          percent={zoom.browserZoomPercent}
+          label={zoom.browserFeedbackLabel}
         />
         <BrowserFind
           isOpen={findOpen}

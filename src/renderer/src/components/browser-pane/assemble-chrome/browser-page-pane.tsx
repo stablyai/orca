@@ -44,6 +44,7 @@ import { useBrowserPageWebviewPartition } from '../host-guest/use-browser-page-w
 import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
 import { useBrowserPageZoomFeedback } from '../host-guest/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/use-browser-page-viewport-scroll-reporting'
+import { useBrowserPageViewportSizeFeedback } from '../host-guest/use-browser-page-viewport-size-feedback'
 
 export function BrowserPagePane({
   browserTab,
@@ -151,6 +152,7 @@ export function BrowserPagePane({
   const slotViewport = useBrowserPageSlotViewport(workspaceId)
 
   const zoom = useBrowserPageZoomFeedback()
+  useBrowserPageViewportSizeFeedback(pageViewport?.content ?? null, isActive, webviewRef, zoom)
   const { resourceNotice, setResourceNotice } = useBrowserPageResourceNotices(browserTab.id)
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const {
@@ -370,7 +372,7 @@ export function BrowserPagePane({
             <BrowserPageViewportOverlays
               markup={markup}
               browserZoomIndicatorState={browserZoomIndicatorState}
-              browserZoomPercent={zoom.browserZoomPercent}
+              browserFeedbackLabel={zoom.browserFeedbackLabel}
               findOpen={findOpen}
               setFindOpen={setFindOpen}
               webviewRef={webviewRef}
