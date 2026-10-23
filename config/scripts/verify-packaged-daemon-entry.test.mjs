@@ -109,6 +109,38 @@ describe('verify-packaged-daemon-entry', () => {
     )
   })
 
+  it('rejects a stale protocolVersion in daemon-entry when a chunk has the current daemon marker', () => {
+    const stale = daemonProtocolVersion - 1
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry"); process.exit(1)\nconst startup = { protocolVersion: ${stale} }\n`
+    )
+    const chunksDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'chunks')
+    mkdirSync(chunksDir, { recursive: true })
+    writeFileSync(
+      join(chunksDir, 'socket.js'),
+      `const name = "orca-terminal-host-v${daemonProtocolVersion}-x"\n`
+    )
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
+    )
+  })
+
+  it('rejects a stale protocolVersion in daemon-entry when a chunk has the current protocolVersion', () => {
+    const stale = daemonProtocolVersion - 1
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry"); process.exit(1)\nconst startup = { protocolVersion: ${stale} }\n`
+    )
+    const chunksDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'chunks')
+    mkdirSync(chunksDir, { recursive: true })
+    writeFileSync(
+      join(chunksDir, 'startup.js'),
+      `const startup = { protocolVersion: ${daemonProtocolVersion} }\n`
+    )
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
+    )
+  })
+
   it('throws when a chunk socket helper defaults to a stale protocol generation', () => {
     const stale = daemonProtocolVersion - 2
     writePackagedEntry('console.error("Usage: daemon-entry"); process.exit(1)\n')
@@ -152,10 +184,7 @@ describe('verify-packaged-daemon-entry', () => {
     writePackagedEntry(
       `console.error("Usage: daemon-entry"); process.exit(1)\nconst startup = { protocolVersion: ${daemonProtocolVersion} }\n`
     )
-    writeFileSync(
-      join(chunksDir, 'socket.js'),
-      `const name = "orca-terminal-host-v${stale}-x"\n`
-    )
+    writeFileSync(join(chunksDir, 'socket.js'), `const name = "orca-terminal-host-v${stale}-x"\n`)
     expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
       /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
     )

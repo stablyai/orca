@@ -112,40 +112,58 @@ function throwProtocolMismatch(versions) {
   )
 }
 
-// Why: socket-generation markers must all equal the contract. MCP chunks also embed protocolVersion:1.
-function assertReferencedProtocolVersions(daemonVersions, genericVersions) {
+function packagedFileVersionsMatch(file) {
+  if (file.daemonEntry) {
+    return [...file.daemonVersions, ...file.genericVersions].every(
+      (version) => version === daemonProtocolVersion
+    )
+  }
+  return (
+    file.daemonVersions.every((version) => version === daemonProtocolVersion) &&
+    file.genericVersions.every((version) => version === daemonProtocolVersion || version === 1)
+  )
+}
+
+// Why: a current daemon marker in one file must not hide a stale protocolVersion in another.
+// Chunks may still carry MCP protocolVersion:1. The contract version must appear at least once.
+function assertReferencedProtocolVersions(files) {
+  const daemonVersions = []
+  const genericVersions = []
+  for (const file of files) {
+    daemonVersions.push(...file.daemonVersions)
+    genericVersions.push(...file.genericVersions)
+  }
   if (daemonVersions.length === 0 && genericVersions.length === 0) {
     throw new Error(
       `[verify-packaged-daemon-entry] unpacked daemon protocol version missing; ` +
         `expected ${daemonProtocolVersion}`
     )
   }
-  if (daemonVersions.length > 0) {
-    const matchesExpected = daemonVersions.every((version) => version === daemonProtocolVersion)
-    if (!matchesExpected) {
-      throwProtocolMismatch([...daemonVersions, ...genericVersions])
-    }
-    return
-  }
-  const highest = Math.max(...genericVersions)
-  if (highest !== daemonProtocolVersion || !genericVersions.includes(daemonProtocolVersion)) {
-    throwProtocolMismatch(genericVersions)
+  const found = [...daemonVersions, ...genericVersions]
+  if (
+    files.some((file) => !packagedFileVersionsMatch(file)) ||
+    !found.includes(daemonProtocolVersion)
+  ) {
+    throwProtocolMismatch(found)
   }
 }
 
 function assertPackagedDaemonProtocolAndDeps(resourcesDir) {
   assertPackagedProcessHostExports(resourcesDir)
-  const genericVersions = []
-  const daemonVersions = []
+  const entryPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
+  const files = []
   for (const filePath of unpackedDaemonJsFiles(resourcesDir)) {
     if (!existsSync(filePath)) {
       continue
     }
     const found = protocolVersionsInSource(readFileSync(filePath, 'utf8'))
-    genericVersions.push(...found.genericVersions)
-    daemonVersions.push(...found.daemonVersions)
+    files.push({
+      daemonEntry: filePath === entryPath,
+      daemonVersions: found.daemonVersions,
+      genericVersions: found.genericVersions
+    })
   }
-  assertReferencedProtocolVersions(daemonVersions, genericVersions)
+  assertReferencedProtocolVersions(files)
 }
 
 // Why: v1.4.129-rc.1 shipped a terminal daemon that could not load (an electron

@@ -4,11 +4,13 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   rmSync,
   renameSync
 } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+import { tmpdir } from 'node:os'
+import { join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { finished } from 'node:stream/promises'
 import { createPackageWithOptions, extractAll } from '@electron/asar'
@@ -17,6 +19,53 @@ const require = createRequire(import.meta.url)
 const { verifyPackagedDaemonEntryBoots } = require('./verify-packaged-daemon-entry.cjs')
 
 const UNPACKED_OUT_DIRS = ['cli', 'main', 'mobile-web', 'shared', 'web']
+
+// Why: electron-builder's `files` globs drop these out/ paths; copying out/ raw would pack them again.
+export function shouldPackOutPath(relFromOut) {
+  const normalized = relFromOut.replaceAll('\\', '/').replace(/^\.\//, '')
+  if (normalized === '' || normalized === '.') {
+    return true
+  }
+  const parts = normalized.split('/')
+  const top = parts[0]
+  if (top === 'orcad' || top.startsWith('orcad-') || top.startsWith('.orcad-')) {
+    return false
+  }
+  if (
+    top === 'runtimes' ||
+    top === 'node-runtime-cache' ||
+    top === 'electron-dev' ||
+    top === 'relay'
+  ) {
+    return false
+  }
+  if (top === 'renderer' && parts[1] === '.vite') {
+    return false
+  }
+  const base = parts[parts.length - 1]
+  return !base.endsWith('.map') && !base.endsWith('.test.js')
+}
+
+function copyPackableOut(sourceOut, destOut) {
+  cpSync(sourceOut, destOut, {
+    recursive: true,
+    filter(source) {
+      const rel = relative(sourceOut, source)
+      return rel === '' || shouldPackOutPath(rel)
+    }
+  })
+}
+
+function withPackableOut(sourceOut, use) {
+  const parent = mkdtempSync(join(tmpdir(), 'sync-win-unpacked-out-'))
+  const filtered = join(parent, 'out')
+  try {
+    copyPackableOut(sourceOut, filtered)
+    return use(filtered)
+  } finally {
+    rmSync(parent, { recursive: true, force: true })
+  }
+}
 
 function assertBuiltDaemonEntry(repoRoot) {
   const entryPath = join(repoRoot, 'out', 'main', 'daemon-entry.js')
@@ -65,6 +114,21 @@ function removeStaging(stagingPath) {
   }
 }
 
+// Why: a failed rollback can leave `.bak` as the only copy of the previous tree.
+function prepareBackupPath(destPath, backupPath) {
+  if (!existsSync(backupPath)) {
+    return
+  }
+  if (!existsSync(destPath)) {
+    renameSync(backupPath, destPath)
+  }
+  if (existsSync(destPath) && existsSync(backupPath)) {
+    throw new Error(
+      `[sync-win-unpacked] leftover backup exists at ${backupPath}; restore or remove it before syncing`
+    )
+  }
+}
+
 // Why: a later copy or verify failure must restore every replacement together.
 export function createPublishTransaction() {
   const retained = []
@@ -106,7 +170,7 @@ export function replaceDirectory(dest, source, transaction) {
   const stagingPath = `${dest}.new`
   const backupPath = `${dest}.bak`
   rmSync(stagingPath, { recursive: true, force: true })
-  rmSync(backupPath, { recursive: true, force: true })
+  prepareBackupPath(dest, backupPath)
   let movedDest = false
   try {
     cpSync(source, stagingPath, { recursive: true })
@@ -129,7 +193,7 @@ export function replaceDirectory(dest, source, transaction) {
 
 function replaceFileAtomically(stagingPath, destPath, transaction) {
   const backupPath = `${destPath}.bak`
-  rmSync(backupPath, { force: true })
+  prepareBackupPath(destPath, backupPath)
   let movedDest = false
   try {
     if (existsSync(destPath)) {
@@ -172,7 +236,6 @@ function syncUnpackedOut(resourcesDir, repoRoot) {
         `[sync-win-unpacked] missing ${source}; run pnpm run build:desktop:assets first`
       )
     }
-    replaceDirectory(join(destOut, name), source)
   }
   const packageJsonPath = join(sourceOut, 'package.json')
   if (!existsSync(packageJsonPath)) {
@@ -180,7 +243,12 @@ function syncUnpackedOut(resourcesDir, repoRoot) {
       `[sync-win-unpacked] missing ${packageJsonPath}; run pnpm run build:desktop:assets first`
     )
   }
-  copyFileSync(packageJsonPath, join(destOut, 'package.json'))
+  withPackableOut(sourceOut, (filtered) => {
+    for (const name of UNPACKED_OUT_DIRS) {
+      replaceDirectory(join(destOut, name), join(filtered, name))
+    }
+    copyFileSync(packageJsonPath, join(destOut, 'package.json'))
+  })
 }
 
 function syncProcessHost(resourcesDir, repoRoot) {
@@ -241,14 +309,24 @@ export function publishStagedResources(transaction, stagingResources, resourcesD
   replaceDirectory(join(destHost, 'dist'), join(stagingHost, 'dist'), transaction)
 }
 
+function replacePackableOut(dest, sourceOut, transaction) {
+  withPackableOut(sourceOut, (filtered) => {
+    replaceDirectory(dest, filtered, transaction)
+  })
+}
+
+export async function stageFilteredOut(repoRoot, extractDir, stagingResources) {
+  replacePackableOut(join(extractDir, 'out'), join(repoRoot, 'out'))
+  mkdirSync(stagingResources, { recursive: true })
+  await repackExtractedApp(extractDir, join(stagingResources, 'app.asar'))
+  syncUnpackedOut(stagingResources, repoRoot)
+}
+
 async function stageResources(repoRoot, extractDir, stagingResources, distAsar) {
   rmSync(extractDir, { recursive: true, force: true })
   rmSync(stagingResources, { recursive: true, force: true })
   extractAll(distAsar, extractDir)
-  replaceDirectory(join(extractDir, 'out'), join(repoRoot, 'out'))
-  mkdirSync(stagingResources, { recursive: true })
-  await repackExtractedApp(extractDir, join(stagingResources, 'app.asar'))
-  syncUnpackedOut(stagingResources, repoRoot)
+  await stageFilteredOut(repoRoot, extractDir, stagingResources)
   syncProcessHost(stagingResources, repoRoot)
   verifyPackagedDaemonEntryBoots(stagingResources)
 }
