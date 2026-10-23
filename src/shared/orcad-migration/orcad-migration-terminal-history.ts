@@ -5,10 +5,25 @@
  */
 import { z } from 'zod'
 import { MAX_PANE_KEY_LEN } from '../agent-hook-listener/listener-limits'
+import { PTY_SESSION_ID_SEPARATOR } from '../pty-session-id-format'
 import { parsePaneKey } from '../stable-pane-id'
 import { isOrcadMigrationTerminalRestoreHintCwd } from './orcad-migration-terminal-restore-hints'
 
 export const ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION = 1
+
+/** Begins the session part of a moved pane's id (`<worktreeId>@@moved-<key>`). */
+export const MOVED_PANE_HISTORY_SESSION_TAG = 'moved-'
+
+export function isMovedPaneHistorySessionId(sessionId: string): boolean {
+  const separator = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  return (
+    separator > 0 &&
+    sessionId.startsWith(
+      MOVED_PANE_HISTORY_SESSION_TAG,
+      separator + PTY_SESSION_ID_SEPARATOR.length
+    )
+  )
+}
 
 const MAX_TERMINAL_DIMENSION = 10_000
 

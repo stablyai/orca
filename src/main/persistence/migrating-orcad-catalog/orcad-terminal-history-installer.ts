@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { dirname, join } from 'node:path'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import {
+  MOVED_PANE_HISTORY_SESSION_TAG,
   parseOrcadMigrationTerminalHistoryText,
   type OrcadMigrationTerminalHistoryDocument
 } from '../../../shared/orcad-migration/orcad-migration-terminal-history'
@@ -31,7 +32,7 @@ export function orcadMigrationTerminalHistoryKey(paneKey: string): string {
 
 /** The session a moved pane restores as on this host; minted for its worktree like any other. */
 export function movedPaneHistorySessionId(worktreeId: string, paneKey: string): string {
-  return `${worktreeId}${PTY_SESSION_ID_SEPARATOR}moved-${orcadMigrationTerminalHistoryKey(paneKey)}`
+  return `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${MOVED_PANE_HISTORY_SESSION_TAG}${orcadMigrationTerminalHistoryKey(paneKey)}`
 }
 
 /** Before the commit: the bytes must be a checkpoint for a terminal pane this manifest moves. */
