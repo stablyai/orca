@@ -44,7 +44,15 @@ export function workspaceRouteHref(
 /** The same, for any router target. An href that already chooses a host keeps that choice. */
 export function workspaceHref(href: RouterHref, executionHost: ExecutionHostId): RouterHref {
   if (typeof href !== 'string') {
-    return { ...href, params: { ...href.params, executionHost } }
+    const params = href.params ?? {}
+    if ('executionHost' in params) {
+      if (params.executionHost !== undefined && params.executionHost !== '') {
+        return href
+      }
+      const { executionHost: _local, ...rest } = params
+      return { ...href, params: rest }
+    }
+    return { ...href, params: { ...params, executionHost } }
   }
   const declared = declaredExecutionHost(href)
   if (declared === 'local') {

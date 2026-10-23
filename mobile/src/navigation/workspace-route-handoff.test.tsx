@@ -77,9 +77,20 @@ describe('a workspace screen’s router', () => {
     const router = await workspaceRouterFor({ executionHost: 'ssh:builder' })
     router.replace('/h/host-1/session/wt?name=resumed&executionHost=')
     router.replace('/h/host-1/session/wt?name=resumed&executionHost=ssh%3Aother')
+    router.navigate({
+      pathname: '/h/[hostId]/files/[worktreeId]',
+      params: { hostId: 'host-1', executionHost: 'ssh:other' }
+    })
     expect(route.opened).toEqual([
       ['replace', '/h/host-1/session/wt?name=resumed'],
-      ['replace', '/h/host-1/session/wt?name=resumed&executionHost=ssh%3Aother']
+      ['replace', '/h/host-1/session/wt?name=resumed&executionHost=ssh%3Aother'],
+      [
+        'navigate',
+        {
+          pathname: '/h/[hostId]/files/[worktreeId]',
+          params: { hostId: 'host-1', executionHost: 'ssh:other' }
+        }
+      ]
     ])
   })
 })
