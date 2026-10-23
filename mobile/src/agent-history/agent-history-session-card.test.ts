@@ -103,6 +103,16 @@ describe('buildMobileAgentHistoryResumeActionState', () => {
     expect(state.get('claude:1')).toEqual({ disabled: true, loading: false, closing: false })
     expect(state.get('claude:2')).toEqual({ disabled: true, loading: false, closing: true })
   })
+
+  it('disables resume while the legacy open-tab lookup is pending', () => {
+    const state = buildMobileAgentHistoryResumeActionState(
+      [session({ id: 'claude:1' })],
+      null,
+      null,
+      true
+    )
+    expect(state.get('claude:1')).toEqual({ disabled: true, loading: false, closing: false })
+  })
 })
 
 describe('isSessionInActiveWorktree', () => {

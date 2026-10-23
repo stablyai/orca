@@ -96,6 +96,10 @@ export function consumeLocalSessionTabFollow(worktree: string): boolean {
   return pendingLocalFollowWorktrees.delete(normalized)
 }
 
+export function cancelLocalSessionTabFollow(worktree: string): void {
+  consumeLocalSessionTabFollow(worktree)
+}
+
 export function activateMobileSessionTab(
   client: ActivationClient,
   params: MobileSessionTabActivationParams

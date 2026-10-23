@@ -4,6 +4,7 @@ import { triggerError, triggerSuccess } from '../platform/haptics'
 import { sessionTabsListRead } from '../session/mobile-session-read-operations'
 import {
   activateMobileSessionTab,
+  cancelLocalSessionTabFollow,
   requestLocalSessionTabFollow
 } from '../session/mobile-session-tab-activation'
 import { sessionTabClose } from '../session/mobile-session-write-operations'
@@ -103,6 +104,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
   sessionsWithOpenTabs: readonly AiVaultSession[]
   closingSessionId: string | null
   closedSessionIds: ReadonlySet<string>
+  fallbackOpenTabsPending: boolean
   onJumpToOpenSession: (session: AiVaultSession, openTab: AiVaultSessionOpenTab) => Promise<void>
   onCloseOpenSession: (session: AiVaultSession, openTab: AiVaultSessionOpenTab) => Promise<void>
 } {
@@ -125,6 +127,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
   const [fallbackOpenTabs, setFallbackOpenTabs] = useState<
     ReadonlyMap<string, AiVaultSessionOpenTab>
   >(() => new Map())
+  const [fallbackOpenTabsPending, setFallbackOpenTabsPending] = useState(false)
 
   // A fresh scan is the host's list again; drop optimistic closes from the previous rows.
   useEffect(() => {
@@ -141,6 +144,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
       sessions.some((s) => Boolean(s.openTab))
     ) {
       setFallbackOpenTabs((prev) => (prev.size === 0 ? prev : new Map()))
+      setFallbackOpenTabsPending(false)
       return
     }
     const candidateIds = new Set<string>()
@@ -153,11 +157,13 @@ export function useMobileAgentHistoryOpenTabActions(input: {
       }
     }
     if (candidateIds.size === 0) {
+      setFallbackOpenTabsPending(false)
       return
     }
     let cancelled = false
     void (async () => {
       const next = new Map<string, AiVaultSessionOpenTab>()
+      setFallbackOpenTabsPending(true)
       await Promise.allSettled(
         [...candidateIds].map(async (wtId) => {
           const reply = await sessionTabsListRead.request(client, { worktree: `id:${wtId}` })
@@ -166,6 +172,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
       )
       if (!cancelled) {
         setFallbackOpenTabs(next)
+        setFallbackOpenTabsPending(false)
       }
     })()
     return () => {
@@ -237,14 +244,15 @@ export function useMobileAgentHistoryOpenTabActions(input: {
           intent: 'user'
         })
         if (!response.ok) {
+          cancelLocalSessionTabFollow(openTab.worktreeId)
           triggerError()
           setResumeMessage('Failed to open session tab.')
           return
         }
-        requestLocalSessionTabFollow(openTab.worktreeId)
         triggerSuccess()
         openHistorySession(router, origin, hostId, worktreeId, openTab.worktreeId)
       } catch (err) {
+        cancelLocalSessionTabFollow(openTab.worktreeId)
         triggerError()
         setResumeMessage(err instanceof Error ? err.message : 'Failed to open session tab.')
       } finally {
@@ -290,6 +298,7 @@ export function useMobileAgentHistoryOpenTabActions(input: {
     sessionsWithOpenTabs,
     closingSessionId,
     closedSessionIds,
+    fallbackOpenTabsPending,
     onJumpToOpenSession,
     onCloseOpenSession
   }

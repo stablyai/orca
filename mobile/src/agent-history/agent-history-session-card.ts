@@ -59,13 +59,16 @@ export function buildMobileAgentHistoryCard(
 export function buildMobileAgentHistoryResumeActionState(
   sessions: readonly Pick<AiVaultSession, 'id'>[],
   resumingSessionId: string | null,
-  closingSessionId: string | null = null
+  closingSessionId: string | null = null,
+  fallbackOpenTabsPending = false
 ): ReadonlyMap<string, MobileAgentHistoryResumeActionState> {
+  const actionsLocked =
+    resumingSessionId !== null || closingSessionId !== null || fallbackOpenTabsPending
   return new Map(
     sessions.map((session) => [
       session.id,
       {
-        disabled: resumingSessionId !== null || closingSessionId !== null,
+        disabled: actionsLocked,
         loading: resumingSessionId === session.id,
         closing: closingSessionId === session.id
       }

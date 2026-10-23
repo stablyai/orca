@@ -139,7 +139,8 @@ function MobileAgentSessionHistoryPanelContent({
     setResumeMessage
   })
   const sessions = openTabActions.sessionsWithOpenTabs
-  const { closingSessionId, closedSessionIds, onJumpToOpenSession } = openTabActions
+  const { closingSessionId, closedSessionIds, fallbackOpenTabsPending, onJumpToOpenSession } =
+    openTabActions
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -167,8 +168,14 @@ function MobileAgentSessionHistoryPanelContent({
   )
 
   const resumeActionStateBySessionId = useMemo(
-    () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId, closingSessionId),
-    [closingSessionId, resumingSessionId, sessions]
+    () =>
+      buildMobileAgentHistoryResumeActionState(
+        sessions,
+        resumingSessionId,
+        closingSessionId,
+        fallbackOpenTabsPending
+      ),
+    [closingSessionId, fallbackOpenTabsPending, resumingSessionId, sessions]
   )
 
   const onResumeSession = useCallback(

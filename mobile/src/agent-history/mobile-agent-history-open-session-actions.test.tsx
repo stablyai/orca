@@ -133,6 +133,41 @@ function accepted(result: unknown = {}): RpcResponse {
   return { id: 'rpc-1', ok: true, result }
 }
 
+function rejected(message: string): RpcResponse {
+  return { id: 'rpc-1', ok: false, error: { code: 'failed', message } }
+}
+
+function legacyOpenTabSnapshot(): RpcResponse {
+  return accepted({
+    worktree: 'wt-1',
+    publicationEpoch: '1',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: 'tab-legacy',
+    activeTabType: 'terminal',
+    tabs: [
+      {
+        type: 'terminal',
+        id: 'tab-legacy::leaf-legacy',
+        parentTabId: 'tab-legacy',
+        leafId: 'leaf-legacy',
+        title: 'Legacy terminal',
+        isActive: true,
+        agentStatus: {
+          state: 'done',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          paneKey: 'tab-legacy:leaf-legacy',
+          stateHistory: [],
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'sess-legacy' }
+        }
+      }
+    ]
+  })
+}
+
 let tree: ReactTestRenderer | null = null
 
 beforeEach(() => {
@@ -270,40 +305,75 @@ describe('mobile agent history open session actions', () => {
     expect(harness.push).not.toHaveBeenCalled()
   })
 
+  it('drops the local follow when activating the open tab fails', async () => {
+    harness.client = {
+      sendRequest: vi.fn(async (method: string, params?: unknown) => {
+        harness.calls.push({ method, params })
+        if (method === 'session.tabs.activate') {
+          return rejected('tab missing')
+        }
+        return accepted()
+      })
+    } as unknown as RpcClient
+    const rendered = await mount()
+    await press(rendered, 'agent-history-jump-claude:open')
+    expect(consumeLocalSessionTabFollow('wt-open')).toBe(false)
+    expect(harness.replace).not.toHaveBeenCalled()
+    expect(harness.back).not.toHaveBeenCalled()
+  })
+
+  it('drops the local follow when activating the open tab throws', async () => {
+    harness.client = {
+      sendRequest: vi.fn(async (method: string, params?: unknown) => {
+        harness.calls.push({ method, params })
+        if (method === 'session.tabs.activate') {
+          throw new Error('socket closed')
+        }
+        return accepted()
+      })
+    } as unknown as RpcClient
+    const rendered = await mount()
+    await press(rendered, 'agent-history-jump-claude:open')
+    expect(consumeLocalSessionTabFollow('wt-open')).toBe(false)
+    expect(harness.replace).not.toHaveBeenCalled()
+  })
+
+  it('disables Resume while the legacy open-tab lookup is in flight', async () => {
+    let releaseTabs: (response: RpcResponse) => void = () => {}
+    harness.sessions = [session({ id: 'claude:legacy', sessionId: 'sess-legacy' })]
+    harness.client = {
+      sendRequest: vi.fn((method: string, params?: unknown) => {
+        harness.calls.push({ method, params })
+        if (method === 'session.tabs.list') {
+          return new Promise<RpcResponse>((resolve) => {
+            releaseTabs = resolve
+          })
+        }
+        return Promise.resolve(accepted())
+      })
+    } as unknown as RpcClient
+
+    const rendered = await mount({ worktreeId: 'wt-1' })
+    expect(nodes(rendered, 'agent-history-resume-claude:legacy')[0]?.props.disabled).toBe(true)
+    expect(nodes(rendered, 'agent-history-jump-claude:legacy')).toHaveLength(0)
+
+    await act(async () => {
+      releaseTabs(legacyOpenTabSnapshot())
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(nodes(rendered, 'agent-history-resume-claude:legacy')).toHaveLength(0)
+    expect(nodes(rendered, 'agent-history-jump-claude:legacy')).toHaveLength(1)
+    expect(nodes(rendered, 'agent-history-jump-claude:legacy')[0]?.props.disabled).toBe(false)
+  })
+
   it('resolves open tabs from session.tabs.list when the host omits openTab', async () => {
     harness.sessions = [session({ id: 'claude:legacy', sessionId: 'sess-legacy' })]
     harness.client = {
       sendRequest: vi.fn(async (method: string, params?: unknown) => {
         harness.calls.push({ method, params })
         if (method === 'session.tabs.list') {
-          return accepted({
-            worktree: 'wt-1',
-            publicationEpoch: '1',
-            snapshotVersion: 1,
-            activeGroupId: null,
-            activeTabId: 'tab-legacy',
-            activeTabType: 'terminal',
-            tabs: [
-              {
-                type: 'terminal',
-                id: 'tab-legacy::leaf-legacy',
-                parentTabId: 'tab-legacy',
-                leafId: 'leaf-legacy',
-                title: 'Legacy terminal',
-                isActive: true,
-                agentStatus: {
-                  state: 'done',
-                  prompt: '',
-                  updatedAt: 1,
-                  stateStartedAt: 1,
-                  paneKey: 'tab-legacy:leaf-legacy',
-                  stateHistory: [],
-                  agentType: 'claude',
-                  providerSession: { key: 'session_id', id: 'sess-legacy' }
-                }
-              }
-            ]
-          })
+          return legacyOpenTabSnapshot()
         }
         return accepted()
       })

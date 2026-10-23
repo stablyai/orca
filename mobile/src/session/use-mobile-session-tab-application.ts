@@ -122,8 +122,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         applicationRevision
       }
 
-      const followsHost =
-        result.navigationIntent === 'follow' || consumeLocalSessionTabFollow(result.worktree)
+      // Why: `||` would skip consume when the snapshot already follows, leaking the request onto the next one.
+      const localFollow = consumeLocalSessionTabFollow(result.worktree)
+      const followsHost = result.navigationIntent === 'follow' || localFollow
       if (followsHost) {
         pendingSelectionRef.current = withoutPendingHandle(
           pendingSelectionRef.current?.kind === 'launched' ? null : pendingSelectionRef.current
