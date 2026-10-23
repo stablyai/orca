@@ -361,6 +361,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     return (
       <NativeChatComposerField
+        nextPromptsBlocked={sendHeld || inputOwnedByCard}
         draftScopeKey={draftScopeKey}
         textareaRef={textareaRef}
         draft={draft}

@@ -13,6 +13,7 @@ import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import { codexProviderHandleLink } from './codex-structured-owner-identity'
+import { codexNextPromptConfig } from './codex-next-prompt-instructions'
 import { openCodexThread } from './codex-structured-thread-open'
 import { catchUpCodexThread } from './codex-structured-thread-catch-up'
 import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
@@ -90,6 +91,14 @@ export async function openCodexStructuredSession(
     openInput.signal
   )
   current()
+  // 恢复会话沿用已保存的指令，避免覆盖从其他客户端带入的会话指令。
+  const nextPromptConfig = launch.resumeThreadId
+    ? {}
+    : await waitForPromiseWithSignal(
+        codexNextPromptConfig(connection, launch.cwd, threadLaunch.threadConfig),
+        openInput.signal
+      )
+  current()
   const commandEnv = {
     ...launch.commandEnv,
     ...(launch.visuals ? { [NATIVE_CHAT_SCRATCH_DIR_ENV]: launch.visuals.folder } : {})
@@ -97,7 +106,11 @@ export async function openCodexStructuredSession(
   const opened = await waitForPromiseWithSignal(
     openCodexThread(
       connection,
-      { ...threadLaunch, commandEnv },
+      {
+        ...threadLaunch,
+        threadConfig: { ...threadLaunch.threadConfig, ...nextPromptConfig },
+        commandEnv
+      },
       // No deadline of its own: resuming a long rollout or starting MCP servers takes what it
       // takes. The host's start ceiling, a close and a Stop end the wait through the signal.
       deps.requestTimeoutMs ?? null,

@@ -45,6 +45,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
+      'config/read',
       'thread/start',
       'skills/list'
     ])
@@ -159,7 +160,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       spawnToken: 'spawn-9'
     })
 
-    expect(codex.connections[0].calls[1]).toEqual({
+    expect(codex.connections[0].calls.find((call) => call.method === 'thread/start')).toEqual({
       method: 'thread/start',
       params: {
         cwd: '/work/repo',

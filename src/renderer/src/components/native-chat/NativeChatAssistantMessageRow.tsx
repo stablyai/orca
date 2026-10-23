@@ -1,3 +1,6 @@
+import { useContext } from 'react'
+import { parseNativeChatNextPrompts } from '../../../../shared/native-chat-next-prompts'
+import { NativeChatNextPromptsEnabledContext } from './native-chat-next-prompts-context'
 import { cn } from '@/lib/utils'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
@@ -49,7 +52,12 @@ export function NativeChatAssistantMessageRow({
   const toolRun = toolRunProps(props, content, run)
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
-  const words = message.role === 'reasoning' ? '' : markdown
+  const nextPromptsEnabled = useContext(NativeChatNextPromptsEnabledContext)
+  const answer =
+    nextPromptsEnabled && message.role === 'assistant' && !message.agentId && !message.shortened
+      ? parseNativeChatNextPrompts(markdown).text
+      : markdown
+  const words = message.role === 'reasoning' ? '' : answer
   // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
   // A working turn's last row is only its frontier: more can still land under it.
   const showControls =

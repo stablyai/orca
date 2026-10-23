@@ -1,3 +1,4 @@
+import { NativeChatNextPromptsRoot } from './NativeChatNextPromptsRoot'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
@@ -266,7 +267,10 @@ export function NativeChatStructuredSession(
     notices.push(hostNotice)
   }
   return (
-    <div
+    <NativeChatNextPromptsRoot
+      agent={props.agent}
+      controller={controller}
+      online={!hostOutage}
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
@@ -413,6 +417,6 @@ export function NativeChatStructuredSession(
       )}
       {paneCommands.menu}
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
-    </div>
+    </NativeChatNextPromptsRoot>
   )
 }

@@ -1,3 +1,4 @@
+import { NativeChatNextPromptSuggestions } from './NativeChatNextPromptSuggestions'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
@@ -31,6 +32,7 @@ export type NativeChatComposerFieldProps = {
    *  only in the composer it was dropped on. */
   /** Owner of the draft the editor's document is saved with. */
   draftScopeKey: string
+  nextPromptsBlocked?: boolean
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
@@ -123,6 +125,7 @@ function imeComposedSegment(base: string, settled: string): string {
 
 export function NativeChatComposerField({
   draftScopeKey,
+  nextPromptsBlocked,
   textareaRef,
   draft,
   disabled,
@@ -237,6 +240,19 @@ export function NativeChatComposerField({
               onChoose={onChooseMentionFile}
             />
           ) : null}
+          <NativeChatNextPromptSuggestions
+            nextPromptsBlocked={nextPromptsBlocked}
+            textareaRef={textareaRef}
+            draft={draft}
+            disabled={disabled}
+            canSend={canSend}
+            unavailableHint={unavailableHint}
+            isWorking={isWorking}
+            isStopping={isStopping}
+            imageAttachments={imageAttachments}
+            imeEnterGesture={imeEnterGesture}
+            onDraftChange={onDraftChange}
+          />
           <NativeChatComposerNotices
             notices={notices.map((notice) =>
               // A dismissed row takes its focused × with it; the message box gets focus back.
