@@ -23,4 +23,11 @@ describe('createBellDetector', () => {
     expect(detector.chunkContainsBell('\x1b')).toBe(false)
     expect(detector.chunkContainsBell('\x07')).toBe(true)
   })
+
+  it('continues tracking split OSC state after a real bell in the same chunk', () => {
+    const detector = createBellDetector()
+
+    expect(detector.chunkContainsBell('\x07\x1b]0;Antigravity working')).toBe(true)
+    expect(detector.chunkContainsBell(' still title\x07')).toBe(false)
+  })
 })

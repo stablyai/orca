@@ -605,7 +605,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       'cancels a scheduled waiting notification when agent status becomes %s during the grace window',
       async (nextStatus) => {
         const { connectPanePty } = await import('./pty-connection')
-        const transport = createMockTransport(`pty-attention-grace-${nextStatus}`)
+        const transport = createMockTransport('tab-pty')
         transportFactoryQueue.push(transport)
         enableActiveRuntimeEnvironment()
         vi.useFakeTimers()
@@ -616,8 +616,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
         connectPanePty(pane as never, manager as never, deps as never)
         const statusHandler = createdTransportOptions[0]?.onAgentStatus
-        if (typeof statusHandler !== 'function') {
-          throw new Error('Expected hook status handler to be registered')
+        const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+        if (typeof statusHandler !== 'function' || !bellHandler) {
+          throw new Error('Expected hook status and bell handlers to be registered')
         }
 
         statusHandler({
@@ -625,6 +626,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
           prompt: 'approve the tool call',
           agentType: 'claude'
         })
+        bellHandler()
         statusHandler({
           state: 'waiting',
           prompt: 'approve the tool call',
@@ -632,6 +634,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
           toolName: 'Shell',
           toolInput: 'git status'
         })
+        bellHandler()
 
         expect(deps.dispatchNotification).not.toHaveBeenCalled()
         vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS - 1)
