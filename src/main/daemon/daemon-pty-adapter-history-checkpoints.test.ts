@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
+import { setDaemonWslSleepCwdReader } from './daemon-wsl-sleep-cwd'
 import type { PendingOutputRecord } from './types'
 import {
   createMockSubprocess,
@@ -618,6 +619,37 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(remountAfterAck.coldRestore).toBeUndefined()
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+      }
+    })
+
+    it("keeps a sleeping WSL pane's shell folder, which bash on the bridge never reports", async () => {
+      // awin verify-4: every moved pane reopened at the project root; the checkpoint held the spawn folder.
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const reader = vi.fn(async () => '/home/jin/repo/deep/er')
+      setDaemonWslSleepCwdReader(reader)
+      try {
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const { id } = await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+          sessionId: 'wsl-sleep-cwd'
+        })
+        lastSubprocess._simulateData('$ cd deep/er\r\n')
+
+        await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
+
+        expect(reader).toHaveBeenCalledWith(id, 'Ubuntu')
+        const checkpointPath = join(historyDir, getHistorySessionDirName(id), 'checkpoint.json')
+        expect(JSON.parse(readFileSync(checkpointPath, 'utf-8')).cwd).toBe(
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\deep\\er'
+        )
+      } finally {
+        setDaemonWslSleepCwdReader(null)
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
       }
     })
 

@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
-import { createWslMoveDriverDeps } from '../wsl-move-driver-wiring'
+import { createWslMoveDriverDeps, registerWslSleepShellCwdReader } from '../wsl-move-driver-wiring'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence'
@@ -275,6 +275,7 @@ export function registerCoreHandlers(
     getUserDataPath: () => app.getPath('userData'),
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
+  registerWslSleepShellCwdReader()
   registerWslMoveHandlers(
     () => app.getPath('userData'),
     (senderId) => getTrustedUIRendererWebContents()?.id === senderId,

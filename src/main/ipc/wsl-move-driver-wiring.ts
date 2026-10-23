@@ -15,6 +15,7 @@ import {
 } from '../../shared/wsl-move/wsl-move-driver-types'
 import { agentHookServer } from '../agent-hooks/server'
 import { getDaemonHistoryDir } from '../daemon/daemon-launch-paths'
+import { setDaemonWslSleepCwdReader } from '../daemon/daemon-wsl-sleep-cwd'
 import {
   countInProcessFallbackTerminals,
   listLiveDaemonSessions
@@ -36,8 +37,7 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-gate-facts'
 import {
   classifyWslGuestPaneForeground,
-  parseWslGuestPaneProcesses,
-  WSL_GUEST_PANE_PROCESS_SCRIPT
+  readWslGuestPaneShellCwd
 } from '../persistence/moving-wsl-projects/wsl-move-guest-foreground'
 import {
   listWslMoveSleptSessionPanes,
@@ -64,12 +64,29 @@ import { listRemoteOrcadFolderCatalog } from '../ssh/orcad-server-folder-workspa
 import { makeTerminalScrollbackSnapshotRef } from '../terminal-scrollback-snapshots'
 import { requestWorktreeSleepFromRenderer } from '../window/worktree-sleep-request-relay'
 import { getWslHostService } from '../wsl/wsl-host-service-instance'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { readWslGuestPaneProcesses } from '../wsl/wsl-guest-pane-processes'
+import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
 import { isWslDistroRegistered } from '../wsl/wsl-distro-registry-id'
 import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import { ptyPaneKey } from './pty/pane/key-state'
 import { tryGetProviderForPty } from './pty/provider/registry'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
 import { getTrustedUIRendererWindow } from './ui'
+
+/**
+ * Lets a sleeping bridge WSL pane keep its shell's folder, so a later move (or wake) reopens it
+ * there. Only with the internal WSL hosts gate open, and only on Windows, where the bridge runs.
+ */
+export function registerWslSleepShellCwdReader(): void {
+  if (process.platform !== 'win32' || !wslHostsGateOpen()) {
+    return
+  }
+  setDaemonWslSleepCwdReader(async (sessionId, distro) => {
+    const paneKey = ptyPaneKey.get(sessionId)
+    const rows = paneKey ? await readWslGuestPaneProcesses(distro) : null
+    return paneKey && rows ? readWslGuestPaneShellCwd(rows, paneKey) : null
+  })
+}
 
 export function createWslMoveDriverDeps(
   store: Store,
@@ -89,18 +106,10 @@ export function createWslMoveDriverDeps(
     ...(process.platform === 'win32'
       ? {
           guestForegrounds: async (distro: string, paneKeys: readonly string[]) => {
-            const result = await runWslProcess({
-              distro,
-              script: WSL_GUEST_PANE_PROCESS_SCRIPT,
-              loginPath: 'none',
-              timeoutMs: 5_000,
-              maxOutputBytes: 1_048_576
-            })
-            if (result.code !== 0 || result.timedOut || result.outputTruncated) {
-              return new Map()
-            }
-            const rows = parseWslGuestPaneProcesses(result.stdout)
-            return new Map(paneKeys.map((key) => [key, classifyWslGuestPaneForeground(rows, key)]))
+            const rows = await readWslGuestPaneProcesses(distro)
+            return rows
+              ? new Map(paneKeys.map((key) => [key, classifyWslGuestPaneForeground(rows, key)]))
+              : new Map()
           }
         }
       : {}),

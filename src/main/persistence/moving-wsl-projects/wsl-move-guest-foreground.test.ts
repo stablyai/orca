@@ -5,6 +5,7 @@ import { collectWslMoveGateInputs, type WslMoveGateFactSources } from './wsl-mov
 import {
   classifyWslGuestPaneForeground,
   parseWslGuestPaneProcesses,
+  readWslGuestPaneShellCwd,
   WSL_GUEST_PANE_PROCESS_SCRIPT,
   type WslGuestProcessRow
 } from './wsl-move-guest-foreground'
@@ -103,7 +104,36 @@ describe('classifyWslGuestPaneForeground', () => {
   })
 })
 
+describe('readWslGuestPaneShellCwd', () => {
+  it("reads the pane's shell folder, not its relay's or a child's", () => {
+    const rows = [
+      { ...relay, paneKey: KEY_A, cwd: '/' },
+      { ...shellA, cwd: '/home/dev/app/deep/er' },
+      child(150, 'vim', { cwd: '/tmp' })
+    ]
+    expect(readWslGuestPaneShellCwd(rows, KEY_A)).toBe('/home/dev/app/deep/er')
+  })
+
+  it('reads nothing when the shell is missing, ambiguous, or its folder unreadable', () => {
+    expect(readWslGuestPaneShellCwd([relay], KEY_A)).toBeNull()
+    expect(readWslGuestPaneShellCwd([relay, shellA], KEY_A)).toBeNull()
+    const twin = { ...shellA, pid: 300, ppid: 1, sid: 300, cwd: '/b' }
+    expect(readWslGuestPaneShellCwd([relay, { ...shellA, cwd: '/a' }, twin], KEY_A)).toBeNull()
+  })
+})
+
 describe('parseWslGuestPaneProcesses', () => {
+  it('reads the folder last, keeping a tab in it and dropping a removed one', () => {
+    expect(
+      parseWslGuestPaneProcesses(
+        `10\t1\t10\t1\tbash\t${KEY_A}\t/home/a\tb\n11\t1\t11\t1\tbash\t\t/gone (deleted)\n`
+      )
+    ).toEqual([
+      { pid: 10, ppid: 1, sid: 10, argc: 1, comm: 'bash', paneKey: KEY_A, cwd: '/home/a\tb' },
+      { pid: 11, ppid: 1, sid: 11, argc: 1, comm: 'bash', paneKey: null }
+    ])
+  })
+
   it('keeps comm with spaces and drops malformed lines', () => {
     expect(
       parseWslGuestPaneProcesses(
@@ -119,9 +149,11 @@ describe('parseWslGuestPaneProcesses', () => {
 describe.runIf(process.platform === 'linux')('WSL_GUEST_PANE_PROCESS_SCRIPT on Linux', () => {
   it('lists processes as pid, ppid, sid, argc, comm and pane key', () => {
     const out = execFileSync('sh', ['-c', WSL_GUEST_PANE_PROCESS_SCRIPT], { encoding: 'utf8' })
-    for (const row of parseWslGuestPaneProcesses(out)) {
+    const rows = parseWslGuestPaneProcesses(out)
+    for (const row of rows) {
       expect(row.pid).toBeGreaterThan(0)
     }
+    expect(rows.some((row) => row.cwd?.startsWith('/'))).toBe(true)
   })
 })
 
