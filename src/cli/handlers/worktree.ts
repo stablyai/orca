@@ -9,6 +9,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
+import { worktreeSleepHandler } from './worktree-sleep'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
 import {
   annotateOmittedHostScope,
@@ -307,5 +308,6 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         ? `removed: ${value.removed}\nOrca is still deleting the checkout in the background.`
         : `removed: ${value.removed}`
     )
-  }
+  },
+  'worktree sleep': worktreeSleepHandler
 }

@@ -98,7 +98,10 @@ ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
+ORCA worktree sleep --worktree id:<repoId>::<worktreePath> --json
 ```
+
+`worktree sleep` frees a worktree's resources like Sleep in the sidebar: its terminals, browser tabs and agents stop, slept agents resume when it is opened again, and files are untouched. It refuses the worktree whose terminal runs the command unless `--force` is passed.
 
 Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
 `hide` hides them; `inherit` clears the repo override and follows the global default.

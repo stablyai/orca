@@ -101,11 +101,14 @@ orca worktree create --name child-task --agent codex --prompt "Investigate the f
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
 orca worktree set --worktree active --workspace-status in-review --unread --json
 orca worktree rm --worktree id:<worktreeId> --force --json
+orca worktree sleep --worktree id:<worktreeId> --json
 ```
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
 
 `worktree set --unread` puts the unread dot on the workspace in the sidebar, the same one Orca shows when an agent finishes; `--read` clears it.
+
+`worktree sleep` does what Sleep in the sidebar does: the worktree's terminals, browser tabs and agents stop, and slept agents resume when you open it again. With the desktop app open, success means Orca accepted the sleep. Sleeping the worktree whose terminal runs the command is refused unless you pass `--force`.
 
 Agent startup flags:
 
