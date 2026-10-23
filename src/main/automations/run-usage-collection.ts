@@ -109,6 +109,9 @@ export async function writeAutomationRunUsage(input: {
   codexUsage: CodexUsageStore | null
 }): Promise<AutomationRun> {
   const { store, run } = input
+  if (run.usage) {
+    return run
+  }
   const usage = await collectAutomationRunUsage({
     automation: store.listAutomations().find((entry) => entry.id === run.automationId),
     run,

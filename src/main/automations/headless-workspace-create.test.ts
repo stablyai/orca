@@ -40,6 +40,7 @@ const automation: Automation = {
   baseBranch: 'origin/main',
   setupDecision: 'skip',
   reuseSession: false,
+  closeOnSuccess: false,
   timezone: 'UTC',
   rrule: 'FREQ=DAILY',
   dtstart: 1,

@@ -22,6 +22,7 @@ const RUNTIME_SELF: AutomationOwnerRef = {
 
 function automation(overrides: Partial<Automation> = {}): Automation {
   return {
+    closeOnSuccess: false,
     id: 'a-1',
     name: 'Nightly',
     prompt: 'sweep',

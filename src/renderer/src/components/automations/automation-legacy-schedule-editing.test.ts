@@ -13,6 +13,7 @@ import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate
 const LEGACY_OVERSIZED_STEP = '*/90 * * * *'
 
 const makeAutomation = (overrides: Partial<Automation> = {}): Automation => ({
+  closeOnSuccess: false,
   id: 'a1',
   name: 'Nightly sweep',
   prompt: 'Check the repo',

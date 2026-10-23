@@ -18,3 +18,16 @@ Schedules accept `hourly`, `daily`, `weekdays`, `weekly`, 5-field cron, or RRULE
 
 Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` for an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive. Use `--reuse-session` only for existing-workspace automations; if the previous terminal is gone, Orca falls back to a fresh session. Prefer `--disabled` while testing setup.
 Use `--extra-agent-args="--model opus --effort high --add-dir docs"` to add arguments after the host's default agent Arguments on every fresh run (always pass it with `=`, since the value starts with `--`). Only model and effort options, plus Claude's `--add-dir`, are accepted, for `claude`, `codex`, `codebuddy`, `cursor`, `grok`, and `omp`. Model or effort in the extras replaces the default's. Extras can't be combined with `--reuse-session`. `--extra-agent-args=` on edit clears them.
+
+## Close successful runs
+
+Closing defaults to off and is opt-in per automation. Use `--close-on-success` on create or edit to enable it, and `--no-close-on-success` to disable it; both flags together are rejected. Omit both on edit to preserve the saved value. Both enabling and disabling require host support and fail explicitly on older hosts.
+
+```text
+ORCA automations edit <automationId> --fresh-session --close-on-success --json
+ORCA automations edit <automationId> --no-close-on-success --json
+```
+
+`--reuse-session` is incompatible with closing; pass `--fresh-session` when enabling it on an existing automation that reuses sessions. `show` displays `closeOnSuccess`; list/show JSON includes the saved value. There is no GUI setting yet, but desktop edits preserve it.
+
+Each run snapshots the setting. After success, Orca saves output, completed status, and usage before closing only that run's own pane; the final pane also closes its tab. No workspace is deleted, and new-per-run workspaces remain on disk. Failed, skipped, and running runs stay open, as do user-used, user-viewed, or unknown terminals under the existing safety policy. Scheduled and manual runs use the same completion handling, including after schedule edits; no new timer or service is added.

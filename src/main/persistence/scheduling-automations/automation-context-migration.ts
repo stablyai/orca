@@ -103,6 +103,7 @@ export function normalizeAutomationSessionReuse(automation: Automation): Automat
     ...(hasExtraAgentArgs(extraAgentArgs) ? { extraAgentArgs } : {}),
     precheck: normalizeAutomationPrecheck(automation.precheck),
     setupDecision,
+    closeOnSuccess: automation.closeOnSuccess === true,
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
 }

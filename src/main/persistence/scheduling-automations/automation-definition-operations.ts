@@ -111,6 +111,7 @@ export function createAutomation(
       input.setupDecision
     ),
     reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
+    closeOnSuccess: input.closeOnSuccess ?? false,
     timezone: input.timezone,
     rrule: input.rrule,
     dtstart: input.dtstart,
@@ -120,6 +121,9 @@ export function createAutomation(
     missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
     createdAt: now,
     updatedAt: now
+  }
+  if (automation.reuseSession && automation.closeOnSuccess) {
+    throw new Error('Close on success requires a fresh session; disable session reuse.')
   }
   assertAutomationExtraAgentArgs(automation)
   operations.state.automations = [...(operations.state.automations ?? []), automation]
@@ -223,6 +227,7 @@ export function updateAutomation(
       workspaceMode === 'existing'
         ? (updates.reuseSession ?? current.reuseSession ?? false)
         : false,
+    closeOnSuccess: updates.closeOnSuccess ?? current.closeOnSuccess ?? false,
     rrule,
     dtstart,
     nextRunAt: scheduleChanged
@@ -234,6 +239,9 @@ export function updateAutomation(
     delete merged.extraAgentArgs
   } else {
     merged.extraAgentArgs = extraAgentArgs
+  }
+  if (merged.reuseSession && merged.closeOnSuccess) {
+    throw new Error('Close on success requires a fresh session; disable session reuse.')
   }
   assertAutomationExtraAgentArgs(merged)
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)

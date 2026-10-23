@@ -66,6 +66,7 @@ describe('automation RPC methods', () => {
           enabled: false,
           setupDecision: 'run',
           reuseSession: false,
+          closeOnSuccess: false,
           rrule: '0 9 * * 1-5',
           dtstart: 2
         }
@@ -97,6 +98,7 @@ describe('automation RPC methods', () => {
         enabled: false,
         setupDecision: 'run',
         reuseSession: false,
+        closeOnSuccess: false,
         rrule: '0 9 * * 1-5'
       }),
       { expectedOwner: undefined, destination: undefined }

@@ -29,6 +29,7 @@ export const WORKSPACE_ID = 'workspace-1'
 
 export function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
+    closeOnSuccess: false,
     id: 'a-1',
     name: 'Nightly',
     prompt: 'Run the nightly sweep',
@@ -72,6 +73,7 @@ export function makeAutomationListRow(
 
 export function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
   return {
+    closeOnSuccess: false,
     id: 'run-1',
     automationId: 'a-1',
     title: 'Nightly #1',

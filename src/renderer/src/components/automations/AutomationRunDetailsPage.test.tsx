@@ -17,6 +17,7 @@ const boundaryMocks = vi.hoisted(() => ({
 vi.mock('@/components/sidebar/CommentMermaidBlock', () => ({ default: boundaryMocks.mermaid }))
 
 const run: AutomationRun = {
+  closeOnSuccess: false,
   id: 'run-1',
   automationId: 'automation-1',
   title: 'Run 1',

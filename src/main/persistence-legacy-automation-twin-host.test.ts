@@ -50,6 +50,7 @@ function legacyAutomation(overrides: Partial<Automation> = {}): Record<string, u
     workspaceId: null,
     baseBranch: null,
     reuseSession: false,
+    closeOnSuccess: false,
     timezone: 'UTC',
     rrule: 'FREQ=DAILY',
     dtstart: 1,

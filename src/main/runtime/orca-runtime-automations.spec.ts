@@ -61,6 +61,7 @@ export function registerOrcaRuntimeAutomationsTests(): void {
     workspaceId: null,
     baseBranch: 'main',
     reuseSession: false,
+    closeOnSuccess: false,
     timezone: 'UTC',
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     dtstart: 1,

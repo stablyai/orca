@@ -121,14 +121,7 @@ export class RuntimeAutomationController {
     }
     const automation = this.store.createAutomation(
       {
-        creationKey: input.creationKey,
-        name: input.name,
-        prompt: input.prompt,
-        precheck: input.precheck,
-        agentId: input.agentId,
-        extraAgentArgs: input.extraAgentArgs,
-        runContext: input.runContext,
-        sourceContext: input.sourceContext,
+        ...input,
         projectId: target.projectId,
         workspaceMode: target.workspaceMode,
         workspaceId: target.workspaceId,
@@ -246,6 +239,7 @@ export class RuntimeAutomationController {
       'baseBranch',
       'setupDecision',
       'reuseSession',
+      'closeOnSuccess',
       'timezone',
       'rrule',
       'dtstart',

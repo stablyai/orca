@@ -49,6 +49,7 @@ function sortedAutomationRuns(state: PersistedState, automationId?: string): Aut
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
     .map((run) => ({
       ...run,
+      closeOnSuccess: run.closeOnSuccess === true,
       precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
     }))
     .sort(compareAutomationRunsNewestFirst)
@@ -87,6 +88,7 @@ export function createAutomationRun(
   const run: AutomationRun = {
     id: randomUUID(),
     automationId: automation.id,
+    closeOnSuccess: automation.closeOnSuccess === true,
     runNumber,
     runContext: automation.runContext ?? null,
     sourceContext: automation.sourceContext ?? null,

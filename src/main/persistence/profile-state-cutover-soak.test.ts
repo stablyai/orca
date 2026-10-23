@@ -151,6 +151,7 @@ describe('profile-state candidate cutover soak', () => {
       workspaceId: 'repo-remote::/fixture/remote',
       baseBranch: null,
       reuseSession: false,
+      closeOnSuccess: false,
       timezone: 'UTC',
       rrule: 'FREQ=DAILY',
       dtstart: 10,

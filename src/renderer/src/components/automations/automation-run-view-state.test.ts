@@ -9,6 +9,7 @@ import {
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
+    closeOnSuccess: false,
     id: 'automation-1',
     name: 'Automation 1',
     prompt: 'Run checks',
@@ -37,6 +38,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
 
 function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
   return {
+    closeOnSuccess: false,
     id: 'run-1',
     automationId: 'automation-1',
     title: 'Run 1',

@@ -8,6 +8,7 @@ const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 
 function run(): AutomationRun {
   return {
+    closeOnSuccess: false,
     id: 'run-1',
     automationId: 'automation-1',
     title: 'Run 1',

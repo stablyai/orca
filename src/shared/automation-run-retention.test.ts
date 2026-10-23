@@ -7,7 +7,9 @@ import {
   pruneAutomationRuns
 } from './automation-run-retention'
 
-function run(overrides: Partial<AutomationRun> & Pick<AutomationRun, 'id' | 'automationId'>) {
+function run(
+  overrides: Partial<AutomationRun> & Pick<AutomationRun, 'id' | 'automationId'>
+): AutomationRun {
   return {
     runContext: null,
     sourceContext: null,
@@ -17,6 +19,7 @@ function run(overrides: Partial<AutomationRun> & Pick<AutomationRun, 'id' | 'aut
     trigger: 'scheduled',
     workspaceId: null,
     sessionKind: 'terminal',
+    closeOnSuccess: false,
     chatSessionId: null,
     terminalSessionId: null,
     terminalPaneKey: null,
@@ -29,7 +32,7 @@ function run(overrides: Partial<AutomationRun> & Pick<AutomationRun, 'id' | 'aut
     dispatchedAt: null,
     createdAt: 0,
     ...overrides
-  } as AutomationRun
+  }
 }
 
 function makeRuns(automationId: string, count: number, from = 0): AutomationRun[] {

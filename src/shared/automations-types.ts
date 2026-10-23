@@ -122,6 +122,7 @@ export type Automation = {
   baseBranch: string | null
   setupDecision?: SetupDecision
   reuseSession: boolean
+  closeOnSuccess: boolean
   timezone: string
   rrule: string
   dtstart: number
@@ -137,6 +138,7 @@ export type Automation = {
 export type AutomationRun = {
   id: string
   automationId: string
+  closeOnSuccess: boolean
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   title: string
@@ -197,6 +199,7 @@ export type AutomationCreateInput = {
   baseBranch?: string | null
   setupDecision?: SetupDecision
   reuseSession?: boolean
+  closeOnSuccess?: boolean
   timezone: string
   rrule: string
   dtstart: number
@@ -220,6 +223,7 @@ export type AutomationUpdateInput = Partial<
     | 'baseBranch'
     | 'setupDecision'
     | 'reuseSession'
+    | 'closeOnSuccess'
     | 'timezone'
     | 'rrule'
     | 'dtstart'

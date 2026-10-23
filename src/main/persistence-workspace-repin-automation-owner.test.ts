@@ -115,6 +115,7 @@ function pinnedAutomation() {
     workspaceId: folderWorkspaceKey('fw-1'),
     baseBranch: null,
     reuseSession: false,
+    closeOnSuccess: false,
     timezone: 'UTC',
     rrule: 'FREQ=DAILY',
     dtstart: NOW,

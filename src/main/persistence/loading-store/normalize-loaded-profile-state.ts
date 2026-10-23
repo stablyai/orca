@@ -110,7 +110,15 @@ export function normalizeLoadedProfileState(
       parsed.migrationUnsupportedPtyEntries
     ),
     legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
-    automations: Array.isArray(parsed.automations) ? parsed.automations : [],
+    automations: Array.isArray(parsed.automations)
+      ? parsed.automations.map((automation) => {
+          if (typeof automation.closeOnSuccess === 'boolean') {
+            return automation
+          }
+          markNeedsSave()
+          return { ...automation, closeOnSuccess: false }
+        })
+      : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
       parsed.orcadMigrationImportReceipts

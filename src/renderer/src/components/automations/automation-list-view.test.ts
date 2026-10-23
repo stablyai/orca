@@ -21,6 +21,7 @@ import type { ExternalAutomationListEntry } from './external-automation-list-ent
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
+    closeOnSuccess: false,
     id: 'automation-1',
     name: 'Zebra job',
     prompt: 'run',

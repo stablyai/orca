@@ -18,6 +18,7 @@ function automation(overrides: Partial<Automation> = {}): Automation {
     workspaceId: null,
     baseBranch: null,
     reuseSession: false,
+    closeOnSuccess: false,
     timezone: 'UTC',
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     dtstart: 0,

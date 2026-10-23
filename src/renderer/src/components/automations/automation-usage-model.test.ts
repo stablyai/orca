@@ -8,6 +8,7 @@ import {
 
 function makeRun(overrides: Partial<AutomationRun>): AutomationRun {
   return {
+    closeOnSuccess: false,
     id: 'run-1',
     automationId: 'automation-1',
     title: 'Run 1',

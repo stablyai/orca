@@ -62,6 +62,7 @@ function build(headless: boolean) {
     )
   }
   const store = {
+    flushPendingOrThrowAsync: vi.fn(async () => {}),
     listAutomationRuns: vi.fn(() => finishedRuns(5)),
     listAutomations: () => [],
     getWorktreeMeta: vi.fn(

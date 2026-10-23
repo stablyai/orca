@@ -14,6 +14,7 @@ function run(overrides: Partial<AutomationRun>): AutomationRun {
     workspaceId: 'wt-1',
     workspaceDisplayName: 'Workspace',
     sessionKind: 'terminal',
+    closeOnSuccess: false,
     chatSessionId: null,
     terminalSessionId: 'tab-1',
     terminalPaneKey: 'tab-1:leaf-1',

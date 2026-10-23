@@ -10,6 +10,7 @@ const splitPaneKey = `tab-1:${splitLeafId}`
 
 function run(overrides: Partial<AutomationRun>): AutomationRun {
   return {
+    closeOnSuccess: false,
     id: 'run-1',
     automationId: 'auto-1',
     title: 'Run 1',

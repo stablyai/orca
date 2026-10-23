@@ -36,13 +36,7 @@ import {
   readAllAutomationRuns,
   readAutomationRunsPage
 } from '../automation-runs-paging'
-import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
-import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import {
-  EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
-  hasExtraAgentArgs
-} from '../../shared/automation-extra-agent-args'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 import {
   assertWorkspaceTargetFlagsCompatible,
@@ -59,7 +53,16 @@ import {
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
-import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
+import {
+  assertExtraAgentArgsSupported,
+  getExtraAgentArgsFlag
+} from './automation-extra-agent-args-flag'
+import {
+  assertCloseOnSuccessSessionCompatible,
+  assertCloseOnSuccessSupported,
+  getCloseOnSuccessFlag,
+  resolveCloseOnSuccessEditOwner
+} from './automation-close-on-success'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -169,20 +172,6 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
   return runContext
 }
 
-// Why: an older runtime strips the field and would run the automation without it.
-async function assertExtraAgentArgsSupported(
-  client: RuntimeClient,
-  extraAgentArgs: string | undefined
-): Promise<void> {
-  if (!hasExtraAgentArgs(extraAgentArgs)) {
-    return
-  }
-  const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
-    throw new RuntimeClientError('incompatible_runtime', EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
-  }
-}
-
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   'automations list': async ({ client, json }) => {
     const result = await client.call<{ automations: Automation[] }>('automation.list')
@@ -201,6 +190,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     }
     const target = await resolveDefaultTarget(flags, cwd, client)
     const sourceContext = getSourceContextFlag(flags)
+    const closeOnSuccess = getCloseOnSuccessFlag(flags)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
     // Built before the destination read so a contradictory flag still fails without a runtime call.
@@ -217,11 +207,14 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspaceMode,
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       reuseSession: getReuseSessionFlag(flags),
+      ...(closeOnSuccess !== undefined ? { closeOnSuccess } : {}),
       timezone: getOptionalStringFlag(flags, 'timezone'),
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
     } satisfies AutomationCreateParams
+    assertCloseOnSuccessSessionCompatible(create.reuseSession, closeOnSuccess)
+    await assertCloseOnSuccessSupported(client, closeOnSuccess)
     await assertExtraAgentArgsSupported(client, create.extraAgentArgs)
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.create', {
@@ -234,6 +227,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const target = await getExplicitTarget(flags, cwd, client)
     const schedule = getScheduleFlag(flags, false)
     const sourceContext = getSourceContextFlag(flags)
+    const closeOnSuccess = getCloseOnSuccessFlag(flags)
     const id = getRequiredStringFlag(flags, 'id')
     // Built before the owner read so a contradictory flag still fails without a runtime call.
     const updates = {
@@ -249,13 +243,16 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspaceMode: getWorkspaceModeFlag(flags),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       reuseSession: getReuseSessionFlag(flags),
+      ...(closeOnSuccess !== undefined ? { closeOnSuccess } : {}),
       timezone: getOptionalStringFlag(flags, 'timezone'),
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
     } satisfies AutomationUpdateParams
+    assertCloseOnSuccessSessionCompatible(updates.reuseSession, closeOnSuccess)
+    await assertCloseOnSuccessSupported(client, closeOnSuccess)
     await assertExtraAgentArgsSupported(client, updates.extraAgentArgs)
-    const expectedOwner = await resolveExpectedOwner(client, id)
+    const expectedOwner = await resolveCloseOnSuccessEditOwner(client, id, updates)
     // Why: expectedOwner only fences the host the record is leaving; an edit that moves it needs the arrival fenced too.
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {

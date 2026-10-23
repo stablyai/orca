@@ -55,6 +55,7 @@ function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
     title: 'Daily checks run 1',
     status: 'dispatching',
     trigger: 'manual',
+    closeOnSuccess: false,
     scheduledFor: 0,
     workspaceId: null,
     sessionKind: 'terminal',

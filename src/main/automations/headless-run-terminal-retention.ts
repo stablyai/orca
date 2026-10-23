@@ -43,6 +43,8 @@ export type HeadlessRunTerminalRetentionDeps = {
    * PTY id. False, sleeping nothing, when another terminal there is live or the sleep failed.
    */
   sleepRunWorkspace: (run: AutomationRun) => Promise<boolean>
+  /** Positive current-turn completion or fresh proof the agent process is gone. */
+  completedRunCanClose?: (run: AutomationRun) => Promise<boolean>
   /** Drops the closed terminal from the run, keeping its status, error and output. */
   forgetRunTerminal: (run: AutomationRun) => Promise<void>
   /** The automation's dispatch lane; a sweep reads and closes its runs' terminals inside it. */
@@ -101,6 +103,10 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
       )
       .toSorted((a, b) => automationRunRecency(b) - automationRunRecency(a))
     for (const run of runs) {
+      // Opt-in cleanup never treats a failed or unfinished run as a successful one.
+      if (run.closeOnSuccess && (run.status !== 'completed' || !run.outputSnapshot || !run.usage)) {
+        continue
+      }
       if (!firstSeenAt.has(run.id)) {
         firstSeenAt.set(run.id, now())
       }
@@ -117,15 +123,19 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
           continue
         }
         ownedPaneKeys.add(run.terminalPaneKey)
-        if (kept < policy.keep) {
+        const closeOnSuccess = run.closeOnSuccess === true
+        if (!closeOnSuccess && kept < policy.keep) {
           kept += 1
           continue
         }
-        if (!(await mayClose(run, policy.graceMs))) {
+        if (!(await mayClose(run, closeOnSuccess ? 0 : policy.graceMs))) {
+          continue
+        }
+        if (closeOnSuccess && !(await deps.completedRunCanClose?.(run))) {
           continue
         }
         // Why: as on the desktop, a run's own workspace sleeps or stays; closing it loses the session.
-        if (run.status === 'completed' && deps.runOwnsWorkspace(run)) {
+        if (!closeOnSuccess && run.status === 'completed' && deps.runOwnsWorkspace(run)) {
           if (await deps.sleepRunWorkspace(run)) {
             firstSeenAt.delete(run.id)
             releasedCount += 1
@@ -134,8 +144,8 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         }
         if (await deps.closeRunTerminal(run)) {
           releasedCount += 1
+          await forget(run)
         }
-        await forget(run)
       } catch (error) {
         console.error('[automations] could not close a run terminal:', error)
       }

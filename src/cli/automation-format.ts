@@ -94,6 +94,7 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `workspaceId: ${automation.workspaceId ?? 'null'}`,
     `baseBranch: ${automation.baseBranch ?? 'null'}`,
     `reuseSession: ${automation.reuseSession}`,
+    `closeOnSuccess: ${automation.closeOnSuccess ?? false}`,
     `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
     // Omitted rather than guessed: a host that reports no owner has none to report.
     ...(result.owner ? [`host: ${formatOwnerSelector(result.owner.selector)}`] : []),

@@ -104,6 +104,21 @@ orca automations create \
 
 Use `orca automations edit <automationId> --fresh-session --json` to switch the automation back to a fresh terminal per run.
 
+## Close successful run terminals
+
+Closing is opt-in per automation and defaults to off. Add `--close-on-success` on create, or enable it later:
+
+```bash
+orca automations edit <automationId> --fresh-session --close-on-success --json
+orca automations edit <automationId> --no-close-on-success --json
+```
+
+Omitting both flags on edit preserves the saved setting. They cannot be combined. Session reuse is incompatible with closing; use `--fresh-session` to disable `--reuse-session` when enabling it. Both enabling and disabling require a host that supports the option; older hosts fail explicitly instead of silently dropping it. Inspect the value with `orca automations show <automationId>` or `automations list --json`.
+
+After a successful run, Orca saves the output, completed status, and usage before closing only that run's own terminal pane. Closing the final pane also closes its tab. It does not delete the workspace: a new-per-run workspace stays on disk. Failed, skipped, and still-running runs are retained. The existing safety policy also keeps terminals that a user has used or viewed, or whose safety is unknown.
+
+The setting is captured for each run and works for scheduled runs and manual `orca automations run` calls, including after schedule changes. It uses the existing completion handling; no new timer or service is needed. This option is CLI-only for now; editing an automation in the desktop UI preserves it.
+
 ## Extra agent arguments
 
 Add arguments to the agent command for one automation, for example a different model:

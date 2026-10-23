@@ -34,6 +34,7 @@ function makeAutomation(
   prompt = `Synthetic opening.\n${'Synthetic detail. '.repeat(80)}`
 ): Automation {
   return {
+    closeOnSuccess: false,
     id: 'synthetic-automation',
     name: 'Synthetic automation',
     prompt,

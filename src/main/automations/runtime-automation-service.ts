@@ -66,20 +66,20 @@ export function createRuntimeAutomationService(input: {
       : undefined
   })
   runtime.setAutomationService(service)
-  if (input.headless) {
-    bindHeadlessRunTerminalRetention(service, store, runtime)
-  }
+  bindRunTerminalRetention(service, store, runtime, input.headless)
   return service
 }
 
-/** A headless host has no renderer to close finished run terminals; its service does it. */
-function bindHeadlessRunTerminalRetention(
+/** Shared cleanup for opted-in runs; headless hosts also retain their default terminal policy. */
+function bindRunTerminalRetention(
   service: AutomationService,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  headless: boolean
 ): void {
   const retention = createHeadlessRunTerminalRetention({
-    listRuns: () => store.listAutomationRuns(),
+    listRuns: () =>
+      store.listAutomationRuns().filter((run) => headless || run.closeOnSuccess === true),
     terminalClientUse: (run) =>
       run.terminalPtyId ? runtime.readTerminalClientUse(run.terminalPtyId) : 'unknown',
     runTerminalAlive: (run) => runOwnHandle(runtime, run) !== null,
@@ -90,7 +90,11 @@ function bindHeadlessRunTerminalRetention(
     closeRunTerminal: async (run) => {
       // Only the run's own process: a restarted pane holds a new PTY a user may be working in.
       const handle = runOwnHandle(runtime, run)
-      if (!handle) {
+      if (
+        !handle ||
+        !run.terminalPtyId ||
+        runtime.readTerminalClientUse(run.terminalPtyId) !== 'unused'
+      ) {
         return false
       }
       // The run's pane only: a pane a user split into the same tab is theirs.
@@ -127,8 +131,35 @@ function bindHeadlessRunTerminalRetention(
       await service.markDispatchResult({ runId: run.id, status: run.status, terminalPtyId: null })
       return true
     },
+    completedRunCanClose: async (run) => {
+      const since = run.dispatchedAt ?? run.startedAt ?? run.createdAt
+      const completedTurn =
+        run.terminalPaneKey &&
+        runtime
+          .getAgentStatusRowsForPane(run.terminalPaneKey)
+          .some(
+            (row) =>
+              row.state === 'done' &&
+              !row.sessionBoundary &&
+              !row.providerSessionOnly &&
+              !row.interrupted &&
+              !row.restoredUnconfirmed &&
+              row.stateStartedAt >= since &&
+              row.turnEndDisposition === 'identified' &&
+              row.turnEndedAt !== undefined &&
+              row.turnEndedAt >= since
+          )
+      return Boolean(
+        completedTurn ||
+        (run.terminalPtyId && (await runtime.confirmTerminalShellAlone(run.terminalPtyId)))
+      )
+    },
     inAutomationLane: (automationId, operation) =>
-      service.runInAutomationLane(automationId, operation),
+      service.runInAutomationLane(automationId, async () => {
+        // The store publishes mutations in memory before their durable acknowledgement.
+        await store.flushPendingOrThrowAsync({ drainToStableGeneration: true })
+        return operation()
+      }),
     forgetRunTerminal: async (run) => {
       // A run still dispatched had its agent exit without a result, proven by its idle shell.
       const unfinished = run.status === 'dispatched'
@@ -144,12 +175,28 @@ function bindHeadlessRunTerminalRetention(
       })
     }
   })
-  service.releaseFinishedRunTerminals = () => retention.drain()
+  service.reconcileFinishedRunTerminals = () =>
+    retention.sweep().catch((error) => {
+      console.error('[automations] could not reconcile completed run terminals:', error)
+    })
+  if (headless) {
+    service.releaseFinishedRunTerminals = () => retention.drain()
+  }
   const start = service.start.bind(service)
   const stop = service.stop.bind(service)
   service.start = () => {
     start()
-    retention.start()
+    for (const run of store.listAutomationRuns()) {
+      if (run.closeOnSuccess && run.status === 'completed' && run.outputSnapshot && !run.usage) {
+        void service.markDispatchResult({ runId: run.id, status: 'completed' }).catch((error) => {
+          console.error('[automations] could not recover completed run usage:', error)
+        })
+      }
+    }
+    if (headless) {
+      retention.start()
+    }
+    void service.reconcileFinishedRunTerminals?.()
   }
   service.stop = () => {
     retention.stop()

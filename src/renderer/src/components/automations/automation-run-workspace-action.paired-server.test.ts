@@ -44,6 +44,7 @@ const MIRRORED_PTY = toRemoteRuntimePtyId('term-handle-1', ENV)
 const worktree = { id: WT, repoId: 'repo-a', hostId: `runtime:${ENV}` as const }
 
 const run: AutomationRun = {
+  closeOnSuccess: false,
   id: 'run-1',
   automationId: 'automation-1',
   title: 'Run 1',

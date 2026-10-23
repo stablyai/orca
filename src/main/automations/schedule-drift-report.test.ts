@@ -16,6 +16,7 @@ const makeAutomation = (name: string, rrule: string): Automation => ({
   workspaceId: 'wt1',
   baseBranch: null,
   reuseSession: false,
+  closeOnSuccess: false,
   timezone: 'UTC',
   rrule,
   dtstart: 0,

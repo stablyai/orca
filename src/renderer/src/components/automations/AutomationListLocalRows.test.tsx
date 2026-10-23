@@ -25,6 +25,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
+    closeOnSuccess: false,
     id: 'automation-1',
     name: 'test',
     prompt: 'Run checks',
@@ -90,6 +91,7 @@ function makeExternalManager(): ExternalAutomationManager {
 
 function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
   return {
+    closeOnSuccess: false,
     id: 'run-1',
     automationId: 'automation-1',
     title: 'test',

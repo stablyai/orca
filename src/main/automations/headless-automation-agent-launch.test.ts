@@ -81,6 +81,7 @@ function previousRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
     workspaceId: 'wt-1',
     workspaceDisplayName: 'repo',
     sessionKind: 'terminal',
+    closeOnSuccess: false,
     chatSessionId: null,
     terminalSessionId: 'tab-prev',
     terminalPaneKey: 'tab-prev:leaf-1',

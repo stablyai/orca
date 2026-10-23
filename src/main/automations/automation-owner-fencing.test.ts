@@ -46,6 +46,7 @@ function automation(overrides: Partial<Automation>): Automation {
     workspaceId: null,
     baseBranch: null,
     reuseSession: false,
+    closeOnSuccess: false,
     timezone: 'UTC',
     rrule: 'FREQ=DAILY',
     dtstart: 0,
@@ -56,7 +57,7 @@ function automation(overrides: Partial<Automation>): Automation {
     createdAt: 0,
     updatedAt: 0,
     ...overrides
-  } as Automation
+  }
 }
 
 const REPOS: Repo[] = [

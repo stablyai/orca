@@ -27,6 +27,7 @@ globalThis.window = { api: mockApi }
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
+    closeOnSuccess: false,
     id: 'auto-1',
     name: 'Remote check',
     prompt: 'Check',

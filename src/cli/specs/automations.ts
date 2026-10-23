@@ -18,7 +18,9 @@ const AUTOMATION_STATE_FLAGS = [
   'disabled',
   'missed-run-grace-minutes',
   'reuse-session',
-  'fresh-session'
+  'fresh-session',
+  'close-on-success',
+  'no-close-on-success'
 ]
 
 export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
@@ -62,6 +64,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
+      'Use --close-on-success to opt in to closing this automation’s pane after successful runs. --no-close-on-success disables it; edits without either flag preserve it. Requires fresh sessions (--fresh-session) and an updated host.',
       'Use --extra-agent-args="--model opus --effort high" to add arguments after the host\'s default agent Arguments on each fresh run. Only model, effort, and a few safe options are accepted (Claude, Codex, CodeBuddy, Cursor, Grok, OMP); extras cannot be combined with --reuse-session. On edit, --extra-agent-args= clears them.'
     ],
     examples: [
@@ -88,10 +91,14 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       ...AUTOMATION_STATE_FLAGS
     ],
     positionalArgs: ['id'],
+    notes: [
+      'Use --close-on-success or --no-close-on-success to enable or disable closing successful runs; omit both to preserve the setting. Use --fresh-session when enabling it on an automation that reuses sessions. Both flags require an updated host.'
+    ],
     examples: [
       'orca automations edit 2f9e... --disabled',
       'orca automations edit --id 2f9e... --trigger "30 * * * *" --json',
-      'orca automations edit 2f9e... --extra-agent-args='
+      'orca automations edit 2f9e... --extra-agent-args=',
+      'orca automations edit 2f9e... --fresh-session --close-on-success'
     ]
   },
   {

@@ -91,6 +91,7 @@ const AUTOMATION: Automation = {
   workspaceId: 'folder:fw-1',
   baseBranch: null,
   reuseSession: false,
+  closeOnSuccess: false,
   timezone: 'UTC',
   rrule: 'FREQ=DAILY',
   dtstart: 0,
@@ -100,7 +101,7 @@ const AUTOMATION: Automation = {
   missedRunGraceMinutes: 720,
   createdAt: 0,
   updatedAt: 0
-} as Automation
+}
 
 async function createStore(
   folderWorkspaces: FolderWorkspace[],

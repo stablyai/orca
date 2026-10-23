@@ -124,6 +124,13 @@ function isMigratedAutomation(value: unknown): value is Automation {
     throw new Error('orcad_migration_dormant_automation_setup_decision_invalid')
   }
   requiredBoolean(record.reuseSession, 'orcad_migration_dormant_automation_reuse_invalid')
+  if (record.closeOnSuccess === undefined) {
+    record.closeOnSuccess = false
+  }
+  requiredBoolean(record.closeOnSuccess, 'orcad_migration_dormant_automation_close_invalid')
+  if (record.reuseSession && record.closeOnSuccess) {
+    throw new Error('orcad_migration_dormant_automation_close_reuse_conflict')
+  }
   requiredString(record.timezone, 'orcad_migration_dormant_automation_timezone_invalid')
   requiredString(record.rrule, 'orcad_migration_dormant_automation_rrule_invalid')
   for (const field of [
@@ -155,6 +162,10 @@ function isMigratedAutomationRun(value: unknown): value is AutomationRun {
   const record = requiredRecord(value, 'orcad_migration_dormant_automation_run_invalid')
   requiredString(record.id, 'orcad_migration_dormant_automation_run_id_invalid')
   requiredString(record.automationId, 'orcad_migration_dormant_automation_run_owner_invalid')
+  if (record.closeOnSuccess === undefined) {
+    record.closeOnSuccess = false
+  }
+  requiredBoolean(record.closeOnSuccess, 'orcad_migration_dormant_automation_close_invalid')
   parseContext(record.runContext, 'workspace-run')
   parseContext(record.sourceContext, 'task-source')
   requiredString(record.title, 'orcad_migration_dormant_automation_run_title_invalid')

@@ -66,8 +66,10 @@ function makeAutomation(
     executionTargetId: 'local',
     schedulerOwner: 'local_host_service',
     workspaceMode: 'new_per_run',
+    workspaceId: null,
     baseBranch: null,
     reuseSession: false,
+    closeOnSuccess: false,
     timezone: 'UTC',
     rrule: 'FREQ=DAILY',
     dtstart: 1,
@@ -79,7 +81,7 @@ function makeAutomation(
     updatedAt: 1,
     runContext,
     ...overrides
-  } as Automation
+  }
 }
 
 function makeStore(

@@ -46,7 +46,6 @@ import type {
 const DEFAULT_TICK_MS = 60 * 1000
 
 export class AutomationService {
-  private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
   private webContents: AutomationRendererChannel | null = null
@@ -61,6 +60,7 @@ export class AutomationService {
   private readonly automationLanes = new Map<string, Promise<void>>()
   /** Set on a headless host: closes completed, unused run terminals now; resolves how many. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
+  reconcileFinishedRunTerminals: (() => Promise<void>) | null = null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
@@ -70,7 +70,7 @@ export class AutomationService {
   externalProbePriority: (<T>(run: () => T) => T) | null = null
 
   constructor(
-    store: Store,
+    private readonly store: Store,
     opts: {
       tickMs?: number
       claudeUsage?: ClaudeUsageStore
@@ -81,7 +81,6 @@ export class AutomationService {
       onAutomationsChanged?: PublishAutomationsChanged
     } = {}
   ) {
-    this.store = store
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS
     this.claudeUsage = opts.claudeUsage ?? null
     this.codexUsage = opts.codexUsage ?? null
@@ -125,6 +124,7 @@ export class AutomationService {
     this.stopped = false
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
+      void this.reconcileFinishedRunTerminals?.()
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
     reportAutomationScheduleDrift(this.store.listAutomations())
@@ -213,16 +213,18 @@ export class AutomationService {
     // before refresh() flips its status snapshot off 'dispatched'. Re-running
     // collectRunUsage advances the attribution window and can rewrite an
     // already-collected 'known' usage to 'unavailable'/'ambiguous_session'.
-    if (run.usage) {
-      return run
-    }
-    return await writeAutomationRunUsage({
+    const finished = await writeAutomationRunUsage({
       store: this.store,
       runs: this.runs,
       run,
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
+    if (finished.closeOnSuccess && finished.status === 'completed' && finished.terminalPtyId) {
+      // Queue cleanup outside a possibly-held dispatch lane; failure cannot change the result.
+      void this.reconcileFinishedRunTerminals?.()
+    }
+    return finished
   }
 
   private async evaluateDueRuns(): Promise<void> {

@@ -8,6 +8,7 @@ import { getAutomationTargetAvailability } from './automation-target-availabilit
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
+    closeOnSuccess: false,
     id: 'automation-1',
     name: 'Nightly',
     prompt: 'Run checks',
