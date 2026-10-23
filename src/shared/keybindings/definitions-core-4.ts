@@ -33,6 +33,19 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'workspace.openUrl',
+    title: 'Open Workspace Link',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'workspace', 'link', 'url', 'browser', 'open'],
+    // Why: Ctrl+Shift+U is Unicode entry on Linux input methods.
+    defaultBindings: {
+      darwin: ['Mod+Shift+U'],
+      linux: ['Alt+Shift+U'],
+      win32: ['Alt+Shift+U']
+    }
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

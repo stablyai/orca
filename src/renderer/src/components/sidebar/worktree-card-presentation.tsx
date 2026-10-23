@@ -162,6 +162,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         cliProvenance: metaCliProvenance
       }) ||
       workspacePorts.length > 0 ||
+      Boolean(worktree.workspaceUrl) ||
       hasHoverIdentity)
   // Why: the parent row owns metadata hover; don't stack the title's truncation tooltip on the details popover.
   const titleWrapper = hasHoverDetails
@@ -194,7 +195,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const detailsAndPortsContent =
     hasDetails || hasPorts ? (
       <div className="flex shrink-0 items-center gap-1">
-        {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
+        {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} worktree={worktree} />}
         {hasDetails && (
           <WorktreeCardMetaBadges
             linkedItemCount={allReferenceItems.length}
@@ -225,7 +226,9 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
-        detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+        detailsAfter={
+          hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} worktree={worktree} /> : null
+        }
         hoverControl={detailsHoverControl}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}
         onEditComment={affiliateListMode ? undefined : handleEditComment}

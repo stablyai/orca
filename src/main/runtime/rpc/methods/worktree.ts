@@ -15,10 +15,7 @@ import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './wo
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
-import {
-  WorktreeCreate,
-  WorktreePrefetchCreateBase
-} from '../../../../shared/rpc-contract/worktree-create-params'
+import { WorktreeCreate } from '../../../../shared/rpc-contract/worktree-create-params'
 import {
   WorktreeActivate,
   WorktreeForceDeleteBranch,
@@ -32,6 +29,7 @@ import {
 } from '../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
+import { WORKTREE_PREFETCH_CREATE_BASE_METHOD } from './worktree-prefetch-create-base-method'
 import { readsWorktreeRemovalMarker } from '../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../workspaces/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
@@ -136,18 +134,7 @@ export const WORKTREE_METHODS = [
       })
   }),
   WORKTREE_PROVISIONED_ROOT_METHOD,
-  defineMethod({
-    name: 'worktree.prefetchCreateBase',
-    permission: 'workspace',
-    params: WorktreePrefetchCreateBase,
-    handler: async (params, { runtime }) => {
-      await runtime.prefetchManagedWorktreeCreateBase({
-        repoSelector: params.repo,
-        baseBranch: params.baseBranch
-      })
-      return null
-    }
-  }),
+  WORKTREE_PREFETCH_CREATE_BASE_METHOD,
   defineMethod({
     name: 'worktree.set',
     permission: 'workspace',
@@ -191,6 +178,7 @@ export const WORKTREE_METHODS = [
         sparsePresetId: params.sparsePresetId,
         baseRef: params.baseRef,
         workspaceStatus: params.workspaceStatus,
+        workspaceUrl: params.workspaceUrl,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
         mobileDiffReview: params.mobileDiffReview,

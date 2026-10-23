@@ -17,6 +17,7 @@ import {
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
 import { useAppStore } from '../store'
+import { claimOpenWorkspaceUrl } from './workspace-open-url-command'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
@@ -320,6 +321,7 @@ export function createAppCommandHandlers(
           : revealRightSidebarTab('sidebar.sourceControl.toggle', 'source-control')
     ],
     ['sidebar.checks.toggle', () => revealRightSidebarTab('sidebar.checks.toggle', 'checks')],
-    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')]
+    ['sidebar.ports.toggle', () => revealRightSidebarTab('sidebar.ports.toggle', 'ports')],
+    ['workspace.openUrl', () => claimOpenWorkspaceUrl(claim)]
   ])
 }

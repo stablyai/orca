@@ -4,6 +4,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-port-scan-refresh'
+import { useWorktreeById } from '@/store/selectors'
+import { WorkspaceUrlRow } from '@/components/workspace-url-row'
 import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
@@ -26,6 +28,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const scan = useAppStore((s) => s.workspacePortScan?.result ?? null)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceUrl = useWorktreeById(activeWorktreeId)?.workspaceUrl
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const scansByKey = useAppStore((s) => s.workspacePortScansByKey)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -190,6 +193,11 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
             />
           ) : (
             <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">
+              {activeWorktreeId && activeWorkspaceUrl && (
+                <div className="border-b border-border/40 p-1">
+                  <WorkspaceUrlRow worktreeId={activeWorktreeId} url={activeWorkspaceUrl} />
+                </div>
+              )}
               {workspaceGroups.length > 0 ? (
                 workspaceGroups.map((group) => (
                   <WorkspaceGroupRows
