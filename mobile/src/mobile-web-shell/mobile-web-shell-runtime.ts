@@ -1,4 +1,5 @@
 import * as ExpoCrypto from 'expo-crypto'
+import type { OrcaMobileWebShellSparesModule } from '../../modules/orca-mobile-web-shell/src/spares'
 import { encodeBase64Url } from '../transport/mobile-endpoint-supervisor-support'
 import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
 import type { GenerationStore } from './generation-store'
@@ -32,14 +33,19 @@ export const DOCUMENT_LOAD_DEADLINE_MS = 20_000
 export type MobileWebShellRuntime = {
   createStore(): GenerationStore
   mintSessionId(): string
+  /** The native pool of pages booted ahead of their screen. Absent on a binary without one. */
+  spares?: OrcaMobileWebShellSparesModule
   now(): number
   /** Runs `run` once, `delayMs` from now, and returns the cancel. The seam the deadline test drives
    *  instead of waiting ten seconds for a real one. */
   setTimer(run: () => void, delayMs: number): () => void
 }
 
-export function createMobileWebShellRuntime(): MobileWebShellRuntime {
+export function createMobileWebShellRuntime(
+  spares: OrcaMobileWebShellSparesModule | null = null
+): MobileWebShellRuntime {
   return {
+    ...(spares === null ? {} : { spares }),
     createStore: processGenerationStore,
     mintSessionId: () => encodeBase64Url(ExpoCrypto.getRandomBytes(SESSION_ID_BYTES)),
     now: Date.now,

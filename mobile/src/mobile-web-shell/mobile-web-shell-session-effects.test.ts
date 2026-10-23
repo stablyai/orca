@@ -1,3 +1,4 @@
+import type { OrcaMobileWebShellSparesModule } from '../../modules/orca-mobile-web-shell/src'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebShellSessionEvent } from './mobile-web-shell-session-contract'
 
@@ -81,7 +82,11 @@ function collect(): {
   return { events, send: (event) => events.push(event) }
 }
 
-async function runDownload(client: RpcClient | null, store: GenerationStore) {
+async function runDownload(
+  client: RpcClient | null,
+  store: GenerationStore,
+  spares?: OrcaMobileWebShellSparesModule
+) {
   const { events, send } = collect()
   await download({
     client,
@@ -91,6 +96,7 @@ async function runDownload(client: RpcClient | null, store: GenerationStore) {
     runtime: {
       createStore: () => store,
       mintSessionId: () => 's',
+      ...(spares === undefined ? {} : { spares }),
       now: () => 0,
       setTimer: () => () => {}
     },
@@ -192,6 +198,21 @@ describe('the download', () => {
 
   it('that lands whole reports no failure', async () => {
     expect(await runDownload(CLIENT, storeThat(null))).toEqual([])
+  })
+
+  it('that commits drops a spare booted from the generation it replaced', async () => {
+    const discarded: (string | null)[] = []
+    const spares: OrcaMobileWebShellSparesModule = {
+      prepareSpare: async () => undefined,
+      takeSpare: async () => null,
+      discardSpares: async (hostKey) => {
+        discarded.push(hostKey)
+      }
+    }
+    await runDownload(CLIENT, storeThat('commit'), spares)
+    expect(discarded).toEqual([])
+    await runDownload(CLIENT, storeThat(null), spares)
+    expect(discarded).toEqual(['k'])
   })
 })
 

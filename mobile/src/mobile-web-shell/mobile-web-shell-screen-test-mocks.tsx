@@ -9,6 +9,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
   return {
     'react-native': () => ({
       ActivityIndicator: 'ActivityIndicator',
+      AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
       AccessibilityInfo: {
         isReduceMotionEnabled: () => Promise.resolve(false),
         addEventListener: () => ({ remove: () => {} })
@@ -122,7 +123,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         dispatch: dependencies.dispatch
       }),
       useNavigationContainerRef: () => ({ getRootState: () => dependencies.rootState }),
-      useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
+      useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect]),
+      useIsFocused: () => true
     }),
     // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
     // and a mount/unmount log is the only thing that can tell a remount from a prop update.
@@ -157,7 +159,9 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
           }, [attach])
           return React.createElement('ShellViewProbe', props)
         },
-        parseMobileWebShellLoadState: parseMobileWebShellLoadState
+        parseMobileWebShellLoadState: parseMobileWebShellLoadState,
+        // A binary without the spare pool, which is every screen here: each mount builds its own page.
+        OrcaMobileWebShellSpares: null
       }
     },
     // The wall's release offer: the native hook imports the update checker module.

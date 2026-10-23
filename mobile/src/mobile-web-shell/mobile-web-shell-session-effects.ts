@@ -135,6 +135,8 @@ export async function download(args: {
       return
     }
     const committed = await store.commitGeneration(staged)
+    // The commit deleted every other generation, a spare's included.
+    void runtime.spares?.discardSpares(hostKey).catch(() => undefined)
     send({
       type: 'activated',
       flow,

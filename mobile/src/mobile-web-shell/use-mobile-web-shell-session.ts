@@ -11,7 +11,6 @@ import type { GenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
 import {
-  createMobileWebShellRuntime,
   DOCUMENT_LOAD_DEADLINE_MS,
   PAGE_READY_DEADLINE_MS,
   type MobileWebShellRuntime
@@ -93,7 +92,7 @@ export function useMobileWebShellSession(args: {
   wide?: boolean
   /** False when this app has no screen of its own for the route. */
   appNamesRoute?: boolean
-  runtime?: MobileWebShellRuntime
+  runtime: MobileWebShellRuntime
 }): MobileWebShellSessionView {
   const { hostId, routePathname } = args
   const wide = args.wide === true
@@ -101,8 +100,7 @@ export function useMobileWebShellSession(args: {
   const gates = useHostProtocolGates()
   const { client, state: connState } = useHostClient(hostId)
 
-  const runtimeRef = useRef<MobileWebShellRuntime | null>(null)
-  runtimeRef.current ??= args.runtime ?? createMobileWebShellRuntime()
+  const runtimeRef = useRef(args.runtime)
   const runtime = runtimeRef.current
   const storeRef = useRef<GenerationStore | null>(null)
   storeRef.current ??= runtime.createStore()
@@ -180,7 +178,9 @@ export function useMobileWebShellSession(args: {
       switch (effect.kind) {
         case 'delete-cache':
           // Reports nothing: the store serialises its own queue, so the sweep and read the reducer
-          // queued behind this one already run after it.
+          // queued behind this one already run after it. A spare booted from the tree is dropped
+          // without waiting; one whose files go mid-boot only fails, and is never adopted.
+          void runtime.spares?.discardSpares(hostKey).catch(() => undefined)
           await store.deleteHostCache(hostKey).catch(() => undefined)
           return
         case 'record-update-failure':
@@ -209,17 +209,24 @@ export function useMobileWebShellSession(args: {
             send
           })
           return
-        case 'open-generation':
+        case 'open-generation': {
+          // A page booted ahead from this tree is adopted by its id. Without a pool, the mint is
+          // in the same tick, as it always was.
+          const spareId =
+            runtime.spares === undefined
+              ? null
+              : await runtime.spares.takeSpare(hostKey, effect.directory).catch(() => null)
           send({
             type: 'activated',
             flow,
             generationDirectory: effect.directory,
-            sessionId: runtime.mintSessionId(),
+            sessionId: spareId ?? runtime.mintSessionId(),
             buildId: effect.buildId,
             totalBytes: effect.totalBytes,
             elapsedMs: runtime.now() - startedAtRef.current
           })
           return
+        }
         case 'remount':
           send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
           return

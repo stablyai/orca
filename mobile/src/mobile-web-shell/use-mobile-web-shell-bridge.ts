@@ -243,6 +243,9 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       onPageBackClaim: (claimed) => argsRef.current.onPageBackClaim(claimed)
     })
     hostRef.current = { sessionId, host }
+    // A view that adopted a spare holds the `ready` it asked while parked, which may have reached
+    // this hook before there was a host to answer it.
+    void viewRef.current?.handle.replayPageReady?.().catch(() => undefined)
     // The count belongs to this host, so a rebuild starts it over. Without this the screen keeps
     // the retired host's number and the next drop reports the new host's first, so the line falls —
     // which reads as frames coming back rather than as a fresh count.

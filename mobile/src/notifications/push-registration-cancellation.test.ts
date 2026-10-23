@@ -22,6 +22,7 @@ vi.mock('../mobile-web-shell/removed-host-shell-cache', () => ({
   forgetHostUpdateFailures: async () => undefined,
   deleteHostPageCache: async () => undefined
 }))
+vi.mock('../mobile-web-shell/removed-host-spare-pages', () => ({ discardHostSparePages: () => {} }))
 vi.mock('./mobile-push-lease-renewal', () => ({ startMobilePushLeaseRenewal: () => () => {} }))
 
 const storage = new Map<string, string>()

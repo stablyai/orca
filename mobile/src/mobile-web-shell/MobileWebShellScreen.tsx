@@ -3,6 +3,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
+  OrcaMobileWebShellSpares,
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
 } from '../../modules/orca-mobile-web-shell/src'
@@ -21,7 +22,8 @@ import { ShellDevFacts } from './ShellDevFacts'
 import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
 import { playPageHaptic } from './page-haptics'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
-import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import { createMobileWebShellRuntime, type MobileWebShellRuntime } from './mobile-web-shell-runtime'
+import { useSparePageRefill } from './use-spare-page-refill'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useShellPageBack } from './use-shell-page-back'
@@ -147,6 +149,10 @@ export function MobileWebShellScreen({
   const popShellStack = useShellStackPop()
   const { isWideLayout } = useResponsiveLayout()
   const { droppedBinaryFrames, reportDroppedBinaryFrames } = useMobileWebShellDroppedFrames()
+  // Built once for the screen's life: the session keeps the first runtime it is handed.
+  const [shellRuntime] = useState(
+    () => runtime ?? createMobileWebShellRuntime(OrcaMobileWebShellSpares)
+  )
   const {
     state,
     downloadProgress,
@@ -170,7 +176,7 @@ export function MobileWebShellScreen({
     routePathname: route.pathname,
     wide: isWideLayout,
     appNamesRoute,
-    runtime
+    runtime: shellRuntime
   })
   // Full screen from the download on, as on a phone; while checking, nobody knows the page owns it.
   useReportedHostAreaServing(ownsHostArea && state.kind !== 'checking')
@@ -335,6 +341,13 @@ export function MobileWebShellScreen({
     setOptions: navigation.setOptions
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
+  useSparePageRefill({
+    hostId,
+    generationDirectory: state.kind === 'ready' ? state.generationDirectory : null,
+    painted: pageFrame === 'painted',
+    ownsHostArea,
+    runtime: shellRuntime
+  })
 
   // A profile read that rejected never becomes a host, so the session would otherwise sit in
   // `ready` behind an un-hidden view with nothing serving it and the page asking forever.
