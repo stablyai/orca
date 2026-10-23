@@ -21,6 +21,8 @@ import type { DiffSection } from '../../diff-section-types'
 import type { DiffSectionItemProps } from '../../diff-section-item-props'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import { writeEditorSave } from '../../editor-save-disk-precondition'
+import { withEditorFileWriteLock } from '../../editor-file-write-lock'
+import { editorPathHoldKey } from '../../editor-autosave-holds'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export type CombinedDiffSectionActions = {
@@ -194,22 +196,29 @@ export function useCombinedDiffSectionActions({
         const worktree = file.worktreeId
           ? findWorktreeById(selectWorktreesByRepo(state), file.worktreeId)
           : null
-        const writeResult = await writeEditorSave(
-          getEditorFileOperationContext(
-            state,
-            {
-              worktreeId: file.worktreeId,
-              runtimeEnvironmentId: file.runtimeEnvironmentId,
-              operationProvenance: file.operationProvenance
-            },
-            worktree?.path ?? null
-          ),
-          absolutePath,
-          content,
-          undefined,
-          mode === 'overwrite' || loaded === undefined
-            ? { kind: 'explicit-overwrite' }
-            : { kind: 'guarded', signature: getDiskBaselineSignature(loaded), allowMissing: false }
+        const owner = {
+          worktreeId: file.worktreeId,
+          runtimeEnvironmentId: file.runtimeEnvironmentId,
+          operationProvenance: file.operationProvenance
+        }
+        const context = getEditorFileOperationContext(state, owner, worktree?.path ?? null)
+        // Why: shares the file's write lock with editor tabs saving the same path.
+        const writeResult = await withEditorFileWriteLock(
+          editorPathHoldKey(state, owner, absolutePath),
+          () =>
+            writeEditorSave(
+              context,
+              absolutePath,
+              content,
+              undefined,
+              mode === 'overwrite' || loaded === undefined
+                ? { kind: 'explicit-overwrite' }
+                : {
+                    kind: 'guarded',
+                    signature: getDiskBaselineSignature(loaded),
+                    allowMissing: false
+                  }
+            )
         )
         if (!writeResult.ok) {
           markConflict()

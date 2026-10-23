@@ -3,15 +3,15 @@ import type {
   LinearMcpIssueListResult
 } from '../../shared/linear/agent-access'
 import { getClients, getStatus, type LinearClientForWorkspace } from './client'
-import { withLinearRead } from './issue-context-client'
-import { linearError } from './issue-context-errors'
+import { withLinearRead } from './issue-context/client'
+import { linearError } from './issue-context/errors'
 import {
   getFanoutClientEntries,
   workspaceFailure,
   type WorkspaceReadFailure
-} from './issue-context-fanout'
-import { ISSUE_FIELDS, mapIssue, type RawIssue } from './issue-context-raw'
-import { resolveWorkspaceSelector } from './issue-context-workspaces'
+} from './issue-context/fanout'
+import { ISSUE_FIELDS, mapIssue, type RawIssue } from './issue-context/raw'
+import { resolveWorkspaceSelector } from './issue-context/workspaces'
 import { encodeIssueListCursor, resolveIssueListCursor } from './mcp-issue-list-cursor'
 import { buildIssueFilter } from './mcp-issue-list-filter'
 

@@ -19,7 +19,7 @@ export const FLAP_DELAY_CAP_MS = (() => {
   return fitting.length > 0 ? Math.max(...fitting) : RECONNECT_BACKOFF_MS[0]
 })()
 
-export type SshReconnectDecision =
+type SshReconnectDecision =
   | { kind: 'retry'; delayMs: number; attemptIndex: number }
   | { kind: 'give-up' }
 

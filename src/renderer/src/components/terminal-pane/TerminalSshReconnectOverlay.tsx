@@ -4,6 +4,7 @@ import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
 import { SshHostNodeMirrorAction } from '@/components/settings/SshHostNodeMirrorAction'
 import { SshHostMoveAnywayButton } from '@/components/settings/SshHostMoveAnywayAction'
+import { OpenPlainSshTerminalButton } from '@/components/plain-ssh-terminal/OpenPlainSshTerminalButton'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -220,6 +221,12 @@ export function TerminalSshReconnectOverlay({
                   disabled={isConnecting}
                 />
               )}
+              <OpenPlainSshTerminalButton
+                targetId={targetId}
+                targetLabel={targetLabel}
+                status={managedServer}
+                ownerEnvironmentId={sshOwnerEnvironmentId}
+              />
             </div>
           ) : null}
         </div>

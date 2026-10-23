@@ -65,7 +65,7 @@ async function displayedRows(args: {
   }
   let setWorktrees: ((rows: Worktree[]) => void) | undefined
   function Probe(): null {
-    const state = useHostScreenState('host-1', undefined)
+    const state = useHostScreenState('host-1')
     state.clientRef.current = client
     setWorktrees = state.setWorktrees
     seen.refresh = useHostRepoMetadata({ client, connState: 'connected', hostId: 'host-1', state })

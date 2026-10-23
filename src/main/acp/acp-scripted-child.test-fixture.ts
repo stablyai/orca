@@ -31,7 +31,7 @@ export function acpScriptedChild(agent: AcpLaunchSpec['agent']): ScriptedAgentCh
         resolveEnvironment: async () => ({ PATH: '' }),
         acpLaunchCommand: {
           resolveCommand: () => 'scripted-acp-agent',
-          probeVersion: async () => true
+          probeVersion: async () => ({ version: '99.0.0' })
         },
         readProcessStartTime: async () => 1_700_000_000_000 + opened,
         openAcpConnection: (launch, options) => {

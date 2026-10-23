@@ -175,7 +175,7 @@ export function ProjectedAgentMenuItems({
   model: NewTabAgentMenuModel
   runLaunch: (row: NewTabAgentMenuRow) => void
 }): React.JSX.Element {
-  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const desktopDefaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
@@ -210,6 +210,7 @@ export function ProjectedAgentMenuItems({
     rows,
     detection: { detectedIds, detectionFailed, needsServerUpdate }
   } = model
+  const defaultAgent = 'defaultTuiAgent' in model ? model.defaultTuiAgent : desktopDefaultAgent
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (

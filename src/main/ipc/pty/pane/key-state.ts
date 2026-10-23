@@ -29,9 +29,15 @@ export function isValidPaneKey(paneKey: unknown): paneKey is string {
   return parseValidPaneKey(paneKey) !== null
 }
 
-export function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+/** The key `rememberPaneKeyForPty` would record, without recording it. */
+export function normalizeValidPaneKey(paneKey: unknown): string | null {
   const normalizedPaneKey = typeof paneKey === 'string' ? paneKey.trim() : ''
-  if (!isValidPaneKey(normalizedPaneKey)) {
+  return isValidPaneKey(normalizedPaneKey) ? normalizedPaneKey : null
+}
+
+export function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+  const normalizedPaneKey = normalizeValidPaneKey(paneKey)
+  if (normalizedPaneKey === null) {
     return null
   }
   // Why: a re-registered ptyId would otherwise leave its old paneKey pointing here.

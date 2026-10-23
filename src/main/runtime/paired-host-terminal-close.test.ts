@@ -41,7 +41,6 @@ function pairedHostLeafRuntime(hostCall: HostCall, runtimeStore: typeof store = 
     focusTerminal: vi.fn(),
     closeTerminal: vi.fn(),
     closeTerminalTab,
-    sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn()
   })
@@ -169,35 +168,41 @@ describe('closing a terminal that a paired runtime runs', () => {
     expect(closeTerminalTab).toHaveBeenCalledOnce()
   })
 
-  it('refuses a pinned tab before the owning host stops anything', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [WORKTREE_ID]: [
-          {
-            id: 'tab-1',
-            ptyId: toRemoteRuntimePtyId('term_on_host', 'env-1'),
-            worktreeId: WORKTREE_ID,
-            title: 'Shell',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 0,
-            isPinned: true
+  it.each(['local', 'runtime:env-1'] as const)(
+    'refuses a pinned tab saved in the %s partition before the owning host stops anything',
+    async (partition) => {
+      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            [WORKTREE_ID]: [
+              {
+                id: 'tab-1',
+                ptyId: toRemoteRuntimePtyId('term_on_host', 'env-1'),
+                worktreeId: WORKTREE_ID,
+                title: 'Shell',
+                customTitle: null,
+                color: null,
+                sortOrder: 0,
+                createdAt: 0,
+                isPinned: true
+              }
+            ]
           }
-        ]
-      }
-    })
-    const { runtime, call } = pairedHostLeafRuntime(
-      async () => ({ close: { handle: 'term_on_host', tabId: 'host-tab', ptyKilled: true } }),
-      runtimeStore
-    )
-    const handle = await listedHandle(runtime)
+        },
+        partition
+      )
+      const { runtime, call } = pairedHostLeafRuntime(
+        async () => ({ close: { handle: 'term_on_host', tabId: 'host-tab', ptyKilled: true } }),
+        runtimeStore
+      )
+      const handle = await listedHandle(runtime)
 
-    await expect(runtime.closeTerminal(handle)).rejects.toThrow('terminal_tab_pinned')
-    await expect(runtime.closeTerminalTab(handle)).rejects.toThrow('terminal_tab_pinned')
-    expect(call).not.toHaveBeenCalled()
-  })
+      await expect(runtime.closeTerminal(handle)).rejects.toThrow('terminal_tab_pinned')
+      await expect(runtime.closeTerminalTab(handle)).rejects.toThrow('terminal_tab_pinned')
+      expect(call).not.toHaveBeenCalled()
+    }
+  )
 
   it('leaves a pane rebound during the host call to its new occupant', async () => {
     let answerHost: ((value: unknown) => void) | null = null

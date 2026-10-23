@@ -8,6 +8,10 @@ await import('./orca-runtime-test-lifecycle.spec')
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 const { store, TEST_WORKTREE_PATH } = await import('./orca-runtime-test-fixtures.spec')
 const { detectAgentCommandsOnHost } = await import('../preflight/agent-detection')
+const { bindPaneFirst, committingSpawn, registerBoundPty } =
+  await import('./bind-first-pane.test-fixture')
+
+type SpawnPane = { worktreeId?: string; tabId?: string; leafId?: string }
 
 class QoderAdoptionRuntime extends OrcaRuntimeService {
   retainedRecipe(ptyId: string, worktreeId: string) {
@@ -32,7 +36,8 @@ it.each([
       const { electronMocks } = await import('./orca-runtime-test-mocks.spec')
       const { TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
       vi.mocked(detectAgentCommandsOnHost).mockResolvedValue(new Set(['qoder']))
-      const runtime = new QoderAdoptionRuntime(store)
+      // Why a copy: main's layout binds panes in this store's session; the shared store stays clean.
+      const runtime = new QoderAdoptionRuntime({ ...store })
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
       let revealedRecipe: SleepingAgentLaunchConfig | undefined
       const revealTerminalSession = vi.fn(
@@ -51,7 +56,6 @@ it.each([
         renameTerminal: vi.fn(),
         closeTerminal: vi.fn(),
         closeSessionTab: vi.fn(),
-        sleepWorktree: vi.fn(),
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
@@ -73,32 +77,43 @@ it.each([
         }
         return true
       })
-      const spawn = vi.fn(async (args: { command?: string; preAllocatedHandle?: string }) => {
-        if (args.command) {
-          acceptedCommands.push(args.command)
-        }
-        live.push({
-          id: 'qoder-live-resume',
-          cwd: TEST_WORKTREE_PATH,
-          title: 'Qoder',
-          worktreeId: TEST_WORKTREE_ID,
-          terminalHandle: args.preAllocatedHandle ?? '',
-          ...(scenario === 'wsl-inventory' ? { wslDistro: 'Ubuntu-Orca' } : {})
-        })
-        if (scenario === 'surviving-recipe') {
-          const retained = runtime.retainedRecipe('qoder-live-resume', TEST_WORKTREE_ID)
-          retained.launchAgent = 'qoder'
-          retained.launchConfig = {
-            agentCommand: 'trusted-qoder',
-            agentArgs: 'trusted args',
-            agentEnv: { TRUSTED: 'retained' }
+      const spawn = vi.fn(
+        async (args: SpawnPane & { command?: string; preAllocatedHandle?: string }) => {
+          if (args.command) {
+            acceptedCommands.push(args.command)
           }
+          live.push({
+            id: 'qoder-live-resume',
+            cwd: TEST_WORKTREE_PATH,
+            title: 'Qoder',
+            worktreeId: TEST_WORKTREE_ID,
+            terminalHandle: args.preAllocatedHandle ?? '',
+            ...(scenario === 'wsl-inventory' ? { wslDistro: 'Ubuntu-Orca' } : {})
+          })
+          if (scenario === 'surviving-recipe') {
+            const retained = runtime.retainedRecipe('qoder-live-resume', TEST_WORKTREE_ID)
+            retained.launchAgent = 'qoder'
+            retained.launchConfig = {
+              agentCommand: 'trusted-qoder',
+              agentArgs: 'trusted args',
+              agentEnv: { TRUSTED: 'retained' }
+            }
+          }
+          // The host committed the spawn, binding its pane; only the reply to the caller is lost.
+          if (args.worktreeId && args.tabId && args.leafId) {
+            bindPaneFirst(runtime, {
+              worktreeId: args.worktreeId,
+              tabId: args.tabId,
+              leafId: args.leafId,
+              ptyId: 'qoder-live-resume'
+            })
+          }
+          if (failure === 'client_disconnected') {
+            connection.abort()
+          }
+          throw new Error(failure)
         }
-        if (failure === 'client_disconnected') {
-          connection.abort()
-        }
-        throw new Error(failure)
-      })
+      )
       runtime.setPtyController({
         spawn,
         listProcesses: async () => {
@@ -240,7 +255,7 @@ it.each([
       }
       const restoredSpawn = vi.fn().mockResolvedValue({ id: 'intentional-restored-qoder' })
       runtime.setPtyController({
-        spawn: restoredSpawn,
+        spawn: committingSpawn(runtime, restoredSpawn),
         write: () => true,
         kill,
         getForegroundProcess: async () => null
@@ -288,18 +303,19 @@ it.each(['missing-original', 'different-agent'])(
       TEST_WORKTREE_ID,
       'unknown-operation'
     )
-    const runtime = new QoderAdoptionRuntime(store)
+    const runtime = new QoderAdoptionRuntime({ ...store })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     const tabId = 'original-owned-tab'
     const leafId = '55555555-5555-4555-8555-555555555555'
-    runtime.registerPty('unknown-owned-pty', TEST_WORKTREE_ID, null, {
+    registerBoundPty(runtime, 'unknown-owned-pty', TEST_WORKTREE_ID, null, {
       tabId,
       leafId,
       terminalHandle: handle,
       incarnationId: 'owned-prior-incarnation'
     })
     const retained = runtime.retainedRecipe('unknown-owned-pty', TEST_WORKTREE_ID)
-    const originalPaneKey = retained.paneKey
+    const originalPaneKey = runtime['paneOfPty'](retained).paneKey
+    expect(originalPaneKey).toBe(`${tabId}:${leafId}`)
     const originalOwnership = retained.runtimeSessionOwned
     if (state === 'different-agent') {
       retained.launchAgent = 'codex'
@@ -343,8 +359,8 @@ it.each(['missing-original', 'different-agent'])(
     expect(retained.launchAgent).toBe(state === 'different-agent' ? 'codex' : null)
     expect(retained.launchToken).toBeNull()
     expect(retained.launchIncarnationId).toBeNull()
-    expect(retained.tabId).toBe(tabId)
-    expect(retained.paneKey).toBe(originalPaneKey)
+    // The pane holding the terminal, as main's layout answers it (the record's copy with the switch off).
+    expect(runtime['paneOfPty'](retained)).toMatchObject({ tabId, paneKey: originalPaneKey })
     expect(retained.runtimeSessionOwned).toBe(originalOwnership)
     expect(runtime.resolveTerminalPane(`${tabId}:${leafId}`).handle).toBe(handle)
   }
@@ -359,7 +375,7 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
     vi.mocked(detectAgentCommandsOnHost)
       .mockReset()
       .mockResolvedValue(new Set(['qoder']))
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = new OrcaRuntimeService({ ...store })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     let accept = false
     const inventory: {
@@ -369,7 +385,7 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
       cwd: string
       title: string
     }[] = []
-    const spawn = vi.fn(async () => {
+    const spawn = vi.fn(async (_args: SpawnPane) => {
       if (accept) {
         return { id: 'fresh-after-expiry' }
       }
@@ -377,7 +393,7 @@ it('releases abandoned dispatch capacity without guessing an expired live recipe
     })
     const kill = vi.fn()
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       kill,
       write: () => true,
       getForegroundProcess: async () => null,

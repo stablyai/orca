@@ -27,13 +27,25 @@ function isTelemetryConsentState(x: unknown): x is TelemetryConsentState {
 }
 
 export function track<N extends EventName>(name: N, props: EventProps<N>): void {
+  void trackWithResult(name, props)
+}
+
+// Undefined supports older bridges; false lets visible-use observations retry a rejected attempt.
+export function trackWithResult<N extends EventName>(
+  name: N,
+  props: EventProps<N>
+): Promise<boolean | void> {
   // Why: telemetry is fire-and-forget and must never throw into the renderer; log (don't rethrow/silently swallow) so IPC failures leave a breadcrumb.
   try {
-    void window.api?.telemetryTrack?.(name, props as Record<string, unknown>)?.catch((err) => {
-      console.warn('[telemetry] IPC track failed', err)
-    })
+    return (
+      window.api?.telemetryTrack?.(name, { ...props })?.catch((err) => {
+        console.warn('[telemetry] IPC track failed', err)
+        return false
+      }) ?? Promise.resolve(false)
+    )
   } catch (err) {
     console.warn('[telemetry] IPC track threw synchronously', err)
+    return Promise.resolve(false)
   }
 }
 

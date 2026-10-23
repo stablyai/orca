@@ -48,7 +48,9 @@ const visibleTabs = TAB_IDS.map((id) => ({
 }))
 
 // The real activation reveal runs, so switching tabs scrolls the strip as it does in the app.
-function mountStrip() {
+function mountStrip(
+  terminals: Pick<Controller['terminals'][number], 'handle' | 'agentIdentity'>[] = []
+) {
   const scrollTo = vi.fn()
   const setRenameTarget = vi.fn()
   const offsetRef = { current: 0 }
@@ -75,7 +77,8 @@ function mountStrip() {
       activeHandleRef: { current: null },
       switchSessionTab: (tab: { id: string }) => setActiveSessionTabId(tab.id),
       setRenameTarget,
-      visibleTabs
+      visibleTabs,
+      terminals
     })
     return createElement(MobileSessionTabStrip, { controller, inTopBar: false })
   }
@@ -101,7 +104,7 @@ function mountStrip() {
     act(() => {
       vi.advanceTimersByTime(ms)
     })
-  return { scrollTo, setRenameTarget, tapAt, wait }
+  return { scrollTo, setRenameTarget, tapAt, wait, tabs }
 }
 
 describe('MobileSessionTabStrip edge taps', () => {
@@ -115,6 +118,19 @@ describe('MobileSessionTabStrip edge taps', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+  })
+
+  it('uses the host identity while retaining tab gestures', () => {
+    const strip = mountStrip([{ handle: 'term-c', agentIdentity: 'cursor' }])
+    expect(strip.tabs[2].findAll((node) => node.props.agentId === 'cursor')).toHaveLength(1)
+    strip.tapAt(295)
+    strip.wait(100)
+    strip.tapAt(295)
+    expect(strip.setRenameTarget).toHaveBeenCalledWith(
+      expect.objectContaining({ handle: 'term-c' })
+    )
+    strip.wait(1000)
+    expect(strip.scrollTo.mock.calls).toEqual([[{ x: 112, animated: true }]])
   })
 
   it('renames the tab a double-tap started on, then reveals its neighbour', () => {

@@ -51,7 +51,11 @@ export class SessionSearchFileRecords {
    * does not chunk at all. The final commit overwrites all of it from the
    * decoded session; until then the title in particular is provisional.
    */
-  updateProvisionalSession(rowId: number, identity: TranscriptSessionIdentity): void {
+  updateProvisionalSession(
+    rowId: number,
+    identity: TranscriptSessionIdentity,
+    candidate: SessionFileCandidate
+  ): void {
     this.db
       .prepare(
         `UPDATE sessions SET session_id = ?, title = ?, cwd = ?, cwd_key = ?,
@@ -63,7 +67,7 @@ export class SessionSearchFileRecords {
         identity.cwd,
         cwdKey(identity.cwd),
         identity.createdAt,
-        identity.updatedAt,
+        identity.updatedAt ?? (candidate.agent === 'cursor' ? candidate.file.modifiedAt : null),
         rowId
       )
   }
@@ -86,7 +90,7 @@ export class SessionSearchFileRecords {
       cwdKey(session.cwd),
       session.branch,
       session.createdAt,
-      session.updatedAt,
+      session.updatedAt ?? (session.agent === 'cursor' ? session.modifiedAt : null),
       session.messageCount,
       session.resumeCommand,
       contentHash.hash,

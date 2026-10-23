@@ -1,3 +1,4 @@
+import { SCAN_ISSUE_LIMIT } from './session-scan-issues'
 import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault-scope-cwd-match'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -16,7 +17,13 @@ import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import { sessionSortTime } from './session-scanner-accumulator'
 import { discoveryFileCandidates, dropCodexHardlinkAliases } from './session-scanner-candidates'
 import type { SessionParseStats } from './session-scanner-parse-cache'
-import { discoverInScopeCwdBucketFiles } from './session-scanner-scope-discovery'
+import {
+  inventoryCwdBucketFiles,
+  selectCwdBucketFiles,
+  yieldScanInventory,
+  type CwdBucketInventory
+} from './session-scanner-scope-inventory'
+import { aiVaultScanWorkload, noteAiVaultScanWorkChanged } from './ai-vault-scan-progress'
 import type {
   AiVaultScanOptions,
   FileWithMtime,
@@ -28,6 +35,7 @@ import { sidecarUnchanged } from './session-sidecar-stat'
 import { prioritizeAntigravityTranscriptCandidates } from './antigravity-transcript-candidates'
 
 type ScopeScanArgs = {
+  inventory: CwdBucketInventory[]
   discoveries: readonly SessionFileDiscovery[]
   options: AiVaultScanOptions
   limit: number
@@ -50,24 +58,29 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
     return []
   }
   const candidates: SessionFileCandidate[] = []
-  for (const source of Object.values(AI_VAULT_SCOPE_CWD_SOURCES)) {
-    if (source.kind !== 'bucket') {
-      continue
-    }
-    const { layout } = source
-    const files = await discoverInScopeCwdBucketFiles(layout, {
-      rootDirs: args.discoveries
-        .filter((discovery) => discovery.agent === layout.agent)
-        .map((discovery) => discovery.rootDir),
+  const workload = aiVaultScanWorkload(args.options.signal)
+  for (const inventory of args.inventory) {
+    const files = await selectCwdBucketFiles(inventory, {
       scopePaths,
       limit: args.limit,
       excludedFilePaths: args.alreadyParsedFilePaths,
-      issues: args.issues
+      issues: args.issues,
+      signal: args.options.signal
     })
+    const selected = new Set(files.map((file) => file.path))
+    let index = 0
+    for (const path of workload?.bucketPaths(inventory.layout.agent) ?? []) {
+      await yieldScanInventory(index++, args.options.signal)
+      if (!selected.has(path)) {
+        workload?.settlePath(inventory.layout.agent, path, 'bucket', false)
+      }
+    }
     for (const file of files) {
-      candidates.push({ agent: layout.agent, file, codexHome: null })
+      candidates.push({ agent: inventory.layout.agent, file, codexHome: null })
     }
   }
+  args.inventory.length = 0
+  noteAiVaultScanWorkChanged(args.options.signal)
   const walked = await walkInScopeSessions(args, scopePaths).finally(clearSessionScopeCwdKnowledge)
   if (candidates.length === 0) {
     return walked
@@ -80,7 +93,8 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
     executionHostId: args.executionHostId,
     issues: args.issues,
     parseStats: args.parseStats,
-    signal: args.options.signal
+    signal: args.options.signal,
+    settled: (candidate, parsed) => workload?.settle(candidate, 'bucket', parsed)
   })
   return [...bucketed, ...walked]
 }
@@ -96,7 +110,7 @@ async function walkInScopeSessions(
 ): Promise<AiVaultSession[]> {
   const signal = args.options.signal
   const inScope = createAiVaultScopeCwdMatcher(scopePaths)
-  const candidates = walkCandidates(args, scopePaths)
+  const candidates = await walkCandidates(args, scopePaths)
   await lookupScopeCwds(candidates, signal)
   const sessions = await parseSessionCandidates({
     candidates,
@@ -108,6 +122,7 @@ async function walkInScopeSessions(
     antigravityWorkspaceResolver: args.antigravityWorkspaceResolver,
     signal,
     listed: false,
+    settled: (candidate, parsed) => aiVaultScanWorkload(signal)?.settle(candidate, 'walk', parsed),
     selectCandidate: (candidate) => mayBeInScope(candidate, inScope, args.platform, signal),
     admitSession: (session) => inScope(session.cwd, session.filePath)
   })
@@ -116,37 +131,104 @@ async function walkInScopeSessions(
     .slice(0, args.limit)
 }
 
-function walkCandidates(
-  args: ScopeScanArgs,
+/** Pure membership enumeration; pruning and ranking remain execution decisions. */
+async function walkInventory(
+  args: Pick<ScopeScanArgs, 'discoveries' | 'options'>,
   scopePaths: readonly string[]
-): SessionFileCandidate[] {
+): Promise<{ candidates: SessionFileCandidate[]; seenPaths: Set<string> }> {
   const all: SessionFileCandidate[] = []
   const seenPaths = new Set<string>()
+  let index = 0
   for (const discovery of args.discoveries) {
     if (!scopeWalksAgentFiles(discovery.agent, scopePaths)) {
       continue
     }
     const files: FileWithMtime[] = []
-    for (const file of [...discovery.files, ...(discovery.scopeFiles ?? [])]) {
-      if (!seenPaths.has(file.path)) {
-        seenPaths.add(file.path)
-        files.push(file)
+    for (const collection of [discovery.files, discovery.scopeFiles ?? []]) {
+      for (const file of collection) {
+        await yieldScanInventory(index++, args.options.signal)
+        if (!seenPaths.has(file.path)) {
+          seenPaths.add(file.path)
+          files.push(file)
+        }
       }
     }
-    // Why: one item per push; a history-sized list spread into push() exceeds V8's argument limit.
     for (const candidate of discoveryFileCandidates(discovery, files, args.options)) {
       all.push(candidate)
     }
   }
+  return { candidates: dropCodexHardlinkAliases(all), seenPaths }
+}
+
+async function walkCandidates(
+  args: ScopeScanArgs,
+  scopePaths: readonly string[]
+): Promise<SessionFileCandidate[]> {
+  const { candidates, seenPaths } = await walkInventory(args, scopePaths)
   pruneSessionScopeCwds(seenPaths)
-  // Aliases collapse with the listed files still present, so a listed rollout's
-  // hardlink in another Codex home is not parsed again.
+  const workload = aiVaultScanWorkload(args.options.signal)
+  const remaining: SessionFileCandidate[] = []
+  for (const [index, candidate] of candidates.entries()) {
+    await yieldScanInventory(index, args.options.signal)
+    if (args.alreadyParsedFilePaths.has(candidate.file.path)) {
+      workload?.settle(candidate, 'walk', false)
+    } else {
+      remaining.push(candidate)
+    }
+  }
   return prioritizeAntigravityTranscriptCandidates(
-    dropCodexHardlinkAliases(all).filter(
-      (candidate) => !args.alreadyParsedFilePaths.has(candidate.file.path)
-    ),
+    remaining,
     (candidate) => candidate.agent === 'antigravity'
   )
+}
+
+export async function prepareScopeScan(
+  args: Pick<ScopeScanArgs, 'discoveries' | 'options' | 'limit'>
+): Promise<CwdBucketInventory[]> {
+  const scopePaths = args.options.scopePaths ?? []
+  if (scopePaths.length === 0) {
+    return []
+  }
+  const workload = aiVaultScanWorkload(args.options.signal)
+  // H is temporary: walk-only keys settle directly, without a second retained registry.
+  if (workload) {
+    const { candidates } = await walkInventory(args, scopePaths)
+    for (const [index, candidate] of candidates.entries()) {
+      await yieldScanInventory(index, args.options.signal)
+      workload.register(candidate, 'walk')
+    }
+  }
+  const inventories: CwdBucketInventory[] = []
+  let issueLimit = SCAN_ISSUE_LIMIT
+  let index = 0
+  for (const source of Object.values(AI_VAULT_SCOPE_CWD_SOURCES)) {
+    if (source.kind !== 'bucket') {
+      continue
+    }
+    const inventory = await inventoryCwdBucketFiles(
+      source.layout,
+      {
+        rootDirs: args.discoveries
+          .filter((discovery) => discovery.agent === source.layout.agent)
+          .map((discovery) => discovery.rootDir),
+        scopePaths,
+        limit: args.limit,
+        signal: args.options.signal
+      },
+      issueLimit
+    )
+    issueLimit -= inventory.issues.length
+    inventories.push(inventory)
+    if (workload) {
+      for (const paths of inventory.directories) {
+        for (const path of paths) {
+          await yieldScanInventory(index++, args.options.signal)
+          workload.registerPath(source.layout.agent, path, 'bucket')
+        }
+      }
+    }
+  }
+  return inventories
 }
 
 // Per lookup batch: one database round trip, then a turn for the event loop.

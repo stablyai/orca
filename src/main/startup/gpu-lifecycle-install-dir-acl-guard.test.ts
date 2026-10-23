@@ -9,10 +9,10 @@ const { showMessageBox, userData } = vi.hoisted(() => ({
   userData: { path: '' }
 }))
 
-// Why the mocks: gpu-lifecycle's import graph reaches electron and the toolkit's
-// electron re-export. Everything below this is the real module under test.
+// Why: only Electron is mocked; GPU lifecycle decisions stay real.
 vi.mock('electron', () => ({
   app: {
+    isPackaged: true,
     getPath: () => userData.path,
     getVersion: () => '1.4.184',
     getGPUFeatureStatus: () => ({}),
@@ -25,11 +25,6 @@ vi.mock('electron', () => ({
     name: 'Orca'
   },
   dialog: { showMessageBox }
-}))
-vi.mock('@electron-toolkit/utils', () => ({
-  is: { dev: false },
-  optimizer: { watchWindowShortcuts: vi.fn() },
-  electronApp: { setAppUserModelId: vi.fn() }
 }))
 
 import { grantsFrom } from './windows-install-dir-acl.test-fixture'

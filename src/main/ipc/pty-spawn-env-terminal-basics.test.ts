@@ -382,7 +382,9 @@ describe('registerPtyHandlers', () => {
       await spawnAndGetEnv()
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
-        id: expect.any(String)
+        id: expect.any(String),
+        incarnationId: expect.any(String),
+        hostId: 'local'
       })
     })
     it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {

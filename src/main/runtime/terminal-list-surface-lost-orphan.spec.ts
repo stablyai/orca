@@ -5,12 +5,16 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
 
 export function registerTerminalListSurfaceLostOrphanTests(): void {
   // #18191: a terminal whose pane the graph dropped kept reporting `orphaned: false` with a
   // `tabId` no tab has — "field-for-field identical to a healthy one", so an operator polling
   // `terminal list` had no signal at all. The runtime asked whether the PTY record agreed with
   // itself; it never asked the leaf topology whether that pane still exists.
+  // Layout-owner builds: a terminal holds its surface exactly when main's layout binds it, so the
+  // pane drops out of main's layout, not out of the window's graph; window graphs never retract it.
 
   const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
   const KEPT_LEAF = '11111111-1111-4111-8111-111111111111'
@@ -60,10 +64,13 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     return session
   }
 
-  function makeStore(session: WorkspaceSessionState = getDefaultWorkspaceSession()) {
+  function makeStore(initialSession: WorkspaceSessionState = getDefaultWorkspaceSession()) {
+    let session = initialSession
     return {
       getWorkspaceSession: vi.fn(() => session),
-      setWorkspaceSession: vi.fn(),
+      setWorkspaceSession: vi.fn((next: WorkspaceSessionState) => {
+        session = next
+      }),
       getRepos: vi.fn(() => [
         {
           id: 'repo-1',
@@ -98,10 +105,18 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     return { tabId, worktreeId: WORKTREE_ID, title: '', activeLeafId, layout: null }
   }
 
+  const storesByRuntime = new WeakMap<OrcaRuntimeService, ReturnType<typeof makeStore>>()
+
+  function pane(tabId: string, leafId: string, ptyId: string) {
+    return { worktreeId: WORKTREE_ID, tabId, leafId, ptyId }
+  }
+
   /** Both PTYs stay live on the host throughout; only the graph changes. */
   function makeRuntime(session?: WorkspaceSessionState): OrcaRuntimeService {
+    const store = makeStore(session)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: makeStore returns the repo and session reads this suite drives; the rest of Store is unreached.
-    const runtime = new OrcaRuntimeService(makeStore(session) as never)
+    const runtime = new OrcaRuntimeService(store as never)
+    storesByRuntime.set(runtime, store)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub carries the four controller members this suite drives; both PTYs stay live throughout.
     runtime.setPtyController({
       spawn: vi.fn(async () => ({ id: 'never' })),
@@ -112,6 +127,8 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
         { id: DROPPED_PTY, cwd: '/tmp/probe-worktree', incarnationId: DROPPED_INCARNATION }
       ])
     } as never)
+    bindPaneFirst(runtime, pane('tab-kept', KEPT_LEAF, KEPT_PTY))
+    bindPaneFirst(runtime, pane('tab-dropped', DROPPED_LEAF, DROPPED_PTY))
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [tab('tab-kept', KEPT_LEAF), tab('tab-dropped', DROPPED_LEAF)],
@@ -125,9 +142,29 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
 
   /** The restart republishes a graph that kept one pane and dropped the other. */
   function dropOnePane(runtime: OrcaRuntimeService): void {
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      unbindDroppedPane(runtime)
+    }
     runtime.syncWindowGraph(1, {
       tabs: [tab('tab-kept', KEPT_LEAF)],
       leaves: [leaf('tab-kept', KEPT_LEAF, KEPT_PTY)]
+    })
+  }
+
+  /** Layout-owner builds: main's layout closes the dropped pane's tab. */
+  function unbindDroppedPane(runtime: OrcaRuntimeService): void {
+    const store = storesByRuntime.get(runtime)!
+    const session = store.getWorkspaceSession()
+    const { 'tab-dropped': _dropped, ...layouts } = session.terminalLayoutsByTabId
+    store.setWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        ...session.tabsByWorktree,
+        [WORKTREE_ID]: (session.tabsByWorktree[WORKTREE_ID] ?? []).filter(
+          (candidate) => candidate.id !== 'tab-dropped'
+        )
+      },
+      terminalLayoutsByTabId: layouts
     })
   }
 
@@ -173,7 +210,10 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
       const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
       const byPty = new Map(terminals.map((terminal) => [terminal.ptyId, terminal]))
       // The renderer may still hold that pane unmounted; it needs the name to rebind instead of forking.
-      expect(byPty.get(DROPPED_PTY)?.recordedPaneKey).toBe(makePaneKey('tab-dropped', DROPPED_LEAF))
+      // Layout-owner builds: views draw main's layout, which no longer has the pane to name.
+      expect(byPty.get(DROPPED_PTY)?.recordedPaneKey).toBe(
+        ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : makePaneKey('tab-dropped', DROPPED_LEAF)
+      )
       expect(byPty.get(KEPT_PTY)).not.toHaveProperty('recordedPaneKey')
     })
 
@@ -193,21 +233,26 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
       dropOnePane(runtime)
       // Spawn records the renderer's pane identity before the graph carrying it arrives (#7587).
       // Re-recording waits for the first graph statement; prior silence cannot retract the claim.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recordPtyWorktree is protected; reaching it is the only way to stamp a pane the graph never published.
-      const stamp = runtime as unknown as {
-        recordPtyWorktree: (
-          ptyId: string,
-          worktreeId: string,
-          state: Record<string, unknown>
-        ) => void
-        graphSequence: number
+      // Layout-owner builds: the spawn commit binds the pane in main's layout, which no graph outranks.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        bindPaneFirst(runtime, pane('tab-dropped', DROPPED_LEAF, DROPPED_PTY))
+      } else {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recordPtyWorktree is protected; reaching it is the only way to stamp a pane the graph never published.
+        const stamp = runtime as unknown as {
+          recordPtyWorktree: (
+            ptyId: string,
+            worktreeId: string,
+            state: Record<string, unknown>
+          ) => void
+          graphSequence: number
+        }
+        stamp.recordPtyWorktree(DROPPED_PTY, WORKTREE_ID, {
+          connected: true,
+          tabId: 'tab-dropped',
+          paneKey: `tab-dropped:${DROPPED_LEAF}`,
+          surfaceRecordedAtGraphSequence: spawnSurfaceClaimSequence(stamp.graphSequence)
+        })
       }
-      stamp.recordPtyWorktree(DROPPED_PTY, WORKTREE_ID, {
-        connected: true,
-        tabId: 'tab-dropped',
-        paneKey: `tab-dropped:${DROPPED_LEAF}`,
-        surfaceRecordedAtGraphSequence: spawnSurfaceClaimSequence(stamp.graphSequence)
-      })
 
       const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
       const dropped = terminals.find((terminal) => terminal.ptyId === DROPPED_PTY)
@@ -230,6 +275,22 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
         expect(byPty.get(KEPT_PTY)?.orphaned).toBe(false)
       }
     })
+
+    it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
+      "keeps a pane main's layout still binds attached when a window graph drops it",
+      async () => {
+        const runtime = makeRuntime()
+        runtime.syncWindowGraph(1, {
+          tabs: [tab('tab-kept', KEPT_LEAF)],
+          leaves: [leaf('tab-kept', KEPT_LEAF, KEPT_PTY)]
+        })
+
+        const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+        const dropped = terminals.find((terminal) => terminal.ptyId === DROPPED_PTY)
+        expect(dropped?.orphaned).toBe(false)
+        expect(dropped?.tabId).toBe('tab-dropped')
+      }
+    )
 
     it('does not call every pane orphaned when the graph goes away', async () => {
       const runtime = makeRuntime()

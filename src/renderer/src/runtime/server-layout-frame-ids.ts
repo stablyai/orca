@@ -166,14 +166,22 @@ export function serverTabIdOf(desktopTabId: string): string {
   return isWebTerminalSurfaceTabId(desktopTabId) ? toHostSessionTabId(desktopTabId) : desktopTabId
 }
 
-/** A desktop editor tab's file id as the server knows it: its own file, owned by no environment. */
-function serverEditorEntityId(entityId: string, layout: PublishedWorkspaceLayout): string {
-  const file = layout.editorFiles.find(
+/** A desktop editor file id as the server knows it: its own file, owned by no environment; unchanged
+ *  when no record names it (`desktopEditorEntityId` then hands it back unchanged too). */
+export function serverEditorFileId(
+  fileId: string,
+  worktreeId: string,
+  files: readonly Pick<PublishedEditorFile, 'filePath' | 'runtimeEnvironmentId'>[]
+): string {
+  const file = files.find(
     (candidate) =>
-      ownedEditorFileId(candidate.filePath, layout.worktreeId, candidate.runtimeEnvironmentId) ===
-      entityId
+      ownedEditorFileId(candidate.filePath, worktreeId, candidate.runtimeEnvironmentId) === fileId
   )
-  return file ? ownedEditorFileId(file.filePath, layout.worktreeId, undefined) : entityId
+  return file ? ownedEditorFileId(file.filePath, worktreeId, undefined) : fileId
+}
+
+function serverEditorEntityId(entityId: string, layout: PublishedWorkspaceLayout): string {
+  return serverEditorFileId(entityId, layout.worktreeId, layout.editorFiles)
 }
 
 /**
@@ -218,6 +226,10 @@ export type ServerLayoutFrameTranslator = {
   rebind: (key: string) => WorkspaceLayoutRecordsFrame | null
   /** The workspaces the server's stream holds now. */
   keys: () => string[]
+  /** A desktop tab id as this server's latest frames name it; null when they hold no such tab. */
+  serverTabId: (key: string, desktopTabId: string) => string | null
+  /** A server tab id under desktop ids; unchanged when the frames hold no such tab. */
+  desktopTabId: (key: string, serverTabId: string) => string
   /** A workspace as the server publishes it, under the server's ids. */
   serverLayout: (key: string) => PublishedWorkspaceLayout | undefined
 }
@@ -294,6 +306,15 @@ export function createServerLayoutFrameTranslator(
       }
     },
     keys: () => [...server.keys()],
+    // Both copies list the same tabs in the same order (serverLayoutForDesktop maps one to one).
+    serverTabId: (key, desktopTabId) => {
+      const index = desktop.get(key)?.layout.tabs.findIndex((tab) => tab.id === desktopTabId) ?? -1
+      return index < 0 ? null : (server.get(key)?.tabs[index]?.id ?? null)
+    },
+    desktopTabId: (key, serverTabId) => {
+      const index = server.get(key)?.tabs.findIndex((tab) => tab.id === serverTabId) ?? -1
+      return index < 0 ? serverTabId : (desktop.get(key)?.layout.tabs[index]?.id ?? serverTabId)
+    },
     serverLayout: (key) => server.get(key),
     rebind: (key) => {
       const layout = server.get(key)

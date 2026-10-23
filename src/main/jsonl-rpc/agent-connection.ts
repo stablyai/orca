@@ -14,6 +14,7 @@ import {
   type JsonlRpcPeerHandlers,
   type JsonlRpcRecord
 } from './peer'
+import type { JsonlRpcRequestOptions } from './peer-oversized-reply'
 import { resolveJsonlRpcPeerOptions, type JsonlRpcPeerOptions } from './peer-limits'
 
 export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {
@@ -151,7 +152,7 @@ export class JsonlRpcAgentConnection {
   request(
     command: string,
     params: Record<string, unknown> = {},
-    options: { timeoutMs?: number | null } = {}
+    options: JsonlRpcRequestOptions = {}
   ): Promise<unknown> {
     return this.peer.request(command, params, options)
   }

@@ -70,7 +70,7 @@ export function createFetchAllWorktrees(
           if (refresh.status !== 'admitted') {
             return
           }
-          mergeFetchedWorktrees(set, {
+          mergeFetchedWorktrees(set, get, {
             repoId: r.id,
             hostId,
             ownerWasMissingAtStart: false,
@@ -129,7 +129,7 @@ export function createFetchAllWorktrees(
           if (refresh.status !== 'admitted') {
             return { repoId: r.id, ok: false as const }
           }
-          const outcome = mergeFetchedWorktrees(set, {
+          const outcome = mergeFetchedWorktrees(set, get, {
             repoId: r.id,
             hostId,
             ownerWasMissingAtStart: false,

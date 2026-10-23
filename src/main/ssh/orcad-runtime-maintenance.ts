@@ -6,7 +6,9 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import { refreshManagedOrcadPairing } from '../../shared/runtime-environment-managed-orcad-store'
 import { assertRuntimeEnvironmentNotReconciling } from '../../shared/runtime-environment-reconciliation-record'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import {
+  getPreferredPairingOffer,
   redactRuntimeEnvironment,
   type KnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
@@ -40,6 +42,8 @@ import { readRemoteOrcadBuildHash } from '../managed-server/install/orcad-remote
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { pruneManagedOrcadVersions } from '../managed-server/lifecycle/orcad-managed-version-gc'
+import { clearOrcadUpdateFailedThisLaunch } from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
+import { admitOrcadRecordForIntent } from '../managed-server/lifecycle/orcad-managed-update-decision'
 import { rollbackOrcad } from '../managed-server/install/orcad-remote-rollback'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
 import { updateTerminalCounts } from './orcad-fenced-stop'
@@ -69,11 +73,12 @@ function refreshPairing(
   readiness: ServeReadiness,
   localPort: number
 ): KnownRuntimeEnvironment {
-  return refreshManagedOrcadPairing(
-    userDataPath,
-    environment.id,
-    tunneledOrcadPairingCode(readiness, localPort)
-  )
+  // Why the enrolled grant: a restarted orcad offers a new device once this one has paired, and
+  // taking it would change who this desktop is to the host (as WSL's #29042 found). Re-read: the
+  // census may have repaired a refused pairing since `environment` was read.
+  const enrolled = getPreferredPairingOffer(resolveEnvironment(userDataPath, environment.id))
+  const pairingCode = tunneledOrcadPairingCode(readiness, localPort, enrolled)
+  return refreshManagedOrcadPairing(userDataPath, environment.id, pairingCode)
 }
 
 /** A launched slot may bind another port than the forward in use, so forward anew. */
@@ -94,14 +99,21 @@ export function updateManagedOrcadEnvironment(
   userDataPath: string,
   args: LifecycleArgs & { force?: boolean }
 ): Promise<OrcadManagedDeployResult> {
-  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) =>
-    runManagedOrcadUpdate(
+  const intent = args.force ? 'force' : 'update'
+  return withManagedOrcadLifecycle(userDataPath, args.selector, async (managed) => {
+    const admitRecord = admitOrcadRecordForIntent(intent, getAppEnvironment().getVersion())
+    const result = await runManagedOrcadUpdate(
       userDataPath,
       managed,
       await resolveLinkedOrcadContext(managed.environment, managed.deployment, args.signal),
-      args
+      { ...args, admitRecord }
     )
-  )
+    // Only a landed Update re-enables the connect's attempts; a failed retry stays remembered.
+    if (result.outcome !== 'deferred') {
+      clearOrcadUpdateFailedThisLaunch({ kind: 'ssh', id: managed.deployment.sshTargetId })
+    }
+    return result
+  })
 }
 
 /** The Managed servers update, run inside the target's lifecycle queue with a resolved context. */
@@ -147,7 +159,10 @@ export async function runManagedOrcadUpdate(
       candidateVersion: result.fullVersion,
       code: result.code,
       reason: result.reason,
-      forceable: isForceableOrcadDeferral(result.code)
+      // A policy refusal is what Force exists to pass, e.g. over a host a newer Orca runs.
+      forceable:
+        isForceableOrcadDeferral(result.code) ||
+        result.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
     // A policy refusal is a decision about this host, not an update waiting to be retried.
     if (result.code !== ORCAD_ACTIVATION_POLICY_REFUSED_CODE) {

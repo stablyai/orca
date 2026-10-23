@@ -291,7 +291,8 @@ export function createCloseFileAction(
                 ? null
                 : s.pendingEditorFocusRequest,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
-            recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds
+            recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
+            editorBufferKeepRequest: opts?.keepEditorBuffer
           }
         })
 

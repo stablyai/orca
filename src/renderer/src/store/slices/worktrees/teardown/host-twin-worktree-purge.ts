@@ -27,6 +27,7 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -200,6 +201,7 @@ export function buildHostTwinPurgeState(
       }
     }
   }
+  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, new Set(), doomed)
   const tabPrefixedSleeping = {
     sleepingAgentSessionsByPaneKey: omitters.omitByPaneKeyTabPrefix(
@@ -239,6 +241,7 @@ export function buildHostTwinPurgeState(
         (group, index) => group.activeTabId !== s.groupsByWorktree[active]?.[index]?.activeTabId
       ))
   return {
+    editorBufferKeepRequest,
     ...layout,
     // Why: a group may now show a surviving tab of another kind, so selection is derived again.
     ...(selectionRemoved ? buildActiveSurfacePatch({ ...s, ...layout }, active) : {}),

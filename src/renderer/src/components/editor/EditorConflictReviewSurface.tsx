@@ -1,5 +1,5 @@
 import React from 'react'
-import { conflictOverviewFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
+import { conflictOverviewView } from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
@@ -40,6 +40,8 @@ export function EditorConflictReviewSurface({
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const closeFile = useAppStore((s) => s.closeFile)
+  // Why: re-render when a record gains or loses views, so the overview follows the record.
+  useAppStore((s) => s.editorBufferViews)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const selectedConflictReviewFile = activeFile.conflictReview?.selectedFileId
     ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
@@ -58,8 +60,16 @@ export function EditorConflictReviewSurface({
     [activeFile.filePath, activeFile.id, activeFile.worktreeId, openConflictReviewFile]
   )
 
-  const createContentFile = (entry: GitStatusEntry): OpenFile => {
+  const createContentFile = (
+    entry: GitStatusEntry
+  ): { contentFile: OpenFile; recordView: OpenFile | null } => {
     const absolutePath = joinPath(activeFile.filePath, entry.path)
+    // Why: an open view of the file lends its id, so the overview mounts its record's model and draft.
+    const recordView = conflictOverviewView(
+      useAppStore.getState(),
+      activeFile.worktreeId,
+      absolutePath
+    )
     const conflict =
       entry.conflictKind && entry.conflictStatus && entry.conflictStatusSource
         ? entry.status === 'deleted'
@@ -83,19 +93,23 @@ export function EditorConflictReviewSurface({
         : undefined
 
     return {
-      id: conflictOverviewFileId(openFiles, activeFile.worktreeId, absolutePath),
-      filePath: absolutePath,
-      relativePath: entry.path,
-      worktreeId: activeFile.worktreeId,
-      language: detectLanguage(entry.path),
-      isDirty: false,
-      mode: 'edit',
-      conflict
+      contentFile: {
+        id: recordView?.id ?? absolutePath,
+        filePath: recordView?.filePath ?? absolutePath,
+        relativePath: entry.path,
+        worktreeId: activeFile.worktreeId,
+        language: detectLanguage(entry.path),
+        isDirty: false,
+        mode: 'edit',
+        conflict
+      },
+      recordView
     }
   }
 
   const renderEditorContent = ({
     contentFile,
+    recordView = null,
     entry,
     className,
     viewStateKeySuffix,
@@ -103,6 +117,7 @@ export function EditorConflictReviewSurface({
     autoHeight = false
   }: {
     contentFile: OpenFile
+    recordView?: OpenFile | null
     entry: GitStatusEntry | null
     className: string
     viewStateKeySuffix: string
@@ -133,7 +148,8 @@ export function EditorConflictReviewSurface({
           <EditorFileLoadErrorView
             message={fileContent.loadError}
             code={fileContent.loadErrorCode}
-            onRetry={() => reloadContent(contentFile)}
+            // Why: a borrowed view reloads through its own workspace, never re-owned by this one.
+            onRetry={() => reloadContent(recordView ?? contentFile)}
           />
         </div>
       )
@@ -166,6 +182,11 @@ export function EditorConflictReviewSurface({
     const monacoLanguage = selectedLanguage === 'notebook' ? 'json' : selectedLanguage
     const selectedViewStateKey = `${contentFile.filePath}::${viewStateScopeId}:${viewStateKeySuffix}`
     const selectedContent = editBuffers[contentFile.id] ?? fileContent.content
+    // Why: a read-only overview borrows another tab's id; it must not take that tab's reveal.
+    const reveal =
+      !readOnly && matchesPendingEditorReveal(pendingEditorReveal, contentFile)
+        ? pendingEditorReveal
+        : null
 
     return (
       <div className={className}>
@@ -189,26 +210,15 @@ export function EditorConflictReviewSurface({
               readOnly ? () => {} : (content) => handleContentChangeForFile(contentFile, content)
             }
             onSave={readOnly ? () => {} : (content) => handleSaveForFile(contentFile, content)}
-            worktreeId={contentFile.worktreeId}
+            worktreeId={recordView?.worktreeId ?? contentFile.worktreeId}
             markdownAnnotationsEnabled={false}
             conflictDecorationsEnabled={contentFile.conflict?.conflictStatus === 'unresolved'}
             readOnly={readOnly}
+            passiveMirror={readOnly}
             autoHeight={autoHeight}
-            revealLine={
-              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
-                ? pendingEditorReveal.line
-                : undefined
-            }
-            revealColumn={
-              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
-                ? pendingEditorReveal.column
-                : undefined
-            }
-            revealMatchLength={
-              matchesPendingEditorReveal(pendingEditorReveal, contentFile)
-                ? pendingEditorReveal.matchLength
-                : undefined
-            }
+            revealLine={reveal?.line}
+            revealColumn={reveal?.column}
+            revealMatchLength={reveal?.matchLength}
           />
         </div>
       </div>
@@ -226,15 +236,18 @@ export function EditorConflictReviewSurface({
     })
   }
 
-  const renderInlineFile = (entry: GitStatusEntry): React.JSX.Element =>
-    renderEditorContent({
-      contentFile: createContentFile(entry),
+  const renderInlineFile = (entry: GitStatusEntry): React.JSX.Element => {
+    const { contentFile, recordView } = createContentFile(entry)
+    return renderEditorContent({
+      contentFile,
+      recordView,
       entry,
       className: 'flex min-h-[120px] flex-col border-b border-border last:border-b-0',
       viewStateKeySuffix: `overview:${entry.path}`,
       readOnly: true,
       autoHeight: true
     })
+  }
 
   const renderAllContent = (): React.JSX.Element => {
     const snapshotEntries = activeFile.conflictReview?.entries ?? []

@@ -91,6 +91,12 @@ export type TerminalDocumentTerminal = {
   readonly unicode: { activeVersion: string }
   attachCustomKeyEventHandler: (handler: () => boolean) => void
   onData: (listener: (data: string) => void) => TerminalDocumentDisposable
+  readonly parser?: {
+    registerOscHandler: (
+      ident: number,
+      callback: (data: string) => boolean
+    ) => TerminalDocumentDisposable
+  }
   readonly textarea?: {
     readOnly: boolean
     tabIndex: number

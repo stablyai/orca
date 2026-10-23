@@ -154,19 +154,23 @@ function WorktreeListRowComponent({
                 <Text style={styles.childBadgeText}>Child</Text>
               </View>
             )}
-            {cardDetails.host && item.hostContextLabel ? (
+            {cardDetails.host && (item.hostContextLabel || item.hostContextHealthLabel) ? (
               <View
                 style={[styles.childBadge, styles.hostBadge]}
                 accessibilityLabel={hostAccessibilityLabel}
               >
                 <HostKindIcon hostId={hostId} size={10} />
-                <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
-                  {item.hostContextLabel}
-                </Text>
+                {item.hostContextLabel ? (
+                  <Text style={[styles.childBadgeText, styles.hostBadgeText]} numberOfLines={1}>
+                    {item.hostContextLabel}
+                  </Text>
+                ) : null}
                 {/* Why separate Text: the name truncates first so the health word stays readable. */}
                 {item.hostContextHealthLabel ? (
                   <Text style={[styles.childBadgeText, styles.hostHealthText]}>
-                    {`· ${item.hostContextHealthLabel}`}
+                    {item.hostContextLabel
+                      ? `· ${item.hostContextHealthLabel}`
+                      : item.hostContextHealthLabel}
                   </Text>
                 ) : null}
               </View>

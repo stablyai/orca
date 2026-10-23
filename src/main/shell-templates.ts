@@ -112,36 +112,6 @@ export const ZSH_USER_ZSHENV_SOURCE_BLOCK = `{
 // Why: daemon, local, and relay wrappers must preserve one Bash prompt-hook contract.
 export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-composition'
 
-/**
- * Restores the worktree-scoped HISTFILE that macOS `/etc/zshrc` destroys.
- *
- * Bash only. The zsh wrapper no longer needs this: it hands ZDOTDIR back before
- * /etc/zshrc runs, so the value that file derives is already the user's own, and
- * the scoped path is re-applied from a non-exported variable in the deferred
- * hook. The `elif` below is inert under bash, where ZDOTDIR is normally unset.
- *
- * That file assigns `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` with no
- * check-before-set, and it runs before any wrapper file Orca controls — so the
- * injected value is already gone, and because ZDOTDIR still points at Orca's
- * wrapper dir the replacement lands INSIDE it. Per-worktree history was a
- * silent no-op on the primary platform as a result (#11044).
- *
- * `builtin unset ORCA_HISTFILE` is the root-cause fix for #11146: the variable
- * cannot be inherited by anything the shell later spawns if it no longer exists
- * once it has been consumed. HISTFILE itself stays exported.
- */
-export const BASH_HISTFILE_RESTORE_BLOCK = `if [[ -n "\${ORCA_HISTFILE:-}" ]]; then
-  HISTFILE="$ORCA_HISTFILE"
-  builtin unset ORCA_HISTFILE
-elif [[ "\${HISTFILE:-}" == "$ZDOTDIR/.zsh_history" ]]; then
-  # Why also when Orca injected nothing: /etc/zshrc derived this from Orca's
-  # wrapper ZDOTDIR, so history would accumulate INSIDE the wrapper dir and the
-  # user's real history would be invisible — the plain #11044 bug, with no
-  # per-worktree scoping involved. Matching the exact clobbered value means a
-  # HISTFILE the user set deliberately is never touched.
-  HISTFILE="\${ORCA_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
-fi`
-
 // Why: zsh precmd fires before zle switches the PTY into line-editing mode,
 // so the marker must be emitted from zle-line-init. Registering it through
 // add-zle-hook-widget is unsafe: the azhw dispatcher aborts its hook chain

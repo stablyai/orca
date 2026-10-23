@@ -2,6 +2,7 @@
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
+import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
@@ -80,6 +81,8 @@ export async function executeAgentLaunch(
       ...(intent.surface ? { surface: intent.surface } : {}),
       vocabulary
     })
+  // A caller's own preparation (intent resolution) may have outlived its request.
+  assertAgentPromptRequestActive(execution.signal)
   // The create's startup terminal is this launch's only surface, and the create delivers the text.
   if (execution.promptPolicy === 'legacy-host') {
     assertLegacyHostTarget(execution)
@@ -144,6 +147,9 @@ export async function executeAgentLaunch(
       }
     }
 
+    // No agent exists yet; only a cancel claims recovery here, so default failures are unchanged.
+    recoverableWorktreeId = execution.signal?.aborted ? placed.worktreeId : undefined
+    assertAgentPromptRequestActive(execution.signal)
     const settlement: AgentLaunchModeSettlement = {
       phase: intent.target.kind === 'existing' ? 'before-effects' : 'created-workspace',
       agent: intent.agent,
@@ -166,6 +172,7 @@ export async function executeAgentLaunch(
 
     execution.onStage?.('surface_create')
     recoverableWorktreeId = placed.worktreeId
+    assertAgentPromptRequestActive(execution.signal)
     let created: CreatedSurface
     try {
       created = await createSurface(execution, placed, settled)
@@ -177,6 +184,8 @@ export async function executeAgentLaunch(
       ) {
         throw error
       }
+      // The refusal proves no agent exists; a fallback after cancel would start one, argv prompt and all.
+      assertAgentPromptRequestActive(execution.signal)
       settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary, settlement)
       created = await createTerminalSurface(execution, placed)
     }

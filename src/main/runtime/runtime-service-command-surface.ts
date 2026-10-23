@@ -30,6 +30,7 @@ export type RuntimeServiceCommandSurface = {
   onNotificationDispatched: RuntimeMobileNotificationController['onDispatched']
   getMobileNotificationListenerCount: RuntimeMobileNotificationController['getListenerCount']
   dispatchMobileNotification: RuntimeMobileNotificationController['dispatch']
+  reportDesktopClientPresence: RuntimeMobileNotificationController['reportDesktopClientPresence']
   getMissedNotificationsSince: RuntimeMobileNotificationController['getMissedSince']
   configureNotificationDismissalStore: RuntimeMobileNotificationController['configureDismissalStore']
   closeNotificationDismissals: RuntimeMobileNotificationController['closeDismissals']
@@ -138,6 +139,7 @@ export function installRuntimeServiceCommandSurface(
     onNotificationDispatched: notifications.onDispatched.bind(notifications),
     getMobileNotificationListenerCount: notifications.getListenerCount.bind(notifications),
     dispatchMobileNotification: notifications.dispatch.bind(notifications),
+    reportDesktopClientPresence: notifications.reportDesktopClientPresence.bind(notifications),
     getMissedNotificationsSince: notifications.getMissedSince.bind(notifications),
     configureNotificationDismissalStore: notifications.configureDismissalStore.bind(notifications),
     closeNotificationDismissals: notifications.closeDismissals.bind(notifications),

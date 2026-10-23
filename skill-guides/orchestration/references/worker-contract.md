@@ -28,6 +28,11 @@ ORCA orchestration ask --from <worker_handle> --question "<question>" --options 
 ORCA orchestration ask --from <worker_handle> --resume <message_id> --timeout-ms 600000
 ```
 
+Each wait defaults to 600000 ms (10 minutes). `--timeout-ms` accepts a positive
+integer up to 1800000 ms (30 minutes); larger values are rejected before creating
+or resuming a question. For decisions that take longer, resume the same question
+after each timeout.
+
 A timeout or disconnect leaves the original question pending. Resume its
 message ID; do not create a duplicate question.
 
@@ -52,6 +57,21 @@ not send `worker_done`, and do not retry the check. An empty `check` never means
 you were replaced; `consumer_fenced` is the only way you learn that.
 If `send` or `ask` returns `consumer_fenced`, the command ran from another
 party's terminal (a coordinator or another worker); run it from your own terminal.
+
+## Helper workers
+
+When the preamble has a SUB-DISPATCH section, start helpers on your own
+Dispatch's Run. Do not `run-create` or `run-use` for them.
+
+```text
+ORCA orchestration worker-start --from <worker_handle> --spec "<sub-task>" --worktree current --agent <agent> --json
+ORCA orchestration reply --from <worker_handle> --id <message_id> --body "<answer>"
+```
+
+Their questions, escalations, and `worker_done` arrive in your own `check`, next
+to your coordinator's mail. Answer their questions with `reply`, and wait for
+every helper's `worker_done` before sending yours. After you settle, a helper
+still running reports to your coordinator's Run.
 
 ## Escalation
 

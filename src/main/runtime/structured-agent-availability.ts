@@ -52,13 +52,13 @@ async function observeHostAgent(
     async () => homedir(),
     runtime,
     false
-  ).catch(() => 'inconclusive' as const)
-  if (seen === 'inconclusive') {
-    return { agent, state: 'unknown' }
+  ).catch(() => ({ status: 'unknown' as const }))
+  if (seen === null || seen.status === 'ready') {
+    return { agent, state: 'available' }
   }
-  return seen === 'supported'
-    ? { agent, state: 'available' }
-    : { agent, state: 'refused', reason: 'agent' }
+  return seen.status === 'tooOld'
+    ? { agent, state: 'refused', reason: 'agent' }
+    : { agent, state: 'unknown' }
 }
 
 /** The runtime's snapshot: taken after a fresh shell capture, initially and on launch settings or

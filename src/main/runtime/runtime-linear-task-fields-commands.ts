@@ -2,11 +2,11 @@ import {
   getLinearTeamMembersOrThrow,
   isLinearUuid,
   getLinearIssueByUuidForAgent,
-  linearError,
-  readLinearIssueContext,
   getLinearTeamStatesOrThrow,
   labelsForIds
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
+import { readLinearIssueContext } from '../linear/issue-context/read-context'
 import type {
   LinearIssueTaskUpdateRequest,
   LinearSaveIssueRequest,

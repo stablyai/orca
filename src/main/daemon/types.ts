@@ -173,6 +173,9 @@ export type KillRequest = {
   payload: {
     sessionId: string
     immediate?: boolean
+    expectedIncarnationId?: string
+    requireNoAgentOwner?: boolean
+    requireUnattached?: boolean
   }
 }
 
@@ -361,6 +364,7 @@ export type SystemResolverHealthResult = {
 }
 
 export type SessionInfo = {
+  foregroundProcess?: string
   sessionId: string
   incarnationId?: string
   state: SessionState

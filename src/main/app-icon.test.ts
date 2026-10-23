@@ -1,28 +1,18 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  browserWindowGetAllWindowsMock,
-  createFromPathMock,
-  dockSetIconMock,
-  isMock,
-  windowSetIconMock
-} = vi.hoisted(() => ({
-  browserWindowGetAllWindowsMock: vi.fn(),
-  createFromPathMock: vi.fn(),
-  dockSetIconMock: vi.fn(),
-  isMock: { dev: false },
-  windowSetIconMock: vi.fn()
-}))
+const { browserWindowGetAllWindowsMock, createFromPathMock, dockSetIconMock, windowSetIconMock } =
+  vi.hoisted(() => ({
+    browserWindowGetAllWindowsMock: vi.fn(),
+    createFromPathMock: vi.fn(),
+    dockSetIconMock: vi.fn(),
+    windowSetIconMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
-  app: { dock: { setIcon: dockSetIconMock } },
+  app: { getPath: () => '/test/electron', isPackaged: true, dock: { setIcon: dockSetIconMock } },
   BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
   nativeImage: { createFromPath: createFromPathMock }
-}))
-
-vi.mock('@electron-toolkit/utils', () => ({
-  is: isMock
 }))
 
 vi.mock('../../resources/icon.png?asset', () => ({
@@ -75,7 +65,6 @@ describe('app icon selection', () => {
     createFromPathMock.mockReset()
     dockSetIconMock.mockReset()
     windowSetIconMock.mockReset()
-    isMock.dev = false
   })
 
   afterEach(() => {

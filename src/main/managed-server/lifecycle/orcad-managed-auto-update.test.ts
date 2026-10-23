@@ -41,9 +41,9 @@ vi.mock('../install/remote-versioned-install', () => ({
 
 import {
   autoUpdateManagedOrcadEnvironment,
-  planManagedOrcadAutoUpdate,
   resetBundledOrcadVersionsForTests
 } from './orcad-managed-auto-update'
+import { planManagedOrcadAutoUpdate } from './orcad-managed-update-decision'
 
 function record(overrides: Partial<OrcadActivationRecord>): OrcadActivationRecord {
   return { ...emptyOrcadActivationRecord(), active: '0.1.0+old', ...overrides }

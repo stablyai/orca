@@ -2,10 +2,13 @@ import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { browserAddressFieldStyles } from './browser-address-field-styles'
 import { compactMobileBrowserFileAddress } from './browser-url'
+import { MobileBrowserLoadProgress } from './MobileBrowserLoadProgress'
 
 type Props = {
   disabled: boolean
   focused: boolean
+  loading: boolean
+  loadFailed: boolean
   onBlur: () => void
   onChangeText: (value: string) => void
   onFocus: () => void
@@ -16,6 +19,8 @@ type Props = {
 export function MobileBrowserAddressField({
   disabled,
   focused,
+  loading,
+  loadFailed,
   onBlur,
   onChangeText,
   onFocus,
@@ -60,6 +65,7 @@ export function MobileBrowserAddressField({
           </Text>
         </View>
       ) : null}
+      <MobileBrowserLoadProgress loading={loading} failed={loadFailed} />
     </View>
   )
 }

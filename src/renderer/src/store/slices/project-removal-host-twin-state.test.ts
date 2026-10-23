@@ -4,6 +4,8 @@
  * tabs, unsaved document and drafts alone.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
+import { confirmUnsavedDiscard } from './worktrees/teardown/removed-workspace-unsaved-files'
 import {
   createTestStore,
   makeOpenFile,
@@ -43,6 +45,11 @@ import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
+
+const recoveryNotice = vi.hoisted(() => vi.fn())
+vi.mock('@/components/editor/closed-unsaved-files-toast', () => ({
+  showClosedUnsavedFilesToast: recoveryNotice
+}))
 
 const PROJECT_ID = 'same-repo'
 const WORKTREE_ID = 'same-repo::/work/same'
@@ -95,6 +102,7 @@ beforeEach(() => {
   layoutApplyTestTransport.reset()
   layoutApplyTestTransport.answerWith({ refuse: 'host_not_owned' })
   ptyKill.mockReset()
+  recoveryNotice.mockClear()
   onRepoRemoved = null
   vi.stubGlobal('window', {
     api: {
@@ -225,6 +233,57 @@ function seedTwins(): ReturnType<typeof createTestStore> {
 }
 
 describe('removing a remote project keeps its local twin', () => {
+  it.each([false, true])(
+    'captures twin and exclusive delayed text in one notice (confirmed=%s)',
+    async (confirmed) => {
+      const store = seedTwins()
+      const exclusive = `${PROJECT_ID}::/work/exclusive`
+      const exclusiveFile = '/work/exclusive/note.ts'
+      store.setState((s) => ({
+        worktreesByRepo: {
+          [PROJECT_ID]: [
+            ...(s.worktreesByRepo[PROJECT_ID] ?? []),
+            makeWorktree({ id: exclusive, repoId: PROJECT_ID, hostId: REMOTE_HOST })
+          ]
+        },
+        openFiles: [
+          ...s.openFiles,
+          makeOpenFile({ id: exclusiveFile, worktreeId: exclusive, runtimeEnvironmentId: 'env-b' })
+        ]
+      }))
+      const flushed: string[] = []
+      const unregister = ['editor:remote-file', exclusiveFile].map((id) =>
+        registerPendingEditorFlush(id, () => {
+          flushed.push(id)
+          store.setState((s) => ({ editorDrafts: { ...s.editorDrafts, [id]: `late ${id}` } }))
+        })
+      )
+      try {
+        const confirmedDiscards = confirmed
+          ? confirmUnsavedDiscard(store.getState, [
+              { id: WORKTREE_ID, hostId: REMOTE_HOST },
+              { id: exclusive, hostId: REMOTE_HOST }
+            ])
+          : undefined
+        await store.getState().removeProject(PROJECT_ID, { hostId: REMOTE_HOST, confirmedDiscards })
+        await layoutApplyTestTransport.settle()
+        expect([...new Set(flushed)].sort()).toEqual(['editor:remote-file', exclusiveFile].sort())
+        expect(store.getState().editorDrafts['/work/same/local.ts']).toBe('unsaved local edit')
+        if (confirmed) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(recoveryNotice).not.toHaveBeenCalled()
+        } else {
+          await vi.waitFor(() => expect(recoveryNotice).toHaveBeenCalledTimes(1))
+          expect(
+            recoveryNotice.mock.calls[0]?.[0].map((f: { content: string }) => f.content).sort()
+          ).toEqual(['late editor:remote-file', `late ${exclusiveFile}`].sort())
+        }
+      } finally {
+        unregister.forEach((f) => f())
+      }
+    }
+  )
+
   it('keeps the local shell, tab, dirty document and draft', async () => {
     const store = seedTwins()
     updateNativeChatComposerDraft('tab-local:leaf-1', { text: 'local chat draft' }, 'deferred')

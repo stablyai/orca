@@ -189,6 +189,9 @@ export function saveWorkspaceLayout(loaded: LoadedWorkspaceLayout): WorkspaceSes
     ...(records.clientHostedBrowserPagesByWorkspace
       ? { clientHostedBrowserPagesByWorktree: records.clientHostedBrowserPagesByWorkspace }
       : {}),
+    ...(records.closedTerminalPanesByPaneKey
+      ? { closedTerminalPanesByPaneKey: records.closedTerminalPanesByPaneKey }
+      : {}),
     ...(legacy.topologyRevisionByRepoId
       ? { terminalTopologyRevisionByRepoId: legacy.topologyRevisionByRepoId }
       : {})

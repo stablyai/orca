@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
 import type { HostAuthority } from '../../../shared/host-authority'
-import { resolveOwnerWithLegacyFallback } from './worktree-runtime-owner'
+import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import { OWNER_RESOLUTION_CASES } from './runtime-owner-alias-matrix.test-fixture'
-import { LEGACY_FALLBACK_OWNER_ACCEPTANCE } from './resolve-owner-acceptance.test-fixture'
+import { OWNER_OR_LOCAL_ACCEPTANCE } from './resolve-owner-acceptance.test-fixture'
 import { LEGACY_RUNTIME_OWNER_GOLDEN } from './legacy-runtime-owner-answers.test-fixture'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
@@ -33,20 +33,20 @@ const DELIBERATE_CHANGES: Record<string, string> = {
   'folder:missing-folder': 'same'
 }
 
-describe('resolveOwnerWithLegacyFallback acceptance (round-3 design §5)', () => {
+describe('resolveOwnerOrLocal acceptance (round-3 design §5)', () => {
   it('pins the owner of every matrix case', () => {
     const actual = Object.fromEntries(
       casesWithIds.map((c) => [
         c.name,
-        describeMatch(resolveOwnerWithLegacyFallback(c.state, { workspaceId: c.worktreeId }))
+        describeMatch(resolveOwnerOrLocal(c.state, { workspaceId: c.worktreeId }))
       ])
     )
-    expect(actual).toEqual(LEGACY_FALLBACK_OWNER_ACCEPTANCE)
+    expect(actual).toEqual(OWNER_OR_LOCAL_ACCEPTANCE)
   })
 
   it('differs from the deprecated resolver only in the deliberate cases', () => {
     const changed = casesWithIds.filter((c) => {
-      const owner = resolveOwnerWithLegacyFallback(c.state, { workspaceId: c.worktreeId })
+      const owner = resolveOwnerOrLocal(c.state, { workspaceId: c.worktreeId })
       const environmentId =
         owner.kind === 'resolved' && owner.owner.endpoint.kind === 'environment'
           ? owner.owner.endpoint.environmentId
@@ -64,13 +64,13 @@ describe('resolveOwnerWithLegacyFallback acceptance (round-3 design §5)', () =>
   })
 })
 
-describe('resolveOwnerWithLegacyFallback probes', () => {
+describe('resolveOwnerOrLocal probes', () => {
   const base = OWNER_RESOLUTION_CASES.find((c) => c.name === 'focused | stale-hub-repo::wt')!.state
   const single = OWNER_RESOLUTION_CASES.find(
     (c) => c.name === 'single focus | legacy-repo::wt'
   )!.state
   const ownerOf = (state: WorktreeRuntimeOwnerState, workspaceId: string, hostId?: 'local') =>
-    describeMatch(resolveOwnerWithLegacyFallback(state, { workspaceId, hostId }))
+    describeMatch(resolveOwnerOrLocal(state, { workspaceId, hostId }))
 
   it('reads a genuine twin as ambiguous', () => {
     const withDirect = {

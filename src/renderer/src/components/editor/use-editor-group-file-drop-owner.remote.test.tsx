@@ -11,7 +11,6 @@ import {
 } from '@/lib/remote-workspace-drop-test-fixtures'
 import { joinPath } from '@/lib/path'
 import { useEditorGroupFileDropOwner } from './use-editor-group-file-drop-owner'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 
 const mocks = vi.hoisted(() => ({
   importPaths: vi.fn(),
@@ -42,20 +41,7 @@ function dropFile(target: Element, name = 'shot.png'): void {
 
 beforeEach(() => {
   seedRemoteDropWorkspaces()
-  const response = createCompatibleRuntimeStatusResponse('owner-runtime')
-  if (!response.ok) {
-    throw new Error('Expected a compatible runtime fixture')
-  }
-  useAppStore.setState({
-    openFile: mocks.openFile,
-    setActiveTabType: mocks.setActiveTabType,
-    browserTabsByWorktree: {},
-    browserPagesByWorkspace: {},
-    unifiedTabsByWorktree: {},
-    runtimeStatusByEnvironmentId: new Map([
-      ['owner-runtime', { status: response.result, checkedAt: Date.now() }]
-    ])
-  })
+  useAppStore.setState({ openFile: mocks.openFile, setActiveTabType: mocks.setActiveTabType })
   mocks.prepare.mockImplementation(async ({ paths }: { paths: string[] }) => ({
     paths,
     failures: []
@@ -122,78 +108,39 @@ describe('editor group OS file drops on remote workspaces', () => {
     )
   })
 
-  it.each(['wt-ssh', 'wt-runtime'])(
-    'previews uploaded HTML in its destination group in %s',
-    async (worktreeId) => {
-      const groupId = worktreeId === 'wt-ssh' ? 'group-ssh' : 'group-runtime'
-      const root = worktreeId === 'wt-ssh' ? SSH_PATH : RUNTIME_PATH
-      const view = render(<EditorStrip worktreeId={worktreeId} groupId={groupId} />)
-      dropFile(view.getByTestId('strip'), 'report.html')
-      await waitFor(() =>
-        expect(useAppStore.getState().browserTabsByWorktree[worktreeId]).toHaveLength(1)
+  it.each(['report.html', 'notes.txt'])(
+    'refuses opening %s when its workspace changes hosts during upload',
+    async (name) => {
+      let finish: (result: {
+        results: { status: 'imported'; kind: 'file'; destPath: string }[]
+      }) => void = () => undefined
+      mocks.importPaths.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
+      const view = render(<EditorStrip worktreeId="wt-runtime" groupId="group-runtime" />)
+      dropFile(view.getByTestId('strip'), name)
+      await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
+      useAppStore.setState((state) => ({
+        repos: state.repos.map((repo) =>
+          repo.id === 'repo-rt' ? { ...repo, executionHostId: 'runtime:new-owner' as const } : repo
+        )
+      }))
+      await act(async () =>
+        finish({
+          results: [
+            {
+              status: 'imported',
+              kind: 'file',
+              destPath: joinPath(RUNTIME_PATH, `.orca/drops/${name}`)
+            }
+          ]
+        })
       )
-      const state = useAppStore.getState()
-      const workspace = state.browserTabsByWorktree[worktreeId][0]
-      expect(state.browserPagesByWorkspace[workspace.id][0].docLocation).toEqual({
-        kind: 'workspace-doc',
-        worktreeId,
-        filePath: joinPath(root, '.orca/drops/report.html')
-      })
-      expect(state.unifiedTabsByWorktree[worktreeId]).toEqual([
-        expect.objectContaining({ contentType: 'browser', entityId: workspace.id, groupId })
-      ])
       expect(mocks.openFile).not.toHaveBeenCalled()
+      expect(mocks.setActiveTabType).not.toHaveBeenCalled()
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/Couldn't verify which host owns/)
+      )
     }
   )
-
-  it('opens uploaded HTML source when the runtime cannot serve scoped previews', async () => {
-    useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
-    const view = render(<EditorStrip worktreeId="wt-runtime" groupId="group-runtime" />)
-
-    dropFile(view.getByTestId('strip'), 'report.html')
-
-    await waitFor(() => expect(mocks.openFile).toHaveBeenCalledTimes(1))
-    expect(mocks.openFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: joinPath(RUNTIME_PATH, '.orca/drops/report.html'),
-        worktreeId: 'wt-runtime',
-        runtimeEnvironmentId: 'owner-runtime'
-      }),
-      { suppressActiveRuntimeFallback: false, targetGroupId: 'group-runtime' }
-    )
-    expect(useAppStore.getState().browserTabsByWorktree['wt-runtime'] ?? []).toHaveLength(0)
-  })
-
-  it('refuses an HTML preview when its workspace changes hosts during upload', async () => {
-    let finish: (result: {
-      results: { status: 'imported'; kind: 'file'; destPath: string }[]
-    }) => void = () => undefined
-    mocks.importPaths.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)))
-    const view = render(<EditorStrip worktreeId="wt-runtime" groupId="group-runtime" />)
-    dropFile(view.getByTestId('strip'), 'report.html')
-    await waitFor(() => expect(mocks.importPaths).toHaveBeenCalledTimes(1))
-    useAppStore.setState((state) => ({
-      repos: state.repos.map((repo) =>
-        repo.id === 'repo-rt' ? { ...repo, executionHostId: 'runtime:new-owner' as const } : repo
-      )
-    }))
-    await act(async () =>
-      finish({
-        results: [
-          {
-            status: 'imported',
-            kind: 'file',
-            destPath: joinPath(RUNTIME_PATH, '.orca/drops/report.html')
-          }
-        ]
-      })
-    )
-    expect(useAppStore.getState().browserTabsByWorktree['wt-runtime'] ?? []).toHaveLength(0)
-    expect(mocks.openFile).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      expect.stringMatching(/Couldn't verify which host owns/)
-    )
-  })
 
   it.each(['wt-ssh', 'wt-runtime'])(
     'opens nothing when the group closes during upload in %s and keeps preparation feedback',

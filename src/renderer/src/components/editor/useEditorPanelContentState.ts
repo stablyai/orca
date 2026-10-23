@@ -175,7 +175,6 @@ export function useEditorPanelContentState({
   useEditorPanelActiveTabContentLoad({
     activeFile,
     selectedConflictReviewFile,
-    openFiles,
     isVisible,
     isChangesMode,
     gitStatusEntries,

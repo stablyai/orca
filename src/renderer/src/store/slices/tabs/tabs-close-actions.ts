@@ -24,9 +24,13 @@ import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { removeTabsAttention } from '../workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { closeEditorTabThroughLayoutOwner } from '../editor/tabs/editor-tab-close-through-layout-owner'
-import { recordClosedAgentSessionTabInLayoutOwner } from '@/runtime/agent-session-tab-layout-owner'
-import { recordClosedSimulatorTabInLayoutOwner } from '@/lib/simulator-tab-layout-owner'
+import { closeContentTabThroughLayoutOwner } from './content-tab-close-through-layout-owner'
+import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
+import type { AppState } from '../../types'
+import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -40,6 +44,8 @@ export function createTabsCloseActions(
         return null
       }
       const { tab, worktreeId } = found
+      forgetDesktopCreatedServerTab(tab.id)
+      forgetDesktopCreatedServerTab(tab.entityId)
       const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
       // Why: a tab whose group record vanished must still close; its order is the worktree's tabs.
       const groupOrder =
@@ -75,7 +81,14 @@ export function createTabsCloseActions(
             worktreeId,
             sessionId: tab.entityId,
             provisional,
-            layoutOwner: state
+            layoutOwner: state,
+            // Switch point: main's frames draw this machine's chats, so main opens it again.
+            ...(ORCA_LAYOUT_OWNER_IS_MAIN &&
+            target.kind === 'local' &&
+            tab.agentSessionAgent &&
+            isTuiAgent(tab.agentSessionAgent)
+              ? { reopen: reopenChatTab(worktreeId, tab.entityId, tab.agentSessionAgent) }
+              : {})
           })
         } else {
           // Closing still removes the tab; no host can be named to stop its chat on.
@@ -148,11 +161,7 @@ export function createTabsCloseActions(
             // never added a tab, so it must leave the selection exactly as the click found it.
             const shouldDeactivateWorktree =
               !opts?.preserveWorktreeSelection &&
-              current.activeWorktreeId === worktreeId &&
-              nextTabs.length === 0 &&
-              (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
-              (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
-              !current.openFiles.some((file) => file.worktreeId === worktreeId)
+              landsOnEmptiedWorktree(current, worktreeId, nextTabs.length)
             return {
               unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: nextTabs },
               groupsByWorktree: {
@@ -167,33 +176,7 @@ export function createTabsCloseActions(
                 : {}),
               ...structuredAttention,
               // Why: closing the last tab can leave the worktree selected but render-empty, so write the landing-state fallback directly.
-              ...(shouldDeactivateWorktree
-                ? {
-                    activeWorktreeId: null,
-                    activeWorkspaceKey: null,
-                    activeWorkspaceExecutionHostId: null,
-                    activeTabId: null,
-                    activeBrowserTabId: null,
-                    activeFileId: null,
-                    activeTabType: 'terminal' as const,
-                    activeTabIdByWorktree: {
-                      ...current.activeTabIdByWorktree,
-                      [worktreeId]: null
-                    },
-                    activeBrowserTabIdByWorktree: {
-                      ...current.activeBrowserTabIdByWorktree,
-                      [worktreeId]: null
-                    },
-                    activeFileIdByWorktree: {
-                      ...current.activeFileIdByWorktree,
-                      [worktreeId]: null
-                    },
-                    activeTabTypeByWorktree: {
-                      ...current.activeTabTypeByWorktree,
-                      [worktreeId]: 'terminal'
-                    }
-                  }
-                : {}),
+              ...(shouldDeactivateWorktree ? emptiedWorktreeLandingPatch(current, worktreeId) : {}),
               ...(!shouldDeactivateWorktree && ownsGlobalSelection(current, worktreeId)
                 ? buildActiveSurfacePatch(
                     {
@@ -216,10 +199,29 @@ export function createTabsCloseActions(
             }
           })
         )
-      // Switch point: main closes an editor tab first; its frame drops it.
+      // Switch point: main closes an editor, browser, chat or simulator tab first; its frame drops it.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
-        closeEditorTabThroughLayoutOwner(get, tab, nextActiveTabId, closeHere)
+        closeContentTabThroughLayoutOwner(get, tab, {
+          nextActiveTabId,
+          closeHere,
+          // An editor close lands through closeFile, which owns its content.
+          ...(isEditorTabContentType(tab.contentType) || opts?.preserveWorktreeSelection
+            ? {}
+            : { landIfEmptied: () => landOnEmptiedWorktree(set, get, worktreeId) }),
+          // A chat tab owns its markers; nothing else retires them.
+          ...(tab.contentType === 'agent-session'
+            ? {
+                closed: () =>
+                  settleAttentionRemovedBy(
+                    set,
+                    get,
+                    () => set((current) => removeTabsAttention(current, [tabId])),
+                    { tabsBefore: state }
+                  )
+              }
+            : {})
+        })
       ) {
         if (opts?.recordInteraction !== false) {
           get().recordFeatureInteraction?.('terminal-tabs')
@@ -227,16 +229,95 @@ export function createTabsCloseActions(
         return { closedTabId: tabId, wasLastTab, worktreeId }
       }
       closeHere()
-      // Switch point: main records a chat or simulator tab the window just closed.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        recordClosedAgentSessionTabInLayoutOwner(get(), tab)
-        recordClosedSimulatorTabInLayoutOwner(get(), tab)
-      }
-
       if (opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
       return { closedTabId: tabId, wasLastTab, worktreeId }
     }
   }
+}
+
+// "The user emptied this worktree": closing its last tab lands on the welcome screen, unless the
+// close keeps the selection (a cleanup that unwinds a create never added a tab).
+type LandingState = Pick<
+  AppState,
+  | 'activeWorktreeId'
+  | 'unifiedTabsByWorktree'
+  | 'tabsByWorktree'
+  | 'browserTabsByWorktree'
+  | 'openFiles'
+  | 'activeTabIdByWorktree'
+  | 'activeBrowserTabIdByWorktree'
+  | 'activeFileIdByWorktree'
+  | 'activeTabTypeByWorktree'
+>
+
+function landsOnEmptiedWorktree(
+  current: LandingState,
+  worktreeId: string,
+  remainingTabs: number
+): boolean {
+  return (
+    current.activeWorktreeId === worktreeId &&
+    remainingTabs === 0 &&
+    (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
+    (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
+    !current.openFiles.some((file) => file.worktreeId === worktreeId)
+  )
+}
+
+function emptiedWorktreeLandingPatch(current: LandingState, worktreeId: string) {
+  return {
+    activeWorktreeId: null,
+    activeWorkspaceKey: null,
+    activeWorkspaceExecutionHostId: null,
+    activeTabId: null,
+    activeBrowserTabId: null,
+    activeFileId: null,
+    activeTabType: 'terminal' as const,
+    activeTabIdByWorktree: { ...current.activeTabIdByWorktree, [worktreeId]: null },
+    activeBrowserTabIdByWorktree: { ...current.activeBrowserTabIdByWorktree, [worktreeId]: null },
+    activeFileIdByWorktree: { ...current.activeFileIdByWorktree, [worktreeId]: null },
+    activeTabTypeByWorktree: {
+      ...current.activeTabTypeByWorktree,
+      [worktreeId]: 'terminal' as const
+    }
+  }
+}
+
+type LandingSet = (update: (state: AppState) => Partial<AppState>) => void
+
+/** After main's frame dropped a closed tab: lands when that emptied the active worktree. */
+export function landOnEmptiedWorktree(
+  set: LandingSet,
+  get: () => AppState,
+  worktreeId: string
+): boolean {
+  const state = get()
+  if (
+    !landsOnEmptiedWorktree(
+      state,
+      worktreeId,
+      (state.unifiedTabsByWorktree[worktreeId] ?? []).length
+    )
+  ) {
+    return false
+  }
+  set((current) => emptiedWorktreeLandingPatch(current, worktreeId))
+  return true
+}
+
+/** Main opens the chat where it opens any chat this host lists: a host-kept chat comes back. */
+function reopenChatTab(worktreeId: string, sessionId: string, agent: TuiAgent): () => void {
+  return () =>
+    void import('@/lib/structured-agent-session-launch-surface').then(
+      ({ openStructuredAgentSessionProvisionalTab }) =>
+        openStructuredAgentSessionProvisionalTab({
+          worktreeId,
+          executionHostId: LOCAL_EXECUTION_HOST_ID,
+          sessionId,
+          agent,
+          activate: false
+        })
+    )
 }

@@ -54,6 +54,53 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
+  it.each([
+    { questionFlag: '--question', questionValue: 'Proceed?', json: true },
+    { questionFlag: '--resume', questionValue: 'msg_pending', json: false }
+  ])('reports oversized ask waits before any request: %o', async (testCase) => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    callMock.mockResolvedValue({
+      id: 'req_ask',
+      ok: true,
+      result: { answer: 'yes', messageId: 'msg_1', threadId: 'msg_1', timedOut: false },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'orchestration',
+        'ask',
+        testCase.questionFlag,
+        testCase.questionValue,
+        '--timeout-ms',
+        '14400000',
+        ...(testCase.json ? ['--json'] : [])
+      ],
+      '/tmp/repo'
+    )
+
+    expect(process.exitCode).toBe(1)
+    expect(callMock).not.toHaveBeenCalled()
+    if (testCase.json) {
+      expect(logSpy).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(logSpy.mock.calls[0][0])).toMatchObject({
+        ok: false,
+        error: {
+          code: 'invalid_argument',
+          message: expect.stringMatching(/--timeout-ms.*1800000.*30 minutes/)
+        }
+      })
+      expect(errorSpy).not.toHaveBeenCalled()
+    } else {
+      expect(logSpy).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/--timeout-ms.*1800000.*30 minutes/)
+      )
+    }
+  })
+
   it('formats group orchestration sends in text mode', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
     callMock.mockResolvedValueOnce({

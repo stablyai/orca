@@ -3,7 +3,7 @@ import type {
   JiraIssueSummaryGenerationRequest,
   JiraIssueSummaryGenerationCancellation,
   JiraIssueSummaryGenerationResult
-} from '../../../shared/jira-issue-summary-generation'
+} from '../../../shared/jira/jira-issue-summary-generation'
 import { JIRA_ISSUE_SUMMARY_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'

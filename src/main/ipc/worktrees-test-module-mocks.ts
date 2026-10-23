@@ -82,7 +82,6 @@ export const loadHooksMock: ModuleMock = vi.fn()
 export const computeWorktreePathMock: Mock<typeof computeWorktreePath> = vi.fn()
 export const ensurePathWithinWorkspaceMock: StringArgMock = vi.fn()
 export const gitExecFileAsyncMock: GitArgvMock = vi.fn()
-export const getSshFilesystemProviderMock: ModuleMock = vi.fn()
 export const deleteWorktreeHistoryDirMock: ModuleMock = vi.fn()
 export const advertisedUrlWatcherForgetWorktreeMock: ModuleMock = vi.fn()
 export const pruneCleanupScanSnapshotMock: ModuleMock = vi.fn().mockResolvedValue(undefined)
@@ -153,10 +152,6 @@ export const githubClientModuleMock = () => ({
 
 export const hostedReviewModuleMock = () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
-})
-
-export const sshFilesystemDispatchModuleMock = () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
 })
 
 export const worktreeSymlinksModuleMock = (): {

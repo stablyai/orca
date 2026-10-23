@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { defaultExclude, defineConfig } from 'vitest/config'
@@ -15,6 +16,20 @@ const paletteMeasurementFile =
   'src/renderer/src/lib/palette-match/palette-match-performance.test.ts'
 const measurementFiles = [measurementFile, paletteMeasurementFile]
 const transforms = {
+  plugins: [
+    {
+      // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
+      name: 'locale-catalog-test-assets',
+      enforce: 'pre' as const,
+      load(id: string) {
+        if (/\/i18n\/locales\/[a-z]+\.json\?url$/.test(id)) {
+          const catalog = readFileSync(id.slice(0, -4)).toString('base64')
+          return `export default ${JSON.stringify(`data:application/json;base64,${catalog}`)}`
+        }
+        return null
+      }
+    }
+  ],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true',
     // Why: tests only interpolate it; they must not depend on the checkout's HEAD.

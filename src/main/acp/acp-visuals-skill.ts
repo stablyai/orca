@@ -1,7 +1,7 @@
 // How each ACP agent loads the chat-visuals skill for one launch, without touching the user's own
 // config: ACP itself has no way to hand an agent a skill.
 
-import { isStableCliVersionFrom } from '../agent-cli-version-probe'
+import { hasReachedAppVersion } from '../../shared/app-version'
 import type { NativeChatVisualsSkillLocation } from '../native-chat/native-chat-visuals-skill-location'
 
 export type AcpVisualsSkillInput = {
@@ -29,7 +29,7 @@ const GROK_PLUGIN_DIR_FIRST_VERSION = '1.0.44'
 
 /** Grok takes Claude's plugin layout through `agent --plugin-dir`, for this process only. */
 export const loadGrokVisualsSkill: AcpVisualsSkillLoader = async ({ skill, version }) =>
-  version !== null && isStableCliVersionFrom(version, GROK_PLUGIN_DIR_FIRST_VERSION)
+  version !== null && hasReachedAppVersion(version, GROK_PLUGIN_DIR_FIRST_VERSION)
     ? { pluginDir: skill.pluginDir }
     : null
 
@@ -74,7 +74,7 @@ const OPENCODE_MERGED_SKILL_PATHS_FIRST_VERSION = '2.0.14'
 export const loadOpenCodeVisualsSkill: AcpVisualsSkillLoader = async ({ skill, env, version }) => {
   if (
     version === null ||
-    !isStableCliVersionFrom(version, OPENCODE_MERGED_SKILL_PATHS_FIRST_VERSION)
+    !hasReachedAppVersion(version, OPENCODE_MERGED_SKILL_PATHS_FIRST_VERSION)
   ) {
     return null
   }

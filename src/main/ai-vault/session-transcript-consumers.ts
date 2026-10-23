@@ -10,8 +10,10 @@ export type TranscriptMessageRole = 'user' | 'assistant' | 'tool'
 
 export type TranscriptMessage = {
   role: TranscriptMessageRole
-  /** Untruncated decoded text; caps and redaction are consumer policy. */
+  /** Decoded text, subject to the reader's safety limits. */
   text: string
+  /** A size limit omitted some decoded text. */
+  textTruncated?: true
   timestamp: string | null
 }
 

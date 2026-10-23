@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   installChatViewHooks,
   composer,
+  hostType,
   render,
+  root,
   update
 } from './MobileNativeChatView.harness.test-fixture'
 
@@ -38,6 +40,51 @@ vi.mock('./MobileNativeChatComposer', async () => {
 describe('MobileNativeChatView: composer lock and prompt cards', () => {
   installChatViewHooks()
 
+  const lockLiveRegion = () =>
+    root().find(
+      (node) => hostType(node) === 'Text' && node.props.accessibilityLiveRegion === 'polite'
+    )
+
+  const waitingStatus = () =>
+    root().findAll(
+      (node) => hostType(node) === 'Text' && node.props.children === 'Waiting for terminal…'
+    )
+
+  it('updates an already mounted live region for a settled waiting lock with a draft', async () => {
+    vi.useFakeTimers()
+    try {
+      await render({ composerText: 'run the tests' })
+      const liveRegion = lockLiveRegion()
+      expect(liveRegion.children).toEqual([])
+
+      await update({ inputLockReason: 'waiting', composerText: 'run the tests' })
+      await act(async () => {
+        vi.advanceTimersByTime(599)
+      })
+      expect(lockLiveRegion()).toBe(liveRegion)
+      expect(liveRegion.children).toEqual([])
+      expect(waitingStatus()).toHaveLength(0)
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
+
+      expect(composer().props.value).toBe('run the tests')
+      expect(composer().props.disabled).toBe(true)
+      expect(waitingStatus()).toHaveLength(1)
+      expect(waitingStatus()[0]).toBe(liveRegion)
+
+      await update({ inputLockReason: 'waiting', composerText: 'run the tests again' })
+      expect(waitingStatus()).toHaveLength(1)
+      await update({ inputLockReason: 'disconnected', composerText: 'run the tests again' })
+      expect(waitingStatus()).toHaveLength(0)
+      expect(composer().props.placeholder).toBe('Reconnecting…')
+      expect(lockLiveRegion()).toBe(liveRegion)
+      expect(liveRegion.children).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps a visible lock through a subscribed-end lease blip', async () => {
     vi.useFakeTimers()
     try {
@@ -59,6 +106,7 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
 
       expect(composer().props.disabled).toBe(true)
       expect(composer().props.placeholder).toBe('Waiting for terminal…')
+      expect(waitingStatus()).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
@@ -67,15 +115,17 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
   it('unlocks after the lease stays ready', async () => {
     vi.useFakeTimers()
     try {
-      await render({ inputLockReason: 'waiting' })
+      await render({ inputLockReason: 'waiting', composerText: 'retained draft' })
       await act(async () => {
         vi.advanceTimersByTime(600)
       })
-      await update({ inputLockReason: null })
+      const liveRegion = lockLiveRegion()
+      await update({ inputLockReason: null, composerText: 'retained draft' })
       await act(async () => {
         vi.advanceTimersByTime(599)
       })
       expect(composer().props.disabled).toBe(true)
+      expect(waitingStatus()).toHaveLength(1)
 
       await act(async () => {
         vi.advanceTimersByTime(1)
@@ -83,6 +133,10 @@ describe('MobileNativeChatView: composer lock and prompt cards', () => {
 
       expect(composer().props.disabled).toBe(false)
       expect(composer().props.placeholder).toBe('Ask anything, @ to mention files, / for commands')
+      expect(composer().props.value).toBe('retained draft')
+      expect(waitingStatus()).toHaveLength(0)
+      expect(lockLiveRegion()).toBe(liveRegion)
+      expect(liveRegion.children).toEqual([])
     } finally {
       vi.useRealTimers()
     }

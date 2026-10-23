@@ -1,5 +1,5 @@
-import { deriveUrl } from './browser-cookie-validation'
-import type { ValidatedCookie } from './browser-cookie-validation'
+import { deriveUrl } from './cookies/sources/browser-cookie-validation'
+import type { ValidatedCookie } from './cookies/sources/browser-cookie-validation'
 
 const MAC_EPOCH_DELTA = 978_307_200
 

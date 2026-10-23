@@ -252,15 +252,17 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
         }
         continue
       }
-      if (!allLivePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
+      if (
+        !allLivePtyIds.has(pty.ptyId) &&
+        (this.mainDecidesLiveness(pty.worktreeId) || !this.leafExistsForPty(pty.ptyId))
+      ) {
         const currentVerdict = this.ptyLivenessVerdictByPtyId.get(pty.ptyId)
         if (
           currentVerdict &&
           currentVerdict.observedAt > livenessObservationAtStart &&
           currentVerdict.verdict.status === 'unverifiable'
         ) {
-          pty.connected = false
-          pty.disconnectedAt ??= Date.now()
+          this.setPtyConnected(pty, false)
           continue
         }
         const observed = this.ptyController.hasPty?.(pty.ptyId)
@@ -273,13 +275,11 @@ export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInve
           ) {
             selectedLivePtyIds.add(pty.ptyId)
           }
-          pty.connected = true
-          pty.disconnectedAt = null
+          this.setPtyConnected(pty, true)
           this.markPtyLivenessLive(pty.ptyId, livenessObservationAtStart)
           continue
         }
-        pty.connected = false
-        pty.disconnectedAt ??= Date.now()
+        this.setPtyConnected(pty, false)
         pty.agentSessionOwners = []
         // Why: this list only enumerates registered providers, so a dropped relay
         // clears `connected` for every one of its PTYs at once. Only `false` here

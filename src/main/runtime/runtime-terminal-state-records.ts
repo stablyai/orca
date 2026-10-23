@@ -61,14 +61,16 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   runtimeSessionOwned: boolean
   isWsl: boolean | null
   wslDistro: string | null
-  tabId: string | null
-  paneKey: string | null
+  /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
+  tabId?: string | null
+  /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
+  paneKey?: string | null
   /**
-   * `graphSequence` when `paneKey` was last written. A surface recorded since the last graph
-   * statement has not yet been offered one that could contradict it — see
-   * pty-recorded-surface-topology.ts.
+   * Window-owned builds only (L80). `graphSequence` when `paneKey` was last written. A surface
+   * recorded since the last graph statement has not yet been offered one that could contradict
+   * it — see pty-recorded-surface-topology.ts.
    */
-  surfaceRecordedAtGraphSequence: number
+  surfaceRecordedAtGraphSequence?: number
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null

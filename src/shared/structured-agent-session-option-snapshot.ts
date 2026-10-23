@@ -194,29 +194,37 @@ export function structuredAgentSessionOptionSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
-  const options = modelOptionSnapshot(state)
+  const options = modelOptionSnapshot(state).map((option) =>
+    (state.listingInProgress && ['effort', 'serviceTier', 'fastMode'].includes(option.id)) ||
+    (state.fastModeRestricted && option.id === 'fastMode')
+      ? { ...option, settable: false }
+      : option
+  )
   return permission ? [...options, permission] : options
 }
 
 /** No launch holds a pick and no fence can carry one yet, so the picker only shows. */
 export function lockedStructuredAgentSessionOptionSnapshot(
-  snapshot: readonly SessionOptionDescriptor[]
+  snapshot: readonly SessionOptionDescriptor[],
+  capabilitiesOnly = false
 ): SessionOptionDescriptor[] {
-  return snapshot.map((descriptor) => ({
-    ...descriptor,
-    settable: false,
-    disabledReason: 'available-after-session-start'
-  }))
+  return snapshot.map((descriptor) =>
+    capabilitiesOnly && !['effort', 'serviceTier', 'fastMode'].includes(descriptor.id)
+      ? descriptor
+      : { ...descriptor, settable: false, disabledReason: 'available-after-session-start' }
+  )
 }
 
 export function canSetStructuredAgentSessionOption(
   state: StructuredAgentSessionOptionState,
   id: string,
-  value: SessionOptionValue
+  value: SessionOptionValue,
+  snapshot = structuredAgentSessionOptionSnapshot(state)
 ): boolean {
-  const descriptor = structuredAgentSessionOptionSnapshot(state).find((entry) => entry.id === id)
+  const descriptor = snapshot.find((entry) => entry.id === id)
   return Boolean(
     state.catalog &&
+    descriptor?.settable &&
     state.pendingId !== id &&
     ((typeof value === 'string' &&
       descriptor?.kind.type === 'select' &&

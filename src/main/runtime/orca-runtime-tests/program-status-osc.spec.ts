@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { committingSpawn } from '../bind-first-pane.test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
@@ -18,7 +19,7 @@ describe('OSC 7501 program status', () => {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -58,7 +59,7 @@ describe('OSC 7501 program status', () => {
       onTerminalProgramStatusFacet: (event) => order.push(`facet:${event.facet?.state ?? 'none'}`)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -83,7 +84,7 @@ describe('OSC 7501 program status', () => {
         facets.push([event.ptyId, event.facet?.state ?? null])
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null

@@ -330,6 +330,11 @@ describe('getPRForBranch', () => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify([branchLookup]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify(exactLookup) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: { repository: { autoMergeAllowed: true, mergeQueue: null } }
+        })
+      })
       .mockResolvedValueOnce({ stdout: JSON.stringify([pushedBranchLookup]) })
       .mockResolvedValueOnce({ stdout: JSON.stringify(pushedExactLookup) })
     gitExecFileAsyncMock

@@ -18,19 +18,28 @@ function configuredText(value: unknown): string | null {
 /** The model and effort the user's Codex config selects, or null when Codex can't say. */
 export async function readCodexConfiguredLaunchDefaults(
   connection: Pick<CodexAppServerConnection, 'request'>,
-  timeoutMs = CONFIG_READ_TIMEOUT_MS
+  timeoutMs = CONFIG_READ_TIMEOUT_MS,
+  cwd?: string
 ): Promise<CodexConfiguredLaunchDefaults | null> {
   try {
-    const response = await connection.request(
-      'config/read',
-      {},
-      { timeoutMs: Math.min(timeoutMs, CONFIG_READ_TIMEOUT_MS) }
-    )
+    const response = await connection.request('config/read', cwd ? { cwd } : {}, {
+      timeoutMs: Math.min(timeoutMs, CONFIG_READ_TIMEOUT_MS)
+    })
     const config =
       typeof response === 'object' && response !== null && 'config' in response
         ? response.config
         : null
-    if (typeof config !== 'object' || config === null) {
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      return null
+    }
+    if (
+      Object.entries(config).some(
+        ([key, value]) =>
+          ['model', 'model_reasoning_effort', 'personality', 'service_tier'].includes(key) &&
+          value != null &&
+          typeof value !== 'string'
+      )
+    ) {
       return null
     }
     const personality = 'personality' in config ? configuredText(config.personality) : null
@@ -43,7 +52,7 @@ export async function readCodexConfiguredLaunchDefaults(
         'model_reasoning_effort' in config ? configuredText(config.model_reasoning_effort) : null
     }
   } catch {
-    // Older Codex has no config/read; its own listing default then stands.
+    // Refusal and transport failure leave configuration unknown.
     return null
   }
 }

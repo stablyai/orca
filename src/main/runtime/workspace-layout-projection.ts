@@ -47,7 +47,8 @@ export function runtimeLayoutLoadContext(
     ...(generationOf
       ? { ptyGenerationOf: (leafId: string) => generationOf.call(store, hostId, leafId) }
       : {}),
-    ...(views ? { editorViewsOf: (key: string) => views[key] } : {})
+    // A partition with no view yet still loads as one whose views are known (none held).
+    ...(store.getLayoutEditorViews ? { editorViewsOf: (key: string) => views?.[key] } : {})
   }
 }
 

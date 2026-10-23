@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ConfirmedUnsavedDiscards } from './worktrees/teardown/removed-workspace-unsaved-files'
 
 import type { NestedWorktreeRemovalApproval } from '../../../../shared/worktree/nested-removal'
 
@@ -22,4 +23,6 @@ export type RemoveWorktreeOptions = {
   sameIdSurvivingHostId?: ExecutionHostId
   /** Both scan owners are in this cleanup batch, so neither is a survivor. */
   ignoreWorkspaceCleanupScanSurvivors?: boolean
+  /** The text a dialog listed when the user confirmed discarding it; other edits are offered back. */
+  confirmedDiscards?: ConfirmedUnsavedDiscards
 }

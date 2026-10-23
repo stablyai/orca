@@ -110,12 +110,22 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
   const liveRowOf = indexLiveRows(sources.liveRows, sources.repoHostIdByRepoId)
   const query = sources.search.trim().toLowerCase()
   const sections: Section[] = []
+  let sectionHostId: ExecutionHostId | null = null
   const rowOf = (
     worktree: HostWorktree,
     hostId: ExecutionHostId,
     repoName: string | undefined,
     workspaceKind: Worktree['workspaceKind']
-  ): Worktree => drawnRow(worktree, hostId, repoName, workspaceKind, liveRowOf(worktree.id, hostId))
+  ): Worktree => {
+    const drawn = drawnRow(
+      worktree,
+      hostId,
+      repoName,
+      workspaceKind,
+      liveRowOf(worktree.id, hostId)
+    )
+    return hostId === sectionHostId ? { ...drawn, hostContextLabel: undefined } : drawn
+  }
   const push = (section: Section) => sections.push(section)
   const current = (): Section => {
     const last = sections.at(-1)
@@ -132,6 +142,7 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
   for (const row of sources.rows) {
     switch (row.type) {
       case 'host-header':
+        sectionHostId = row.hostId
         push({ key: row.key, title: row.label, count: row.count, data: [] })
         break
       case 'header':

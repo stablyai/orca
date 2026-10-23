@@ -47,7 +47,7 @@ export type CodexStructuredInvocation = {
  * The one place a structured Codex child's binary and environment are
  * resolved. The session launch and the session-less catalog probe both build
  * on it, so a probe can never list under a different binary or env than the
- * session it stands in for. Env VALUES stay out of the catalog fingerprint:
+ * session it stands in for. Inherited env values stay out of the catalog fingerprint:
  * drift there heals on the next refresh.
  */
 export function resolveCodexStructuredInvocation(
@@ -119,7 +119,8 @@ export function codexStructuredLaunchPart(
       inheritedEnvToDelete: [
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-      ]
+      ],
+      cliRuntimeCommand: command
     }
   }
 }

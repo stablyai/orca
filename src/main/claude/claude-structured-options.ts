@@ -2,11 +2,7 @@ import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import {
-  claudeModelEffortLevels,
-  claudeModelFastModeSupport,
-  readClaudeCurrentModel,
   observeClaudeSettingsApplied,
-  readClaudeListedModels,
   readClaudeSettingsEffort,
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
@@ -70,39 +66,9 @@ export async function setClaudeStructuredOption(
       `claude stream-json has no session option named ${input.key}`
     )
   }
-  // One read answers every catalog question this write asks, so the guards below
-  // cannot each pay a round trip for the same list nor disagree about the model.
-  // Two writes ask nothing of it and so read nothing: an effort write with no current
-  // model has nothing to look up, and turning Fast off needs no support evidence.
-  const needsCatalog =
-    (input.key === 'model' && session.options.get('fastMode') === 'true') ||
-    (input.key === 'fastMode' && fastMode === true) ||
-    (input.key === 'effort' && readClaudeCurrentModel(session).id !== undefined)
-  const listed = needsCatalog ? await readClaudeListedModels(session, timeoutMs) : []
-  // The child stores an effort its model has no control for and keeps it across
-  // every later model switch, so refuse before the write rather than read the
-  // acceptance back as adoption.
-  if (input.key === 'effort') {
-    const { modelId, levels } = claudeModelEffortLevels(session, listed)
-    if (levels && !levels.has(input.value)) {
-      throw new AgentSessionOptionRejectedError(
-        `claude model ${modelId} does not accept effort ${input.value}`
-      )
-    }
-  }
   if (input.key === 'fastMode') {
     if (typeof fastMode !== 'boolean') {
       throw new AgentSessionOptionRejectedError('claude fast mode must be encoded as true or false')
-    }
-    const support = claudeModelFastModeSupport(session, listed)
-    // A catalog that identified nothing is not evidence against this model, the same
-    // rule used for unknown capability evidence — otherwise a CLI that cannot answer has Fast
-    // refused on every model. A catalog that did list the model and stayed silent
-    // about Fast is still not positive evidence, so that case keeps refusing.
-    if (fastMode && listed.length > 0 && support.supported !== true) {
-      throw new AgentSessionOptionRejectedError(
-        `claude model ${support.modelId ?? 'current'} does not support Fast mode`
-      )
     }
     if (
       fastMode &&
@@ -114,10 +80,6 @@ export async function setClaudeStructuredOption(
       )
     }
   }
-  const modelFastModeSupport =
-    input.key === 'model' && session.options.get('fastMode') === 'true'
-      ? claudeModelFastModeSupport(session, listed, input.value)
-      : null
   session.appliedInputOptions.delete(input.key)
   const mutationSequence = beginClaudeOptionMutation(session, input.key)
   // Read with the fence bump, so a write that lands after an earlier one's bookkeeping compares against it.
@@ -133,30 +95,6 @@ export async function setClaudeStructuredOption(
     }
     if (input.key === 'model') {
       session.translator?.modelWritten(input.value)
-    }
-    if (
-      input.key === 'model' &&
-      session.options.get('fastMode') === 'true' &&
-      modelFastModeSupport?.supported === false
-    ) {
-      if (mutationSequence !== session.optionMutationSequence) {
-        return Object.fromEntries(session.options)
-      }
-      session.options.set('model', input.value)
-      session.options.set('fastMode', 'false')
-      session.confirmedOptions.delete('effort')
-      session.confirmedOptions.delete('fastMode')
-      // The requested model is already accepted; a cleanup failure cannot reject that write.
-      session.appliedInputOptions.delete('fastMode')
-      await session.connection.applyFlagSettings({ fastMode: false }, { timeoutMs }).then(
-        () => {
-          if (mutationSequence === session.optionMutationSequence) {
-            session.appliedInputOptions.set('fastMode', 'false')
-          }
-        },
-        () => {}
-      )
-      return Object.fromEntries(session.options)
     }
   } catch (error) {
     if (error instanceof ClaudeControlRequestError) {

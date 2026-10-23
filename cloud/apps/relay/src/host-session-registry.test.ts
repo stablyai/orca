@@ -584,6 +584,63 @@ describe('host session cleanup races', () => {
     )
   })
 
+  // The root of a seat c34's feed listed for hours: a rebind whose database activation outlived
+  // the orphan grace revived the removed session outside the map, still listed and unreachable.
+  it('refuses a rebind whose session left the map while its activation was in flight', async () => {
+    const blocked = deferred<string>()
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValueOnce('control:production-gce-c3:1')
+      .mockReturnValueOnce(blocked.promise)
+    const { registry, activate, releaseActivity } = createRegistry(activateControl)
+    const key = { userId: identity.sub, relayHostId: identity.relayHostId }
+    const originalSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(originalSocket as unknown as WebSocket, identity, null, 1, false, 1)
+    const original = registry.get(key)
+    originalSocket.close(1006, 'network reset')
+    expect(original?.state).toBe('orphaned')
+
+    const rebindSocket = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    const rebinding = activate(rebindSocket as unknown as WebSocket, identity, original, 1, true, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(activateControl).toHaveBeenCalledTimes(2)
+    // The grace runs out while the database answers slowly.
+    await vi.advanceTimersByTimeAsync(CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
+    expect(registry.get(key)).toBeNull()
+    blocked.resolve('control:production-gce-c3:1')
+    await rebinding
+
+    expect(rebindSocket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+    expect(registry.get(key)).toBeNull()
+    expect(original?.state).toBe('closed')
+    const page = registry.seatFeed(null)
+    expect('full' in page && page.full).toEqual([])
+    expect(releaseActivity).toHaveBeenCalledWith(key, 'control:production-gce-c3:1')
+  })
+
+  // Two hellos proven against the same empty map could take the same generation; an activation at
+  // a generation this host already had here is refused, so a late leave cannot share it.
+  it('refuses a fresh activation at a generation this host already had here', async () => {
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValue('control:production-gce-c3:2')
+    const { registry, activate } = createRegistry(activateControl)
+    const key = { userId: identity.sub, relayHostId: identity.relayHostId }
+    const first = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(first as unknown as WebSocket, identity, null, 2, false, 1)
+    first.close(1006, 'network reset')
+    await vi.advanceTimersByTimeAsync(CONTROL_CONTINUITY_LIMITS.orphanGraceMs)
+    expect(registry.get(key)).toBeNull()
+    const reused = new FakeSocket()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: FakeSocket implements the registry's WebSocket event and lifecycle surface.
+    await activate(reused as unknown as WebSocket, identity, null, 2, false, 1)
+    expect(reused.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+    expect(registry.get(key)).toBeNull()
+  })
+
   it('skips a closed queued control so its live retry avoids abandoned database work', async () => {
     const stalled = deferred<string>()
     const activateControl = vi
@@ -1356,6 +1413,7 @@ describe('source-owned idle cutover', () => {
       await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
     ).toEqual({ outcome })
     expect(commit).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
+    await vi.advanceTimersByTimeAsync(0)
     expect(h.socket.close).toHaveBeenCalledTimes(outcome === 'busy' ? 0 : 1)
   })
   it('restarts the age when the host rebinds its control socket', async () => {
@@ -1414,6 +1472,7 @@ describe('source-owned idle cutover', () => {
     expect(
       await h.registry.idleRehome(request, commit, vi.fn().mockResolvedValue('not-committed'))
     ).toEqual({ outcome: 'committed' })
+    await vi.advanceTimersByTimeAsync(0)
     expect(h.socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, expect.any(String))
     expect(h.releaseActivity).toHaveBeenCalled()
   })
@@ -1961,6 +2020,8 @@ describe('paced drain', () => {
   it('sends every drain at once when no window is given', async () => {
     const { registry, sockets } = await connectHosts(4)
     registry.drain(0)
+    // A zero-grace drain is told by its close, once the host's release has landed.
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(4)
   })
 
@@ -1969,13 +2030,19 @@ describe('paced drain', () => {
   it('spreads the sends evenly across the window', async () => {
     const { registry, sockets } = await connectHosts(5)
     registry.drain(0, { paceWindowMs: 40_000 })
-    // The first host is sent synchronously; the last lands on the window's closing edge.
+    // Each host is told by its zero-grace close, which a timer nested in the send runs 1 ms on.
+    const advance = async (ms: number): Promise<void> => {
+      await vi.advanceTimersByTimeAsync(ms)
+      await vi.advanceTimersByTimeAsync(1)
+    }
+    // The first host is told at once; the last lands on the window's closing edge.
+    await advance(0)
     expect(drainsSent(sockets)).toBe(1)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await advance(10_000)
     expect(drainsSent(sockets)).toBe(2)
-    await vi.advanceTimersByTimeAsync(20_000)
+    await advance(20_000)
     expect(drainsSent(sockets)).toBe(4)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await advance(10_000)
     expect(drainsSent(sockets)).toBe(5)
   })
 
@@ -1987,6 +2054,7 @@ describe('paced drain', () => {
     const socket = new FakeSocket()
     registry.acceptControl(socket as unknown as WebSocket, { ...identity, sub: 'user-late' })
     expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(1)
   })
 
@@ -2032,8 +2100,10 @@ describe('paced drain', () => {
   it('lets an emergency drain supersede the sends still queued by a paced one', async () => {
     const { registry, sockets } = await connectHosts(4)
     registry.drain(0, { paceWindowMs: 40_000 })
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(1)
     registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
     expect(drainsSent(sockets)).toBe(4)
     const sendsAfterEmergency = sockets.map((socket) => socket.send.mock.calls.length)
     await vi.advanceTimersByTimeAsync(40_000)

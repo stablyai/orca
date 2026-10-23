@@ -78,6 +78,20 @@ function ownershipRecord(
   return JSON.stringify({ version, accountId, runtime, distro })
 }
 
+function comparableOwnershipRecord(
+  version: unknown,
+  accountId: unknown,
+  runtime: unknown,
+  distro: unknown
+): string {
+  return ownershipRecord(
+    version,
+    accountId,
+    runtime,
+    runtime === 'wsl' && typeof distro === 'string' ? distro.trim().toLowerCase() : distro
+  )
+}
+
 function readOwnershipMarker(file: string): string | null {
   try {
     if (!lstatSync(file).isFile()) {
@@ -94,7 +108,7 @@ function readOwnershipMarker(file: string): string | null {
     throw new ClaudeProfileSurfaceError('unreadable', 'Claude profile marker is unreadable')
   }
   const { version, accountId, runtime, distro } = marker.value
-  return ownershipRecord(version, accountId, runtime, distro)
+  return comparableOwnershipRecord(version, accountId, runtime, distro)
 }
 
 // Written when a first setup finishes, so its absence means no setup has finished here yet.
@@ -132,7 +146,11 @@ export function prepareClaudeProfileDirectory(
   const distro = profile.target.runtime === 'wsl' ? profile.target.distro : undefined
   const record = ownershipRecord(profile.version, profile.accountId, profile.target.runtime, distro)
   const marker = readOwnershipMarker(markerPath)
-  if (marker !== null && marker !== record) {
+  if (
+    marker !== null &&
+    marker !==
+      comparableOwnershipRecord(profile.version, profile.accountId, profile.target.runtime, distro)
+  ) {
     throw new ClaudeProfileSurfaceError(
       'invalid-profile',
       'Claude profile belongs to another account or target'

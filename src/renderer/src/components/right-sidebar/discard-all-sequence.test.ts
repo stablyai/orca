@@ -25,7 +25,7 @@ describe('getDiscardAllPaths', () => {
       entry({ path: 'c.ts', area: 'untracked', status: 'untracked' })
     ]
     expect(getDiscardAllPaths(entries, 'staged')).toEqual(['a.ts'])
-    expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['b.ts'])
+    expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['b.ts', 'c.ts'])
     expect(getDiscardAllPaths(entries, 'untracked')).toEqual(['c.ts'])
   })
 

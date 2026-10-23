@@ -6,7 +6,12 @@
  * installed build must all name the same process. Then the record and pid file are rewritten under
  * the activation fence. A different version is then handled by the usual update gate.
  */
-import { ORCAD_LOCK_FILE_NAME, parseOrcadInstanceLockRecord } from '../orcad/orcad-instance-lock'
+import {
+  ORCAD_LOCK_FILE_NAME,
+  parseOrcadInstanceLockRecord,
+  type OrcadLockRecord
+} from '../orcad/orcad-instance-lock'
+import { compareOrcadProcessIdentity } from '../orcad/orcad-process-start-time'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import {
   readOrcadActivationRecord,
@@ -36,6 +41,7 @@ import {
 } from '../managed-server/install/remote-install-model'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
+import { readWslGuestIdentity, wslGuestOrcadIncarnation } from './wsl-guest-process-identity'
 
 const LOCK_RECORD_MAX_BYTES = 64 * 1024
 const UNRECORDED_ORCAD_CODE = 'wsl_orcad_unrecorded_instance_unverifiable'
@@ -62,11 +68,37 @@ async function readLiveLockHolder(slot: OrcadSlotOptions): Promise<LockHolder | 
   if (!lock || lock.role === 'desktop') {
     return null
   }
-  const alive = await execOrcadRemote(
-    slot,
-    `if kill -0 ${String(lock.pid)} 2>/dev/null; then echo LIVE; else echo DEAD; fi`
-  )
-  return alive.trim().split('\n').pop() === 'LIVE' ? { pid: lock.pid, version: lock.version } : null
+  // Not live is never adopted; the launch's own instance lock then decides, on the host.
+  return (await lockHolderLiveness(slot, lock)) === 'live'
+    ? { pid: lock.pid, version: lock.version }
+    : null
+}
+
+type LockHolderLiveness = 'live' | 'unverifiable' | 'exited'
+
+/** A PID is no identity after a distro restart reuses it: the lock's boot id and start ticks are. */
+async function lockHolderLiveness(
+  slot: OrcadSlotOptions,
+  lock: OrcadLockRecord
+): Promise<LockHolderLiveness> {
+  const guest = await readWslGuestIdentity(slot.conn, lock.pid)
+  if (!guest) {
+    return 'unverifiable'
+  }
+  const incarnation = wslGuestOrcadIncarnation(guest)
+  // The guest answered, and no process has that PID.
+  if (!incarnation) {
+    return 'exited'
+  }
+  // Why lowercased: the guest's boot id is read lowercased, and a writer may record it otherwise.
+  const recorded = lock.bootId ? { ...lock, bootId: lock.bootId.toLowerCase() } : lock
+  const verdict = compareOrcadProcessIdentity(lock.pid, recorded, {
+    incarnation: () => incarnation,
+    // The guest's wall clock jumps after a host sleep, so it is not read.
+    startedAtMs: () => null,
+    platform: 'linux'
+  })
+  return verdict === 'matches' ? 'live' : verdict === 'differs' ? 'exited' : 'unverifiable'
 }
 
 async function readSlotPid(slot: OrcadSlotOptions, version: string): Promise<number | null> {

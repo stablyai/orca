@@ -5,6 +5,7 @@ allowBuilds:
   sharp: true
 
 overrides:
+  path-to-regexp@>=4.0.0 <6.3.0: 6.3.0
   '@vercel/node>undici': 6.28.1
   '@vercel/python-analysis>js-yaml': 4.3.2
   '@vercel/python-analysis>minimatch': 10.2.6
@@ -18,3 +19,6 @@ overrides:
   '@vercel/hono>path-to-regexp': 8.4.0
   '@vercel/container>tar': 7.5.22
   '@vercel/container>smol-toml': 1.9.1
+
+patchedDependencies:
+  braces@3.0.3: ../../config/patches/braces@3.0.3.patch

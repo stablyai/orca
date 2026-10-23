@@ -147,7 +147,6 @@ describe('self-move source suppression (in-flight)', () => {
 
 describe('self-move echo verification (content identity)', () => {
   const setExternalMutation = vi.fn()
-  const setPendingLiveDiskVerification = vi.fn()
   const clearSelfMoveEcho = vi.fn()
 
   const BASELINE_CONTENT = 'the file on disk\n'
@@ -175,7 +174,6 @@ describe('self-move echo verification (content identity)', () => {
       ...createTestStore().getState(),
       openFiles: [file],
       setExternalMutation,
-      setPendingLiveDiskVerification,
       clearSelfMoveEcho
     })
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file])
@@ -205,17 +203,15 @@ describe('self-move echo verification (content identity)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('suspends autosave synchronously and suppresses when disk matches the baseline', async () => {
+  it('suppresses when disk matches the baseline', async () => {
     mockState(movedDirtyTab())
     stubDiskRead({ isBinary: false, content: BASELINE_CONTENT })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
     handleFsChanged(payloadFor())
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', true)
     await vi.advanceTimersByTimeAsync(100)
 
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', false)
     expect(clearSelfMoveEcho).toHaveBeenCalledWith('file-notes')
     dispose()
   })
@@ -253,7 +249,6 @@ describe('self-move echo verification (content identity)', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-notes', false)
     dispose()
   })
 
@@ -284,7 +279,6 @@ describe('self-move echo verification (content identity)', () => {
 })
 
 describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () => {
-  const setPendingLiveDiskVerification = vi.fn()
   const clearSelfMoveEcho = vi.fn()
   const setExternalMutation = vi.fn()
 
@@ -316,7 +310,6 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     vi.mocked(useAppStore.getState).mockReturnValue({
       ...createTestStore().getState(),
       openFiles: [floatingTab],
-      setPendingLiveDiskVerification,
       clearSelfMoveEcho,
       setExternalMutation
     })
@@ -332,9 +325,8 @@ describe('verifyLatchedMoveDestinations (proactive, cross-worktree path)', () =>
     await vi.advanceTimersByTimeAsync(50)
 
     expect(readFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: FLOATING_FILE_PATH }))
-    // Disk == baseline -> echo -> suppress + release the gate, no false banner.
+    // Disk == baseline -> echo -> suppress, no false banner.
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-x', 'changed')
-    expect(setPendingLiveDiskVerification).toHaveBeenCalledWith('file-x', false)
     // Safety net does NOT consume provenance (a later watcher event still needs it).
     expect(clearSelfMoveEcho).not.toHaveBeenCalled()
   })

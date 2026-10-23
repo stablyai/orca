@@ -54,7 +54,7 @@ export function isUnconfirmedSshCommandTermination(
 }
 
 /** A command that ran and exited nonzero; `stdout` is its own output, never the command text. */
-export type SshCommandExitError = Error & { exitCode: number; stdout: string }
+type SshCommandExitError = Error & { exitCode: number; stdout: string }
 
 export function isSshCommandExitError(error: unknown): error is SshCommandExitError {
   return (

@@ -77,13 +77,14 @@ describe('sleep and wake through the layout owner', () => {
     expect(mocks.send).not.toHaveBeenCalled()
   })
 
-  it('wakes the one pane the window resumed', () => {
+  it('records the wake of the one pane the window resumed, and has main start nothing', () => {
     recordPaneWakeThroughLayoutOwner(STATE, WT, A2)
 
     expect(mocks.send).toHaveBeenCalledWith(STATE, WT, {
       type: 'wake',
       tabId: 'tab-a',
-      paneKeys: [A2]
+      paneKeys: [A2],
+      recordOnly: true
     })
   })
 

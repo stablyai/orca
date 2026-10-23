@@ -200,8 +200,11 @@ export function registerWslHostHandlers(args: WslHostHandlerArgs): void {
   })
   ipcMain.handle(
     'wslHosts:connect',
-    (_event, request: { environmentId: string; force?: boolean }) =>
-      wsl.connect(request.environmentId, { force: request.force === true })
+    (_event, request: { environmentId: string; intent?: unknown }) =>
+      wsl.connect(
+        request.environmentId,
+        request.intent === 'update' || request.intent === 'force' ? { intent: request.intent } : {}
+      )
   )
   ipcMain.handle('wslHosts:getCapability', (): WslHostCapability => ({
     serverFiles: wsl.hasServerFiles()

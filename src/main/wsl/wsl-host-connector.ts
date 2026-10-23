@@ -1,4 +1,5 @@
 /** The production WSL side of `WslHostService`: one holder, connection manager and supervisor. */
+import { createWslOrcadPairingRecovery } from './wsl-orcad-pairing-repair'
 import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
 import { parsePairingCode } from '../../shared/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
@@ -62,8 +63,10 @@ export function createWslHostConnector(options: {
         ? unguardedHolder.ensureHeld(distro)
         : Promise.reject(refuseUnknown(distro))
   }
+  const pairingRecovery = createWslOrcadPairingRecovery(options.userDataPath)
   const manager = new WslOrcadConnectionManager({
     holder,
+    pairingRecovery,
     getPairingOffer: (environmentId) =>
       findWslHostDeployment(options.userDataPath, environmentId)
         ? resolveEnvironmentPairingOffer(options.userDataPath, environmentId)
@@ -141,6 +144,7 @@ export function createWslHostConnector(options: {
     listDistros: () => listWslHostDistros(),
     readOrcadPublicKey: (distro) => readWslDistroOrcadPublicKey(transportFor(distro)),
     connect: (distro, connectOptions) => liveness.connect(distro, connectOptions),
+    forgetPairingFailures: (environmentId) => pairingRecovery.repairs.forgetFailures(environmentId),
     get: (distro) => manager.get(distro),
     isReachable: async (distro, environmentId) =>
       options.runtime.isReady?.(environmentId) ||

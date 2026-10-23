@@ -230,6 +230,18 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WORKSPACE_NAME/u')
   })
 
+  it.each(['repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo', 'folder:f1'])(
+    'crosses the workspace id %s into the guest untranslated (/u), as the window and main stamp it',
+    (workspaceId) => {
+      const env: Record<string, string> = { ORCA_WORKSPACE_ID: workspaceId }
+
+      addOrcaWslInteropEnv(env)
+
+      expect(env.ORCA_WORKSPACE_ID).toBe(workspaceId)
+      expect(env.WSLENV?.split(':')).toContain('ORCA_WORKSPACE_ID/u')
+    }
+  )
+
   // #10861: wsl.exe drops SSH_CONNECTION, so WSL Codex copied only to the Windows clipboard.
   it('crosses the Codex remote-viewer clipboard marker into the guest untranslated (/u)', () => {
     const env: Record<string, string> = { SSH_CONNECTION: CODEX_REMOTE_VIEWER_SSH_CONNECTION }

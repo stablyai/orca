@@ -7,7 +7,7 @@ import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { buildPosixStdoutFence } from '../../shared/posix-stdout-fence'
 
-export type RemoteDirEntry = {
+type RemoteDirEntry = {
   name: string
   isDirectory: boolean
 }

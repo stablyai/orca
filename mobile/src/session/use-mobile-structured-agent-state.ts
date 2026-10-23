@@ -55,8 +55,7 @@ export function useMobileStructuredAgentState(args: {
   /** The whole queue's pause, published with the drafts. */
   queuePause: MobileQueuePause
   olderPages: OlderPagePhase
-  /** `settled`: the page waits for it before it lands (the phone page, until the reader stops). */
-  loadEarlier: (settled?: () => Promise<void>) => void
+  loadEarlier: () => void
 } {
   const { client, connected, enabled, sessionId, sessionKey } = args
   // Keep a bounded cache so offline tab switches select the right transcript
@@ -197,72 +196,65 @@ export function useMobileStructuredAgentState(args: {
     }
   }, [apply, applyQueued, client, connected, enabled, sessionId, sessionKey, supersede])
 
-  const loadEarlier = useCallback(
-    (settled?: () => Promise<void>) => {
-      const start = oldestStructuredAgentSessionCursor(stateRef.current)
-      if (!client || !sessionId || !sessionKey || !stateRef.current.hasOlder || !start) {
-        return
-      }
-      let cursor = start
-      // Every head this tap produced. Any other head means a live batch trimmed the window mid-tap,
-      // and the reducer drops a page that no longer abuts it, so the read restarts from that head.
-      // Holding them all keeps the check right while `stateRef` lags a commit behind a landed page.
-      let heads = new Set([start.sequence])
-      const intact = (): boolean => {
+  const loadEarlier = useCallback(() => {
+    const start = oldestStructuredAgentSessionCursor(stateRef.current)
+    if (!client || !sessionId || !sessionKey || !stateRef.current.hasOlder || !start) {
+      return
+    }
+    let cursor = start
+    // Every head this tap produced. Any other head means a live batch trimmed the window mid-tap,
+    // and the reducer drops a page that no longer abuts it, so the read restarts from that head.
+    // Holding them all keeps the check right while `stateRef` lags a commit behind a landed page.
+    let heads = new Set([start.sequence])
+    const intact = (): boolean => {
+      const head = oldestStructuredAgentSessionCursor(stateRef.current)
+      return head?.epoch === cursor.epoch && heads.has(head.sequence)
+    }
+    loadOlderPages(async ({ timeoutMs, isCurrent }) => {
+      if (!intact()) {
         const head = oldestStructuredAgentSessionCursor(stateRef.current)
-        return head?.epoch === cursor.epoch && heads.has(head.sequence)
+        if (!head) {
+          return 'end'
+        }
+        cursor = head
+        heads = new Set([head.sequence])
       }
-      loadOlderPages(async ({ timeoutMs, isCurrent }) => {
-        if (!intact()) {
-          const head = oldestStructuredAgentSessionCursor(stateRef.current)
-          if (!head) {
-            return 'end'
-          }
-          cursor = head
-          heads = new Set([head.sequence])
-        }
-        let result: AgentSessionHistoryResult
-        try {
-          result = await callAgentSession<AgentSessionHistoryResult>(
-            client,
-            'agentSession.history',
-            { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT },
-            timeoutMs
-          )
-        } catch (error) {
-          return isFinalAgentSessionReadRefusal(agentSessionReadFailureRefusal(error))
-            ? 'unavailable'
-            : 'failed'
-        }
-        // Lands once the reader stops scrolling, so nothing grows above them mid-fling.
-        if (settled) {
-          await settled()
-        }
-        if (!isCurrent()) {
-          return 'end'
-        }
-        if (!result.ok) {
-          // Every reset reason makes the subscription reload a fresh window, which replaces this one.
-          return 'end'
-        }
-        if (!intact()) {
-          return 'drew-nothing'
-        }
-        const { page } = result
-        apply({ type: 'older-page', requestedCursor: cursor, page })
-        const oldest = page.items[0]
-        if (!page.hasOlder || !oldest) {
-          return 'end'
-        }
-        heads.add(oldest.sequence)
-        cursor = page.window.nextCursor
-        // Mobile draws only the session's own rows, so a page of a subagent's rows alone lands as
-        // nothing; the loader reads on until a page adds a row the reader can see.
-        return page.items.some(isRootAgentJournalItem) ? 'drew' : 'drew-nothing'
-      })
-    },
-    [apply, client, loadOlderPages, sessionId, sessionKey]
-  )
+      let result: AgentSessionHistoryResult
+      try {
+        result = await callAgentSession<AgentSessionHistoryResult>(
+          client,
+          'agentSession.history',
+          { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT },
+          timeoutMs
+        )
+      } catch (error) {
+        return isFinalAgentSessionReadRefusal(agentSessionReadFailureRefusal(error))
+          ? 'unavailable'
+          : 'failed'
+      }
+      if (!isCurrent()) {
+        return 'end'
+      }
+      if (!result.ok) {
+        // Every reset reason makes the subscription reload a fresh window, which replaces this one.
+        return 'end'
+      }
+      if (!intact()) {
+        return 'drew-nothing'
+      }
+      const { page } = result
+      apply({ type: 'older-page', requestedCursor: cursor, page })
+      const oldest = page.items[0]
+      if (!page.hasOlder || !oldest) {
+        return 'end'
+      }
+      heads.add(oldest.sequence)
+      cursor = page.window.nextCursor
+      // Mobile draws only the session's own rows, so a page of a subagent's rows alone lands as
+      // nothing; the loader reads on until a page adds a row the reader can see.
+      return page.items.some(isRootAgentJournalItem) ? 'drew' : 'drew-nothing'
+    })
+  }, [apply, client, loadOlderPages, sessionId, sessionKey])
 
   // A window of only a subagent's rows draws nothing, and an empty list cannot be scrolled
   // to ask for more, so it reads back once from each such head. A first page can be one: an

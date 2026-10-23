@@ -53,3 +53,7 @@ export function getUiLanguageChoiceLabel(
 export function resolveUiLocale(language: UiLanguage): string {
   return resolveRendererUiLocale(language)
 }
+
+export function getUiLanguageNativeLabel(language: BuiltInUiLanguage): string {
+  return UI_LANGUAGE_CHOICE_FALLBACKS[language]
+}

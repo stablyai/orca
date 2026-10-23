@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
-  notifyEditorFileCacheStale
+  ORCA_EDITOR_FILE_SAVED_EVENT,
+  notifyEditorFileCacheStale,
+  type EditorFileSavedDetail
 } from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
@@ -26,14 +28,27 @@ type ProbeProps = {
   calls: ProbeCalls
   isVisible: boolean
   openFiles: OpenFile[]
+  /** Loaded panel content; the probe writes the latest back into `current`. */
+  contents?: { current: Record<string, FileContent> }
 }
 
-function ExternalContentProbe({ activeFileId, calls, isVisible, openFiles }: ProbeProps): null {
+function ExternalContentProbe({
+  activeFileId,
+  calls,
+  isVisible,
+  openFiles,
+  contents
+}: ProbeProps): null {
   const activeContentFileIdRef = useRef(activeFileId)
   const isVisibleRef = useRef(isVisible)
   const openFilesRef = useRef(openFiles)
   const editorViewModeRef = useRef({})
-  const [, setFileContents] = useState<Record<string, FileContent>>({})
+  const [fileContents, setFileContents] = useState<Record<string, FileContent>>(
+    () => contents?.current ?? {}
+  )
+  if (contents) {
+    contents.current = fileContents
+  }
   const [, setDiffContents] = useState<Record<string, DiffContent>>({})
 
   useLayoutEffect(() => {
@@ -403,4 +418,37 @@ describe('useEditorPanelExternalContentEvents', () => {
       expect(calls[invalidator]).toHaveBeenCalledWith([changedFile.id])
     }
   )
+
+  it("moves the record's other loaded views to the saved text when the saving tab closed mid-save", () => {
+    const other = makeFile('other')
+    const loaded: Record<string, FileContent> = {
+      other: { content: 'old disk', isBinary: false },
+      unrelated: { content: 'old disk', isBinary: false }
+    }
+    const contents = { current: loaded }
+    act(() => {
+      root.render(
+        <ExternalContentProbe
+          activeFileId={other.id}
+          calls={makeCalls()}
+          isVisible
+          openFiles={[other]}
+          contents={contents}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent<EditorFileSavedDetail>(ORCA_EDITOR_FILE_SAVED_EVENT, {
+          detail: {
+            fileId: 'closed-saver',
+            content: 'saved',
+            recordViewIds: ['closed-saver', 'other']
+          }
+        })
+      )
+    })
+    expect(contents.current.other?.content).toBe('saved')
+    expect(contents.current.unrelated?.content).toBe('old disk')
+  })
 })

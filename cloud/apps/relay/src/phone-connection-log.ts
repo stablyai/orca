@@ -1,4 +1,4 @@
-import { AssignmentRejectionLogWindow } from './assignment-rejection-log-window.js'
+import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 
 // Phone-connection anomalies that repeat per dial (a stuck database, a lost ledger write, a

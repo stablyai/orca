@@ -4,12 +4,12 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
-  addPreviewContent,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   arrayValue,
   asRecord,
@@ -134,5 +134,5 @@ function consumeJcodeMessage(
   }
   accumulator.messageCount++
   accumulator.totalTokens += jcodeMessageTokens(messageRecord)
-  addPreviewContent(accumulator, role, content, messageRecord.timestamp)
+  addSessionContent(accumulator, role, content, messageRecord.timestamp)
 }

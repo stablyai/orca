@@ -43,7 +43,7 @@ export type PtyForegroundProcessTracker = {
   markDead(): void
   /** `rawFallback`: node-pty's own name only, with no identity cache and no background
    *  process-table refresh -- the cheap-tier tick must not fork a full `ps` as a side effect. */
-  getForegroundProcess(options?: { rawFallback?: boolean }): string | null
+  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
   confirmForegroundProcess(): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
 }
@@ -75,6 +75,10 @@ export function createPtyForegroundProcessTracker(args: {
       : null
   let foregroundRefreshInFlight = false
   let lastForegroundRefreshStartedAt = 0
+  const cacheAgentForeground = (processName: string, pid: number | null): void => {
+    cachedAgentForeground = { processName, pid, refreshedAt: Date.now() }
+    startupAgentForeground = null
+  }
   const getFallbackProcess = (): string | null =>
     resolveFallbackForegroundProcess(staticName ? args.shellPath : proc.process, args.shellPath)
   const getActiveStartupAgent = (
@@ -222,6 +226,12 @@ export function createPtyForegroundProcessTracker(args: {
       if (args.isDead()) {
         return null
       }
+      if (options?.cachedOnly === true) {
+        return cachedAgentForeground &&
+          Date.now() - cachedAgentForeground.refreshedAt <= FOREGROUND_AGENT_CACHE_TTL_MS
+          ? cachedAgentForeground.processName
+          : null
+      }
       if (options?.rawFallback === true) {
         return getFallbackProcess()
       }
@@ -232,12 +242,7 @@ export function createPtyForegroundProcessTracker(args: {
           fallbackRecognition !== null &&
           shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)
         if (fallbackProcess && fallbackRecognition && !inspectOuterWrapper) {
-          cachedAgentForeground = {
-            processName: fallbackProcess,
-            pid: null,
-            refreshedAt: Date.now()
-          }
-          startupAgentForeground = null
+          cacheAgentForeground(fallbackProcess, null)
           return fallbackProcess
         }
         scheduleRefresh(fallbackProcess)
@@ -300,13 +305,8 @@ export function createPtyForegroundProcessTracker(args: {
         const processName =
           recognizeAgentProcess(resolution.processName)?.processName ?? resolution.processName
         if (shouldCachePtyForeground(processName, staticName)) {
-          cachedAgentForeground = {
-            processName,
-            pid: resolution.processId ?? null,
-            refreshedAt: Date.now()
-          }
-          startupAgentForeground = null
-          return cachedAgentForeground.processName
+          cacheAgentForeground(processName, resolution.processId ?? null)
+          return processName
         }
         cachedAgentForeground = null
         startupAgentForeground = null

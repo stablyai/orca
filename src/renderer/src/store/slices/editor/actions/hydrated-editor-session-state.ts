@@ -4,10 +4,7 @@ import type { WorkspaceSessionState } from '../../../../../../shared/workspace-s
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { reconcileEditorBufferMembership } from '../buffers/editor-buffer-record'
-import {
-  EMPTY_EDITOR_BUFFER_VIEW_INDEX,
-  reconcileEditorBufferViewIndex
-} from '../buffers/editor-buffer-views'
+import { buildEditorBufferViewIndex } from '../buffers/editor-buffer-views'
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
 import { resolveHydratedEditorFileSelection } from '../file-ids/hydrated-editor-file-selection'
 import { resolveHydratedEditorFrontmatter } from '../file-ids/hydrated-editor-frontmatter'
@@ -23,6 +20,7 @@ export type HydratedEditorSessionState = Pick<
   | 'editorBuffers'
   | 'editorBufferIdOf'
   | 'editorBufferViews'
+  | 'editorBufferDetached'
   | 'editorDrafts'
   | 'markdownFrontmatterVisible'
   | 'activeFileId'
@@ -113,13 +111,6 @@ export function buildHydratedEditorSessionState(
         ...(isReadOnly ? { readOnly: true } : {}),
         ...(isReadOnly && pf.liveTail === true ? { liveTail: true } : {}),
         lastKnownDiskSignature: isReadOnly ? undefined : pf.lastKnownDiskSignature,
-        // Why: suspend autosave until the conflict scan verifies disk vs baseline, else a slow remote read clobbers an offline write.
-        pendingDiskBaselineVerification:
-          !isReadOnly &&
-          pf.dirtyDraftContent !== undefined &&
-          pf.lastKnownDiskSignature !== undefined
-            ? true
-            : undefined,
         mode: 'edit'
       })
     }
@@ -160,13 +151,15 @@ export function buildHydratedEditorSessionState(
     editorFileIdMigrationsByWorktree
   )
 
-  const viewIndex = reconcileEditorBufferViewIndex(EMPTY_EDITOR_BUFFER_VIEW_INDEX, openFiles)
+  // Why own records: the record middleware joins restored views once their identities resolve.
+  const viewIndex = buildEditorBufferViewIndex(openFiles, (file) => file.id)
   return {
     state: {
       openFiles,
       // Why fresh: a restored tab's buffer state comes from the session, not a same-id tab it replaces.
       editorBuffers: reconcileEditorBufferMembership({}, openFiles, viewIndex),
       ...viewIndex,
+      editorBufferDetached: {},
       editorDrafts,
       markdownFrontmatterVisible,
       activeFileId: nextActiveFileId,

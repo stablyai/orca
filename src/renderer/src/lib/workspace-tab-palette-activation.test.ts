@@ -63,7 +63,7 @@ const mocks = vi.hoisted(() => {
     activateAndRevealWorkspace: vi.fn(),
     activateWebRuntimeSessionTab: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
-    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: vi.fn(),
+    runtimeEnvironmentIdOrLocalUnlessTwin: vi.fn(),
     isWebRuntimeSessionActive: vi.fn()
   }
 })
@@ -79,8 +79,7 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin:
-    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin: mocks.runtimeEnvironmentIdOrLocalUnlessTwin
 }))
 
 vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
@@ -173,7 +172,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
         .find((worktree) => worktree.id === worktreeId)
     )
     mocks.activateAndRevealWorkspace.mockReturnValue(true)
-    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin.mockReturnValue('runtime-1')
+    mocks.runtimeEnvironmentIdOrLocalUnlessTwin.mockReturnValue('runtime-1')
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
   })
 

@@ -139,7 +139,6 @@ export function installActiveSessionTabsSubscription({
     const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
     const syncState = useAppStore.getState()
     const localTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
-    const localTerminalCount = localTabs.length
     const hasLiveLocalPty = localTabs.some(
       (tab) => (syncState.ptyIdsByTabId[tab.id] ?? []).length > 0
     )
@@ -150,11 +149,12 @@ export function installActiveSessionTabsSubscription({
       activeWorktreeId,
       requestedRespawnAfterWake,
       snapshotIsFresh: decision.apply,
-      localTerminalCount,
+      localTerminalCount: localTabs.length,
       hasLiveLocalPty,
       skipWakeRespawn:
         shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId) ||
         // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — a frame-drawn workspace's terminals are not the mirror's to respawn.
+        // Interim (ledger L240): respawn stays only for servers without `layout.intents.v1`, until Phase 2.
         (ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, activeWorktreeId))
     })
     let settle: HostSessionMirrorSettle | null = decision.apply
@@ -174,6 +174,7 @@ export function installActiveSessionTabsSubscription({
             {
               environmentId,
               worktreeId: recovered.worktree,
+              source: recovered,
               decision,
               expectedEnvironmentConnectionGeneration: activeWorktreeRuntimeConnectionGeneration,
               expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,

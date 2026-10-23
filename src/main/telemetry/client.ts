@@ -6,15 +6,17 @@
 // equivalent of posthog-js's `person_profiles: 'identified_only'` (no PostHog person per install_id).
 
 import { randomUUID } from 'node:crypto'
-import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
-import { getAppEnvironment } from '../../shared/app-environment'
-import { PostHog } from 'posthog-node'
+import type { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
+import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
 import type { Store } from '../persistence'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
 import { getCohortAtEmit } from './cohort-classifier'
-import { resolveConsent, type ConsentState } from './consent'
+import { resolveConsent } from './consent'
+import { buildCommonProps, createPostHogClient, waitForCaptureEnqueue } from './posthog-transport'
 import { commonPropsSchema, validate } from './validator'
+
+export { shouldOptOutSdkAtInit } from './posthog-transport'
 
 // Compile-time feature flag, independent of the build-identity gate — both must be satisfied to transmit.
 // NOTE: config/scripts/verify-telemetry-constants.mjs greps `const TELEMETRY_ENABLED = true|false`; keep that shape or update its regex.
@@ -42,26 +44,12 @@ let commonProps: CommonProps | null = null
 let shuttingDown = false
 let storeRef: Store | null = null
 
-const OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS = 1_000
-
 // Test-only transport-gate override (`_enableTransportForTests`) so tests exercise the full pipeline without a real CI build.
 let testTransportEnabled = false
 
 // First-launch `app_opened` gate: no events transmit until the banner resolves; keep mark+emit atomic.
 let appOpenedTrackedThisSession = false
-
-function buildCommonProps(installId: string, sid: string, channel: 'stable' | 'rc'): CommonProps {
-  // Don't truncate here; the validator's `.max(64)` is authoritative, so an over-long string drops rather than being silently masked.
-  return {
-    app_version: getAppEnvironment().getVersion(),
-    platform: osPlatform(),
-    arch: osArch(),
-    os_release: osRelease(),
-    install_id: installId,
-    session_id: sid,
-    orca_channel: channel
-  }
-}
+const trackedDashboardActiveDays = new Map<AgentDashboardSurface, number>()
 
 export function initTelemetry(store: Store): void {
   // Set unconditionally so `setOptIn` can persist opt-out to disk even on contributor / non-official builds.
@@ -70,8 +58,9 @@ export function initTelemetry(store: Store): void {
   shuttingDown = false
   // Reset per session: the "no app_opened until banner resolution" invariant is per-launch, not per-install.
   appOpenedTrackedThisSession = false
+  trackedDashboardActiveDays.clear()
 
-  if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD) {
+  if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || BUILD_IDENTITY === null || WRITE_KEY === null) {
     return
   }
 
@@ -84,12 +73,12 @@ export function initTelemetry(store: Store): void {
   }
 
   sessionId = randomUUID()
-  commonProps = buildCommonProps(
-    installId,
-    sessionId,
-    // Non-null here: `IS_OFFICIAL_BUILD` gated this branch to the `'stable' | 'rc'` arm.
-    BUILD_IDENTITY as 'stable' | 'rc'
-  )
+  commonProps = buildCommonProps(installId, sessionId, BUILD_IDENTITY)
+
+  const languageCohort = settings.telemetry?.onboardingLanguageCohort
+  if (languageCohort === 'control' || languageCohort === 'treatment') {
+    commonProps.onboarding_language_v1 = languageCohort
+  }
 
   // Fail-closed: a bad `install_id` (e.g. empty from a migration bug) would collapse all events into one distinct_id.
   // Validated once here (not per `track()`): `commonProps` is a session-lifetime singleton that can't drift.
@@ -100,64 +89,7 @@ export function initTelemetry(store: Store): void {
     return
   }
 
-  posthog = new PostHog(WRITE_KEY as string, {
-    host: 'https://us.i.posthog.com',
-    flushAt: 20,
-    flushInterval: 10_000,
-    // Strip SDK-auto GeoIP / client-IP enrichment; our wire is exactly CommonProps ∪ EventProps ∪ a small allow-list.
-    disableGeoip: true,
-    // Bumped from the default 1000 (drops oldest-first past cap) to 5000 to tolerate long-offline sessions.
-    maxQueueSize: 5000
-  })
-
-  if (shouldOptOutSdkAtInit(resolveConsent(settings))) {
-    posthog.optOut()
-  }
-}
-
-/**
- * Whether to flip the PostHog SDK's in-memory `optedOut` flag at boot.
- *
- * True for DISABLED cohorts only, re-applied every boot (the flag doesn't persist) so any direct
- * `posthog.capture()` bypassing `track()` still drops for an opted-out user. Deliberately excludes
- * `pending_banner`: the direct `telemetry_opted_out` capture in `setOptIn(_, false)` must not drop,
- * or we'd lose the one signal that the opt-out flow works.
- */
-export function shouldOptOutSdkAtInit(consent: ConsentState): boolean {
-  return consent.effective === 'disabled'
-}
-
-function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false
-    let stopListening: (() => void) | null = null
-    let timeout: ReturnType<typeof setTimeout> | null = null
-
-    const settle = (enqueued: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (timeout) {
-        clearTimeout(timeout)
-      }
-      stopListening?.()
-      resolve(enqueued)
-    }
-
-    // Why: posthog-node capture() enqueues async; this SDK event is the durable boundary before optOut().
-    stopListening = client.on('capture', (payload: unknown) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const message = payload as { event?: unknown; uuid?: unknown }
-      if (message.event === event && message.uuid === uuid) {
-        settle(true)
-      }
-    })
-
-    timeout = setTimeout(() => settle(false), OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS)
-  })
+  posthog = createPostHogClient(WRITE_KEY, resolveConsent(settings))
 }
 
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
@@ -172,6 +104,17 @@ export function isTelemetryEnabled(): boolean {
   )
 }
 
+export function hasTrackedAgentDashboardActiveToday(props: unknown): boolean {
+  if (!props || typeof props !== 'object' || !('surface' in props)) {
+    return false
+  }
+  const surface = props.surface
+  return (
+    (surface === 'in_window' || surface === 'popout') &&
+    (trackedDashboardActiveDays.get(surface) ?? -1) >= Math.floor(Date.now() / 86_400_000)
+  )
+}
+
 // No-op in contributor / non-official builds; only official stable/rc builds (CI-injected `ORCA_BUILD_IDENTITY` + `ORCA_POSTHOG_WRITE_KEY`) transmit.
 export function track<N extends EventName>(name: N, props: EventProps<N>): boolean {
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
@@ -182,7 +125,24 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   if (shuttingDown) {
     return false
   }
-  if (!posthog || !commonProps || !storeRef) {
+  if (!posthog || !commonProps || !storeRef || posthog.optedOut) {
+    return false
+  }
+
+  const dashboardActiveSurface =
+    name === 'agent_dashboard_active' &&
+    props !== null &&
+    typeof props === 'object' &&
+    'surface' in props &&
+    (props.surface === 'in_window' || props.surface === 'popout')
+      ? props.surface
+      : null
+  const dashboardActiveDay = dashboardActiveSurface ? Math.floor(Date.now() / 86_400_000) : 0
+  // Drop repeat observations before they can exhaust the session-wide event budget.
+  if (
+    dashboardActiveSurface &&
+    (trackedDashboardActiveDays.get(dashboardActiveSurface) ?? -1) >= dashboardActiveDay
+  ) {
     return false
   }
 
@@ -192,7 +152,8 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   }
 
   // (3) Consent resolve — reads live settings every call so it can't drift from persisted state / env-var precedence.
-  const consent = resolveConsent(storeRef.getSettings())
+  const settings = storeRef.getSettings()
+  const consent = resolveConsent(settings)
   if (consent.effective !== 'enabled') {
     return false
   }
@@ -202,6 +163,23 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   if (!result.ok) {
     return false
   }
+  if (dashboardActiveSurface) {
+    if (settings.experimentalAgentDashboardPopout !== true) {
+      return false
+    }
+    const savedDay = settings.telemetry?.agentDashboardActiveDays?.[dashboardActiveSurface] ?? -1
+    if (savedDay >= dashboardActiveDay) {
+      trackedDashboardActiveDays.set(dashboardActiveSurface, savedDay)
+      return false
+    }
+  }
+  const mainOwnedProps =
+    name === 'app_opened'
+      ? {
+          agent_dashboard_enabled: settings.experimentalAgentDashboardPopout === true
+        }
+      : {}
+
   // (5) Capture. `$process_person_profile: false` stops posthog-node creating a person per install_id (no init-time equivalent).
   posthog.capture({
     distinctId: commonProps.install_id,
@@ -209,9 +187,26 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     properties: {
       ...commonProps,
       ...result.props,
+      ...mainOwnedProps,
       $process_person_profile: false
     }
   })
+  if (dashboardActiveSurface && settings.telemetry) {
+    trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
+    try {
+      storeRef.updateSettings({
+        telemetry: {
+          ...settings.telemetry,
+          agentDashboardActiveDays: {
+            ...settings.telemetry.agentDashboardActiveDays,
+            [dashboardActiveSurface]: dashboardActiveDay
+          }
+        }
+      })
+    } catch (err) {
+      console.warn('[telemetry] failed to persist dashboard daily usage limit', err)
+    }
+  }
   return true
 }
 
@@ -221,12 +216,15 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   }
   const settings = storeRef.getSettings()
   // Deep-merge (persistence.ts:552) so flipping `optedIn` won't clobber `installId` / `existedBeforeTelemetryRelease`.
-  storeRef.updateSettings({
-    telemetry: {
-      ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
-      optedIn
-    }
-  })
+  storeRef.updateSettings(
+    {
+      telemetry: {
+        ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
+        optedIn
+      }
+    },
+    { notifyListeners: true }
+  )
 
   const client = posthog
   if (optedIn) {
@@ -280,12 +278,15 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
   }
   const settings = storeRef.getSettings()
   // Fallback only used if the `telemetry` block is absent (migration invariant broken); updateSettings deep-merges it (persistence.ts:560).
-  storeRef.updateSettings({
-    telemetry: {
-      ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
-      optedIn: true
-    }
-  })
+  storeRef.updateSettings(
+    {
+      telemetry: {
+        ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
+        optedIn: true
+      }
+    },
+    { notifyListeners: true }
+  )
   if (posthog) {
     await posthog.optIn()
   }

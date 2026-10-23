@@ -12,13 +12,13 @@ import {
   shouldClearTeamDerivedFacets,
   teamDerivedFacetsForPrimaryTeamChange,
   isLinearIssueSearchActive
-} from '@/components/task-page-linear-issue-request'
+} from '@/components/task-page/linear/task-page-linear-issue-request'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { buildLinearIssueWorkspaceAttachmentIndex } from '@/lib/linear-issue-workspace-attachment'
 import {
   collectLinkedLinearIssueRefsFromWorktrees,
   linkedLinearIssueRefsSignature
-} from '@/components/task-page-linear-in-orca-issues'
+} from '@/components/task-page/linear/task-page-linear-in-orca-issues'
 export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelectionPreludeModel) {
   const {
     allWorktrees,

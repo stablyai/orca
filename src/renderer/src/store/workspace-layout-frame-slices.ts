@@ -274,7 +274,9 @@ export function buildLayoutFrameSlices({
       tabsByWorktree: rows.tabsByWorktree
     },
     session,
-    workspaceKeys
+    workspaceKeys,
+    // A frame redraws the window's own selection: one it never made stays none.
+    { unchosenStaysUnset: true }
   )
   const editorTabs = {
     ...tabs,

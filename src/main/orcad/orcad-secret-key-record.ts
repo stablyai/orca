@@ -20,6 +20,8 @@ import {
 } from '../../shared/secure-file'
 import { restrictWindowsFile } from '../../shared/secure-path-windows-acl'
 import { ORCAD_MASTER_KEY_BYTES } from './orcad-secret-sealing'
+import { hasErrorCode, isProcessAlive } from '../daemon/daemon-process-inspection'
+import { errorMessage } from '../../shared/error-message'
 
 // `os-keyring`: written only by older builds; read to migrate it (see orcad-legacy-keyring-key.ts).
 export type StoredKeyState =
@@ -32,12 +34,12 @@ export type StoredKeyState =
       check: string
     }
 
-export type RecordRead =
+type RecordRead =
   | { kind: 'absent' }
   | { kind: 'record'; stored: StoredKeyState }
   | { kind: 'unreadable'; reason: string }
 
-export function parseStoredState(raw: string): StoredKeyState | null {
+function parseStoredState(raw: string): StoredKeyState | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -119,17 +121,13 @@ export function isTemporaryKeyDir(keyDir: string): boolean {
   return roots.some((root) => isInside(root, target) || isInside(root, resolve(keyDir)))
 }
 
-function errorCode(error: unknown): unknown {
-  return error instanceof Error && 'code' in error ? error.code : undefined
-}
-
 export function readStoredRecord(statePath: string): RecordRead {
   let raw: string
   try {
     raw = readFileSync(statePath, 'utf8')
   } catch (error) {
     // Why only ENOENT: EACCES on an existing record must never be mistaken for "no key yet".
-    if (errorCode(error) === 'ENOENT') {
+    if (hasErrorCode(error, 'ENOENT')) {
       return { kind: 'absent' }
     }
     return {
@@ -158,7 +156,7 @@ export function publishRecordExclusively(path: string, record: StoredKeyState): 
     try {
       linkSync(staging, path)
     } catch (error) {
-      if (errorCode(error) === 'EEXIST') {
+      if (hasErrorCode(error, 'EEXIST')) {
         return 'exists'
       }
       throw error
@@ -166,7 +164,7 @@ export function publishRecordExclusively(path: string, record: StoredKeyState): 
     bestEffortFsyncDirectorySync(dirname(path))
     return 'published'
   } catch (error) {
-    return `its key record ${path} could not be written (${error instanceof Error ? error.message : String(error)})`
+    return `its key record ${path} could not be written (${errorMessage(error)})`
   } finally {
     rmSync(staging, { force: true })
   }
@@ -195,19 +193,9 @@ export function replaceRecord(
     bestEffortFsyncDirectorySync(dirname(path))
     return 'replaced'
   } catch (error) {
-    return `its key record ${path} could not be written (${error instanceof Error ? error.message : String(error)})`
+    return `its key record ${path} could not be written (${errorMessage(error)})`
   } finally {
     rmSync(staging, { force: true })
-  }
-}
-
-function isLiveProcess(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    // EPERM: alive, owned by someone else.
-    return errorCode(error) === 'EPERM'
   }
 }
 
@@ -230,7 +218,7 @@ export function sweepStaleRecordStaging(statePath: string): void {
     const pid = name.startsWith(prefix)
       ? /^(\d+)\.[0-9a-f]{8}\.staging$/.exec(name.slice(prefix.length))?.[1]
       : undefined
-    if (!pid || Number(pid) === process.pid || isLiveProcess(Number(pid))) {
+    if (!pid || Number(pid) === process.pid || isProcessAlive(Number(pid))) {
       continue
     }
     const path = join(dir, name)

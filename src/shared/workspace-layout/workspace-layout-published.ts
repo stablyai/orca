@@ -35,7 +35,14 @@ export type PublishedPane = {
   status?: PaneStartStatus
   /** Why a start failed or is held, for the pane's card. */
   statusReason?: string
+  /** Whether main's start of the pane's terminal resumed its agent: live state, never saved, and
+   *  only while the pane keeps that terminal. Absent from older hosts and from plain starts. */
+  resumeOutcome?: PaneResumeOutcome
 }
+
+/** 'restored': main's start resumed the pane's agent. 'resume-unavailable': it could not verify the
+ *  agent's session, so a fresh one runs instead. */
+export type PaneResumeOutcome = 'restored' | 'resume-unavailable'
 
 /**
  * Why the pane shows no live terminal. A pane with a ptyId and no status shows that live terminal;

@@ -104,7 +104,7 @@ function sourceChangedLine(): SshHostServerStatusLine {
     tone: 'warning',
     text: translate(
       'auto.components.settings.sshHostServer.sourceChanged',
-      'An older version of Orca changed this host’s projects. Move those changes to this host’s Orca server, or keep the server’s version, to connect again.'
+      'This computer has projects or folders for this host that its Orca server doesn’t have yet, often added by an older version of Orca. Move them to this host’s Orca server, or keep the server’s version, to connect again.'
     )
   }
 }

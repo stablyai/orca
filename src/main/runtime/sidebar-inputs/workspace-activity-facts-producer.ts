@@ -28,7 +28,9 @@ export type AgentStatusStoreView = Pick<
   | 'getStatusSnapshotForPane'
   | 'subscribeStatusRowMutations'
   | 'subscribeStatusFreshness'
->
+> &
+  /** The hook server's enriched rows, which main's generated titles follow. */
+  Partial<Pick<AgentHookServer, 'subscribeEnrichedStatus'>>
 
 const AGENT_FRESHNESS_DEADLINE = 'agent-freshness'
 

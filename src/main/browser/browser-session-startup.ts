@@ -3,6 +3,7 @@ import type { BrowserSessionRegistryProfileOptions } from './browser-session-reg
 import { collectOrphanedBrowserRoutePartitionStorage } from './browser-route-partition-storage-runtime'
 import { configureRouteSessionsForOrcaProfile } from './browser-route-session-runtime'
 import { configureBrowserSitePermissionStore } from './browser-site-permission-store'
+import { configureBrowserSiteDisplayStore } from './browser-site-display-store'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from './paired-runtime-browser-client-host-runtime'
 
 let initialized = false
@@ -19,6 +20,7 @@ export function initializeBrowserSessionsForApp(
   if (activeProfile) {
     browserSessionRegistry.configureForOrcaProfile(activeProfile)
     configureBrowserSitePermissionStore(activeProfile.profileDirectory)
+    configureBrowserSiteDisplayStore(activeProfile.profileDirectory)
     configureRouteSessionsForOrcaProfile({
       orcaProfileId: activeProfile.orcaProfileId,
       profileDirectory: activeProfile.profileDirectory

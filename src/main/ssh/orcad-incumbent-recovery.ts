@@ -35,7 +35,7 @@ export type OrcadIncumbentRecoveryOptions = OrcadSlotOptions & {
   acceptChangedState?: boolean
 }
 
-export type OrcadIncumbentRecovery =
+type OrcadIncumbentRecovery =
   | { outcome: 'restored'; readiness: ServeReadiness | null }
   | { outcome: 'refused'; verdict: 'live' | 'unverifiable'; code: string; reason: string }
 

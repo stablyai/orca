@@ -23,7 +23,9 @@ describe('isWslDirectGitReadCommand', () => {
     // Global options precede the subcommand.
     [['-c', 'core.quotepath=off', 'log', '--oneline']],
     [['-C', '/repo', 'rev-parse', 'HEAD']],
-    [['--git-dir=/repo/.git', 'ls-tree', 'HEAD']]
+    [['--git-dir=/repo/.git', 'ls-tree', 'HEAD']],
+    [['--git-dir', '/repo/.git', 'log']],
+    [['--work-tree', '/repo', 'status']]
   ])('routes %j without a shell', (args) => {
     expect(isWslDirectGitReadCommand(args)).toBe(true)
   })
@@ -82,10 +84,8 @@ describe('isWslDirectGitReadCommand', () => {
     [['-C', '/repo', 'commit', '-m', 'x']],
     [['-c', 'k=v', 'fetch', '--all']],
     [['--git-dir=/x', 'push']],
-    // Space-separated global values are not parsed; the value reads as the
-    // subcommand, which is in no read set, so it stays on the login shell.
-    [['--git-dir', '/x', 'log']],
-    [['--work-tree', '/x', 'status']],
+    [['--git-dir', '/x', 'push']],
+    [['--work-tree', '/x', 'commit', '-m', 'x']],
     [['-c', 'k=v']]
   ])('keeps %j on the login shell behind global options', (args) => {
     expect(isWslDirectGitReadCommand(args)).toBe(false)
@@ -119,9 +119,9 @@ describe('classifyGitCommand', () => {
     [['checkout', 'main'], 'other'],
     [['made-up-command'], 'other'],
     [[], 'other'],
-    // Unparsed space-separated global values remain fail-safe.
-    [['--git-dir', '/repo/.git', 'log'], 'other'],
-    [['--work-tree', '/repo', 'status'], 'other'],
+    [['--git-dir', '/repo/.git', 'log'], 'read'],
+    [['--work-tree', '/repo', 'status'], 'read'],
+    [['--git-dir', '/repo/.git', 'fetch', 'origin'], 'network'],
     [['-c', 'key=value'], 'other']
   ] as const)('classifies %j as %s', (args, expected) => {
     expect(classifyGitCommand(args)).toBe(expected)

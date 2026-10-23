@@ -27,9 +27,9 @@ const withImage: AgentJournalMessageItem = {
 }
 
 describe('ACP image prompts', () => {
-  it('sends an image to an agent whose row offers images and whose start advertised them', async () => {
+  it('sends an image to an agent whose start advertised them', async () => {
     const rig = await openAcpAdapterRig({
-      spec: acpLaunchSpecFor('opencode')!,
+      spec: acpLaunchSpecFor('omp')!,
       initialize: { agentCapabilities: { loadSession: true, promptCapabilities: { image: true } } }
     })
     await rig.acquire()
@@ -47,24 +47,12 @@ describe('ACP image prompts', () => {
     expect(rig.sent('initialize')).toHaveLength(1)
   })
 
-  it('refuses the message, sending nothing, when the agent did not advertise images', async () => {
+  it('refuses an image with no saved file, sending nothing, when the agent did not advertise images', async () => {
     const rig = await openAcpAdapterRig({ spec: acpLaunchSpecFor('opencode')! })
     await rig.acquire()
     await expect(
       rig.adapter.dispatch({ sessionId: SESSION, clientMessageId: 'm1', body: withImage, fence: 1 })
     ).resolves.toMatchObject({ state: 'rejected', rejection: { kind: 'attachmentInvalid' } })
-    expect(rig.sent('session/prompt')).toEqual([])
-    await expect(acceptsImages(rig)).resolves.toBe(false)
-  })
-
-  it('refuses an image for an agent whose row offers none, whatever it advertises', async () => {
-    const rig = await openAcpAdapterRig({
-      initialize: { agentCapabilities: { loadSession: true, promptCapabilities: { image: true } } }
-    })
-    await rig.acquire()
-    await expect(
-      rig.adapter.dispatch({ sessionId: SESSION, clientMessageId: 'm1', body: withImage, fence: 1 })
-    ).resolves.toMatchObject({ state: 'rejected' })
     expect(rig.sent('session/prompt')).toEqual([])
     await expect(acceptsImages(rig)).resolves.toBe(false)
   })

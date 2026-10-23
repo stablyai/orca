@@ -3,7 +3,9 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
+import type { ILink, ITerminalOptions } from '@xterm/xterm'
+import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/wrapped-terminal-http-link-provider'
+import { TERMINAL_HTTP_URL_REGEX } from '../../components/terminal-pane/terminal-http-url-extraction'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-pointer'
@@ -72,37 +74,42 @@ export function createPaneDOM(
   container.appendChild(dragHandle)
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
-  const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
-    {
-      hover: (_event, uri) => {
-        if (uri) {
-          linkTooltipHoverToken += 1
-          const hoverToken = linkTooltipHoverToken
-          const openLinkHint = options.linkOpenHint(id)
-          linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
-          linkTooltip.style.display = ''
-          const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
-          if (formatted && typeof formatted === 'object' && 'then' in formatted) {
-            void formatted.then(
-              (nextText) => {
-                if (hoverToken === linkTooltipHoverToken && nextText) {
-                  linkTooltip.textContent = nextText
-                }
-              },
-              () => undefined
-            )
-          } else if (formatted) {
-            linkTooltip.textContent = formatted
-          }
-        }
-      },
-      leave: () => {
+  const linkHandlers = {
+    activate: (event, uri) => options.onLinkClick?.(id, event, uri),
+    hover: (_event, uri) => {
+      if (uri) {
         linkTooltipHoverToken += 1
-        linkTooltip.style.display = 'none'
+        const hoverToken = linkTooltipHoverToken
+        const openLinkHint = options.linkOpenHint(id)
+        linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
+        linkTooltip.style.display = ''
+        const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
+        if (formatted && typeof formatted === 'object' && 'then' in formatted) {
+          void formatted.then(
+            (nextText) => {
+              if (hoverToken === linkTooltipHoverToken && nextText) {
+                linkTooltip.textContent = nextText
+              }
+            },
+            () => undefined
+          )
+        } else if (formatted) {
+          linkTooltip.textContent = formatted
+        }
       }
+    },
+    leave: () => {
+      linkTooltipHoverToken += 1
+      linkTooltip.style.display = 'none'
     }
-  )
+  } satisfies Pick<ILink, 'activate' | 'hover' | 'leave'>
+  if (options.onLinkClick) {
+    terminal.registerLinkProvider(createWrappedTerminalHttpLinkProvider(terminal, linkHandlers))
+  }
+  const webLinksAddon = new WebLinksAddon(options.onLinkClick ? linkHandlers.activate : undefined, {
+    ...linkHandlers,
+    urlRegex: TERMINAL_HTTP_URL_REGEX
+  })
 
   const panePointerDownHandler = (event: PointerEvent): void => {
     onPointerDown(id, {

@@ -1,6 +1,7 @@
 import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
@@ -63,6 +64,20 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
     }
   }
   return blocks
+}
+
+/** An async question is an agentMessage whose text already reads it out; the call block is what
+ *  lets clients answer it, through the same pending rule a terminal transcript's call takes. */
+function codexAsyncQuestionBlock(item: CodexThreadItem): NativeChatBlock | null {
+  if (item.type !== 'agentMessage' || item.delivery !== 'async' || !Array.isArray(item.questions)) {
+    return null
+  }
+  return {
+    type: 'tool-call',
+    name: CODEX_ASYNC_QUESTION_TOOL,
+    callId: item.id,
+    input: { questions: item.questions }
+  }
 }
 
 export type CodexJournalItem = {
@@ -217,7 +232,8 @@ export function codexJournalItem(
   started?: CodexThreadItem
 ): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
-    const blocks = codexMessageBlocks(item)
+    const question = codexAsyncQuestionBlock(item)
+    const blocks = question ? [...codexMessageBlocks(item), question] : codexMessageBlocks(item)
     return {
       body:
         blocks.length === 0

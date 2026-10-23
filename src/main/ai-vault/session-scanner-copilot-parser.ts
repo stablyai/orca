@@ -10,11 +10,11 @@ import type {
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
-  addPreviewMessage,
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionText } from './session-scanner-messages'
 import {
   asRecord,
   copilotModelMetricsTotal,
@@ -70,7 +70,7 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
     accumulator.title ??= normalizeTitleText(
       extractString(data.transformedContent) ?? extractString(data.content) ?? ''
     )
-    addPreviewMessage(accumulator, {
+    addSessionText(accumulator, {
       role: 'user',
       text: extractString(data.transformedContent) ?? extractString(data.content),
       timestamp: record.timestamp
@@ -79,7 +79,7 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
   }
   if (record.type === 'assistant.message' && data) {
     accumulator.messageCount++
-    addPreviewMessage(accumulator, {
+    addSessionText(accumulator, {
       role: 'assistant',
       text: extractString(data.content),
       timestamp: record.timestamp

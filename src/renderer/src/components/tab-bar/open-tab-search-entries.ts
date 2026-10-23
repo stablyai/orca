@@ -54,6 +54,60 @@ export type OpenTabSearchEntryState = Pick<
   worktree: Worktree
 }
 
+/** What the browser-page part of the entries reads; a narrower store subscription than the rest. */
+export type OpenTabSearchBrowserPageState = Pick<
+  OpenTabSearchEntryState,
+  | 'activeBrowserTabId'
+  | 'activeTabType'
+  | 'activeWorktreeId'
+  | 'browserPagesByWorkspace'
+  | 'browserTabsByWorktree'
+  | 'executionHostId'
+  | 'folderWorkspaces'
+  | 'repo'
+  | 'unifiedTabsByWorktree'
+  | 'worktree'
+  | 'worktreesByRepo'
+>
+
+// Why picked: the full entry state also follows terminal titles and editor tabs, which would
+// re-render a subscriber that only needs the open browser pages.
+export function selectOpenTabSearchBrowserPageState(
+  state: AppState,
+  worktreeId: string
+): OpenTabSearchBrowserPageState | null {
+  const entry = selectOpenTabSearchEntryState(state, worktreeId)
+  if (!entry) {
+    return null
+  }
+  const {
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeId,
+    browserPagesByWorkspace,
+    browserTabsByWorktree,
+    executionHostId,
+    folderWorkspaces,
+    repo,
+    unifiedTabsByWorktree,
+    worktree,
+    worktreesByRepo
+  } = entry
+  return {
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeId,
+    browserPagesByWorkspace,
+    browserTabsByWorktree,
+    executionHostId,
+    folderWorkspaces,
+    repo,
+    unifiedTabsByWorktree,
+    worktree,
+    worktreesByRepo
+  }
+}
+
 export type OpenTabSearchAgentState = Pick<
   AppState,
   | 'agentStatusByPaneKey'
@@ -124,22 +178,40 @@ export function selectOpenTabSearchAgentState(state: AppState): OpenTabSearchAge
   }
 }
 
-export function buildOpenTabSearchEntries(
-  state: OpenTabSearchEntryState,
-  agentState: OpenTabSearchAgentState
-): OpenTabSearchEntries {
+function openTabSearchScope(state: OpenTabSearchBrowserPageState) {
   const { repo, worktree } = state
   const scopedWorktree =
     worktree.hostId === state.executionHostId
       ? worktree
       : { ...worktree, hostId: state.executionHostId }
-  const worktrees = [scopedWorktree]
-  const scope = {
-    worktrees,
+  return {
+    worktrees: [scopedWorktree],
     ownershipWorktrees: getPaletteOwnershipWorktreeIds(state),
     repoMap: new Map(repo ? [[repo.id, repo]] : []),
     worktreeOrder: new Map([[worktree.id, 0]])
   }
+}
+
+export function buildOpenTabSearchBrowserPages(
+  state: OpenTabSearchBrowserPageState,
+  scope = openTabSearchScope(state)
+): SearchableBrowserPage[] {
+  return buildSearchableBrowserPages({
+    ...scope,
+    browserTabsByWorktree: state.browserTabsByWorktree,
+    browserPagesByWorkspace: state.browserPagesByWorkspace,
+    unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+    activeBrowserTabId: state.activeBrowserTabId,
+    activeWorktreeId: state.activeWorktreeId,
+    activeTabType: state.activeTabType
+  })
+}
+
+export function buildOpenTabSearchEntries(
+  state: OpenTabSearchEntryState,
+  agentState: OpenTabSearchAgentState
+): OpenTabSearchEntries {
+  const scope = openTabSearchScope(state)
 
   return {
     workspaceTabs: buildSearchableWorkspaceTabs({
@@ -163,15 +235,7 @@ export function buildOpenTabSearchEntries(
       activeTabTypeByWorktree: state.activeTabTypeByWorktree,
       generatedTitlesEnabled: state.generatedTitlesEnabled
     }),
-    browserPages: buildSearchableBrowserPages({
-      ...scope,
-      browserTabsByWorktree: state.browserTabsByWorktree,
-      browserPagesByWorkspace: state.browserPagesByWorkspace,
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-      activeBrowserTabId: state.activeBrowserTabId,
-      activeWorktreeId: state.activeWorktreeId,
-      activeTabType: state.activeTabType
-    }),
+    browserPages: buildOpenTabSearchBrowserPages(state, scope),
     simulatorTabs: buildSearchableSimulatorTabs({
       ...scope,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,

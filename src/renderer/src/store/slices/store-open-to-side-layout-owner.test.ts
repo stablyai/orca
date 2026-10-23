@@ -5,7 +5,8 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
-import { recordOpenedAgentSessionTabInLayoutOwner } from '@/runtime/agent-session-tab-layout-owner'
+import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
+import { contentTabOpenPlacement } from './tabs/content-tab-open-placement'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -133,11 +134,15 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
       split: { sourceGroupId: editorGroup, splitDirection: 'down' }
     })
     const terminalGroup = store.getState().groupsByWorktree[WT]!.at(-1)!.id
-    store.getState().createBrowserTab(WT, 'about:blank', {
+    // The browser tab and its split are drawn from main's frame.
+    const browser = store.getState().createBrowserTab(WT, 'about:blank', {
       split: { sourceGroupId: ROOT, splitDirection: 'left' }
     })
-    const browserGroup = store.getState().groupsByWorktree[WT]!.at(-1)!.id
-    expect(await settledSent()).toEqual([
+    const sentNow = await settledSent()
+    const browserGroup = store
+      .getState()
+      .unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === browser.id)!.groupId
+    expect(sentNow).toEqual([
       expect.objectContaining({
         type: 'createTerminalTab',
         tabId: onlyTabOf(terminalGroup),
@@ -191,17 +196,29 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     [
       'chat',
       () => {
-        // As openStructuredAgentSessionProvisionalTab does, on this test's store.
-        const tab = store.getState().createUnifiedTab(WT, 'agent-session', {
-          entityId: 'chat-1',
-          agentSessionAgent: 'codex',
+        // As openAgentSessionTabThroughLayoutOwner does, on this test's store.
+        const tabId = 'agent-session:chat-1'
+        const placement = contentTabOpenPlacement(store.getState(), WT, tabId, {
           targetGroupId: ROOT
+        })!
+        openContentTabThroughLayoutOwner(store.getState(), {
+          worktreeId: WT,
+          entityId: 'chat-1',
+          command: {
+            type: 'openAgentSessionTab',
+            tabId,
+            sessionId: 'chat-1',
+            agent: 'codex',
+            ...placement
+          },
+          facts: { label: 'Codex' },
+          shown: () => {},
+          drawHere: () => null
         })
-        recordOpenedAgentSessionTabInLayoutOwner(store.getState(), tab)
       }
     ]
   ])(
-    'records a %s tab opened into the emptied root after its neighbour split again',
+    'opens a %s tab into the emptied root after its neighbour split again',
     async (_kind, openIntoRoot) => {
       // The splits beside the emptied root hold tabs, so main has only those.
       store.getState().createTab(WT, undefined, undefined, {

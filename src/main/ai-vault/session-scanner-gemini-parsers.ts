@@ -12,12 +12,12 @@ import type {
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
-  addPreviewContent,
   createAccumulator,
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
 } from './session-scanner-accumulator'
+import { addSessionContent } from './session-scanner-messages'
 import {
   arrayValue,
   asRecord,
@@ -163,12 +163,12 @@ export function consumeGeminiMessage(
   if (record.type === 'user') {
     accumulator.messageCount++
     accumulator.title ??= extractContentText(record.content)
-    addPreviewContent(accumulator, 'user', record.content, record.timestamp)
+    addSessionContent(accumulator, 'user', record.content, record.timestamp)
     return
   }
   if (record.type === 'gemini') {
     accumulator.messageCount++
-    addPreviewContent(accumulator, 'assistant', record.content, record.timestamp)
+    addSessionContent(accumulator, 'assistant', record.content, record.timestamp)
     const model = extractString(record.model)
     if (model) {
       accumulator.model = model

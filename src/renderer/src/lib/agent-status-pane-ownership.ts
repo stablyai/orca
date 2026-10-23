@@ -113,23 +113,3 @@ export function resolvePaneKey(
     tabTitle
   }
 }
-
-export function resolveWorktreeConnection(
-  store: AppState,
-  worktreeId: string
-): {
-  worktreeExists: boolean
-  repoConnectionId: string | null
-  repoConnectionResolved: boolean
-} {
-  const worktree = getIndexedWorktreeMap(selectWorktreesByRepo(store)).get(worktreeId)
-  if (!worktree) {
-    return { worktreeExists: false, repoConnectionId: null, repoConnectionResolved: false }
-  }
-  const repo = getIndexedRepoMap(store.repos).get(worktree.repoId)
-  return {
-    worktreeExists: true,
-    repoConnectionId: repo?.connectionId ?? null,
-    repoConnectionResolved: repo !== undefined
-  }
-}

@@ -1,3 +1,5 @@
+import { jobExecutions } from './ci-job-executions.mjs'
+
 const minutesBetween = (start, end) => {
   const value = (Date.parse(end) - Date.parse(start)) / 60_000
   return Number.isFinite(value) ? Math.max(0, value) : 0
@@ -30,6 +32,8 @@ export function runnerDemand(runs, samples) {
         sampledRuns: 0,
         runnerMinutes: 0,
         cancelledRunnerMinutes: 0,
+        repeatedSuccessfulJobs: 0,
+        repeatedSuccessfulRunnerMinutes: 0,
         completedPrRuns: 0,
         completedPrRunnerMinutes: 0
       })
@@ -40,7 +44,17 @@ export function runnerDemand(runs, samples) {
   for (const { run, jobs, weight } of samples) {
     const row = workflows.get(workflowKey(run))
     row.sampledRuns++
-    for (const job of jobs) {
+    const executions = jobExecutions(jobs)
+    const firstSuccess = new Map()
+    for (const job of executions) {
+      if (job.name && Number.isInteger(job.run_attempt) && job.conclusion === 'success') {
+        firstSuccess.set(
+          job.name,
+          Math.min(firstSuccess.get(job.name) ?? Infinity, job.run_attempt)
+        )
+      }
+    }
+    for (const job of executions) {
       if (!job.runner_name || !job.started_at) {
         continue
       }
@@ -51,6 +65,10 @@ export function runnerDemand(runs, samples) {
       const duration = minutesBetween(job.started_at, job.completed_at)
       const weighted = duration * weight
       row.runnerMinutes += weighted
+      if (Number.isInteger(job.run_attempt) && firstSuccess.get(job.name) < job.run_attempt) {
+        row.repeatedSuccessfulJobs += weight
+        row.repeatedSuccessfulRunnerMinutes += weighted
+      }
       if (run.conclusion === 'cancelled') {
         row.cancelledRunnerMinutes += weighted
       }

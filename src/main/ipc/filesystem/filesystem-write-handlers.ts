@@ -13,7 +13,6 @@ import { isENOENT } from '../filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from '../filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
-import { assertLocalWriteTargetIsRegularFile } from './local-regular-file-read'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
@@ -55,7 +54,6 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
           throw error
         }
       }
-      await assertLocalWriteTargetIsRegularFile(filePath)
       return writeLocalTextFileWithDiskPrecondition(filePath, args.content, args.diskPrecondition)
     }
   )

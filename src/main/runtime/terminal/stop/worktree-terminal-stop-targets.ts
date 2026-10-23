@@ -3,6 +3,8 @@ import { setsEqual } from '../../runtime-worktree-binding-index'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from '../../worktree-pty-host-fence'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 
 export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithSleepResolvedWorktreeTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
@@ -123,6 +125,18 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       if (
         worktreeIdsEqual(pty.worktreeId, worktreeId) &&
         pty.connected &&
+        (!freshPtyIds || freshPtyIds.has(pty.ptyId))
+      ) {
+        ptyIds.add(pty.ptyId)
+      }
+    }
+    // Switch point: a registered terminal main's layout binds may run through a host's listing gap,
+    // as the window kept it connected; only a certified exit, or a fresh inventory, drops it.
+    for (const pty of ORCA_LAYOUT_OWNER_IS_MAIN ? this.ptysById.values() : []) {
+      if (
+        worktreeIdsEqual(pty.worktreeId, worktreeId) &&
+        mainHoldsTerminal(this, pty.ptyId) &&
+        this.getPtyLivenessVerdict(pty.ptyId)?.status !== 'exited' &&
         (!freshPtyIds || freshPtyIds.has(pty.ptyId))
       ) {
         ptyIds.add(pty.ptyId)

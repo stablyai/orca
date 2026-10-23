@@ -79,6 +79,8 @@ export type AgentLaunchSurfaceFactory = {
     /** False for a reused terminal, which has no fresh launch readiness to wait for. */
     freshLaunch: boolean
     prompt: AgentLaunchPrompt
+    /** The launch's own; aborting ends the readiness wait and refuses the paste. */
+    signal?: AbortSignal
   }): Promise<boolean>
 }
 

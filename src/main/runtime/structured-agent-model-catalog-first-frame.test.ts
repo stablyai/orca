@@ -226,15 +226,4 @@ describe('a running chat’s listing, saved for the next chat', () => {
       [{ value: 'low', label: 'Low' }]
     ])
   })
-
-  it('saves a Claude live listing through the same step as every other agent', async () => {
-    const store = new AgentModelCatalogStore()
-    const record = { ...grokRecord(), provider: 'claude', accountHome: HOMES.claude! }
-    const catalog = service(store, {}, [record])
-    catalog.recordLiveListing(record.sessionId, {
-      models: [{ id: 'opus', label: 'Opus', isDefault: false, efforts: [] }]
-    })
-    const read = await catalog.read({ agent: 'claude', sessionId: record.sessionId })
-    expect(read.origin === 'unknown' ? null : read.models.map((m) => m.id)).toEqual(['opus'])
-  })
 })

@@ -13,6 +13,11 @@ import {
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
 import { hostTestOperationId } from './structured-agent-session-host-test-data'
+import * as loginShell from '../../startup/login-shell-environment'
+import { createStructuredAgentEnvironmentResolvers } from '../../runtime/structured-agent-shell-environment'
+import { codexModelCatalogDiscovery } from '../../runtime/structured-agent-model-catalog-discovery'
+import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
+import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
 
 describe('a chat permission mode', () => {
   let rig: RestTestRig
@@ -86,6 +91,70 @@ describe('a chat permission mode', () => {
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(1)
     await rig.restart()
     expect((await rig.host.readOptions(SESSION)).current.permissionMode).toBe('full-access')
+  })
+
+  it('saves a permission pick with a missing CLI without starting a shell capture', async () => {
+    await foundRestTestChat(rig)
+    const shellReady = Promise.withResolvers<NodeJS.ProcessEnv>()
+    const shell = vi.fn(() => shellReady.promise)
+    const resolveShell = loginShell.resolveLoginShellEnvironment
+    const capture = vi
+      .spyOn(loginShell, 'resolveLoginShellEnvironment')
+      .mockImplementation((options) =>
+        resolveShell({
+          ...options,
+          shellOverride: '/missing/catalog-shell',
+          env: {},
+          spawner: shell
+        })
+      )
+    const environment = createStructuredAgentEnvironmentResolvers({})
+    shell.mockClear()
+    capture.mockClear()
+    const discovery = codexModelCatalogDiscovery({
+      environment,
+      deps: {
+        stateDirectory: rig.root,
+        hostId: 'local',
+        claimKeyId: 'key-1',
+        resolveWorkspacePath: async () => rig.root,
+        resolveLaunchArgs: () => [],
+        resolveClaudeAuthPolicy: () => ({ account: 'system' }),
+        resolveCodexCommand: () => 'codex-pr-30107-missing',
+        logger: { warn: vi.fn(), error: vi.fn() }
+      }
+    })
+    if (discovery.kind !== 'probe') {
+      throw new Error('Codex must have discovery')
+    }
+    const catalog = createAgentModelCatalogService({
+      store: new AgentModelCatalogStore(),
+      getRecord: (id) => rig.store.getRecord(id) ?? undefined,
+      drivesRecord: () => true,
+      recordWorkspacePath: async () => rig.root,
+      resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),
+      probes: { codex: discovery.probe }
+    })
+    try {
+      await rig.restart({ modelCatalog: catalog })
+      expect(await pick('full-access')).toMatchObject({
+        ok: true,
+        value: { options: { permissionMode: 'full-access' } }
+      })
+      expect(rig.store.getRecord(SESSION)?.permissionMode).toBe('full-access')
+      shellReady.resolve({ PATH: '/missing/catalog-bin' })
+      await environment.resolveBaseEnvironment()
+      capture.mockClear()
+      expect(await pick('ask')).toMatchObject({ ok: true })
+      expect(capture).toHaveBeenCalled()
+      expect(capture.mock.calls.every(([options]) => options?.cachedOnly === true)).toBe(true)
+      expect(shell).not.toHaveBeenCalled()
+    } finally {
+      shellReady.resolve({ PATH: '/missing/catalog-bin' })
+      catalog.stop()
+      capture.mockRestore()
+      loginShell.resetLoginShellEnvironmentCacheForTests()
+    }
   })
 
   it('keeps Full access through a model pick on the running agent and the next start', async () => {

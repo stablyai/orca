@@ -9,6 +9,7 @@ import {
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { assertSpawnReplyWasLive } from '../pane/agent-session-owners'
 import { failPtySpawnExecute } from '../spawn-execute-failure'
+import { attachOnlyViewOf, attachViewWithoutOwner } from '../pane/attach-only-view'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
@@ -64,7 +65,9 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     if (!ctx.preAdoptedStablePane && ctx.paneAgentLaunch) {
       ctx.paneAgentLaunch.dispatched = true
     }
-    ctx.result = await ctx.provider.spawn(ctx.spawnOptions)
+    ctx.result = attachOnlyViewOf(args)
+      ? await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
+      : await ctx.provider.spawn(ctx.spawnOptions)
     ctx.stablePaneOwner = null
     ctx.rejectedRegistrationCandidate = ctx.result
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {

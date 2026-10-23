@@ -1,6 +1,6 @@
 /** Durable account binding: existing single-directory records or OpenCode's data context. */
 
-import type { AgentSessionStoredAgent } from './agent-session-stored-agent'
+import type { AgentSessionStoredAgent } from './agent-session/lifecycle/agent-session-stored-agent'
 
 /** Account root pinned at launch by the account selector, so a resume cannot drift to another login. */
 export type LegacyAgentSessionAccountHome = {

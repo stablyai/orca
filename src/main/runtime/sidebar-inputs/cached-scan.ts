@@ -11,6 +11,7 @@ export class CachedScan<T> {
   private scanning: Promise<void> | null = null
   private rescanQueued = false
   private stale = false
+  private readonly freshWaiters: { after: number; done: () => void }[] = []
 
   constructor(
     private readonly deps: {
@@ -41,8 +42,17 @@ export class CachedScan<T> {
     this.stale = false
     this.scanning = this.deps
       .scan()
-      .then((value) => this.apply(version, value))
-      .catch((error: unknown) => console.warn(`[${this.deps.label}] scan failed`, error))
+      .then((value) => {
+        try {
+          this.apply(version, value)
+        } finally {
+          this.settleFresh(version)
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn(`[${this.deps.label}] scan failed`, error)
+        this.settleFresh(version)
+      })
       .finally(() => {
         this.scanning = null
         if (this.rescanQueued) {
@@ -59,6 +69,29 @@ export class CachedScan<T> {
     }
     while (this.scanning && (this.value === null || this.stale)) {
       await this.scanning
+    }
+  }
+
+  /** Calls `done` once a scan started after this call has finished; at once with no demand. */
+  afterFresh(done: () => void): void {
+    if (!this.deps.demand()) {
+      done()
+      return
+    }
+    this.freshWaiters.push({ after: this.version, done })
+    this.request(true)
+  }
+
+  // Why synchronous after apply: a waiter's change lands in the same revision as the result.
+  private settleFresh(version: number): void {
+    const due = this.freshWaiters.filter((waiter) => waiter.after < version)
+    if (due.length === 0) {
+      return
+    }
+    const waiting = this.freshWaiters.filter((waiter) => waiter.after >= version)
+    this.freshWaiters.splice(0, this.freshWaiters.length, ...waiting)
+    for (const waiter of due) {
+      waiter.done()
     }
   }
 
