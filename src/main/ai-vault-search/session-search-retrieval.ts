@@ -1,4 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
+import { planCjkMatch } from './session-search-cjk-match'
 import type { SessionSearchRoute, SessionSearchScope } from './session-search-engine-types'
 import type { MessageRow, SessionRow } from './session-search-hit-ranking'
 import {
@@ -102,8 +103,7 @@ export class SessionSearchRetrieval {
   run(plan: SessionSearchQueryPlan, scope: RetrievalScope): Retrieved {
     let incomplete = false
     let sessions: SessionRow[] = []
-    const match = (expression: string): MessageRow[] => {
-      const rows = this.match(expression, scope)
+    const accept = (rows: MessageRow[]): MessageRow[] => {
       // Assigned, not accumulated: only the rung whose rows are returned can
       // say whether a cap hid anything. A phrase rung that filled the limit and
       // was then discarded describes a row set the answering rung never used.
@@ -114,6 +114,21 @@ export class SessionSearchRetrieval {
       )
       const eligible = new Set(sessions.map((row) => row.id))
       return rows.filter((row) => eligible.has(row.session_row_id))
+    }
+    const match = (expression: string): MessageRow[] => accept(this.match(expression, scope))
+    // Why first: unicode61 indexes a CJK run as one token, so a CJK query only
+    // matches by substring through the trigram index; a miss falls to the ladder.
+    if (plan.cjkRuns.length > 0) {
+      const rows = accept(this.matchCjk(plan, scope))
+      if (rows.length > 0) {
+        return {
+          sessions,
+          rows,
+          incomplete,
+          route: 'phrase',
+          plan: { ...plan, cjkMatched: true }
+        }
+      }
     }
     const exact = this.phraseThenAnd(plan, match)
     if (exact) {
@@ -267,19 +282,43 @@ export class SessionSearchRetrieval {
       m.session_row_id, m.role, m.ts, s.updated_at
       FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
       JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ?${eligible}`
-    // Why: collapse to one row per session BEFORE the candidate limit, on both
-    // sort orders, so a single long session cannot occupy the whole page.
-    // `max(score)` makes SQLite pick that session's best row for the bare columns.
-    // Cost of grouping instead of a bounded top-N sorter, measured: ~1.75x
-    // (49.6 vs 28.6 ms at 80k matching rows, 183.6 vs 104.1 ms at 240k) and a
-    // temp b-tree over every match. No inner LIMIT can bound it: the CTE has no
-    // order, so any cut drops whole sessions rather than their surplus rows.
-    const order = sort === 'newest' ? 'updated_at DESC, score DESC' : 'score DESC'
-    const sql = `WITH matched AS MATERIALIZED (${matched})
-      SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched
-      GROUP BY session_row_id ORDER BY ${order} LIMIT ${candidateLimit}`
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: groupedBySession selects exactly the MessageRow columns.
     return this.db
-      .prepare(sql)
+      .prepare(groupedBySession(matched, sort, candidateLimit))
       .all(scopedExpression(scope.scope, expression), ...filter.values) as MessageRow[]
   }
+
+  private matchCjk(plan: SessionSearchQueryPlan, scope: RetrievalScope): MessageRow[] {
+    const { filter, sort, candidateLimit } = scope
+    const cjk = planCjkMatch(plan, scope.scope)
+    const eligible = filter.conditions.length
+      ? ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
+      : ''
+    const matched = `SELECT messages_cjk_fts.rowid AS rowid, ${cjk.score} AS score,
+      m.session_row_id, m.role, m.ts, s.updated_at
+      FROM messages_cjk_fts JOIN messages m ON m.id = messages_cjk_fts.rowid
+      JOIN sessions s ON s.id = m.session_row_id WHERE ${cjk.conditions.join(' AND ')}${eligible}`
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: groupedBySession selects exactly the MessageRow columns.
+    return this.db
+      .prepare(groupedBySession(matched, sort, candidateLimit))
+      .all(...cjk.params, ...filter.values) as MessageRow[]
+  }
+}
+
+// Why: collapse to one row per session BEFORE the candidate limit, on both
+// sort orders, so a single long session cannot occupy the whole page.
+// `max(score)` makes SQLite pick that session's best row for the bare columns.
+// Cost of grouping instead of a bounded top-N sorter, measured: ~1.75x
+// (49.6 vs 28.6 ms at 80k matching rows, 183.6 vs 104.1 ms at 240k) and a
+// temp b-tree over every match. No inner LIMIT can bound it: the CTE has no
+// order, so any cut drops whole sessions rather than their surplus rows.
+function groupedBySession(
+  matched: string,
+  sort: 'relevance' | 'newest',
+  candidateLimit: number
+): string {
+  const order = sort === 'newest' ? 'updated_at DESC, score DESC' : 'score DESC'
+  return `WITH matched AS MATERIALIZED (${matched})
+      SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched
+      GROUP BY session_row_id ORDER BY ${order} LIMIT ${candidateLimit}`
 }

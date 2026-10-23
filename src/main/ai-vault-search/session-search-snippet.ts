@@ -1,4 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
+import { cjkColumns } from './session-search-cjk-match'
 import {
   SESSION_SEARCH_SNIPPET_MARK_CLOSE,
   SESSION_SEARCH_SNIPPET_MARK_OPEN
@@ -49,6 +50,9 @@ export function sessionSearchSnippet(
   plan: SessionSearchQueryPlan,
   route: SessionSearchRoute
 ): SessionSearchSnippet {
+  if (plan.cjkMatched) {
+    return cjkSnippet(db, scope, rowid, plan.cjkRuns)
+  }
   // Why: the identifier shadow column is word soup; a hit that also matches in a
   // prose column should be shown from there. Column -1 (any column) is the
   // fallback for rows that only matched through the shadow column.
@@ -103,6 +107,74 @@ export function sessionSearchSnippet(
   } catch {
     return EMPTY_SNIPPET
   }
+}
+
+const CJK_SNIPPET_RADIUS = 48
+
+/**
+ * The CJK route matches by substring, which FTS5's `snippet()` cannot show for
+ * a query shorter than a trigram, so the window is cut from the stored text.
+ */
+function cjkSnippet(
+  db: SyncDatabase,
+  scope: SessionSearchScope,
+  rowid: number,
+  runs: readonly string[]
+): SessionSearchSnippet {
+  const columns = cjkColumns(scope)
+  try {
+    const row = db
+      .prepare(
+        `SELECT ${columns.map((column) => `messages_cjk_fts.${column} AS ${column}`).join(', ')}
+         FROM messages_cjk_fts
+         JOIN messages m ON m.id = messages_cjk_fts.rowid
+         JOIN sessions s ON s.id = m.session_row_id
+         WHERE messages_cjk_fts.rowid = ?`
+      )
+      .get(rowid)
+    if (!isSnippetRow(row)) {
+      return EMPTY_SNIPPET
+    }
+    const marker = new RegExp([...runs].sort((a, b) => b.length - a.length).join('|'), 'gu')
+    for (const column of columns) {
+      const text = row[column] ?? ''
+      const first = text.search(marker)
+      if (first === -1) {
+        continue
+      }
+      return renderSnippet(cjkWindowPieces(text, first, marker))
+    }
+    return EMPTY_SNIPPET
+  } catch {
+    return EMPTY_SNIPPET
+  }
+}
+
+function cjkWindowPieces(text: string, first: number, marker: RegExp): SnippetPiece[] {
+  let start = Math.max(0, first - CJK_SNIPPET_RADIUS)
+  let end = Math.min(text.length, first + CJK_SNIPPET_RADIUS * 2)
+  // Never cut a surrogate pair in half.
+  if (start > 0 && /[\uDC00-\uDFFF]/.test(text[start]!)) {
+    start--
+  }
+  if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1]!)) {
+    end--
+  }
+  const pieces: SnippetPiece[] = []
+  const window = text.slice(start, end)
+  let at = 0
+  for (const match of window.matchAll(marker)) {
+    const from = match.index
+    pieces.push(
+      { kind: 'text', value: (at === 0 && start > 0 ? '…' : '') + window.slice(at, from) },
+      { kind: 'mark', value: MARK_OPEN },
+      { kind: 'text', value: match[0] },
+      { kind: 'mark', value: MARK_CLOSE }
+    )
+    at = from + match[0].length
+  }
+  pieces.push({ kind: 'text', value: window.slice(at) + (end < text.length ? '…' : '') })
+  return pieces
 }
 
 function isSnippetRow(value: unknown): value is Record<string, string> {

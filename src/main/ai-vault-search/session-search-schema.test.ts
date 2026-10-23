@@ -69,7 +69,7 @@ describe('openSessionSearchDatabase', () => {
     second.close()
   })
 
-  it('carries one FTS table and throws away an index that carries two', async () => {
+  it('carries the main and the CJK FTS tables and throws away an index that carries a third', async () => {
     const path = await tempDatabasePath()
     const fresh = openSessionSearchDatabase(path)
     const tables = (): string[] =>
@@ -78,7 +78,7 @@ describe('openSessionSearchDatabase', () => {
           .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_fts'")
           .all() as { name: string }[]
       ).map((row) => row.name)
-    expect(tables()).toEqual(['messages_fts'])
+    expect(tables().sort()).toEqual(['messages_cjk_fts', 'messages_fts'])
 
     // What an index written before this bump looks like: the second table, and
     // rows in it. `CREATE TABLE IF NOT EXISTS` would leave both in place, so

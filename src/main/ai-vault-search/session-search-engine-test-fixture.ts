@@ -3,6 +3,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchEngine, type SessionSearchEngineOptions } from './session-search-engine'
 import { cwdKey } from './session-search-file-records'
 import { identifierShadowText } from './session-search-identifier-split'
+import { hasCjkText } from './session-search-query-planner'
 import { SessionSearchStore } from './session-search-store'
 import {
   openSessionSearchIndexFile,
@@ -100,6 +101,11 @@ export function addSyntheticSession(db: SyncDatabase, session: SyntheticSession)
     db.prepare(
       'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
     ).run(messageId, user, assistant, tool, identifierShadowText(`${text} ${toolText}`))
+    if (hasCjkText(`${text} ${toolText}`)) {
+      db.prepare(
+        'INSERT INTO messages_cjk_fts(rowid,user_text,assistant_text,tool_text) VALUES (?,?,?,?)'
+      ).run(messageId, user, assistant, tool)
+    }
   }
 }
 

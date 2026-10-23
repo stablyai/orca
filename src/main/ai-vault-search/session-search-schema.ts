@@ -90,6 +90,12 @@ CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   user_text, assistant_text, tool_text, identifiers, ${TOKENIZER}, detail=full
 );
+-- Why a second table: unicode61 indexes a whole CJK run between punctuation as one
+-- token, so only trigram can match a substring. Rows without CJK text are never
+-- written here, so Latin-only indexes pay nothing for it.
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_cjk_fts USING fts5(
+  user_text, assistant_text, tool_text, tokenize="trigram"
+);
 `
 
 /**
