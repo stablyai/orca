@@ -20,6 +20,7 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('gemini', null)).toBe(true)
     expect(isStatusBarItemAvailable('antigravity', null)).toBe(true)
     expect(isStatusBarItemAvailable('grok', null)).toBe(true)
+    expect(isStatusBarItemAvailable('kiro', null)).toBe(true)
     expect(isStatusBarItemAvailable('zcode', null)).toBe(true)
   })
 
@@ -29,6 +30,7 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('gemini', ['claude', 'codex'])).toBe(false)
     expect(isStatusBarItemAvailable('antigravity', ['claude', 'codex'])).toBe(false)
     expect(isStatusBarItemAvailable('grok', ['claude', 'kimi'])).toBe(false)
+    expect(isStatusBarItemAvailable('kiro', ['claude', 'kimi'])).toBe(false)
     expect(isStatusBarItemAvailable('zcode', ['claude', 'kimi'])).toBe(false)
   })
 
@@ -38,6 +40,7 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('gemini', ['gemini'])).toBe(true)
     expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
     expect(isStatusBarItemAvailable('grok', ['grok'])).toBe(true)
+    expect(isStatusBarItemAvailable('kiro', ['kiro'])).toBe(true)
     expect(isStatusBarItemAvailable('zcode', ['zcode'])).toBe(true)
   })
 })

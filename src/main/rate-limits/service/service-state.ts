@@ -35,6 +35,7 @@ export abstract class RateLimitServiceState {
     minimax: null,
     grok: null,
     cursor: null,
+    kiro: null,
     zcode: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
@@ -56,6 +57,7 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
+    kiro: 0,
     zcode: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
@@ -69,6 +71,7 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
+    kiro: 0,
     zcode: 0
   }
   protected mainWindow: BrowserWindow | null = null
