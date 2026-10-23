@@ -1,15 +1,16 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { MobileSessionTab } from './mobile-session-route-types'
 
 const sheets = vi.hoisted(() => ({
   labelsByTitle: new Map<string, string[]>(),
   actionsByTitle: new Map<string, ActionSheetAction[]>(),
-  clipboardWriteText: vi.fn<(text: string) => Promise<void>>(() => Promise.resolve())
+  clipboardText: ''
 }))
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -20,8 +21,11 @@ vi.mock('lucide-react-native', () => ({
   RefreshCw: 'Icon',
   SquareTerminal: 'Icon'
 }))
-vi.mock('../platform/clipboard', () => ({
-  useClipboardWriter: () => ({ writeText: sheets.clipboardWriteText })
+vi.mock('expo-clipboard', () => ({
+  setStringAsync: async (text: string) => {
+    sheets.clipboardText = text
+    return true
+  }
 }))
 vi.mock('../platform/haptics', () => ({ triggerSuccess: () => {}, triggerError: () => {} }))
 vi.mock('../components/ActionSheetModal', () => ({
@@ -51,6 +55,18 @@ vi.mock('./mobile-terminal-action-sheet-actions', () => ({
 
 import { MobileSessionSheets } from './MobileSessionSheets'
 
+let renderer: ReturnType<typeof create> | null = null
+
+beforeEach(() => {
+  sheets.labelsByTitle.clear()
+  sheets.actionsByTitle.clear()
+  sheets.clipboardText = ''
+})
+afterEach(async () => {
+  await act(async () => renderer?.unmount())
+  renderer = null
+})
+
 async function newTabLabels(executionHost?: string): Promise<string[]> {
   sheets.labelsByTitle.clear()
   const controller = mountFixture<Parameters<typeof MobileSessionSheets>[0]['controller']>({
@@ -64,7 +80,7 @@ async function newTabLabels(executionHost?: string): Promise<string[]> {
     closeWithBulkActions: () => []
   })
   await act(async () => {
-    create(
+    renderer = create(
       createElement(
         WorkspaceExecutionHostContext.Provider,
         { value: normalizeExecutionHostId(executionHost) ?? undefined },
@@ -84,39 +100,84 @@ describe('the New Tab sheet', () => {
     const labels = await newTabLabels('runtime:vm')
     expect(labels).toEqual(['Terminal', 'Browser'])
   })
+})
 
-  it('copies the absolute filePath from the Markdown tab action sheet Copy Path action', async () => {
-    sheets.actionsByTitle.clear()
-    sheets.clipboardWriteText.mockClear()
+describe('the Markdown tab Copy Path action', () => {
+  it.each([
+    {
+      name: 'workspace root',
+      filePath: '/workspace/README.md',
+      relativePath: 'README.md',
+      expected: '/workspace/README.md'
+    },
+    {
+      name: 'nested file with spaces',
+      filePath: '/workspace/docs/Read me.md',
+      relativePath: 'docs/Read me.md',
+      expected: '/workspace/docs/Read me.md'
+    },
+    {
+      name: 'Windows host',
+      filePath: 'C:\\workspace\\docs\\README.md',
+      relativePath: 'docs/README.md',
+      expected: 'C:\\workspace\\docs\\README.md'
+    },
+    {
+      name: 'UNC host',
+      filePath: '\\\\server\\share\\docs\\README.md',
+      relativePath: 'docs/README.md',
+      expected: '\\\\server\\share\\docs\\README.md'
+    },
+    {
+      name: 'legacy missing absolute path',
+      filePath: '',
+      relativePath: 'docs/README.md',
+      expected: 'docs/README.md'
+    },
+    {
+      name: 'missing relative path',
+      filePath: '/workspace/docs/README.md',
+      relativePath: '',
+      expected: '/workspace/docs/README.md'
+    }
+  ])('copies the host path for $name', async ({ filePath, relativePath, expected }) => {
+    const setMarkdownActionTarget = vi.fn()
+    const showToast = vi.fn()
+    const target: Extract<MobileSessionTab, { type: 'markdown' }> = {
+      type: 'markdown',
+      id: 'md-1',
+      title: 'README.md',
+      filePath,
+      relativePath,
+      isDirty: false,
+      isActive: true,
+      documentVersion: 'version-1'
+    }
     const controller = mountFixture<Parameters<typeof MobileSessionSheets>[0]['controller']>({
-      worktreeId: 'repo::/wt',
-      isFolderWorkspaceRoute: false,
+      worktreeId: 'folder:/workspace',
+      isFolderWorkspaceRoute: true,
       isFloatingWorkspaceRoute: false,
-      sessionTabs: [],
+      sessionTabs: [target],
       nativeChatController: { isTabChatView: () => false },
       createTabAgentActions: [],
       sendDiffNotesAgentActions: [],
       closeWithBulkActions: () => [],
-      markdownActionTarget: {
-        type: 'markdown',
-        id: 'md-1',
-        title: 'README.md',
-        filePath: '/wt/README.md',
-        relativePath: 'README.md',
-        isDirty: false,
-        isActive: true
-      },
-      setMarkdownActionTarget: vi.fn(),
-      showToast: vi.fn()
+      markdownActionTarget: target,
+      setMarkdownActionTarget,
+      showToast
     })
     await act(async () => {
-      create(createElement(MobileSessionSheets, { controller }))
+      renderer = create(createElement(MobileSessionSheets, { controller }))
     })
-    const copyPathAction = sheets.actionsByTitle
+    const action = sheets.actionsByTitle
       .get('README.md')
-      ?.find((action) => action.label === 'Copy Path')
-    expect(copyPathAction).toBeDefined()
-    copyPathAction?.onPress()
-    expect(sheets.clipboardWriteText).toHaveBeenCalledWith('/wt/README.md')
+      ?.find((entry) => entry.label === 'Copy Path')
+    if (!action) {
+      throw new Error('Markdown Copy Path action is missing')
+    }
+    await act(async () => action.onPress())
+    expect(sheets.clipboardText).toBe(expected)
+    expect(setMarkdownActionTarget).toHaveBeenCalledExactlyOnceWith(null)
+    expect(showToast).toHaveBeenCalledExactlyOnceWith('Path copied')
   })
 })
