@@ -88,7 +88,21 @@ jobs:
             exit 0
           fi
           read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
-          bash .github/scripts/prepare-ubuntu-apt.sh
+          if [ -f .github/scripts/prepare-ubuntu-apt.sh ]; then
+            bash .github/scripts/prepare-ubuntu-apt.sh
+          else
+            # Dispatched refs can predate the shared preparation script.
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+              fi
+            done
+            sudo tee /etc/apt/apt.conf.d/99-orca-ci >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          fi
           timeout 120 sudo apt-get update
           timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
 
