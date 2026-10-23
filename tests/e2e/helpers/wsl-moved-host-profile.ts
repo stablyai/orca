@@ -22,9 +22,16 @@ type MovedOpenFile = { filePath: string; relativePath: string; dirtyDraftContent
 /** The moved workspace's session rows, keyed as a session partition holds them. */
 export function movedWorkspaceRows(
   worktreeId: string,
-  options: { openFiles?: MovedOpenFile[]; runtimeEnvironmentId?: string; browserTab?: boolean } = {}
+  options: {
+    openFiles?: MovedOpenFile[]
+    runtimeEnvironmentId?: string
+    browserTab?: boolean
+    /** A UUID leaf whose history the host's daemon holds, so no stored snapshot names it. */
+    daemonHistoryLeafId?: string
+  } = {}
 ): Record<string, Record<string, unknown>> {
   const files = options.openFiles ?? []
+  const leafId = options.daemonHistoryLeafId ?? MOVED_LEAF
   const browser = options.browserTab !== false
   const page = {
     id: MOVED_BROWSER_PAGE,
@@ -138,12 +145,16 @@ export function movedWorkspaceRows(
     activeGroupIdByWorktree: { [worktreeId]: MOVED_GROUP },
     terminalLayoutsByTabId: {
       [MOVED_TAB]: {
-        root: { type: 'leaf', leafId: MOVED_LEAF },
-        activeLeafId: MOVED_LEAF,
+        root: { type: 'leaf', leafId },
+        activeLeafId: leafId,
         expandedLeafId: null,
-        scrollbackRefsByLeafId: {
-          [MOVED_LEAF]: makeTerminalScrollbackSnapshotRef(MOVED_TAB, MOVED_LEAF)
-        }
+        ...(options.daemonHistoryLeafId
+          ? {}
+          : {
+              scrollbackRefsByLeafId: {
+                [MOVED_LEAF]: makeTerminalScrollbackSnapshotRef(MOVED_TAB, MOVED_LEAF)
+              }
+            })
       }
     }
   }
