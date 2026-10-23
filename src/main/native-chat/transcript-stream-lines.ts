@@ -2,7 +2,7 @@ import type { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
-import { inTranscriptFileOrder } from './transcript-file-order'
+import { inTranscriptFileOrder, TRANSCRIPT_FILE_ORDER_START } from './transcript-file-order'
 
 type TranscriptDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
@@ -16,7 +16,7 @@ export async function decodeTranscriptStream(
 ): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
   const messages: NativeChatMessage[] = []
   let consumedBytes = 0
-  let latest = Number.NEGATIVE_INFINITY
+  let order = TRANSCRIPT_FILE_ORDER_START
   const framer = createTranscriptLineFramer((line, byteLength, terminated) => {
     if (terminated || includeTrailingLine) {
       decodeLine(line, consumedBytes)
@@ -37,8 +37,8 @@ export async function decodeTranscriptStream(
     }
     const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
     if (message) {
-      const ordered = inTranscriptFileOrder(message, latest)
-      latest = ordered.latest
+      const ordered = inTranscriptFileOrder(message, order)
+      order = ordered.order
       messages.push(ordered.message)
     }
   }

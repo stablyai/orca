@@ -1,7 +1,11 @@
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import { extendTranscriptBoundary } from './transcript-file-version'
-import { inTranscriptFileOrder } from './transcript-file-order'
+import {
+  inTranscriptFileOrder,
+  TRANSCRIPT_FILE_ORDER_START,
+  type TranscriptFileOrder
+} from './transcript-file-order'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
@@ -17,8 +21,8 @@ export type IncrementalTranscriptState = {
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
-  /** Newest row time read so far, so an append never sorts above earlier rows. */
-  latestTimestamp: number
+  /** Order of the rows read so far, so an append never sorts above earlier rows. */
+  fileOrder: TranscriptFileOrder
 }
 
 export function createIncrementalTranscriptState(): IncrementalTranscriptState {
@@ -29,7 +33,7 @@ export function createIncrementalTranscriptState(): IncrementalTranscriptState {
     pendingStart: 0,
     pendingBytes: 0,
     droppingOversizedRecord: false,
-    latestTimestamp: Number.NEGATIVE_INFINITY
+    fileOrder: TRANSCRIPT_FILE_ORDER_START
   }
 }
 
@@ -40,7 +44,7 @@ export function resetIncrementalTranscriptState(state: IncrementalTranscriptStat
   state.pendingStart = 0
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
-  state.latestTimestamp = Number.NEGATIVE_INFINITY
+  state.fileOrder = TRANSCRIPT_FILE_ORDER_START
 }
 
 export async function readIncrementalTranscriptMessages(
@@ -132,8 +136,8 @@ export async function readIncrementalTranscriptMessages(
     if (!message) {
       return
     }
-    const ordered = inTranscriptFileOrder(message, state.latestTimestamp)
-    state.latestTimestamp = ordered.latest
+    const ordered = inTranscriptFileOrder(message, state.fileOrder)
+    state.fileOrder = ordered.order
     messages.push(ordered.message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))

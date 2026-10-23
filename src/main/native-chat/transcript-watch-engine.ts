@@ -10,6 +10,7 @@ import {
   readIncrementalTranscriptMessages,
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
+import { TRANSCRIPT_FILE_ORDER_START } from './transcript-file-order'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
 import { emitTranscriptUnavailableSnapshot } from './transcript-unavailable-snapshot'
 import { transcriptWatcherPathIsInstallable } from './transcript-watcher-install-probe'
@@ -164,7 +165,7 @@ export async function installTranscriptWatcher(
     if (replacementSnapshot && onReplace) {
       state.offset = replacementSnapshot.consumedTo
       state.pendingStart = state.offset
-      state.latestTimestamp = replacementSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
+      state.fileOrder = replacementSnapshot.fileOrder ?? TRANSCRIPT_FILE_ORDER_START
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
@@ -187,7 +188,7 @@ export async function installTranscriptWatcher(
       if (initialSnapshot) {
         state.offset = initialSnapshot.consumedTo
         state.pendingStart = state.offset
-        state.latestTimestamp = initialSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
+        state.fileOrder = initialSnapshot.fileOrder ?? TRANSCRIPT_FILE_ORDER_START
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,
