@@ -1,3 +1,4 @@
+import { filterAcceptedRepoCatalogSessionOwners } from '../repos/repo-catalog-owner-reconciliation'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -42,9 +43,13 @@ export function createWorkspaceTerminalHydrationActions(
         : null
       const ownershipTransfersByTabId = new Map<string, TerminalLayoutPtyOwnershipTransfer[]>()
       set((s) => {
+        const runtimeHostIdByWorkspaceSessionKey = filterAcceptedRepoCatalogSessionOwners(
+          get,
+          options?.runtimeHostIdByWorkspaceSessionKey ?? {}
+        )
         const runtimeSessionPlaceholders = buildRuntimeSessionPlaceholders({
           repos: s.repos,
-          runtimeHostIdByWorkspaceSessionKey: options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+          runtimeHostIdByWorkspaceSessionKey,
           worktreesByRepo: s.worktreesByRepo
         })
         const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
@@ -154,8 +159,7 @@ export function createWorkspaceTerminalHydrationActions(
           activeWorkspaceExecutionHostId,
           activeTabId,
           activeTabIdByWorktree,
-          restoredRuntimeHostIdByWorkspaceSessionKey:
-            options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+          restoredRuntimeHostIdByWorkspaceSessionKey: runtimeHostIdByWorkspaceSessionKey,
           // Why conditional: a mid-session re-hydration (the SSH pull merge) carries no shadow, and
           // clearing it there would drop the co-claimant rows the next write has to put back.
           ...(options?.contestedHostWorkspaceSessions

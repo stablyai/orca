@@ -11,6 +11,98 @@
   },
   "gates": [
     {
+      "id": "catalog.accepted-owner-reconciliation",
+      "title": "Successful host catalogs retire only proved absent workspace owners",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-workspace-catalog",
+      "layer": "renderer-store-session-persistence-contract",
+      "surfaces": [
+        "desktop project sidebar",
+        "paired web workspace history",
+        "workspace terminal and editor cleanup"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "paired-runtime", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "paired-runtime", "ssh"],
+      "coverageNotes": "Production renderer store with synthetic catalog IPC/RPC, persisted web-session replay and delayed editor writes. Hidden Electron local setup deletion is checked separately; no native Windows, WSL, physical phone or live paired/SSH acceptance claimed.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/23224",
+        "https://github.com/stablyai/orca/issues/21731"
+      ],
+      "invariant": "Only a successful current host catalog, including empty, proves that host owner absent. Rows, qualified session history and active selection converge without removing sibling host surfaces or losing dirty edits. Explicit removal retains late PTY mappings through host awaits.",
+      "oracle": "Exercise local, runtime and all-host successful-empty paths, persisted-only owners, actual session hydration and reload, superseded/replaced/failed/unrequested hosts, host twins, SSH aliases and folder keys. Flush delayed editor text before canonical purge. Race observer refetch with explicit removal and late same/new-worktree PTYs; retain current projects added after older accepted proof.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/store/slices/repos-catalog-owner-reconciliation.test.ts src/renderer/src/store/slices/repos-catalog-removal-race.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-all-hosts.test.ts src/renderer/src/store/slices/worktrees-workspace-selection-state.test.ts src/renderer/src/store/slices/repos-catalog-connection-fence.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/repos/repo-removal-host-twin-teardown.test.ts src/renderer/src/store/repos/repo-removal.test.ts --maxWorkers=2"
+      ],
+      "testFiles": [
+        "src/renderer/src/store/slices/repos-catalog-owner-reconciliation.test.ts",
+        "src/renderer/src/store/slices/repos-catalog-removal-race.test.ts",
+        "src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts",
+        "src/renderer/src/store/slices/repos-all-hosts.test.ts",
+        "src/renderer/src/store/slices/worktrees-workspace-selection-state.test.ts",
+        "src/renderer/src/store/slices/repos-catalog-connection-fence.test.ts",
+        "src/renderer/src/store/slices/repos.test.ts",
+        "src/renderer/src/store/repos/repo-removal-host-twin-teardown.test.ts",
+        "src/renderer/src/store/repos/repo-removal.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/store/slices/repos-catalog-owner-reconciliation.test.ts",
+          "assertions": [
+            "persists cleared web history and rehydrates without rebuilding a removed runtime placeholder",
+            "flushes delayed editor text before removing the owner and keeps the exact draft recoverable",
+            "a newer owner request invalidates prior empty proof before its result settles"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/repos-catalog-removal-race.test.ts",
+          "assertions": [
+            "keeps a late PTY mapping through the refetch so explicit removal kills it once",
+            "a failed removal without accepted absence keeps the live tab and PTYs"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/store/slices/repos-catalog-owner-reconciliation.test.ts src/renderer/src/store/slices/repos-catalog-removal-race.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-all-hosts.test.ts src/renderer/src/store/slices/worktrees-workspace-selection-state.test.ts src/renderer/src/store/slices/repos-catalog-connection-fence.test.ts src/renderer/src/store/slices/repos.test.ts src/renderer/src/store/repos/repo-removal-host-twin-teardown.test.ts src/renderer/src/store/repos/repo-removal.test.ts --maxWorkers=2",
+          "result": "passed",
+          "durationSeconds": 37.67,
+          "summary": "202 tests passed across nine files, including unlisted sibling surface ownership, late new-worktree PTY attachment and notification settlement in accepted application/replay paths."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 240,
+        "scope": "Nine renderer-store contract files; allocation only, not a measured p95."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Focused local passes; no CI soak collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Unmodified a046955d failed 8 owner cases with 7 passing controls. Explicit removal/refetch race failed 2 cases with 1 control before the per-store guard. Independent probes exposed late hydration, post-catalog additions, session-only purge and unlisted sibling ownership gaps; candidate recheck passes. A parent probe reproduced missing notification dismissal before canonical attention settlement was added."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Reuses canonical host matching and purge operations. Accepted proof is held per store and host in WeakMaps and invalidated by existing catalog/connection fences. No new timers, polling, subprocesses or wire requests."
+      },
+      "promotionCriteria": [
+        "Collect 100 CI passes or 14 days without unexplained flakes.",
+        "Exercise real paired and SSH clients plus native Windows, Linux, WSL and phone reload flows."
+      ],
+      "knownGaps": [
+        "Only the stale/Unknown client workspace and history scope of #21731 is covered; desktop arbitration, host path resolution and listener/keyring problems remain separate.",
+        "Ambiguous unqualified legacy state and surfaces with unlisted sibling ownership evidence are retained rather than guessed.",
+        "Local catalog observation introduces no PTY kills; explicit removal retains its existing cleanup authority."
+      ],
+      "demotionRule": "Keep experimental or demote if an unaccepted host response purges state, sibling surfaces disappear, newly added owners are removed, dirty edits become unrecoverable or late PTYs escape explicit removal."
+    },
+    {
       "id": "agent-session.detached-account-restart-progress",
       "title": "Independent hidden account restarts progress within a shared spawn limit",
       "maturity": "experimental",

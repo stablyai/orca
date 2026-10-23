@@ -62,7 +62,7 @@
 1 src/renderer/src/store/project-groups/project-group-removal-state.ts # store writer
 4 src/renderer/src/store/repos/converted-ssh-host-rows.ts # store writer
 5 src/renderer/src/store/repos/repo-catalog-merge.ts # store writer
-5 src/renderer/src/store/repos/repo-removal.ts # store writer
+3 src/renderer/src/store/repos/repo-removal.ts # store writer
 6 src/renderer/src/store/slices/diff-comment-persistence.ts # store writer
 12 src/renderer/src/store/slices/workspace-attention/workspace-unread-flag.ts # store writer
 2 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts # store writer

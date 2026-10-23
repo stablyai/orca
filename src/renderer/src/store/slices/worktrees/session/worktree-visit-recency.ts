@@ -1,3 +1,4 @@
+import { reconcileAcceptedRepoCatalogOwners } from '../../../repos/repo-catalog-owner-reconciliation'
 import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -48,9 +49,10 @@ export function createMarkWorktreeVisited(
 
 export function createPruneLastVisitedTimestamps(
   set: WorktreeSliceSet,
-  _get: WorktreeSliceGet
+  get: WorktreeSliceGet
 ): WorktreeSlice['pruneLastVisitedTimestamps'] {
   const prune = () => {
+    reconcileAcceptedRepoCatalogOwners(set, get)
     set((s) => {
       // Why: prune per-repo, not globally — SSH repos aren't hydrated at startup, so a global prune would wipe SSH focus-recency.
       // Only drop for repos with a populated/authoritative list; a missing repoId means not-yet-hydrated (defer).

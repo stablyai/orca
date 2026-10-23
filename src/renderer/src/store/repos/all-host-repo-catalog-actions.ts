@@ -1,3 +1,9 @@
+import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
+import {
+  flushRepoCatalogOwnerEdits,
+  rememberAcceptedRepoCatalog,
+  repoCatalogOwnerRemovalPatch
+} from './repo-catalog-owner-reconciliation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -57,44 +63,65 @@ export function createAllHostRepoCatalogActions(
         if (!isCurrent(fence)) {
           return false
         }
+        flushRepoCatalogOwnerEdits(get, catalog.repos, catalog.hostId)
+        let exclusiveIds: string[] = []
         let hostRepos: Repo[] = []
-        set((s) => {
-          // Why: skip a catalog whose env was tombstoned mid-load (removed), not one merely absent from the not-yet-hydrated saved list (#8881).
-          if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
-            return s
-          }
-          const result = mergeFetchedRepoCatalog(catalog, s.repos)
-          const reconciliation = reconcileSupersededSshRepos(result.repos, s)
-          const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
-          const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
-            previous: {
-              projects: s.projects,
-              projectHostSetups: filterSetupsForPrunedRepoRows(
-                s.projectHostSetups,
-                result.repos,
-                finalizedRepos
-              )
-            },
-            fetched: catalog.projectHostSetupCompatibility,
-            repos: finalizedRepos,
-            hostId: result.hostId
+        settleAttentionRemovedBy(set, get, () =>
+          set((s) => {
+            if (!isCurrent(fence)) {
+              return s
+            }
+            // Why: skip a catalog whose env was tombstoned mid-load (removed), not one merely absent from the not-yet-hydrated saved list (#8881).
+            if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
+              return s
+            }
+            const result = mergeFetchedRepoCatalog(catalog, s.repos)
+            const reconciliation = reconcileSupersededSshRepos(result.repos, s)
+            const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
+            const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
+              previous: {
+                projects: s.projects,
+                projectHostSetups: filterSetupsForPrunedRepoRows(
+                  s.projectHostSetups,
+                  result.repos,
+                  finalizedRepos
+                )
+              },
+              fetched: catalog.projectHostSetupCompatibility,
+              repos: finalizedRepos,
+              hostId: result.hostId
+            })
+            hostRepos = finalizedRepos.filter(
+              (repo) => getRepoExecutionHostId(repo) === result.hostId
+            )
+            const removal = repoCatalogOwnerRemovalPatch(
+              { ...s, ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions) },
+              finalizedRepos,
+              result.hostId,
+              get
+            )
+            exclusiveIds = removal.exclusiveIds
+            return {
+              repos: finalizedRepos,
+              pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+              ...removal.patch,
+              ...mergedProjectCompatibility,
+              ...(arrayElementsUnchanged(finalizedRepos, s.repos)
+                ? {}
+                : { folderWorkspacePathStatuses: {} }),
+              activeRepoId: s.activeRepoId,
+              filterRepoIds: s.filterRepoIds,
+              setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
+            }
           })
-          hostRepos = finalizedRepos.filter(
-            (repo) => getRepoExecutionHostId(repo) === result.hostId
-          )
-          return {
-            repos: finalizedRepos,
-            pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
-            ...mergedProjectCompatibility,
-            ...(arrayElementsUnchanged(finalizedRepos, s.repos)
-              ? {}
-              : { folderWorkspacePathStatuses: {} }),
-            activeRepoId: s.activeRepoId,
-            filterRepoIds: s.filterRepoIds,
-            setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
-          }
-        })
+        )
+        if (!isCurrent(fence)) {
+          return false
+        }
+        rememberAcceptedRepoCatalog(get, hostRepos, catalog.hostId, fence)
+        if (exclusiveIds.length > 0) {
+          get().removeWorkspaceSpaceWorktrees(exclusiveIds)
+        }
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         scheduleSafeAutoForkSync(hostRepos)
         return true

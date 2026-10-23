@@ -143,19 +143,29 @@ describe('a host that just moved to its managed server', () => {
     expect(state.folderWorkspaces.map((entry) => entry.executionHostId)).toEqual(['runtime:env-1'])
   })
 
-  it('carries the host’s visit recency to the server instead of leaving it for the next prune', async () => {
-    store.setState({
-      lastVisitedAtByWorktreeId: { [`ssh:ssh-1|${worktreeId}`]: 500, [`local|${worktreeId}`]: 7 }
-    })
-    applySshManagedServerTransition('ssh-1', undefined, { kind: 'managed', environmentId: 'env-7' })
-
-    await vi.waitFor(() =>
-      expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
-        [`runtime:env-7|${worktreeId}`]: 500,
-        [`local|${worktreeId}`]: 7
+  for (const localRepoPresent of [true, false]) {
+    it(`carries the host’s visit recency to the server and ${localRepoPresent ? 'preserves a listed local sibling' : 'prunes an absent local owner'}`, async () => {
+      const environmentId = localRepoPresent ? 'env-7-local' : 'env-7-absent'
+      const localRepos: Repo[] = localRepoPresent ? [{ ...repo, executionHostId: 'local' }] : []
+      window.api.repos.list = vi.fn(async () => localRepos)
+      store.setState({
+        repos: [...store.getState().repos, ...localRepos],
+        lastVisitedAtByWorktreeId: { [`ssh:ssh-1|${worktreeId}`]: 500, [`local|${worktreeId}`]: 7 }
       })
-    )
-  })
+      applySshManagedServerTransition('ssh-1', undefined, { kind: 'managed', environmentId })
+
+      await vi.waitFor(() =>
+        expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+          [`runtime:${environmentId}|${worktreeId}`]: 500,
+          ...(localRepoPresent ? { [`local|${worktreeId}`]: 7 } : {})
+        })
+      )
+      expect(window.api.repos.list).toHaveBeenCalledOnce()
+      expect(store.getState().repos.some((entry) => entry.executionHostId === 'local')).toBe(
+        localRepoPresent
+      )
+    })
+  }
 
   it('moves the open workspace onto the server so its panes stop dialing the stopped relay', async () => {
     store.setState({

@@ -1,3 +1,9 @@
+import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
+import {
+  flushRepoCatalogOwnerEdits,
+  rememberAcceptedRepoCatalog,
+  repoCatalogOwnerRemovalPatch
+} from './repo-catalog-owner-reconciliation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -100,51 +106,69 @@ export function createRepoCatalogActions(
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
+        flushRepoCatalogOwnerEdits(get, catalog.repos, catalog.hostId)
+        let exclusiveIds: string[] = []
         let finalizedHostRepos: Repo[] = []
-        set((s) => {
-          // Why: an in-flight fetch for a just-removed env would re-add purged repos and stick; skip only when the env was tombstoned, not merely unhydrated (#8881).
-          if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
-            return s
-          }
-          // Why: re-adoption leaves a stale row on the old SSH target id (a ghost that fails "SSH target not found"); drop rows a live-host sibling supersedes.
-          const result = mergeFetchedRepoCatalog(catalog, s.repos)
-          const reconciliation = reconcileSupersededSshRepos(result.repos, s)
-          const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
-          const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
-          const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
-          const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
-            previous: {
-              projects: s.projects,
-              projectHostSetups: filterSetupsForPrunedRepoRows(
-                s.projectHostSetups,
-                result.repos,
-                prunedRepos
-              )
-            },
-            fetched: catalog.projectHostSetupCompatibility,
-            repos: prunedRepos,
-            hostId: result.hostId
-          })
-          finalizedHostRepos = prunedRepos.filter(
-            (repo) => getRepoExecutionHostId(repo) === result.hostId
-          )
-          return {
-            repos: prunedRepos,
-            pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
-            ...mergedProjectCompatibility,
-            ...(arrayElementsUnchanged(prunedRepos, s.repos)
-              ? {}
-              : { folderWorkspacePathStatuses: {} }),
-            activeRepoId:
-              s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-            filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
-            setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
-              s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+        settleAttentionRemovedBy(set, get, () =>
+          set((s) => {
+            if (!isHostCatalogFenceCurrent(get, fence)) {
+              return s
+            }
+            // Why: an in-flight fetch for a just-removed env would re-add purged repos and stick; skip only when the env was tombstoned, not merely unhydrated (#8881).
+            if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
+              return s
+            }
+            // Why: re-adoption leaves a stale row on the old SSH target id (a ghost that fails "SSH target not found"); drop rows a live-host sibling supersedes.
+            const result = mergeFetchedRepoCatalog(catalog, s.repos)
+            const reconciliation = reconcileSupersededSshRepos(result.repos, s)
+            const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
+            const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
+            const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
+            const mergedProjectCompatibility = mergeFetchedHostProjectCatalog({
+              previous: {
+                projects: s.projects,
+                projectHostSetups: filterSetupsForPrunedRepoRows(
+                  s.projectHostSetups,
+                  result.repos,
+                  prunedRepos
+                )
+              },
+              fetched: catalog.projectHostSetupCompatibility,
+              repos: prunedRepos,
+              hostId: result.hostId
+            })
+            finalizedHostRepos = prunedRepos.filter(
+              (repo) => getRepoExecutionHostId(repo) === result.hostId
             )
-          }
-        })
+            const removal = repoCatalogOwnerRemovalPatch(
+              { ...s, ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions) },
+              prunedRepos,
+              result.hostId,
+              get
+            )
+            exclusiveIds = removal.exclusiveIds
+            return {
+              repos: prunedRepos,
+              pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+              ...removal.patch,
+              ...mergedProjectCompatibility,
+              ...(arrayElementsUnchanged(prunedRepos, s.repos)
+                ? {}
+                : { folderWorkspacePathStatuses: {} }),
+              activeRepoId:
+                s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+              filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
+              setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+                s.setupScriptPromptDismissedRepoIds,
+                validRepoHostIdentities
+              )
+            }
+          })
+        )
+        rememberAcceptedRepoCatalog(get, finalizedHostRepos, catalog.hostId, fence)
+        if (exclusiveIds.length > 0) {
+          get().removeWorkspaceSpaceWorktrees(exclusiveIds)
+        }
         scheduleSafeAutoForkSync(finalizedHostRepos)
       } catch (err) {
         localCatalogOutcome = { status: 'rejected', reason: err }
