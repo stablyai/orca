@@ -152,7 +152,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       )
     })
 
-    it('restores a suppressed terminal bell when a delayed hook completion resumes work', async () => {
+    it('drops a suppressed terminal bell when a delayed hook completion resumes work', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -204,7 +204,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       })
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
 
-      expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
         expect.objectContaining({ source: 'terminal-bell' })
       )
       expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
@@ -212,7 +212,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       )
     })
 
-    it('restores a suppressed terminal bell when a delayed hook completion resumes via title tracking', async () => {
+    it('drops a suppressed terminal bell when a delayed hook completion resumes via title tracking', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
@@ -263,7 +263,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       workingHandler()
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
 
-      expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
         expect.objectContaining({ source: 'terminal-bell' })
       )
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
@@ -272,7 +272,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       )
     })
 
-    it('restores a suppressed terminal bell when the pending agent completion is canceled', async () => {
+    it('drops a suppressed terminal bell when the pending agent completion is canceled by resuming work', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -300,7 +300,7 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       workingHandler()
       vi.advanceTimersByTime(250)
 
-      expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
         expect.objectContaining({ source: 'terminal-bell' })
       )
       expect(deps.dispatchNotification).not.toHaveBeenCalledWith(

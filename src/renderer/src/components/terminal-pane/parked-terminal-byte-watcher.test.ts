@@ -339,7 +339,7 @@ describe('startParkedTerminalByteWatcher', () => {
     const { dispose } = await startWatcher()
 
     emit(WORKING_TITLE_OSC)
-    emit(IDLE_TITLE_OSC)
+    emit(`${IDLE_TITLE_OSC}\x07`)
     flushSideEffects()
     emit(WORKING_TITLE_OSC)
     flushSideEffects()
