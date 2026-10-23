@@ -73,6 +73,9 @@ export function buildRuntimeWorktreePsSummaries(args: {
       linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
       linkedItems: getWorkspaceAttachments(meta ?? worktree),
       comment: meta?.comment ?? '',
+      ...(meta?.metadataUpdatedAt !== undefined
+        ? { metadataUpdatedAt: meta.metadataUpdatedAt }
+        : {}),
       isPinned: meta?.isPinned ?? false,
       isActive: false,
       unread: meta?.isUnread ?? false,
@@ -123,6 +126,9 @@ export function buildRuntimeWorktreePsSummaries(args: {
       linkedGitLabIssue: worktree.linkedGitLabIssue ?? null,
       linkedItems: getWorkspaceAttachments(worktree),
       comment: worktree.comment,
+      ...(worktree.metadataUpdatedAt !== undefined
+        ? { metadataUpdatedAt: worktree.metadataUpdatedAt }
+        : {}),
       isPinned: worktree.isPinned,
       isActive: false,
       unread: worktree.isUnread,

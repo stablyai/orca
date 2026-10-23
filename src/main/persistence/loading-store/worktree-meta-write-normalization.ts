@@ -51,5 +51,13 @@ export function mergeWorktreeMetaForWrite(
     ? sourceContext
     : null
   updated.instanceId ||= randomUUID()
+  if (
+    updates.metadataUpdatedAt === undefined &&
+    ((updates.comment !== undefined && updates.comment !== (existing?.comment ?? '')) ||
+      (updates.workspaceStatus !== undefined &&
+        updates.workspaceStatus !== (existing?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID)))
+  ) {
+    updated.metadataUpdatedAt = Date.now()
+  }
   return updated
 }

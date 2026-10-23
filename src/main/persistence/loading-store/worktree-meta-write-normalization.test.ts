@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 
 const existingMeta: WorktreeMeta = {
@@ -17,6 +18,18 @@ const existingMeta: WorktreeMeta = {
 }
 
 describe('worktree metadata write normalization', () => {
+  it('preserves a copied host timestamp and does not timestamp default status writes', () => {
+    expect(
+      mergeWorktreeMetaForWrite(undefined, {
+        comment: '',
+        workspaceStatus: DEFAULT_WORKSPACE_STATUS_ID
+      }).metadataUpdatedAt
+    ).toBeUndefined()
+    expect(
+      mergeWorktreeMetaForWrite(undefined, { comment: 'Remote', metadataUpdatedAt: 123 })
+        .metadataUpdatedAt
+    ).toBe(123)
+  })
   it('clears GitHub PR suppression on every positive linked PR update', () => {
     const updated = mergeWorktreeMetaForWrite(existingMeta, {
       linkedPR: 42,
