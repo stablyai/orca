@@ -44,21 +44,39 @@ describe('verify-packaged-daemon-entry', () => {
     )
   })
 
+  function withDaemonMarker(source) {
+    return `const PROTOCOL_VERSION = ${daemonProtocolVersion}\n${source}`
+  }
+
   it('passes when the packaged entry loads and reaches argv parsing', () => {
-    writePackagedEntry('console.error("Usage: daemon-entry <socket>"); process.exit(1)\n')
+    writePackagedEntry(
+      withDaemonMarker('console.error("Usage: daemon-entry <socket>"); process.exit(1)\n')
+    )
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).not.toThrow()
   })
 
   it('fails when the packaged entry cannot resolve its module graph', () => {
-    writePackagedEntry('require("orca-module-that-does-not-exist")\n')
+    writePackagedEntry(withDaemonMarker('require("orca-module-that-does-not-exist")\n'))
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
       /failed to load under plain Node/
     )
   })
 
   it('fails when the packaged entry never reaches argv parsing', () => {
-    writePackagedEntry('process.exit(0)\n')
+    writePackagedEntry(withDaemonMarker('process.exit(0)\n'))
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(/did not reach argv parsing/)
+  })
+
+  it('throws when the unpacked daemon graph has no protocol marker', () => {
+    writePackagedEntry('console.error("Usage: daemon-entry"); process.exit(1)\n')
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      new RegExp(
+        `unpacked daemon protocol version missing;[\\s\\S]*expected ${daemonProtocolVersion}`
+      )
+    )
+    expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
+      /unpacked daemon protocol version missing/
+    )
   })
 
   function writeProcessHost(exportsMap, presentFiles) {

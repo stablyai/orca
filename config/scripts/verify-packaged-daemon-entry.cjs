@@ -114,14 +114,17 @@ function throwProtocolMismatch(versions) {
 
 // Why: socket-generation markers must all equal the contract. MCP chunks also embed protocolVersion:1.
 function assertReferencedProtocolVersions(daemonVersions, genericVersions) {
+  if (daemonVersions.length === 0 && genericVersions.length === 0) {
+    throw new Error(
+      `[verify-packaged-daemon-entry] unpacked daemon protocol version missing; ` +
+        `expected ${daemonProtocolVersion}`
+    )
+  }
   if (daemonVersions.length > 0) {
     const matchesExpected = daemonVersions.every((version) => version === daemonProtocolVersion)
     if (!matchesExpected) {
       throwProtocolMismatch([...daemonVersions, ...genericVersions])
     }
-    return
-  }
-  if (genericVersions.length === 0) {
     return
   }
   const highest = Math.max(...genericVersions)

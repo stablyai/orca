@@ -8,10 +8,10 @@ import {
   rmSync,
   renameSync
 } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { finished } from 'node:stream/promises'
-import { createPackage, extractAll } from '@electron/asar'
+import { createPackageWithOptions, extractAll } from '@electron/asar'
 
 const require = createRequire(import.meta.url)
 const { verifyPackagedDaemonEntryBoots } = require('./verify-packaged-daemon-entry.cjs')
@@ -80,8 +80,13 @@ export function createPublishTransaction() {
           if (backupPath && existsSync(backupPath)) {
             renameSync(backupPath, destPath)
           }
-        } catch {
-          // Keep restoring earlier replacements.
+        } catch (error) {
+          // Keep restoring earlier replacements, but report each failed restore.
+          const message = error instanceof Error ? error.message : String(error)
+          console.error(`[sync-win-unpacked] rollback failed for ${destPath}: ${message}`)
+          if (backupPath) {
+            console.error(`[sync-win-unpacked] previous contents may remain at ${backupPath}`)
+          }
         }
       }
       retained.length = 0
@@ -200,18 +205,35 @@ function syncProcessHost(resourcesDir, repoRoot) {
   }
 }
 
-function publishStagedResources(transaction, stagingResources, resourcesDir) {
+function asarUnpackGlob(sourceDir) {
+  const { asarUnpack } = require('../electron-builder.config.cjs')
+  if (!Array.isArray(asarUnpack) || asarUnpack.length === 0) {
+    throw new Error('[sync-win-unpacked] electron-builder asarUnpack is empty')
+  }
+  // Why: @electron/asar unpack is one minimatch, and brace expansion is how it takes many patterns.
+  return `{${asarUnpack.map((pattern) => join(sourceDir, pattern).split(sep).join('/')).join(',')}}`
+}
+
+// Why: createPackage resolves when end() is called, before the archive bytes are flushed.
+export async function repackExtractedApp(sourceDir, archivePath) {
+  await finished(
+    await createPackageWithOptions(sourceDir, archivePath, {
+      unpack: asarUnpackGlob(sourceDir)
+    })
+  )
+}
+
+export function publishStagedResources(transaction, stagingResources, resourcesDir) {
   const destAsar = join(resourcesDir, 'app.asar')
   if (existsSync(destAsar)) {
     publishFile(transaction, join(stagingResources, 'app.asar'), destAsar)
   }
-  const stagingOut = join(stagingResources, 'app.asar.unpacked', 'out')
-  const destOut = join(resourcesDir, 'app.asar.unpacked', 'out')
-  mkdirSync(destOut, { recursive: true })
-  for (const name of UNPACKED_OUT_DIRS) {
-    replaceDirectory(join(destOut, name), join(stagingOut, name), transaction)
-  }
-  publishFile(transaction, join(stagingOut, 'package.json'), join(destOut, 'package.json'))
+  // Why: shipping only out/ would drop unpacked resources the new header still points at.
+  replaceDirectory(
+    join(resourcesDir, 'app.asar.unpacked'),
+    join(stagingResources, 'app.asar.unpacked'),
+    transaction
+  )
   const stagingHost = join(stagingResources, 'node_modules', '@orca', 'process-host')
   const destHost = join(resourcesDir, 'node_modules', '@orca', 'process-host')
   mkdirSync(destHost, { recursive: true })
@@ -225,8 +247,7 @@ async function stageResources(repoRoot, extractDir, stagingResources, distAsar) 
   extractAll(distAsar, extractDir)
   replaceDirectory(join(extractDir, 'out'), join(repoRoot, 'out'))
   mkdirSync(stagingResources, { recursive: true })
-  // Why: createPackage resolves when end() is called, before the archive bytes are flushed.
-  await finished(await createPackage(extractDir, join(stagingResources, 'app.asar')))
+  await repackExtractedApp(extractDir, join(stagingResources, 'app.asar'))
   syncUnpackedOut(stagingResources, repoRoot)
   syncProcessHost(stagingResources, repoRoot)
   verifyPackagedDaemonEntryBoots(stagingResources)
@@ -257,11 +278,14 @@ async function main() {
     transaction.rollback()
     throw error
   } finally {
-    if (committed) {
-      transaction.commit()
+    try {
+      if (committed) {
+        transaction.commit()
+      }
+    } finally {
+      rmSync(extractDir, { recursive: true, force: true })
+      rmSync(stagingResources, { recursive: true, force: true })
     }
-    rmSync(extractDir, { recursive: true, force: true })
-    rmSync(stagingResources, { recursive: true, force: true })
   }
 }
 

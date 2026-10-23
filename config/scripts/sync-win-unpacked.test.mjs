@@ -1,8 +1,15 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { statFile } from '@electron/asar'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createPublishTransaction, publishFile, replaceDirectory } from './sync-win-unpacked.mjs'
+import {
+  createPublishTransaction,
+  publishFile,
+  publishStagedResources,
+  replaceDirectory,
+  repackExtractedApp
+} from './sync-win-unpacked.mjs'
 
 describe('sync-win-unpacked directory replace', () => {
   let root
@@ -87,5 +94,84 @@ describe('sync-win-unpacked directory replace', () => {
 
     expect(readFileSync(join(dest, 'marker.txt'), 'utf8')).toBe('new')
     expect(existsSync(`${dest}.bak`)).toBe(false)
+  })
+
+  it('reports a restore failure and still rolls back earlier replacements', () => {
+    root = mkdtempSync(join(tmpdir(), 'sync-win-unpacked-'))
+    const kept = join(root, 'kept')
+    const keptBackup = join(root, 'kept.bak')
+    writeFileSync(kept, 'new')
+    writeFileSync(keptBackup, 'old')
+    const brokenDest = join(root, 'missing-parent', 'dest')
+    const brokenBackup = join(root, 'broken.bak')
+    writeFileSync(brokenBackup, 'backup')
+    const errors = []
+    const originalError = console.error
+    console.error = (...args) => {
+      errors.push(args.join(' '))
+    }
+    const transaction = createPublishTransaction()
+    transaction.retain(kept, keptBackup)
+    transaction.retain(brokenDest, brokenBackup)
+    try {
+      transaction.rollback()
+    } finally {
+      console.error = originalError
+    }
+
+    expect(readFileSync(kept, 'utf8')).toBe('old')
+    expect(existsSync(brokenBackup)).toBe(true)
+    expect(errors.some((line) => line.includes(`rollback failed for ${brokenDest}`))).toBe(true)
+    expect(
+      errors.some((line) => line.includes(`previous contents may remain at ${brokenBackup}`))
+    ).toBe(true)
+  })
+
+  it('publishes the unpacked tree from asarUnpack next to synced out files', async () => {
+    root = mkdtempSync(join(tmpdir(), 'sync-win-unpacked-'))
+    const source = join(root, 'src')
+    mkdirSync(join(source, 'out', 'main'), { recursive: true })
+    mkdirSync(join(source, 'out', 'web'), { recursive: true })
+    mkdirSync(join(source, 'resources', 'nested'), { recursive: true })
+    mkdirSync(join(source, 'packed'), { recursive: true })
+    writeFileSync(join(source, 'out', 'main', 'daemon-entry.js'), 'daemon\n')
+    writeFileSync(join(source, 'out', 'web', 'app.js'), 'web\n')
+    writeFileSync(join(source, 'resources', 'nested', 'keep.txt'), 'keep\n')
+    writeFileSync(join(source, 'packed', 'only.txt'), 'packed\n')
+
+    const staging = join(root, 'stage')
+    mkdirSync(staging, { recursive: true })
+    await repackExtractedApp(source, join(staging, 'app.asar'))
+    const syncedWeb = join(staging, 'app.asar.unpacked', 'out', 'web')
+    mkdirSync(syncedWeb, { recursive: true })
+    writeFileSync(join(syncedWeb, 'app.js'), 'web\n')
+    const host = join(staging, 'node_modules', '@orca', 'process-host')
+    mkdirSync(join(host, 'dist'), { recursive: true })
+    writeFileSync(join(host, 'package.json'), '{}\n')
+    writeFileSync(join(host, 'dist', 'index.js'), '')
+
+    const resources = join(root, 'resources')
+    mkdirSync(resources, { recursive: true })
+    writeFileSync(join(resources, 'app.asar'), 'old-asar')
+    const transaction = createPublishTransaction()
+    publishStagedResources(transaction, staging, resources)
+    transaction.commit()
+
+    const unpacked = join(resources, 'app.asar.unpacked')
+    const destAsar = join(resources, 'app.asar')
+    expect(readFileSync(join(unpacked, 'resources', 'nested', 'keep.txt'), 'utf8')).toBe('keep\n')
+    expect(readFileSync(join(unpacked, 'out', 'main', 'daemon-entry.js'), 'utf8')).toBe('daemon\n')
+    expect(readFileSync(join(unpacked, 'out', 'web', 'app.js'), 'utf8')).toBe('web\n')
+    expect(existsSync(join(unpacked, 'packed', 'only.txt'))).toBe(false)
+    expect(statFile(destAsar, join('resources', 'nested', 'keep.txt')).unpacked).toBe(true)
+    expect(statFile(destAsar, join('out', 'main', 'daemon-entry.js')).unpacked).toBe(true)
+    expect(statFile(destAsar, join('out', 'web', 'app.js')).unpacked).toBeUndefined()
+    expect(statFile(destAsar, join('packed', 'only.txt')).unpacked).toBeUndefined()
+    expect(
+      readFileSync(
+        join(resources, 'node_modules', '@orca', 'process-host', 'dist', 'index.js'),
+        'utf8'
+      )
+    ).toBe('')
   })
 })
