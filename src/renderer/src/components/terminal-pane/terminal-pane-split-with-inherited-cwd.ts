@@ -11,6 +11,7 @@ import {
   splitServerPane,
   type SplitInMainRequest
 } from './terminal-pane-split-in-main'
+import { splitHostTerminalPane } from './terminal-pane-host-terminal-split'
 
 type SplitArgs = {
   worktreeId: string
@@ -27,6 +28,9 @@ type SplitArgs = {
 
 export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
   const ptyId = args.paneTransports.get(args.pane.id)?.getPtyId() ?? null
+  if (splitHostTerminalPane(args)) {
+    return
+  }
   if (
     splitWebRuntimeTerminal(ptyId, args.direction, args.source, {
       worktreeId: args.worktreeId,

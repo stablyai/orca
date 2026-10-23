@@ -151,6 +151,9 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'tab.viewMode', 'terminal', content)
   fill(loaded, 'tab.isPreview', true, terminal)
   fill(loaded, 'tab.agentSessionAgent', 'claude', terminal)
+  // A cross-host stamp on one tab of each table: it writes the setup and overrides the host.
+  fill(loaded, 'tab.hostStamp', { setup: 'setup-a', executionHostId: 'runtime:env-a' }, terminal)
+  fill(loaded, 'tab.hostStamp', { setup: 'setup-b', executionHostId: 'runtime:env-b' }, content)
   fill(loaded, 'view.lastFocusedAt', { [GIT_KEY]: { 'tab-agent': 1, 'browser-1': 2 } })
   fill(loaded, 'view.markdownFrontmatterVisible', { '/doc.md': true })
   fill(loaded, 'carried.activeConnectionIdsAtShutdown', ['target-1', 'target-2'])

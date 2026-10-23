@@ -18,9 +18,9 @@ export type WorkspaceRecordState = Pick<AppState, 'worktreesByRepo' | 'folderWor
 // ─── Compatibility views ─────────────────────────────────────────────
 
 /** Git worktrees per repo id, in listing order. */
-export function selectWorktreesByRepo(
-  state: Pick<AppState, 'worktreesByRepo'>
-): AppState['worktreesByRepo'] {
+export function selectWorktreesByRepo<State extends { worktreesByRepo?: unknown }>(
+  state: State
+): State['worktreesByRepo'] {
   return state.worktreesByRepo
 }
 
@@ -31,9 +31,9 @@ export function selectFolderWorkspaces(
 }
 
 /** Checkouts git reports that Orca does not track, per repo id. */
-export function selectDetectedWorktreesByRepo(
-  state: Pick<AppState, 'detectedWorktreesByRepo'>
-): AppState['detectedWorktreesByRepo'] {
+export function selectDetectedWorktreesByRepo<State extends { detectedWorktreesByRepo?: unknown }>(
+  state: State
+): State['detectedWorktreesByRepo'] {
   return state.detectedWorktreesByRepo
 }
 

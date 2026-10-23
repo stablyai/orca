@@ -155,12 +155,14 @@ const ENTRY_FIELDS = {
   sortOrder: TAB_ORDER,
   isPreview: tab('isPreview'),
   agentSessionAgent: tab('agentSessionAgent'),
-  lastFocusedAt: own('view', 'lastFocusedAt')
+  lastFocusedAt: own('view', 'lastFocusedAt'),
+  projectHostSetupId: tab('hostStamp')
 } as const
 
 const TERMINAL_ENTRY = {
   ...ENTRY_FIELDS,
-  executionHostId: own('model', 'hostId'),
+  // A stamped entry writes its stamp's host instead (workspace-layout-save-tabs.ts entryHost).
+  executionHostId: { from: 'model.hostId', via: ['tab.hostStamp'] },
   label: own('terminalRow', 'title')
 } as const satisfies Record<keyof Tab, DiskFieldWritten>
 
@@ -168,7 +170,7 @@ const CONTENT_ENTRY = {
   ...ENTRY_FIELDS,
   executionHostId: {
     from: 'model.hostId',
-    via: ['file.externalSshTargetId', 'file.runtimeEnvironmentId']
+    via: ['file.externalSshTargetId', 'file.runtimeEnvironmentId', 'tab.hostStamp']
   },
   label: own('facts', 'tabLabels')
 } as const satisfies Record<keyof Tab, DiskFieldWritten>

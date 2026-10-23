@@ -1,10 +1,25 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-setup-terminal-worktree-id'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getWorktreeExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import type { Tab } from '../../../shared/tab-types'
+import { parseTerminalHostStamp } from '../../../shared/workspace-layout/terminal-host-stamp'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
+import { getWorktreeProjectId } from '@/components/tab-bar/tab-bar-host-terminal-targets'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspace-record-selectors'
+import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 import { resolveOwnerOrLocal } from './worktree-runtime-owner'
-import { namedHostForOwnerRef, runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
+import { namedHostForOwnerRef, resolveOwner, runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import {
   resolveWorktreeOperationRouteResultForHost,
@@ -222,4 +237,118 @@ export function resolveTerminalWorktreeRoute(
 
 export function hasUnroutableTerminalWorktreeOwner(state: AppState, worktreeId: string): boolean {
   return resolveTerminalWorktreeRoute(state, worktreeId) === null
+}
+
+/** Positive proof a worktree runs here; a missing row, runtime provenance or ambiguity is not local. */
+export function isPositivelyLocalSourceWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string
+): boolean {
+  const rows = Object.values(selectWorktreesByRepo(state) ?? {})
+    .flat()
+    .filter((worktree) => worktree.id === worktreeId)
+  const repo = state.repos?.find((repo) => repo.id === rows[0]?.repoId)
+  const route = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+  const owner = resolveOwner(state, { workspaceId: worktreeId })
+  return (
+    rows.length === 1 &&
+    !rows[0].runtimeOwnerEnvironmentId?.trim() &&
+    owner.kind === 'resolved' &&
+    owner.owner.endpoint.kind === 'self' &&
+    owner.owner.at === LOCAL_EXECUTION_HOST_ID &&
+    getWorktreeExecutionHostId(rows[0], repo) === LOCAL_EXECUTION_HOST_ID &&
+    route.kind !== 'ambiguous' &&
+    (!hasIndexedDetectedWorktree(selectDetectedWorktreesByRepo(state), worktreeId) ||
+      (route.kind === 'resolved' && route.route.executionHostId === LOCAL_EXECUTION_HOST_ID))
+  )
+}
+
+/** Proof for worktrees holding a setup-stamped tab; owned predicates refuse a stamp without it. */
+export function getLocalSourceWorktreeIds(
+  state: WorktreeRuntimeOwnerState & Pick<AppState, 'unifiedTabsByWorktree'>
+): ReadonlySet<string> {
+  return new Set(
+    Object.entries(state.unifiedTabsByWorktree ?? {})
+      .filter(([, tabs]) => tabs?.some((tab) => tab.projectHostSetupId !== undefined))
+      .map(([worktreeId]) => worktreeId)
+      .filter((worktreeId) => isPositivelyLocalSourceWorktree(state, worktreeId))
+  )
+}
+
+type StampedTerminal = {
+  environmentId: string
+  executionHostId: ExecutionHostId
+  projectHostSetupId: string
+}
+
+export type HostStampedTerminal =
+  | { kind: 'none' }
+  | { kind: 'invalid'; reason: string }
+  | ({ kind: 'stamped' } & StampedTerminal)
+
+/** Recognized by the setup stamp alone, so a malformed stamp never reads as a legacy tab. */
+export function classifyHostStampedTerminal(
+  unifiedTabs:
+    | readonly (Pick<Tab, 'id' | 'contentType'> & {
+        executionHostId?: unknown
+        projectHostSetupId?: unknown
+      })[]
+    | undefined,
+  tabId: string
+): HostStampedTerminal {
+  const matches = (unifiedTabs ?? []).filter((tab) => tab.id === tabId)
+  if (!matches.some((tab) => tab.projectHostSetupId !== undefined)) {
+    return { kind: 'none' }
+  }
+  const [tab] = matches
+  if (matches.length !== 1) {
+    return { kind: 'invalid', reason: 'ambiguous_tab' }
+  }
+  if (tab.contentType !== 'terminal') {
+    return { kind: 'invalid', reason: 'not_terminal' }
+  }
+  return parseTerminalHostStamp(tab.projectHostSetupId, tab.executionHostId)
+}
+
+export type HostTerminalRoute =
+  | ({ kind: 'host-terminal'; targetWorktreeSelector: string } & StampedTerminal)
+  | { kind: 'refused'; reason: string }
+
+/** Null only for a tab with no setup stamp; every stamped tab routes to its target or refuses. */
+export function resolveHostTerminalRoute(
+  state: AppState,
+  worktreeId: string,
+  tabId: string,
+  ptyIds: readonly (string | null | undefined)[]
+): HostTerminalRoute | null {
+  const stamp = classifyHostStampedTerminal(state.unifiedTabsByWorktree?.[worktreeId], tabId)
+  if (stamp.kind !== 'stamped') {
+    return stamp.kind === 'none' ? null : { kind: 'refused', reason: stamp.reason }
+  }
+  if (!isPositivelyLocalSourceWorktree(state, worktreeId)) {
+    return { kind: 'refused', reason: 'source_worktree_not_local' }
+  }
+  const worktree = findWorktreeById(selectWorktreesByRepo(state), worktreeId)
+  const repo = state.repos.find((candidate) => candidate.id === worktree?.repoId)
+  const projectId = worktree && getWorktreeProjectId(worktree, repo, state.projectHostSetups)
+  const setups = state.projectHostSetups.filter(
+    (setup) =>
+      setup.id === stamp.projectHostSetupId &&
+      setup.projectId === projectId &&
+      setup.setupState === 'ready' &&
+      setup.hostId === stamp.executionHostId &&
+      !setup.connectionId &&
+      setup.path.trim() !== ''
+  )
+  if (!projectId || setups.length !== 1) {
+    return { kind: 'refused', reason: 'setup_not_ready' }
+  }
+  // Why: a local, ownerless or foreign PTY on a host-stamped tab proves nothing about its target.
+  const foreignPty = ptyIds.some((ptyId) => {
+    const owner = ptyId ? parseRemoteRuntimePtyId(ptyId) : undefined
+    return ptyId && (!owner?.handle.trim() || owner.environmentId !== stamp.environmentId)
+  })
+  return foreignPty
+    ? { kind: 'refused', reason: 'pty_owner_mismatch' }
+    : { ...stamp, kind: 'host-terminal', targetWorktreeSelector: `path:${setups[0].path}` }
 }

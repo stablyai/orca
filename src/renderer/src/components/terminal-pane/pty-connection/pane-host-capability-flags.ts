@@ -48,7 +48,9 @@ export function installPaneHostCapabilityFlags(session: ConnectPanePtySession): 
   // host is the authoritative signal: only a 'local' host is a local native PTY.
   session.executionHostId = session.terminalOwnerUnresolved
     ? UNRESOLVED_OWNER_HOST_ID
-    : getExecutionHostIdForWorktree(session.state, session.deps.worktreeId)
+    : // Why: a host-stamped terminal runs on its target, not its local source's host.
+      (session.hostTerminal?.executionHostId ??
+      getExecutionHostIdForWorktree(session.state, session.deps.worktreeId))
   session.isNativeWindowsConpty = isLocalNativeWindowsConpty({
     userAgent: navigator.userAgent,
     connectionId: null,

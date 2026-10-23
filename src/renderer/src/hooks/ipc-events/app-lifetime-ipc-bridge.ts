@@ -75,7 +75,11 @@ export function installAppLifetimeIpcEvents(): () => void {
       })
       .catch((error) => console.error('Failed to read runtime status snapshots:', error))
   }
-  const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
+  const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(
+    unsubs,
+    worktreeRuntime,
+    remountTerminalTabsAwaitingHostHydration
+  )
   registerBackgroundWorktreeRemovalBridge(unsubs)
   registerWslHostIpcBridge(unsubs)
   registerProjectCatalogIpcBridge(

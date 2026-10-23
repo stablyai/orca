@@ -14,6 +14,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from '../terminal-tab-types'
+import type { TerminalHostStamp } from './terminal-host-stamp'
 import type { PaneSide } from './terminal-pane-tree'
 import type { SplitRatioIntent } from './split-ratio-intents'
 import type { PaneOutcomeChanges } from './workspace-layout-pane-outcomes'
@@ -51,6 +52,8 @@ export type LayoutCommand =
       /** A quick command tab's label, so a later save of it matches main's copy. */
       quickCommandLabel?: string
       creation?: Partial<LayoutTerminalCreation>
+      /** A cross-host terminal's host and project setup, written with the tab it opens. */
+      hostStamp?: TerminalHostStamp
       initial?: InitialSurfaceReason
       /** A live terminal no pane shows: its pane when main holds one, else this tab, bound to it. */
       adopt?: LiveTerminalAdoption

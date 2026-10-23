@@ -10,6 +10,7 @@ import {
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
 import { OptionalExecutionHostId } from './worktree-params'
+import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
 
 // Why refused at the boundary rather than at spawn: only the host knows the allowlist, and a
 // relay-side throw reaches the caller as an opaque spawn failure after the round trip.
@@ -204,6 +205,12 @@ export const ResumeProviderSessionParam = z.object({
 
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
+  executionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && parseExecutionHostId(value)?.id === value
+    )
+    .optional(),
+  projectHostSetupId: OptionalString,
   clientMutationId: z.string().min(1).max(128).optional(),
   reconcileExisting: z.boolean().optional(),
   command: OptionalString,
@@ -235,6 +242,8 @@ export const TerminalCreateParams = z.object({
   presentation: z.enum(['background', 'focused']).optional(),
   tabId: OptionalString,
   leafId: OptionalString,
+  /** A host create's local tab group; local main consumes it and never forwards it to the host. */
+  groupId: OptionalString,
   spawnIntent: SpawnIntentParam.optional(),
   shell: WindowsShellOverrideParam.optional(),
   // Layout-owner build: the window's own new tab, already written to main under `tabId`/`leafId`;

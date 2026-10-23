@@ -28,11 +28,8 @@ import {
   terminalTabCreateCommand,
   withMainTerminalFacts
 } from './terminal-tab-create-through-layout-owner'
-import {
-  getRemoteConnectionIdForWorktree,
-  resolveCreatedTabShellOverride,
-  worktreeUsesWslPath
-} from './terminal-workspace-routing'
+import { resolveCreatedTabShellOverride, worktreeUsesWslPath } from './terminal-workspace-routing'
+import { resolveTerminalTabHostRouting } from './terminal-tab-host-routing'
 import type { AppState } from '../types'
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
 
@@ -101,8 +98,8 @@ export function createTerminalTabCreationActions(
         const defaultTitle = `Terminal ${nextOrdinal}`
         const quickCommandLabel = options?.quickCommandLabel?.trim()
         const startupCwd = options?.startupCwd
-        const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
-        const isRemoteWorktree = Boolean(remoteConnectionId)
+        const { explicitHostId, remoteConnectionId, isRemoteWorktree } =
+          resolveTerminalTabHostRouting(s, worktreeId, options?.executionHostId)
         const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
         const createdShellOverride = resolveCreatedTabShellOverride(
           shellOverride,
@@ -206,6 +203,10 @@ export function createTerminalTabCreationActions(
           entityId: id,
           groupId: group.id,
           worktreeId,
+          ...(explicitHostId ? { executionHostId: explicitHostId } : {}),
+          ...(options?.projectHostSetupId
+            ? { projectHostSetupId: options.projectHostSetupId }
+            : {}),
           contentType: 'terminal' as const,
           label: tab.title,
           ...(tab.quickCommandLabel?.trim()

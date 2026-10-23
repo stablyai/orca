@@ -64,6 +64,7 @@ export function createTerminalTab(
     color: command.color ?? null,
     ...(command.quickCommandLabel ? { quickCommandLabel: command.quickCommandLabel } : {}),
     ...(command.viewMode ? { viewMode: command.viewMode } : {}),
+    ...(command.hostStamp ? { hostStamp: command.hostStamp } : {}),
     kind: 'terminal',
     terminal: { defaultTitle: `Terminal ${ordinal}`, ...command.creation },
     panes: { root: { type: 'leaf', leafId } }

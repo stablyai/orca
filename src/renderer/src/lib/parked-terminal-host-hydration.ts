@@ -2,7 +2,7 @@ import { getConnectionIdFromState } from './connection-owner-resolution'
 import type { AppState } from '@/store/types'
 
 type ParkedPaneHostState = Parameters<typeof getConnectionIdFromState>[0] &
-  Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId'>
+  Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId' | 'unifiedTabsByWorktree'>
 
 // Why: only panes that actually parked on the unresolved-host guard may be
 // remounted. Keying off "tab has no PTY" instead would also churn tabs whose
@@ -45,7 +45,11 @@ export function getTabIdsAwaitingHostHydrationRemount(state: ParkedPaneHostState
       // Remount only a tab that still exists and still has no PTY. Either way the
       // entry is consumed below: a closed tab is gone, and one that acquired a PTY
       // by other means is no longer parked.
-      if (tab && !tab.ptyId && !hasLivePty) {
+      // Why: a parked host-stamped pane holds only its saved handle; remounting reattaches it.
+      const savedHostPty = state.unifiedTabsByWorktree?.[worktreeId]?.some(
+        (entry) => entry.id === tabId && entry.projectHostSetupId !== undefined
+      )
+      if (tab && (savedHostPty || (!tab.ptyId && !hasLivePty))) {
         remountable.push(tabId)
       }
     }

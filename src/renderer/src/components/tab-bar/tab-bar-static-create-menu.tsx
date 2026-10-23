@@ -12,6 +12,7 @@ import {
 } from './use-tab-bar-runtime-model'
 import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import { TabBarHostTerminalSubmenu } from './TabBarHostTerminalSubmenu'
 
 export function TabBarStaticCreateMenu({
   terminalOnly,
@@ -101,6 +102,13 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     )
+  const hostTerminalSubmenu = (
+    <TabBarHostTerminalSubmenu
+      worktreeId={props.worktreeId}
+      groupId={props.groupId}
+      onNewTerminalTab={onNewTerminalTab}
+    />
+  )
   const newBrowserMenuItem =
     !terminalOnly && managedBrowserCreationEnabled ? (
       <DropdownMenuItem
@@ -183,6 +191,7 @@ export function TabBarStaticCreateMenu({
       {newMarkdownMenuItem}
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
+      {hostTerminalSubmenu}
       {newBrowserMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
@@ -190,6 +199,7 @@ export function TabBarStaticCreateMenu({
   ) : (
     <>
       {defaultTerminalMenuItems}
+      {hostTerminalSubmenu}
       {newBrowserMenuItem}
       {newMarkdownMenuItem}
       {openMarkdownMenuItem}

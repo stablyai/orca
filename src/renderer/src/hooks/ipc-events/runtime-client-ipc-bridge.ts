@@ -36,7 +36,8 @@ import { readPublishedSortOrders } from '../../store/slices/worktrees/listing/wo
 
 export function registerRuntimeClientIpcBridge(
   unsubs: (() => void)[],
-  worktreeRuntime: WorktreeEventRuntime
+  worktreeRuntime: WorktreeEventRuntime,
+  remountTerminalTabsAwaitingHostHydration?: () => void
 ): () => void {
   const { worktreeChangeRefreshQueue, activateNotifiedWorktree } = worktreeRuntime
   let stopped = false
@@ -62,6 +63,10 @@ export function registerRuntimeClientIpcBridge(
       // Why: project events can reveal target CRUD, but known target states already arrive by push.
       void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
+      // Why: a stamped pane parked before this host's catalog delivered its setup can route now.
+      if (!stopped) {
+        remountTerminalTabsAwaitingHostHydration?.()
+      }
       // Why: the host emits one reposChanged for group/folder-workspace edits too, so those
       // catalogs go stale without this; groups first because folder workspaces resolve owners from them.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }

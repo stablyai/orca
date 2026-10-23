@@ -6,6 +6,7 @@ import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
+import { TabHostBadgeAndColor } from './TabHostBadgeAndColor'
 import { TabHoverCard } from './TabHoverCard'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
@@ -80,6 +81,8 @@ export type SortableTabProps = {
   nativeChat?: NativeChatTabSession
   /** A native chat whose generated name failed, unless the user named the tab. */
   namingFailure?: StructuredChatTabNamingFailure | null
+  /** Names the host a tab runs on when it is not its worktree's own host. */
+  hostBadge?: string | null
 }
 
 export default function SortableTab({
@@ -111,7 +114,8 @@ export default function SortableTab({
   onToggleViewMode,
   canSplitTerminal = true,
   nativeChat,
-  namingFailure
+  namingFailure,
+  hostBadge = null
 }: SortableTabProps): React.JSX.Element {
   const naming = useNativeChatNamingFailure(namingFailure)
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
@@ -297,13 +301,10 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
-      )}
-      {tab.color && !isEditing && (
-        <span
-          className="mr-1.5 size-2 rounded-full shrink-0"
-          style={{ backgroundColor: tab.color }}
-        />
+        <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+          <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
+          <TabHostBadgeAndColor hostBadge={hostBadge} color={tab.color} hidden={false} />
+        </div>
       )}
       {isExpanded && !isEditing && (
         <button

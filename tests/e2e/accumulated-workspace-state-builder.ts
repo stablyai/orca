@@ -11,6 +11,8 @@ import type { WorktreeLineage } from '../../src/shared/worktree/lineage-types'
 import type { Worktree } from '../../src/shared/worktree/types'
 import type { NormalizedAccumulatedWorkspaceFixtureOptions } from './accumulated-workspace-profile'
 
+type SyntheticWorkspaceTab = Omit<Tab, 'projectHostSetupId'> & { projectHostSetupId?: never }
+
 export type SyntheticLiveStatus = {
   paneKey: string
   tabId: string
@@ -24,7 +26,7 @@ export type AccumulatedWorkspaceSeed = {
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId: Record<string, string[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
-  unifiedTabsByWorktree: Record<string, Tab[]>
+  unifiedTabsByWorktree: Record<string, SyntheticWorkspaceTab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
@@ -107,7 +109,7 @@ export function buildAccumulatedWorkspaceSeed(
   const tabsByWorktree: Record<string, TerminalTab[]> = {}
   const ptyIdsByTabId: Record<string, string[]> = {}
   const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
-  const unifiedTabsByWorktree: Record<string, Tab[]> = {}
+  const unifiedTabsByWorktree: Record<string, SyntheticWorkspaceTab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
   const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
@@ -127,7 +129,7 @@ export function buildAccumulatedWorkspaceSeed(
       worktreeIndex
     )
     const terminalTabs: TerminalTab[] = []
-    const unifiedTabs: Tab[] = []
+    const unifiedTabs: SyntheticWorkspaceTab[] = []
     for (let tabIndex = 0; tabIndex < terminalCount; tabIndex += 1) {
       const tabId = `synthetic-tab-${terminalOrdinal}`
       const panes = Array.from({ length: config.panesPerTab }, () => paneId(++paneOrdinal))

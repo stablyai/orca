@@ -237,6 +237,8 @@ export function movePaneToNewTab(
     color: null,
     // The chat pane's new tab opens in chat view, as the window's drag-out opens it.
     ...(tab.panes.chatLeafId === leafId ? { viewMode: 'chat' as const } : {}),
+    // A pane split off a stamped tab still runs on the stamped host.
+    ...(tab.hostStamp ? { hostStamp: tab.hostStamp } : {}),
     kind: 'terminal',
     terminal: {
       defaultTitle: `Terminal ${ordinal}`,

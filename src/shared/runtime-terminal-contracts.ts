@@ -5,7 +5,6 @@ import type { PtyIncarnationId } from './pty-incarnation'
 import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
-import type { StartupCwdFallback } from './startup-cwd-fallback'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
@@ -275,29 +274,6 @@ export type RuntimeTerminalCreateRequestPayload =
       source: 'runtime-session'
     })
 
-export type RuntimeTerminalCreate = {
-  handle: string
-  /** Host-owned PTY incarnation used to fence remote identity observations. */
-  incarnationId?: string | null
-  tabId?: string
-  paneKey?: string | null
-  ptyId?: string | null
-  worktreeId: string
-  title: string | null
-  executionHostId?: ExecutionHostId
-  hostPlatform?: NodeJS.Platform
-  surface?: 'background' | 'visible'
-  warning?: string
-  agentSessionDisposition?: 'created' | 'adopted'
-  isReattach?: true
-  /** Spawn process identity for host-internal ownership proof. */
-  processId?: number
-  /** Host-internal: the requested folder was gone, so the process started at the workspace root. */
-  startupCwdFallback?: StartupCwdFallback
-  /** Host-internal saved-folder decision; excluded by RPC result projection. */
-  savedStartupCwd?: string
-}
-
 export type RuntimeTerminalSplit = {
   handle: string
   tabId: string
@@ -367,3 +343,8 @@ export type RuntimeTerminalWait = {
   exitCause?: TerminalExitCause
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
+
+export {
+  isTerminalCreatedHere,
+  type RuntimeTerminalCreate
+} from './runtime-terminal-create-disposition'

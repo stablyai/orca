@@ -70,6 +70,7 @@ const useAppStoreMock = vi.fn(
       activeWorktreeId: string | null
       gitStatusByWorktree: Record<string, never[]>
       projects: typeof appStoreSnapshot.projects
+      projectHostSetups: never[]
       repos: { id: string; connectionId?: string | null }[]
       sshConnectionStates: Map<string, { remotePlatform?: NodeJS.Platform }>
       worktreesByRepo: typeof appStoreSnapshot.worktreesByRepo
@@ -99,6 +100,7 @@ const useAppStoreMock = vi.fn(
       activeWorktreeId: appStoreSnapshot.activeWorktreeId,
       gitStatusByWorktree: {},
       projects: appStoreSnapshot.projects,
+      projectHostSetups: [],
       repos: appStoreSnapshot.repos,
       sshConnectionStates: appStoreSnapshot.sshConnectionStates,
       worktreesByRepo: appStoreSnapshot.worktreesByRepo,

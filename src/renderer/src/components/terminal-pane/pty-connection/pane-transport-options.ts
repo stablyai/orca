@@ -28,6 +28,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,
+    ...(session.hostTerminal ? { hostTerminalTarget: session.hostTerminal } : {}),
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
     // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
     // pty:spawn returns.

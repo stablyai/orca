@@ -1,4 +1,6 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { getLocalSourceWorktreeIds } from '@/lib/terminal-worktree-route'
+import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
@@ -45,13 +47,15 @@ type WorkspaceTabPaletteActivationState = Pick<
   | 'setActiveTabType'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
->
+> &
+  WorktreeRuntimeOwnerState
 
 function validateTarget(
   state: WorkspaceTabPaletteActivationState,
   result: WorkspaceTabPaletteActivationTarget
 ): WorkspaceTabPaletteActivationFailure | null {
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(getPaletteOwnershipWorktreeIds(state))
+  const localSourceWorktreeIds = getLocalSourceWorktreeIds(state)
   if (!result.executionHostId && ambiguousWorktreeIds.has(result.worktreeId)) {
     return 'missing-worktree'
   }
@@ -74,7 +78,7 @@ function validateTarget(
       candidate.groupId === result.groupId &&
       candidate.worktreeId === result.worktreeId &&
       candidate.contentType === result.contentType &&
-      isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
+      isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds, localSourceWorktreeIds)
   )
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
