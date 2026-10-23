@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import type { UpdateStatus } from './update-status-types'
+import { ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT } from './editor-save-events'
+import { acceptEditorHotExitRequest } from './editor-hot-exit-request'
 import {
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
@@ -30,6 +32,7 @@ describe('prepareRendererForAppRestart', () => {
       prepareRendererForAppRestart(eventTarget, {
         startedEventName: 'restart-started',
         abortedEventName: 'restart-aborted',
+        userInitiated: true,
         awaitCheckpoint: () => Promise.resolve()
       })
     ).rejects.toThrow('Renderer shutdown checkpoint was not completed.')
@@ -53,6 +56,7 @@ describe('prepareRendererForAppRestart', () => {
       prepareRendererForAppRestart(eventTarget, {
         startedEventName: 'restart-started',
         abortedEventName: 'restart-aborted',
+        userInitiated: true,
         awaitCheckpoint: () => Promise.resolve()
       })
     ).rejects.toThrow('Renderer shutdown checkpoint was not completed: sendSync payload rejected')
@@ -67,6 +71,7 @@ describe('prepareRendererForAppRestart', () => {
     await prepareRendererForAppRestart(eventTarget, {
       startedEventName: 'restart-started',
       abortedEventName: 'restart-aborted',
+      userInitiated: true,
       awaitCheckpoint
     })
 
@@ -74,15 +79,21 @@ describe('prepareRendererForAppRestart', () => {
     expect(awaitCheckpoint).toHaveBeenCalledTimes(1)
   })
 
-  it('waits for the durable checkpoint write before the restart proceeds', async () => {
+  it('keeps quit protection until editor consent, then waits for the durable checkpoint', async () => {
     const eventTarget = new EventTarget()
     const order: string[] = []
+    let releaseConsent!: () => void
     let releaseCheckpoint!: () => void
+    eventTarget.addEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, (event) => {
+      releaseConsent = acceptEditorHotExitRequest(event)!.resolve
+    })
+    eventTarget.addEventListener('restart-started', () => order.push('started'))
     eventTarget.addEventListener('beforeunload', () => order.push('staged'))
 
     const prepared = prepareRendererForAppRestart(eventTarget, {
       startedEventName: 'restart-started',
       abortedEventName: 'restart-aborted',
+      userInitiated: true,
       awaitCheckpoint: () =>
         new Promise<void>((resolve) => {
           order.push('awaiting-flush')
@@ -97,12 +108,14 @@ describe('prepareRendererForAppRestart', () => {
       settled = true
     })
 
+    expect(order).toEqual([])
+    releaseConsent()
     await Promise.resolve()
     expect(settled).toBe(false)
 
     releaseCheckpoint()
     await prepared
-    expect(order).toEqual(['staged', 'awaiting-flush', 'flushed'])
+    expect(order).toEqual(['started', 'staged', 'awaiting-flush', 'flushed'])
   })
 
   it('aborts the restart when the staged state cannot be persisted', async () => {
@@ -114,6 +127,7 @@ describe('prepareRendererForAppRestart', () => {
       prepareRendererForAppRestart(eventTarget, {
         startedEventName: 'restart-started',
         abortedEventName: 'restart-aborted',
+        userInitiated: true,
         awaitCheckpoint: () => Promise.reject(new Error('Failed to persist renderer state.'))
       })
     ).rejects.toThrow('Failed to persist renderer state.')

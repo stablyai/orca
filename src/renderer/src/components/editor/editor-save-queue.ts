@@ -58,7 +58,8 @@ export type EditorSaveQueue = {
   queueSave: (
     file: OpenFile,
     fallbackContent: string,
-    trigger?: EditorSaveTrigger
+    trigger?: EditorSaveTrigger,
+    admissionDeadline?: number
   ) => Promise<EditorSaveResult>
   /** Flushes pending text, drops the autosave timer, then waits for the running and queued saves. */
   settleFileSaves: (fileId: string, flush?: boolean) => Promise<void>
@@ -67,6 +68,8 @@ export type EditorSaveQueue = {
   syncAutoSave: () => void
   dispose: () => void
 }
+
+class EditorSaveAdmissionExpiredError extends Error {}
 
 // Why: keeping the save queue, settle coordination, and the debounce timers that feed it together avoids split-brain saves.
 export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
@@ -133,8 +136,13 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     // Why: before the flush, which could republish discarded edits; no await follows before the write.
     // Why the queued record: a rejoin since then moves the view to a record with its own epoch.
     const discarded = (): boolean => editorDiscardEpoch(request.recordId) !== request.discardEpoch
+    const expired = (): boolean =>
+      request.admissionDeadline !== undefined && performance.now() >= request.admissionDeadline
     if (discarded()) {
       return nothingToWrite
+    }
+    if (expired()) {
+      return 'failed'
     }
     flushPendingEditorBuffer(store.getState(), fileId, trigger === 'autosave')
     // Why: edits saved by the save ahead or reloaded since the request leave nothing to write.
@@ -180,11 +188,17 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           if (discarded()) {
             throw new EditorSaveDiscardedError()
           }
+          if (expired()) {
+            throw new EditorSaveAdmissionExpiredError()
+          }
         }
       )
     } catch (error) {
       // Why: the self-write stamp is only valid after a real write; clear on failure so it can't suppress a real update.
       clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
+      if (error instanceof EditorSaveAdmissionExpiredError) {
+        return 'failed'
+      }
       if (error instanceof EditorSaveDiscardedError) {
         return nothingToWrite
       }
@@ -251,7 +265,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
   const queueSave = (
     file: OpenFile,
     fallbackContent: string,
-    trigger: EditorSaveTrigger = 'user'
+    trigger: EditorSaveTrigger = 'user',
+    admissionDeadline?: number
   ): Promise<EditorSaveResult> => {
     const key = recordKeyOf(file.id)
     clearScheduledAutoSave(key)
@@ -265,6 +280,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       trigger,
       requestedDirty,
       recordId: key,
+      admissionDeadline,
       discardEpoch
     })
   }

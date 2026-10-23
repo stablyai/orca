@@ -71,6 +71,7 @@ function createLifecycleHarness(
       prepareRendererForAppRestart(window, {
         startedEventName,
         abortedEventName,
+        userInitiated: true,
         awaitCheckpoint: () => Promise.resolve()
       }),
     cleanup: () => {

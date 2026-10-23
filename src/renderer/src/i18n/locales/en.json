@@ -16771,6 +16771,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Failed to list Markdown documents."
+        },
+        "RestartUnsavedChangesDialog": {
+          "title": "Restart Without Unsaved Changes?",
+          "body": "These files have unsaved changes that can't be kept across a restart. Save them first, or restart without those changes.",
+          "cancel": "Cancel",
+          "restartAnyway": "Restart Anyway"
         }
       },
       "diff": {

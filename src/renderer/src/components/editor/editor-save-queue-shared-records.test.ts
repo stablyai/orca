@@ -1,3 +1,5 @@
+import { ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT } from '../../../../shared/editor-save-events'
+import { requestEditorHotExitBackup } from '../../../../shared/editor-hot-exit-request'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
@@ -198,6 +200,29 @@ describe('editor save queue: shared records', () => {
       expect(disk.files.get(PATH)).toBe('a edits')
       expect(disk.files.get('/repo/b.ts')).toBe('b edits')
       expect(store.getState().openFiles.every((file) => !file.isDirty)).toBe(true)
+    })
+
+    it('hot-exit autosaves two views of one record without a duplicate-path refusal', async () => {
+      store.setState({ openFiles: [tab('w1'), tab('w2', { worktreeId: 'wt-2' })] })
+      expect(recordOf('w1')).toBe(recordOf('w2'))
+      type('w2', 'shared draft')
+      const { handlePrepareHotExit } = createEditorRestartSaveHandlers({
+        store,
+        queueSave: queue.queueSave,
+        settleFileSaves: queue.settleFileSaves
+      })
+      const handle = (event: Event): void => {
+        void handlePrepareHotExit(event)
+      }
+      window.addEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, handle)
+      try {
+        await requestEditorHotExitBackup(window, true)
+        expect(writes()).toEqual(['shared draft'])
+        expect(disk.files.get(PATH)).toBe('shared draft')
+        expect(view('w1').isDirty || view('w2').isDirty).toBe(false)
+      } finally {
+        window.removeEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, handle)
+      }
     })
 
     it('writes through the writable view when a read-only view of the record is listed first', async () => {

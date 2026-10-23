@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@tes
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../../shared/update-status-types'
+import { APP_RESTART_CANCELLED_BY_USER_MESSAGE } from '../../../shared/app-restart-cancellation'
 import { useAppStore } from '../store'
 import { UpdateCard } from './UpdateCard'
 import { NotificationCardStack } from './NotificationCardStack'
@@ -96,6 +97,22 @@ afterEach(() => {
 })
 
 describe('UpdateCard staged install recovery', () => {
+  it('offers Restart after cancelling automatic installation without retrying automatically', async () => {
+    quitAndInstall.mockRejectedValueOnce(new Error(APP_RESTART_CANCELLED_BY_USER_MESSAGE))
+    renderAfterAvailableStatus()
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }))
+    act(() => useAppStore.getState().setUpdateStatus({ state: 'downloaded', version: '1.4.200' }))
+    await flushActions()
+
+    expect(quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Installing...')).toBeNull()
+    expect(screen.queryByText('Update Error')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Restart to Update' }))
+    await flushActions()
+    expect(quitAndInstall).toHaveBeenCalledTimes(2)
+    expect(download).toHaveBeenCalledTimes(1)
+  })
+
   it('explains background blockers and retries installation without a manual download', async () => {
     renderWithInitialStatus({
       state: 'error',

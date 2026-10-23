@@ -18,6 +18,7 @@ import { MANAGE_SESSIONS_SECTION_ID } from './TerminalTccAttributionNotice'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { isRestartCancelledByUser } from '../../../../shared/app-restart-cancellation'
 
 export function TerminalWindowsAdministratorSection(): React.JSX.Element {
   const [administrator, setAdministrator] = useState<boolean | null | undefined>()
@@ -83,9 +84,9 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
     setRestartError(false)
     try {
       await window.api.app.restartAsAdministrator()
-    } catch {
+    } catch (error) {
       setRestarting(false)
-      setRestartError(true)
+      setRestartError(!isRestartCancelledByUser(error))
     }
   }
 

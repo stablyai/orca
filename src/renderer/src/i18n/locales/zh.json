@@ -16431,6 +16431,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "无法列出 Markdown 文档。"
+        },
+        "RestartUnsavedChangesDialog": {
+          "title": "不保留未保存的更改并重启？",
+          "body": "这些文件中有未保存的更改，重启后无法保留。请先保存，或在不保留这些更改的情况下重启。",
+          "cancel": "取消",
+          "restartAnyway": "仍然重启"
         }
       },
       "diff": {

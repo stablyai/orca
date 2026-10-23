@@ -118,7 +118,8 @@ describe('renderer restart wiring', () => {
       async () => {},
       async () => {}
     )
-    expect(add.mock.calls).toHaveLength(2)
+    // Each preparation adds a hot-exit reply listener and a checkpoint-failure listener.
+    expect(add.mock.calls).toHaveLength(4)
     expect(remove.mock.calls).toEqual(add.mock.calls)
   })
 

@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { isRestartCancelledByUser } from '../../../shared/app-restart-cancellation'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../store'
 import { getStartupErrorFallbackUI } from '../lib/startup-ui-hydration'
@@ -53,7 +54,11 @@ function announceDegradedStartup(): void {
     action: {
       label: translate('auto.App.caea5b51b9', 'Restart now'),
       onClick: () => {
-        void window.api.app.relaunch()
+        void window.api.app.relaunch().catch((error) => {
+          if (!isRestartCancelledByUser(error)) {
+            console.error('[startup] relaunch from degraded mode failed', error)
+          }
+        })
       }
     }
   })

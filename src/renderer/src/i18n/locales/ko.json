@@ -16431,6 +16431,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Markdown 문서를 나열하지 못했습니다."
+        },
+        "RestartUnsavedChangesDialog": {
+          "title": "저장하지 않은 변경 사항 없이 다시 시작할까요?",
+          "body": "이 파일에는 다시 시작하면 유지할 수 없는 저장하지 않은 변경 사항이 있습니다. 먼저 저장하거나, 해당 변경 사항 없이 다시 시작하세요.",
+          "cancel": "취소",
+          "restartAnyway": "그래도 다시 시작"
         }
       },
       "diff": {

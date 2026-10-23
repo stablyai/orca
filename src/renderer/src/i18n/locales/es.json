@@ -16428,6 +16428,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "No se pudo obtener la lista de documentos Markdown."
+        },
+        "RestartUnsavedChangesDialog": {
+          "title": "¿Reiniciar sin los cambios no guardados?",
+          "body": "Estos archivos tienen cambios sin guardar que no se pueden conservar tras un reinicio. Guárdalos primero o reinicia sin esos cambios.",
+          "cancel": "Cancelar",
+          "restartAnyway": "Reiniciar de todos modos"
         }
       },
       "diff": {

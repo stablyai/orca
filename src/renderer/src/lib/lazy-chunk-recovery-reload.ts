@@ -58,6 +58,8 @@ export async function requestLazyChunkRecoveryReload(
     await prepareRendererForAppRestart(win, {
       startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
       abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+      // Why: a dialog here could need the very chunk that failed to load, so refuse silently.
+      userInitiated: false,
       awaitCheckpoint
     })
   } catch {

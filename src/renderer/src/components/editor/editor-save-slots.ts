@@ -8,6 +8,7 @@ export type EditorSaveRequest = {
   requestedDirty: boolean
   /** The record the request was queued under; `discardEpoch` is its epoch then. */
   recordId: string
+  admissionDeadline: number | undefined
   /** A discard since the request voids it, whatever the trigger. */
   discardEpoch: number
 }
@@ -49,6 +50,10 @@ export function createEditorSaveSlots(
       }
       request.fallbackContent = incoming.fallbackContent
       request.requestedDirty ||= incoming.requestedDirty
+      request.admissionDeadline =
+        request.admissionDeadline === undefined || incoming.admissionDeadline === undefined
+          ? undefined
+          : Math.max(request.admissionDeadline, incoming.admissionDeadline)
       if (TRIGGER_RANK[incoming.trigger] > TRIGGER_RANK[request.trigger]) {
         request.trigger = incoming.trigger
       }

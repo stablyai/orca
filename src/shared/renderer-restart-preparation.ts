@@ -1,7 +1,4 @@
-import {
-  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
-  type EditorPrepareHotExitDetail
-} from './editor-save-events'
+import { requestEditorHotExitBackup } from './editor-hot-exit-request'
 import {
   consumeShutdownCheckpointFailureReason,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
@@ -12,44 +9,21 @@ import type { UpdateStatus } from './update-status-types'
 export type AppRestartPrepOptions = {
   startedEventName: string
   abortedEventName: string
+  /** False for automatic restarts; only a user who asked to restart may be asked about unsaved work. */
+  userInitiated: boolean
   /** Joins the durable write of the state the checkpoint staged; rejects if it failed. */
   awaitCheckpoint: () => Promise<void>
 }
 
-function requestEditorHotExitBackup(eventTarget: EventTarget): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    let claimed = false
-    eventTarget.dispatchEvent(
-      new CustomEvent<EditorPrepareHotExitDetail>(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, {
-        detail: {
-          claim: () => {
-            claimed = true
-          },
-          resolve,
-          reject: (message) => {
-            reject(new Error(message))
-          }
-        }
-      })
-    )
-
-    // Why: restart paths can run before the editor autosave controller mounts.
-    // With no claimant, there are no renderer-owned dirty buffers to back up.
-    if (!claimed) {
-      resolve()
-    }
-  })
-}
-
 export async function prepareRendererForAppRestart(
   eventTarget: EventTarget,
-  { startedEventName, abortedEventName, awaitCheckpoint }: AppRestartPrepOptions
+  { startedEventName, abortedEventName, userInitiated, awaitCheckpoint }: AppRestartPrepOptions
 ): Promise<void> {
-  eventTarget.dispatchEvent(new Event(startedEventName))
   let checkpointFailed = false
 
   try {
-    await requestEditorHotExitBackup(eventTarget)
+    await requestEditorHotExitBackup(eventTarget, userInitiated)
+    eventTarget.dispatchEvent(new Event(startedEventName))
     const markCheckpointFailed = (): void => {
       checkpointFailed = true
     }

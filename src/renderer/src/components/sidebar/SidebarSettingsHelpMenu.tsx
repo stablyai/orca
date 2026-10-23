@@ -35,6 +35,7 @@ import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SidebarFeedbackDialogModule from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import { isRestartCancelledByUser } from '../../../../shared/app-restart-cancellation'
 
 // Why lazy: the feedback form is only reachable from this menu's own item, so it does not
 // belong on the renderer boot graph. Shared with the menu-open warm below so both hit the
@@ -153,6 +154,9 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
     void window.api.app.restart().catch((error) => {
       if (mountedRef.current) {
         setIsRestartingOrca(false)
+        if (isRestartCancelledByUser(error)) {
+          return
+        }
         toast.error(
           translate(
             'auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3',

@@ -14,6 +14,7 @@ import {
   createOrcaProfilesAuthActions,
   type OrcaProfilesAuthActions
 } from './orca-profiles-auth-actions'
+import { isRestartCancelledByUser } from '../../../../shared/app-restart-cancellation'
 
 export type OrcaProfilesSlice = OrcaProfilesAuthActions & {
   orcaProfiles: OrcaProfileSummary[]
@@ -113,8 +114,11 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
       }
       return result
     } catch (err) {
-      console.error('Failed to switch Orca profile:', err)
       set({ orcaProfileSwitching: false })
+      if (isRestartCancelledByUser(err)) {
+        return null
+      }
+      console.error('Failed to switch Orca profile:', err)
       toast.error(
         translate('auto.store.slices.orca.profiles.7d4bc516ee', 'Failed to switch profile'),
         {
@@ -141,6 +145,9 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
       }
       return result
     } catch (err) {
+      if (isRestartCancelledByUser(err)) {
+        return null
+      }
       console.error('Failed to transfer Orca profile project:', err)
       toast.error(
         translate('auto.store.slices.orca.profiles.f03ae7f27b', 'Failed to transfer project'),

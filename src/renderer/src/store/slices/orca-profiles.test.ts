@@ -6,6 +6,7 @@ import type {
   OrcaProfileListResult,
   TransferOrcaProfileProjectResult
 } from '../../../../shared/orca-profiles'
+import { APP_RESTART_CANCELLED_BY_USER_MESSAGE } from '../../../../shared/app-restart-cancellation'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -176,6 +177,20 @@ describe('orca profile slice', () => {
 
     expect(result).toEqual({ status: 'already-active' })
     expect(store.getState().orcaProfileSwitching).toBe(false)
+  })
+
+  it('resets quietly when the user cancels the restart to keep unsaved changes', async () => {
+    // Why: only the message crosses the preload bridge, so the rejection is rebuilt from it here.
+    orcaProfilesApi.switchProfile.mockRejectedValue(
+      new Error(APP_RESTART_CANCELLED_BY_USER_MESSAGE)
+    )
+    const store = createTestStore()
+    store.setState({ activeOrcaProfileId: 'local-default' })
+
+    await expect(store.getState().switchOrcaProfile('local-work')).resolves.toBeNull()
+
+    expect(store.getState().orcaProfileSwitching).toBe(false)
+    expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
   it('does not call main when switching to the active profile', async () => {

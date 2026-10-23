@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { bumpEditorDiscardEpoch } from './editor-discard-epoch'
 import type { OpenFile } from '@/store/slices/editor'
 import { createEditorSaveQueue, type EditorSaveQueue } from './editor-save-queue'
 import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
@@ -95,6 +96,55 @@ describe('editor save queue: one running and one queued save per record', () => 
     expect(disk.files.get(PATH)).toBe('abc')
     expect(file('a').isDirty).toBe(false)
   })
+
+  it.each([
+    ['bounded then ordinary autosave', -1, undefined, false, 'autosave', 'written'],
+    ['ordinary autosave then bounded', undefined, -1, false, 'autosave', 'written'],
+    ['bounded then Overwrite', -1, undefined, false, 'overwrite', 'written'],
+    ['Overwrite then bounded', undefined, -1, false, 'overwrite', 'written'],
+    ['later bound joins', -1, 1000, false, 'autosave', 'written'],
+    ['earlier bound joins', 1000, -1, false, 'autosave', 'written'],
+    ['both bounds expired', -1, -1, false, 'autosave', 'failed'],
+    ['discard replaces unbounded authority', undefined, -1, true, 'user', 'failed'],
+    ['discard replaces expired authority', -1, undefined, true, 'user', 'written']
+  ] as const)(
+    '%s saves the latest draft only while authorized',
+    async (_, firstBound, nextBound, discard, independentTrigger, expected) => {
+      vi.useFakeTimers()
+      try {
+        edit('a', 'old')
+        const release = holdNextWrite(disk)
+        const first = queue.queueSave(file('a'), 'old')
+        await vi.advanceTimersByTimeAsync(0)
+        edit('a', 'newer')
+        const pending = queue.queueSave(
+          file('a'),
+          'newer',
+          firstBound === undefined ? independentTrigger : 'autosave',
+          firstBound
+        )
+        if (discard) {
+          bumpEditorDiscardEpoch(store.getState().editorBufferIdOf.a)
+        }
+        edit('a', 'latest')
+        const joined = queue.queueSave(
+          file('a'),
+          'latest',
+          nextBound === undefined ? independentTrigger : 'autosave',
+          nextBound
+        )
+        expect(joined).toBe(pending)
+        release()
+        expect(await first).toBe('written')
+        expect(await Promise.all([pending, joined])).toEqual([expected, expected])
+        expect(writtenContents()).toEqual(expected === 'written' ? ['old', 'latest'] : ['old'])
+        expect(disk.files.get(PATH)).toBe(expected === 'written' ? 'latest' : 'old')
+        expect(store.getState().editorDrafts.a).toBe(expected === 'written' ? undefined : 'latest')
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('upgrades a queued autosave to the Overwrite that joins it', async () => {
     edit('a', 'a')

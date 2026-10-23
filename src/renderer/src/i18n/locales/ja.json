@@ -16431,6 +16431,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Markdown ドキュメントを一覧表示できませんでした。"
+        },
+        "RestartUnsavedChangesDialog": {
+          "title": "未保存の変更を破棄して再起動しますか？",
+          "body": "これらのファイルには、再起動後に保持できない未保存の変更があります。先に保存するか、変更を破棄して再起動してください。",
+          "cancel": "キャンセル",
+          "restartAnyway": "このまま再起動"
         }
       },
       "diff": {

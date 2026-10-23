@@ -58,6 +58,7 @@ export async function prepareAndInvokeUpdaterInstall(
   await prepareRendererForAppRestart(eventTarget, {
     startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
     abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+    userInitiated: true,
     awaitCheckpoint
   })
   relay.markPrepared()
@@ -85,6 +86,7 @@ export async function prepareAndInvokeAppRestart<T>(
       await prepareRendererForAppRestart(eventTarget, {
         startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
         abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+        userInitiated: true,
         awaitCheckpoint
       })
     }

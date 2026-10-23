@@ -16557,6 +16557,12 @@
         },
         "useMarkdownDocuments": {
           "listFailed": "Impossible de lister les documents Markdown."
+        },
+        "RestartUnsavedChangesDialog": {
+          "title": "Redémarrer sans les modifications non enregistrées ?",
+          "body": "Ces fichiers contiennent des modifications non enregistrées qui ne peuvent pas être conservées après un redémarrage. Enregistrez-les d'abord, ou redémarrez sans ces modifications.",
+          "cancel": "Annuler",
+          "restartAnyway": "Redémarrer quand même"
         }
       },
       "diff": {

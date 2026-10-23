@@ -10,6 +10,7 @@ import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-d
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
+import { getBackedUpEditorDraft } from './editor-draft-backup'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
@@ -128,13 +129,11 @@ export function buildEditorSessionData(
   | 'activeTabTypeByWorktree'
   | 'markdownFrontmatterVisible'
 > {
-  const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
-  for (const f of editFiles) {
+  for (const f of openFiles.filter((file) => file.mode === 'edit')) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
-    const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
+    const dirtyDraftContent = f.isDirty ? getBackedUpEditorDraft(f, editorDrafts) : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,

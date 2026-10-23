@@ -14,10 +14,8 @@ import {
 } from './updater-beforeunload'
 import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
 import { ORCA_APP_RESTART_ABORTED_EVENT } from '../../../shared/updater-renderer-events'
-import {
-  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
-  type EditorPrepareHotExitDetail
-} from '../../../shared/editor-save-events'
+import { ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT } from '../../../shared/editor-save-events'
+import { acceptEditorHotExitRequest } from '../../../shared/editor-hot-exit-request'
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
 const LANDED_RELOAD_GUARD_VALUE = 'doc-before-the-reload'
@@ -369,14 +367,13 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       preventUnloadAndScheduleShutdownCheckpointReset(event, window)
     }
     const hotExitBackup = (event: Event): void => {
-      const detail = (event as CustomEvent<EditorPrepareHotExitDetail>).detail
-      detail.claim()
+      const request = acceptEditorHotExitRequest(event)
       harness.hotExitBackups += 1
       if (options.hotExitBackupFails === true) {
-        detail.reject('Some unsaved editor changes cannot be backed up before restart.')
+        request?.reject('Some unsaved editor changes cannot be backed up before restart.')
         return
       }
-      detail.resolve()
+      request?.resolve()
     }
 
     window.addEventListener('beforeunload', dirtyTabGuard)

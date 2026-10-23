@@ -13,6 +13,7 @@ import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
 import { StarNagCard } from '../components/StarNagCard'
 import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeOnRestartModal'
+import { RestartUnsavedChangesDialog } from '../components/editor/RestartUnsavedChangesDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
@@ -303,6 +304,10 @@ export function AppRootSurfaces(props: {
       </NotificationCardStack>
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
         <NativeChatResumeOnRestartModal />
+      </OverlayBoundary>
+      {/* Why static: a restart awaits this dialog, so it can't depend on loading a chunk. */}
+      <OverlayBoundary boundaryId="overlay.restart-unsaved-changes" resetKey>
+        <RestartUnsavedChangesDialog />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />
