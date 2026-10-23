@@ -1063,7 +1063,7 @@ jobs:
     name: package
     needs: [code_paths, preflight]
     if: needs.code_paths.outputs.package == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # Let the serial Docker gates reach their own deadlines and report cleanup failures.
     timeout-minutes: 90
 
