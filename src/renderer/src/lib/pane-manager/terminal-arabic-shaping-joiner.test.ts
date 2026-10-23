@@ -286,6 +286,15 @@ describe('configureLazyArabicShapingJoiner', () => {
     ])
   })
 
+  it('does not register for Indic text that needs no joining', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, '১২৩ কু ।')
+
+    expect(host.events).toEqual([])
+  })
+
   it('registers once before the first RTL write and cleans it up', () => {
     const host = createLazyHost()
     const cleanup = configureLazyArabicShapingJoiner(host.terminal, () => true)

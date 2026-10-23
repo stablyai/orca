@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { containsIndicScriptText, findIndicClusterRanges } from './terminal-indic-cluster-ranges'
+import { findIndicClusterRanges } from './terminal-indic-cluster-ranges'
 
 type ArabicShapingTerminal = Pick<Terminal, 'registerCharacterJoiner' | 'deregisterCharacterJoiner'>
 
@@ -233,7 +233,7 @@ export function ensureArabicShapingJoinerForText(
   const finalCodeUnit = finalCharacter.charCodeAt(0)
   state.trailingHighSurrogate =
     finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff ? finalCharacter : ''
-  if (!containsStrongRtlText(scanText) && !containsIndicScriptText(scanText)) {
+  if (!containsStrongRtlText(scanText) && findIndicClusterRanges(scanText).length === 0) {
     return
   }
 

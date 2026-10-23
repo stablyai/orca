@@ -6,12 +6,13 @@
 const INDIC_SCAN_FLOOR = 0x0900
 const INDIC_SCAN_CEILING = 0x0dff
 
-// Devanagari, Bengali, Gujarati, Odia, Telugu, Malayalam, Gurmukhi, Tamil, Kannada, Sinhala viramas.
-const VIRAMAS = '\\u094D\\u09CD\\u0A4D\\u0ACD\\u0B4D\\u0BCD\\u0C4D\\u0CCD\\u0D4D\\u0DCA'
+// Why: Tamil pulli (U+0BCD) is omitted because it renders as a visible dot, so Tamil never forms conjuncts.
+const VIRAMAS = '\\u094D\\u09CD\\u0A4D\\u0ACD\\u0B4D\\u0C4D\\u0CCD\\u0D4D\\u0DCA'
 
-// Base letter, then marks/joiners, or a letter that follows a virama (conjunct).
+// Base letter, then marks/joiners, or a letter that follows a virama (+ optional ZWJ) as a conjunct.
+// Malayalam virama + ZWJ is a legacy chillu, which ends its cluster instead of joining the next letter.
 const INDIC_CLUSTER = new RegExp(
-  `(?=\\p{L})[\\u0900-\\u0DFF](?:[\\p{M}\\u200C\\u200D]|(?<=[${VIRAMAS}\\u200D])(?=\\p{L})[\\u0900-\\u0DFF])*`,
+  `(?=\\p{L})[\\u0900-\\u0DFF](?:[\\p{M}\\u200C\\u200D]|(?<=[${VIRAMAS}]\\u200D?)(?<!\\u0D4D\\u200D)(?=\\p{L})[\\u0900-\\u0DFF])*`,
   'gu'
 )
 // Mn-only clusters (e.g. কু) already render in their single base cell.
