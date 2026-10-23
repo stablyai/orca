@@ -2,24 +2,51 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../shared/automations-types'
 import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
 
-const { deliverTerminalAgentLaunchPrompt } = vi.hoisted(() => ({
-  deliverTerminalAgentLaunchPrompt: vi.fn(async (_args: Record<string, unknown>) => true)
+const {
+  deliverTerminalAgentLaunchPrompt,
+  createStructuredAgentSessionForWorktree,
+  commitStructuredAgentSessionLaunchPrompt,
+  getStructuredAgentSessionHost
+} = vi.hoisted(() => ({
+  deliverTerminalAgentLaunchPrompt: vi.fn(async (_args: Record<string, unknown>) => true),
+  createStructuredAgentSessionForWorktree: vi.fn(),
+  commitStructuredAgentSessionLaunchPrompt: vi.fn(async () => 'msg-1'),
+  getStructuredAgentSessionHost: vi.fn<() => unknown>(() => null)
 }))
 vi.mock('../runtime/rpc/methods/agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt
+}))
+vi.mock('../runtime/rpc/methods/structured-agent-session-create', () => ({
+  createStructuredAgentSessionForWorktree
+}))
+vi.mock('../runtime/rpc/methods/agent-launch-structured-prompt', () => ({
+  commitStructuredAgentSessionLaunchPrompt
+}))
+vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost
 }))
 
 beforeEach(() => {
   deliverTerminalAgentLaunchPrompt.mockClear()
   deliverTerminalAgentLaunchPrompt.mockResolvedValue(true)
+  createStructuredAgentSessionForWorktree.mockReset()
+  commitStructuredAgentSessionLaunchPrompt.mockClear()
+  commitStructuredAgentSessionLaunchPrompt.mockResolvedValue('msg-1')
+  getStructuredAgentSessionHost.mockReset()
+  getStructuredAgentSessionHost.mockReturnValue(null)
 })
 
 const CHAT_DEFAULT_ON = { experimentalNativeChat: true }
 
-function harness(options: { startupTerminal?: Record<string, unknown> | null } = {}) {
+function harness(
+  options: { startupTerminal?: Record<string, unknown> | null; structuredHost?: boolean } = {}
+) {
   const runtime = {
     requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
+    ...(options.structuredHost
+      ? { ensureStructuredAgentSessionHost: vi.fn(async () => undefined) }
+      : {}),
     createManagedWorktree: vi.fn(async (_args: Record<string, unknown>) => ({
       worktree: { id: 'repo-1::/wt/auto', displayName: 'auto-nightly' },
       ...(options.startupTerminal === null
@@ -348,5 +375,96 @@ describe('headless automation agent launch', () => {
     await launch(runtime, { reuseSession: true }, [previousRun()])
 
     expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
+  })
+
+  it('launches a structured chat session when Chat UI is enabled and supported', async () => {
+    const runtime = harness({ structuredHost: true })
+    getStructuredAgentSessionHost.mockReturnValue({ deps: { store: { getRecord: () => null } } })
+    createStructuredAgentSessionForWorktree.mockResolvedValue({
+      ok: true,
+      value: {
+        sessionId: 'sess-structured-1',
+        fence: 3,
+        tabId: 'structured-agent-session-sess-structured-1'
+      }
+    })
+
+    const launched = await launch(runtime, {
+      workspaceMode: 'new_per_run',
+      workspaceId: null
+    })
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promisedAgentChat: true,
+        awaitTerminalProvisioning: true,
+        observeSetupCompletion: true
+      })
+    )
+    expect(createStructuredAgentSessionForWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktree: 'id:repo-1::/wt/auto',
+        agent: 'claude',
+        activate: false
+      })
+    )
+    expect(commitStructuredAgentSessionLaunchPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'sess-structured-1',
+        fence: 3,
+        text: 'fix the flaky test'
+      })
+    )
+    expect(launched).toMatchObject({
+      workspaceId: 'repo-1::/wt/auto',
+      workspaceDisplayName: 'auto-nightly',
+      sessionKind: 'structured',
+      chatSessionId: 'sess-structured-1',
+      terminalHandle: 'structured-automation-session:sess-structured-1',
+      terminalSessionId: 'structured-agent-session-sess-structured-1',
+      terminalPtyId: null
+    })
+  })
+
+  it('reuses an idle structured chat session when reuseSession is enabled', async () => {
+    const runtime = harness({ structuredHost: true })
+    getStructuredAgentSessionHost.mockReturnValue({
+      readStatusSummary: () => ({ status: 'idle', agent: 'claude' }),
+      deps: {
+        store: {
+          getRecord: (id: string) =>
+            id === 'sess-prev'
+              ? { location: { workspaceId: 'wt-1' }, lease: { runtimeFence: 7 } }
+              : null
+        }
+      }
+    })
+
+    const launched = await launch(runtime, { reuseSession: true }, [
+      previousRun({
+        sessionKind: 'structured',
+        chatSessionId: 'sess-prev',
+        terminalSessionId: 'structured-agent-session-sess-prev',
+        terminalPaneKey: 'structured-agent-session-sess-prev:11111111-1111-4111-a111-111111111111',
+        terminalPtyId: null
+      })
+    ])
+
+    expect(commitStructuredAgentSessionLaunchPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'sess-prev',
+        fence: 7,
+        text: 'fix the flaky test'
+      })
+    )
+    expect(createStructuredAgentSessionForWorktree).not.toHaveBeenCalled()
+    expect(launched).toMatchObject({
+      workspaceId: 'wt-1',
+      sessionKind: 'structured',
+      chatSessionId: 'sess-prev',
+      terminalHandle: 'structured-automation-session:sess-prev',
+      terminalSessionId: 'structured-agent-session-sess-prev',
+      terminalPtyId: null
+    })
   })
 })

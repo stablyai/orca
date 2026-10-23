@@ -155,4 +155,56 @@ describe('opening a paired-server automation run', () => {
     )
     expect(mocks.toastMessage).not.toHaveBeenCalled()
   })
+
+  it('activates a mirrored structured chat tab and asks the paired server when not mirrored yet', async () => {
+    const structuredRun: AutomationRun = {
+      ...run,
+      sessionKind: 'structured',
+      chatSessionId: 'sess-1',
+      terminalSessionId: 'structured-agent-session-sess-1',
+      terminalPaneKey: 'structured-agent-session-sess-1:11111111-1111-4111-a111-111111111111',
+      terminalPtyId: null
+    }
+    const activateTab = vi.fn()
+    mocks.state = {
+      ...storeState(false),
+      activateTab,
+      unifiedTabsByWorktree: {
+        [WT]: [
+          {
+            id: 'structured-agent-session-sess-1',
+            contentType: 'agent-session',
+            entityId: 'sess-1'
+          }
+        ]
+      }
+    }
+
+    openRun(structuredRun)
+
+    expect(activateTab).toHaveBeenCalledWith('structured-agent-session-sess-1', { worktreeId: WT })
+    expect(mocks.state.setActiveTabType).toHaveBeenCalledWith('agent-session', WT)
+    await vi.waitFor(() =>
+      expect(mocks.activateWebRuntimeSessionTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: WT,
+          tabId: 'structured-agent-session-sess-1',
+          environmentId: ENV
+        })
+      )
+    )
+
+    mocks.activateWebRuntimeSessionTab.mockClear()
+    mocks.state = storeState(false)
+    openRun(structuredRun)
+    await vi.waitFor(() =>
+      expect(mocks.activateWebRuntimeSessionTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          worktreeId: WT,
+          tabId: 'agent-session:sess-1',
+          environmentId: ENV
+        })
+      )
+    )
+  })
 })

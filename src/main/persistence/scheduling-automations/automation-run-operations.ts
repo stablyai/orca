@@ -21,7 +21,9 @@ import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   normalizeAutomationPrecheckResult,
+  normalizeAutomationRunChatSessionId,
   normalizeAutomationRunOutputSnapshot,
+  normalizeAutomationRunSessionKind,
   normalizeAutomationRunTerminalPaneKey,
   normalizeAutomationRunTerminalPtyId,
   normalizeAutomationRunWorkspaceDisplayName
@@ -47,10 +49,15 @@ function touchAutomation(state: PersistedState, automationId: string, now: numbe
 function sortedAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   const runs = state.automationRuns ?? []
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
-    .map((run) => ({
-      ...run,
-      precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
-    }))
+    .map((run) => {
+      const chatSessionId = normalizeAutomationRunChatSessionId(run.chatSessionId)
+      return {
+        ...run,
+        sessionKind: normalizeAutomationRunSessionKind(run.sessionKind, chatSessionId),
+        chatSessionId,
+        precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
+      }
+    })
     .sort(compareAutomationRunsNewestFirst)
 }
 
@@ -175,6 +182,14 @@ export function updateAutomationRun(
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
     ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
     : null
+  const chatSessionId = Object.hasOwn(result, 'chatSessionId')
+    ? normalizeAutomationRunChatSessionId(result.chatSessionId)
+    : normalizeAutomationRunChatSessionId(current.chatSessionId)
+  const sessionKind = Object.hasOwn(result, 'sessionKind')
+    ? normalizeAutomationRunSessionKind(result.sessionKind, chatSessionId)
+    : Object.hasOwn(result, 'chatSessionId')
+      ? normalizeAutomationRunSessionKind(undefined, chatSessionId)
+      : normalizeAutomationRunSessionKind(current.sessionKind, chatSessionId)
   const updated: AutomationRun = {
     ...current,
     status: result.status,
@@ -183,6 +198,8 @@ export function updateAutomationRun(
       workspaceDisplayName ??
       normalizeAutomationRunWorkspaceDisplayName(current.workspaceDisplayName ?? null) ??
       operations.getWorkspaceDisplayName(workspaceId),
+    sessionKind,
+    chatSessionId,
     terminalSessionId: Object.hasOwn(result, 'terminalSessionId')
       ? (result.terminalSessionId ?? null)
       : current.terminalSessionId,

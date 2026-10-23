@@ -2,13 +2,25 @@ import type { AutomationRun } from '../../../shared/automations-types'
 import { findReusableAutomationRun } from '../../../shared/automation-session-reuse'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../shared/structured-agent-session-projection'
 import type { AppState } from '@/store/types'
 
-export type ReusableAutomationSession = {
-  tabId: string
-  ptyId: string
-  paneKey: string
-}
+export type ReusableAutomationSession =
+  | {
+      kind?: 'terminal'
+      tabId: string
+      ptyId: string
+      paneKey: string
+    }
+  | {
+      kind: 'structured'
+      tabId: string
+      chatSessionId: string
+      paneKey: string
+    }
 
 export function findReusableAutomationSession(args: {
   automationId: string
@@ -22,12 +34,16 @@ export function findReusableAutomationSession(args: {
   >
 }): ReusableAutomationSession | null {
   const { state, ...selection } = args
+  const unifiedTabs = state.unifiedTabsByWorktree[args.worktreeId] ?? []
   const terminalTabIds = new Set(
-    (state.unifiedTabsByWorktree[args.worktreeId] ?? [])
-      .filter((tab) => tab.contentType === 'terminal')
-      .map((tab) => tab.entityId)
+    unifiedTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
   )
-  return findReusableAutomationRun({
+  const structuredTabsBySessionId = new Map(
+    unifiedTabs
+      .filter((tab) => tab.contentType === 'agent-session')
+      .map((tab) => [tab.entityId, tab] as const)
+  )
+  return findReusableAutomationRun<ReusableAutomationSession>({
     ...selection,
     agentStatusForPane: (paneKey) => state.agentStatusByPaneKey[paneKey],
     liveSession: (run) => {
@@ -40,6 +56,26 @@ export function findReusableAutomationSession(args: {
         return null
       }
       return { tabId: parsed.tabId, ptyId: run.terminalPtyId, paneKey: run.terminalPaneKey }
+    },
+    structuredStatusForSession: (chatSessionId, run) => {
+      const tab = structuredTabsBySessionId.get(chatSessionId)
+      const tabId = tab?.id ?? run.terminalSessionId ?? structuredAgentSessionTabId(chatSessionId)
+      const paneKey = run.terminalPaneKey ?? structuredAgentSessionPaneKey(tabId, chatSessionId)
+      return state.agentStatusByPaneKey[paneKey]
+    },
+    liveStructuredSession: (run) => {
+      const tab = structuredTabsBySessionId.get(run.chatSessionId)
+      if (!tab) {
+        return null
+      }
+      const paneKey =
+        run.terminalPaneKey ?? structuredAgentSessionPaneKey(tab.id, run.chatSessionId)
+      return {
+        kind: 'structured',
+        tabId: tab.id,
+        chatSessionId: run.chatSessionId,
+        paneKey
+      }
     }
   })
 }

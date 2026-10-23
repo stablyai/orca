@@ -1,4 +1,7 @@
-// Automations observe PTYs, so launch terminal agents regardless of the chat default.
+/**
+ * A server-run automation's agent, started through the shared launch executor: a structured chat
+ * when the Chat UI default allows one here, else the terminal agent it always started.
+ */
 
 import type {
   AgentLaunchPublishedSurface,
@@ -6,15 +9,25 @@ import type {
 } from '../agent-launch/agent-launch-execution'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
-import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
+import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
+import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
+import { commitStructuredAgentSessionLaunchPrompt } from '../runtime/rpc/methods/agent-launch-structured-prompt'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
+import {
+  createHeadlessAutomationStructuredSession,
+  runOwnHandle,
+  sendToReusableHeadlessAutomationSession,
+  supportsStructuredAutomationRuntime,
+  waitForStructuredAutomationSetup
+} from './headless-automation-session-reuse'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
+import { structuredAutomationRunHandle } from './runtime-structured-run-observer'
 
-const TERMINAL_ONLY_MESSAGE = 'An automation starts a terminal agent only.'
+export { runOwnHandle }
 
 type LaunchedTerminal = {
   handle: string
@@ -40,43 +53,74 @@ export async function launchHeadlessAutomationAgent(
   const agent = automation.agentId
   const text = automation.prompt?.trim()
   if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
-    const reused = await sendToReusableSession(runtime, { ...request, text })
+    const reused = await sendToReusableHeadlessAutomationSession(runtime, {
+      ...request,
+      text,
+      worktreeId: requireWorkspaceId(automation)
+    })
     if (reused) {
       return reused
     }
   }
+  const terminalOnly =
+    hasExtraAgentArgs(automation.extraAgentArgs) || !supportsStructuredAutomationRuntime(runtime)
+  const caller = { callerKey: `automation:${run.id}` }
   let workspace: { id: string; displayName: string | null } | undefined
   let terminal: LaunchedTerminal | undefined
+  let structured: { sessionId: string; tabId: string } | undefined
   const execution: AgentLaunchSurfaceExecution = {
     runtime,
     intent: {
       agent,
-      // The workspace factory supplies create arguments from the automation.
       target:
         automation.workspaceMode === 'new_per_run'
           ? { kind: 'create-worktree', create: {} }
           : { kind: 'existing', worktree: requireWorkspaceId(automation) },
       ...(text ? { prompt: { text, delivery: 'submit' as const } } : {})
     },
-    terminalOnly: true,
+    ...(terminalOnly ? { terminalOnly: true } : {}),
     workspaces: {
-      createWorktree: async ({ startupAgent, startupPrompt }) => {
-        if (startupAgent === undefined) {
-          throw new Error(TERMINAL_ONLY_MESSAGE)
-        }
-        const { startupPrompt: _prompt, ...create } = buildHeadlessAutomationWorktreeCreateArgs({
-          automation,
-          run,
-          repo: target.repo
-        })
+      createRecoveryShell: async (worktreeId) => {
+        await runtime.createTerminal?.(`id:${worktreeId}`, { surfaceOwner: false })
+      },
+      createWorktree: async ({
+        startupAgent,
+        startupPrompt,
+        promisedAgentChat,
+        onWorkspaceCreated
+      }) => {
+        const {
+          startupAgent: _a,
+          startupPrompt: _p,
+          startupExtraAgentArgs: _e,
+          ...create
+        } = buildHeadlessAutomationWorktreeCreateArgs({ automation, run, repo: target.repo })
         const created = await runtime.createManagedWorktree({
           ...create,
-          startupAgent,
-          ...(startupPrompt ? { startupPrompt } : {})
+          ...(startupAgent
+            ? {
+                startupAgent,
+                ...(startupPrompt ? { startupPrompt } : {}),
+                ...(automation.extraAgentArgs
+                  ? { startupExtraAgentArgs: automation.extraAgentArgs }
+                  : {})
+              }
+            : {
+                ...(promisedAgentChat ? { promisedAgentChat: true } : {}),
+                ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
+                awaitTerminalProvisioning: true,
+                observeSetupCompletion: true
+              })
         })
-        workspace = {
-          id: created.worktree.id,
-          displayName: created.worktree.displayName ?? null
+        workspace = { id: created.worktree.id, displayName: created.worktree.displayName ?? null }
+        if (!startupAgent) {
+          await waitForStructuredAutomationSetup(runtime, created.setupReceipt)
+          return {
+            worktreeId: created.worktree.id,
+            workspacePath: created.worktree.path,
+            connectionId: target.repo.connectionId ?? null,
+            startupTerminalHandle: undefined
+          }
         }
         const startup = created.startupTerminal
         if (!startup?.handle) {
@@ -89,15 +133,34 @@ export async function launchHeadlessAutomationAgent(
           worktreeId: created.worktree.id,
           startupTerminalHandle: startup.handle,
           ...(startup.paneKey ? { startupTerminalPaneKey: startup.paneKey } : {}),
-          // Creation stages long prompts while keeping them on the launch command.
           ...(startupPrompt ? { promptRodeLaunchCommand: true } : {})
         }
       }
     },
     surfaces: {
-      createStructuredSession: () => {
-        throw new Error(TERMINAL_ONLY_MESSAGE)
+      createStructuredSession: async ({ worktreeId, agent: structuredAgent, withoutPrompt }) => {
+        const created = await createHeadlessAutomationStructuredSession({
+          runtime,
+          caller,
+          worktreeId,
+          agent: structuredAgent,
+          ...(withoutPrompt ? { withoutPrompt: true as const } : {})
+        })
+        structured = { sessionId: created.sessionId, tabId: created.tabId }
+        if (!workspace) {
+          const shown = await runtime.showManagedWorktree(`id:${worktreeId}`)
+          workspace = { id: worktreeId, displayName: shown.displayName ?? null }
+        }
+        return created
       },
+      deliverStructuredPrompt: ({ sessionId, fence, prompt }) =>
+        commitStructuredAgentSessionLaunchPrompt({
+          host: getStructuredAgentSessionHost(),
+          caller,
+          sessionId,
+          fence,
+          text: prompt.text
+        }),
       createTerminalAgent: async ({ worktreeId, startupPrompt }) => {
         const launched = await runtime.launchAgentTerminal(`id:${worktreeId}`, {
           agent,
@@ -121,7 +184,19 @@ export async function launchHeadlessAutomationAgent(
         })
     }
   }
-  await launchUntilPublished(execution)
+  const published = await launchUntilPublished(execution)
+  if (published.outcome.kind === 'structured' && workspace && structured) {
+    return {
+      workspaceId: workspace.id,
+      workspaceDisplayName: workspace.displayName,
+      sessionKind: 'structured',
+      chatSessionId: structured.sessionId,
+      terminalHandle: structuredAutomationRunHandle(structured.sessionId),
+      terminalSessionId: structured.tabId,
+      terminalPaneKey: structuredAgentSessionPaneKey(structured.tabId, structured.sessionId),
+      terminalPtyId: null
+    }
+  }
   if (!workspace || !terminal) {
     throw new Error('Automation agent launch did not report its terminal.')
   }
@@ -135,71 +210,6 @@ export async function launchHeadlessAutomationAgent(
   }
 }
 
-async function sendToReusableSession(
-  runtime: OrcaRuntimeService,
-  request: {
-    automation: Automation
-    run: Pick<AutomationRun, 'id'>
-    runs: readonly AutomationRun[]
-    text: string
-  }
-): Promise<HeadlessAutomationAgentLaunch | null> {
-  const { automation, text } = request
-  const worktreeId = requireWorkspaceId(automation)
-  const session = findReusableAutomationRun({
-    automationId: automation.id,
-    agentId: automation.agentId,
-    worktreeId,
-    currentRunId: request.run.id,
-    runs: request.runs,
-    agentStatusForPane: (paneKey) =>
-      runtime
-        .getAgentStatusRowsForPane(paneKey)
-        .filter((row) => !row.providerSessionOnly)
-        .toSorted((left, right) => right.receivedAt - left.receivedAt)[0],
-    liveSession: (previous) => {
-      const handle = runOwnHandle(runtime, previous)
-      return handle ? { handle, previous } : null
-    }
-  })
-  if (
-    !session ||
-    !(await deliverTerminalAgentLaunchPrompt({
-      runtime,
-      handle: session.handle,
-      agent: automation.agentId,
-      freshLaunch: false,
-      text,
-      // Windows cannot prove which agent is foreground; refuse only a proven shell.
-      unprovableHost: 'write-unless-shell'
-    }))
-  ) {
-    return null
-  }
-  const shown = await runtime.showManagedWorktree(`id:${worktreeId}`)
-  return {
-    workspaceId: worktreeId,
-    workspaceDisplayName: shown.displayName ?? null,
-    terminalHandle: session.handle,
-    terminalSessionId: session.previous.terminalSessionId,
-    terminalPaneKey: session.previous.terminalPaneKey,
-    terminalPtyId: session.previous.terminalPtyId
-  }
-}
-
-/** Reject reused pane handles whose PTY no longer belongs to this run. */
-export function runOwnHandle(runtime: OrcaRuntimeService, run: AutomationRun): string | null {
-  const handle = run.terminalPaneKey
-    ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey)
-    : null
-  return handle &&
-    run.terminalPtyId &&
-    runtime.getTerminalPtyIdForHandle(handle) === run.terminalPtyId
-    ? handle
-    : null
-}
-
-/** Return on terminal publication; post-start prompt delivery may still be pending. */
 function launchUntilPublished(
   execution: AgentLaunchSurfaceExecution
 ): Promise<AgentLaunchPublishedSurface> {

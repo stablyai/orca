@@ -10,6 +10,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   buildAutomationRunOpenLayout,
   getAutomationRunOwnerEnvironmentId,
+  resolveAutomationRunStructuredTarget,
   resolveAutomationRunTerminalTarget
 } from './automation-run-open-target'
 import { getAutomationRunViewState } from './automation-run-view-state'
@@ -28,6 +29,10 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
     const ownerEnvironmentId = runWorktree
       ? getAutomationRunOwnerEnvironmentId(appStore, run.workspaceId, runWorktree.hostId)
       : null
+    const structuredTarget = resolveAutomationRunStructuredTarget(
+      run,
+      appStore.unifiedTabsByWorktree
+    )
     const terminalTarget = resolveAutomationRunTerminalTarget(
       run,
       {
@@ -43,11 +48,37 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
     const runViewState = getAutomationRunViewState({
       run,
       workspaceExists: Boolean(runWorktree),
-      terminalTargetExists: terminalTarget !== null,
+      terminalTargetExists: structuredTarget !== null || terminalTarget !== null,
       terminalOnPairedServer: ownerEnvironmentId !== null
     })
     if (!run.workspaceId || !runWorktree || !runViewState.canOpen) {
       toast.error(runViewState.statusLabel)
+      return
+    }
+    if (structuredTarget) {
+      if (activateAndRevealWorktree(run.workspaceId)) {
+        appStore.activateTab?.(structuredTarget.tabId, { worktreeId: run.workspaceId })
+        appStore.setActiveTabType('agent-session', run.workspaceId)
+        if (ownerEnvironmentId) {
+          void openRunStructuredOnOwner(run.workspaceId, ownerEnvironmentId, structuredTarget.tabId)
+        }
+        return
+      }
+    }
+    if (run.sessionKind === 'structured' && run.chatSessionId && !structuredTarget) {
+      if (!ownerEnvironmentId) {
+        toast.error(runViewState.statusLabel)
+        return
+      }
+      if (!activateAndRevealWorktree(run.workspaceId)) {
+        toast.error(workspaceUnavailableMessage())
+        return
+      }
+      void openRunStructuredOnOwner(
+        run.workspaceId,
+        ownerEnvironmentId,
+        `agent-session:${run.chatSessionId}`
+      )
       return
     }
     const paneRef = parsePaneKey(run.terminalPaneKey ?? '')
@@ -101,6 +132,24 @@ async function openRunTerminalOnOwner(
     tabId: paneRef.tabId,
     environmentId,
     leafId: paneRef.leafId,
+    expectedCurrentLocalTabId: resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
+  })
+  if (!opened) {
+    toast.error(
+      translate('components.automations.runTerminalUnavailable', 'Run terminal is unavailable.')
+    )
+  }
+}
+
+async function openRunStructuredOnOwner(
+  worktreeId: string,
+  environmentId: string,
+  tabId: string
+): Promise<void> {
+  const opened = await activateWebRuntimeSessionTab({
+    worktreeId,
+    tabId,
+    environmentId,
     expectedCurrentLocalTabId: resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
   })
   if (!opened) {

@@ -5,6 +5,12 @@ import type {
 } from './run-completion-watcher'
 import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
 import { judgeIdleRun, type AutomationRunAgentEvidence } from './automation-run-agent-evidence'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  observeStructuredAutomationRunCompletion,
+  parseStructuredAutomationRunHandle,
+  structuredAutomationRunHandle
+} from './runtime-structured-run-observer'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
 
@@ -181,64 +187,114 @@ async function buildUnobservedObservation(
   }
 }
 
+function resolveRunObserverHandle(
+  runtime: AutomationRunTerminalHost,
+  run: AutomationRun
+): string | null {
+  if (run.sessionKind === 'structured' && run.chatSessionId) {
+    const host = getStructuredAgentSessionHost()
+    return host?.deps.store.getRecord(run.chatSessionId)
+      ? structuredAutomationRunHandle(run.chatSessionId)
+      : null
+  }
+  return run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null
+}
+
+async function waitUntilTerminalRunSettled(
+  runtime: AutomationRunTerminalHost,
+  handle: string,
+  judged: { evidence: AutomationRunAgentEvidence; run: AutomationRun } | null,
+  runStartedAt: number,
+  signal: AbortSignal,
+  deadlineAt: number
+): Promise<AutomationRunCompletionObservation | null> {
+  while (Date.now() < deadlineAt) {
+    try {
+      const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
+      if (!judged || !wait.satisfied) {
+        return await buildObservation(runtime, handle, wait)
+      }
+      const observation = await settleIdlePane(
+        runtime,
+        handle,
+        judged,
+        runStartedAt,
+        signal,
+        deadlineAt
+      )
+      if (observation) {
+        return observation
+      }
+    } catch (error) {
+      if (signal.aborted || !isTerminalWaitTimeout(error)) {
+        throw error
+      }
+    }
+  }
+  return null
+}
+
+async function observeTerminalRunCompletion(
+  runtime: AutomationRunTerminalHost,
+  handle: string,
+  options: { signal: AbortSignal; run?: AutomationRun },
+  evidence?: AutomationRunAgentEvidence
+): Promise<AutomationRunCompletionObservation> {
+  const { signal, run } = options
+  const startedAt = Date.now()
+  const judged = evidence && run?.terminalPaneKey ? { evidence, run } : null
+  const runStartedAt = run?.startedAt ?? run?.dispatchedAt ?? startedAt
+  if (!judged && (await isTuiIdleSatisfiedNow(runtime, handle, signal))) {
+    const started = await waitForAgentStart(
+      runtime,
+      handle,
+      signal,
+      startedAt + AGENT_START_DEADLINE_MS
+    )
+    if (!started) {
+      return buildUnobservedObservation(
+        runtime,
+        handle,
+        'Automation agent never started after the prompt was submitted.'
+      )
+    }
+  }
+  const settled = await waitUntilTerminalRunSettled(
+    runtime,
+    handle,
+    judged,
+    runStartedAt,
+    signal,
+    startedAt + OBSERVE_DEADLINE_MS
+  )
+  return (
+    settled ??
+    buildUnobservedObservation(
+      runtime,
+      handle,
+      'Orca stopped watching this run after 6h without a completion signal.'
+    )
+  )
+}
+
 export function createRuntimeAutomationRunTerminalObserver(
   runtime: AutomationRunTerminalHost,
   /** Agent evidence discounts prior-run idleness; without it, require a busy-to-idle transition. */
   evidence?: AutomationRunAgentEvidence
 ): AutomationRunTerminalObserver {
   return {
-    resolveRunTerminal: (run) =>
-      run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null,
-    observeCompletion: async (handle, { signal, run }) => {
-      const startedAt = Date.now()
-      const judged = evidence && run?.terminalPaneKey ? { evidence, run } : null
-      const runStartedAt = run?.startedAt ?? run?.dispatchedAt ?? startedAt
-      // Without agent evidence, require a busy edge to exclude a previous run's idle state.
-      if (!judged && (await isTuiIdleSatisfiedNow(runtime, handle, signal))) {
-        const started = await waitForAgentStart(
-          runtime,
-          handle,
-          signal,
-          startedAt + AGENT_START_DEADLINE_MS
-        )
-        if (!started) {
-          return await buildUnobservedObservation(
-            runtime,
-            handle,
-            'Automation agent never started after the prompt was submitted.'
-          )
-        }
+    resolveRunTerminal: (run) => resolveRunObserverHandle(runtime, run),
+    observeCompletion: (handle, options) => {
+      const structuredSessionId = parseStructuredAutomationRunHandle(handle)
+      if (structuredSessionId) {
+        const since = options.run?.dispatchedAt ?? options.run?.startedAt ?? Date.now()
+        return observeStructuredAutomationRunCompletion({
+          sessionId: structuredSessionId,
+          signal: options.signal,
+          since
+        })
       }
-      const deadlineAt = startedAt + OBSERVE_DEADLINE_MS
-      while (Date.now() < deadlineAt) {
-        try {
-          const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
-          if (!judged || !wait.satisfied) {
-            return await buildObservation(runtime, handle, wait)
-          }
-          const observation = await settleIdlePane(
-            runtime,
-            handle,
-            judged,
-            runStartedAt,
-            signal,
-            deadlineAt
-          )
-          if (observation) {
-            return observation
-          }
-        } catch (error) {
-          // Individual wait timeouts do not prove the agent stopped working.
-          if (signal.aborted || !isTerminalWaitTimeout(error)) {
-            throw error
-          }
-        }
-      }
-      return await buildUnobservedObservation(
-        runtime,
-        handle,
-        'Orca stopped watching this run after 6h without a completion signal.'
-      )
+      return observeTerminalRunCompletion(runtime, handle, options, evidence)
     }
   }
 }
