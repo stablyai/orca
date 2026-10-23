@@ -60,6 +60,8 @@
       "connectionNotSecure": "Connection isn't secure",
       "cantReachHost": "Can't reach {{value0}}",
       "cantLoadPage": "Can't load this page",
+      "blockedTitle": "{{host}} is blocked",
+      "blockedDescription": "An extension blocked this page. To open it, allow this site in the extension, then retry.",
       "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
       "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
       "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
@@ -193,6 +195,16 @@
     },
     "managedProfile": {
       "createFailed": "Couldn't create this workspace's browser profile. Close this tab and open a new one to try again."
+    },
+    "extensions": {
+      "menu": "Extensions",
+      "open": "Open",
+      "pin": "Pin to toolbar",
+      "unpin": "Unpin from toolbar",
+      "remove": "Remove…",
+      "empty": "No extensions are on for this profile",
+      "visitWebStore": "Visit Chrome Web Store",
+      "manage": "Manage extensions"
     }
   },
   "editor": {
@@ -434,6 +446,39 @@
         "keywordIsolate": "isolate",
         "repoProfileLabel": "Repo: {{name}}",
         "worktreeProfileLabel": "Workspace: {{name}}"
+      },
+      "extensions": {
+        "sourceUnpacked": "Unpacked",
+        "sourceWebStore": "Chrome Web Store",
+        "options": "Options",
+        "toggleLabel": "Turn {{name}} on or off",
+        "remove": "Remove",
+        "reload": "Reload from folder",
+        "removeTitle": "Remove {{name}}?",
+        "removeUnpackedDescription": "It is removed from every Orca browser profile, with its saved data. The folder on disk stays where it is.",
+        "removeDescription": "It is removed from every Orca browser profile, with its saved data.",
+        "heldUpdate": "Version {{version}} is waiting for more access.",
+        "reviewAccess": "Review access",
+        "loadError": "Could not start: {{error}}",
+        "profileDescription": "Extensions turned on here run in tabs that use the {{profile}} profile.",
+        "loadUnpacked": "Load unpacked…",
+        "empty": "No extensions installed. Add one from the Chrome Web Store above.",
+        "title": "Extensions",
+        "description": "Chrome extensions for the selected local browser profile.",
+        "keywordExtension": "extension",
+        "keywordChrome": "chrome",
+        "keywordUnpacked": "unpacked",
+        "keywordPassword": "password manager",
+        "desktopOnly": "Browser extensions run only in the Orca desktop app.",
+        "webStore": {
+          "placeholder": "Chrome Web Store link or extension ID",
+          "inputLabel": "Add from Chrome Web Store",
+          "add": "Add",
+          "adding": "Adding…",
+          "added": "Added {{name}}",
+          "browse": "Browse the Chrome Web Store",
+          "openFailed": "Open a workspace to browse the Chrome Web Store."
+        }
       }
     },
     "agents": {
@@ -7781,6 +7826,10 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "browserExtensions": {
+            "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
+            "toggleLabel": "Toggle browser extensions"
           }
         },
         "FloatingWorkspacePane": {
@@ -10291,6 +10340,13 @@
               "board": "board",
               "inWindow": "in-window",
               "worktrees": "worktrees"
+            },
+            "browserExtensions": {
+              "title": "Browser extensions",
+              "description": "Run Chrome extensions, such as password managers, in Orca browser tabs.",
+              "extension": "extension",
+              "chrome": "chrome",
+              "password": "password manager"
             }
           }
         },
@@ -21144,5 +21200,53 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "browserExtensions": {
+    "permission": {
+      "history": "Read your browsing history",
+      "historyWrite": "Read and change your browsing history",
+      "bookmarks": "Read and change your bookmarks",
+      "clipboardRead": "Read data you copy and paste",
+      "clipboardWrite": "Modify data you copy and paste",
+      "downloads": "Manage your downloads",
+      "nativeMessaging": "Communicate with cooperating native applications",
+      "notifications": "Display notifications",
+      "privacy": "Change your privacy-related settings",
+      "management": "Manage your other extensions",
+      "proxy": "Change your proxy settings",
+      "contentSettings": "Change which sites can use cookies, JavaScript, your camera, microphone and location",
+      "geolocation": "Detect your physical location",
+      "topSites": "Read a list of your most frequently visited websites",
+      "blockContent": "Block content on any page",
+      "debugger": "Access the page debugger backend",
+      "screenCapture": "Capture content of your screen",
+      "email": "Know your email address",
+      "allSites": "Read and change all your data on all websites",
+      "someSites": "Read and change your data on {{hosts}}",
+      "manySites": "Read and change your data on {{hosts}} and {{count}} other sites"
+    },
+    "install": {
+      "title": "Add {{name}}?",
+      "profileDescription": "It runs in tabs that use the {{profile}} profile.",
+      "description": "It runs in Orca browser tabs.",
+      "noAccess": "It does not ask to read or change data on websites.",
+      "canHeading": "It can:",
+      "cancel": "Cancel",
+      "confirm": "Add extension"
+    },
+    "uninstall": {
+      "title": "Remove {{name}}?",
+      "confirm": "Remove"
+    },
+    "unsupported": {
+      "identity": "extension sign-in",
+      "line": "Not available in Orca yet: {{features}}."
+    },
+    "permissions": {
+      "title": "Allow {{name}} more access?",
+      "description": "It is asking for access it did not have when you added it.",
+      "deny": "Deny",
+      "confirm": "Allow"
+    }
   }
 }

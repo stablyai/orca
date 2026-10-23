@@ -9,7 +9,9 @@ export async function createBrowserTabInRenderer(
   profileId: string | undefined,
   sessionPartition: string | undefined,
   activate?: boolean,
-  requestedPageId?: string
+  requestedPageId?: string,
+  /** Used only when `worktreeId` is unset and no workspace is active in the renderer. */
+  fallbackWorktreeId?: string
 ): Promise<{ browserPageId: string }> {
   const win = host.getAuthoritativeWindow()
   const requestId = randomUUID()
@@ -44,7 +46,8 @@ export async function createBrowserTabInRenderer(
       // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
       sessionProfileId: profileId,
       sessionPartition,
-      activate
+      activate,
+      ...(fallbackWorktreeId ? { fallbackWorktreeId } : {})
     })
   })
 

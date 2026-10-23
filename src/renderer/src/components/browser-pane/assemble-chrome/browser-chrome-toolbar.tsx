@@ -94,6 +94,7 @@ export function BrowserChromeToolbar({
   reloadControl,
   reloadLabel,
   importControl,
+  extensionActions,
   elementTools,
   markup,
   shareControl,
@@ -109,6 +110,11 @@ export function BrowserChromeToolbar({
   reloadLabel?: string
   /** Cookie import — a browsing session concept; null where there is no session to import into. */
   importControl?: ((compact: boolean) => React.ReactNode) | null
+  /**
+   * Extension buttons; null where the page's session runs no extensions (doc preview, route and
+   * SSH pages). `compact` folds the pinned buttons, leaving the extensions menu.
+   */
+  extensionActions?: ((compact: boolean) => React.ReactNode) | null
   elementTools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
@@ -128,6 +134,7 @@ export function BrowserChromeToolbar({
     external: openExternal !== null,
     devtools: viewSource !== null,
     share: shareControl != null,
+    extensions: extensionActions != null,
     draw: true,
     grab: elementTools !== null,
     annotate: elementTools !== null
@@ -252,6 +259,8 @@ export function BrowserChromeToolbar({
       {openExternal && !folded.has('external') ? (
         <BrowserChromeActionButton action={openExternal} icon={ExternalLink} />
       ) : null}
+
+      {extensionActions?.(folded.has('extensions'))}
 
       <span className="relative inline-flex">
         {overflowMenu({

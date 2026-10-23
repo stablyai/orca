@@ -2,7 +2,18 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { noopUnsubscribe } from './web-storage'
 
+function desktopOnlyExtensionsResult(): { ok: false; error: string } {
+  return {
+    ok: false,
+    error: translate(
+      'settings.browser.extensions.desktopOnly',
+      'Browser extensions run only in the Orca desktop app.'
+    )
+  }
+}
+
 export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: installWebPreloadApi wraps this in withFallback, which answers any member left out here.
   return {
     registerGuest: () => Promise.resolve(false),
     isGuestRegistered: () => Promise.resolve(false),
@@ -96,7 +107,30 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     sessionClearDefaultCookies: () => Promise.resolve(false),
     sitePermissionsList: () => Promise.resolve([]),
     sitePermissionsSet: () => Promise.resolve([]),
-    notifyActiveTabChanged: () => Promise.resolve(false)
+    notifyActiveTabChanged: () => Promise.resolve(false),
+    extensionsList: () => Promise.resolve({ active: false, extensions: [] }),
+    extensionsSetEnabled: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    extensionsRemove: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    extensionsLoadUnpacked: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    extensionsReload: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    extensionsOpenOptions: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    extensionsReviewUpdate: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    onExtensionsChanged: () => noopUnsubscribe,
+    extensionsToolbarState: () => Promise.resolve(null),
+    extensionsSetPinned: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    extensionsActivateAction: () => Promise.resolve(desktopOnlyExtensionsResult()),
+    extensionsPageIcon: () => Promise.resolve(null),
+    onExtensionsToolbarChanged: () => noopUnsubscribe,
+    onExtensionsPopupRequested: () => noopUnsubscribe,
+    onRequestTabActivate: () => noopUnsubscribe,
+    replyTabActivate: () => {},
+    extensionsInstallFromWebStore: () =>
+      Promise.resolve({ status: 'failed', error: desktopOnlyExtensionsResult().error }),
+    onExtensionInstallPrompt: () => noopUnsubscribe,
+    onExtensionInstallPromptClosed: () => noopUnsubscribe,
+    respondExtensionInstallPrompt: () => Promise.resolve(false),
+    extensionsContextMenuClick: () => Promise.resolve(false),
+    extensionsActionContextMenu: () => Promise.resolve(null)
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
 

@@ -8,6 +8,7 @@ import { SecuritySurface } from './security-surface'
 
 // Every dialog that asks the user to trust, approve, run or remove code. A new one belongs here.
 const TRUST_DIALOGS = [
+  'browser-extension-install-dialog.tsx',
   'sidebar/OrcaYamlTrustDialog.tsx',
   'editor/IpynbViewer.tsx',
   'settings/PluginConsentDialog.tsx',
@@ -16,6 +17,12 @@ const TRUST_DIALOGS = [
   'settings/PluginMarketplaceSourceDialog.tsx',
   'settings/PluginRemoveDialog.tsx',
   'settings/PluginRollbackDialog.tsx'
+]
+
+// The same decisions asked through the shared confirmation prompt.
+const TRUST_CONFIRMATIONS = [
+  'settings/BrowserExtensionsSection.tsx',
+  'browser-pane/assemble-chrome/browser-extension-action-menu.tsx'
 ]
 
 // Trust decisions made outside a dialog: agent command approvals and certificate overrides.
@@ -43,6 +50,11 @@ describe('security surfaces', () => {
     const source = readFileSync(join(import.meta.dirname, '..', file), 'utf8')
     expect(source).toMatch(/<DialogContent\s[^>]*surface="security"/)
     expect(source).not.toContain('plugin-security-chrome')
+  })
+
+  it.each(TRUST_CONFIRMATIONS)('%s asks on the security surface', (file) => {
+    const source = readFileSync(join(import.meta.dirname, '..', file), 'utf8')
+    expect(source).toContain("surface: 'security'")
   })
 
   it('applies the host-owned token set outside dialogs', () => {

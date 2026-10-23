@@ -14,7 +14,12 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/browser-popup-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/browser-popup-native-compatibility.electron.test.ts',
-  'src/main/browser/browser-popup-background-compatibility.electron.test.ts'
+  'src/main/browser/browser-popup-background-compatibility.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-api.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-persistence.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-lifecycle.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-toolbar.electron.test.ts',
+  'src/main/browser/extensions/browser-extension-native-messaging.electron.test.ts'
 ]
 
 // The package (windows) job's "Test Windows-specific boundaries" step runs exactly these files.

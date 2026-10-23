@@ -237,6 +237,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
+    browserTabRequestsReady: () => {},
     onRequestRemoteCliBrowserScope: () => noopUnsubscribe,
     replyRemoteCliBrowserScope: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,

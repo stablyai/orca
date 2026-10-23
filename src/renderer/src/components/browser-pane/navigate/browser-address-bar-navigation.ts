@@ -5,6 +5,7 @@ import {
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import { parseChromeExtensionUrl } from '../../../../../shared/browser-extension-url'
 
 export type BrowserAddressBarSubmission =
   | { status: 'navigate'; url: string }
@@ -17,8 +18,16 @@ export type BrowserAddressBarSubmission =
  */
 export function resolveBrowserAddressBarSubmission(
   rawValue: string,
-  options?: { allowFileUrls?: boolean }
+  options?: { allowFileUrls?: boolean; allowExtensionPages?: boolean }
 ): BrowserAddressBarSubmission {
+  // Why opt-in: only a local browser-profile tab can host an extension page; main's session decides
+  // whether that extension is on, and Chromium refuses pages of extensions the session never loaded.
+  const extensionUrl = options?.allowExtensionPages
+    ? parseChromeExtensionUrl(rawValue.trim())
+    : null
+  if (extensionUrl) {
+    return { status: 'navigate', url: extensionUrl.url }
+  }
   const { browserDefaultSearchEngine, browserKagiSessionLink } = useAppStore.getState()
   // Why: the search-engine argument opts into search fallback; without it typed
   // queries parse as hosts ("google maps" -> https://google%20maps/).

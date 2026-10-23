@@ -22,6 +22,8 @@ import {
 import { isDocPreviewSession } from '../browser/doc-preview-protocol'
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
+import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
 
 /**
  * Why a separate admission rule: `normalizeBrowserNavigationUrl` answers only for
@@ -35,6 +37,21 @@ function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
   }
   const target = parseDocPreviewUrl(src)
   return target !== null && getDocPreviewGrant(target.grantId) !== null
+}
+
+/**
+ * Why its own rule: extension pages (options, tabs.create) are not typed URLs, so they attach only
+ * in a local browser-profile partition whose session has that extension loaded — i.e. installed
+ * and enabled for that profile. Route, SSH and doc-preview partitions never qualify.
+ */
+function isAdmissibleExtensionPageAttach(partition: string, src: string): boolean {
+  const extensionUrl = parseChromeExtensionUrl(src)
+  if (!extensionUrl || !browserSessionRegistry.isAllowedPartition(partition)) {
+    return false
+  }
+  const profile = browserSessionRegistry.listProfiles().find((p) => p.partition === partition)
+  const sess = profile ? getBrowserExtensionSessionForProfile(profile.id) : null
+  return Boolean(sess?.extensions.getExtension(extensionUrl.extensionId))
 }
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
@@ -74,10 +91,12 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     // profile partitions — the renderer owns their URLs, no main-side grants.
     const isLocalSshPartition = isLocalSshBrowserPartition(partition)
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
+    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(partition, src)
 
     // Why: fail closed — deny any src or partition not in the registry allowlist so a renderer bug can't smuggle preload/Node into an unprivileged guest.
     if (
       !isDocPreviewAttach &&
+      !isExtensionPageAttach &&
       (!normalizedSrc ||
         (!isProfilePartition && !isRoutePartition && !isLocalSshPartition) ||
         (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL))
@@ -96,7 +115,11 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     // insurance — if that ever changes, the guest would read this app's browser-host id.
     delete webPreferences.additionalArguments
     webPreferences.nodeIntegration = false
-    webPreferences.nodeIntegrationInSubFrames = false
+    // Why every local profile: a framed extension page needs Orca's extension preload, and
+    // extensions can be switched on after the tab opens. Sandboxed and without Node, the flag only
+    // runs the same preloads per frame; the close guard keeps to the top frame and the extension
+    // preload, registered only while extensions run, acts only in chrome-extension:// frames.
+    webPreferences.nodeIntegrationInSubFrames = isProfilePartition
     webPreferences.enableBlinkFeatures = ''
     webPreferences.disableBlinkFeatures = ''
     webPreferences.webSecurity = true

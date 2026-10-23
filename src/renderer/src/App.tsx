@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
+import { BrowserExtensionInstallDialog } from './components/browser-extension-install-dialog'
 import { DocPreviewExternalLinkConfirmation } from './components/browser-pane/workspace-doc/doc-preview-external-link-confirmation'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
@@ -108,6 +109,7 @@ function App(): React.JSX.Element {
               onboardingGate={onboardingGate}
             />
             <BrowserWebAuthnAccountDialog />
+            <BrowserExtensionInstallDialog />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />

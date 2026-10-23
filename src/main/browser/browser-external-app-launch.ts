@@ -1,6 +1,7 @@
 import { app, shell } from 'electron'
 
 import { DOC_PREVIEW_SCHEME } from '../../shared/doc-preview-scheme'
+import { BROWSER_EXTENSION_API_SCHEME } from '../../shared/browser-extension-worker-api'
 import {
   browserPagePromptOrigin,
   openBrowserPagePrompt,
@@ -14,6 +15,9 @@ const NEVER_EXTERNAL_APP_PROTOCOLS: ReadonlySet<string> = new Set([
   'afp:',
   'blob:',
   'chrome:',
+  // Why: extension pages and Orca's extension API are browser-internal, as in Chrome.
+  'chrome-extension:',
+  `${BROWSER_EXTENSION_API_SCHEME}:`,
   'data:',
   'devtools:',
   'disk:',

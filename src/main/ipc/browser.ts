@@ -25,6 +25,10 @@ import type {
   BrowserPagePromptResult
 } from '../../shared/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../browser/browser-page-prompts'
+import { recordActiveBrowserPage } from '../browser/extensions/browser-extension-tab-model'
+import { announceRegisteredBrowserExtensionTab } from '../browser/extensions/api/tabs-lifecycle'
+import { registerBrowserExtensionHandlers } from './browser-extensions'
+import { registerBrowserExtensionContextMenuHandlers } from './browser-extension-context-menu'
 
 let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 
@@ -96,6 +100,7 @@ export function registerBrowserHandlers(): void {
       agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
     }
     resolveTabRegistrationWaiters(args.browserPageId, args.worktreeId)
+    announceRegisteredBrowserExtensionTab(args.browserPageId, args.webContentsId)
     return true
   }
 
@@ -230,9 +235,11 @@ export function registerBrowserHandlers(): void {
   // Without this, a user switching tabs in the UI would leave the agent operating
   // on the previous tab, which is confusing.
   ipcMain.handle('browser:activeTabChanged', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
+    if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
       return false
     }
+    // Why before the bridge check: extensions need the active tab even when no agent bridge exists.
+    recordActiveBrowserPage(args.browserPageId)
     if (!agentBrowserBridgeRef) {
       return false
     }
@@ -258,4 +265,7 @@ export function registerBrowserHandlers(): void {
   // --- Browser Session Profile IPC ---
 
   registerBrowserSessionProfileHandlers()
+
+  registerBrowserExtensionHandlers()
+  registerBrowserExtensionContextMenuHandlers()
 }

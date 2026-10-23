@@ -116,6 +116,8 @@ describe('browser external app launch', () => {
     'blob:https://example.com/id',
     'about:blank',
     'orca-preview://doc/index.html',
+    'chrome-extension://nngceckbapebfimnlniiiahkandclblb/popup/index.html',
+    'orca-extension-api://api/call',
     'shell:startup',
     'vbscript:msgbox(1)',
     'hcp://system/sysinfo',

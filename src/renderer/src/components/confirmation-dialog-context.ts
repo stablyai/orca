@@ -20,6 +20,8 @@ export type ConfirmationDialogOptions = {
   icon?: LucideIcon
   cancelVariant?: 'outline' | 'ghost'
   initialFocus?: 'confirm'
+  /** Prompts to trust, approve, run or remove code: host-owned tokens a plugin theme cannot restyle. */
+  surface?: 'security'
   /** The short close-prompt look: small title, text and buttons. */
   compact?: boolean
   /** Opened by a click or Enter: an outside press, a repeated Enter or a double-click's second

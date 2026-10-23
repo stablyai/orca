@@ -10,6 +10,7 @@ import {
 import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
+import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -102,6 +103,7 @@ const preflightReady = runMainProcessPreflight({
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
+  enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
   app.on('open-url', (event, url) => {
     if (!parseSkillShareId(url)) {
