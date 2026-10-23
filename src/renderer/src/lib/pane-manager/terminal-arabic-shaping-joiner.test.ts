@@ -295,6 +295,37 @@ describe('configureLazyArabicShapingJoiner', () => {
     expect(host.events).toEqual([])
   })
 
+  it('registers when a Bengali spacing vowel sign arrives in the next write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    expect(host.events).toEqual([])
+    ensureArabicShapingJoinerForText(host.terminal, 'ি')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('registers when a conjunct is split after the virama', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক্')
+    ensureArabicShapingJoinerForText(host.terminal, 'ষ')
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('does not carry an Indic tail across an ASCII write', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ক')
+    ensureArabicShapingJoinerForText(host.terminal, ' ি')
+
+    expect(host.events).toEqual([])
+  })
+
   it('registers once before the first RTL write and cleans it up', () => {
     const host = createLazyHost()
     const cleanup = configureLazyArabicShapingJoiner(host.terminal, () => true)
