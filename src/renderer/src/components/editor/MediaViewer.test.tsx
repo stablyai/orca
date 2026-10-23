@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { StrictMode, act } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import MediaViewer from './MediaViewer'
 
@@ -38,6 +38,44 @@ describe('MediaViewer', () => {
     expect(pause).toHaveBeenCalledTimes(1)
     expect(load).toHaveBeenCalledTimes(1)
     expect(video?.getAttribute('src')).toBeNull()
+  })
+
+  it('resumes from the last playback position after the tab remounts', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    const renderViewer = async (): Promise<{ root: Root; video: HTMLVideoElement }> => {
+      const container = document.createElement('div')
+      const root = createRoot(container)
+      await act(async () =>
+        root.render(
+          <StrictMode>
+            <MediaViewer
+              src="orca-media://file/token"
+              mimeType="video/mp4"
+              filePath="clip.mp4"
+              canOpenLocally
+              playbackCacheKey="clip.mp4:pdf"
+            />
+          </StrictMode>
+        )
+      )
+      const video = container.querySelector('video')
+      if (!video) {
+        throw new Error('video not rendered')
+      }
+      Object.defineProperty(video, 'duration', { configurable: true, value: 60 })
+      return { root, video }
+    }
+
+    const first = await renderViewer()
+    first.video.currentTime = 42
+    await act(async () => first.root.unmount())
+
+    const second = await renderViewer()
+    second.video.currentTime = 0
+    await act(async () => second.video.dispatchEvent(new Event('loadedmetadata')))
+    expect(second.video.currentTime).toBe(42)
+    await act(async () => second.root.unmount())
   })
 
   it('shows a persistent playback error and only offers the default app for local files', async () => {
