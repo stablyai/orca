@@ -8,13 +8,16 @@ import type { WslMoveDriverDeps, WslMoveTerminalScope } from './wsl-move-driver-
 import { refusal } from './wsl-move-driver-plan'
 import type { WslMoveRestoreHintPane } from './wsl-move-restore-hints'
 import { assessWslMoveTerminals } from './wsl-move-terminal-gate'
+import { withSleptSessionPanes } from './wsl-move-slept-scrollback'
 
 const sessionsOf = (panes: readonly WslMoveRestoreHintPane[]): string =>
   JSON.stringify(panes.map((pane) => pane.sessionId).sort())
 
 export async function pauseWslMoveScope(
-  deps: Pick<WslMoveDriverDeps, 'gateInputs' | 'listPanes' | 'quiesce'>,
-  scope: WslMoveTerminalScope
+  deps: Pick<WslMoveDriverDeps, 'gateInputs' | 'listPanes' | 'quiesce' | 'sleptSessionPanes'>,
+  scope: WslMoveTerminalScope,
+  /** The window's bindings of panes slept before the move, which main no longer holds. */
+  reported: readonly WslMoveRestoreHintPane[] = []
 ): Promise<{ panes: readonly WslMoveRestoreHintPane[] } | WslMoveRefusal> {
   const before = deps.listPanes(scope)
   const gate = assessWslMoveTerminals(await deps.gateInputs(scope))
@@ -28,9 +31,15 @@ export async function pauseWslMoveScope(
   }
   try {
     const { failedWorktreeIds } = await deps.quiesce.sleepWorkspaces(scope.workspaceIds)
+    // Panes slept before the move too, so their folders reach the restore hints, not only history.
     return failedWorktreeIds.length > 0
       ? refusal('wsl_move_pause_failed', { detail: 'sleep-failed' })
-      : { panes }
+      : {
+          panes: withSleptSessionPanes(
+            panes,
+            deps.sleptSessionPanes?.(scope.workspaceIds, reported) ?? []
+          )
+        }
   } catch (error) {
     return refusal('wsl_move_pause_failed', {
       detail: error instanceof Error ? error.message : String(error)

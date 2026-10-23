@@ -2,6 +2,8 @@
 export type WorktreeSleepRequest = {
   requestId: string
   worktreeIds: string[]
+  /** A WSL move's pause: its browser tabs move with the project, so Sleep must not close them. */
+  keepBrowserTabs?: true
 }
 
 export type WorktreeSleepResponse = {

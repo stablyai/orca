@@ -49,7 +49,8 @@ void browserWindowFits
  */
 export async function requestWorktreeSleepFromRenderer(
   mainWindow: WorktreeSleepRendererWindow,
-  worktreeIds: readonly string[]
+  worktreeIds: readonly string[],
+  options: { keepBrowserTabs?: true } = {}
 ): Promise<WorktreeSleepResult> {
   if (mainWindow.isDestroyed()) {
     throw new Error('renderer_unavailable')
@@ -100,7 +101,11 @@ export async function requestWorktreeSleepFromRenderer(
     webContents.once('render-process-gone', onRendererUnavailable)
     // A reload discards the renderer's pending Sleep, so it would never answer.
     webContents.once('did-start-loading', onRendererUnavailable)
-    const request: WorktreeSleepRequest = { requestId, worktreeIds: [...worktreeIds] }
+    const request: WorktreeSleepRequest = {
+      requestId,
+      worktreeIds: [...worktreeIds],
+      ...(options.keepBrowserTabs ? { keepBrowserTabs: true } : {})
+    }
     try {
       webContents.send('ui:worktreeSleepRequest', request)
     } catch {

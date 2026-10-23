@@ -110,7 +110,8 @@ export type WorktreeSleepOutcome = {
 
 /** The sleep without the toast, for callers that report failures themselves. */
 export async function sleepWorktreesReportingFailures(
-  requestedWorktreeIds: readonly string[]
+  requestedWorktreeIds: readonly string[],
+  options: { keepBrowserTabs?: boolean } = {}
 ): Promise<WorktreeSleepOutcome> {
   // Why unique: both copies of a twin share one id, and sleeping it sleeps the whole workspace.
   const worktreeIds = [...new Set(requestedWorktreeIds)]
@@ -145,7 +146,9 @@ export async function sleepWorktreesReportingFailures(
     let chats: Promise<WorkspaceChatStop> = Promise.resolve({ receipts: [], failed: false })
     // Browser cleanup and the authoritative terminal admission run before any batch wait.
     const panels = withWorktreeSleepTeardown(worktreeId, async () => {
-      shutdownWorktreeBrowsers(worktreeId)
+      if (!options.keepBrowserTabs) {
+        shutdownWorktreeBrowsers(worktreeId)
+      }
       await shutdownWorktreeTerminals(worktreeId, {
         keepIdentifiers: true,
         onAdmitted: () => {

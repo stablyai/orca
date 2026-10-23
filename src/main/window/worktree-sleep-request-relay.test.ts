@@ -59,6 +59,13 @@ describe('requestWorktreeSleepFromRenderer', () => {
     expect(window.listenerCount('closed')).toBe(0)
   })
 
+  it('asks the renderer to keep browser tabs only when the caller says so', async () => {
+    void requestWorktreeSleepFromRenderer(window, ['wt-1'], { keepBrowserTabs: true })
+    void requestWorktreeSleepFromRenderer(window, ['wt-2'])
+    expect(window.webContents.sent[0]?.keepBrowserTabs).toBe(true)
+    expect(window.webContents.sent[1]).not.toHaveProperty('keepBrowserTabs')
+  })
+
   it('rejects with the error the renderer reports', async () => {
     const pending = requestWorktreeSleepFromRenderer(window, ['wt-1'])
     respond(window.webContents, {

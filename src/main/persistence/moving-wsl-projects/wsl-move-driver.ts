@@ -128,7 +128,7 @@ async function runMove(
   }
   const { host, scope } = prepared
   deps.progress({ distro, step: 'pausing-terminals', migrationId })
-  const paused = await pauseWslMoveScope(deps, scope)
+  const paused = await pauseWslMoveScope(deps, scope, request.sleptPanes)
   if ('outcome' in paused) {
     return paused
   }

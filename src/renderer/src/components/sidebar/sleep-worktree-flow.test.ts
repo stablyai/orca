@@ -342,6 +342,14 @@ describe('runSleepWorktree', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
+  it("keeps a workspace's browser tabs when a WSL move pauses it", async () => {
+    const outcome = await sleepWorktreesReportingFailures(['wt-1'], { keepBrowserTabs: true })
+
+    expect(outcome.failedWorktreeIds).toEqual([])
+    expect(mocks.state.shutdownWorktreeBrowsers).not.toHaveBeenCalled()
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalled()
+  })
+
   it('sleeps multiple worktrees and clears active only once when included', async () => {
     mocks.state.activeWorktreeId = 'wt-2'
 

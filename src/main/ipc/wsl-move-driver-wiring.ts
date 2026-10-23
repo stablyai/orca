@@ -130,13 +130,15 @@ export function createWslMoveDriverDeps(
     exportManifest: (request) => exportWslMoveManifest(store, request),
     gateInputs: (scope) => collectWslMoveGateInputs(facts, scope),
     listPanes: (scope) => listWslMovePanes(facts, scope),
+    sleptSessionPanes: (workspaceIds, reported) =>
+      listWslMoveSleptSessionPanes(store.getWorkspaceSession(), workspaceIds, reported),
     quiesce: {
       sleepWorkspaces: (workspaceIds) => {
         const window = getTrustedUIRendererWindow()
         if (!window) {
           return Promise.reject(new Error('renderer_unavailable'))
         }
-        return requestWorktreeSleepFromRenderer(window, workspaceIds)
+        return requestWorktreeSleepFromRenderer(window, workspaceIds, { keepBrowserTabs: true })
       },
       livePtyIds: (workspaceIds) =>
         runtime.listWslMoveLiveTerminals(workspaceIds).map((terminal) => terminal.ptyId),
