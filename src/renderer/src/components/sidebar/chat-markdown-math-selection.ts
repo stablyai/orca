@@ -1,7 +1,7 @@
 import type { ClipboardEvent } from 'react'
 
 /** A selected equation copies once as TeX instead of KaTeX's duplicated visual/MathML text. */
-export function chatMathSelectionText(selection: Selection, root: HTMLElement): string | null {
+export function chatMathSelectionText(selection: Selection, root: Element): string | null {
   if (selection.isCollapsed || !selection.rangeCount) {
     return null
   }
