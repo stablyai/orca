@@ -4,8 +4,10 @@ import type { RemoteRuntimeHandshakeState } from './remote-runtime-client-handsh
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { RuntimeRpcEnvelopeSchema, type RuntimeRpcResponse } from './runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
+import { decodeRuntimeSnapshotResponse } from './remote-runtime-snapshot-compression'
 
 type SubscriptionFrameRouterOptions<TResult> = {
+  snapshotCompression?: boolean
   handshake: PairedE2EEClientHandshake
   sealAuth: () => Promise<string>
   isSettled: () => boolean
@@ -115,7 +117,10 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
   private handleRpcFrame(plaintext: string): void {
     let raw: unknown
     try {
-      raw = parseRemoteRuntimeJsonText(plaintext)
+      raw = decodeRuntimeSnapshotResponse(
+        parseRemoteRuntimeJsonText(plaintext),
+        this.options.snapshotCompression === true
+      )
     } catch {
       this.options.fail(
         new RemoteRuntimeClientError(

@@ -14,6 +14,7 @@ import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import type { RpcBinarySender } from '../rpc/rpc-binary-sender'
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
+import { createRuntimeSnapshotReply } from '../rpc/runtime-snapshot-reply'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 
@@ -203,7 +204,12 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     const replyForRequest =
       request.method === 'status.get'
         ? (response: string): void => boundedReply(injectDeviceScope(response, device.scope))
-        : boundedReply
+        : createRuntimeSnapshotReply(
+            request.method,
+            device.scope,
+            authenticatedSocket?.clientCapabilities,
+            boundedReply
+          )
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
     const pairingProvider = this.mobileRelayPairingProvider
