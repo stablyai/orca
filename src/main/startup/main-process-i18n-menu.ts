@@ -10,9 +10,8 @@ import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-win
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
 import {
+  getAppMenuQuitHandlers,
   openSettingsFromSystemMenu,
-  quitAndStopAllSessionsFromUserCommand,
-  quitFromUserCommand,
   runUserInitiatedUpdateCheck,
   sendOpenCrashReport,
   sendOpenFeatureTour,
@@ -31,9 +30,7 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   logStartupMilestone('i18n-ready')
   registerAppMenu({
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
-    ...(state.isServeMode
-      ? { onQuit: quitFromUserCommand }
-      : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand }),
+    ...getAppMenuQuitHandlers(),
     onCheckForUpdates: (options) => {
       ensureAutoUpdaterConfigured()
       runUserInitiatedUpdateCheck(options)

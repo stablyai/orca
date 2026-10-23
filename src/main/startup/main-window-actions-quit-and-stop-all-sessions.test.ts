@@ -33,9 +33,11 @@ vi.mock('../window/renderer-launch-failure-probe', () => ({ probeRendererLaunchC
 import { safelyRevealWindow } from '../window/focus-existing-window'
 import {
   consumeQuitAndStopAllSessionsRequest,
+  getAppMenuQuitHandlers,
   getSystemTrayOptions,
   quitAfterRendererStoppedAllSessions,
   quitAndStopAllSessionsFromUserCommand,
+  quitFromUserCommand,
   setMainWindowOpener
 } from './main-window-actions'
 import { mainProcessState as state } from './main-process-state'
@@ -219,6 +221,17 @@ describe('quitAfterRendererStoppedAllSessions', () => {
     expect(electron.quit).toHaveBeenCalledOnce()
   })
 
+  it('quits even when stopping the sessions outlasts the request expiry', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID)).toBe(true)
+
+    // The renderer may wait 30 s for the restored session before Kill all even starts.
+    vi.setSystemTime(Date.now() + 120_000)
+    quitAfterRendererStoppedAllSessions(MAIN_WEB_CONTENTS_ID)
+
+    expect(electron.quit).toHaveBeenCalledOnce()
+  })
+
   it('ignores a renderer that never consumed the request', () => {
     expect(consumeQuitAndStopAllSessionsRequest(MAIN_WEB_CONTENTS_ID + 1)).toBe(false)
 
@@ -241,5 +254,16 @@ describe('getSystemTrayOptions', () => {
 
     state.isServeMode = true
     expect(getSystemTrayOptions()?.onQuitAndStopAllSessions).toBeUndefined()
+  })
+})
+
+describe('getAppMenuQuitHandlers', () => {
+  it('offers Quit and Stop All Sessions on a desktop app, and keeps a serve host on its own Quit', () => {
+    expect(getAppMenuQuitHandlers()).toEqual({
+      onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand
+    })
+
+    state.isServeMode = true
+    expect(getAppMenuQuitHandlers()).toEqual({ onQuit: quitFromUserCommand })
   })
 })

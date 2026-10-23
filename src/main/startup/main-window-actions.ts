@@ -10,6 +10,8 @@ import {
 } from 'electron'
 import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
+import type { AppMenuQuitHandlers } from '../menu/app-menu-quit-item'
+import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from '../updater'
@@ -68,7 +70,7 @@ export function showMainWindowFromTray(): void {
 /** Shows the main window and sends it a one-shot intent, also queued for a renderer that mounts later. */
 function sendOneShotToMainWindow(
   channel: string,
-  pending: typeof state.pendingOpenSettings,
+  pending: ReturnType<typeof createWebContentsTimedFlag>,
   durationMs: number
 ): boolean {
   showMainWindowFromTray()
@@ -206,6 +208,12 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
       ? {}
       : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand })
   }
+}
+
+export function getAppMenuQuitHandlers(): AppMenuQuitHandlers {
+  return state.isServeMode
+    ? { onQuit: quitFromUserCommand }
+    : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand }
 }
 
 export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {

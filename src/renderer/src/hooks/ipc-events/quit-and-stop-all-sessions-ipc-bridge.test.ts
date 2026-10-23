@@ -35,6 +35,8 @@ const CLEAN_SUMMARY: KillAllSummary = {
 }
 
 let pushListener: (() => void) | null
+let unhandledRejections: unknown[] = []
+const recordUnhandledRejection = (reason: unknown): void => void unhandledRejections.push(reason)
 let pending: boolean[]
 const quitAfterStoppingAllSessions = vi.fn()
 
@@ -74,9 +76,12 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
     mocks.storeState.hydrationSucceeded = true
     mocks.toastError.mockReset()
     installUiApi()
+    unhandledRejections = []
+    process.on('unhandledRejection', recordUnhandledRejection)
   })
 
   afterEach(() => {
+    process.off('unhandledRejection', recordUnhandledRejection)
     vi.restoreAllMocks()
   })
 
@@ -217,6 +222,19 @@ describe('registerQuitAndStopAllSessionsIpcBridge', () => {
       '[quit-and-stop-all-sessions] Stopping sessions failed:',
       expect.any(Error)
     )
+  })
+
+  it('stops nothing, without an unhandled rejection, when consuming the request fails', async () => {
+    Object.assign(window.api.ui, {
+      consumePendingQuitAndStopAllSessions: () => Promise.reject(new Error('IPC unavailable'))
+    })
+
+    registerQuitAndStopAllSessionsIpcBridge([])
+    await settle()
+
+    expect(mocks.waitReady).not.toHaveBeenCalled()
+    expect(quitAfterStoppingAllSessions).not.toHaveBeenCalled()
+    expect(unhandledRejections).toEqual([])
   })
 
   it('runs again on the next request after a failed attempt', async () => {

@@ -13,6 +13,7 @@ import {
   type SeveredDaemonRestartResult
 } from '../daemon/daemon-host-image-state'
 import { getAllDaemonAdapters, getCurrentDaemonAdapter } from '../daemon/daemon-provider-routing'
+import { isHoldingForNewerProtocolDaemon } from '../daemon/daemon-newer-protocol-hold'
 import {
   getDaemonFolderAccessMismatch,
   refreshDaemonFolderAccessProbe,
@@ -176,14 +177,16 @@ export function registerDaemonManagementHandlers(): void {
       killedSessionIds: string[]
       listingIncomplete?: boolean
     }> => {
-      const provider = getDaemonProvider()
-      const adapters = provider ? [...getAllDaemonAdapters(provider)] : []
+      const adapters = getDaemonAdapters()
       // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
       const { sessions: initial, unlistedVersions } = await listSessionsOfEveryAdapter(adapters)
       const initialIds = new Set(initial.map((s) => s.sessionId))
       const initialCount = initial.length
-      // Why no provider counts: a daemon from an earlier run can own sessions when startup here failed.
-      const incomplete = provider && unlistedVersions.size === 0 ? {} : { listingIncomplete: true }
+      // Why: with no adapter (failed startup) or a held newer-build daemon, unlisted sessions can survive.
+      const incomplete =
+        adapters.length > 0 && unlistedVersions.size === 0 && !isHoldingForNewerProtocolDaemon()
+          ? {}
+          : { listingIncomplete: true }
 
       if (initialCount === 0) {
         return { killedCount: 0, remainingCount: 0, killedSessionIds: [], ...incomplete }
