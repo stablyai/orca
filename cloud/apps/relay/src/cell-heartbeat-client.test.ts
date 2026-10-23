@@ -13,6 +13,67 @@ const CONFIG = {
 describe('cell heartbeat client', () => {
   afterEach(() => vi.restoreAllMocks())
 
+  it.each([200, 404, 503])('releases heartbeat and status response bodies for status %i', async (status) => {
+    const cancellations = [vi.fn(), vi.fn()]
+    const fetchImpl: typeof fetch = async (input) => {
+      const isHeartbeat = String(input).endsWith('/cell-heartbeat')
+      return new Response(new ReadableStream({ cancel: cancellations[isHeartbeat ? 0 : 1] }), {
+        status: isHeartbeat ? 200 : status
+      })
+    }
+    const client = startCellHeartbeat(CONFIG, {
+      ready: async () => true,
+      observedRequests: () => 0,
+      connectionCounts: () => ({
+        totalConnections: 0,
+        inFlightConnections: 0,
+        reservedConnectionUnits: 0,
+        enforcedConnectionUnits: 0
+      }),
+      regionalRehomeSafety: () => ({
+        observedAt: 1,
+        sqlFailures: 0,
+        reconnects: 0,
+        controlActivityRecoveryFailures: 0,
+        databasePoolWaiting: 0,
+        databasePoolWaitersMax: 0,
+        databasePoolWaitMsMax: 0
+      }),
+      fetch: fetchImpl,
+      identityToken: async () => 'token',
+      intervalMs: 60_000
+    })!
+    try {
+      await vi.waitFor(() => {
+        for (const cancel of cancellations) expect(cancel).toHaveBeenCalledOnce()
+      })
+    } finally {
+      client.stop()
+    }
+  })
+
+  it('releases a rejected heartbeat body before ending the attempt', async () => {
+    const cancel = vi.fn()
+    const client = startCellHeartbeat(CONFIG, {
+      ready: async () => true,
+      observedRequests: () => 0,
+      connectionCounts: () => ({
+        totalConnections: 0,
+        inFlightConnections: 0,
+        reservedConnectionUnits: 0,
+        enforcedConnectionUnits: 0
+      }),
+      fetch: async () => new Response(new ReadableStream({ cancel }), { status: 503 }),
+      identityToken: async () => 'token',
+      intervalMs: 60_000
+    })!
+    try {
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+    } finally {
+      client.stop()
+    }
+  })
+
   it('sends an immediate authenticated heartbeat without putting credentials in the URL', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {

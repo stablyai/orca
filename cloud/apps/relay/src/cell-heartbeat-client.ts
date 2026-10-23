@@ -78,6 +78,7 @@ export function startCellHeartbeat(
           signal: AbortSignal.timeout(10_000)
         }
       )
+      await response.body?.cancel().catch(() => undefined)
       if (!response.ok) throw new Error(`director_heartbeat_${response.status}`)
       if (options.regionalRehomeSafety) {
         const statusResponse = await fetchImpl(
@@ -99,6 +100,7 @@ export function startCellHeartbeat(
             signal: AbortSignal.timeout(10_000)
           }
         )
+        await statusResponse.body?.cancel().catch(() => undefined)
         if (!statusResponse.ok && statusResponse.status !== 404) {
           throw new Error(`director_rehome_status_${statusResponse.status}`)
         }

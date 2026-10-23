@@ -61,7 +61,10 @@ export async function probeRegionalRehomeTrust(input: {
         signal: AbortSignal.timeout(SOURCE_PROBE_TIMEOUT_MS)
       }
     )
-    if (!response.ok) throw new Error(`regional_rehome_trust_probe_source_${response.status}`)
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`regional_rehome_trust_probe_source_${response.status}`)
+    }
     const parsed = SourceProbeResponseSchema.safeParse(await response.json())
     if (!parsed.success) throw new Error('regional_rehome_trust_probe_source_invalid_response')
     return parsed.data
