@@ -38,6 +38,22 @@ describe('locked audit tool execution', () => {
     expect(result).toBe(failed)
   })
 
+  it('captures structured tool output without hiding the installation log', () => {
+    const calls = []
+    const output = { ...success, stdout: '{"ok":true}' }
+    expect(
+      runAuditTool('react-doctor', ['.', '--json'], {
+        stdio: 'pipe',
+        run: (spec) => {
+          calls.push(spec)
+          return calls.length === 1 ? success : output
+        }
+      })
+    ).toBe(output)
+    expect(calls[0].stdio).toBe('inherit')
+    expect(calls[1].stdio).toBe('pipe')
+  })
+
   it.each([
     { code: 1, signal: null, timedOut: false },
     { code: null, signal: 'SIGTERM', timedOut: false },

@@ -9426,7 +9426,7 @@
             "5d8f1a3b7c": "Chine",
             "7e2a4b8c1d": "outre-mer",
             "cursor": {
-              "description": "Utilisation mensuelle du forfait lue depuis la connexion Cursor déjà présente sur cet ordinateur (cursor-agent login).",
+              "description": "Utilisation du forfait lue depuis la connexion Cursor déjà présente sur cet ordinateur (cursor-agent login).",
               "kw": {
                 "cursor": "cursor",
                 "rateLimit": "limite de débit",
@@ -9712,7 +9712,7 @@
               "background": "arrière-plan"
             },
             "cursor": {
-              "description": "Afficher l'utilisation mensuelle du forfait Cursor à partir de la connexion Cursor sur cet ordinateur.",
+              "description": "Afficher l'utilisation du forfait Cursor à partir de la connexion Cursor sur cet ordinateur.",
               "kw": {
                 "cursor": "cursor"
               },
@@ -12598,11 +12598,11 @@
             "keychain": "Trousseau macOS (cursor-agent)"
           },
           "staleUsage": "Dernière utilisation connue — la dernière actualisation a échoué : {{reason}}",
-          "subtitle": "Affiche l'utilisation mensuelle de votre forfait Cursor à partir de la connexion déjà présente sur cet ordinateur. Orca se contente de la lire — il ne modifie jamais votre connexion Cursor.",
+          "subtitle": "Affiche l'utilisation de votre forfait Cursor à partir de la connexion déjà présente sur cet ordinateur. Orca se contente de la lire — il ne modifie jamais votre connexion Cursor.",
           "title": "Cursor",
           "usageDescription": "Cursor facture deux enveloppes qui se réinitialisent avec votre cycle de facturation, plus des dépenses à la demande une fois épuisées.",
           "usageLabel": "Utilisation",
-          "usageTitle": "Utilisation mensuelle du forfait"
+          "usageTitle": "Utilisation du forfait"
         },
         "NotificationHostToggles": {
           "offCount": "{{count}} désactivées",

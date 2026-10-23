@@ -12,6 +12,17 @@ import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/
 export type AgentLaunchSettingsOwner = {
   environmentId: string
   pairingRevision?: number
+  runtimeId?: string
+}
+
+type SettingsListener = (owner: AgentLaunchSettingsOwner) => void
+const settingsListeners = new Set<SettingsListener>()
+
+export function subscribeHostAgentLaunchSettings(listener: SettingsListener): () => void {
+  settingsListeners.add(listener)
+  return () => {
+    settingsListeners.delete(listener)
+  }
 }
 
 export async function readHostAgentLaunchSettings(
@@ -21,7 +32,8 @@ export async function readHostAgentLaunchSettings(
   if (
     !(await runtimeEnvironmentSupportsCapability(
       owner.environmentId,
-      AGENT_LAUNCH_SETTINGS_CAPABILITY
+      AGENT_LAUNCH_SETTINGS_CAPABILITY,
+      15_000
     ))
   ) {
     return null
@@ -30,7 +42,12 @@ export async function readHostAgentLaunchSettings(
     { kind: 'environment', environmentId: owner.environmentId },
     'settings.getAgentLaunch',
     undefined,
-    { expectedEnvironmentPairingRevision: owner.pairingRevision, signal, timeoutMs: 15_000 }
+    {
+      expectedEnvironmentPairingRevision: owner.pairingRevision,
+      ...(owner.runtimeId ? { expectedEnvironmentRuntimeId: owner.runtimeId } : {}),
+      signal,
+      timeoutMs: 15_000
+    }
   )
   return result.settings
 }
@@ -71,6 +88,9 @@ export async function mutateHostAgentLaunchSettings(
     mutation,
     { expectedEnvironmentPairingRevision: owner.pairingRevision, signal, timeoutMs: 15_000 }
   )
+  if (!signal?.aborted) {
+    settingsListeners.forEach((listener) => listener(owner))
+  }
   return result.settings
 }
 

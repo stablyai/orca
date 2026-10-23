@@ -6,6 +6,7 @@ import { RuntimeClientError } from '../../runtime-client'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import {
   clampOrchestrationAskTimeoutMs,
+  ORCHESTRATION_ASK_MAX_TIMEOUT_MS,
   resolveOrchestrationAskClientTimeoutMs
 } from '../../../shared/orchestration-ask-timeout'
 import type { LegacyCompatibilityResult } from '../../../shared/orchestration-check-output'
@@ -21,6 +22,12 @@ import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
   'orchestration ask': async ({ flags, client, cwd, json }) => {
     const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    if (parsedTimeoutMs !== undefined && parsedTimeoutMs > ORCHESTRATION_ASK_MAX_TIMEOUT_MS) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--timeout-ms must be at most ${ORCHESTRATION_ASK_MAX_TIMEOUT_MS} (30 minutes) per wait. For longer waits, resume the same question after a timeout.`
+      )
+    }
     const timeoutMs = clampOrchestrationAskTimeoutMs(parsedTimeoutMs)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const question = getOptionalStringFlag(flags, 'question')

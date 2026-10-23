@@ -11,6 +11,92 @@
   },
   "gates": [
     {
+      "id": "agent-session.detached-account-restart-progress",
+      "title": "Independent hidden account restarts progress within a shared spawn limit",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-store-provider-contract",
+      "surfaces": [
+        "hidden account-switch restart",
+        "Codex restart notices",
+        "Claude move-on-turn-end"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Real renderer store and scheduler with synthetic PTY IPC. Covers slot admission, later requests, prompt recovery, mounted ownership, stale replacement cleanup and executor reinstall. Physical PTYs and account switches remain unproved. Foreign-runtime and mobile execution are unchanged.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/22243"],
+      "invariant": "One unresolved detached restart must not block independent accepted restarts, and after 90s it must re-ask instead of blocking silently. At most four unexpired claimed restarts may be in flight across sweeps; each claim must recheck current pane ownership before spawning and retain existing late-result adoption or reaping.",
+      "oracle": "Hold the first spawn pending and reject the second; require later panes to rebind and unblock. Add requests during a pending sweep and require four total in flight, with excess requests still queued. Free a slot after a queued tab mounts and require that mounted pane to remain untouched while another pane progresses. Reinstall the executor and settle an older claim to release a slot for new work. Stall four spawns past the deadline and require the fifth pane to restart, the stalled pane to ask again, and its late result to still adopt.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts src/renderer/src/lib/agent-account-restart-startup.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts",
+        "src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts",
+        "src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts",
+        "src/renderer/src/lib/agent-account-restart-startup.test.ts",
+        "src/renderer/src/lib/codex-session-restart.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts",
+          "assertions": [
+            "finishes later accepted panes while the first spawn stays pending and a second fails",
+            "admits later requests within a shared limit and rechecks mounted ownership as slots free",
+            "resumes queued work when a claim from an earlier executor installation settles",
+            "asks again and frees the slot when a spawn stalls, then adopts its late result"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts",
+          "assertions": [
+            "rejects a detached spawn after the tab generation and leaf owner change",
+            "keeps the replacement when a pane mounts during the spawn, since main already stopped the old PTY"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/terminal-pane/account-restart-queue-progress.test.ts src/renderer/src/components/terminal-pane/codex-detached-pane-restart.test.ts src/renderer/src/components/terminal-pane/claude-detached-pane-restart.test.ts src/renderer/src/lib/agent-account-restart-startup.test.ts src/renderer/src/lib/codex-session-restart.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.52,
+          "summary": "75 tests pass across five files. Initial serial code fails both progress regressions; a stale installation callback fails the reinstall regression until corrected."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "deterministic renderer store/provider contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One local full gate pass; CI soak not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original serial sweep strands pane three and admits only one later request. Generation-bound settlement callbacks strand the fifth pane after reinstall. All three regressions pass after fixes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "At most four claimed restart IPCs across all concurrent sweeps; fake-clock test verifies admission and slot reuse. One 90s per-claim timer frees a stalled slot and re-asks; no polling, retries, cancellation or process enumeration. Existing pending store is the queue; no second pending collection."
+      },
+      "promotionCriteria": [
+        "Collect 100 CI passes or 14 days without unexplained flakes.",
+        "Exercise live Codex and Claude hidden account-switch batches on Windows, Linux and macOS."
+      ],
+      "knownGaps": [
+        "A stalled spawn is not cancelled; its pane re-asks after 90s and stays claimed until main settles. Why a real Windows spawn stalls is not proved.",
+        "No live accounts, ConPTY, WSL or rendered prompt interaction exercised; no claim of closing broader restart/continuity reports.",
+        "Remote-runtime and mobile detached executors are unchanged; foreign-machine PTYs still wait for mounted transport."
+      ],
+      "demotionRule": "Keep experimental or demote if pending work spins, the shared limit is exceeded, mounted owners are replaced, or stale results leak or overwrite newer panes."
+    },
+    {
       "id": "terminal-provider.retired-macos-daemon-recovery",
       "title": "Restart releases retired macOS daemon conversation owners across upgrades",
       "maturity": "experimental",

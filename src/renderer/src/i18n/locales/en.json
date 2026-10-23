@@ -9628,7 +9628,7 @@
             "7e2a4b8c1d": "overseas",
             "cursor": {
               "title": "Cursor Usage",
-              "description": "Monthly plan usage read from the Cursor sign-in already on this computer (cursor-agent login).",
+              "description": "Plan usage read from the Cursor sign-in already on this computer (cursor-agent login).",
               "kw": {
                 "cursor": "cursor",
                 "usage": "usage",
@@ -9919,7 +9919,7 @@
             },
             "cursor": {
               "title": "Cursor Usage",
-              "description": "Show monthly Cursor plan usage from the Cursor sign-in on this computer.",
+              "description": "Show Cursor plan usage from the Cursor sign-in on this computer.",
               "kw": {
                 "cursor": "cursor"
               }
@@ -12791,7 +12791,7 @@
             "desktop": "Cursor IDE"
           },
           "title": "Cursor",
-          "subtitle": "Shows your monthly Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.",
+          "subtitle": "Shows your Cursor plan usage from the sign-in already on this computer. Orca only reads it — it never changes your Cursor login.",
           "dashboardLink": "Cursor dashboard",
           "loading": "Loading…",
           "signedIn": "Signed in",
@@ -12801,7 +12801,7 @@
           "signedOut": "No Cursor sign-in found on this computer",
           "signedOutHelp": "Sign in with Cursor IDE, or run cursor-agent login in a terminal, then click Refresh usage here.",
           "refreshUsage": "Refresh usage",
-          "usageTitle": "Monthly plan usage",
+          "usageTitle": "Plan usage",
           "usageDescription": "Cursor bills two pools that reset with your billing cycle, plus on-demand spend once they run out.",
           "planTotal": "Plan",
           "resets": "Resets {{when}}",

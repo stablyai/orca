@@ -9243,7 +9243,7 @@
             "25591bf95b": "粘贴完整的 opencode.ai Cookie 标头，包括 __Host-console_session，以进行速率限制提取。",
             "d16378a88f": "极小极大",
             "cursor": {
-              "description": "从此电脑上已有的 Cursor 登录（cursor-agent login）读取每月套餐用量。",
+              "description": "从此电脑上已有的 Cursor 登录（cursor-agent login）读取套餐用量。",
               "kw": {
                 "cursor": "cursor",
                 "rateLimit": "速率限制",
@@ -9529,7 +9529,7 @@
               "background": "背景"
             },
             "cursor": {
-              "description": "显示来自此电脑上 Cursor 登录的每月 Cursor 套餐用量。",
+              "description": "显示来自此电脑上 Cursor 登录的 Cursor 套餐用量。",
               "kw": {
                 "cursor": "cursor"
               },
@@ -12472,11 +12472,11 @@
             "keychain": "macOS 钥匙串（cursor-agent）"
           },
           "staleUsage": "上次已知用量 — 最近一次刷新失败：{{reason}}",
-          "subtitle": "显示来自此电脑上已有登录的每月 Cursor 套餐用量。Orca 仅读取，不会更改您的 Cursor 登录。",
+          "subtitle": "显示来自此电脑上已有登录的 Cursor 套餐用量。Orca 仅读取，不会更改您的 Cursor 登录。",
           "title": "Cursor",
           "usageDescription": "Cursor 按两个随账单周期重置的额度池计费，用完后按需计费。",
           "usageLabel": "用量",
-          "usageTitle": "每月套餐用量"
+          "usageTitle": "套餐用量"
         },
         "ZcodeCliSetupSection": {
           "title": "通过 ZCode 使用 GLM",

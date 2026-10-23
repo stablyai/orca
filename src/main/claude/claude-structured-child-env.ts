@@ -69,7 +69,7 @@ async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChi
 export function claudeChildEnv(
   sources: ClaudeChildEnvSources,
   decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env,
-  /** False when the session's seal pairs the CLI runtime itself, after the session's identity. */
+  /** False when the session's seal pairs the CLI runtime itself, behind this app's CLI. */
   { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
   const env = decorateEnv({

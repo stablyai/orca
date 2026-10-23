@@ -9248,7 +9248,7 @@
             "b0a4e8c6d9": "OAuth",
             "a9f3d7b5c8": "inicio de sesión",
             "cursor": {
-              "description": "Uso mensual del plan obtenido del inicio de sesión de Cursor que ya está en este equipo (cursor-agent login).",
+              "description": "Uso del plan obtenido del inicio de sesión de Cursor que ya está en este equipo (cursor-agent login).",
               "kw": {
                 "cursor": "cursor",
                 "rateLimit": "rate limit",
@@ -9533,7 +9533,7 @@
             "usagePercentageDisplayTitle": "Porcentajes de uso",
             "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
             "cursor": {
-              "description": "Muestra el uso mensual del plan de Cursor a partir del inicio de sesión de Cursor en este equipo.",
+              "description": "Muestra el uso del plan de Cursor a partir del inicio de sesión de Cursor en este equipo.",
               "kw": {
                 "cursor": "cursor"
               },
@@ -12195,11 +12195,11 @@
             "keychain": "Llavero de macOS (cursor-agent)"
           },
           "staleUsage": "Último uso conocido — falló la actualización más reciente: {{reason}}",
-          "subtitle": "Muestra tu uso mensual del plan de Cursor a partir del inicio de sesión que ya está en este equipo. Orca solo lo lee — nunca modifica tu inicio de sesión de Cursor.",
+          "subtitle": "Muestra tu uso del plan de Cursor a partir del inicio de sesión que ya está en este equipo. Orca solo lo lee — nunca modifica tu inicio de sesión de Cursor.",
           "title": "Cursor",
           "usageDescription": "Cursor factura dos cuotas que se restablecen con tu ciclo de facturación, más gasto bajo demanda cuando se agotan.",
           "usageLabel": "Uso",
-          "usageTitle": "Uso mensual del plan"
+          "usageTitle": "Uso del plan"
         },
         "NotificationHostToggles": {
           "offCount": "{{count}} desactivadas",

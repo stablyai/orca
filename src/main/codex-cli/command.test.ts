@@ -349,6 +349,33 @@ describe('withCliRuntimeOnPath', () => {
     expect(withCliRuntimeOnPath(join(brew, 'codex'), env, { platform: 'darwin' })).toBe(env)
   })
 
+  it('leaves PATH untouched for a compiled CLI beside a node (Homebrew, /usr/bin)', () => {
+    const root = makeCommandFixture('orca-pair-')
+    const brew = join(root, 'opt', 'homebrew', 'bin')
+    makeExecutable(join(brew, 'node'))
+    makeExecutable(join(brew, 'codex'))
+    writeFileSync(join(brew, 'codex'), Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0x07]))
+    const env = { PATH: '/usr/bin' }
+
+    expect(withCliRuntimeOnPath(join(brew, 'codex'), env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('pairs over the inherited PATH when the env names none, instead of replacing it', () => {
+    const root = makeCommandFixture('orca-pair-')
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node'))
+    makeExecutable(join(v20, 'codex'))
+    const inherited = process.env.PATH
+    onTestFinished(() => {
+      process.env.PATH = inherited
+    })
+    process.env.PATH = ['/opt/inherited/bin', '/usr/bin'].join(delimiter)
+
+    const noPath: NodeJS.ProcessEnv = {}
+    const paired = withCliRuntimeOnPath(join(v20, 'codex'), noPath, { platform: 'darwin' })
+    expect(paired.PATH).toBe([v20, '/opt/inherited/bin', '/usr/bin'].join(delimiter))
+  })
+
   it('leaves PATH untouched for a bare command name', () => {
     const env = { PATH: '/usr/bin' }
     expect(withCliRuntimeOnPath('codex', env, { platform: 'darwin' })).toBe(env)

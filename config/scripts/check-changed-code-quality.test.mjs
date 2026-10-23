@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -7,6 +7,7 @@ import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 import {
   OXLINT_SCANS,
   collectBaseLineBlocks,
+  collectAddedLineRanges,
   diagnosticTouchesAddedLines,
   isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
@@ -74,6 +75,38 @@ describe('changed-code quality line matching', () => {
   it('leaves Cloud source to the independent Cloud quality checks', () => {
     expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
     expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
+  })
+
+  it.each([
+    ['Counter.tsx', []],
+    ['Counter.txt', [{ start: 1, end: 2 }]],
+    ['cloud/Counter.tsx', [{ start: 1, end: 2 }]]
+  ])('retains rename subtraction only within the included scope: %s', (source, expected) => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-entry-'))
+    try {
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: repo })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const hooks = path.join(repo, '.git', 'test-hooks')
+      mkdirSync(hooks)
+      git('config', 'core.hooksPath', hooks)
+      git('config', 'commit.gpgsign', 'false')
+      mkdirSync(path.dirname(path.join(repo, source)), { recursive: true })
+      writeFileSync(path.join(repo, source), 'const counter = 1\nexport { counter }\n')
+      git('add', source)
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      git('mv', source, 'MovedCounter.tsx')
+
+      expect(collectAddedLineRanges(repo, base).rangesByFile.get('MovedCounter.tsx') ?? []).toEqual(
+        expected
+      )
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+    }
   })
 })
 

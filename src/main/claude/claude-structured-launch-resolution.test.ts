@@ -530,7 +530,11 @@ describe('claude structured launch resolution', () => {
       })
     })({ identity: IDENTITY })
 
-    expect((launch.env?.PATH ?? launch.env?.Path)?.split(delimiter)[0]).toBe(binDir)
+    // Right behind this app's CLI, so a runtime dir holding another `orca` cannot shadow it.
+    expect((launch.env?.PATH ?? launch.env?.Path)?.split(delimiter).slice(1)).toEqual([
+      binDir,
+      '/usr/bin'
+    ])
   })
 
   it('refuses other hosts, WSL, providers, and account-home variables', async () => {

@@ -121,6 +121,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'inject_rejected',
   'dispatch_not_found',
   'dispatch_run_mismatch',
+  'task_run_mismatch',
   'terminal_not_found',
   // A handle that names a live agent session with no terminal. Distinct from
   // `terminal_handle_stale`, which claims the handle went dead — nothing went stale here.

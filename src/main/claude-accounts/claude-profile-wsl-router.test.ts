@@ -96,6 +96,20 @@ function fixture() {
 }
 
 describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
+  it('publishes and launches the saved account across distro casing without changing guest spelling', async () => {
+    const f = fixture()
+    await f.router.publish('ubuntu')
+    expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
+    const launch = await f.router.prepareLaunch('ubuntu')
+    expect(launch).toMatchObject({
+      wslDistro: 'ubuntu',
+      envPatch: { CLAUDE_CONFIG_DIR: f.profileHome }
+    })
+    f.settings.claudeManagedAccounts[0].wslDistro = 'ubuntu'
+    expect(await f.router.runningDistros()).toEqual(['Ubuntu'])
+    expect((await f.router.preparation('Ubuntu')).envPatch.CLAUDE_CONFIG_DIR).toBe(f.profileHome)
+  })
+
   it('writes the guest pointer per build, sets up even a missing folder, and removes it with the last account', async () => {
     const f = fixture()
     await f.router.publish('Ubuntu')
@@ -362,13 +376,17 @@ it.skipIf(!posixHost)(
       external: ['electron'],
       logLevel: 'silent'
     })
-    const run = (accountId: string) =>
-      spawnSync(process.execPath, [helper, home, 'Ubuntu', accountId], { encoding: 'utf8' })
+    const run = (accountId: string, distro = 'Ubuntu') =>
+      spawnSync(process.execPath, [helper, home, distro, accountId], { encoding: 'utf8' })
 
     expect(run('a').status).toBe(0)
     expect(existsSync(join(profileHome, '..', 'profile.json'))).toBe(true)
     // History is a Linux link into the guest's own ~/.claude.
     expect(lstatSync(join(profileHome, 'projects')).isSymbolicLink()).toBe(true)
+    const marker = readFileSync(join(profileHome, '..', 'profile.json'), 'utf8')
+    expect(run('a', 'ubuntu').status).toBe(0)
+    expect(readFileSync(join(profileHome, '..', 'profile.json'), 'utf8')).toBe(marker)
+    expect(run('a', 'Debian').status).not.toBe(0)
     expect(run('../escape').status).not.toBe(0)
   }
 )

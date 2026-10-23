@@ -10,11 +10,11 @@ import {
   publishHostServerStatus
 } from '../runtime-environments/runtime-environment-managed-tunnel'
 
-// Once per SSH session: a restore runs on every runtime call, and the answer only changes when
-// a session ends, which the next session (a new connection or reconnect generation) checks.
-// The ended verdict is reapplied so a status a later connect replaces gets the warning back.
-// Every verdict expires: another desktop can end its launching session, or restart the server.
-const checked = new WeakMap<object, { generation: number; ended: boolean; at: number }>()
+// Restores run on every runtime call; cache only within the same environment and SSH session.
+const checked = new WeakMap<
+  object,
+  { environmentId: string; generation: number; ended: boolean; at: number }
+>()
 const RECHECK_MS = 10 * 60_000
 
 /** Never blocks or fails the caller; anything but a proven exit shows nothing. */
@@ -33,19 +33,19 @@ export async function noteEndedLaunchSshSession(
   }
   const generation = connection.getConnectGeneration()
   const prior = checked.get(connection)
-  const sameSession = prior?.generation === generation
+  const sameSession = prior?.generation === generation && prior.environmentId === environmentId
   if (sameSession && now() - prior.at < RECHECK_MS) {
     if (prior.ended) {
       flag(targetId, environmentId)
     }
     return
   }
-  const pending = { generation, ended: false, at: now() }
+  const pending = { environmentId, generation, ended: false, at: now() }
   checked.set(connection, pending)
   // Only a live probe disproves a proven end; unanswered or unknown keeps it.
   const provenEnded = sameSession && prior.ended
   const markEnded = (): void => {
-    checked.set(connection, { generation, ended: true, at: now() })
+    checked.set(connection, { environmentId, generation, ended: true, at: now() })
     flag(targetId, environmentId)
   }
   // Why: a disconnect, reconnect, unlink or relaunch during the probe makes its answer stale.

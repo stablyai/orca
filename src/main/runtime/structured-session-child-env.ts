@@ -97,7 +97,7 @@ export type SealedStructuredSessionChild = {
  * `env` named as this session's child. `inheritedEnvToDelete` is required so every agent states
  * what it strips, none included; a key the seal itself names the child by is never stripped (a
  * registered worker keeps its handle). `cliRuntimeCommand`: a Node CLI whose own directory goes
- * first on PATH, after the identity's, so it runs on the runtime beside it.
+ * on PATH right behind this app's CLI, so it runs on the runtime beside it.
  */
 export function sealStructuredSessionChild(input: {
   sessionId: string
@@ -106,13 +106,14 @@ export function sealStructuredSessionChild(input: {
   inheritedEnvToDelete: readonly string[]
   cliRuntimeCommand?: string
 }): SealedStructuredSessionChild {
-  const identity = childIdentity(input.sessionId, input.env)
+  // Why: pair before naming the child so this app's CLI dir stays ahead of a runtime dir holding another `orca`.
+  const paired = input.cliRuntimeCommand
+    ? withCliRuntimeOnPath(input.cliRuntimeCommand, input.env, { platform: process.platform })
+    : input.env
+  const identity = childIdentity(input.sessionId, paired)
   const named = new Set([...Object.keys(identity.commandEnv), ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV])
-  const env = input.cliRuntimeCommand
-    ? withCliRuntimeOnPath(input.cliRuntimeCommand, identity.env, { platform: process.platform })
-    : identity.env
   return {
-    env: { ...env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: input.spawnToken },
+    env: { ...identity.env, [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: input.spawnToken },
     envToDelete: input.inheritedEnvToDelete.filter((key) => !named.has(key)),
     commandEnv: identity.commandEnv
   }

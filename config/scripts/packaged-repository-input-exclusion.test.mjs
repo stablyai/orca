@@ -9,9 +9,9 @@ const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
-describe('packaged cloud source exclusion', () => {
-  it('omits cloud service sources during traversal while preserving compiled cloud clients', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-packaging-cloud-'))
+describe('packaged repository input exclusion', () => {
+  it('omits repository build inputs while preserving runtime files', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-packaging-inputs-'))
     const source = join(root, 'app')
     const destination = join(root, 'selected')
     const cloudPaths = [
@@ -22,7 +22,17 @@ describe('packaged cloud source exclusion', () => {
       'cloud/.env',
       'cloud/packages/push-contract/src/push-host-proof-vector.json'
     ]
+    const rootConfigs = [
+      '.oxlintrc.json',
+      '.oxfmtrc.json',
+      'components.json',
+      'opencode.json',
+      'orca.yaml',
+      'pnpm-workspace.yaml',
+      'vite.web.config.ts'
+    ]
     const runtimePaths = [
+      'LICENSE',
       'package.json',
       'out/main/index.js',
       'out/cli/index.js',
@@ -31,10 +41,11 @@ describe('packaged cloud source exclusion', () => {
       'out/shared/mobile-push-contract.js',
       'out/renderer/index.html',
       'out/renderer/assets/cloud/client.js',
+      'resources/configs/orca.yaml',
       'resources/cloud/icon.png'
     ]
     try {
-      for (const fixturePath of [...cloudPaths, ...runtimePaths]) {
+      for (const fixturePath of [...cloudPaths, ...rootConfigs, ...runtimePaths]) {
         const file = join(source, fixturePath)
         await mkdir(dirname(file), { recursive: true })
         await writeFile(file, fixturePath)
@@ -43,6 +54,7 @@ describe('packaged cloud source exclusion', () => {
         new FileMatcher(source, destination, (value) => value, electronBuilderConfig.files)
       ])
       expect(existsSync(join(destination, 'cloud'))).toBe(false)
+      expect(rootConfigs.filter((file) => existsSync(join(destination, file)))).toEqual([])
       for (const runtimePath of runtimePaths) {
         expect(await readFile(join(destination, runtimePath), 'utf8')).toBe(runtimePath)
       }

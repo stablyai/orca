@@ -3430,7 +3430,7 @@
             "glm": "glm",
             "cursor": {
               "title": "Uso do Cursor",
-              "description": "Mostrar o uso mensal do plano Cursor pela sessão conectada neste computador.",
+              "description": "Mostrar o uso do plano Cursor pela sessão conectada neste computador.",
               "kw": {
                 "cursor": "cursor"
               }
@@ -4739,7 +4739,7 @@
             "25591bf95b": "Cole o cabeçalho Cookie completo de opencode.ai, incluindo __Host-console_session, para consultar os limites de uso.",
             "cursor": {
               "title": "Uso do Cursor",
-              "description": "Uso mensal do plano consultado pela sessão do Cursor já conectada neste computador (cursor-agent login).",
+              "description": "Uso do plano consultado pela sessão do Cursor já conectada neste computador (cursor-agent login).",
               "kw": {
                 "cursor": "cursor",
                 "usage": "uso",
@@ -8353,7 +8353,7 @@
             "desktop": "Cursor IDE"
           },
           "title": "Cursor",
-          "subtitle": "Mostra o uso mensal do seu plano Cursor pela sessão já conectada neste computador. O Orca apenas a lê — nunca altera seu login no Cursor.",
+          "subtitle": "Mostra o uso do seu plano Cursor pela sessão já conectada neste computador. O Orca apenas a lê — nunca altera seu login no Cursor.",
           "dashboardLink": "Painel do Cursor",
           "loading": "Carregando…",
           "signedIn": "Conectado",
@@ -8363,7 +8363,7 @@
           "signedOut": "Nenhuma sessão do Cursor encontrada neste computador",
           "signedOutHelp": "Entre no Cursor IDE ou execute cursor-agent login em um terminal e clique em Atualizar uso aqui.",
           "refreshUsage": "Atualizar uso",
-          "usageTitle": "Uso mensal do plano",
+          "usageTitle": "Uso do plano",
           "usageDescription": "O Cursor cobra dois saldos que são renovados a cada ciclo de cobrança, além de gastos sob demanda quando eles se esgotam.",
           "planTotal": "Plano",
           "resets": "Renova {{when}}",
