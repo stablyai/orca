@@ -219,14 +219,41 @@ const usageLimitView = {
   }
 
   describe('a Codex retrying a dropped stream', () => {
-    it('draws one warning for the run, with what failed on its second line', () => {
+    it('keeps the reader’s open or closed choice while later attempts replace the row', () => {
+      const first = retry(1, 1)
+      const second = retry(2, 2)
+      const third = retry(3, 3)
+      const { rerender } = render(transcript([first]))
+      fireEvent.click(screen.getByRole('button', { name: 'Retrying' }))
+
+      rerender(transcript([first, second]))
+      const toggle = screen.getByRole('button', { name: 'Retrying' })
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByText(/Codex is retrying/).textContent).toBe(
+        'Codex is retrying: Reconnecting... 2/5.\nstream disconnected before completion'
+      )
+      fireEvent.click(toggle)
+
+      rerender(transcript([first, second, third]))
+      expect(screen.getByRole('button', { name: 'Retrying' })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
+      expect(screen.queryByText(/Codex is retrying/)).toBeNull()
+    })
+
+    it('draws one compact retry for the run and retains the latest cause on expansion', () => {
       render(transcript([retry(1, 1), retry(2, 2), retry(3, 3)]))
 
-      const rows = screen.getAllByText(/Codex is retrying/)
-      expect(rows).toHaveLength(1)
-      expect(rows[0]?.textContent).toBe(
+      const triggers = screen.getAllByRole('button', { name: 'Retrying' })
+      expect(triggers).toHaveLength(1)
+      expect(triggers[0]).toHaveClass('text-chat-foreground-faint')
+      expect(screen.queryByText(/Codex is retrying/)).toBeNull()
+      fireEvent.click(triggers[0]!)
+      expect(screen.getByText(/Codex is retrying/).textContent).toBe(
         'Codex is retrying: Reconnecting... 3/5.\nstream disconnected before completion'
       )
+      expect(screen.queryByText(/Reconnecting\.\.\. 2\/5/)).toBeNull()
     })
   })
 }

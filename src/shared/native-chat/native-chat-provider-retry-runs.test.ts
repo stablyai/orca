@@ -60,6 +60,51 @@ describe('a run of provider retry rows', () => {
     ])
   })
 
+  it('retains the first retry disclosure identity with the latest message and journal position', () => {
+    const first = retry(1)
+    const second = retry(2)
+    const third = retry(3)
+    const before = projectStructuredAgentSessionMessages([first], [], [])
+    const after = projectStructuredAgentSessionMessages([first, second, third], [], [])
+    expect(after).toHaveLength(1)
+    expect(after[0]).toMatchObject({
+      id: third.itemId,
+      providerRetryRunId: first.itemId,
+      journalPosition: { sequence: third.sequence }
+    })
+    expect(texts(after)).toEqual(['Codex is retrying: Reconnecting... 3/5.'])
+    expect(before[0]?.providerRetryRunId).toBeUndefined()
+    expect(projectStructuredAgentSessionMessages([first], [], [])).toEqual(before)
+  })
+
+  it('keeps disclosure identities separate across agents, resumed work and context clears', () => {
+    const first = retry(1)
+    const child = retry(1, 'child')
+    const childNext = retry(2, 'child')
+    const resumed = assistant('Resumed')
+    const nextRun = retry(1)
+    const cleared = item({
+      kind: 'status',
+      text: 'Context cleared',
+      presentation: 'context-cleared',
+      contextClear: { operationId: 'clear', afterFence: 1, clearedAt: 1 }
+    })
+    const afterClear = retry(1, 'child')
+    const items = [first, child, retry(2), childNext, resumed, nextRun, cleared, afterClear]
+    const messages = projectStructuredAgentSessionMessages(items, [], [])
+    expect(
+      messages
+        .filter((message) => message.providerRetryRunId)
+        .map((message) => message.providerRetryRunId)
+    ).toEqual([first.itemId, child.itemId])
+    expect(
+      messages.find((message) => message.id === nextRun.itemId)?.providerRetryRunId
+    ).toBeUndefined()
+    expect(
+      messages.find((message) => message.id === afterClear.itemId)?.providerRetryRunId
+    ).toBeUndefined()
+  })
+
   it("is split by any other of the same agent's rows drawn between two retries", () => {
     const notice = item({ kind: 'status', tone: 'notice', text: 'Model changed' })
     expect(

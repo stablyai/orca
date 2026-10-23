@@ -3178,12 +3178,17 @@
       },
       "notices": {
         "compaction": "Context compacted",
+        "configuration": "Codex configuration warning",
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
+        "deprecation": "Codex deprecation notice",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
-        "plan": "Plan"
+        "plan": "Plan",
+        "retryAttempt": "Retrying · {{attempt}}",
+        "retryAttemptOf": "Retrying · {{attempt}} of {{maxRetries}}",
+        "retrying": "Retrying"
       },
       "question": {
         "other": "Other…"

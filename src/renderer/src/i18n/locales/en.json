@@ -19026,6 +19026,11 @@
         "cancelledBy": "Cancelled on {{device}}"
       },
       "notices": {
+        "configuration": "Codex configuration warning",
+        "deprecation": "Codex deprecation notice",
+        "retrying": "Retrying",
+        "retryAttempt": "Retrying · {{attempt}}",
+        "retryAttemptOf": "Retrying · {{attempt}} of {{maxRetries}}",
         "contextCleared": "Context cleared",
         "compaction": "Context compacted",
         "details": "Details",

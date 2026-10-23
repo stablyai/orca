@@ -13,10 +13,22 @@ import type { NativeChatBlock, NativeChatTextBlock } from './native-chat-types'
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
   contextCleared: 'Context cleared',
-  plan: 'Plan'
+  plan: 'Plan',
+  configuration: 'Codex configuration warning',
+  deprecation: 'Codex deprecation notice',
+  retrying: 'Retrying',
+  retryAttempt: 'Retrying · {{attempt}}',
+  retryAttemptOf: 'Retrying · {{attempt}} of {{maxRetries}}'
 } as const
 
 export type NativeChatNoticeTone = 'warning' | 'error' | 'notice'
+
+export type NativeChatNoticeDisclosureLook = {
+  kind: 'disclosure'
+  label: 'configuration' | 'deprecation' | 'retrying'
+  attempt?: number
+  maxRetries?: number
+}
 
 export type NativeChatNoticeLook =
   /** A rule across the chat with its label. */
@@ -28,6 +40,7 @@ export type NativeChatNoticeLook =
   | { kind: 'plan' }
   /** Faint, as a system row with no notice of its own is. */
   | { kind: 'aside' }
+  | NativeChatNoticeDisclosureLook
   /** A boxed line with its icon when it has a tone; plain text when it has none. */
   | { kind: 'line'; tone: NativeChatNoticeTone | null }
 
@@ -65,9 +78,42 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   if (presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION) {
     return { kind: 'line', tone: 'notice' }
   }
+  if (presentation === undefined && block.orcaStop === undefined) {
+    if (block.failure?.kind === 'providerRetrying') {
+      return {
+        kind: 'disclosure',
+        label: 'retrying',
+        attempt: block.failure.retry?.attempt,
+        maxRetries: block.failure.retry?.maxRetries
+      }
+    }
+    if (!block.failure && block.tone !== 'error' && block.providerFrame?.provider === 'codex') {
+      if (block.providerFrame.kind === 'notification:configWarning') {
+        return { kind: 'disclosure', label: 'configuration' }
+      }
+      if (block.providerFrame.kind === 'notification:deprecationNotice') {
+        return { kind: 'disclosure', label: 'deprecation' }
+      }
+    }
+  }
   const { tone } = block
   return {
     kind: 'line',
     tone: tone === 'warning' || tone === 'error' || tone === 'notice' ? tone : null
   }
+}
+
+export function nativeChatNoticeDisclosureKey(messageId: string): string {
+  return `notice:${messageId}`
+}
+
+export function nativeChatNoticeDisclosureText(look: NativeChatNoticeDisclosureLook): string {
+  if (look.label !== 'retrying' || !look.attempt) {
+    return NATIVE_CHAT_NOTICE_COPY[look.label]
+  }
+  return (
+    look.maxRetries ? NATIVE_CHAT_NOTICE_COPY.retryAttemptOf : NATIVE_CHAT_NOTICE_COPY.retryAttempt
+  )
+    .replace('{{attempt}}', String(look.attempt))
+    .replace('{{maxRetries}}', String(look.maxRetries))
 }

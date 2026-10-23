@@ -13,6 +13,7 @@ import { MobileMarkdown } from '../components/MobileMarkdown'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
+import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
 
 const TONE_COLOR: Record<NativeChatNoticeTone, string> = {
   warning: colors.statusAmber,
@@ -24,11 +25,13 @@ const TONE_COLOR: Record<NativeChatNoticeTone, string> = {
  *  its faint system asides are, so it never reads as the agent speaking. */
 export function MobileNativeChatNoticeRow({
   blocks,
+  messageId,
   fontScale,
   onOpenFile,
   onLongPress
 }: {
   blocks: readonly NativeChatBlock[]
+  messageId?: string
   fontScale: number
   onOpenFile?: (relativePath: string) => void
   /** Android only: a long press on a plan's link opens the row's actions sheet. */
@@ -50,6 +53,15 @@ export function MobileNativeChatNoticeRow({
   }
   const look = nativeChatNoticeLook(notice)
   switch (look.kind) {
+    case 'disclosure':
+      return (
+        <MobileNativeChatNoticeDisclosure
+          block={notice}
+          look={look}
+          messageId={messageId}
+          fontScale={fontScale}
+        />
+      )
     case 'divider': {
       const label = NATIVE_CHAT_NOTICE_COPY[look.label]
       return (

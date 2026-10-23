@@ -38,11 +38,16 @@ export function collapseProviderRetryRuns(
     }
     const agent = agentJournalItemSubagentId(message)
     const previous = openRuns.get(agent)
+    let latest = message
     if (previous !== undefined) {
+      const prior = drawn[previous]
+      if (prior) {
+        latest = { ...message, providerRetryRunId: prior.providerRetryRunId ?? prior.id }
+      }
       drawn[previous] = null
     }
     openRuns.set(agent, drawn.length)
-    drawn.push(message)
+    drawn.push(latest)
   }
   return drawn.filter((message) => message !== null)
 }

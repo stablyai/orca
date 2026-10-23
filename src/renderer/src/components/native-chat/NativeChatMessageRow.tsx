@@ -121,7 +121,7 @@ export const MessageRow = memo(function MessageRow(
       <div ref={rowRef}>
         <NativeChatNoticeRow
           block={notice}
-          messageId={message.id}
+          messageId={message.providerRetryRunId ?? message.id}
           agentName={agentName}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}

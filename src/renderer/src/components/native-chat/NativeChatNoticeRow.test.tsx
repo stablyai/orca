@@ -22,6 +22,62 @@ afterEach(async () => {
   await i18n.changeLanguage('en')
 })
 
+it('keeps repeated configuration notices separate and reveals their complete text independently', () => {
+  const text = 'Ignored configuration setting.\n\nfeatures.example is ignored in /config.toml.'
+  const block = {
+    type: 'text',
+    text,
+    tone: 'warning',
+    providerFrame: {
+      provider: 'codex',
+      kind: 'notification:configWarning',
+      payload: {
+        head: '{"summary":"Ignored configuration setting"}',
+        byteLength: 43,
+        digest: 'digest',
+        truncated: false
+      }
+    }
+  } as const
+  render(
+    <>
+      <NativeChatNoticeRow block={block} messageId="first" />
+      <NativeChatNoticeRow block={block} messageId="second" />
+    </>
+  )
+  const triggers = screen.getAllByRole('button', { name: 'Codex configuration warning' })
+  expect(triggers).toHaveLength(2)
+  expect(triggers[0]).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.queryByText(/features.example/)).toBeNull()
+  fireEvent.click(triggers[0]!)
+  expect(triggers[0]).toHaveAttribute('aria-expanded', 'true')
+  expect(triggers[1]).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.getByText(/features.example/).textContent).toBe(text)
+  expect(screen.getByText('Details').closest('details')?.querySelector('pre')).toHaveTextContent(
+    'Ignored configuration setting'
+  )
+})
+
+it('shows typed retries in gray while keeping the original cause available on expansion', () => {
+  renderStatus({
+    kind: 'status',
+    tone: 'warning',
+    ...agentSessionFailureWords(
+      agentSessionFailureFact('providerRetrying', {
+        retry: { attempt: 2, maxRetries: 5, cause: 'Last error: HTTP 503.' },
+        detail: { audience: 'person', text: 'The connection was interrupted.' }
+      }),
+      { agentName: 'Claude', surface: 'row' }
+    )
+  })
+  const trigger = screen.getByRole('button', { name: 'Retrying · 2 of 5' })
+  expect(trigger).toHaveClass('text-chat-foreground-faint')
+  expect(screen.queryByText(/HTTP 503/)).toBeNull()
+  fireEvent.click(trigger)
+  expect(screen.getByText(/HTTP 503/)).toBeInTheDocument()
+  expect(screen.getAllByText(/The connection was interrupted\./)).toHaveLength(1)
+})
+
 it('keeps a skipped compaction warning truthful instead of showing the success separator', () => {
   renderStatus({
     kind: 'status',

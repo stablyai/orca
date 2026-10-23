@@ -1,7 +1,15 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalStatusItem } from '../../../src/shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalStatusItem
+} from '../../../src/shared/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './mobile-native-chat-disclosure-store'
 import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
@@ -68,6 +76,7 @@ vi.mock('lucide-react-native', () => ({
   MessageSquareMore: 'MessageSquareMore',
   Pencil: 'Pencil',
   Plug: 'Plug',
+  RotateCcw: 'RotateCcw',
   Search: 'Search',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
@@ -337,26 +346,91 @@ describe('MobileNativeChatMessage', () => {
       observedAt: 2,
       body
     })!
-  it.each([
-    [
-      'an API retry as a warning',
-      statusRow({
+  it('draws a muted collapsed API retry and reveals the original cause when opened', () => {
+    const message = statusRow({
+      kind: 'status',
+      tone: 'warning',
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('providerRetrying', {
+          retry: readProviderRetry({
+            error: 'overloaded',
+            status: 529,
+            attempt: 2,
+            maxRetries: 10
+          })
+        }),
+        { surface: 'row', agentName: 'Claude' }
+      )
+    })
+    const tree = render(message)
+    const toggle = tree.root.findByProps({ accessibilityRole: 'button' })
+    expect(toggle.props.accessibilityState.expanded).toBe(false)
+    const headline = tree.root.find(
+      (node) => String(node.type) === 'Text' && node.props.children === 'Retrying · 2 of 10'
+    )
+    expect(Object.assign({}, ...headline.props.style)).toMatchObject({ color: colors.textMuted })
+    expect(tree.root.findAll((node) => node.props.selectable === true)).toHaveLength(0)
+    act(() => toggle.props.onPress())
+    expect(toggle.props.accessibilityState.expanded).toBe(true)
+    const text = tree.root.find(
+      (node) => String(node.type) === 'Text' && node.props.selectable === true
+    )
+    expect(text.props.children).toBe(message.blocks.find((block) => block.type === 'text')?.text)
+    expect(text.props.children).toContain('HTTP 529 overloaded')
+  })
+
+  it('keeps retry details open across attempt replacement and keeps later runs independent', () => {
+    const retry = (attempt: number): AgentJournalRenderItem => ({
+      itemId: `retry-${attempt}`,
+      sequence: attempt,
+      revision: 1,
+      observedAt: attempt,
+      body: {
         kind: 'status',
         tone: 'warning',
-        ...agentSessionFailureWords(
-          agentSessionFailureFact('providerRetrying', {
-            retry: readProviderRetry({
-              error: 'overloaded',
-              status: 529,
-              attempt: 2,
-              maxRetries: 10
-            })
-          }),
-          { surface: 'row', agentName: 'Claude' }
-        )
-      }),
-      colors.statusAmber
-    ],
+        text: `Retry cause ${attempt}`,
+        failure: { kind: 'providerRetrying', retry: { attempt } }
+      }
+    })
+    const first = retry(1)
+    const second = retry(2)
+    const resumed: AgentJournalRenderItem = {
+      itemId: 'resumed',
+      sequence: 3,
+      revision: 1,
+      observedAt: 3,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Resumed' }] }
+    }
+    function Transcript({ items }: { items: AgentJournalRenderItem[] }): React.JSX.Element {
+      const disclosures = useMobileNativeChatDisclosures('retry-session')
+      return createElement(
+        MobileNativeChatDisclosureContext.Provider,
+        { value: disclosures },
+        projectStructuredAgentSessionMessages(items, [], [])
+          .filter((message) => message.role === 'system')
+          .map((message) => createElement(MobileNativeChatMessage, { key: message.id, message }))
+      )
+    }
+    act(() => {
+      renderer = create(createElement(Transcript, { items: [first] }))
+    })
+    act(() => renderer!.root.findByProps({ accessibilityRole: 'button' }).props.onPress())
+
+    act(() => renderer!.update(createElement(Transcript, { items: [first, second] })))
+    expect(
+      renderer!.root.findByProps({ accessibilityRole: 'button' }).props.accessibilityState.expanded
+    ).toBe(true)
+    expect(words(renderer!.root)).toContain('Retry cause 2')
+    expect(words(renderer!.root)).not.toContain('Retry cause 1')
+
+    act(() =>
+      renderer!.update(createElement(Transcript, { items: [first, second, resumed, retry(4)] }))
+    )
+    const buttons = renderer!.root.findAllByProps({ accessibilityRole: 'button' })
+    expect(buttons.map((button) => button.props.accessibilityState.expanded)).toEqual([true, false])
+  })
+
+  it.each([
     [
       'a sign-in failure as an error',
       statusRow({

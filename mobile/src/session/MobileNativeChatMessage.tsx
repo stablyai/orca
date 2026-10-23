@@ -310,6 +310,7 @@ function MobileNativeChatMessageImpl({
           {isSystem ? (
             <MobileNativeChatNoticeRow
               blocks={drawnProse}
+              messageId={message.providerRetryRunId ?? message.id}
               fontScale={fontScale}
               onOpenFile={onOpenFile}
               onLongPress={onLongPress}

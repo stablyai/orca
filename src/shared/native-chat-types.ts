@@ -289,6 +289,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   foldedJournalPosition?: AgentJournalPosition
   /** Private presentation row; raw host messages never publish this fold-only marker. */
   unpairedToolResults?: true
+  /** First retry row's id, retaining disclosure state while the run shows its latest attempt. */
+  providerRetryRunId?: string
 }
 
 /** Split reasoning and its answer share the provider's row identity. */

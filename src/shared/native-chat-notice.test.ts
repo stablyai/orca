@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { nativeChatNoticeBlock, nativeChatNoticeLook } from './native-chat-notice'
+import {
+  nativeChatNoticeBlock,
+  nativeChatNoticeDisclosureText,
+  nativeChatNoticeLook
+} from './native-chat-notice'
 import type { NativeChatTextBlock } from './native-chat-types'
 
 const block = (fields: Partial<NativeChatTextBlock>): NativeChatTextBlock => ({
@@ -40,5 +44,60 @@ describe('nativeChatNoticeBlock', () => {
     const notice = block({ tone: 'warning' })
     expect(nativeChatNoticeBlock([block({}), notice])).toBe(notice)
     expect(nativeChatNoticeBlock([block({})])).toBeUndefined()
+  })
+})
+
+const frame = (kind: string): NonNullable<NativeChatTextBlock['providerFrame']> => ({
+  provider: 'codex',
+  kind: `notification:${kind}`,
+  payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+})
+
+describe('notice disclosure classification', () => {
+  it.each([
+    ['configWarning', 'configuration'],
+    ['deprecationNotice', 'deprecation']
+  ] as const)('collapses a typed %s without reading its wording', (kind, label) => {
+    expect(nativeChatNoticeLook(block({ tone: 'warning', providerFrame: frame(kind) }))).toEqual({
+      kind: 'disclosure',
+      label
+    })
+  })
+
+  it('uses the retry fact across providers, even without a raw provider frame', () => {
+    const look = nativeChatNoticeLook(
+      block({
+        tone: 'warning',
+        failure: { kind: 'providerRetrying', retry: { attempt: 2, maxRetries: 5 } }
+      })
+    )
+    expect(look.kind).toBe('disclosure')
+    if (look.kind === 'disclosure') {
+      expect(nativeChatNoticeDisclosureText(look)).toBe('Retrying · 2 of 5')
+    }
+  })
+
+  it.each([
+    { providerFrame: frame('warning') },
+    { providerFrame: frame('guardianWarning') },
+    { providerFrame: { ...frame('configWarning'), provider: 'other' } },
+    { providerFrame: frame('configWarning'), presentation: 'turn-notice' },
+    { providerFrame: frame('configWarning'), failure: { kind: 'usageLimitReached' } },
+    { providerFrame: frame('configWarning'), failure: { kind: 'notSignedIn' } },
+    { presentation: 'turn-notice' }
+  ] satisfies Partial<NativeChatTextBlock>[])('keeps %j prominent', (fields) => {
+    expect(nativeChatNoticeLook(block({ tone: 'warning', ...fields }))).toEqual({
+      kind: 'line',
+      tone: 'warning'
+    })
+  })
+
+  it('does not fold a configuration frame carrying an explicit error tone', () => {
+    expect(
+      nativeChatNoticeLook(block({ tone: 'error', providerFrame: frame('configWarning') }))
+    ).toEqual({
+      kind: 'line',
+      tone: 'error'
+    })
   })
 })

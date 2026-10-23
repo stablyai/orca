@@ -30,6 +30,7 @@ import { agentSessionFailureSentence } from '../../../../shared/agent-session-fa
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import { formatUsageLimitResetClock } from '../../../../shared/agent-session-usage-limit'
+import { NativeChatNoticeDisclosure } from './NativeChatNoticeDisclosure'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -72,6 +73,9 @@ export function NativeChatNoticeRow({
   const orcaStopView = useNativeChatOrcaStopView()
   const claudeSignIn = useNativeChatClaudeSignInView()
   const look = nativeChatNoticeLook(block)
+  if (look.kind === 'disclosure') {
+    return <NativeChatNoticeDisclosure block={block} look={look} messageId={messageId} />
+  }
   if (look.kind === 'divider') {
     const label =
       look.label === 'contextCleared'
