@@ -223,6 +223,12 @@ describe('presentSocketNotificationFallback', () => {
     expect(getCurrentInAppNotificationBanner()).toBeNull()
   })
 
+  it('ignores notifications whose agentState is still working', async () => {
+    await presentSocketNotificationFallback(alert({ agentState: 'working' }), 'host-1')
+    expect(mocks.schedule).not.toHaveBeenCalled()
+    expect(getCurrentInAppNotificationBanner()).toBeNull()
+  })
+
   it('does not schedule or show in-app banner when eligibility flips the subscription to disposed', async () => {
     let disposed = false
     mocks.eligible.mockImplementation(async () => {

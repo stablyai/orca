@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications'
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { hostStackRouteHref } from '../navigation/host-stack-navigation'
+import { firstParam } from '../navigation/route-param-reader'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   dismissInAppNotificationBanner,
@@ -11,6 +12,7 @@ import {
   subscribeInAppNotificationBanner
 } from './in-app-notification-banner-store'
 import { getNotificationNavigationTarget } from './notification-routing'
+import { isViewingWorkspaceTarget } from './notification-viewing-policy'
 import { useOpenNotificationRoute } from './use-open-notification-route'
 
 const AUTO_DISMISS_MS = 12000
@@ -39,8 +41,8 @@ export function InAppNotificationBanner() {
   const router = useRouter()
   const pathname = usePathname()
   const activeParams = useGlobalSearchParams<{
-    hostId?: string
-    worktreeId?: string
+    hostId?: string | string[]
+    worktreeId?: string | string[]
   }>()
   const openNotificationRoute = useOpenNotificationRoute()
   const bannerId = banner?.id
@@ -60,8 +62,13 @@ export function InAppNotificationBanner() {
   }
 
   const isUrgent = banner.tone === 'urgent'
+  const isTerminalBell = banner.title.startsWith('Bell in ')
   const accentColor = isUrgent ? colors.statusAmber : colors.statusGreen
-  const badgeText = isUrgent ? '⚡ Needs input' : '✅ Completed'
+  const badgeText = isUrgent
+    ? isTerminalBell
+      ? '🔔 Terminal bell'
+      : '⚡ Needs input'
+    : '✅ Completed'
   const canNavigate =
     typeof banner.hostId === 'string' &&
     banner.hostId.length > 0 &&
@@ -76,24 +83,33 @@ export function InAppNotificationBanner() {
     if (!canNavigate) {
       return
     }
+    const activeHostId = firstParam(activeParams.hostId)
+    const activeWorktreeId = firstParam(activeParams.worktreeId)
     const onSameHost =
-      pathname.startsWith('/h/') && paramMatches(activeParams.hostId, banner.hostId)
-    const onSameWorkspace =
+      pathname.startsWith('/h/') && paramMatches(activeHostId, banner.hostId)
+    const onNativeSessionRoute =
       onSameHost &&
       pathname.includes('/session/') &&
-      paramMatches(activeParams.worktreeId, banner.worktreeId)
-    if (onSameWorkspace) {
-      if (banner.paneKey) {
-        router.setParams({ paneKey: banner.paneKey })
-      }
-      return
-    }
+      paramMatches(activeWorktreeId, banner.worktreeId)
+    const onSameWorkspace =
+      onNativeSessionRoute ||
+      isViewingWorkspaceTarget({
+        hostId: banner.hostId,
+        worktreeId: banner.worktreeId,
+        executionHost: banner.executionHost
+      })
     const target = getNotificationNavigationTarget({
       hostId: banner.hostId,
       worktreeId: banner.worktreeId,
       paneKey: banner.paneKey,
       executionHost: banner.executionHost
     })
+    if (onSameWorkspace) {
+      if (onNativeSessionRoute && banner.paneKey && target) {
+        openNotificationRoute(target)
+      }
+      return
+    }
     if (!target) {
       return
     }

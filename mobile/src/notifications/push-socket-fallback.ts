@@ -67,6 +67,9 @@ export async function presentSocketNotificationFallback(
   if (event.desktopAllowed === false || event.legacySocketAllowed === false) {
     return
   }
+  if (event.agentState === 'working') {
+    return
+  }
   const title = event.title?.trim() ?? ''
   const body = event.body?.trim() ?? ''
   if (title.length === 0 && body.length === 0) {

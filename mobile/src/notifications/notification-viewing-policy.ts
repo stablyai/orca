@@ -1,9 +1,100 @@
 import { AppState } from 'react-native'
+import {
+  dismissInAppNotificationBanner,
+  getCurrentInAppNotificationBanner
+} from './in-app-notification-banner-store'
+
+export type NotificationViewingWorkspace = Readonly<{
+  hostId: string
+  worktreeId: string
+  executionHost?: string
+}>
 
 // `executionHost` is the route's server; absent for the desktop's own workspaces.
-let viewing: { hostId: string; worktreeId: string; executionHost?: string } | null = null
-export function setNotificationViewingWorkspace(value: typeof viewing): void {
-  viewing = value
+let routeViewing: NotificationViewingWorkspace | null = null
+let inPageViewing: NotificationViewingWorkspace | null = null
+
+function paramMatches(actual: string | undefined, expected: string | undefined): boolean {
+  if (!actual || !expected) {
+    return false
+  }
+  if (actual === expected) {
+    return true
+  }
+  try {
+    return decodeURIComponent(actual) === expected
+  } catch {
+    return false
+  }
+}
+
+function dismissBannerMatchingViewingWorkspace(): void {
+  const banner = getCurrentInAppNotificationBanner()
+  if (
+    banner &&
+    isViewingWorkspaceTarget({
+      hostId: banner.hostId,
+      worktreeId: banner.worktreeId,
+      executionHost: banner.executionHost
+    })
+  ) {
+    dismissInAppNotificationBanner(banner.id)
+  }
+}
+
+export function setNotificationViewingWorkspace(
+  value: NotificationViewingWorkspace | null,
+  options?: { preserveInPageForHostId?: string }
+): void {
+  routeViewing = value
+  if (value === null) {
+    if (
+      !options?.preserveInPageForHostId ||
+      !paramMatches(inPageViewing?.hostId, options.preserveInPageForHostId)
+    ) {
+      inPageViewing = null
+    }
+    return
+  }
+  if (inPageViewing && !paramMatches(inPageViewing.hostId, value.hostId)) {
+    inPageViewing = null
+  }
+  dismissBannerMatchingViewingWorkspace()
+}
+
+export function setInPageNotificationViewingWorkspace(
+  value: NotificationViewingWorkspace | null
+): void {
+  inPageViewing = value
+  if (value !== null) {
+    dismissBannerMatchingViewingWorkspace()
+  }
+}
+
+export function getNotificationViewingWorkspace(): NotificationViewingWorkspace | null {
+  return inPageViewing ?? routeViewing
+}
+
+export function isViewingWorkspaceTarget(target: {
+  hostId?: string
+  worktreeId?: string
+  executionHost?: string
+}): boolean {
+  const viewing = getNotificationViewingWorkspace()
+  if (!viewing || !target.hostId || !target.worktreeId) {
+    return false
+  }
+  const viewingExec = viewing.executionHost || undefined
+  const targetExec = target.executionHost || undefined
+  const executionHostMatches =
+    viewingExec === undefined && targetExec === undefined
+      ? true
+      : paramMatches(viewingExec, targetExec)
+  return (
+    paramMatches(viewing.hostId, target.hostId) &&
+    paramMatches(viewing.worktreeId, target.worktreeId) &&
+    executionHostMatches
+  )
 }
 
 export function shouldSuppressNotificationWhileViewing(
@@ -14,8 +105,10 @@ export function shouldSuppressNotificationWhileViewing(
   return (
     suppressWhileViewing &&
     AppState.currentState === 'active' &&
-    viewing?.hostId === hostId &&
-    viewing.worktreeId === event.worktreeId &&
-    viewing.executionHost === event.executionHost
+    isViewingWorkspaceTarget({
+      hostId,
+      worktreeId: event.worktreeId,
+      executionHost: event.executionHost
+    })
   )
 }

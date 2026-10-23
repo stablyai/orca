@@ -2,6 +2,7 @@ import { startAndroidForegroundPushPresentation } from '../src/notifications/and
 import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
 import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
+import { firstParam } from '../src/navigation/route-param-reader'
 import { useCallback, useEffect, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
 import { Stack, useRouter, useGlobalSearchParams, usePathname } from 'expo-router'
@@ -48,18 +49,31 @@ export default function RootLayout() {
   const router = useRouter()
   const pathname = usePathname()
   const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
-    hostId?: string
-    worktreeId?: string
-    executionHost?: string
+    hostId?: string | string[]
+    worktreeId?: string | string[]
+    executionHost?: string | string[]
   }>()
+  const resolvedHostId = firstParam(hostId)
+  const resolvedWorktreeId = firstParam(worktreeId)
+  const resolvedExecutionHost = firstParam(executionHost)
   useEffect(() => {
-    setNotificationViewingWorkspace(
-      pathname.includes('/session/') && typeof hostId === 'string' && typeof worktreeId === 'string'
-        ? { hostId, worktreeId, ...(typeof executionHost === 'string' ? { executionHost } : {}) }
-        : null
-    )
+    if (
+      pathname.includes('/session/') &&
+      resolvedHostId !== '' &&
+      resolvedWorktreeId !== ''
+    ) {
+      setNotificationViewingWorkspace({
+        hostId: resolvedHostId,
+        worktreeId: resolvedWorktreeId,
+        ...(resolvedExecutionHost !== '' ? { executionHost: resolvedExecutionHost } : {})
+      })
+    } else if (pathname.startsWith('/h/') && resolvedHostId !== '') {
+      setNotificationViewingWorkspace(null, { preserveInPageForHostId: resolvedHostId })
+    } else {
+      setNotificationViewingWorkspace(null)
+    }
     return () => setNotificationViewingWorkspace(null)
-  }, [pathname, hostId, worktreeId, executionHost])
+  }, [pathname, resolvedHostId, resolvedWorktreeId, resolvedExecutionHost])
   const openNotificationRoute = useOpenNotificationRoute()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 

@@ -40,6 +40,7 @@ import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-over
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+import { setInPageNotificationViewingWorkspace } from '../notifications/notification-viewing-policy'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -242,7 +243,12 @@ export function MobileWebShellScreen({
     // lands.
     onPagePainted: reportPagePainted,
     // While this is true the key below belongs to the page, not to the stack this screen sits on.
-    onPageBackClaim: reportPageBackClaim,
+    onPageBackClaim: (claimed) => {
+      reportPageBackClaim(claimed)
+      if (!claimed && isHostRouteOf(route.pathname, hostId)) {
+        setInPageNotificationViewingWorkspace(null)
+      }
+    },
     onRouteParamClear: (param, value) => {
       onRouteParamClear?.(param, value)
     },
