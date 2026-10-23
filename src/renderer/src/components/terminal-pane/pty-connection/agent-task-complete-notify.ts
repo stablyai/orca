@@ -69,11 +69,11 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       }
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
       return Boolean(
-        currentStatus && currentStatus.state !== 'waiting' && currentStatus.state !== 'blocked'
+        !currentStatus || (currentStatus.state !== 'waiting' && currentStatus.state !== 'blocked')
       )
     }
     // Why: the snapshot captured at schedule time stays `waiting`/`blocked` even after
-    // the pane resumes or finishes inside the grace window.
+    // the pane resumes, finishes, or drops its status row inside the grace window.
     const cancelStaleAttentionNotification = (): boolean => {
       if (!attentionSnapshotLeftUserInput()) {
         return false

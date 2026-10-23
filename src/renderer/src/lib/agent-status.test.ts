@@ -248,6 +248,14 @@ describe('detectAgentStatusFromTitle', () => {
     }
   )
 
+  it('keeps a Claude mention inside an Antigravity summary idle', () => {
+    expect(detectAgentStatusFromTitle('Antigravity - Fix Claude permission bug')).toBe('idle')
+  })
+
+  it('does not treat a permission path segment after the keyword as permission', () => {
+    expect(detectAgentStatusFromTitle('codex permission/notes')).toBe('idle')
+  })
+
   it('does not treat path fragments containing Hermes as agent activity', () => {
     expect(detectAgentStatusFromTitle('~/hermes/working')).not.toBe('working')
     expect(detectAgentStatusFromTitle('C:\\hermes\\ready')).toBeNull()

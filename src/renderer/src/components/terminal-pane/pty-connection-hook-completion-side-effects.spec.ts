@@ -601,51 +601,59 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       )
     })
 
-    it('cancels a scheduled waiting notification when the pane returns to working during the grace window', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-attention-grace')
-      transportFactoryQueue.push(transport)
-      enableActiveRuntimeEnvironment()
-      vi.useFakeTimers()
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps()
+    it.each(['working', 'removed'])(
+      'cancels a scheduled waiting notification when agent status becomes %s during the grace window',
+      async (nextStatus) => {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport(`pty-attention-grace-${nextStatus}`)
+        transportFactoryQueue.push(transport)
+        enableActiveRuntimeEnvironment()
+        vi.useFakeTimers()
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        const pane = createPane(1)
+        const manager = createManager(1)
+        const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
-      const statusHandler = createdTransportOptions[0]?.onAgentStatus
-      if (typeof statusHandler !== 'function') {
-        throw new Error('Expected hook status handler to be registered')
+        connectPanePty(pane as never, manager as never, deps as never)
+        const statusHandler = createdTransportOptions[0]?.onAgentStatus
+        if (typeof statusHandler !== 'function') {
+          throw new Error('Expected hook status handler to be registered')
+        }
+
+        statusHandler({
+          state: 'working',
+          prompt: 'approve the tool call',
+          agentType: 'claude'
+        })
+        statusHandler({
+          state: 'waiting',
+          prompt: 'approve the tool call',
+          agentType: 'claude',
+          toolName: 'Shell',
+          toolInput: 'git status'
+        })
+
+        expect(deps.dispatchNotification).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS - 1)
+        expect(deps.dispatchNotification).not.toHaveBeenCalled()
+
+        if (nextStatus === 'removed') {
+          delete mockStoreState.agentStatusByPaneKey[paneKey]
+        } else {
+          statusHandler({
+            state: 'working',
+            prompt: 'approve the tool call',
+            agentType: 'claude',
+            toolName: 'Shell',
+            toolInput: 'git status'
+          })
+        }
+        notifyStoreSubscribers()
+        vi.advanceTimersByTime(1)
+        vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+        expect(deps.dispatchNotification).not.toHaveBeenCalled()
       }
-
-      statusHandler({
-        state: 'working',
-        prompt: 'approve the tool call',
-        agentType: 'claude'
-      })
-      statusHandler({
-        state: 'waiting',
-        prompt: 'approve the tool call',
-        agentType: 'claude',
-        toolName: 'Shell',
-        toolInput: 'git status'
-      })
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS - 1)
-      expect(deps.dispatchNotification).not.toHaveBeenCalled()
-
-      statusHandler({
-        state: 'working',
-        prompt: 'approve the tool call',
-        agentType: 'claude',
-        toolName: 'Shell',
-        toolInput: 'git status'
-      })
-      notifyStoreSubscribers()
-      vi.advanceTimersByTime(1)
-      vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
-
-      expect(deps.dispatchNotification).not.toHaveBeenCalled()
-    })
+    )
   })
 }

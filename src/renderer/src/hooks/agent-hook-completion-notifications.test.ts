@@ -735,15 +735,59 @@ describe('agent hook completion notifications', () => {
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
   })
 
-  it('does not banner Antigravity ask_permission when default args skip permissions', async () => {
+  it('still banners Antigravity ask_permission when the pane has no registered launch', async () => {
     mockStoreState.settings.agentDefaultArgs = {
       antigravity: '--dangerously-skip-permissions'
     }
 
     await observeAntigravityAttention('ask_permission')
 
-    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        agentStatusSnapshot: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'antigravity',
+          toolName: 'ask_permission'
+        })
+      })
+    )
   })
+
+  it.each([
+    '--prompt "explain --dangerously-skip-permissions"',
+    '-- --dangerously-skip-permissions'
+  ])(
+    'still banners Antigravity ask_permission when the bypass text is not a launch option (%j)',
+    async (agentArgs) => {
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: {
+          agentArgs,
+          agentEnv: {}
+        },
+        identity: { agentType: 'antigravity' }
+      }
+
+      await observeAntigravityAttention('ask_permission')
+
+      expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+      expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+        'wt-1',
+        expect.objectContaining({
+          source: 'agent-task-complete',
+          paneKey,
+          agentStatusSnapshot: expect.objectContaining({
+            state: 'waiting',
+            agentType: 'antigravity',
+            toolName: 'ask_permission'
+          })
+        })
+      )
+    }
+  )
 
   it('still banners Antigravity ask_question while permissions are auto-approved', async () => {
     mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {

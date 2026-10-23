@@ -288,6 +288,14 @@ describe('permission keyword boundaries', () => {
   it('still classifies a real permission prompt when another agent shares an agy title', () => {
     expect(detectAgentStatusFromTitle('agy | claude - action required')).toBe('permission')
   })
+
+  it('keeps a Claude mention inside an Antigravity summary idle', () => {
+    expect(detectAgentStatusFromTitle('Antigravity - Fix Claude permission bug')).toBe('idle')
+  })
+
+  it('does not treat a permission path segment after the keyword as permission', () => {
+    expect(detectAgentStatusFromTitle('codex permission/notes')).toBe('idle')
+  })
 })
 
 describe('Cursor agent title identity', () => {

@@ -1,4 +1,3 @@
-import { buildAgentNameRe } from './agent-name-token-match'
 import { getDeepSeekBuildTitleStatus } from './dsb-terminal-title'
 import { qoderTitleStatus } from './qoder-terminal-title'
 import {
@@ -194,16 +193,17 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
   return canonical
 }
 
-function titleHasLegacyAgentBesidesAntigravity(title: string): boolean {
-  if (!containsLegacyAgentName(title)) {
-    return false
-  }
-  if (!titleHasAgentName(title, 'antigravity')) {
-    return true
-  }
-  return containsLegacyAgentName(
-    title.replace(new RegExp(buildAgentNameRe('antigravity').source, 'gi'), ' ')
-  )
+function titleHasNonAntigravityPermissionSegment(title: string): boolean {
+  return getWrapperTitleSegments(title).some((segment) => {
+    if (AGY_AGENT_NAME_RE.test(segment) || titleHasAgentName(segment, 'antigravity')) {
+      return false
+    }
+    const namesAnotherAgent =
+      containsLegacyAgentName(segment) ||
+      DROID_AGENT_NAME_RE.test(segment) ||
+      HERMES_AGENT_NAME_RE.test(segment)
+    return namesAnotherAgent && STRONG_PERMISSION_KEYWORDS_RE.test(segment)
+  })
 }
 
 function computeAgentStatusFromTitle(title: string): AgentStatus | null {
@@ -280,12 +280,8 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   }
   // Why: Antigravity writes conversation/task summaries into the OSC title and reports
   // waiting states exclusively through hooks, so status words in an agy or Antigravity
-  // title are subject matter (like OpenCode's session summary above), never a permission prompt.
-  const hasAntigravitySubjectTitle = hasAgyAgentName || titleHasAgentName(title, 'antigravity')
-  if (
-    (!hasAntigravitySubjectTitle || titleHasLegacyAgentBesidesAntigravity(title)) &&
-    STRONG_PERMISSION_KEYWORDS_RE.test(title)
-  ) {
+  // segment are subject matter (like OpenCode's session summary above), never a permission prompt.
+  if (titleHasNonAntigravityPermissionSegment(title)) {
     return 'permission'
   }
   // Why: boundary-aware regexes avoid cwd/path and substring false positives.
