@@ -1,5 +1,8 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import { encodeClaudeProjectPaths, isClaudeProjectDirInScope } from './claude-project-dir-encoding'
+import {
+  encodeClaudeProjectPaths,
+  isClaudeProjectDirInScope
+} from '../../shared/claude-project-dir-encoding'
 
 /** An agent that keeps one directory per cwd, named by a lossy encoding of that cwd. */
 export type CwdBucketLayout = {

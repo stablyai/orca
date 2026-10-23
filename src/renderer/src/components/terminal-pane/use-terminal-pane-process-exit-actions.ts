@@ -37,6 +37,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     onPtyErrorRef,
     onPtyExitRef,
     onPtyRecoveryStateRef,
+    paneCwdRef,
     paneKittyKeyboardModesRef,
     paneLastThemeModeRef,
     paneMode2031Ref,
@@ -59,20 +60,25 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   } = controller
 
   const buildAccountRestartStartup = useCallback(
-    (agent: AccountRestartAgent, leafId: string) =>
+    (agent: AccountRestartAgent, pane: { id: number; leafId: string }) =>
       buildPaneAccountRestartStartup(agent, {
         tabId,
         worktreeId,
-        leafId,
+        leafId: pane.leafId,
         shellOverride: useAppStore
           .getState()
-          .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.shellOverride
+          .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.shellOverride,
+        paneCwd: paneCwdRef.current.get(pane.id)?.cwd
       }),
-    [tabId, worktreeId]
+    [paneCwdRef, tabId, worktreeId]
   )
 
   const handleRestartPane = useCallback(
-    (paneId: number, startup: PtyConnectionDeps['startup'], options: { focus: boolean }) => {
+    (
+      paneId: number,
+      startup: PtyConnectionDeps['startup'],
+      options: { focus: boolean; cwd?: string }
+    ) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
@@ -97,7 +103,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
         worktreeId,
-        cwd,
+        cwd: options.cwd ?? cwd,
         startup,
         ...(replacesPtyId ? { replacesPtyId } : {}),
         mountFollowsTerminalPark: false,
@@ -249,10 +255,11 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         continue
       }
       const agent = consumePendingPaneAccountRestart(ptyId)
-      const startup = agent ? buildAccountRestartStartup(agent, pane.leafId) : null
+      const startup = agent ? buildAccountRestartStartup(agent, pane) : null
       if (agent && startup) {
+        const { cwd: sessionCwd, ...restartStartup } = startup
         // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
-        handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
+        handleRestartPane(pane.id, restartStartup, { focus: agent === 'codex', cwd: sessionCwd })
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.

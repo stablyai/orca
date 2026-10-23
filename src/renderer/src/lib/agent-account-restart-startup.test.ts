@@ -249,6 +249,70 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(buildPaneAccountRestartStartup('claude', pane)?.command).toContain('--model')
   })
 
+  it('relaunches Claude in the folder its transcript is filed under, not the pane’s last folder', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: {
+        key: 'session_id',
+        id: SESSION_ID,
+        transcriptPath: `/home/dev/.claude-b/projects/-home-dev-repo/${SESSION_ID}.jsonl`
+      }
+    })
+
+    const startup = buildPaneAccountRestartStartup('claude', {
+      ...pane,
+      paneCwd: '/home/dev/repo/packages/app'
+    })
+
+    expect(startup?.cwd).toBe('/home/dev/repo')
+  })
+
+  it('leaves the folder to the tab when no known folder holds the transcript', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: {
+        key: 'session_id',
+        id: SESSION_ID,
+        transcriptPath: `/home/dev/.claude/projects/-home-dev-elsewhere/${SESSION_ID}.jsonl`
+      }
+    })
+
+    const startup = buildPaneAccountRestartStartup('claude', { ...pane, paneCwd: '/home/dev/repo' })
+
+    expect(startup?.command).toContain(SESSION_ID)
+    expect(startup).not.toHaveProperty('cwd')
+  })
+
+  it('keeps a WSL pane’s guest folder out of the host spawn', () => {
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'done',
+      providerSession: {
+        key: 'session_id',
+        id: SESSION_ID,
+        transcriptPath: `/home/dev/.claude/projects/-home-dev-repo/${SESSION_ID}.jsonl`
+      }
+    })
+    projectRuntimeContext = {
+      status: 'resolved',
+      runtime: {
+        kind: 'wsl',
+        hostPlatform: 'wsl',
+        projectId: 'project-1',
+        distro: 'Ubuntu',
+        reason: 'project-override',
+        cacheKey: 'repo-1:wsl:Ubuntu'
+      }
+    }
+
+    const startup = buildPaneAccountRestartStartup('claude', { ...pane, paneCwd: '/home/dev/repo' })
+
+    expect(startup?.command).toContain(SESSION_ID)
+    expect(startup).not.toHaveProperty('cwd')
+  })
+
   it('reports no resume when the Claude pane has no session id', () => {
     seedAgentStatus({ agentType: 'claude', state: 'done' })
 

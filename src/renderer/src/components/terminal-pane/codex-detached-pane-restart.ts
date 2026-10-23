@@ -196,9 +196,10 @@ async function executeDetachedCodexPaneRestart(
   if (!startup) {
     return
   }
+  const { cwd: sessionCwd, ...restartStartup } = startup
 
   const workspacePath = getWorkspacePath(state, worktreeId)
-  const cwd = tab.startupCwd ?? workspacePath ?? undefined
+  const cwd = sessionCwd ?? tab.startupCwd ?? workspacePath ?? undefined
   const capabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
@@ -232,8 +233,8 @@ async function executeDetachedCodexPaneRestart(
     cols: 80,
     rows: 24,
     ...(cwd ? { cwd } : {}),
-    ...startup,
-    env: { ...startup.env, ...buildPaneIdentityEnv(state, worktreeId, tab.id, leafId) },
+    ...restartStartup,
+    env: { ...restartStartup.env, ...buildPaneIdentityEnv(state, worktreeId, tab.id, leafId) },
     worktreeId,
     tabId: tab.id,
     leafId,

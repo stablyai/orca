@@ -180,6 +180,50 @@ describe('codex detached pane restart executor', () => {
     expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[NEW_PTY])).toBe(false)
   })
 
+  it('starts a Claude restart in the folder its session is filed under, not the tab’s sub-folder', async () => {
+    seedQueuedRestart()
+    const paneKey = `tab-1:${LEAF_ID}`
+    const sessionId = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
+    useAppStore.getState().clearCodexRestartNotice(OLD_PTY)
+    useAppStore.setState((state) => ({
+      tabsByWorktree: {
+        wt1: (state.tabsByWorktree.wt1 ?? []).map((tab) => ({
+          ...tab,
+          startupCwd: '/Users/dev/code/orca/packages/app'
+        }))
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          agentType: 'claude',
+          state: 'done',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: {
+            key: 'session_id',
+            id: sessionId,
+            transcriptPath: `/Users/dev/.claude/projects/-Users-dev-code-orca/${sessionId}.jsonl`
+          }
+        }
+      }
+    }))
+    useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+
+    await sweepUnclaimedCodexPaneRestarts()
+
+    expect(window.api.pty.spawn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        cwd: '/Users/dev/code/orca',
+        command: `claude '--resume' '${sessionId}'`,
+        launchAgent: 'claude',
+        replacesPtyId: OLD_PTY
+      })
+    )
+  })
+
   it('adopts the replacement when the replaced PTY exit clears the tab binding mid-spawn', async () => {
     seedQueuedRestart()
     // Main stops the replaced PTY before replying, so its exit reaches the renderer first; a

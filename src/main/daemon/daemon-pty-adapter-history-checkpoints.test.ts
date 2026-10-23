@@ -15,6 +15,7 @@ import {
 import type * as DaemonHealthModule from './daemon-health'
 import type * as DaemonTccAttributionModule from './daemon-tcc-attribution'
 import * as startupCwdProbe from '../ipc/pty/host-env/startup-cwd-directory-exists'
+import { encodeClaudeProjectPath } from '../../shared/claude-project-dir-encoding'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -804,6 +805,45 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cols: 120,
         rows: 40
       })
+    })
+
+    it('revives a Claude resume where its transcript is filed, not in the last reported sub-folder', async () => {
+      const sessionId = 'claude-cold-restore'
+      const project = join(dir, 'project')
+      const subFolder = join(project, 'packages', 'app')
+      mkdirSync(subFolder, { recursive: true })
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: subFolder,
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), '$ claude\r\n')
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId,
+        cwd: project,
+        claudeResumeTranscriptPath: join(
+          dir,
+          '.claude',
+          'projects',
+          encodeClaudeProjectPath(project),
+          'session-1.jsonl'
+        )
+      })
+
+      expect(result.coldRestore?.cwd).toBe(project)
+      expect(lastSpawnOpts).toMatchObject({ sessionId, cwd: project })
     })
   })
 })

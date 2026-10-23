@@ -9,6 +9,10 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { findClaudeTranscriptProjectFolder } from '../../../shared/claude-project-dir-encoding'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import { isWslShellName } from '../../../shared/local-windows-terminal-runtime'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -27,6 +31,8 @@ export type AgentAccountRestartStartup = {
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** The folder the session is filed under, when known; the relaunch starts there. */
+  cwd?: string
 }
 
 type AccountRestartPane = {
@@ -34,6 +40,8 @@ type AccountRestartPane = {
   leafId: string
   worktreeId: string
   shellOverride?: string
+  /** The pane's last reported folder, which may be a sub-folder of the session's own. */
+  paneCwd?: string
 }
 
 /**
@@ -114,6 +122,23 @@ export function resolveAgentAccountRestartResumeStartup(
   if (!startupPlan) {
     return null
   }
+  // Why host-native only: WSL and remote panes report guest paths this host must not start in.
+  const resumesOnThisHost =
+    !repo?.connectionId &&
+    parseExecutionHostId(executionHostId)?.kind === 'local' &&
+    !(projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') &&
+    resumeTarget.platform === CLIENT_PLATFORM &&
+    !isWslShellName(args.shellOverride)
+  // Why: Claude finds a session only from the folder it is filed under, which neither the pane's
+  // last reported folder nor the tab's start folder has to be (#31545).
+  const sessionCwd =
+    agent === 'claude' && resumesOnThisHost
+      ? findClaudeTranscriptProjectFolder(providerSession.transcriptPath, [
+          args.paneCwd,
+          state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.tabId)?.startupCwd,
+          worktree?.path
+        ])
+      : null
   return {
     startupCommandDelivery: 'shell-ready',
     launchAgent: agent,
@@ -122,7 +147,8 @@ export function resolveAgentAccountRestartResumeStartup(
     launchConfig: startupPlan.launchConfig,
     // Why it rides along: main only repins the launch home for a spawn that
     // names the session it is resuming, so dropping this drops the account move.
-    resumeProviderSession: providerSession
+    resumeProviderSession: providerSession,
+    ...(sessionCwd ? { cwd: sessionCwd } : {})
   }
 }
 

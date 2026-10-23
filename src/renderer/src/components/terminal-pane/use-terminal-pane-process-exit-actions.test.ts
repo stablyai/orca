@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => {
   return {
     ...state,
     connectPanePty: vi.fn(() => ({ dispose: vi.fn() })),
-    buildPaneAccountRestartStartup: vi.fn((agent: string) => ({
+    buildPaneAccountRestartStartup: vi.fn((agent: string): { command: string; cwd?: string } => ({
       command: `${agent} resume session-1`
     }))
   }
@@ -51,6 +51,8 @@ function createController(): TerminalPaneCloseController {
     Object.entries({
       managerRef: { current: manager },
       paneTransportsRef: { current: new Map([[PANE.id, transport]]) },
+      paneCwdRef: { current: new Map([[PANE.id, { cwd: '/repo/packages/app', confirmed: true }]]) },
+      cwd: '/repo/packages',
       panePtyBindingsRef: { current: new Map() },
       savedLayout: { ptyIdsByLeafId: { [PANE.leafId]: 'pty-1' } },
       tabId: 'tab-1',
@@ -109,6 +111,27 @@ describe('useTerminalPaneProcessExitActions', () => {
       PANE,
       expect.anything(),
       expect.objectContaining({ startup: { command: 'codex resume session-1' } })
+    )
+  })
+
+  it('relaunches Claude in its session folder instead of the tab’s start folder', () => {
+    mocks.readyRestartPtyIds = ['pty-1']
+    mocks.pendingAgent = 'claude'
+    mocks.buildPaneAccountRestartStartup.mockReturnValueOnce({
+      command: 'claude --resume session-1',
+      cwd: '/repo'
+    })
+
+    renderHook(() => useTerminalPaneProcessExitActions(createController()))
+
+    expect(mocks.buildPaneAccountRestartStartup).toHaveBeenCalledWith(
+      'claude',
+      expect.objectContaining({ paneCwd: '/repo/packages/app' })
+    )
+    expect(mocks.connectPanePty).toHaveBeenCalledWith(
+      PANE,
+      expect.anything(),
+      expect.objectContaining({ cwd: '/repo', startup: { command: 'claude --resume session-1' } })
     )
   })
 })

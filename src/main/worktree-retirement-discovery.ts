@@ -5,7 +5,7 @@ import { isWslUncPath, parseWslUncPath } from '../shared/wsl-paths'
 import {
   encodeClaudeProjectPaths,
   isClaudeProjectDirInScope
-} from './ai-vault/claude-project-dir-encoding'
+} from '../shared/claude-project-dir-encoding'
 import { wslGatedReaddir, wslGatedStat } from './native-chat/wsl-transcript-fs-access'
 import type { RetirementScanResult } from './worktree-retirement-backfill-scan'
 import { normalizeRetirableGeneratedName } from './worktree-name-retirement'

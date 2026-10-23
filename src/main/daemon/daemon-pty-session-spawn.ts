@@ -17,9 +17,9 @@ import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-ma
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
+import { resolveColdRestoreStartupCwd } from './cold-restore-startup-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
-import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
@@ -178,13 +178,13 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
         requestedCwd,
         wslDistro: recoveryWslDistro
       })
-      // Why: a recovered folder deleted since the crash yields to the request's already-resolved cwd.
       return {
         ...restoreInfo,
-        cwd:
-          recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
-            ? recoveredCwd
-            : requestedCwd
+        cwd: await resolveColdRestoreStartupCwd({
+          recoveredCwd,
+          requestedCwd,
+          claudeResumeTranscriptPath: opts.claudeResumeTranscriptPath
+        })
       }
     }
 

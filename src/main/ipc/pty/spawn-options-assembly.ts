@@ -3,6 +3,7 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import { withCodexTerminalServerIsolationEnv } from '../../../shared/codex-terminal-server-isolation'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../opencode/opencode-pty-launch'
@@ -74,6 +75,7 @@ export type PtySpawnLaunchOptionsInput = {
     cols: number
     rows: number
     launchAgent?: unknown
+    resumeProviderSession?: unknown
     command?: string
     commandDelivery?: PtySpawnOptions['commandDelivery']
     startupCommandDelivery?: PtySpawnOptions['startupCommandDelivery']
@@ -171,6 +173,13 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   }
   if (launchAgent) {
     spawnOptions.launchAgent = launchAgent
+  }
+  const claudeResumeTranscriptPath =
+    launchAgent === 'claude' && !connectionId && launchCommand !== undefined
+      ? normalizeAgentProviderSession(args.resumeProviderSession)?.transcriptPath
+      : undefined
+  if (claudeResumeTranscriptPath) {
+    spawnOptions.claudeResumeTranscriptPath = claudeResumeTranscriptPath
   }
   if (args.worktreeId !== undefined) {
     spawnOptions.worktreeId = args.worktreeId
