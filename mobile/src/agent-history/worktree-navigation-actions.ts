@@ -25,16 +25,22 @@ export function openHistorySession(
   fromWorktreeId: string,
   toWorktreeId: string,
   name?: string,
-  executionHost?: ExecutionHostId | null
+  executionHost?: ExecutionHostId | null,
+  currentExecutionHost?: ExecutionHostId | null
 ): void {
-  if (origin === 'session' && toWorktreeId === fromWorktreeId) {
+  // Why both hosts: the same worktree can resume on another machine.
+  if (
+    origin === 'session' &&
+    toWorktreeId === fromWorktreeId &&
+    (executionHost ?? null) === (currentExecutionHost ?? null)
+  ) {
     router.back()
     return
   }
   const query = name === undefined ? '' : `?name=${encodeURIComponent(name)}`
   const href = workspaceRouteHref(
     `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(toWorktreeId)}${query}`,
-    executionHost ?? undefined
+    executionHost
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Expo Router's typed Href union does not model the optional name and executionHost query on this session route.
   router.replace(href as Parameters<RouteHandoff['replace']>[0])

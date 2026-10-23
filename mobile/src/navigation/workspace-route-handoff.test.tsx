@@ -72,4 +72,14 @@ describe('a workspace screen’s router', () => {
     const router = await workspaceRouterFor({})
     expect(router).toBe(route.router)
   })
+
+  it('does not copy the history route’s server onto a resume pinned to this machine', async () => {
+    const router = await workspaceRouterFor({ executionHost: 'ssh:builder' })
+    router.replace('/h/host-1/session/wt?name=resumed&executionHost=')
+    router.replace('/h/host-1/session/wt?name=resumed&executionHost=ssh%3Aother')
+    expect(route.opened).toEqual([
+      ['replace', '/h/host-1/session/wt?name=resumed'],
+      ['replace', '/h/host-1/session/wt?name=resumed&executionHost=ssh%3Aother']
+    ])
+  })
 })

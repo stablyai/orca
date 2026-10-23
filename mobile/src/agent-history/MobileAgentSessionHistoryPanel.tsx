@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
@@ -53,6 +54,7 @@ export function MobileAgentSessionHistoryPanel({
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
   // screen, and the session it resumes into is a native route the shell has to push.
   const router = useWorkspaceRouteHandoff()
+  const currentExecutionHost = useWorkspaceExecutionHost()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
     hostId,
@@ -249,7 +251,8 @@ export function MobileAgentSessionHistoryPanel({
           worktreeId,
           target.worktreeId,
           resumedName,
-          target.targetExecutionHostId
+          target.targetExecutionHostId,
+          currentExecutionHost
         )
       } catch (err) {
         triggerError()
@@ -263,6 +266,7 @@ export function MobileAgentSessionHistoryPanel({
       client,
       connState,
       hostId,
+      currentExecutionHost,
       origin,
       resumeHost,
       hostTerminalWindowsShell,
