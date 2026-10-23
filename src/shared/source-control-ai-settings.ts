@@ -12,6 +12,7 @@ import {
   commandTemplateFromOperationInstruction,
   isLegacyBranchInstructionTemplate
 } from './source-control-ai-command-template'
+import { normalizeSourceControlCustomActions } from './source-control-custom-actions'
 import type {
   SourceControlAiPrCreationDefaults,
   SourceControlAiSettings
@@ -154,6 +155,10 @@ export function normalizeSourceControlAiSettings(
     modelOverridesByOperation: copyRecord(base.modelOverridesByOperation),
     prCreationDefaults: { ...defaults.prCreationDefaults, ...base.prCreationDefaults },
     actions: { ...defaults.actions, ...normalizedActions, ...migratedTextActions },
-    launchActionDefaults: normalizedLaunchActionDefaults ?? defaults.launchActionDefaults
+    launchActionDefaults: normalizedLaunchActionDefaults ?? defaults.launchActionDefaults,
+    // Why: only touch the key when present so settings without custom actions keep their shape.
+    ...(base.customActions !== undefined
+      ? { customActions: normalizeSourceControlCustomActions(base.customActions) }
+      : {})
   }
 }

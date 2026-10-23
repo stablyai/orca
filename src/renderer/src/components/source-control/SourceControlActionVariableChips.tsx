@@ -11,11 +11,14 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card'
 import { translate } from '@/i18n/i18n'
 
 type SourceControlActionVariableChipsProps = {
-  actionId: AiActionId
   disabled?: boolean
   variablePreviews?: Partial<Record<string, string>>
   onInsert: (variable: string) => void
-}
+} & (
+  | { actionId: AiActionId; variables?: never }
+  // Why: custom actions are not built-in recipes, so they pass their own variable list.
+  | { actionId?: never; variables: readonly SourceControlActionVariable[] }
+)
 
 function hasVariablePreview(
   variablePreviews: Partial<Record<string, string>> | undefined,
@@ -103,10 +106,12 @@ function SourceControlVariableDetails({
 
 export function SourceControlActionVariableChips({
   actionId,
+  variables,
   disabled = false,
   variablePreviews,
   onInsert
 }: SourceControlActionVariableChipsProps): React.JSX.Element {
+  const chipVariables = variables ?? (actionId ? SOURCE_CONTROL_ACTION_VARIABLES[actionId] : [])
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -116,7 +121,7 @@ export function SourceControlActionVariableChips({
           'Variables'
         )}
       </span>
-      {SOURCE_CONTROL_ACTION_VARIABLES[actionId].map((variable) => {
+      {chipVariables.map((variable) => {
         const preview = hasVariablePreview(variablePreviews, variable)
           ? variablePreviews?.[variable]
           : undefined

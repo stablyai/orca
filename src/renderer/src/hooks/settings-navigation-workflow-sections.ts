@@ -2,6 +2,7 @@ import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifac
 import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations-settings-search'
 import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
 import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commit-message-ai-search'
+import { getSourceControlCustomActionsSearchEntries } from '@/components/settings/source-control-custom-actions-section'
 import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
 import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
@@ -104,6 +105,7 @@ export function buildWorkflowSettingsSections(
       searchEntries: [
         ...getGitPaneSearchEntries(),
         ...getCommitMessageAiPaneSearchEntries(),
+        ...getSourceControlCustomActionsSearchEntries(),
         ...getGitProviderApiBudgetSearchEntries()
       ],
       group: 'workflows'

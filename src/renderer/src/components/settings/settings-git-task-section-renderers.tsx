@@ -1,6 +1,7 @@
 import { CommitMessageAiPane } from './CommitMessageAiPane'
 import { GitPane } from './GitPane'
 import { GitProviderApiBudgetPane } from './GitProviderApiBudgetPane'
+import { SourceControlCustomActionsPane } from './SourceControlCustomActionsPane'
 import { TasksPane } from './TasksPane'
 import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
@@ -38,6 +39,11 @@ export function renderGitSettingsSection(context: SettingsRenderContext): React.
             onCustomPromptDirtyChange={model.setHasUnsavedCommitPromptChanges}
             customPromptDiscardSignal={model.sourceControlAiPromptDiscardSignal}
             settingsSearchQuery={model.settingsSearchQuery}
+          />
+          <SourceControlCustomActionsPane
+            settings={model.settings}
+            searchQuery={model.settingsSearchQuery}
+            writeSourceControlAiSettings={interactions.writeSourceControlAiSettingsOrThrow}
           />
           <GitProviderApiBudgetPane
             settingsSearchQuery={model.settingsSearchQuery}

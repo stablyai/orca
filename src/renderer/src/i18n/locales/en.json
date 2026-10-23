@@ -21115,5 +21115,54 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+  },
+  "pullRequestCustomActions": {
+    "launch": {
+      "agentUnavailable": "The agent chosen for this custom action is not available on this workspace host.",
+      "workspaceMissing": "Unable to find the workspace attached to this pull request.",
+      "workspaceRevealFailed": "Unable to open the workspace attached to this pull request.",
+      "noWorkspace": "Unable to find a workspace for this pull request.",
+      "emptyPrompt": "The prompt for \"{{value0}}\" is empty. Update it in Git & Source Control settings.",
+      "needsWorkspaceSetup": "Orca could not create the workspace for \"{{value0}}\" on its own. Create it, then run the action again.",
+      "failed": "Failed to run \"{{value0}}\": {{value1}}",
+      "promptTooLong": "The prompt for \"{{value0}}\" is too long once filled in. Shorten it in Git & Source Control settings.",
+      "createWorkspace": "Create workspace"
+    },
+    "menu": {
+      "manage": "Manage custom actions…",
+      "add": "Add custom action…"
+    },
+    "dialog": {
+      "editTitle": "Edit custom action",
+      "addTitle": "Add custom action",
+      "description": "Runs from the Start workspace menu on a pull request: Orca opens the PR workspace, starts the agent, and sends this prompt once the agent is ready.",
+      "label": "Label",
+      "labelPlaceholder": "Review",
+      "agent": "Agent",
+      "prompt": "Prompt",
+      "example": "Example: {{value0}}",
+      "cancel": "Cancel"
+    },
+    "settings": {
+      "edit": "Edit {{value0}}",
+      "remove": "Remove {{value0}}",
+      "saveFailed": "Failed to save custom action: {{value0}}",
+      "removeTitle": "Delete \"{{value0}}\"?",
+      "removeDescription": "This custom action will be removed from the pull request menu.",
+      "removeConfirm": "Delete",
+      "removeFailed": "Failed to delete custom action: {{value0}}",
+      "add": "Add action",
+      "empty": "No custom actions yet. Add one, such as a review command that takes {prUrl}.",
+      "limit": "You can save up to {{value0}} custom actions.",
+      "title": "Pull request custom actions",
+      "description": "Prompts listed beside Start workspace on a pull request. Choosing one opens the PR workspace and sends the prompt to the agent.",
+      "keyword": {
+        "custom": "custom",
+        "action": "action",
+        "prompt": "prompt",
+        "review": "review",
+        "pullRequest": "pull request"
+      }
+    }
   }
 }
