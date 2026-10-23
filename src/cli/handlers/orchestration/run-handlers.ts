@@ -16,7 +16,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
       run: { id: string; objective: string; consumer_generation: number }
     }>(client, flags, 'orchestration.runCreate', {
       objective: getRequiredStringFlag(flags, 'objective'),
-      from
+      from,
+      ...(flags.get('replace-current') === true ? { replaceCurrent: true } : {})
     })
     printResult(result, json, (r) => `Run ${r.run.id} created and bound: ${r.run.objective}`)
   },

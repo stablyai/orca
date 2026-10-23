@@ -264,7 +264,8 @@ describe('mail sent to a session address reaches the mailbox that session reads'
   it("files it under the chat's current Run, as a terminal coordinator's pane does", async () => {
     await as(SESSION_X, 'orchestration.runCreate', { objective: 'first' })
     const current = idOf(
-      (await as(SESSION_X, 'orchestration.runCreate', { objective: 'next' })).run
+      (await as(SESSION_X, 'orchestration.runCreate', { objective: 'next', replaceCurrent: true }))
+        .run
     )
 
     const { message } = await sendFromTerminal(ADDRESS_X)

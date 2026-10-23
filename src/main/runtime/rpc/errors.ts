@@ -114,6 +114,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worktree_id_requires_full_path',
   'run_not_found',
   'run_required',
+  'run_already_bound',
   'stable_pane_required',
   'consumer_fenced',
   'task_not_found',
