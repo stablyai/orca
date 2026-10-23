@@ -105,6 +105,53 @@ describe('verify-packaged-daemon-entry', () => {
     )
   })
 
+  it('rejects a minified socket default whose identifier contains $', () => {
+    const stale = daemonProtocolVersion - 1
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry"); process.exit(1)\nconst PROTOCOL_VERSION = ${daemonProtocolVersion}\n`
+    )
+    const chunksDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'chunks')
+    mkdirSync(chunksDir, { recursive: true })
+    writeFileSync(
+      join(chunksDir, 'socket.js'),
+      `const $a=${stale};function getDaemonSocketPath(e){return "orca-terminal-host-v\${$a}-x"}\n`
+    )
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
+    )
+  })
+
+  it('rejects mixed daemon protocol markers and still allows mcp protocolVersion 1', () => {
+    const stale = daemonProtocolVersion - 1
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry"); process.exit(1)\nconst PROTOCOL_VERSION = ${daemonProtocolVersion}\n`
+    )
+    const chunksDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'chunks')
+    mkdirSync(chunksDir, { recursive: true })
+    writeFileSync(join(chunksDir, 'mcp-initialize.js'), 'call("initialize",{protocolVersion:1})\n')
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).not.toThrow()
+
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry"); process.exit(1)\nconst startup = { protocolVersion: ${daemonProtocolVersion} }\n`
+    )
+    writeFileSync(
+      join(chunksDir, 'socket.js'),
+      `const name = "orca-terminal-host-v${stale}-x"\n`
+    )
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
+    )
+
+    rmSync(join(chunksDir, 'socket.js'), { force: true })
+    writePackagedEntry(
+      `console.error("Usage: daemon-entry"); process.exit(1)\nconst PROTOCOL_VERSION = ${daemonProtocolVersion}\n`
+    )
+    writeFileSync(join(chunksDir, 'legacy.js'), `const PROTOCOL_VERSION = ${stale}\n`)
+    expect(() => assertPackagedDaemonProtocolAndDeps(resourcesDir)).toThrow(
+      /\[verify-packaged-daemon-entry\] unpacked daemon protocol version mismatch/
+    )
+  })
+
   it('passes when protocolVersion matches and every process-host export exists', () => {
     writePackagedEntry(
       `console.error("Usage: daemon-entry protocolVersion: ${daemonProtocolVersion}"); process.exit(1)\n`
