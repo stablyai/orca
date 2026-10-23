@@ -46,6 +46,14 @@ function isCodexNoRolloutError(error: unknown, threadId: string): boolean {
   )
 }
 
+function isCodexArchivedThreadError(error: unknown): boolean {
+  return (
+    isCodexAppServerRequestError(error) &&
+    error.method === 'thread/resume' &&
+    /\b(?:session|thread)\s+\S+\s+is archived\b|\bcodex unarchive\b/i.test(error.message)
+  )
+}
+
 /**
  * Codex rebuilds each command's env from `shell_environment_policy`, so `inherit = "core"` drops
  * every Orca key the app-server holds. Codex adds `set` keys after that filter and merges these
@@ -103,20 +111,27 @@ export async function openCodexThread(
       threadId: resumeThreadId,
       ...threadSettings
     }
-    try {
+    const resumeThread = (): Promise<unknown> => {
       throwIfSignalAborted(signal)
-      opened = await connection.request(
+      return connection.request(
         'thread/resume',
         { ...resumeParams, excludeTurns: true },
         { timeoutMs }
       )
+    }
+    try {
+      opened = await resumeThread()
     } catch (error) {
       throwIfSignalAborted(signal)
-      if (!launch.supersedeIfUnsaved || !isCodexNoRolloutError(error, resumeThreadId)) {
+      if (isCodexArchivedThreadError(error)) {
+        await connection.request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
+        opened = await resumeThread()
+      } else if (launch.supersedeIfUnsaved && isCodexNoRolloutError(error, resumeThreadId)) {
+        supersededThreadId = resumeThreadId
+        opened = await startThread()
+      } else {
         throw error
       }
-      supersededThreadId = resumeThreadId
-      opened = await startThread()
     }
   }
   const threadId = readCodexThreadId(opened)

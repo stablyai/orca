@@ -150,6 +150,98 @@ describe('openCodexThread', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    ['success', '', 3],
+    ['second-archive', 'is archived', 3],
+    ['retry-no-rollout', 'no rollout found', 3],
+    ['unarchive-refusal', 'is archived', 2],
+    ['cancel-before-unarchive', 'cancelled opening', 1],
+    ['cancel-before-retry', 'cancelled opening', 2],
+    ['start', 'is archived', 1]
+  ] as const)(
+    'recovers an archived resume once through the real connection: %s',
+    async (mode, error, calls) => {
+      const fakeAppServer = String.raw`
+      const readline = require('node:readline')
+      const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
+      let resumes = 0
+      let mode
+      readline.createInterface({ input: process.stdin }).on('line', (line) => {
+        const { id, method, params } = JSON.parse(line)
+        if (method === 'initialize') return send({ id, result: {} })
+        if (!id) return
+        mode ??= params.cwd
+        if (method === 'thread/unarchive' && mode !== 'unarchive-refusal') {
+          return send({ id, result: {} })
+        }
+        if (method === 'thread/resume' && ++resumes === 2 && mode !== 'second-archive') {
+          if (mode === 'retry-no-rollout') {
+            return send({ id, error: { code: -32600, message: 'no rollout found for thread id thread-1' } })
+          }
+          return send({ id, result: { thread: { id: 'thread-1' }, model: 'gpt-saved' } })
+        }
+        send({ id, error: { code: -32600, message: 'session thread-1 is archived. Run ' +
+          String.fromCharCode(96) + 'codex unarchive thread-1' + String.fromCharCode(96) +
+          ' to unarchive it first.' } })
+      })
+    `
+      const connection = await openCodexAppServerConnection({
+        command: process.execPath,
+        args: ['-e', fakeAppServer]
+      })
+      const controller = new AbortController()
+      const request = vi.fn<CodexAppServerConnection['request']>(async (...args) => {
+        try {
+          return await connection.request(...args)
+        } finally {
+          if (
+            (mode === 'cancel-before-unarchive' && args[0] === 'thread/resume') ||
+            (mode === 'cancel-before-retry' && args[0] === 'thread/unarchive')
+          ) {
+            controller.abort(new Error('cancelled opening'))
+          }
+        }
+      })
+      try {
+        const opened = openCodexThread(
+          connectionFor(request),
+          {
+            cwd: mode,
+            resumeThreadId: mode === 'start' ? null : 'thread-1',
+            supersedeIfUnsaved: true,
+            model: 'gpt-selected',
+            permissionPolicy: codexStructuredPermissionPolicy('ask'),
+            threadConfig: { service_tier: 'priority' },
+            commandEnv: { ORCA_SESSION_ID: 'session-1' }
+          },
+          null,
+          controller.signal
+        )
+        if (error) {
+          await expect(opened).rejects.toThrow(error)
+        } else {
+          await expect(opened).resolves.toMatchObject({ threadId: 'thread-1', model: 'gpt-saved' })
+          expect(request.mock.calls[2]).toEqual(request.mock.calls[0])
+          expect(request.mock.calls[0]?.[1]).not.toHaveProperty('model')
+        }
+        const methods =
+          mode === 'start'
+            ? ['thread/start']
+            : ['thread/resume', 'thread/unarchive', 'thread/resume'].slice(0, calls)
+        expect(request.mock.calls.map(([method]) => method)).toEqual(methods)
+        if (methods.includes('thread/unarchive')) {
+          expect(request.mock.calls[1]).toEqual([
+            'thread/unarchive',
+            { threadId: 'thread-1' },
+            { timeoutMs: null }
+          ])
+        }
+      } finally {
+        await connection.close()
+      }
+    }
+  )
+
   it('does not retry ambiguous invalid params or oversized history responses', async () => {
     const invalid = new CodexAppServerRequestError(
       'thread/resume',
