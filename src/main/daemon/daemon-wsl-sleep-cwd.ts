@@ -44,7 +44,12 @@ export async function readDaemonWslSleepCwd(
         timer.unref?.()
       })
     ])
-    return cwd && /^\/(?!\/)/.test(cwd) ? toWindowsWslUncPath(cwd, wslDistro) : null
+    if (!cwd || !/^\/(?!\/)/.test(cwd)) {
+      // awin verify-5: an open pane reopened at its root; this says whether the read was the gap.
+      console.info('[wsl-sleep-cwd] No shell folder read for a sleeping WSL pane:', sessionId)
+      return null
+    }
+    return toWindowsWslUncPath(cwd, wslDistro)
   } catch {
     return null
   } finally {

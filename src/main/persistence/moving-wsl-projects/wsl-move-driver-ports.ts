@@ -88,6 +88,8 @@ export type WslMoveDriverDeps = {
     workspaceIds: readonly string[],
     reported: readonly WslMoveRestoreHintPane[]
   ) => readonly WslMoveRestoreHintPane[]
+  /** Live bridge panes' shell folders by pane key, read in their distro; absent off Windows. */
+  shellCwds?: (panes: readonly WslMoveRestoreHintPane[]) => Promise<ReadonlyMap<string, string>>
   quiesce: Pick<
     WslMoveQuiesceDeps,
     'sleepWorkspaces' | 'livePtyIds' | 'captureRestoreHints' | 'proveExited'

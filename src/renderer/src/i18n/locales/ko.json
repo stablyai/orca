@@ -19841,7 +19841,9 @@
       "useHereConfirm": "이 컴퓨터에서 사용",
       "useHereSuperseded": "이후 {{distro}} 호스트로의 이동에 이 프로젝트가 포함되어 있습니다. 그 이동을 먼저 되돌리세요.",
       "useHereMoveRunning": "{{distro}} 호스트로의 이동이 아직 진행 중입니다. 끝난 후 다시 시도하세요.",
-      "useHereFailed": "이 프로젝트를 이 컴퓨터로 되돌리지 못했습니다."
+      "useHereFailed": "이 프로젝트를 이 컴퓨터로 되돌리지 못했습니다.",
+      "useHereUnsavedTitle": "먼저 파일을 저장하세요",
+      "useHereUnsavedDescription": "{{name}}을(를) 다시 가져오면 이 창이 새로고침됩니다. 먼저 다음 파일을 저장하거나 닫으세요: {{files}}"
     }
   },
   "editor": {

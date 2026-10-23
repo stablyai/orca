@@ -14,6 +14,26 @@ export async function bringWslMovedProjectBack(
   project: WslMovedProject,
   confirm: ConfirmationDialogContextValue
 ): Promise<void> {
+  // The release reloads this window, and an unsaved file vetoes that reload silently: the window
+  // would keep the moved layout, its panes bound to terminals that no longer run (awin verify-5).
+  const unsaved = useAppStore
+    .getState()
+    .openFiles.filter((file) => file.isDirty)
+    .map((file) => file.relativePath)
+  if (unsaved.length > 0) {
+    await confirm({
+      title: translate('sidebar.wslMoved.useHereUnsavedTitle', 'Save your files first'),
+      description: translate(
+        'sidebar.wslMoved.useHereUnsavedDescription',
+        'Bringing {{name}} back reloads this window. Save or close these files first: {{files}}',
+        { name: project.displayName, files: unsaved.join(', ') }
+      ),
+      confirmLabel: translate('sidebar.wslMoved.useHereRefusedOk', 'OK'),
+      acknowledgeOnly: true,
+      initialFocus: 'confirm'
+    })
+    return
+  }
   const confirmed = await confirm({
     title: translate('sidebar.wslMoved.useHereTitle', 'Use {{name}} on this computer again?', {
       name: project.displayName

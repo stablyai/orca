@@ -47,7 +47,10 @@ import {
   wslMoveSleptSpoolRoot
 } from '../persistence/moving-wsl-projects/wsl-move-slept-scrollback'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
-import { captureWslMoveRestoreHints } from '../persistence/moving-wsl-projects/wsl-move-restore-hints'
+import {
+  captureWslMoveRestoreHints,
+  type WslMoveRestoreHintPane
+} from '../persistence/moving-wsl-projects/wsl-move-restore-hints'
 import {
   isWslMoveProjectFenced,
   wslMoveProjectRefForWorkspace
@@ -88,6 +91,25 @@ export function registerWslSleepShellCwdReader(): void {
   })
 }
 
+/** Each live bridge pane's shell folder, one process read per distro. */
+async function readWslMovePaneShellCwds(
+  panes: readonly WslMoveRestoreHintPane[]
+): Promise<Map<string, string>> {
+  const cwds = new Map<string, string>()
+  const distros = new Set(panes.flatMap((pane) => (pane.wslDistro ? [pane.wslDistro] : [])))
+  for (const distro of distros) {
+    const rows = await readWslGuestPaneProcesses(distro)
+    for (const pane of panes) {
+      const cwd =
+        rows && pane.wslDistro === distro ? readWslGuestPaneShellCwd(rows, pane.paneKey) : null
+      if (cwd) {
+        cwds.set(pane.paneKey, cwd)
+      }
+    }
+  }
+  return cwds
+}
+
 export function createWslMoveDriverDeps(
   store: Store,
   runtime: OrcaRuntimeService
@@ -95,6 +117,7 @@ export function createWslMoveDriverDeps(
   const userDataPath = app.getPath('userData')
   const facts: WslMoveGateFactSources = {
     listTerminals: (workspaceIds) => runtime.listWslMoveLiveTerminals(workspaceIds),
+    paneKeyForPty: (ptyId) => ptyPaneKey.get(ptyId) ?? null,
     inspect: async (ptyId) => {
       const provider = tryGetProviderForPty(ptyId)
       if (!provider) {
@@ -107,9 +130,23 @@ export function createWslMoveDriverDeps(
       ? {
           guestForegrounds: async (distro: string, paneKeys: readonly string[]) => {
             const rows = await readWslGuestPaneProcesses(distro)
-            return rows
-              ? new Map(paneKeys.map((key) => [key, classifyWslGuestPaneForeground(rows, key)]))
-              : new Map()
+            if (!rows) {
+              console.warn('[wsl-move] Could not list processes in', distro)
+              return new Map()
+            }
+            return new Map(
+              paneKeys.map((key) => {
+                const verdict = classifyWslGuestPaneForeground(rows, key)
+                if (verdict === 'unverifiable') {
+                  // awin verify-5: a pane stayed "cannot check" after its job was killed elsewhere.
+                  const tagged = rows.filter((row) => row.paneKey === key)
+                  const processes =
+                    tagged.map((row) => `${row.pid}/${row.ppid}/${row.comm}`).join(' ') || 'none'
+                  console.warn(`[wsl-move] No shell found for a pane; its processes: ${processes}`)
+                }
+                return [key, verdict]
+              })
+            )
           }
         }
       : {}),
@@ -139,6 +176,7 @@ export function createWslMoveDriverDeps(
     exportManifest: (request) => exportWslMoveManifest(store, request),
     gateInputs: (scope) => collectWslMoveGateInputs(facts, scope),
     listPanes: (scope) => listWslMovePanes(facts, scope),
+    ...(process.platform === 'win32' ? { shellCwds: readWslMovePaneShellCwds } : {}),
     sleptSessionPanes: (workspaceIds, reported) =>
       listWslMoveSleptSessionPanes(store.getWorkspaceSession(), workspaceIds, reported),
     quiesce: {

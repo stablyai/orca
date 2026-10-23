@@ -13,6 +13,11 @@ export type WslMoveRestoreHintPane = {
   sessionId: string
   /** The distro the pane's session ran in, as the daemon reported it; null for a native shell. */
   wslDistro?: string | null
+  /**
+   * The folder the pane's shell was in, read inside the distro right before Sleep. Bash on the
+   * bridge reports none, so without it the checkpoint keeps only the spawn folder.
+   */
+  shellCwd?: string
 }
 
 export type WslMoveRestoreHintCapture = {
@@ -44,6 +49,11 @@ export async function captureWslMoveRestoreHints(
     staleCwdPaneKeys: []
   }
   for (const pane of panes) {
+    const shellCwd = pane.shellCwd && /^\/(?!\/)/.test(pane.shellCwd) ? pane.shellCwd : null
+    if (shellCwd) {
+      capture.hints.push({ paneKey: pane.paneKey, cwd: shellCwd })
+      continue
+    }
     let detection: ColdRestoreDetection
     try {
       // A sleep ends the session cleanly; its checkpoint is exactly what a cold restore would read.

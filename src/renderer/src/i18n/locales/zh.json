@@ -19841,7 +19841,9 @@
       "useHereConfirm": "在此电脑上使用",
       "useHereSuperseded": "之后一次移动到 {{distro}} 主机的操作包含此项目。请先将那次移动恢复。",
       "useHereMoveRunning": "移动到 {{distro}} 主机的操作仍在进行。请在其结束后重试。",
-      "useHereFailed": "无法将此项目恢复到此电脑。"
+      "useHereFailed": "无法将此项目恢复到此电脑。",
+      "useHereUnsavedTitle": "请先保存文件",
+      "useHereUnsavedDescription": "将 {{name}} 恢复到此电脑会重新加载此窗口。请先保存或关闭以下文件：{{files}}"
     }
   },
   "editor": {

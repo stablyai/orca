@@ -6,8 +6,9 @@ import type {
 } from '../../../shared/wsl-move/wsl-moved-project'
 
 const movedProjects = vi.hoisted((): { kind: string; id: string; displayName: string }[] => [])
+const openFiles = vi.hoisted((): { id: string; relativePath: string; isDirty: boolean }[] => [])
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ wslMovedProjects: movedProjects }) }
+  useAppStore: { getState: () => ({ wslMovedProjects: movedProjects, openFiles }) }
 }))
 
 const { bringWslMovedProjectBack } = await import('./wsl-moved-project-use-here')
@@ -39,6 +40,25 @@ async function refusalShown(): Promise<string | undefined> {
 describe('bringWslMovedProjectBack', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    openFiles.length = 0
+  })
+
+  // awin verify-5: an unsaved file vetoed main's reload, so the window kept the moved layout and
+  // its panes stayed bound to dead terminals.
+  it('asks for unsaved files to be saved first, before anything is released', async () => {
+    openFiles.push({ id: 'f1', relativePath: 'README.md', isDirty: true })
+    const call = stubApi({
+      released: true,
+      distro: 'Ubuntu',
+      repoIds: ['repo-1'],
+      folderWorkspaceIds: []
+    })
+    const confirm = vi.fn(async (_options: ConfirmationDialogOptions) => true)
+    await bringWslMovedProjectBack(project, confirm)
+    expect(call).not.toHaveBeenCalled()
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm.mock.calls[0]?.[0]).toMatchObject({ acknowledgeOnly: true })
+    expect(confirm.mock.calls[0]?.[0]?.description).toContain('README.md')
   })
 
   it('does nothing unless the user confirms', async () => {

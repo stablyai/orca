@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalModes } from '../../daemon/terminal-modes'
 import { makeTerminalScrollbackSnapshotRef } from '../../terminal-scrollback-snapshots'
 import { projectOrcadMigrationSessionScrollback } from '../migrating-orcad-catalog/orcad-source-scrollback-state'
 import {
@@ -68,6 +69,24 @@ function restored(scrollbackAnsi: string, snapshotAnsi: string, hasUnreadableRec
   }
 }
 
+function withModes<T extends ReturnType<typeof restored>>(
+  detection: T,
+  alternateScreen: boolean
+): T {
+  return {
+    ...detection,
+    restoreInfo: {
+      ...detection.restoreInfo,
+      modes: {
+        bracketedPaste: false,
+        mouseTracking: false,
+        applicationCursor: false,
+        alternateScreen
+      } satisfies TerminalModes
+    }
+  }
+}
+
 describe('a slept pane on the snapshot channel', () => {
   it('carries the checkpoint a slept pane has instead of a renderer snapshot', () => {
     const history = Buffer.from('$ make\r\nok\r\n$ ', 'utf8')
@@ -106,9 +125,35 @@ describe('a slept pane on the snapshot channel', () => {
     expect(projected.snapshots[0]?.byteLength).toBe(history.length)
   })
 
+  // awin verify-6: a normal-screen checkpoint's restore info holds the whole buffer in both fields
+  // (cold restore fills scrollbackAnsi from snapshotAnsi), so concatenating them carried every
+  // line twice, and the per-pane cap then kept only the newest ~half of a 2,000-line pane.
+  it('carries a normal-screen buffer once, not twice', async () => {
+    const buffer = Array.from({ length: 2_000 }, (_, i) => `line ${i}`).join('\r\n')
+    const slept = await readWslMoveSleptScrollbackFromHistory(
+      { detectColdRestoreState: async () => withModes(restored(buffer, buffer), false) },
+      [{ paneKey: PANE_KEY, sessionId: 'pty-1', wslDistro: 'Ubuntu' }],
+      'Ubuntu',
+      spoolRoot()
+    )
+    expect(sleptScrollbackReader(slept)?.(TAB, LEAF)?.toString('utf8')).toBe(buffer)
+    slept.dispose()
+  })
+
+  it('carries the normal buffer, not the TUI frame, for a pane on the alternate screen', async () => {
+    const slept = await readWslMoveSleptScrollbackFromHistory(
+      { detectColdRestoreState: async () => withModes(restored('history\r\n$ vim', 'tui'), true) },
+      [{ paneKey: PANE_KEY, sessionId: 'pty-1', wslDistro: 'Ubuntu' }],
+      'Ubuntu',
+      spoolRoot()
+    )
+    expect(sleptScrollbackReader(slept)?.(TAB, LEAF)?.toString('utf8')).toBe('history\r\n$ vim')
+    slept.dispose()
+  })
+
   it('spools each buffer, serves it by ref, and leaves any other ref to the store', async () => {
     const reader = {
-      detectColdRestoreState: vi.fn(async () => restored('old\r\n', '$ '))
+      detectColdRestoreState: vi.fn(async () => restored('', 'old\r\n$ '))
     }
     const slept = await readWslMoveSleptScrollbackFromHistory(
       reader,

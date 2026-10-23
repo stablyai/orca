@@ -19903,7 +19903,9 @@
       "useHereConfirm": "Utiliser sur cet ordinateur",
       "useHereSuperseded": "Un déplacement ultérieur vers l'hôte {{distro}} inclut ce projet. Ramenez d'abord celui-là.",
       "useHereMoveRunning": "Un déplacement vers l'hôte {{distro}} est encore en cours. Réessayez une fois terminé.",
-      "useHereFailed": "Impossible de ramener ce projet sur cet ordinateur."
+      "useHereFailed": "Impossible de ramener ce projet sur cet ordinateur.",
+      "useHereUnsavedTitle": "Enregistrez d'abord vos fichiers",
+      "useHereUnsavedDescription": "Récupérer {{name}} recharge cette fenêtre. Enregistrez ou fermez d'abord ces fichiers : {{files}}"
     }
   },
   "editor": {

@@ -14,7 +14,10 @@ const sessionsOf = (panes: readonly WslMoveRestoreHintPane[]): string =>
   JSON.stringify(panes.map((pane) => pane.sessionId).sort())
 
 export async function pauseWslMoveScope(
-  deps: Pick<WslMoveDriverDeps, 'gateInputs' | 'listPanes' | 'quiesce' | 'sleptSessionPanes'>,
+  deps: Pick<
+    WslMoveDriverDeps,
+    'gateInputs' | 'listPanes' | 'quiesce' | 'sleptSessionPanes' | 'shellCwds'
+  >,
   scope: WslMoveTerminalScope,
   /** The window's bindings of panes slept before the move, which main no longer holds. */
   reported: readonly WslMoveRestoreHintPane[] = []
@@ -29,6 +32,14 @@ export async function pauseWslMoveScope(
   if (sessionsOf(panes) !== sessionsOf(before)) {
     return refusal('wsl_move_pause_failed', { detail: 'terminals-changed' })
   }
+  // Bash on the bridge reports no folder; once slept, its shell is gone and so is the folder.
+  const cwds = await (deps.shellCwds?.(panes) ?? Promise.resolve(new Map<string, string>())).catch(
+    () => new Map<string, string>()
+  )
+  const withCwds = panes.map((pane) => {
+    const shellCwd = cwds.get(pane.paneKey)
+    return shellCwd ? { ...pane, shellCwd } : pane
+  })
   try {
     const { failedWorktreeIds } = await deps.quiesce.sleepWorkspaces(scope.workspaceIds)
     // Panes slept before the move too, so their folders reach the restore hints, not only history.
@@ -36,7 +47,7 @@ export async function pauseWslMoveScope(
       ? refusal('wsl_move_pause_failed', { detail: 'sleep-failed' })
       : {
           panes: withSleptSessionPanes(
-            panes,
+            withCwds,
             deps.sleptSessionPanes?.(scope.workspaceIds, reported) ?? []
           )
         }

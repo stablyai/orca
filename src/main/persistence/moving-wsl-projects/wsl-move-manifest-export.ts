@@ -282,7 +282,7 @@ function differingPaths(left: unknown, right: unknown, path = '$', found: string
   if (found.length >= 8) {
     return found
   }
-  if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) {
+  if (!isJsonRecord(left) || !isJsonRecord(right)) {
     if (JSON.stringify(left) !== JSON.stringify(right)) {
       found.push(path)
     }
@@ -293,10 +293,15 @@ function differingPaths(left: unknown, right: unknown, path = '$', found: string
     // Array indexes are folded so one dropped field names its shape, not every row.
     const step = Array.isArray(left) ? `${path}[]` : `${path}.${key}`
     const before = found.length
-    differingPaths(Reflect.get(left, key), Reflect.get(right, key), step, found)
+    differingPaths(left[key], right[key], step, found)
     if (Array.isArray(left) && found.length > before) {
       return found
     }
   }
   return found
+}
+
+// Arrays included: their indexes are keys like any record's.
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }

@@ -189,6 +189,10 @@ function reloadWithSessionHeld(
   const lift = (): void => liftReleasedWslMoveSessionHolds()
   sender.once('did-finish-load', lift)
   sender.once('destroyed', lift)
+  // The renderer refuses a release while a file is unsaved; one edited since still vetoes this.
+  sender.once('will-prevent-unload', () => {
+    console.warn('[wsl-move] Reload after "Use on this computer again" was vetoed by the page')
+  })
   // After the reply reaches the renderer, so its awaited call settles first.
   setImmediate(() => {
     if (!sender.isDestroyed()) {
