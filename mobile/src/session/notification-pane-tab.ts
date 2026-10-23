@@ -28,3 +28,20 @@ export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: 
           ) === paneKey)
   )
 }
+
+export function sessionTabPaneKey(tab: MobileSessionTab | undefined): string | undefined {
+  if (!tab) {
+    return undefined
+  }
+  if (tab.type === 'terminal') {
+    const tabId = tab.parentTabId ?? tab.id
+    return tabId && tab.leafId ? `${tabId}:${tab.leafId}` : undefined
+  }
+  if (tab.type === 'agent-session') {
+    return structuredAgentSessionPaneKey(
+      structuredAgentSessionTabId(tab.sessionId),
+      tab.sessionId
+    )
+  }
+  return undefined
+}

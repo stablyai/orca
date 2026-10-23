@@ -8,6 +8,8 @@ export type LastVisitedWorktreeOnHost = {
   worktreeId: string
   /** A server workspace's `runtime:` host; absent for the desktop's own (local and SSH) rows. */
   executionHost?: ExecutionHostId
+  /** Active pane key within the workspace so foreground notification suppression only mutes the currently viewed tab. */
+  paneKey?: string
 }
 
 /** The route's server for a row, as the host list routes it: only a `runtime:` host is named. */

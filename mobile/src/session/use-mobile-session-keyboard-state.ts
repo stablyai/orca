@@ -4,6 +4,7 @@ import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
+import { sessionTabPaneKey } from './notification-pane-tab'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
 
@@ -38,7 +39,8 @@ export type MobileSessionKeyboardScope = Pick<
   | 'viewportMeasuredRef'
   | 'viewportRef'
   | 'worktreeId'
->
+> &
+  Partial<Pick<MobileSessionLifecycleModel, 'sessionTabs'>>
 
 export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope) {
   const {
@@ -153,11 +155,18 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
   }, [activeSessionTabId, scrollActiveTabIntoView])
 
   const executionHost = useWorkspaceExecutionHost()
+  const activeTab = scope.sessionTabs?.find((tab) => tab.id === activeSessionTabId)
+  const activePaneKey = sessionTabPaneKey(activeTab)
   useEffect(() => {
     if (hostId && worktreeId) {
-      void writeLastVisitedWorktree({ hostId, worktreeId, executionHost })
+      void writeLastVisitedWorktree({
+        hostId,
+        worktreeId,
+        executionHost,
+        ...(activePaneKey ? { paneKey: activePaneKey } : {})
+      })
     }
-  }, [hostId, worktreeId, executionHost])
+  }, [hostId, worktreeId, executionHost, activePaneKey])
 
   const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
     try {

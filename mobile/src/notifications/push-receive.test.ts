@@ -341,3 +341,24 @@ it('silences only the viewed workspace on its own host, desktop or server', asyn
   await expect(present('runtime:env-1')).resolves.toBe(false)
   await expect(present()).resolves.toBe(true)
 })
+
+it('shows notifications from another tab in the same workspace while suppressing the active tab', async () => {
+  AppState.currentState = 'active'
+  let seq = 0
+  const presentPane = (paneKey?: string) =>
+    canPresentForegroundPush({
+      hostFingerprint,
+      worktreeId: 'repo::/work',
+      ...(paneKey ? { paneKey } : {}),
+      notificationId: `pane-${++seq}`,
+      notificationEpoch: 'epoch',
+      notificationSeq: seq
+    })
+  setNotificationViewingWorkspace({
+    hostId: 'host-1',
+    worktreeId: 'repo::/work',
+    paneKey: 'tab-a:11111111-1111-4111-8111-111111111111'
+  })
+  await expect(presentPane('tab-a:11111111-1111-4111-8111-111111111111')).resolves.toBe(false)
+  await expect(presentPane('tab-b:22222222-2222-4222-8222-222222222222')).resolves.toBe(true)
+})

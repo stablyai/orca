@@ -7,6 +7,7 @@ import {
 export type NotificationViewingWorkspace = Readonly<{
   hostId: string
   worktreeId: string
+  paneKey?: string
   executionHost?: string
 }>
 
@@ -32,9 +33,10 @@ function dismissBannerMatchingViewingWorkspace(): void {
   const banner = getCurrentInAppNotificationBanner()
   if (
     banner &&
-    isViewingWorkspaceTarget({
+    isViewingNotificationTarget({
       hostId: banner.hostId,
       worktreeId: banner.worktreeId,
+      paneKey: banner.paneKey,
       executionHost: banner.executionHost
     })
   ) {
@@ -97,17 +99,34 @@ export function isViewingWorkspaceTarget(target: {
   )
 }
 
+export function isViewingNotificationTarget(target: {
+  hostId?: string
+  worktreeId?: string
+  paneKey?: string
+  executionHost?: string
+}): boolean {
+  if (!isViewingWorkspaceTarget(target)) {
+    return false
+  }
+  const viewing = getNotificationViewingWorkspace()
+  if (!target.paneKey || !viewing?.paneKey) {
+    return true
+  }
+  return paramMatches(viewing.paneKey, target.paneKey)
+}
+
 export function shouldSuppressNotificationWhileViewing(
-  event: { worktreeId?: string; executionHost?: string },
+  event: { worktreeId?: string; paneKey?: string; executionHost?: string },
   hostId: string,
   suppressWhileViewing: boolean
 ): boolean {
   return (
     suppressWhileViewing &&
     AppState.currentState === 'active' &&
-    isViewingWorkspaceTarget({
+    isViewingNotificationTarget({
       hostId,
       worktreeId: event.worktreeId,
+      paneKey: event.paneKey,
       executionHost: event.executionHost
     })
   )

@@ -11,6 +11,7 @@ import {
   getCurrentInAppNotificationBanner,
   subscribeInAppNotificationBanner
 } from './in-app-notification-banner-store'
+import { dispatchInPageNotificationNavigation } from './in-page-notification-navigation'
 import { getNotificationNavigationTarget } from './notification-routing'
 import { isViewingWorkspaceTarget } from './notification-viewing-policy'
 import { useOpenNotificationRoute } from './use-open-notification-route'
@@ -65,10 +66,10 @@ export function InAppNotificationBanner() {
   const isTerminalBell = banner.title.startsWith('Bell in ')
   const accentColor = isUrgent ? colors.statusAmber : colors.statusGreen
   const badgeText = isUrgent
-    ? isTerminalBell
+    ? '⚡ Needs input'
+    : isTerminalBell
       ? '🔔 Terminal bell'
-      : '⚡ Needs input'
-    : '✅ Completed'
+      : '✅ Completed'
   const canNavigate =
     typeof banner.hostId === 'string' &&
     banner.hostId.length > 0 &&
@@ -87,6 +88,19 @@ export function InAppNotificationBanner() {
     const activeWorktreeId = firstParam(activeParams.worktreeId)
     const onSameHost =
       pathname.startsWith('/h/') && paramMatches(activeHostId, banner.hostId)
+    if (
+      onSameHost &&
+      banner.hostId &&
+      banner.worktreeId &&
+      dispatchInPageNotificationNavigation({
+        hostId: banner.hostId,
+        worktreeId: banner.worktreeId,
+        paneKey: banner.paneKey,
+        executionHost: banner.executionHost
+      })
+    ) {
+      return
+    }
     const onNativeSessionRoute =
       onSameHost &&
       pathname.includes('/session/') &&

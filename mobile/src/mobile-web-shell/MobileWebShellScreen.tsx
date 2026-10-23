@@ -40,6 +40,12 @@ import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-over
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+import {
+  noteInPageBackClaim,
+  noteInPageRouteParamClear,
+  noteInPageStorageWrite,
+  useInPageNotificationBridge
+} from '../notifications/in-page-notification-navigation'
 import { setInPageNotificationViewingWorkspace } from '../notifications/notification-viewing-policy'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
@@ -219,7 +225,8 @@ export function MobileWebShellScreen({
     sessionEstablished: pageReady,
     snapshot,
     readStorage,
-    onStorageWrite: writeStorage,
+    onStorageWrite: (k, v) =>
+      noteInPageStorageWrite(hostId, k, v, writeStorage, setInPageNotificationViewingWorkspace),
     // Reported as the document failing to load, which is what it is: the document loaded and never
     // produced a tree. That reason drops this generation and downloads once, so a page broken by
     // bytes this host has since replaced recovers, and a page broken by its own code stops at the
@@ -243,15 +250,16 @@ export function MobileWebShellScreen({
     // lands.
     onPagePainted: reportPagePainted,
     // While this is true the key below belongs to the page, not to the stack this screen sits on.
-    onPageBackClaim: (claimed) => {
-      reportPageBackClaim(claimed)
-      if (!claimed && isHostRouteOf(route.pathname, hostId)) {
-        setInPageNotificationViewingWorkspace(null)
-      }
-    },
-    onRouteParamClear: (param, value) => {
-      onRouteParamClear?.(param, value)
-    },
+    onPageBackClaim: (c) =>
+      noteInPageBackClaim(
+        c,
+        route.pathname,
+        hostId,
+        reportPageBackClaim,
+        setInPageNotificationViewingWorkspace
+      ),
+    onRouteParamClear: (p, v) =>
+      noteInPageRouteParamClear(p, v, route, bridge.publishRoute, onRouteParamClear),
     // `document-load-failed` because that is what happens: the document loads and the page refuses
     // the session, so no tree is ever built. The refetch it costs is wasted on a route this shell
     // produced, and the second report is terminal, which is the failure screen this deserves.
@@ -325,6 +333,17 @@ export function MobileWebShellScreen({
   useEffect(() => {
     publishRoute(route)
   }, [publishRoute, route])
+
+  useInPageNotificationBridge({
+    pageReady,
+    overlay,
+    ownsHostArea,
+    hostId,
+    isFocused: () => navigation.isFocused(),
+    publishRoute,
+    route,
+    setViewingWorkspace: setInPageNotificationViewingWorkspace
+  })
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
   // Every keyboard event, a height change while open included, so the page never holds a stale one.
@@ -465,16 +484,9 @@ export function MobileWebShellScreen({
 }
 
 const styles = StyleSheet.create({
-  shellRoot: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  shellView: {
-    flex: 1
-  },
-  unpaintedOverlay: {
-    opacity: 0
-  },
+  shellRoot: { flex: 1, backgroundColor: colors.bgBase },
+  shellView: { flex: 1 },
+  unpaintedOverlay: { opacity: 0 },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -500,12 +512,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radii.button
   },
-  retryLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  }
+  retryLabel: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
+  pressed: { opacity: 0.7 }
 })

@@ -25,7 +25,7 @@ export function classifyNotificationTone(
   event: Pick<DesktopNotificationDispatchEvent, 'source' | 'agentState' | 'title' | 'body'>
 ): NotificationTone {
   if (event.source === 'terminal-bell') {
-    return 'urgent'
+    return 'complete'
   }
   if (event.agentState === 'waiting' || event.agentState === 'blocked') {
     return 'urgent'
@@ -146,10 +146,10 @@ export async function presentSocketNotificationFallback(
   const vibrationPattern = tone === 'urgent' ? URGENT_VIBRATION_PATTERN : COMPLETE_VIBRATION_PATTERN
   const subtitleLabel =
     tone === 'urgent'
-      ? event.source === 'terminal-bell'
+      ? 'Needs input'
+      : event.source === 'terminal-bell'
         ? 'Terminal bell'
-        : 'Needs input'
-      : 'Task complete'
+        : 'Task complete'
   await Notifications.scheduleNotificationAsync({
     ...(osNotificationIdentifier ? { identifier: osNotificationIdentifier } : {}),
     content: {

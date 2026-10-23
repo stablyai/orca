@@ -96,7 +96,7 @@ describe('classifyNotificationTone & resolveEventPaneKey', () => {
   it('classifies urgent vs complete notifications accurately', () => {
     expect(classifyNotificationTone({ agentState: 'waiting', title: 'orca' })).toBe('urgent')
     expect(classifyNotificationTone({ agentState: 'blocked', title: 'orca' })).toBe('urgent')
-    expect(classifyNotificationTone({ source: 'terminal-bell', title: 'orca' })).toBe('urgent')
+    expect(classifyNotificationTone({ source: 'terminal-bell', title: 'orca' })).toBe('complete')
     expect(classifyNotificationTone({ agentState: 'done', title: 'orca' })).toBe('complete')
     expect(
       classifyNotificationTone({ title: 'orca · main', body: 'Claude finished the task' })
