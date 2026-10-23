@@ -84,7 +84,7 @@ export function buildMobileTerminalSurfaceTabs(
           inputs.generatedTitlesEnabled,
           leafTitle ?? terminal.title ?? 'Terminal'
         )
-      : (leafTitle ?? 'Terminal')
+      : (leafTitle ?? terminal.customTitle?.trim()) || 'Terminal'
     const agentStatusTitle = leafTitle ?? (tabWideFallbackSafe ? terminal.title : '') ?? ''
     const agentStatus =
       paneKey && !isClaudeManagementTitle(agentStatusTitle)

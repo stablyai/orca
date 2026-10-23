@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { AppState } from '../store/types'
+import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -579,6 +580,40 @@ describe('terminal mobile session layout publication', () => {
     expect(buildMobileSessionTabSnapshots(splitState)[0]?.tabs).toMatchObject([
       { leafId: firstLeaf, title: 'agent pane' },
       { leafId: secondLeaf, title: 'shell pane' }
+    ])
+  })
+
+  it('uses a custom title for split panes that have no leaf title', () => {
+    const firstLeaf = '11111111-1111-4111-8111-111111111111'
+    const secondLeaf = '22222222-2222-4222-8222-222222222222'
+    const tab: TerminalTab = {
+      id: 'term-1',
+      ptyId: 'pty-1',
+      worktreeId: 'wt-1',
+      title: 'Leaked tab title',
+      customTitle: '  Nightly audit  ',
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const layout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', leafId: firstLeaf },
+        second: { type: 'leaf', leafId: secondLeaf }
+      },
+      activeLeafId: firstLeaf,
+      expandedLeafId: null
+    }
+    const splitState = makeState({
+      tabsByWorktree: { 'wt-1': [tab] },
+      terminalLayoutsByTabId: { 'term-1': layout }
+    })
+
+    expect(buildMobileSessionTabSnapshots(splitState)[0]?.tabs).toMatchObject([
+      { leafId: firstLeaf, title: 'Nightly audit' },
+      { leafId: secondLeaf, title: 'Nightly audit' }
     ])
   })
 })
