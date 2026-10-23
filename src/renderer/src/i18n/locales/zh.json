@@ -20826,7 +20826,8 @@
     "confirm": "停止会话并退出",
     "cancel": "取消",
     "failed": "未能停止所有终端会话，因此 Orca 仍保持打开。",
-    "newerVersionMessage": "较新版本的 Orca 仍在运行部分终端。",
-    "newerVersionDetail": "当前版本无法停止这些终端，因此未停止任何内容。请在此处重新打开这些终端，或在较新版本中退出它们，然后重试。"
+    "ok": "确定",
+    "unavailableMessage": "Orca 目前无法停止所有终端会话。",
+    "unavailableDetail": "未停止任何内容。请在终端打开后重试。如果某个终端显示它是在较新版本的 Orca 中打开的，请先重新打开它。"
   }
 }

@@ -37,9 +37,10 @@ import {
 import { probeRendererLaunchCapacity } from '../window/renderer-launch-failure-probe'
 import {
   confirmQuitAndStopAllSessions,
-  explainNewerOrcaTerminalsBlockStopAll
+  explainStopAllSessionsUnavailable
 } from './quit-and-stop-all-sessions-prompt'
 import { isHoldingForNewerProtocolDaemon } from '../daemon/daemon-newer-protocol-hold'
+import { getDaemonProvider } from '../daemon/daemon-provider-state'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
@@ -150,10 +151,12 @@ export function quitAndStopAllSessionsFromUserCommand(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     showMainWindowFromTray()
   }
-  // Why before asking: Kill all can't list a newer version's terminals, so it would close every tab, then refuse.
-  const ask: typeof confirmQuitAndStopAllSessions = isHoldingForNewerProtocolDaemon()
-    ? explainNewerOrcaTerminalsBlockStopAll
-    : confirmQuitAndStopAllSessions
+  // Why before asking: without a daemon provider (starting or failed) or with a newer version's daemon held,
+  // Kill all can't list every session, so it would close every tab and then refuse.
+  const ask: typeof confirmQuitAndStopAllSessions =
+    getDaemonProvider() && !isHoldingForNewerProtocolDaemon()
+      ? confirmQuitAndStopAllSessions
+      : explainStopAllSessionsUnavailable
   void ask(showMessageBoxOnMainWindow)
     .then((confirmed) => {
       if (confirmed) {

@@ -20808,7 +20808,8 @@
     "confirm": "Arrêter les sessions et quitter",
     "cancel": "Annuler",
     "failed": "Impossible d'arrêter toutes les sessions de terminal, Orca reste donc ouvert.",
-    "newerVersionMessage": "Une version plus récente d'Orca exécute encore certains terminaux.",
-    "newerVersionDetail": "Cette version ne peut pas les arrêter, donc rien n'a été arrêté. Rouvrez ces terminaux ici ou quittez-les depuis la version plus récente, puis réessayez."
+    "ok": "OK",
+    "unavailableMessage": "Orca ne peut pas arrêter toutes les sessions de terminal pour le moment.",
+    "unavailableDetail": "Rien n'a été arrêté. Réessayez une fois vos terminaux ouverts. Si un terminal indique qu'il a été ouvert dans une version plus récente d'Orca, rouvrez-le d'abord."
   }
 }

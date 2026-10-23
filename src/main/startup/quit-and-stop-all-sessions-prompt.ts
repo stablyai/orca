@@ -3,6 +3,7 @@ import { translateMain } from '../i18n/main-i18n'
 
 const CONFIRM_BUTTON_INDEX = 0
 const CANCEL_BUTTON_INDEX = 1
+const ACKNOWLEDGE_BUTTON_INDEX = 0
 
 /** Asks before Quit and Stop All Sessions; resolves true only when the user confirms. */
 export async function confirmQuitAndStopAllSessions(
@@ -31,21 +32,24 @@ export async function confirmQuitAndStopAllSessions(
   return response === CONFIRM_BUTTON_INDEX
 }
 
-/** Explains why nothing will be stopped while a newer Orca version runs some terminals; never confirms. */
-export async function explainNewerOrcaTerminalsBlockStopAll(
+/** Explains that nothing was stopped because not every session can be listed yet; never confirms. */
+export async function explainStopAllSessionsUnavailable(
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
 ): Promise<false> {
   await showMessageBox({
     type: 'info',
+    buttons: [translateMain('quitAndStopAllSessions.ok', 'OK')],
+    defaultId: ACKNOWLEDGE_BUTTON_INDEX,
+    cancelId: ACKNOWLEDGE_BUTTON_INDEX,
     noLink: true,
     title: translateMain('quitAndStopAllSessions.title', 'Quit and Stop All Sessions'),
     message: translateMain(
-      'quitAndStopAllSessions.newerVersionMessage',
-      'A newer version of Orca is still running some terminals.'
+      'quitAndStopAllSessions.unavailableMessage',
+      "Orca can't stop every terminal session right now."
     ),
     detail: translateMain(
-      'quitAndStopAllSessions.newerVersionDetail',
-      "This version can't stop them, so nothing was stopped. Reopen those terminals here, or quit them from the newer version, then try again."
+      'quitAndStopAllSessions.unavailableDetail',
+      'Nothing was stopped. Try again once your terminals have opened. If a terminal says it was opened in a newer version of Orca, reopen it first.'
     )
   })
   return false

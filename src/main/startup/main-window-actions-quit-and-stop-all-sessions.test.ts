@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   confirmQuitAndStopAllSessions,
-  explainNewerOrcaTerminalsBlockStopAll
+  explainStopAllSessionsUnavailable
 } from './quit-and-stop-all-sessions-prompt'
 
 const electron = vi.hoisted(() => ({ quit: vi.fn(), showMessageBox: vi.fn() }))
 const prompt = vi.hoisted(() => ({
   confirm: vi.fn<typeof confirmQuitAndStopAllSessions>(),
-  explain: vi.fn<typeof explainNewerOrcaTerminalsBlockStopAll>()
+  explain: vi.fn<typeof explainStopAllSessionsUnavailable>()
 }))
-const daemonHold = vi.hoisted(() => ({ holdingNewer: vi.fn(() => false) }))
+const daemon = vi.hoisted(() => ({
+  holdingNewer: vi.fn(() => false),
+  provider: vi.fn<() => object | null>(() => ({}))
+}))
 
 vi.mock('electron', () => ({
   app: { quit: electron.quit },
@@ -17,11 +20,12 @@ vi.mock('electron', () => ({
 }))
 vi.mock('./quit-and-stop-all-sessions-prompt', () => ({
   confirmQuitAndStopAllSessions: prompt.confirm,
-  explainNewerOrcaTerminalsBlockStopAll: prompt.explain
+  explainStopAllSessionsUnavailable: prompt.explain
 }))
 vi.mock('../daemon/daemon-newer-protocol-hold', () => ({
-  isHoldingForNewerProtocolDaemon: daemonHold.holdingNewer
+  isHoldingForNewerProtocolDaemon: daemon.holdingNewer
 }))
+vi.mock('../daemon/daemon-provider-state', () => ({ getDaemonProvider: daemon.provider }))
 vi.mock('../updater', () => ({ checkForUpdatesFromMenu: vi.fn(), isQuittingForUpdate: vi.fn() }))
 vi.mock('../tray/system-tray', () => ({
   createSystemTray: vi.fn(),
@@ -73,7 +77,8 @@ beforeEach(() => {
   electron.showMessageBox.mockReset()
   prompt.confirm.mockReset()
   prompt.explain.mockReset().mockResolvedValue(false)
-  daemonHold.holdingNewer.mockReset().mockReturnValue(false)
+  daemon.holdingNewer.mockReset().mockReturnValue(false)
+  daemon.provider.mockReset().mockReturnValue({})
   vi.mocked(safelyRevealWindow).mockReset()
   state.isQuitting = false
   state.isServeMode = false
@@ -182,8 +187,14 @@ describe('quitAndStopAllSessionsFromUserCommand', () => {
     expect(prompt.confirm).toHaveBeenCalledTimes(2)
   })
 
-  it('explains instead of asking, and stops nothing, while a newer version runs some terminals', async () => {
-    daemonHold.holdingNewer.mockReturnValue(true)
+  it.each([
+    [
+      'the terminal daemon is still starting or failed to start',
+      () => daemon.provider.mockReturnValue(null)
+    ],
+    ["a newer version's daemon is held", () => daemon.holdingNewer.mockReturnValue(true)]
+  ])('explains instead of asking, and stops nothing, while %s', async (_name, arrange) => {
+    arrange()
 
     quitAndStopAllSessionsFromUserCommand()
     await flushPromptChain()

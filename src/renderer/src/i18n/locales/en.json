@@ -21108,7 +21108,8 @@
     "message": "Stop all terminal sessions and quit Orca?",
     "detail": "Orca closes every terminal tab and stops its session, including agents running in terminals, then quits. Terminal sessions on remote hosts may keep running there. Unsaved terminal work is lost, and the closed tabs don't come back on next launch. This can't be undone.",
     "failed": "Couldn't stop every terminal session, so Orca stayed open.",
-    "newerVersionMessage": "A newer version of Orca is still running some terminals.",
-    "newerVersionDetail": "This version can't stop them, so nothing was stopped. Reopen those terminals here, or quit them from the newer version, then try again."
+    "ok": "OK",
+    "unavailableMessage": "Orca can't stop every terminal session right now.",
+    "unavailableDetail": "Nothing was stopped. Try again once your terminals have opened. If a terminal says it was opened in a newer version of Orca, reopen it first."
   }
 }

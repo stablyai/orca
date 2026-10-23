@@ -20927,7 +20927,8 @@
     "confirm": "Encerrar sessões e sair",
     "cancel": "Cancelar",
     "failed": "Não foi possível encerrar todas as sessões de terminal, então o Orca continuou aberto.",
-    "newerVersionMessage": "Uma versão mais recente do Orca ainda está executando alguns terminais.",
-    "newerVersionDetail": "Esta versão não consegue encerrá-los, então nada foi encerrado. Reabra esses terminais aqui ou encerre-os na versão mais recente e tente novamente."
+    "ok": "OK",
+    "unavailableMessage": "O Orca não consegue encerrar todas as sessões de terminal agora.",
+    "unavailableDetail": "Nada foi encerrado. Tente novamente depois que seus terminais abrirem. Se um terminal indicar que foi aberto em uma versão mais recente do Orca, reabra-o primeiro."
   }
 }
