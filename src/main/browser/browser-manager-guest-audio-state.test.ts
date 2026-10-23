@@ -77,10 +77,9 @@ describe('browser guest audio state', () => {
           : null
     )
     browserManager.attachGuestPolicies(guest as never)
-    const audioStateHandler = guestOnMock.mock.calls.find(
+    const onAudioStateChanged: (event: { audible: boolean }) => void = guestOnMock.mock.calls.find(
       ([event]) => event === 'audio-state-changed'
     )?.[1]
-    const onAudioStateChanged = (event: { audible: boolean }): void => audioStateHandler(event)
 
     browserManager.registerGuest({
       browserPageId: 'page-1',

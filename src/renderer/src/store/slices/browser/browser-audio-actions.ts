@@ -1,5 +1,6 @@
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
 import { findPage } from '../browser-page-records'
+import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 
 export function createBrowserAudioActions(
   set: BrowserSliceSet,
@@ -12,9 +13,7 @@ export function createBrowserAudioActions(
           return s
         }
         if (!audible) {
-          const next = { ...s.browserAudiblePageIds }
-          delete next[pageId]
-          return { browserAudiblePageIds: next }
+          return { browserAudiblePageIds: omitRecordKeys(s.browserAudiblePageIds, [pageId]) }
         }
         if (!findPage(s.browserPagesByWorkspace, pageId)) {
           return s
@@ -28,13 +27,11 @@ export function createBrowserAudioActions(
         if (muted === Boolean(s.browserAudioMutedTabIds[tabId])) {
           return s
         }
-        const next = { ...s.browserAudioMutedTabIds }
-        if (muted) {
-          next[tabId] = true
-        } else {
-          delete next[tabId]
+        return {
+          browserAudioMutedTabIds: muted
+            ? { ...s.browserAudioMutedTabIds, [tabId]: true }
+            : omitRecordKeys(s.browserAudioMutedTabIds, [tabId])
         }
-        return { browserAudioMutedTabIds: next }
       })
       for (const page of get().browserPagesByWorkspace[tabId] ?? []) {
         void window.api.browser.setPageAudioMuted({ browserPageId: page.id, muted })
