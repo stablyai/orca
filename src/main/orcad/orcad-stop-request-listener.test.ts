@@ -1,8 +1,9 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCAD_STOP_REQUEST_FILENAME } from '../../shared/orcad-stop-request'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { orcadManagedStopRequestPath } from './orcad-managed-stop-request'
 import {
@@ -12,13 +13,13 @@ import {
 
 const roots: string[] = []
 const listeners: OrcadStopRequestListener[] = []
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
   for (const listener of listeners.splice(0)) {
     listener.close()
   }
   for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
+    await removeTree(root)
   }
 })
 
