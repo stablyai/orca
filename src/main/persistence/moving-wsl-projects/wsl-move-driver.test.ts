@@ -317,6 +317,23 @@ describe('moveProjectsToWslHost', () => {
     expect([...world.catalog.values()]).toEqual([])
   })
 
+  it('tells a window that only follows progress how a run ended without committing', async () => {
+    world.deps.connectHost = async () => {
+      throw new Error('ECONNREFUSED')
+    }
+    const result = await moveProjectsToWslHost(world.deps, request)
+    // A host that will not connect is a refusal the user can act on, not "could not check".
+    expect(result).toEqual({
+      outcome: 'refused',
+      code: 'wsl_move_host_unavailable',
+      detail: 'connect_failed'
+    })
+    expect(world.progress.at(-1)).toEqual({ distro: 'Ubuntu', step: 'preparing', result })
+    await expect(previewWslMove(world.deps, request)).resolves.toMatchObject({
+      code: 'wsl_move_host_unavailable'
+    })
+  })
+
   it('is unreachable with the internal WSL hosts gate closed', async () => {
     vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '')
     const connectHost = vi.spyOn(world.deps, 'connectHost')

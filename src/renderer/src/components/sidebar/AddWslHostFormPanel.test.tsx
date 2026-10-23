@@ -43,6 +43,13 @@ describe('AddWslHostFormPanel', () => {
     expect([ubuntu, debian, legacy, added].map(canAddWslDistro)).toEqual([true, true, false, false])
   })
 
+  it('does not promise bridge projects stay put once they can move to the host', () => {
+    // "Use it for new projects; ... keep working as they are" contradicted the mover (D1b-10 run).
+    const html = render()
+    expect(html).not.toContain('Use it for new projects')
+    expect(html).toContain('until you move them to this host')
+  })
+
   it('makes starting a stopped distro an explicit action', () => {
     const html = render({ selectedDistro: 'Debian' })
     expect(html).toContain('Debian is stopped. Adding it starts it.')

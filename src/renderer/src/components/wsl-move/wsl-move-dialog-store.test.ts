@@ -284,6 +284,30 @@ describe('run', () => {
     expect(store.wslMoveDialogLocked(state)).toBe(true)
   })
 
+  it('shows how a followed run ended when it did not commit, instead of its last step', () => {
+    // A refused start left the dialog on "Moving… Preparing" until a reload (D1b-10 run on awin).
+    adoptWslMoveProgress({ distro: 'Ubuntu', step: 'preparing' })
+    adoptWslMoveProgress({
+      distro: 'Ubuntu',
+      step: 'preparing',
+      result: { outcome: 'refused', code: 'wsl_move_host_unavailable' }
+    })
+    const state = dialog()
+    expect(state.stage === 'result' && state.result).toEqual({
+      outcome: 'refused',
+      code: 'wsl_move_host_unavailable'
+    })
+  })
+
+  it('opens nothing for the end of a run it never followed', () => {
+    adoptWslMoveProgress({
+      distro: 'Ubuntu',
+      step: 'preparing',
+      result: { outcome: 'refused', code: 'wsl_move_cancelled' }
+    })
+    expect(dialog().stage).toBe('closed')
+  })
+
   it('leaves its own run to its own listener', async () => {
     await openWslMoveDialog({ distro: 'Ubuntu' })
     api.start.mockReturnValueOnce(deferred<WslMoveResult>().promise)

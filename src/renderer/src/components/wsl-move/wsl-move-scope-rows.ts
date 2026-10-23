@@ -11,6 +11,8 @@ import {
 } from '../../../../shared/runtime-environments'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import { collectLeafIdsInOrder } from '../terminal-pane/terminal-layout-leaf-ids'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -25,6 +27,8 @@ export type WslMoveCatalog = {
   folderWorkspaces: readonly FolderWorkspace[]
   worktreesByRepo: Record<string, readonly Worktree[]>
   unifiedTabsByWorktree: Record<string, readonly Pick<Tab, 'id' | 'entityId' | 'contentType'>[]>
+  /** Panes, not tabs, are what the terminal blockers count; absent: one pane per tab. */
+  terminalLayoutsByTabId?: Record<string, Pick<TerminalLayoutSnapshot, 'root'> | undefined>
 }
 
 export type WslMoveProjectRow = WslMoveRowRef & { name: string }
@@ -119,7 +123,7 @@ export function wslMoveCounts(
       counts.workspaces += 1
       for (const tab of catalog.unifiedTabsByWorktree[key] ?? []) {
         if (tab.contentType === 'terminal') {
-          counts.terminals += 1
+          counts.terminals += terminalPaneCount(catalog, tab)
         } else if (tab.contentType === 'agent-session') {
           counts.chats += 1
         }
@@ -127,6 +131,12 @@ export function wslMoveCounts(
     }
   }
   return counts
+}
+
+function terminalPaneCount(catalog: WslMoveCatalog, tab: Pick<Tab, 'id' | 'entityId'>): number {
+  const layout =
+    catalog.terminalLayoutsByTabId?.[tab.entityId] ?? catalog.terminalLayoutsByTabId?.[tab.id]
+  return Math.max(1, collectLeafIdsInOrder(layout?.root).length)
 }
 
 function projectOfWorkspaceKey(key: string): WslMoveRowRef {

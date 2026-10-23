@@ -142,6 +142,11 @@ export type WslMoveProgressEvent = {
   /** While copying: bytes sent of the total. */
   bytesSent?: number
   bytesTotal?: number
+  /**
+   * The run ended without committing (refused, reset, waiting): how, so a window that only followed
+   * its progress (it reloaded mid-move, or the move started elsewhere) can show the result too.
+   */
+  result?: WslMoveResult
 }
 
 /** A committed move whose host steps are not all confirmed yet, for the sidebar/settings notice. */

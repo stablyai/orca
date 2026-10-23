@@ -6714,7 +6714,7 @@
           "running": "En cours",
           "stopped": "Arrêtée",
           "title": "Ajouter une distro WSL",
-          "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Utilisez-la pour les nouveaux projets ; les projets que vous avez ouverts via \\\\wsl.localhost continuent de fonctionner tels quels.",
+          "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets que vous avez ouverts via \\\\wsl.localhost continuent de fonctionner tels quels jusqu'à ce que vous les déplaciez vers cet hôte.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",

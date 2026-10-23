@@ -6606,7 +6606,7 @@
           "running": "실행 중",
           "stopped": "중지됨",
           "title": "WSL 배포판 추가",
-          "description": "Orca는 배포판 안에서 서버를 실행하므로 git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. 새 프로젝트에 사용하세요. \\\\wsl.localhost를 통해 연 프로젝트는 그대로 계속 작동합니다.",
+          "description": "Orca는 배포판 안에서 서버를 실행하므로 git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. \\\\wsl.localhost를 통해 연 프로젝트는 이 호스트로 옮기기 전까지 그대로 계속 작동합니다.",
           "distro": "배포판",
           "loading": "WSL 배포판 찾는 중…",
           "placeholder": "배포판 선택",

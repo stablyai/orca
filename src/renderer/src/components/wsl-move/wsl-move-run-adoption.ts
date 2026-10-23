@@ -18,6 +18,18 @@ export function adoptWslMoveProgress(progress: WslMoveProgressEvent): void {
     if (!dialog.adopted || dialog.distro !== progress.distro) {
       return
     }
+    if (progress.result) {
+      // It ended without committing; without this the dialog sat on its last step for good.
+      setWslMoveDialog({
+        stage: 'result',
+        distro: dialog.distro,
+        selected: [],
+        result: progress.result,
+        reload: 'idle'
+      })
+      void refreshWslMoveUnfinished()
+      return
+    }
     if (progress.step === 'done' && progress.migrationId) {
       setWslMoveDialog({
         stage: 'result',
@@ -37,7 +49,12 @@ export function adoptWslMoveProgress(progress: WslMoveProgressEvent): void {
     setWslMoveDialog({ ...dialog, progress })
     return
   }
-  if (wslMoveDialogLocked(dialog) || dialog.stage === 'result' || progress.step === 'done') {
+  if (
+    wslMoveDialogLocked(dialog) ||
+    dialog.stage === 'result' ||
+    progress.step === 'done' ||
+    progress.result
+  ) {
     return
   }
   setWslMoveDialog({
