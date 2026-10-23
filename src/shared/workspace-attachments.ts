@@ -188,7 +188,12 @@ export function normalizeWorkspaceAttachmentUpdate(
     linkedWorkItem: existing?.linkedWorkItem,
     linkedTaskSourceContext: existing?.linkedTaskSourceContext
   })[0]
+  const selectionCleared = reviewSlots.every(([slot]) => requested[slot] === null)
   for (const fields of WORKSPACE_ATTACHMENT_LEGACY_FIELDS) {
+    // Clearing the active review must not delete the workspace's review history.
+    if (selectionCleared && reviewSlots.some(([slot]) => slot === fields[0])) {
+      continue
+    }
     if (updates[fields[0]] === null) {
       items = removeSelectedWorkspaceAttachments(
         items,

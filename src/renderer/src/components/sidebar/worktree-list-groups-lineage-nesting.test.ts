@@ -222,7 +222,11 @@ describe('buildRows workspace lineage nesting', () => {
       [secondChildId, 1],
       [childId, 1]
     ])
-    expect(items[0]).toMatchObject({ lineageChildCount: 2, lineageCollapsed: false })
+    expect(items[0]).toMatchObject({
+      lineageChildCount: 2,
+      lineageChildWorktreeIds: [secondChildId, childId],
+      lineageCollapsed: false
+    })
   })
 
   it('rejects stale resolved lineage after a parent instance is replaced', () => {
@@ -471,6 +475,7 @@ describe('buildRows workspace lineage nesting', () => {
       type: 'item',
       worktree: { id: parent.id },
       lineageChildCount: 1,
+      lineageChildWorktreeIds: [child.id],
       lineageCollapsed: true
     })
   })

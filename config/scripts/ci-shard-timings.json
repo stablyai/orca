@@ -8766,7 +8766,7 @@
       "src/renderer/src/components/task-page-localized-options.test.ts": 188,
       "src/renderer/src/components/task-page-mutation-page-allocation.test.ts": 95,
       "src/renderer/src/components/task-page-new-issue-draft.test.ts": 53,
-      "src/renderer/src/components/task-page-pagination-page-numbers.test.ts": 39,
+      "src/renderer/src/components/task-page/task-page-pagination-page-numbers.test.ts": 39,
       "src/renderer/src/components/task-page-pr-check-summary.test.ts": 40,
       "src/renderer/src/components/task-page-repo-source-context.test.ts": 1360,
       "src/renderer/src/components/task-page-repo-source-divergence.test.ts": 1310,

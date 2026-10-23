@@ -3,7 +3,9 @@ import { admitSelfInitiatedTreeKill } from '../../own-chromium-tree-kill-guard'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 
-export function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
+export function killSpawnedCommandTree(
+  child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
+): Promise<void> {
   const pid = child.pid
   if (!pid || process.platform !== 'win32') {
     child.kill()

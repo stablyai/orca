@@ -69,6 +69,7 @@ desktop.ini
 .oxlintcache
 /.cache/vite/
 /.cache/vite.lock/
+/.cache/typecheck/
 
 # Logs
 *.log

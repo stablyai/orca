@@ -84,7 +84,8 @@ export type ClaudeLateDispatchOutcome =
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
     }
-  | ({ clientMessageId: string; state: 'rejected' } & AgentJournalDispatchRejection)
+  /** `unrun`: the CLI reported it removed the send without running it. */
+  | ({ clientMessageId: string; state: 'rejected'; unrun?: true } & AgentJournalDispatchRejection)
   /** The CLI took the send and let it go unanswered: it may have run, so it is never re-sent. */
   | { clientMessageId: string; state: 'unknown'; reason: string }
 

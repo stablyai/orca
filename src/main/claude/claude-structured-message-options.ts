@@ -11,7 +11,11 @@ import {
 import { listedModels } from './claude-structured-model-catalog'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import {
+  isAbortSignalReason,
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../shared/abort-signal-reason'
 
 const defaultLogger = createStructuredAgentSessionLogger()
 
@@ -110,7 +114,8 @@ export async function dispatchClaudeMessage(
           error
         }
       )
-      throw error instanceof AgentSessionOptionRejectedError
+      throw error instanceof AgentSessionOptionRejectedError ||
+        isAbortSignalReason(input.signal, error)
         ? error
         : new AgentSessionOptionRejectedError(error)
     }

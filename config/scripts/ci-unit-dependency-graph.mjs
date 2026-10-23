@@ -4,17 +4,11 @@ import ts from 'typescript-api'
 import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
 import { hasIndirectUnitInputs } from './ci-unit-indirect-inputs.mjs'
 
-const EXTENSIONS = [
+const SOURCE_EXTENSIONS = ['ts', 'tsx', 'mts', 'cts', 'mjs', 'js', 'jsx', 'cjs', 'json']
+const RESOLUTION_SUFFIXES = [
   '',
-  '.ts',
-  '.tsx',
-  '.mjs',
-  '.js',
-  '.cjs',
-  '.json',
-  '/index.ts',
-  '/index.tsx',
-  '/index.js'
+  ...SOURCE_EXTENSIONS.map((extension) => `.${extension}`),
+  ...SOURCE_EXTENSIONS.map((extension) => `/index.${extension}`)
 ]
 
 function localPath(file, specifier) {
@@ -57,12 +51,22 @@ export function buildUnitDependencyGraph(sources, workspace = { resolve: () => n
       if (path === null) {
         continue
       }
-      let resolved
-      for (const extension of EXTENSIONS) {
-        const candidate = path + extension
+      const candidates = RESOLUTION_SUFFIXES.map((suffix) => path + suffix)
+      if (/\.(?:[mc]?js|jsx)$/.test(path)) {
+        candidates.push(path.replace(/js(x?)$/, 'ts$1'))
+        if (path.endsWith('.js')) {
+          candidates.push(`${path.slice(0, -3)}.tsx`)
+        }
+      }
+      if (sources.has(`${path}/package.json`)) {
+        opaque.add(file)
+      }
+      let resolved = false
+      // Resolution differs across runtimes; retain every plausible source consumer.
+      for (const candidate of candidates) {
         if (sources.has(candidate)) {
-          resolved = candidate
-          break
+          addConsumer(candidate, file)
+          resolved = true
         }
       }
       if (!resolved) {
@@ -72,7 +76,6 @@ export function buildUnitDependencyGraph(sources, workspace = { resolve: () => n
       if (workspaceSource) {
         addConsumer(workspaceSource.manifest, file)
       }
-      addConsumer(resolved, file)
     }
   }
   return { reverse, opaque }
@@ -80,11 +83,9 @@ export function buildUnitDependencyGraph(sources, workspace = { resolve: () => n
 
 export function collectUnitDependencyGraph(root = process.cwd()) {
   const files = globSync(
-    [
-      'src/**/*.{ts,tsx,js,mjs,cjs,json}',
-      'config/**/*.{ts,tsx,js,mjs,cjs,json}',
-      'tests/**/*.{ts,tsx,js,mjs,cjs,json}'
-    ],
+    ['src', 'config', 'tests'].map(
+      (directory) => `${directory}/**/*.{${SOURCE_EXTENSIONS.join(',')}}`
+    ),
     { cwd: root, exclude: ['**/node_modules/**', '**/dist/**'] }
   )
   const sources = new Map(

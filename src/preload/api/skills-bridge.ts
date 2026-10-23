@@ -85,7 +85,6 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:previewBundleInstall', input),
   removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
     ipcRenderer.invoke('skills:removeInstall', input),
-  // Desktop always registers the delete IPC handlers in its own main process.
   deleteSupported: (): Promise<boolean> => Promise.resolve(true),
   previewDelete: (request: SkillDeleteRequest): Promise<SkillDeletePlan> =>
     ipcRenderer.invoke('skills:previewDelete', request),

@@ -1,0 +1,80 @@
+{
+  "batch": "config-0002",
+  "reviewer": "audit_config",
+  "platform": "Linux",
+  "source_commit": "6d473f4bea1d190cb3649af97e04f1cdde170c5f",
+  "reviewed_files": 50,
+  "original_declarations": 375,
+  "changed_test_files": [
+    "config/scripts/check-node-runtime-pin.test.mjs",
+    "config/scripts/check-runtime-launcher-protocol-ratchet.test.mjs",
+    "config/scripts/ci-background-steps.test.mjs",
+    "config/scripts/ci-closed-pr-cancellation.test.mjs",
+    "config/scripts/ci-dependency-download-cache.test.mjs",
+    "config/scripts/ci-e2e-job-selection.test.mjs",
+    "config/scripts/ci-native-cache.test.mjs",
+    "config/scripts/ci-unit-selection-review.test.mjs",
+    "config/scripts/compact-packaged-orcad-ripgrep.test.mjs"
+  ],
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/run-vitest.mjs run --config config/vitest.config.ts <all 50 files listed in config-0002.jsonl>",
+      "result": "50 suites passed; 828 tests passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-config-0002-final.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node config/scripts/run-vitest.mjs run --config config/vitest.config.ts config/scripts/ci-native-cache.test.mjs",
+      "result": "14 tests passed after repairing nested Bash fixture isolation",
+      "exit_code": 0,
+      "log": "/tmp/orca-config-0002-native-repair.log"
+    },
+    {
+      "command": "pnpm exec oxlint <9 changed config-0002 test files>",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "pnpm exec oxfmt --check <9 changed config-0002 test files>",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check -- config/scripts docs/audits/test-value/reviews/config-0002.jsonl",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "command": "Verify every original source_commit hash and every final reviewed_sha256 against Git/file bytes",
+      "result": "50 original hashes and 50 final hashes match; 375 original declarations have individual decisions",
+      "exit_code": 0
+    }
+  ],
+  "initial_validation": {
+    "result": "49 suites passed; 824 tests passed; 4 existing native setup fixture failures",
+    "log": "/tmp/orca-config-0002-tests.log",
+    "cause": "The E2E workflow now invokes prepare-ubuntu-apt.sh in nested Bash, bypassing the unexported sudo function and attempting actual sudo. Permission was denied. The fixture now copies the real helper into a temporary checkout and exports its sudo stub into child Bash."
+  },
+  "coverage_preserved": [
+    "headless Electron import graph and public workspace package isolation",
+    "root-path bytes and workflow annotation injection boundaries",
+    "runtime/protocol mixed-version guard",
+    "root/mobile lockfile compatibility",
+    "malformed and incomplete external lint/cache/selection receipts fail closed",
+    "real native Playwright discovery and managed SSH command selection",
+    "native ABI/cache identities and main-only write boundaries",
+    "real shallow Git security scan history"
+  ],
+  "changes": [
+    "Remove duplicate current runtime asset/header assertions already enforced by main()",
+    "Replace copied cancellation target inventory with existing workflow-derived coverage",
+    "Remove copied cache condition expressions covered by evaluated policy matrices",
+    "Repair vacuous launcher/discovery/selection assertions",
+    "Check final compacted storage instead of an arbitrary target count",
+    "Isolate and propagate native setup process stubs into nested Bash"
+  ],
+  "production_changes": "none",
+  "temporary_production_mutations": "none; existing behavioral fixtures exercise the retained failure contracts",
+  "next_pending_path": "config/scripts/computer-use-smoke.test.mjs",
+  "log_note": "Session log paths are pointers; commands, results and fixture regression are recorded here for durable review."
+}

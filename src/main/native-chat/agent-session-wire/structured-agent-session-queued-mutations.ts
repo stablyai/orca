@@ -1,12 +1,11 @@
 // `agentSession.queuedMessageSend` / `agentSession.queuedMessageDelete` / Resume: mutations of
-// the conversation's queued drafts. Each action's command receipt commits with the row it
-// changes, so a lost acknowledgement replays from that receipt and the rows it points at, never
+// the conversation's queued cards. Each action's command receipt commits with the journal row it
+// writes, so a lost acknowledgement replays from that receipt and the row it points at, never
 // from the operation ledger. No mutation returns draft text:
 // the published list is the one authority a client renders.
 
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
@@ -14,21 +13,15 @@ import type {
   AgentSessionQueuedMessagesResumeResult,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
-import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import {
   journalRowReceiptResult,
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
-import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { CommandReceiptResult } from '../agent-session-journal/command-receipt-schema'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
-import {
-  resumeStructuredQueue,
-  structuredAgentSessionHostInstance
-} from './structured-agent-session-queued-pause'
+import { resumeStructuredQueue } from './structured-agent-session-queued-pause'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
@@ -63,28 +56,6 @@ function submissionRowReceipt(
     throw new Error('an acknowledged hand-off requires its submission row')
   }
   return { kind: 'journal-row', epoch: ctx.journal.epoch, sequence: submission.submittedSequence }
-}
-
-/** One transaction, stamped with the operation's caller-scoped key so a replay
- *  answers "spent" from the receipts. Withdrawal retires any hold in the same
- *  UPDATE, and the store's commit notification publishes the change. */
-export async function withdrawQueuedMessagesForOperation(
-  journal: AgentSessionJournal,
-  input: {
-    sessionId: string
-    messageIds: readonly string[]
-    callerKey: string
-    operationId: string
-  },
-  receipt?: JournalOperationReceipt
-): Promise<QueuedMessageRow[]> {
-  return journal.queuedMessages.withdraw(
-    {
-      messageIds: input.messageIds,
-      settledByOp: agentSessionOperationKey(input.callerKey, input.operationId)
-    },
-    receipt
-  )
 }
 
 /** Draft actions run like any mutation: admitted on the session's lane, the
@@ -172,12 +143,7 @@ export function sendQueuedStructuredAgentMessage(
             fence: ctx.fence,
             handoverRecorded: true
           },
-          {
-            messageId,
-            expect: row.state,
-            settledByOp: agentSessionOperationKey(ctx.resolvedBy, operationId),
-            hostInstance: structuredAgentSessionHostInstance()
-          },
+          { messageId, expect: row.state },
           ctx.operationReceipt
         )
       } catch (error) {
@@ -215,7 +181,6 @@ export function deleteQueuedStructuredAgentMessage(
   params: { envelope: AgentSessionMutationEnvelope; messageId: string }
 ): Promise<AgentSessionMutationResult<AgentSessionQueuedMessageDeleteResult>> {
   const { messageId } = params
-  const operationId = params.envelope.clientOperationId
   const plan: MutationPlan<AgentSessionQueuedMessageDeleteResult> = {
     method: 'agentSession.queuedMessageDelete',
     fields: { messageId },
@@ -242,19 +207,9 @@ export function deleteQueuedStructuredAgentMessage(
       if (row.state === 'withdrawn') {
         return { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }
       }
-      // The withdrawal notifies through the journal's commit listener, which
-      // also re-derives the drain — deleting a returned card can unblock the
-      // drafts behind it.
-      const withdrawn = await withdrawQueuedMessagesForOperation(
-        ctx.journal,
-        {
-          sessionId: ctx.sessionId,
-          messageIds: [messageId],
-          callerKey: ctx.resolvedBy,
-          operationId
-        },
-        ctx.operationReceipt
-      )
+      // The withdrawal's row notifies through the journal's commit listener, which also
+      // re-derives the drain — deleting a returned card can unblock the cards behind it.
+      const withdrawn = await ctx.journal.queuedMessages.withdraw([messageId], ctx.operationReceipt)
       return withdrawn.length > 0
         ? { ok: true, value: { deleted: true, messageId } }
         : { ok: true, value: { deleted: false, messageId, disposition: 'withdrawn' } }

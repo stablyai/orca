@@ -30,6 +30,7 @@ export async function removeWorktree(
   // forceBranchDelete: for failed-creation rollback (fresh branch, no user work); user deletes leave it false so unmerged commits survive.
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
+  options = removalWorkerOptions(options)
   try {
     // Removal deletes branches, and a ref deletion needs the packed-refs lock a
     // running idle pack holds while it rewrites. Waits that window out; the
@@ -100,10 +101,10 @@ function deleteBranchOfRemovedWorktree(
   branchHead: string,
   options: RemoveWorktreeOptions
 ): Promise<RemoveWorktreeResult> {
-  // Why its own span: branch cleanup can reach the network (`fetch --prune`), so a stall here reads as
+  // Why its own span: branch cleanup can reach the network, so a stall here reads as
   // `git worktree remove` being slow unless it is timed separately.
   // Why serialized per repo: concurrent removals in one repo race `packed-refs.lock` and the
-  // remote-tracking ref locks of `fetch --prune` (#2259); the checkout deletes above need not wait.
+  // remote-tracking ref locks of `fetch` (#2259); the checkout deletes above need not wait.
   return runKeyedSerializedOperation(branchCleanupQueueByRepo, repoPath, () =>
     withSpan('worktree.remove.branch_delete', () =>
       deleteBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options)
@@ -123,6 +124,7 @@ export async function finishUnregisteredWorktreeRemoval(
   assertCheckoutGone: () => Promise<void>,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
+  options = removalWorkerOptions(options)
   await assertCheckoutGone()
   await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options)).catch(
     (error: unknown) => console.warn(`[git] worktree prune failed in ${repoPath}`, error)
@@ -140,6 +142,7 @@ export async function deleteBranchOfUnregisteredWorktree(
   branch: { name: string; head: string } | null,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
+  options = removalWorkerOptions(options)
   try {
     if (!branch?.name || !(await localBranchExists(repoPath, branch.name, options))) {
       return {}
@@ -151,6 +154,11 @@ export async function deleteBranchOfUnregisteredWorktree(
     invalidateSparseCheckoutState(repoPath, worktreePath)
     bumpWorktreeScanGeneration(repoPath)
   }
+}
+
+function removalWorkerOptions(options: RemoveWorktreeOptions): RemoveWorktreeOptions {
+  // uv_spawn can block even for async Git; keep native process creation off Electron's UI loop.
+  return process.platform === 'darwin' ? { ...options, spawnOnWorkerThread: true } : options
 }
 
 async function localBranchExists(

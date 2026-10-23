@@ -12,6 +12,7 @@ import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
+import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
@@ -187,6 +188,10 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
+  }
+  if (error instanceof TerminalSplitOutcomeError) {
+    // Keeps the code callers already match; the split's id rides in `data` for scripts.
+    return errorResponse(id, meta, 'runtime_error', message, error.data)
   }
   if (
     error instanceof Error &&

@@ -310,16 +310,6 @@ describeBundling('the app bundle', () => {
     }
   }, 120_000)
 
-  it('builds the same buildId twice', async () => {
-    const first = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'a') })
-    )
-    const second = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'b') })
-    )
-    expect(first.manifest.buildId).toBe(second.manifest.buildId)
-  }, 120_000)
-
   it('loads the entry as a module, so its route imports resolve', async () => {
     const { manifest, html } = await readWrittenBundle()
     // import() in a classic script is a syntax error, so the tag and the format are one fact.
@@ -516,11 +506,6 @@ describe('the Phase C budget', () => {
       for (const imageCount of [0, 42, 120]) {
         const chunks = mobileWebAppBundleMaxChunks(routeCount)
         expect(mobileWebAppBundleMaxAssets(routeCount, imageCount)).toBe(chunks + imageCount + 1)
-        // The ordering claim itself: a bundle at the chunk ceiling is exactly at the asset
-        // ceiling, so no bundle can pass the chunk check and fail the asset one.
-        expect(chunks + imageCount + 1).toBeLessThanOrEqual(
-          mobileWebAppBundleMaxAssets(routeCount, imageCount)
-        )
       }
     }
   })

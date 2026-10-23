@@ -64,9 +64,19 @@ export function projectJournalBatch(input: {
       )
       continue
     }
-    if (row.kind === 'submission' || row.kind === 'dispatch') {
-      touchedClientMessageIds.add(row.clientMessageId)
-      touchedItemIds.add(agentJournalSubmissionKey(row.clientMessageId))
+    // A card's row naming its hand-off can change how that send reads (`foldQueuedHandOffInDoubt`).
+    const attempt =
+      row.kind === 'queue' && row.change.op === 'queued' ? row.change.attempt : undefined
+    const clientMessageId =
+      row.kind === 'submission' || row.kind === 'dispatch'
+        ? row.clientMessageId
+        : attempt === undefined
+          ? undefined
+          : input.snapshot.submissions.find((submission) => submission.clientMessageId === attempt)
+              ?.clientMessageId
+    if (clientMessageId !== undefined) {
+      touchedClientMessageIds.add(clientMessageId)
+      touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
     }
   }
 

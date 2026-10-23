@@ -1,0 +1,425 @@
+{
+  "batch": "mobile-0003",
+  "reviewer": "audit_mobile",
+  "source_commit": "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b",
+  "validation_worktree": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-3",
+  "scope": {
+    "files_reviewed": 50,
+    "original_declarations_reviewed": 315,
+    "case_decisions": {
+      "keep": 279,
+      "remove": 17,
+      "fix": 11,
+      "consolidate": 8
+    },
+    "first_path": "mobile/src/components/keyed-bottom-drawer.test.tsx",
+    "last_path": "mobile/src/components/use-html-preview-link-grant.web.test.tsx",
+    "next_path": "mobile/src/components/use-new-workspace-execution-target.test.tsx"
+  },
+  "changes": {
+    "modified_test_files": [
+      "mobile/src/components/mobile-diff-review-send-sheet-stacking.test.ts",
+      "mobile/src/components/mobile-markdown-preview-placeholder.test.ts",
+      "mobile/src/components/mobile-webview-editor-web-fallbacks.test.tsx",
+      "mobile/src/components/new-workspace-reply-schema.test.ts",
+      "mobile/src/components/new-worktree-form-sheet-visibility.test.ts",
+      "mobile/src/components/pr-sidebar/markdown-blocks.test.ts",
+      "mobile/src/components/pr-sidebar/pr-checks-presentation.test.ts",
+      "mobile/src/components/pr-sidebar/pr-conflict-presentation.test.ts",
+      "mobile/src/components/pr-state-token.test.ts",
+      "mobile/src/components/rich-markdown/document-lifecycle.test.ts",
+      "mobile/src/components/rich-markdown/editor-content.test.ts",
+      "mobile/src/components/rich-markdown/markdown-round-trip.test.ts",
+      "mobile/src/components/rich-markdown/page-stylesheet.test.ts",
+      "mobile/src/components/rich-markdown/rich-markdown-document-parse-time.test.ts",
+      "mobile/src/components/rich-markdown/rich-markdown-host-seams.test.ts",
+      "mobile/src/components/rich-markdown/rich-markdown-web-document-mount.test.ts",
+      "mobile/src/components/right-drawer-hardware-back.test.tsx",
+      "mobile/src/components/use-html-preview-link-grant.web.test.tsx"
+    ],
+    "removed_test_files": [
+      "mobile/src/components/mobile-agent-icon-assets.test.ts",
+      "mobile/src/components/mobile-agent-icon-gradient.test.ts"
+    ],
+    "added_test_lines": 140,
+    "deleted_test_lines": 425,
+    "net_test_lines": -285,
+    "supporting_test_config_changes": [
+      {
+        "path": "mobile/tests-typecheck-baseline.txt",
+        "change": "Remove only the stale src/components/mobile-agent-icon-gradient.test.ts grandfather entry after deleting its test file; authorized by the coordinating agent.",
+        "sha256": "b77d1c5a6409b09345aa82135382ae9b1b0c96c12591eba337781f08f65c9e0b",
+        "reviewed_sha256": "97153d7ba88d3607bb02f82684440ced08befe42d85e8295e306e1c1100f1120"
+      }
+    ],
+    "total_added_lines": 140,
+    "total_deleted_lines": 426,
+    "total_net_lines": -286,
+    "production_files_modified": []
+  },
+  "baseline": {
+    "result": "not-run",
+    "note": "No pre-edit baseline test run was performed for batch 0003. Saved original sources and hashes were preserved before editing. All 50 originals were checked byte-for-byte against the new checkout source commit; no upstream differences required reconciliation. Passing post-edit results are not represented as a baseline."
+  },
+  "checks": [
+    {
+      "id": "initial-targeted-repairs",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "test",
+        "src/components/mobile-webview-editor-web-fallbacks.test.tsx",
+        "src/components/mobile-diff-review-send-sheet-stacking.test.ts",
+        "src/components/pr-sidebar/pr-checks-presentation.test.ts",
+        "src/components/pr-sidebar/markdown-blocks.test.ts",
+        "src/components/rich-markdown/markdown-round-trip.test.ts",
+        "src/components/right-drawer-hardware-back.test.tsx"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-initial-validation.log",
+      "test_files": 6,
+      "tests": 61
+    },
+    {
+      "id": "retained-batch-final",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "test",
+        "src/components/keyed-bottom-drawer.test.tsx",
+        "src/components/markdown-file-path-detection.test.ts",
+        "src/components/markdown-href-routing.test.ts",
+        "src/components/markdown-inline-matcher.test.ts",
+        "src/components/mobile-diff-review-send-sheet-stacking.test.ts",
+        "src/components/mobile-markdown-android-selection.test.tsx",
+        "src/components/mobile-markdown-mermaid-routing.test.ts",
+        "src/components/mobile-markdown-preview-placeholder.test.ts",
+        "src/components/mobile-markdown-selectable.test.tsx",
+        "src/components/mobile-markdown-table.test.tsx",
+        "src/components/mobile-markdown-visual-lines.test.ts",
+        "src/components/mobile-pr-sidebar-presentation.test.ts",
+        "src/components/mobile-rich-markdown-editor-keyboard-inset.test.ts",
+        "src/components/mobile-webview-editor-web-fallbacks.test.tsx",
+        "src/components/mounted-bottom-drawer-keyboard-seam.test.tsx",
+        "src/components/mounted-bottom-drawer-page-keyboard.web.test.tsx",
+        "src/components/new-workspace-project-targets.test.ts",
+        "src/components/new-workspace-reply-schema.test.ts",
+        "src/components/new-worktree-agent-selection.test.ts",
+        "src/components/new-worktree-form-sheet-visibility.test.ts",
+        "src/components/pr-sidebar/PRCommentsSection.test.ts",
+        "src/components/pr-sidebar/PRConflictingFilesSection.test.ts",
+        "src/components/pr-sidebar/markdown-blocks.test.ts",
+        "src/components/pr-sidebar/markdown-link-scheme.test.ts",
+        "src/components/pr-sidebar/markdown-table-delimiter-performance.test.ts",
+        "src/components/pr-sidebar/markdown-tag-stripping-performance.test.ts",
+        "src/components/pr-sidebar/pr-actions-state.test.ts",
+        "src/components/pr-sidebar/pr-check-detail-content.test.ts",
+        "src/components/pr-sidebar/pr-checks-presentation.test.ts",
+        "src/components/pr-sidebar/pr-comment-card-web-avatar.test.tsx",
+        "src/components/pr-sidebar/pr-conflict-presentation.test.ts",
+        "src/components/pr-state-token.test.ts",
+        "src/components/rich-markdown/document-host-root.test.ts",
+        "src/components/rich-markdown/document-lifecycle.test.ts",
+        "src/components/rich-markdown/editor-content.test.ts",
+        "src/components/rich-markdown/editor-selection.test.ts",
+        "src/components/rich-markdown/markdown-code-fence-allocation.test.ts",
+        "src/components/rich-markdown/markdown-round-trip.test.ts",
+        "src/components/rich-markdown/page-stylesheet.test.ts",
+        "src/components/rich-markdown/rich-markdown-document-parse-time.test.ts",
+        "src/components/rich-markdown/rich-markdown-host-seams.test.ts",
+        "src/components/rich-markdown/rich-markdown-web-document-mount.test.ts",
+        "src/components/right-drawer-hardware-back.test.tsx",
+        "src/components/right-drawer-panel-width.test.ts",
+        "src/components/terminal-shortcut-settings-custom-keys.test.tsx",
+        "src/components/use-bottom-drawer-follow-up.test.tsx",
+        "src/components/use-connected-host-picker.test.ts",
+        "src/components/use-html-preview-link-grant.web.test.tsx"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-final-validation.log",
+      "test_files": 48,
+      "tests": 310,
+      "note": "After this full batch run, the only test changes were a void act callback block and removal of an unused import; both affected suites passed the final-cleanup run."
+    },
+    {
+      "id": "existing-consolidation-coverage",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "test",
+        "src/components/html-preview-link-affordance.test.tsx",
+        "src/components/MobileRichMarkdownToolbar.test.tsx",
+        "src/components/use-new-worktree-drawer-navigation.test.ts",
+        "src/style-scoping/document-style-scoping.test.ts"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-existing-coverage.log",
+      "test_files": 4,
+      "tests": 12
+    },
+    {
+      "id": "final-cleanup-tests",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "test",
+        "src/components/mobile-webview-editor-web-fallbacks.test.tsx",
+        "src/components/use-html-preview-link-grant.web.test.tsx"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-final-cleanup-tests.log",
+      "test_files": 2,
+      "tests": 9
+    },
+    {
+      "id": "mobile-tests-typecheck",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": ["pnpm", "run", "check:tests-typecheck"],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-typecheck-final.log",
+      "test_files_in_program": 1110,
+      "grandfathered_files": 115,
+      "intentionally_excluded_files": 5
+    },
+    {
+      "id": "changed-test-lint",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "mobile/src/components/mobile-diff-review-send-sheet-stacking.test.ts",
+        "mobile/src/components/mobile-markdown-preview-placeholder.test.ts",
+        "mobile/src/components/mobile-webview-editor-web-fallbacks.test.tsx",
+        "mobile/src/components/new-workspace-reply-schema.test.ts",
+        "mobile/src/components/new-worktree-form-sheet-visibility.test.ts",
+        "mobile/src/components/pr-sidebar/markdown-blocks.test.ts",
+        "mobile/src/components/pr-sidebar/pr-checks-presentation.test.ts",
+        "mobile/src/components/pr-sidebar/pr-conflict-presentation.test.ts",
+        "mobile/src/components/pr-state-token.test.ts",
+        "mobile/src/components/rich-markdown/document-lifecycle.test.ts",
+        "mobile/src/components/rich-markdown/editor-content.test.ts",
+        "mobile/src/components/rich-markdown/markdown-round-trip.test.ts",
+        "mobile/src/components/rich-markdown/page-stylesheet.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-document-parse-time.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-host-seams.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-web-document-mount.test.ts",
+        "mobile/src/components/right-drawer-hardware-back.test.tsx",
+        "mobile/src/components/use-html-preview-link-grant.web.test.tsx"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-lint-final.log"
+    },
+    {
+      "id": "changed-test-format",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "exec",
+        "oxfmt",
+        "--check",
+        "mobile/src/components/mobile-diff-review-send-sheet-stacking.test.ts",
+        "mobile/src/components/mobile-markdown-preview-placeholder.test.ts",
+        "mobile/src/components/mobile-webview-editor-web-fallbacks.test.tsx",
+        "mobile/src/components/new-workspace-reply-schema.test.ts",
+        "mobile/src/components/new-worktree-form-sheet-visibility.test.ts",
+        "mobile/src/components/pr-sidebar/markdown-blocks.test.ts",
+        "mobile/src/components/pr-sidebar/pr-checks-presentation.test.ts",
+        "mobile/src/components/pr-sidebar/pr-conflict-presentation.test.ts",
+        "mobile/src/components/pr-state-token.test.ts",
+        "mobile/src/components/rich-markdown/document-lifecycle.test.ts",
+        "mobile/src/components/rich-markdown/editor-content.test.ts",
+        "mobile/src/components/rich-markdown/markdown-round-trip.test.ts",
+        "mobile/src/components/rich-markdown/page-stylesheet.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-document-parse-time.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-host-seams.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-web-document-mount.test.ts",
+        "mobile/src/components/right-drawer-hardware-back.test.tsx",
+        "mobile/src/components/use-html-preview-link-grant.web.test.tsx",
+        "mobile/tests-typecheck-baseline.txt"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-format-final.log",
+      "note": "oxfmt matched the 18 surviving modified test files; the baseline text file has no supported formatter."
+    },
+    {
+      "id": "changed-code-quality",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "run",
+        "check:code-quality:changed",
+        "--",
+        "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-code-quality-changed-final.log",
+      "note": "Checks the combined worktree diff; all categories reported zero new findings across 22 analyzed files."
+    },
+    {
+      "id": "changed-react-doctor",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "run",
+        "check:react-doctor:changed",
+        "--",
+        "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-react-doctor-changed-final.log",
+      "note": "Checks the combined worktree diff; zero errors."
+    },
+    {
+      "id": "diff-whitespace",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "mobile",
+        "docs/audits/test-value/reviews/mobile-0003.jsonl",
+        "docs/audits/test-value/reviews/mobile-0003-validation.json"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0003-diff-check-final.log"
+    }
+  ],
+  "preliminary_checks_resolved": [
+    {
+      "id": "initial-changed-test-lint",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "mobile/src/components/mobile-diff-review-send-sheet-stacking.test.ts",
+        "mobile/src/components/mobile-markdown-preview-placeholder.test.ts",
+        "mobile/src/components/mobile-webview-editor-web-fallbacks.test.tsx",
+        "mobile/src/components/new-workspace-reply-schema.test.ts",
+        "mobile/src/components/new-worktree-form-sheet-visibility.test.ts",
+        "mobile/src/components/pr-sidebar/markdown-blocks.test.ts",
+        "mobile/src/components/pr-sidebar/pr-checks-presentation.test.ts",
+        "mobile/src/components/pr-sidebar/pr-conflict-presentation.test.ts",
+        "mobile/src/components/pr-state-token.test.ts",
+        "mobile/src/components/rich-markdown/document-lifecycle.test.ts",
+        "mobile/src/components/rich-markdown/editor-content.test.ts",
+        "mobile/src/components/rich-markdown/markdown-round-trip.test.ts",
+        "mobile/src/components/rich-markdown/page-stylesheet.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-document-parse-time.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-host-seams.test.ts",
+        "mobile/src/components/rich-markdown/rich-markdown-web-document-mount.test.ts",
+        "mobile/src/components/right-drawer-hardware-back.test.tsx",
+        "mobile/src/components/use-html-preview-link-grant.web.test.tsx"
+      ],
+      "result": "failed",
+      "log": "/tmp/orca-mobile-0003-lint.log",
+      "issue": "Removing the native constant-return grant case left an unused native hook import.",
+      "resolution": "Removed the import; final targeted oxlint passed."
+    },
+    {
+      "id": "initial-mobile-tests-typecheck",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": ["pnpm", "run", "check:tests-typecheck"],
+      "result": "failed",
+      "log": "/tmp/orca-mobile-0003-typecheck.log",
+      "issues": [
+        "The fallback test act callback returned dispatchEvent boolean instead of void.",
+        "The deleted gradient test remained in the grandfather baseline."
+      ],
+      "resolution": "Used a void callback block and pruned exactly that baseline entry; final ratchet passed."
+    },
+    {
+      "id": "diagnostic-mobile-test-compiler",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "exec",
+        "tsc",
+        "--noEmit",
+        "-p",
+        "tsconfig.test.json",
+        "--pretty",
+        "false"
+      ],
+      "result": "failed",
+      "exit_code": 2,
+      "log": "/tmp/orca-mobile-0003-tsc-errors.log",
+      "note": "Diagnostic run exposed the act callback error plus existing grandfathered diagnostics. The ratchet is the repository gate; final ratchet passed after the callback fix and baseline shrink."
+    }
+  ],
+  "review_evidence": {
+    "source_snapshot": "Every original sha256 matches git show at source_commit. Every original declaration location/title matches the preserved extraction, including table declarations and removed cases.",
+    "final_content": "Every retained file reviewed_sha256 matches final formatted contents; deleted files use null. Unchanged retained files have equal original/final hashes.",
+    "implementation_review": "Read all 50 actual test files and relevant production implementations. Preserved independent parser oracles, hostile-input VM deadlines, actual callback/bridge/DOM behavior, asynchronous stale-answer guards and positive/negative AST ownership controls.",
+    "consolidation_coverage": [
+      "mobile/src/components/html-preview-link-affordance.test.tsx",
+      "mobile/src/components/MobileRichMarkdownToolbar.test.tsx",
+      "mobile/src/components/use-new-worktree-drawer-navigation.test.ts",
+      "mobile/src/style-scoping/document-style-scoping.test.ts"
+    ],
+    "mutation_checks": "None. The repaired discard fixture presents src/a.ts, moves the controller selection to src/b.ts and verifies the real RPC still targets src/a.ts; it directly distinguishes presented target ownership from current selection.",
+    "scope_guard": "Only the owned mobile test files, one stale test-typecheck baseline entry and these two review records changed for this batch. No production changes, commits, branch changes or inventory refresh were performed by this reviewer."
+  },
+  "production_findings": [
+    {
+      "finding": "Dormant editor timer plumbing is speculative: inputTimer initializes to null and is only reset to null; production never schedules a pending edit timer. The removed lifecycle case planted that state itself.",
+      "evidence": [
+        "mobile/src/components/rich-markdown/document-scope.ts",
+        "mobile/src/components/rich-markdown/editor-content.ts",
+        "mobile/src/components/rich-markdown/create-rich-markdown-editor-document.ts"
+      ],
+      "action": "Finding only. Production timer fields, seams and cleanup remain untouched per the coordinating agent scope."
+    }
+  ]
+}

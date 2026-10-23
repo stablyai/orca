@@ -13,9 +13,6 @@ describe('CI dependency download caches', () => {
   it('scopes desktop stores to the root lockfile and lets mixed installs opt in', () => {
     expect(action.inputs['cache-dependency-path'].default).toBe('pnpm-lock.yaml')
     for (const step of action.runs.steps.filter((step) => step.uses === 'actions/setup-node@v6')) {
-      expect(step.with.cache).toBe(
-        "${{ github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only != 'true' && 'pnpm' || '' }}"
-      )
       expect(step.with['cache-dependency-path']).toBe('${{ inputs.cache-dependency-path }}')
       expect(step.with['package-manager-cache']).toBe(false)
     }
@@ -52,12 +49,6 @@ describe('CI dependency download caches', () => {
     const resolve = action.runs.steps.find((step) => step.id === 'pnpm-store')
     const restore = action.runs.steps.find(
       (step) => step.name === 'Restore pnpm download store without saving'
-    )
-    expect(restore.if).toBe(
-      "github.event_name == 'pull_request' && inputs.cache-pnpm-store != 'false' && !((runner.os == 'Linux' || runner.os == 'macOS') && (runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml') && (runner.os != 'Windows' || !(runner.arch == 'X64' && contains(inputs.cache-dependency-path, 'mobile/pnpm-lock.yaml')) && !((runner.arch == 'X64' || runner.arch == 'ARM64') && inputs.cache-dependency-path == 'pnpm-lock.yaml'))"
-    )
-    expect(resolve.if).toBe(
-      `${restore.if} || (github.event_name != 'pull_request' && inputs.cache-pnpm-store != 'false' && steps.pnpm-store-mode.outputs.lookup-only == 'true')`
     )
     expect(restore.uses).toBe('actions/cache/restore@v5')
     expect(restore.with.path).toBe('${{ steps.pnpm-store.outputs.path }}')

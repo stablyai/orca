@@ -274,7 +274,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     body: AgentJournalMessageItem
     /** Immutable choices of this submission; adapters apply them only to this dispatch. */
     executionOptions?: AgentSessionExecutionOptions
-    /** Host-local cancellation while choices are applied before prompt admission. */
+    /** Host-local cancellation while choices are applied before prompt admission. An abort surfaces
+     *  as the signal's own reason, unwrapped and only before the write: the host reads it as unwritten. */
     signal?: AbortSignal
     fence: number
     /** Host clock on the submission row this send came from; the origin the turn

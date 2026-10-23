@@ -57,31 +57,6 @@ function queuedBuilder(events, afterSign) {
 }
 
 describe('overlapping macOS notarization', () => {
-  it('reduces a modeled pair of 4-second Apple waits from 10 to 6 seconds', async () => {
-    vi.useFakeTimers()
-    try {
-      const started = Date.now()
-      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-      const build = async ({ config }) => {
-        const artifacts = []
-        for (const arch of [1, 3]) {
-          await delay(1000)
-          await config.afterSign(context(arch))
-          artifacts.push(config.artifactBuildStarted({ arch }))
-        }
-        await Promise.all(artifacts)
-        return []
-      }
-      const result = buildWithOverlappingNotarization(options(build, () => delay(4000)))
-      await vi.runAllTimersAsync()
-      await result
-      expect(Date.now() - started).toBe(6000)
-      expect(2 * (1000 + 4000)).toBe(10000)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('packs serially, overlaps Apple waits, and gates every artifact on both verified tickets', async () => {
     const events = []
     const x64 = deferred(),

@@ -253,7 +253,8 @@ branch refs/heads/main
     // Exempt from general admission: deletes queue under their own limit instead.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'remove', '/repo-feature'], {
       cwd: '/repo',
-      admissionExempt: true
+      admissionExempt: true,
+      ...(process.platform === 'darwin' ? { spawnOnWorkerThread: true } : {})
     })
     expect(getGitCalls()).not.toContain('git worktree prune')
     expect(getGitCalls()).toContain('git branch -d -- feature/test')

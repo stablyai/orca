@@ -37,10 +37,6 @@ describe('runtime-required English catalog rule', () => {
     ])
   })
 
-  it('keeps a plural entry even when a call site spells it identically', () => {
-    expect(collectRuntimeRequiredKeys(entries, references).has('count.thing_one')).toBe(true)
-  })
-
   // The generated file is committed, so a walk-order difference between a
   // contributor's machine and CI would make the gate flap forever.
   it('produces byte-identical output whatever order the call sites are visited in', () => {

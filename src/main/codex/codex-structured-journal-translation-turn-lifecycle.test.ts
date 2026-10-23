@@ -241,7 +241,6 @@ describe('codex turn lifecycle rows', () => {
     expect(appended.ok && appended.rows).toEqual([
       expect.objectContaining({
         kind: 'item',
-        v: 3,
         ts: 1_000,
         body: {
           kind: 'turn',

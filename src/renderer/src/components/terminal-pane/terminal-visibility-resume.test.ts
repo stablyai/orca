@@ -9,11 +9,8 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn()
 }))
 const presentPaneViewport = vi.fn()
-const presentPaneViewportPreservingSynchronizedOutput = vi.fn()
 vi.mock('@/lib/pane-manager/pane-webgl-renderer', () => ({
-  presentPaneViewport: (pane: unknown) => presentPaneViewport(pane),
-  presentPaneViewportPreservingSynchronizedOutput: (pane: unknown) =>
-    presentPaneViewportPreservingSynchronizedOutput(pane)
+  presentPaneViewport: (pane: unknown) => presentPaneViewport(pane)
 }))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: vi.fn(),
@@ -173,7 +170,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledWith(pane)
     expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
     expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledWith('visibility-resume-dpr')
-    expect(presentPaneViewportPreservingSynchronizedOutput).not.toHaveBeenCalled()
+    expect(presentPaneViewport).not.toHaveBeenCalled()
     expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
   })
 
@@ -189,7 +186,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
 
     resumeTerminalVisibility(resumeArgs(manager, false))
 
-    expect(presentPaneViewportPreservingSynchronizedOutput).toHaveBeenCalledWith(pane)
+    expect(presentPaneViewport).toHaveBeenCalledWith(pane)
     // The expensive registry-wide rebuild is still deferred to the settled frame.
     expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
     expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
