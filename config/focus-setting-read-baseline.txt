@@ -156,7 +156,6 @@
 1 src/renderer/src/components/skills/SkillsPage.tsx
 2 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
 1 src/renderer/src/components/status-bar/CodexSwitcherMenu.tsx
-1 src/renderer/src/components/status-bar/SshStatusSegment.tsx
 1 src/renderer/src/components/status-bar/StatusBarSurface.tsx
 2 src/renderer/src/components/status-bar/provider-account-sync-key.ts
 1 src/renderer/src/components/status-bar/usage-provider-settings-target.ts

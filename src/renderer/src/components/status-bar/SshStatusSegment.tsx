@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { MonitorSmartphone, Server } from 'lucide-react'
+import { AlertCircle, MonitorSmartphone, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
+import { cn } from '@/lib/utils'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -24,7 +25,11 @@ import {
   runtimePairingRepairRoute
 } from '../../../../shared/runtime-environments'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
-import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment-copy'
+import {
+  connectedHostCountLabel,
+  moreSshHostsLabel,
+  remoteHostConnectionSummary
+} from './ssh-status-segment-copy'
 import { SshHostFindPopover } from './SshHostFindPopover'
 import { splitSshStatusMenuRows } from './ssh-status-menu-rows'
 import { SshTargetStatusRow } from './SshTargetStatusRow'
@@ -32,9 +37,7 @@ import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync
 import { connectRuntimeHostAndReloadProjects } from './runtime-environment-explicit-connect'
 import {
   runtimeHostBlockedCopy,
-  runtimeHostConnectionDetail,
-  runtimeHostStatusForOverall,
-  sshStatusForOverall
+  runtimeHostConnectionDetail
 } from './remote-host-connection-status'
 import {
   isConnectedRuntimeHostState,
@@ -72,20 +75,18 @@ export function SshStatusSegment({
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const userManagedEnvironments = runtimeEnvironments.filter(isListedRemoteServer)
   // Why the registry: a managed server and its SSH host are one machine, shown on its active route.
-  const visibleHosts = new Map(
-    pickerExecutionHosts(
-      buildExecutionHostRegistry({
-        repos: [],
-        settings,
-        hostSource: 'configured-only',
-        sshTargetLabels,
-        sshConnectionStates,
-        runtimeEnvironments: userManagedEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides
-      })
-    ).map((host) => [host.id, host])
-  )
+  const registeredHosts = buildExecutionHostRegistry({
+    repos: [],
+    settings,
+    hostSource: 'configured-only',
+    sshTargetLabels,
+    sshConnectionStates,
+    runtimeEnvironments: userManagedEnvironments,
+    runtimeStatusByEnvironmentId,
+    hostLabelOverrides
+  })
+  const registeredHostsById = new Map(registeredHosts.map((host) => [host.id, host]))
+  const visibleHosts = new Map(pickerExecutionHosts(registeredHosts).map((host) => [host.id, host]))
   const targets = Array.from(sshTargetLabels.entries())
     // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
     // as a user-facing SSH host in the status bar.
@@ -98,7 +99,7 @@ export function SshStatusSegment({
         status: state?.status ?? ('disconnected' satisfies SshConnectionStatus)
       }
     })
-  const runtimeHosts = userManagedEnvironments
+  const runtimeHostRows = userManagedEnvironments
     .filter((environment) => visibleHosts.has(toRuntimeExecutionHostId(environment.id)))
     .map((environment) => {
       const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
@@ -117,16 +118,10 @@ export function SshStatusSegment({
               canRepair: blockedReason === 'access-revoked' && repairRoute === 'access-link'
             }
           : null,
-        snapshot: statusEntry?.snapshot,
-        status: statusEntry?.status ?? null,
-        active: settings?.activeRuntimeEnvironmentId === environment.id,
+        state: runtimeHostConnectionStateForEntry(statusEntry),
         remoteControl: statusEntry?.remoteControl ?? statusEntry?.status?.remoteControl ?? null
       }
     })
-  const runtimeHostRows = runtimeHosts.map((host) => ({
-    ...host,
-    state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
-  }))
   // Available remote servers are online even when they are not the active runtime.
   // Keep host health separate from the advanced active-server selection.
   const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
@@ -168,15 +163,17 @@ export function SshStatusSegment({
     [recordFeatureInteraction, readRuntimeHostStatusSnapshots]
   )
 
-  if (targets.length === 0 && runtimeHosts.length === 0) {
+  if (targets.length === 0 && runtimeHostRows.length === 0) {
     return null
   }
 
-  const statuses = [
-    ...targets.map((t) => sshStatusForOverall(t.status)),
-    ...runtimeHostRows.map((host) => runtimeHostStatusForOverall(host.state, host.blockedReason))
-  ]
-  const connectedHostCount = statuses.filter((status) => status === 'connected').length
+  const connectedHostCount =
+    connectedTargets.length + connectedRuntimeHosts.filter((host) => !host.blockedReason).length
+  const blockedHostCount = userManagedEnvironments.filter(
+    (environment) =>
+      registeredHostsById.get(toRuntimeExecutionHostId(environment.id))?.health === 'blocked'
+  ).length
+  const connectionSummary = remoteHostConnectionSummary(connectedHostCount, blockedHostCount)
   const openRepair = (host: { id: string; label: string }): void => {
     // Why close first: the dialog must not open underneath the menu's focus trap.
     setMenuOpen(false)
@@ -203,28 +200,42 @@ export function SshStatusSegment({
             'auto.components.status.bar.SshStatusSegment.fdc57e9970',
             'Remote host connection status'
           )}
+          aria-description={connectionSummary}
         >
           {iconOnly ? (
-            <MonitorSmartphone className="size-3" />
+            <MonitorSmartphone aria-hidden className="size-3" />
           ) : (
-            <>
-              <Server className="size-3" />
-              {!compact && (
-                <span className="inline-grid text-2xs tabular-nums">
-                  {/* Reserve both localized forms so count changes don't resize the bar. */}
-                  <span aria-hidden className="invisible col-start-1 row-start-1">
-                    {connectedHostCountLabel(1)}
-                  </span>
-                  <span aria-hidden className="invisible col-start-1 row-start-1">
-                    {connectedHostCountLabel(Math.max(99, statuses.length))}
-                  </span>
-                  <span className="col-start-1 row-start-1">
-                    {connectedHostCountLabel(connectedHostCount)}
-                  </span>
-                </span>
-              )}
-            </>
+            <Server aria-hidden className="size-3" />
           )}
+          <span className="inline-grid text-2xs tabular-nums">
+            {/* Reserve both localized forms so count changes don't resize the bar. */}
+            <span aria-hidden className="invisible col-start-1 row-start-1">
+              {connectedHostCountLabel(1)}
+            </span>
+            <span aria-hidden className="invisible col-start-1 row-start-1">
+              {connectedHostCountLabel(Math.max(99, targets.length + runtimeHostRows.length))}
+            </span>
+            <span className="col-start-1 row-start-1">
+              {connectedHostCountLabel(connectedHostCount)}
+            </span>
+          </span>
+          <span
+            aria-hidden
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 border-l border-border pl-2 text-destructive',
+              blockedHostCount === 0 && 'invisible'
+            )}
+          >
+            <AlertCircle className="size-3" />
+            {!compact && !iconOnly && (
+              <span className="text-2xs">
+                {translate(
+                  'auto.components.status.bar.SshStatusSegment.needsAttention',
+                  'Needs attention'
+                )}
+              </span>
+            )}
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

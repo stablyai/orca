@@ -2,17 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 import {
   runtimeHostBlockedCopy,
-  runtimeHostConnectionDetail,
-  runtimeHostStatusForOverall
+  runtimeHostConnectionDetail
 } from './remote-host-connection-status'
 
 describe('blocked runtime hosts', () => {
-  it('excludes refused hosts from the connected count', () => {
-    expect(runtimeHostStatusForOverall('disconnected', 'access-revoked')).toBe('blocked')
-    expect(runtimeHostStatusForOverall('connected', 'incompatible')).toBe('blocked')
-    expect(runtimeHostStatusForOverall('disconnected', undefined)).toBe('disconnected')
-  })
-
   it('words each refusal for what the user must do', () => {
     expect(runtimeHostBlockedCopy('access-revoked').label).toBe('Access revoked')
     expect(runtimeHostBlockedCopy('access-revoked').explanation).toMatch(/new pairing link/)

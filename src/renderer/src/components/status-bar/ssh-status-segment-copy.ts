@@ -14,6 +14,20 @@ export function connectedHostCountLabel(count: number): string {
       )
 }
 
+export function remoteHostConnectionSummary(connected: number, blocked: number): string {
+  return blocked > 0
+    ? translate(
+        'auto.components.status.bar.SshStatusSegment.connectionSummaryAttention',
+        'Connected hosts: {{connected}}. Hosts needing attention: {{blocked}}.',
+        { connected, blocked }
+      )
+    : translate(
+        'auto.components.status.bar.SshStatusSegment.connectionSummary',
+        'Connected hosts: {{connected}}.',
+        { connected }
+      )
+}
+
 export function moreSshHostsLabel(count: number): string {
   return count === 1
     ? translate(

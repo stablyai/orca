@@ -5,8 +5,7 @@ import {
   isConnectedRuntimeHostState,
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionState,
-  runtimeHostConnectionStateForEntry,
-  runtimeStatusForOverall
+  runtimeHostConnectionStateForEntry
 } from './runtime-host-connection-state'
 
 function makeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
@@ -32,13 +31,10 @@ describe('runtime host connection state', () => {
   it('counts connected remote servers as connected hosts', () => {
     // Why: "connected" = attached/reachable (active-agnostic), matching Settings.
     // There is no separate "available" state — a reachable host is just Connected.
-    expect(runtimeStatusForOverall('connected')).toBe('connected')
     expect(isConnectedRuntimeHostState('connected')).toBe(true)
   })
 
   it('keeps reconnecting and disconnected remote servers out of the connected count', () => {
-    expect(runtimeStatusForOverall('reconnecting')).toBe('connecting')
-    expect(runtimeStatusForOverall('disconnected')).toBe('disconnected')
     expect(isConnectedRuntimeHostState('reconnecting')).toBe(false)
     expect(isConnectedRuntimeHostState('disconnected')).toBe(false)
   })
@@ -51,14 +47,12 @@ describe('runtime host connection state', () => {
         transportStatus: 'connected'
       })
     ).toBe('runtime-unavailable')
-    expect(runtimeStatusForOverall('runtime-unavailable')).toBe('connected')
     expect(isConnectedRuntimeHostState('runtime-unavailable')).toBe(true)
   })
 
   it('still counts a workspace-window-closed remote server as a connected host', () => {
     // Why: the transport is healthy, so demoting it to disconnected would be a lie
     // in the other direction — only the wording changes (#12350).
-    expect(runtimeStatusForOverall('workspace-window-closed')).toBe('connected')
     expect(isConnectedRuntimeHostState('workspace-window-closed')).toBe(true)
   })
 
@@ -298,7 +292,6 @@ describe('snapshot transport evidence', () => {
       snapshot: snapshotWith('unknown', 'unavailable')
     })
     expect(isDisconnectedRuntimeHostState(state)).toBe(true)
-    expect(runtimeStatusForOverall(state)).toBe('disconnected')
   })
 
   it('still lets a blocked or retired snapshot reach the disconnected verdict', () => {

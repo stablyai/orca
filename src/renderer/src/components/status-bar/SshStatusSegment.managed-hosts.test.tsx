@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { PropsWithChildren } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
@@ -155,15 +155,21 @@ describe('the status menu for a managed SSH host', () => {
     { compact: false, iconOnly: false },
     { compact: true, iconOnly: false },
     { compact: true, iconOnly: true }
-  ])('keeps the summary steady during host retries (%j)', (density) => {
+  ])('keeps retries quiet and exposes blockers alongside the connected count (%j)', (density) => {
     state.runtimeStatusByEnvironmentId.delete('server-windows')
     const { rerender } = render(<SshStatusSegment {...density} />)
     const trigger = screen.getByRole('button', { name: 'Remote host connection status' })
-    const checkingSummary = trigger.innerHTML
-    expect(screen.getByText('Checking')).toBeTruthy()
-    if (!density.compact && !density.iconOnly) {
-      expect(screen.getByText('1 host', { selector: 'span:not([aria-hidden])' })).toBeTruthy()
+    const expectSummary = (blocked: boolean): void => {
+      expect(trigger.getAttribute('aria-description')).toBe(
+        blocked ? 'Connected hosts: 1. Hosts needing attention: 1.' : 'Connected hosts: 1.'
+      )
+      expect(
+        within(trigger).getByText('1 host', { selector: 'span:not([aria-hidden])' })
+      ).toBeTruthy()
+      expect(trigger.querySelector('.animate-spin')).toBeNull()
     }
+    expect(screen.getByText('Checking')).toBeTruthy()
+    expectSummary(false)
 
     const ready = readyStatus()
     state.runtimeStatusByEnvironmentId.set('server-windows', {
@@ -172,25 +178,32 @@ describe('the status menu for a managed SSH host', () => {
     })
     rerender(<SshStatusSegment {...density} />)
     expect(screen.getByText('Reconnecting')).toBeTruthy()
-    expect(trigger.innerHTML).toBe(checkingSummary)
+    expectSummary(false)
 
     state.runtimeStatusByEnvironmentId.set('server-windows', { status: null, checkedAt: 1 })
     rerender(<SshStatusSegment {...density} />)
     expect(screen.getByText('Disconnected')).toBeTruthy()
-    expect(trigger.innerHTML).toBe(checkingSummary)
+    expectSummary(false)
 
-    state.runtimeStatusByEnvironmentId.set('server-windows', blockedStatus('access-revoked'))
-    rerender(<SshStatusSegment {...density} />)
-    expect(screen.getByText('Access revoked')).toBeTruthy()
-    expect(trigger.innerHTML).toBe(checkingSummary)
+    for (const reason of ['access-revoked', 'incompatible'] as const) {
+      const blocked = blockedStatus(reason)
+      state.runtimeStatusByEnvironmentId.set('server-windows', blocked)
+      rerender(<SshStatusSegment {...density} />)
+      expectSummary(true)
+      state.runtimeStatusByEnvironmentId.set('server-windows', {
+        ...blocked,
+        remoteControl: ready.remoteControl
+          ? { ...ready.remoteControl, state: 'reconnecting' }
+          : null
+      })
+      rerender(<SshStatusSegment {...density} />)
+      expectSummary(true)
+    }
 
     state.runtimeStatusByEnvironmentId.set('server-windows', ready)
     rerender(<SshStatusSegment {...density} />)
-    if (!density.compact && !density.iconOnly) {
-      expect(trigger.textContent).toContain('2 hosts')
-    } else {
-      expect(trigger.innerHTML).toBe(checkingSummary)
-    }
+    expect(trigger.getAttribute('aria-description')).toBe('Connected hosts: 2.')
+    expect(trigger.textContent).toContain('2 hosts')
   })
 
   it('shows and counts one row per machine and disconnects the managed server', async () => {
@@ -224,6 +237,30 @@ describe('the status menu for a managed SSH host', () => {
     )
     expect(mocks.disconnectRuntime).not.toHaveBeenCalled()
   })
+
+  it.each(['access-revoked', 'incompatible'] as const)(
+    'counts a %s managed server needing attention while its SSH relay is connected',
+    (reason) => {
+      state.sshConnectionStates.set(
+        'ssh-openclaw',
+        sshState({ kind: 'relay', reason: 'source_changed' })
+      )
+      state.runtimeStatusByEnvironmentId.set(
+        'server-openclaw',
+        blockedStatus(reason, 'server-openclaw')
+      )
+      render(<SshStatusSegment compact={false} iconOnly={false} />)
+      const trigger = screen.getByRole('button', { name: 'Remote host connection status' })
+      expect(trigger.getAttribute('aria-description')).toBe(
+        'Connected hosts: 2. Hosts needing attention: 1.'
+      )
+      expect(within(trigger).getByText('Needs attention').parentElement?.classList).not.toContain(
+        'invisible'
+      )
+      expect(screen.getAllByText('openclaw')).toHaveLength(1)
+      expect(screen.getByText('SSH Host')).toBeTruthy()
+    }
+  )
 
   it('keeps the managed server reconnect action when the pair is disconnected', async () => {
     state.sshConnectionStates.set('ssh-openclaw', { ...sshState(), status: 'disconnected' })
@@ -290,20 +327,32 @@ describe('the status menu for a managed SSH host', () => {
     expect(screen.getByRole('dialog').textContent).toBe('Re-pair win-lowspec (server-windows)')
   })
 
-  it('names an incompatible server as needing an update', () => {
-    state.runtimeStatusByEnvironmentId.set('server-windows', blockedStatus('incompatible'))
+  it('excludes a reachable but incompatible server from the connected count', () => {
+    const ready = readyStatus()
+    state.runtimeStatusByEnvironmentId.set('server-windows', {
+      ...ready,
+      status: ready.status ? { ...ready.status, runtimeProtocolVersion: 0 } : null
+    })
     render(<SshStatusSegment compact={false} iconOnly={false} />)
     expect(screen.getByText('Update required')).toBeTruthy()
     expect(screen.queryByText('Re-pair…')).toBeNull()
+    expect(
+      screen
+        .getByRole('button', { name: 'Remote host connection status' })
+        .getAttribute('aria-description')
+    ).toBe('Connected hosts: 1. Hosts needing attention: 1.')
   })
 })
 
-function blockedStatus(blockedReason: 'access-revoked' | 'incompatible'): RuntimeEnvironmentStatus {
+function blockedStatus(
+  blockedReason: 'access-revoked' | 'incompatible',
+  environmentId = 'server-windows'
+): RuntimeEnvironmentStatus {
   return {
     status: null,
     checkedAt: 1,
     snapshot: {
-      environmentId: 'server-windows',
+      environmentId,
       pairingRevision: 1,
       sequence: 1,
       checkedAt: 1,

@@ -2536,7 +2536,6 @@
             "bc5a3fd41a": "partial",
             "connectedHostCount_one": "{{count}} host",
             "connectedHostCount_other": "{{count}} hosts",
-            "connecting": "Connecting…",
             "d09ec41831": "Remote Hosts",
             "fbb3f9f05e": "conflict",
             "fd9a3c600e": "error",

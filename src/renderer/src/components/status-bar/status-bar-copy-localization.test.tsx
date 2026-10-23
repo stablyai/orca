@@ -17,6 +17,7 @@ import {
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
 import { SshStatusSegment } from './SshStatusSegment'
+import { remoteHostConnectionSummary } from './ssh-status-segment-copy'
 
 type StoreState = {
   sshConnectionStates: Map<string, { status: SshConnectionStatus }>
@@ -151,7 +152,16 @@ describe('status-bar copy under a non-English UI language', () => {
     render(<SshStatusSegment compact={false} iconOnly={false} />)
 
     expect(screen.getByRole('button').getAttribute('aria-label')).toBe('リモートホスト接続状態')
+    expect(screen.getByRole('button').getAttribute('aria-description')).toBe(
+      '接続済みのホスト：2 台。'
+    )
     expect(triggerText()).toContain('2 台のホスト')
+  })
+
+  it('translates the host summary when attention is needed', () => {
+    expect(remoteHostConnectionSummary(2, 1)).toBe(
+      '接続済みのホスト：2 台。対応が必要なホスト：1 台。'
+    )
   })
 
   it('translates the singular host count', () => {

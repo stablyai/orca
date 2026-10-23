@@ -1,5 +1,4 @@
 import { translate } from '@/i18n/i18n'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
@@ -7,29 +6,6 @@ import {
   describeRuntimeCompatBlock,
   type RuntimeCompatVerdict
 } from '../../../../shared/protocol-compat'
-import {
-  runtimeStatusForOverall,
-  type HostStatus,
-  type RuntimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
-import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
-
-/** 'blocked' is a host that refused us (revoked pairing or incompatible versions). */
-export type OverallHostStatus = HostStatus | 'blocked'
-
-export function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
-  if (status === 'connected') {
-    return 'connected'
-  }
-  return isConnectingSshStatus(status) ? 'connecting' : 'disconnected'
-}
-
-export function runtimeHostStatusForOverall(
-  state: RuntimeHostConnectionState,
-  blockedReason: RuntimeHostBlockedReason | undefined
-): OverallHostStatus {
-  return blockedReason ? 'blocked' : runtimeStatusForOverall(state)
-}
 
 export type RuntimeHostBlockedCopy = {
   label: string

@@ -3,7 +3,6 @@ import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-sta
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { isRuntimeWorkspaceWindowClosed } from '../../../shared/runtime-workspace-window-availability'
 
-export type HostStatus = 'connected' | 'disconnected' | 'connecting'
 export type RuntimeHostTransportState = 'connected' | 'checking' | 'disconnected'
 
 // Why: 'workspace-window-closed' is a reachable host that cannot serve graph-backed
@@ -76,22 +75,6 @@ export function runtimeHostConnectionState({
   // host reads "Connected" in one place and "Available" in the other. Active/default is
   // a separate concept (surfaced elsewhere), so it must not change this state.
   return 'connected'
-}
-
-export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
-  switch (state) {
-    // Why: a closed workspace window is a degraded host, not a lost connection —
-    // it must keep counting toward the connected-host total.
-    case 'connected':
-    case 'runtime-unavailable':
-    case 'workspace-window-closed':
-      return 'connected'
-    case 'checking':
-    case 'reconnecting':
-      return 'connecting'
-    case 'disconnected':
-      return 'disconnected'
-  }
 }
 
 export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
