@@ -140,11 +140,11 @@ export function exportRequestOf(
   prepared: Pick<WslMovePrepared, 'plan' | 'host'>,
   migrationId: string,
   startedAt: Date,
-  sleptScrollback?: (tabId: string, leafId: string) => Buffer | null
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): WslMoveManifestExportRequest {
   const { plan, host } = prepared
   return {
-    ...(sleptScrollback ? { sleptScrollback } : {}),
+    ...(daemonHistoryLeaf ? { daemonHistoryLeaf } : {}),
     migrationId,
     now: () => startedAt,
     distro: plan.distro,

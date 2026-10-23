@@ -50,7 +50,7 @@ export type WslMoveManifestExportRequest = {
   repoIds: readonly string[]
   folderWorkspaceIds: readonly string[]
   /** Slept panes' daemon history: their only copy of the scrollback. */
-  sleptScrollback?: (tabId: string, leafId: string) => Buffer | null
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 }
 
 export type WslMoveManifestExport = {
@@ -143,7 +143,7 @@ export function exportWslMoveManifest(
     source,
     catalog,
     request.destinationEnvironmentId,
-    request.sleptScrollback
+    request.daemonHistoryLeaf
   )
   blockers.push(...inspection.blockedSessionItems, ...inspection.leftBehindItems)
   for (const [kind, count] of Object.entries(inspection.blockedCounts)) {

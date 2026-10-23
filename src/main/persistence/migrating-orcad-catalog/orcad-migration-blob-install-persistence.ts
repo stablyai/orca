@@ -147,12 +147,22 @@ function installCommitted(
     worktreeHasLiveShells: options.worktreeHasLiveShells,
     deferredShellHistoryWorktreeIds: runtime.deferredShellHistoryWorktreeIds,
     paneWorktreeId: (paneKey) => findPaneWorktreeId(runtime.state, paneKey),
+    workspacePath: (worktreeId) => findWorkspacePath(runtime.state, worktreeId),
     now: clock(options)
   })
 }
 
 function clock(options: ClockOptions): number {
   return (options.now ?? (() => new Date()))().getTime()
+}
+
+// A git worktree id carries its path; a folder workspace's is on its record.
+function findWorkspacePath(state: PersistedState, worktreeId: string): string | null {
+  const separator = worktreeId.indexOf('::')
+  if (separator > 0) {
+    return worktreeId.slice(separator + 2) || null
+  }
+  return state.folderWorkspaces.find((folder) => folder.id === worktreeId)?.folderPath ?? null
 }
 
 // The commit merged the moved session in with its worktree ids unchanged.

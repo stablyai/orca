@@ -22,8 +22,7 @@ import type { WslMoveDriverDeps, WslMoveHost } from './wsl-move-driver-ports'
 import {
   readSleptScrollback,
   unreadableSleptHistory,
-  sleptScrollbackReader,
-  withSleptSnapshots,
+  daemonHistoryLeafOf,
   type WslMoveSleptScrollback
 } from './wsl-move-slept-scrollback'
 import { reportWslMoveRunEnd } from './wsl-move-driver-run-end'
@@ -202,7 +201,7 @@ async function moveQuiesced(
   let again: ReturnType<WslMoveDriverDeps['exportManifest']>
   try {
     again = deps.exportManifest(
-      exportRequestOf(prepared, migrationId, startedAt, sleptScrollbackReader(slept))
+      exportRequestOf(prepared, migrationId, startedAt, daemonHistoryLeafOf(slept))
     )
   } catch (error) {
     throw isWslMoveScopeChanged(error) ? new WslMoveStop('wsl_move_scope_changed') : error
@@ -218,13 +217,9 @@ async function moveQuiesced(
   }
   stopIfCancelled()
   deps.progress({ distro, step: 'copying', migrationId, phase: quiesced.phase })
-  const staged = await stageWslMove(
-    { ...deps, snapshots: withSleptSnapshots(deps.snapshots, slept) },
-    host,
-    quiesced
-  )
+  const staged = await stageWslMove(deps, host, quiesced)
   stopIfCancelled()
-  const blobs = await collectWslMoveBlobs(deps, quiesced, again.worktrees)
+  const blobs = await collectWslMoveBlobs(deps, quiesced, again.worktrees, slept)
   const { snapshotBytes, bytesTotal } = wslMoveCopyBytes(quiesced, blobs.descriptors)
   deps.progress({
     distro,

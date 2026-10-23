@@ -59,6 +59,8 @@ export type OrcadMigrationTerminalHistoryInstall = {
   historyRoot: string
   /** The worktree that owns the pane on this host, or null when the pane is not here. */
   paneWorktreeId: (paneKey: string) => string | null
+  /** Where a pane with no recorded folder starts: its workspace's folder on this host. */
+  workspacePath: (worktreeId: string) => string | null
   now: number
 }
 
@@ -90,11 +92,12 @@ export function installOrcadMigrationTerminalHistory(
       )
     }
     const worktreeId = document ? install.paneWorktreeId(document.paneKey) : null
-    if (document && worktreeId) {
+    const cwd = worktreeId ? (document?.cwd ?? install.workspacePath(worktreeId)) : null
+    if (document && worktreeId && cwd) {
       writeSessionFolder(
         install.historyRoot,
         movedPaneHistorySessionId(worktreeId, document.paneKey),
-        document,
+        { ...document, cwd },
         install.now
       )
     }
@@ -106,7 +109,7 @@ export function installOrcadMigrationTerminalHistory(
 function writeSessionFolder(
   historyRoot: string,
   sessionId: string,
-  document: OrcadMigrationTerminalHistoryDocument,
+  document: OrcadMigrationTerminalHistoryDocument & { cwd: string },
   now: number
 ): void {
   const dir = join(historyRoot, getHistorySessionDirName(sessionId))
@@ -117,7 +120,10 @@ function writeSessionFolder(
   // A crash before meta.json left no session yet; redo the folder whole.
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true, mode: 0o700 })
-  writeAtomically(join(dir, 'checkpoint.json'), JSON.stringify(document.checkpoint))
+  writeAtomically(
+    join(dir, 'checkpoint.json'),
+    JSON.stringify({ ...document.checkpoint, cwd: document.cwd })
+  )
   const meta: SessionMeta = {
     cwd: document.cwd,
     cols: document.cols,
