@@ -123,7 +123,11 @@ export function createWslMoveDriverDeps(
       if (!provider) {
         throw new Error('terminal_gone')
       }
-      return inspectPtyProviderProcessForRenderer(provider, ptyId, { scanChildProcesses: true })
+      // After a relaunch, a pane the window has not reopened is still live in the daemon.
+      return inspectPtyProviderProcessForRenderer(provider, ptyId, {
+        scanChildProcesses: true,
+        includeUnattached: true
+      })
     },
     agentRows: (paneKey) => agentHookServer.getStatusSnapshotForPane(paneKey),
     ...(process.platform === 'win32'
