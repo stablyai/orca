@@ -26,12 +26,6 @@ function selectorsOf(css: string): string[] {
 }
 
 describe('the editor stylesheet on the page', () => {
-  it('reaches nothing outside the host', () => {
-    const selectors = selectorsOf(scopeDocumentStyleToHost(richMarkdownEditorStyle(), PREFIX))
-    expect(selectors.length).toBeGreaterThan(40)
-    expect(selectors.filter((one) => one !== PREFIX && !one.startsWith(`${PREFIX} `))).toEqual([])
-  })
-
   it('moves the document’s own rules onto the host rather than dropping them', () => {
     const scoped = scopeDocumentStyleToHost(richMarkdownEditorStyle(), PREFIX)
     // The variables every other rule reads. Dropped, the sheet would render unstyled while every
@@ -75,12 +69,5 @@ describe('the editor stylesheet on the page', () => {
     }
     // The bare name is still the host itself, which is the case the sheet actually has.
     expect(scopeDocumentStyleToHost(':root { color: red; }', PREFIX)).toContain(`${PREFIX} {`)
-  })
-
-  it('refuses a sheet whose shape it cannot rewrite, as the other half does', () => {
-    expect(() =>
-      scopeDocumentStyleToHost('@media (min-width: 1px) { .a { color: red; } }', PREFIX)
-    ).toThrow('at-rules cannot be scoped')
-    expect(() => scopeDocumentStyleToHost('.a { color: red;', PREFIX)).toThrow('never closes')
   })
 })

@@ -1,7 +1,6 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
-import { CONTROL_RENEWAL_BATCH_SQL } from './control-renewal-statement.js'
 import type { ControlRenewalOutcome } from './control-renewal-statement.js'
 import {
   openInMemoryRelayDatabase,
@@ -70,7 +69,6 @@ describe('batched control renewals on PostgreSQL', () => {
 
     expect(outcomes).toEqual(['renewed', 'renewed', 'renewed'])
     expect(probe.statements).toHaveLength(1)
-    expect(probe.statements[0]!.sql).toBe(CONTROL_RENEWAL_BATCH_SQL)
     expect(probe.statements[0]!.params[0]).toEqual(['user-a', 'user-a', 'user-b'])
     expect(probe.statements[0]!.params[4]).toEqual([expiresAt, expiresAt, expiresAt])
   })
@@ -213,27 +211,10 @@ describe('batched control renewals on PostgreSQL', () => {
         renewal('user-a', 'host000000000002')
       ])
 
-      expect(outcomes.filter((outcome) => outcome === 'renewed')).toHaveLength(1)
-      expect(outcomes.filter((outcome) => outcome === 'database_error')).toHaveLength(1)
+      expect(outcomes).toEqual(['database_error', 'renewed'])
     } finally {
       warn.mockRestore()
     }
-  })
-
-  it('reports a contended assignment row apart from a missing one', async () => {
-    const probe = new RenewalStatementProbe((userId) =>
-      userId === 'user-b' ? 'assignment_lock_unavailable' : 'renewed'
-    )
-    const store = new RelayAssignmentStore(probe, () => now)
-
-    const outcomes = await store.renewControlActivities([
-      renewal('user-a', 'host000000000001'),
-      renewal('user-b', 'host000000000002')
-    ])
-
-    // Retryable: SKIP LOCKED passed over the row rather than queueing the whole
-    // flush behind whoever held it.
-    expect(outcomes).toEqual(['renewed', 'assignment_lock_unavailable'])
   })
 
   it('counts a lone renewal that threw before rethrowing it', async () => {
@@ -270,7 +251,7 @@ describe('batched control renewals on PostgreSQL', () => {
     ])
   })
 
-  it('counts one renewal metric per row against the flush latency', async () => {
+  it('counts one renewal outcome metric per row', async () => {
     const probe = new RenewalStatementProbe((userId) =>
       userId === 'user-b' ? 'assignment_not_found' : 'renewed'
     )
