@@ -1,6 +1,6 @@
 /** One load into a profile session; it checks `cancelled` after each step. */
 export type BrowserExtensionProfileLoad = {
-  extensionId: string | null
+  extensionId: string
   cancelled: boolean
   settled: Promise<void>
 }
@@ -23,14 +23,14 @@ export class BrowserExtensionProfileLoads {
   private closed = false
 
   track<T>(
-    extensionId: string | null,
+    extensionId: string,
     run: (load: BrowserExtensionProfileLoad) => Promise<T>
   ): Promise<T> {
     if (this.closed) {
       return Promise.reject(new Error(BROWSER_EXTENSION_PROFILE_UNAVAILABLE))
     }
     const earlier = [...this.loads]
-      .filter((load) => extensionId !== null && load.extensionId === extensionId)
+      .filter((load) => load.extensionId === extensionId)
       .map((load) => load.settled)
     const load: BrowserExtensionProfileLoad = {
       extensionId,

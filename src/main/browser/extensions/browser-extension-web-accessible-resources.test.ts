@@ -29,19 +29,14 @@ describe('withStaticWebAccessibleResources', () => {
 })
 
 describe('withPrivateFilesHiddenFromWebAccessibleResources', () => {
-  const packageFiles = [
-    'popup.html',
-    'assets/app.js',
-    'assets/deep/icon.png',
-    'orca-extension-api-token.json',
-    'orca-original-manifest.json'
-  ]
-  const privateFiles = ['orca-extension-api-token.json', 'orca-original-manifest.json']
+  const packageFiles = ['popup.html', 'assets/app.js', 'assets/deep/icon.png', 'Secret.json']
+  // Stands in for the file system: any spelling of the private file names it.
+  const isPrivate = (resource: string) => resource.toLowerCase() === 'secret.json'
 
-  it('turns a catch-all pattern into the package files minus the private ones', () => {
+  it('lists the package files a pattern matches, minus private ones', () => {
     const manifest = { web_accessible_resources: [{ resources: ['*'], matches: ['<all_urls>'] }] }
     expect(
-      withPrivateFilesHiddenFromWebAccessibleResources(manifest, packageFiles, privateFiles)
+      withPrivateFilesHiddenFromWebAccessibleResources(manifest, packageFiles, isPrivate)
     ).toEqual({
       web_accessible_resources: [
         {
@@ -52,26 +47,15 @@ describe('withPrivateFilesHiddenFromWebAccessibleResources', () => {
     })
   })
 
-  it('expands only patterns that reach a private file and keeps the rest as written', () => {
+  it('keeps named resources unless they are a private file in another spelling', () => {
     const manifest = {
-      web_accessible_resources: [{ resources: ['/*.json', 'assets/*'], matches: ['<all_urls>'] }]
-    }
-    const result = withPrivateFilesHiddenFromWebAccessibleResources(
-      manifest,
-      packageFiles,
-      privateFiles
-    )
-    expect(result.web_accessible_resources).toEqual([
-      { resources: ['assets/*'], matches: ['<all_urls>'] }
-    ])
-  })
-
-  it('leaves manifests whose patterns never reach a private file unchanged', () => {
-    const manifest = {
-      web_accessible_resources: [{ resources: ['assets/*.js'], matches: ['<all_urls>'] }]
+      web_accessible_resources: [
+        { resources: ['SECRET.JSON', 'popup.html', '/assets/*.js'], matches: ['<all_urls>'] }
+      ]
     }
     expect(
-      withPrivateFilesHiddenFromWebAccessibleResources(manifest, packageFiles, privateFiles)
-    ).toEqual(manifest)
+      withPrivateFilesHiddenFromWebAccessibleResources(manifest, packageFiles, isPrivate)
+        .web_accessible_resources
+    ).toEqual([{ resources: ['popup.html', 'assets/app.js'], matches: ['<all_urls>'] }])
   })
 })

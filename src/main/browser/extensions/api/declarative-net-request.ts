@@ -200,7 +200,12 @@ export function registerDeclarativeNetRequestNamespace(): void {
         (caller, request) => {
           const { rules, hostAccess } = entryFor(caller)
           return testDnrMatchOutcome(rules, request, () =>
-            hostAccess.access(request.url, request.initiator ?? null, request.tabId ?? -1)
+            hostAccess.access(
+              request.url,
+              request.initiator ?? null,
+              request.tabId ?? -1,
+              request.type
+            )
           )
         }
       ),

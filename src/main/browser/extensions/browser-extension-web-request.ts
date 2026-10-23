@@ -1,3 +1,4 @@
+import { CHROME_WEB_STORE_ORIGIN } from '../../../shared/browser-extension-webstore'
 import {
   installBrowserSessionHeadersReceived,
   removeBrowserSessionHeadersReceived
@@ -17,6 +18,7 @@ import { browserExtensionEventHasListener } from './browser-extension-contexts'
 import { matchesExtensionMatchPattern } from './browser-extension-match-pattern'
 import { extensionHasPermission } from './browser-extension-namespace-registry'
 import { hasBrowserExtensionHostPermission } from './browser-extension-permission-grants'
+import { canExtensionAccessRequest } from './browser-extension-request-host-access'
 import { resolveBrowserExtensionTab } from './browser-extension-tab-model'
 
 /**
@@ -186,8 +188,25 @@ export function webRequestFilterMatches(
   )
 }
 
-function isWebUrl(url: string): boolean {
-  return /^(https?|wss?):/i.test(url)
+const WEB_URL = /^(?:https?|wss?):/i
+
+/** WebRequestPermissions::HideRequest: requests extensions never see or act on. */
+export function isRequestHiddenFromExtensions(details: {
+  url: string
+  webContentsId?: number
+  initiatorOrigin?: string
+}): boolean {
+  if (!WEB_URL.test(details.url)) {
+    return true
+  }
+  // Orca's own main-process requests carry neither a webContents nor an initiator.
+  if (details.webContentsId === undefined && details.initiatorOrigin === undefined) {
+    return true
+  }
+  return (
+    details.url.startsWith(`${CHROME_WEB_STORE_ORIGIN}/`) ||
+    details.url.startsWith('https://chrome.google.com/webstore')
+  )
 }
 
 function forward(
@@ -196,7 +215,7 @@ function forward(
   details: ObservedWebRequestDetails
 ): void {
   if (
-    !isWebUrl(details.url) ||
+    isRequestHiddenFromExtensions(details) ||
     !getBrowserExtensionProfileIdForSession(session) ||
     !browserExtensionEventHasListener(session, 'webRequest', event)
   ) {
@@ -209,17 +228,24 @@ function forward(
     entry ? { tabId: entry.contents.id, windowId: entry.windowId } : { tabId: -1, windowId: -1 },
     frameFields(details)
   )
+  const request = {
+    url: details.url,
+    initiator: details.initiatorOrigin ?? null,
+    tabId: chromeDetails.tabId,
+    type: chromeDetails.type
+  }
   emitBrowserExtensionEvent(
     { session },
     'webRequest',
     event,
-    (extension) =>
-      hasBrowserExtensionHostPermission(
-        browserExtensionHostPatternsInSession(extension, session),
-        details.url
+    (extension) => {
+      const patterns = browserExtensionHostPatternsInSession(extension, session)
+      return canExtensionAccessRequest(extension.id, request, (url) =>
+        hasBrowserExtensionHostPermission(patterns, url)
       )
         ? [chromeDetails]
-        : null,
+        : null
+    },
     (filter) => webRequestFilterMatches(filter, chromeDetails)
   )
 }

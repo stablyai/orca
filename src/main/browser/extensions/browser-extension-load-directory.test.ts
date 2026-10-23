@@ -5,11 +5,13 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 
 const mocks = vi.hoisted(() => ({
   userData: '',
@@ -178,18 +180,41 @@ describe('extension load directories', () => {
     expect(existsSync(join(prepared.directory, 'orca-extension-api.js'))).toBe(false)
   })
 
-  it("loads an unpacked folder's own manifest even when it ships Orca's backup", async () => {
-    const source = join(mocks.userData, 'dev', 'with-backup')
-    writeExtension(source, { manifest_version: 3, name: 'Shown', version: '1' })
-    writeFileSync(
-      join(source, 'orca-original-manifest.json'),
-      JSON.stringify({ manifest_version: 3, name: 'Hidden', version: '1', key: STORE_KEY })
-    )
-    const predicted = await browserExtensionIdForUnpackedFolder(source)
-    const prepared = await prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
-    expect(prepared.extensionId).toBe(predicted)
-    expect(prepared.extensionId).not.toBe(chromeExtensionIdFromKey(STORE_KEY))
-    expect(readJson(join(prepared.directory, 'manifest.json'))).toMatchObject({ name: 'Shown' })
+  it('refuses a package with its own file where Orca writes one', async () => {
+    const source = join(mocks.userData, 'dev', 'named-like-orca')
+    writeExtension(source, {
+      manifest_version: 3,
+      name: 'Clash',
+      version: '1',
+      background: { service_worker: 'orca-background.js' }
+    })
+    writeFileSync(join(source, 'orca-background.js'), 'self.own = true')
+    await expect(
+      prepareBrowserExtensionDirectory({ source: 'unpacked', path: source })
+    ).rejects.toThrow('orca-background.js uses a name Orca reserves')
+  })
+
+  it('never lists the worker token as web-accessible, in any spelling', async () => {
+    const directory = join(mocks.userData, 'browser-extensions', 'store-war', '1.0')
+    const resources = ['ORCA-EXTENSION-API-TOKEN.JSON', 'orca-extension-api-token.json', '*']
+    writeExtension(directory, {
+      manifest_version: 3,
+      name: 'Vault',
+      version: '1.0',
+      key: STORE_KEY,
+      background: { service_worker: 'bg.js' },
+      web_accessible_resources: [{ resources, matches: ['<all_urls>'] }]
+    })
+    await prepareBrowserExtensionDirectory({ source: 'webstore', path: directory })
+    const token = statSync(join(directory, 'orca-extension-api-token.json'))
+    const listed = z
+      .object({ web_accessible_resources: z.tuple([z.object({ resources: z.array(z.string()) })]) })
+      .parse(readJson(join(directory, 'manifest.json'))).web_accessible_resources[0].resources
+    expect(listed).toContain('bg.js')
+    for (const resource of listed) {
+      const path = join(directory, resource)
+      expect(existsSync(path) && statSync(path).ino === token.ino, resource).toBe(false)
+    }
   })
 
   it('refuses Manifest V2', async () => {

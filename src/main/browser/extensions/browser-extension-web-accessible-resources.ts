@@ -36,21 +36,20 @@ function resourcePatternToRegExp(pattern: string): RegExp {
 }
 
 /**
- * Keeps Orca's private files out of reach of web pages. A wildcard such as "*" would otherwise
- * expose the worker token, letting any site call Orca's extension API as this extension. Each
- * pattern that matches a private file becomes the explicit list of the package files it matched.
+ * Keeps Orca's private files out of reach of web pages. Chromium matches the URL's spelling but
+ * serves through the file system, where other spellings (case, Unicode folding, 8.3 names) can
+ * name a private file. So every pattern becomes the package files it matches, and `isPrivate`
+ * drops any entry that is a private file on disk, whatever its spelling.
  */
 export function withPrivateFilesHiddenFromWebAccessibleResources(
   manifest: Manifest,
   packageFiles: readonly string[],
-  privateFiles: readonly string[]
+  isPrivate: (resource: string) => boolean
 ): Manifest {
   const entries = manifest.web_accessible_resources
   if (!Array.isArray(entries)) {
     return manifest
   }
-  const isPrivate = new Set(privateFiles)
-  const publicFiles = packageFiles.filter((file) => !isPrivate.has(file))
   return {
     ...manifest,
     web_accessible_resources: entries.map((entry: unknown) => {
@@ -67,11 +66,10 @@ export function withPrivateFilesHiddenFromWebAccessibleResources(
           continue
         }
         const pattern = resourcePatternToRegExp(resource)
-        if (privateFiles.some((file) => pattern.test(file))) {
-          publicFiles.filter((file) => pattern.test(file)).forEach((file) => next.add(file))
-        } else {
-          next.add(resource)
-        }
+        const matched = /[*?]/.test(resource)
+          ? packageFiles.filter((file) => pattern.test(file))
+          : [resource]
+        matched.filter((file) => !isPrivate(file)).forEach((file) => next.add(file))
       }
       return { ...entry, resources: [...next] }
     })

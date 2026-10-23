@@ -187,31 +187,38 @@ export function addUnpackedBrowserExtension(
     if (!isAbsolute(directory)) {
       throw new Error('Choose an extension folder')
     }
-    const store = getBrowserExtensionInstallStore()
     const summary = await readBrowserExtensionManifest(directory)
-    // Why before loading: a refused folder must leave no loaded copy and no rewritten profile records.
-    const existing = store.get(await browserExtensionIdForUnpackedFolder(directory))
-    if (existing?.source === 'webstore') {
-      throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
-    }
-    // Why refresh only a new one: another profile may be running the copy (Reload re-copies it).
-    const loaded = await loadBrowserExtensionFolderIntoProfile(browserProfileId, directory, {
-      refresh: existing === null
+    const extensionId = await browserExtensionIdForUnpackedFolder(directory)
+    // Why the lock: a removal finishing mid-load would be undone by the save below.
+    await withBrowserExtensionLock(extensionId, async () => {
+      const store = getBrowserExtensionInstallStore()
+      // Why before loading: a refused folder must leave no loaded copy and no rewritten profile records.
+      const existing = store.get(extensionId)
+      if (existing?.source === 'webstore') {
+        throw new Error(`${existing.name} is already installed from the Chrome Web Store`)
+      }
+      // Why refresh only a new one: another profile may be running the copy (Reload re-copies it).
+      const loaded = await loadBrowserExtensionFolderIntoProfile(
+        browserProfileId,
+        extensionId,
+        directory,
+        { refresh: existing === null }
+      )
+      store.save({
+        id: loaded.id,
+        name: summary.name,
+        version: loaded.version,
+        path: directory,
+        source: 'unpacked',
+        iconPath: summary.iconPath,
+        permissions: summary.permissions,
+        hostPermissions: summary.hostPermissions,
+        optionsPage: summary.optionsPage
+      })
+      browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
+        withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
+      )
     })
-    store.save({
-      id: loaded.id,
-      name: summary.name,
-      version: loaded.version,
-      path: directory,
-      source: 'unpacked',
-      iconPath: summary.iconPath,
-      permissions: summary.permissions,
-      hostPermissions: summary.hostPermissions,
-      optionsPage: summary.optionsPage
-    })
-    browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-      withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
-    )
     notifyBrowserExtensionListChanged()
   })
 }

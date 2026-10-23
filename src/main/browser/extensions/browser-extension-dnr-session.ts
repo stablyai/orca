@@ -6,7 +6,7 @@ import {
   getBrowserExtensionActionState,
   notifyBrowserExtensionActionsChangedSoon
 } from './browser-extension-action-registry'
-import { DnrExtensionHostAccess } from './browser-extension-dnr-host-access'
+import { DnrExtensionHostAccess } from './browser-extension-request-host-access'
 import { DnrExtensionRules } from './browser-extension-dnr-extension-rules'
 import { DnrFrameTracker } from './browser-extension-dnr-frames'
 import { DNR_API_CONSTANTS, DNR_GLOBAL_STATIC_RULE_LIMIT } from './browser-extension-dnr-limits'

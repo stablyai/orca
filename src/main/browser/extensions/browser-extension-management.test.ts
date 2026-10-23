@@ -139,6 +139,7 @@ describe('addUnpackedBrowserExtension', () => {
     expect(await addUnpackedBrowserExtension('default', '/dev/vault')).toEqual({ ok: true })
     expect(loader.loadBrowserExtensionFolderIntoProfile).toHaveBeenCalledWith(
       'default',
+      ID,
       '/dev/vault',
       { refresh: true }
     )
@@ -150,9 +151,27 @@ describe('addUnpackedBrowserExtension', () => {
     expect(await addUnpackedBrowserExtension('work', '/dev/vault')).toEqual({ ok: true })
     expect(loader.loadBrowserExtensionFolderIntoProfile).toHaveBeenCalledWith(
       'work',
+      ID,
       '/dev/vault',
       { refresh: false }
     )
+  })
+
+  it('holds off a removal until its load is recorded, so removal cannot be undone', async () => {
+    let finishLoad = (): void => {}
+    vi.mocked(loader.loadBrowserExtensionFolderIntoProfile).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: management reads only id and version.
+          finishLoad = () => resolve({ id: ID, version: '1.0' } as Electron.Extension)
+        })
+    )
+    const adding = addUnpackedBrowserExtension('default', '/dev/vault')
+    await vi.waitFor(() => expect(loader.loadBrowserExtensionFolderIntoProfile).toHaveBeenCalled())
+    expect(await removeBrowserExtension(ID)).toMatchObject({ ok: false })
+    finishLoad()
+    expect(await adding).toEqual({ ok: true })
+    expect(mocks.store.remove).not.toHaveBeenCalled()
   })
 })
 

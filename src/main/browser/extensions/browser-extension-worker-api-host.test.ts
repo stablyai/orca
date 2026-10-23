@@ -99,24 +99,49 @@ function send(stub: ReturnType<typeof makeSession>, request: Request): Promise<R
   return handler(request)
 }
 
-function post(stub: ReturnType<typeof makeSession>, url: string, body: unknown): Promise<Response> {
-  return send(
-    stub,
-    new Request(url, { method: 'POST', body: wire.encodeBrowserExtensionWireJson(body) })
-  )
+// Electron sets initiatorOrigin from the browser's record of who made the request.
+function makeRequest(url: string, initiatorOrigin: string | undefined, body: string): Request {
+  return Object.assign(new Request(url, { method: 'POST', body }), { initiatorOrigin })
 }
 
-async function callAs(stub: ReturnType<typeof makeSession>, token: string, request: unknown) {
-  const response = await post(stub, wire.BROWSER_EXTENSION_API_CALL_URL, { token, request })
+function post(
+  stub: ReturnType<typeof makeSession>,
+  url: string,
+  body: unknown,
+  initiatorOrigin: string | undefined
+): Promise<Response> {
+  return send(stub, makeRequest(url, initiatorOrigin, wire.encodeBrowserExtensionWireJson(body)))
+}
+
+const originOf = (extensionId: string) => `chrome-extension://${extensionId}`
+
+async function callAs(stub: ReturnType<typeof makeSession>, extensionId: string, request: unknown) {
+  const token = getBrowserExtensionWorkerToken(extensionId)
+  const response = await post(
+    stub,
+    wire.BROWSER_EXTENSION_API_CALL_URL,
+    { token, request },
+    originOf(extensionId)
+  )
   return wire.decodeBrowserExtensionWireJson(await response.text())
 }
 
-function listen(stub: ReturnType<typeof makeSession>, token: string) {
-  return callAs(stub, token, { type: 'listen', namespace: 'probe', event: 'onPing', active: true })
+function listen(stub: ReturnType<typeof makeSession>, extensionId: string) {
+  return callAs(stub, extensionId, {
+    type: 'listen',
+    namespace: 'probe',
+    event: 'onPing',
+    active: true
+  })
 }
 
-async function openEvents(stub: ReturnType<typeof makeSession>, token: string) {
-  const response = await post(stub, wire.BROWSER_EXTENSION_API_EVENTS_URL, { token })
+async function openEvents(stub: ReturnType<typeof makeSession>, extensionId: string) {
+  const response = await post(
+    stub,
+    wire.BROWSER_EXTENSION_API_EVENTS_URL,
+    { token: getBrowserExtensionWorkerToken(extensionId) },
+    originOf(extensionId)
+  )
   const reader = response.body?.getReader()
   if (!reader) {
     throw new Error('no event stream')
@@ -153,27 +178,34 @@ beforeAll(() => {
 describe('worker API protocol', () => {
   const echo = { type: 'call', namespace: 'probe', method: 'echo', args: [21, undefined] }
 
-  it('refuses web pages, unknown tokens and extensions not loaded in the session', async () => {
-    const response = await post(vaultSession, wire.BROWSER_EXTENSION_API_CALL_URL, {
-      request: echo
-    })
-    expect(response.status).toBe(403)
+  it('refuses web pages, wrong tokens and extensions not loaded in the session', async () => {
+    const vaultCall = { token: getBrowserExtensionWorkerToken(VAULT), request: echo }
+    // A website holding the token is refused before main reads its body.
+    const fromSite = makeRequest(
+      wire.BROWSER_EXTENSION_API_CALL_URL,
+      'https://site.example',
+      wire.encodeBrowserExtensionWireJson(vaultCall)
+    )
+    expect((await send(vaultSession, fromSite)).status).toBe(403)
+    expect(fromSite.bodyUsed).toBe(false)
+    expect(
+      (await post(vaultSession, wire.BROWSER_EXTENSION_API_CALL_URL, vaultCall, undefined)).status
+    ).toBe(403)
+    // Another extension's token does not name the caller.
     expect(
       (
-        await post(vaultSession, wire.BROWSER_EXTENSION_API_CALL_URL, {
-          token: 'guess',
-          request: echo
-        })
+        await post(
+          vaultSession,
+          wire.BROWSER_EXTENSION_API_CALL_URL,
+          { token: getBrowserExtensionWorkerToken(OTHER), request: echo },
+          originOf(VAULT)
+        )
       ).status
     ).toBe(403)
     // The vault extension is not loaded in the other profile's session.
     expect(
-      (
-        await post(otherSession, wire.BROWSER_EXTENSION_API_CALL_URL, {
-          token: getBrowserExtensionWorkerToken(VAULT),
-          request: echo
-        })
-      ).status
+      (await post(otherSession, wire.BROWSER_EXTENSION_API_CALL_URL, vaultCall, originOf(VAULT)))
+        .status
     ).toBe(403)
     expect(
       (await send(vaultSession, new Request(wire.BROWSER_EXTENSION_API_CALL_URL))).status
@@ -181,17 +213,13 @@ describe('worker API protocol', () => {
     expect(seen).toEqual([])
   })
 
-  it('runs a call as the token’s extension, keeping undefined arguments and the worker alive', async () => {
+  it('runs a call as the initiating extension, keeping undefined arguments and the worker alive', async () => {
     vaultSession.startWorker()
-    await expect(
-      callAs(vaultSession, getBrowserExtensionWorkerToken(VAULT), echo)
-    ).resolves.toEqual({
+    await expect(callAs(vaultSession, VAULT, echo)).resolves.toEqual({
       ok: true,
       value: 42
     })
-    await expect(
-      callAs(otherSession, getBrowserExtensionWorkerToken(OTHER), echo)
-    ).resolves.toEqual({
+    await expect(callAs(otherSession, OTHER, echo)).resolves.toEqual({
       ok: true,
       value: 42
     })
@@ -204,9 +232,8 @@ describe('worker API protocol', () => {
   })
 
   it('streams events, queues them while the worker is stopped, and delivers after restart', async () => {
-    const token = getBrowserExtensionWorkerToken(VAULT)
-    const first = await openEvents(vaultSession, token)
-    await listen(vaultSession, token)
+    const first = await openEvents(vaultSession, VAULT)
+    await listen(vaultSession, VAULT)
     host.emitBrowserExtensionEvent({ extensionId: VAULT }, 'probe', 'onPing', [1, undefined])
     await expect(first.next()).resolves.toEqual({
       namespace: 'probe',
@@ -221,21 +248,20 @@ describe('worker API protocol', () => {
 
     // The restarted worker reopens its stream, then re-registers the listener.
     vaultSession.startWorker()
-    const second = await openEvents(vaultSession, token)
-    await listen(vaultSession, token)
+    const second = await openEvents(vaultSession, VAULT)
+    await listen(vaultSession, VAULT)
     await expect(second.next()).resolves.toEqual({ namespace: 'probe', event: 'onPing', args: [2] })
   })
 
   it('holds a worker-start event until the worker registers its listener, then sends it once', async () => {
-    const token = getBrowserExtensionWorkerToken(OTHER)
     const sess = asSession(otherSession)
     host.emitBrowserExtensionWorkerStartEvent(sess, OTHER, 'probe', 'onPing', ['install'])
     expect(otherSession.startWorkerForScope).toHaveBeenCalledWith(`chrome-extension://${OTHER}/`)
 
-    const events = await openEvents(otherSession, token)
-    await listen(otherSession, token)
+    const events = await openEvents(otherSession, OTHER)
+    await listen(otherSession, OTHER)
     // A reconnect re-registers the listener; the event must not go out again.
-    await listen(otherSession, token)
+    await listen(otherSession, OTHER)
     host.emitBrowserExtensionEvent({ session: sess, extensionId: OTHER }, 'probe', 'onPing', [
       'later'
     ])

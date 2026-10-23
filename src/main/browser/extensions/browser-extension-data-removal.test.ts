@@ -38,7 +38,8 @@ mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-data-user-'))
 const {
   clearBrowserExtensionSessionData,
   noteBrowserExtensionStorageOpened,
-  removeUninstalledBrowserExtensionData
+  removeUninstalledBrowserExtensionData,
+  throwIfBrowserExtensionStorageAwaitingRestart
 } = await import('./browser-extension-data-removal')
 const { getBrowserExtensionProfileStateStore } =
   await import('./browser-extension-profile-state-store')
@@ -89,6 +90,7 @@ describe('clearBrowserExtensionSessionData', () => {
     await clearBrowserExtensionSessionData(opened, ID)
     // Chromium still holds the open database, so the launch sweep deletes it instead.
     expect(existsSync(folder)).toBe(true)
+    expect(() => throwIfBrowserExtensionStorageAwaitingRestart(opened, ID)).toThrow('Restart Orca')
 
     const sess = fakeSession(false, partition)
     await clearBrowserExtensionSessionData(sess, ID)
@@ -113,7 +115,11 @@ describe('removeUninstalledBrowserExtensionData', () => {
       mkdirSync(folder, { recursive: true })
     }
     mkdirSync(join(partition, 'IndexedDB'))
-    await removeUninstalledBrowserExtensionData(partition, 'default', new Set([OTHER]))
+    await removeUninstalledBrowserExtensionData(
+      fakeSession(false, partition),
+      'default',
+      new Set([OTHER])
+    )
     expect(existsSync(join(settings, ID))).toBe(false)
     expect(existsSync(join(settings, OTHER))).toBe(true)
     expect(existsSync(join(settings, 'notes'))).toBe(true)
@@ -122,12 +128,30 @@ describe('removeUninstalledBrowserExtensionData', () => {
 
   it('does nothing for an in-memory session or a partition without the folder', async () => {
     await expect(
-      removeUninstalledBrowserExtensionData(null, 'default', new Set())
+      removeUninstalledBrowserExtensionData(fakeSession(false), 'default', new Set())
     ).resolves.toBeUndefined()
     const empty = mkdtempSync(join(tmpdir(), 'orca-extension-data-'))
     await expect(
-      removeUninstalledBrowserExtensionData(empty, 'default', new Set())
+      removeUninstalledBrowserExtensionData(fakeSession(false, empty), 'default', new Set())
     ).resolves.toBeUndefined()
+  })
+
+  it('deletes storage left open at uninstall at the next launch, even if reinstalled since', async () => {
+    const partition = mkdtempSync(join(tmpdir(), 'orca-extension-data-'))
+    const folder = join(partition, 'Local Extension Settings', ID)
+    mkdirSync(folder, { recursive: true })
+    const thisRun = fakeSession(false, partition)
+    noteBrowserExtensionStorageOpened(thisRun, ID)
+    await clearBrowserExtensionSessionData(thisRun, ID)
+
+    await removeUninstalledBrowserExtensionData(thisRun, 'default', new Set())
+    expect(existsSync(folder)).toBe(true)
+    await removeUninstalledBrowserExtensionData(
+      fakeSession(false, partition),
+      'default',
+      new Set([ID])
+    )
+    expect(existsSync(folder)).toBe(false)
   })
 
   // Uninstall reaches only the Orca profile open at the time; others are swept when they attach.
@@ -141,7 +165,7 @@ describe('removeUninstalledBrowserExtensionData', () => {
     sync.flush()
     states.update('home', ID, (state) => ({ ...state, grantedPermissions: ['tabs'] }))
 
-    await removeUninstalledBrowserExtensionData(null, 'work', new Set([OTHER]))
+    await removeUninstalledBrowserExtensionData(fakeSession(false), 'work', new Set([OTHER]))
     expect(Object.keys(states.readProfile('work'))).toEqual([OTHER])
     expect(states.read('home', ID).grantedPermissions).toEqual(['tabs'])
     expect(

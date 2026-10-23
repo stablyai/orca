@@ -23,6 +23,7 @@ export type ObservedWebRequestDetails = {
   webContentsId?: number
   frame?: Electron.WebFrameMain | null
   resourceType: string
+  initiatorOrigin?: string
   timestamp: number
   requestHeaders?: Record<string, string>
   responseHeaders?: Record<string, string[]>

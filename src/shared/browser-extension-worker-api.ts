@@ -3,9 +3,9 @@
  *
  * Why no preload: a service-worker preload crashes the renderer during GC (electron#52310), so
  * Orca runs its shim inside the worker itself and talks to main over fetch. Each extension
- * session handles the scheme, which tells main the session; the per-extension token, readable
- * only from that extension's own files, tells it the extension. Chromium sends no Origin to
- * protocol handlers, so the token is the caller identity.
+ * session handles the scheme, which tells main the session. The request's initiator origin names
+ * the extension, and the per-extension token, readable only from that extension's own files,
+ * must match it, so a page that forges its initiator still lacks the token.
  */
 
 export const BROWSER_EXTENSION_API_SCHEME = 'orca-extension-api'

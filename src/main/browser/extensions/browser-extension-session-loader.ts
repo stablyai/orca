@@ -18,7 +18,8 @@ import {
 } from './browser-extension-runtime-lifecycle'
 import {
   noteBrowserExtensionStorageOpened,
-  removeUninstalledBrowserExtensionData
+  removeUninstalledBrowserExtensionData,
+  throwIfBrowserExtensionStorageAwaitingRestart
 } from './browser-extension-data-removal'
 import {
   clearBrowserExtensionLoadFailure,
@@ -103,27 +104,23 @@ function unregisterExtensionPreload(sess: Electron.Session): void {
 async function loadIntoSession(
   sess: Electron.Session,
   profileId: string,
-  extension: BrowserExtensionLoadSource & { id?: string },
+  extension: BrowserExtensionLoadSource & { id: string },
   kind: BrowserExtensionLoadKind,
   load: BrowserExtensionProfileLoad,
   options: { refresh?: boolean } = {}
 ): Promise<Electron.Extension> {
   throwIfBrowserExtensionLoadCancelled(load)
-  const known = extension.id ? sess.extensions.getExtension(extension.id) : null
+  const known = sess.extensions.getExtension(extension.id)
   if (known) {
     return known
   }
   const prepared = await prepareBrowserExtensionDirectory(extension, options)
-  load.extensionId = prepared.extensionId
   throwIfBrowserExtensionLoadCancelled(load)
-  if (extension.id && prepared.extensionId !== extension.id) {
+  if (prepared.extensionId !== extension.id) {
     // Why: an unpacked folder whose id changed (e.g. a new manifest key) is a different extension.
     throw new Error('Extension id changed since it was added; remove it and add it again')
   }
-  const loaded = sess.extensions.getExtension(prepared.extensionId)
-  if (loaded) {
-    return loaded
-  }
+  throwIfBrowserExtensionStorageAwaitingRestart(sess, prepared.extensionId)
   const reregisters = await refreshWorkerRegistration(sess, profileId, prepared)
   throwIfBrowserExtensionLoadCancelled(load)
   const registered =
@@ -178,7 +175,7 @@ export function attachBrowserExtensionsToProfileSession(
   const store = getBrowserExtensionInstallStore()
   const loads = new BrowserExtensionProfileLoads()
   const swept = removeUninstalledBrowserExtensionData(
-    sess.getStoragePath(),
+    sess,
     profile.id,
     new Set(store.list().map((extension) => extension.id))
   ).catch((error: unknown) => {
@@ -295,11 +292,12 @@ export async function loadBrowserExtensionIntoProfile(
 }
 
 /**
- * Developer "Load unpacked": loads Orca's copy of the folder; the id comes from the copy's key.
+ * Developer "Load unpacked": loads Orca's copy of the folder, whose key gives it `extensionId`.
  * `refresh` copies the folder again, so pass it only when no profile can be running the copy.
  */
 export async function loadBrowserExtensionFolderIntoProfile(
   profileId: string,
+  extensionId: string,
   directory: string,
   options: { refresh: boolean }
 ): Promise<Electron.Extension> {
@@ -307,12 +305,12 @@ export async function loadBrowserExtensionFolderIntoProfile(
   if (!state) {
     throw new Error(BROWSER_EXTENSION_PROFILE_UNAVAILABLE)
   }
-  return state.loads.track(null, async (load) => {
+  return state.loads.track(extensionId, async (load) => {
     await state.loading
     return loadIntoSession(
       state.session,
       profileId,
-      { source: 'unpacked', path: directory },
+      { id: extensionId, source: 'unpacked', path: directory },
       'other',
       load,
       options

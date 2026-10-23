@@ -1,5 +1,5 @@
 import type { DnrHostAccess } from './declarative-net-request/extension-matcher'
-import { hasBrowserExtensionActiveTab } from './browser-extension-active-tab'
+import { browserExtensionActiveTabCovers } from './browser-extension-active-tab'
 import { matchesExtensionMatchPattern } from './browser-extension-match-pattern'
 import { manifestPermissionSets } from './browser-extension-permission-grants'
 import { getBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
@@ -34,11 +34,43 @@ function allows(compiled: CompiledHostPatterns, url: string): boolean {
   )
 }
 
+export type ExtensionRequestTarget = {
+  url: string
+  /** Serialised initiator origin; null or "null" when opaque or absent. */
+  initiator: string | null
+  tabId: number
+  /** Chrome resource type; navigations skip the initiator check. */
+  type?: string
+}
+
 /**
- * WebRequestPermissions::CanExtensionAccessURL for one extension in one profile: manifest host
- * permissions, origins the user granted, and an activeTab grant for the request's tab. Orca has
- * no runtime host withholding, so access is allowed or denied, never withheld.
+ * WebRequestPermissions::CanExtensionAccessURL with REQUIRE_HOST_PERMISSION_FOR_URL_AND_INITIATOR,
+ * shared by webRequest and declarativeNetRequest. `hostAllowed` is the extension's host grants;
+ * an activeTab grant adds only its tab's page origin. Orca has no runtime host withholding, so
+ * access is allowed or denied, never withheld.
  */
+export function canExtensionAccessRequest(
+  extensionId: string,
+  request: ExtensionRequestTarget,
+  hostAllowed: (url: string) => boolean
+): boolean {
+  const allowed = (url: string): boolean =>
+    url.startsWith('about:') ||
+    url.toLowerCase().startsWith(`chrome-extension://${extensionId}/`) ||
+    hostAllowed(url) ||
+    (request.tabId >= 0 && browserExtensionActiveTabCovers(extensionId, request.tabId, url))
+  if (!allowed(request.url)) {
+    return false
+  }
+  // crbug.com/41433450: only sub-resource requests need access to their initiator.
+  if (request.type === 'main_frame' || request.type === 'sub_frame') {
+    return true
+  }
+  const { initiator } = request
+  return initiator === null || initiator === 'null' || allowed(`${initiator}/`)
+}
+
+/** canExtensionAccessRequest for one extension in one profile, as the DNR engine asks it. */
 export class DnrExtensionHostAccess {
   private readonly requiredPatterns: string[]
   private compiled: CompiledHostPatterns | null = null
@@ -67,14 +99,12 @@ export class DnrExtensionHostAccess {
     return this.compiled
   }
 
-  /** REQUIRE_HOST_PERMISSION_FOR_URL_AND_INITIATOR. */
-  access(url: string, initiator: string | null, tabId: number): DnrHostAccess {
-    if (tabId >= 0 && hasBrowserExtensionActiveTab(this.extensionId, tabId)) {
-      return 'allowed'
-    }
+  access(url: string, initiator: string | null, tabId: number, type?: string): DnrHostAccess {
     const patterns = this.patternsNow()
-    const initiatorAllowed =
-      initiator === null || initiator === 'null' || allows(patterns, `${initiator}/`)
-    return initiatorAllowed && allows(patterns, url) ? 'allowed' : 'denied'
+    return canExtensionAccessRequest(this.extensionId, { url, initiator, tabId, type }, (target) =>
+      allows(patterns, target)
+    )
+      ? 'allowed'
+      : 'denied'
   }
 }

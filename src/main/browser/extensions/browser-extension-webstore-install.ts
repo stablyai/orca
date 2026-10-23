@@ -10,6 +10,7 @@ import {
 } from './browser-extension-archive'
 import type { VerifiedCrx } from './browser-extension-crx'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
+import { refuseOrcaFileCollisions } from './browser-extension-load-directory'
 import {
   readBrowserExtensionManifest,
   type BrowserExtensionManifestSummary
@@ -111,10 +112,11 @@ export async function stageWebStoreExtension(crx: VerifiedCrx): Promise<StagedWe
       entries.filter((entry) => entry !== manifestEntry),
       directory
     )
+    // Why here: once Orca's own files are written, a package file at their paths can't be told apart.
+    await refuseOrcaFileCollisions(directory, manifest)
     const manifestText = JSON.stringify(manifest, null, 2)
     await writeFile(join(directory, 'manifest.json'), manifestText)
-    // Why written here: it replaces any package file at that name, whatever its case, so the
-    // manifest Orca later loads is always the one this prompt shows.
+    // Why written here: the manifest Orca later loads is always the one this prompt shows.
     await writeFile(join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE), manifestText)
     return {
       extensionId: crx.extensionId,

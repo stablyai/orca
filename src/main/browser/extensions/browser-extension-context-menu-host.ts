@@ -23,6 +23,7 @@ import {
   type ContextMenuTarget
 } from './browser-extension-context-menu-target'
 import { grantBrowserExtensionActiveTab } from './browser-extension-active-tab'
+import { getBrowserExtensionDocumentId } from './browser-extension-document-ids'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
 import { extensionHasPermission } from './browser-extension-namespace-registry'
 import { getBrowserExtensionProfileStateStore } from './browser-extension-profile-state-store'
@@ -38,6 +39,8 @@ type MenuSnapshot = {
   session: Electron.Session
   profileId: string
   tabId: number | null
+  /** The tab's top document when the menu opened; a click after it navigates does nothing. */
+  documentId: string | null
   target: ContextMenuTarget
   frameId: number
   editable: boolean
@@ -54,6 +57,11 @@ function pruneSnapshots(now: number): void {
       snapshots.delete(token)
     }
   }
+}
+
+function topDocumentId(tabId: number | null): string | null {
+  const contents = tabId === null ? null : resolveBrowserExtensionTab(tabId)?.contents
+  return contents ? getBrowserExtensionDocumentId(contents.mainFrame.frameTreeNodeId) : null
 }
 
 function extensionDisplayName(extension: Electron.Extension): string {
@@ -106,10 +114,12 @@ export function buildBrowserExtensionPageContextMenu(
   const now = Date.now()
   pruneSnapshots(now)
   const token = randomUUID()
+  const tabId = resolveBrowserExtensionTab(guest.id) ? guest.id : null
   snapshots.set(token, {
     session,
     profileId,
-    tabId: resolveBrowserExtensionTab(guest.id) ? guest.id : null,
+    tabId,
+    documentId: topDocumentId(tabId),
     target,
     frameId: frame ? chromeFrameId(frame) : 0,
     editable: params.isEditable,
@@ -120,6 +130,10 @@ export function buildBrowserExtensionPageContextMenu(
 }
 
 function runClick(snapshot: MenuSnapshot, extensionId: string, key: string): boolean {
+  // Chrome drops an extension item click once the menu's frame is gone (RenderViewContextMenu).
+  if (topDocumentId(snapshot.tabId) !== snapshot.documentId) {
+    return false
+  }
   const extension = snapshot.session.extensions.getExtension(extensionId)
   if (!extension || !extensionHasPermission(extension, 'contextMenus', snapshot.session)) {
     return false
@@ -217,6 +231,7 @@ export function buildBrowserExtensionActionContextMenu(
     session,
     profileId: browserProfileId,
     tabId,
+    documentId: topDocumentId(tabId),
     target,
     frameId: 0,
     editable: false,

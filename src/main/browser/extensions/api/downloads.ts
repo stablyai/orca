@@ -154,6 +154,10 @@ function startDownload(
   options: z.infer<typeof optionsSchema>,
   place: DownloadPlace
 ): Promise<number> {
+  // Why: the tab can close during the save dialog or an earlier identical start.
+  if (owner.isDestroyed()) {
+    throw new BrowserExtensionApiError('The tab closed before the download started')
+  }
   const id = nextDownloadId++
   const started = new Promise<number>((resolve, reject) => {
     const timer = setTimeout(() => {

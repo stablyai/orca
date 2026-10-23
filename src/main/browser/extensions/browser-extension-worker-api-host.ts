@@ -1,5 +1,8 @@
 import { randomBytes } from 'node:crypto'
-import { getChromeExtensionOrigin } from '../../../shared/browser-extension-url'
+import {
+  getChromeExtensionOrigin,
+  parseChromeExtensionUrl
+} from '../../../shared/browser-extension-url'
 import {
   BROWSER_EXTENSION_API_CALL_URL,
   BROWSER_EXTENSION_API_EVENTS_URL,
@@ -21,9 +24,9 @@ import { handleBrowserExtensionApiRequest } from './browser-extension-api-reques
 
 /**
  * Serves the worker shim's fetch calls on each extension session's `orca-extension-api:` handler.
- * The handler's session is the caller's session; the token names the extension. Chromium gives
- * protocol handlers no Origin or Referer, and any page in the session can reach the scheme, so a
- * request without a known token is refused.
+ * The handler's session is the caller's session. Any page in the session can reach the scheme, so
+ * Electron's browser-set initiator origin must name an extension loaded there, and the token,
+ * readable only from that extension's own files, must match it.
  */
 
 const tokenByExtensionId = new Map<string, string>()
@@ -83,6 +86,39 @@ function openEventStream(context: WorkerContext, headers: HeadersInit): Response
   })
 }
 
+// Why: Chrome's limit for one extension message; a worker call carries no more.
+const MAX_BODY_BYTES = 64 * 1024 * 1024
+
+async function readBoundedText(request: Request): Promise<string | null> {
+  if (!request.body) {
+    return ''
+  }
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const read = await reader.read()
+    if (read.done) {
+      return Buffer.concat(chunks).toString('utf8')
+    }
+    size += read.value.byteLength
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel()
+      return null
+    }
+    chunks.push(read.value)
+  }
+}
+
+// Why before reading the body: a website's request must cost main nothing to refuse.
+function initiatingExtension(sess: Electron.Session, request: Request): Electron.Extension | null {
+  const origin =
+    'initiatorOrigin' in request && typeof request.initiatorOrigin === 'string'
+      ? parseChromeExtensionUrl(`${request.initiatorOrigin}/`)
+      : null
+  return origin ? sess.extensions.getExtension(origin.extensionId) : null
+}
+
 export async function handleBrowserExtensionWorkerRequest(
   sess: Electron.Session,
   state: HostSessionState,
@@ -91,9 +127,17 @@ export async function handleBrowserExtensionWorkerRequest(
   if (request.method !== 'POST') {
     return refuse(405)
   }
+  const extension = initiatingExtension(sess, request)
+  if (!extension) {
+    return refuse(403)
+  }
+  const text = await readBoundedText(request)
+  if (text === null) {
+    return refuse(413)
+  }
   let body: unknown
   try {
-    body = decodeBrowserExtensionWireJson(await request.text())
+    body = decodeBrowserExtensionWireJson(text)
   } catch {
     return refuse(400)
   }
@@ -101,9 +145,7 @@ export async function handleBrowserExtensionWorkerRequest(
     body !== null && typeof body === 'object' && 'token' in body && typeof body.token === 'string'
       ? body.token
       : ''
-  const extensionId = extensionIdByToken.get(token)
-  const extension = extensionId ? sess.extensions.getExtension(extensionId) : null
-  if (!extension) {
+  if (extensionIdByToken.get(token) !== extension.id) {
     return refuse(403)
   }
   const origin = getChromeExtensionOrigin(extension.id)

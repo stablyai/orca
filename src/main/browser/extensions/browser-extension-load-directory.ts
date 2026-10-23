@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { statSync } from 'node:fs'
+import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import type { InstalledBrowserExtension } from '../../../shared/browser-extension-types'
 import {
@@ -126,12 +127,51 @@ const ORCA_PRIVATE_FILES = [
   BROWSER_EXTENSION_WORKER_TOKEN_FILE,
   BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE
 ]
-const ORCA_GENERATED_FILE_NAMES = new Set([
+const ORCA_ROOT_FILES = [
   ...ORCA_PRIVATE_FILES,
   BROWSER_EXTENSION_WORKER_SHIM_FILE,
-  BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
+  BROWSER_EXTENSION_CONTENT_SCRIPT_FILE
+]
+const ORCA_GENERATED_FILE_NAMES = new Set([
+  ...ORCA_ROOT_FILES,
   BROWSER_EXTENSION_WORKER_WRAPPER_FILE
 ])
+
+/**
+ * Refuses a package that already has a file where Orca writes its own, which would overwrite it.
+ * Asks the file system rather than comparing names, so every spelling that aliases one counts.
+ */
+export async function refuseOrcaFileCollisions(
+  directory: string,
+  manifest: Record<string, unknown>
+): Promise<void> {
+  const wrapperPath = buildBrowserExtensionBackgroundWrapper(manifest)?.wrapperPath
+  for (const path of wrapperPath ? [...ORCA_ROOT_FILES, wrapperPath] : ORCA_ROOT_FILES) {
+    const target = resolveInsideExtensionDirectory(directory, path)
+    if (target && (await stat(target).catch(() => null))) {
+      throw new Error(`Orca can't load this extension: its file ${path} uses a name Orca reserves`)
+    }
+  }
+}
+
+function fileIdentity(path: string): string | null {
+  try {
+    const stats = statSync(path, { bigint: true })
+    return `${stats.dev}:${stats.ino}`
+  } catch {
+    return null
+  }
+}
+
+/** True for a resource that is one of Orca's private files on disk, whatever its spelling. */
+function isPrivateFileOnDisk(directory: string): (resource: string) => boolean {
+  const privateIds = new Set(ORCA_PRIVATE_FILES.map((file) => fileIdentity(join(directory, file))))
+  privateIds.delete(null)
+  return (resource) => {
+    const target = resolveInsideExtensionDirectory(directory, resource)
+    return target !== null && privateIds.has(fileIdentity(target))
+  }
+}
 
 // Why skip Orca's own files: they appear only after the first load, and listing them would change
 // the manifest on the next launch and needlessly re-register the worker.
@@ -159,16 +199,15 @@ async function prepare(
   }
   const originalPath = join(directory, BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE)
   const { originalText, original } = await readOriginalManifest(directory, extension.source)
+  if (unpacked) {
+    await refuseOrcaFileCollisions(directory, original)
+  }
   const key = manifestKey(original, extension)
   const extensionId = chromeExtensionIdFromKey(key)
-  const adjusted = withPrivateFilesHiddenFromWebAccessibleResources(
-    withStaticWebAccessibleResources({ ...original, key }),
-    await listPackageFiles(directory),
-    ORCA_PRIVATE_FILES
-  )
-  const wrapper = buildBrowserExtensionBackgroundWrapper(adjusted)
-  const withContentScript = withOrcaContentScript(wrapper?.manifest ?? adjusted)
-  const manifestText = JSON.stringify(withContentScript ?? wrapper?.manifest ?? adjusted, null, 2)
+  const packageFiles = await listPackageFiles(directory)
+  const staticResources = withStaticWebAccessibleResources({ ...original, key })
+  const wrapper = buildBrowserExtensionBackgroundWrapper(staticResources)
+  const withContentScript = withOrcaContentScript(wrapper?.manifest ?? staticResources)
   await writeIfChanged(originalPath, originalText)
   let workerScripts = ''
   if (wrapper) {
@@ -187,6 +226,16 @@ async function prepare(
       readBrowserExtensionContentScript()
     )
   }
+  // Why after writing them: privacy is decided by the private files' identity on disk.
+  const manifestText = JSON.stringify(
+    withPrivateFilesHiddenFromWebAccessibleResources(
+      withContentScript ?? wrapper?.manifest ?? staticResources,
+      packageFiles,
+      isPrivateFileOnDisk(directory)
+    ),
+    null,
+    2
+  )
   await writeIfChanged(join(directory, 'manifest.json'), manifestText)
   return {
     directory,

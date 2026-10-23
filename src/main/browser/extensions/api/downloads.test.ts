@@ -178,6 +178,19 @@ describe('downloads.download', () => {
     expect(owner.downloadURL).not.toHaveBeenCalled()
   })
 
+  it('fails cleanly when the tab closes while the save dialog is open', async () => {
+    const { session, owner, download } = setup()
+    mocks.chooseSavePath.mockImplementationOnce(async () => {
+      owner.isDestroyed = () => true
+      return '/Users/me/Desktop/f'
+    })
+    await expect(download({ url: 'https://site.test/f', saveAs: true })).rejects.toThrow(
+      'The tab closed before the download started'
+    )
+    expect(owner.downloadURL).not.toHaveBeenCalled()
+    expect(session.listenerCount('will-download')).toBe(0)
+  })
+
   it.each([
     [{ filename: '../escape.txt' }, 'Invalid filename'],
     [{ filename: '/etc/passwd' }, 'Invalid filename'],

@@ -7,6 +7,10 @@ import {
   unloadBrowserExtensionFromProfile
 } from './browser-extension-session-loader'
 
+function isEnabledIn(profileId: string, extensionId: string): boolean {
+  return browserSessionRegistry.getEnabledExtensionIds(profileId).includes(extensionId)
+}
+
 /**
  * Swaps the loaded copy in every attached profile that has the extension turned on. Unloads all
  * first so re-copying an unpacked folder never rewrites files another profile is running.
@@ -20,8 +24,7 @@ export async function reloadBrowserExtensionWhereEnabled(
     .map((profile) => profile.id)
     .filter(
       (profileId) =>
-        browserSessionRegistry.getEnabledExtensionIds(profileId).includes(extension.id) &&
-        getBrowserExtensionSessionForProfile(profileId)
+        isEnabledIn(profileId, extension.id) && getBrowserExtensionSessionForProfile(profileId)
     )
   for (const profileId of profileIds) {
     unloadBrowserExtensionFromProfile(profileId, extension.id)
@@ -30,6 +33,15 @@ export async function reloadBrowserExtensionWhereEnabled(
     await prepareBrowserExtensionDirectory(extension, { refresh: true })
   }
   for (const profileId of profileIds) {
-    await loadBrowserExtensionIntoProfile(profileId, extension, 'reload')
+    // Why recheck: a Disable during an earlier await had no load of ours to cancel.
+    if (!isEnabledIn(profileId, extension.id)) {
+      continue
+    }
+    await loadBrowserExtensionIntoProfile(profileId, extension, 'reload').catch((error) => {
+      // A Disable that cancelled this load is not a reload failure; other profiles still reload.
+      if (isEnabledIn(profileId, extension.id)) {
+        throw error
+      }
+    })
   }
 }

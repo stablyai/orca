@@ -1,4 +1,3 @@
-import { CHROME_WEB_STORE_ORIGIN } from '../../../shared/browser-extension-webstore'
 import type { BrowserSessionRequestDecider } from '../browser-session-request-decisions'
 import {
   createDnrRequestState,
@@ -12,7 +11,7 @@ import {
 import type { DnrRequestInfo, DnrResponseHeaders } from './declarative-net-request/request-context'
 import type { DnrRequestAction } from './declarative-net-request/ruleset-matcher'
 import { getDnrSessionRuntime, type DnrSessionRuntime } from './browser-extension-dnr-session'
-import { chromeResourceType } from './browser-extension-web-request'
+import { chromeResourceType, isRequestHiddenFromExtensions } from './browser-extension-web-request'
 
 type RequestDetails = {
   id: number
@@ -22,23 +21,6 @@ type RequestDetails = {
   webContentsId?: number
   frame?: Electron.WebFrameMain | null
   initiatorOrigin?: string
-}
-
-const WEB_URL = /^(?:https?|wss?):/i
-
-/** WebRequestPermissions::HideRequest: requests extensions never see or act on. */
-function isActionable(details: RequestDetails): boolean {
-  if (!WEB_URL.test(details.url)) {
-    return false
-  }
-  // Orca's own main-process requests carry neither a webContents nor an initiator.
-  if (details.webContentsId === undefined && details.initiatorOrigin === undefined) {
-    return false
-  }
-  return !(
-    details.url.startsWith(`${CHROME_WEB_STORE_ORIGIN}/`) ||
-    details.url.startsWith('https://chrome.google.com/webstore')
-  )
 }
 
 function requestInfo(runtime: DnrSessionRuntime, details: RequestDetails): DnrRequestInfo {
@@ -74,7 +56,7 @@ function evaluateOptions(
     hostAccess: (extensionId) =>
       runtime.extensions
         .get(extensionId)
-        ?.hostAccess.access(info.url, info.initiator, info.tabId) ?? 'denied'
+        ?.hostAccess.access(info.url, info.initiator, info.tabId, info.type) ?? 'denied'
   }
 }
 
@@ -247,7 +229,7 @@ function decideHeadersReceived(
 export const browserExtensionDnrRequestDecider: BrowserSessionRequestDecider = {
   beforeRequest: (session, details) => {
     const runtime = getDnrSessionRuntime(session)
-    if (!runtime?.inUse || !isActionable(details)) {
+    if (!runtime?.inUse || isRequestHiddenFromExtensions(details)) {
       return null
     }
     const loading = runtime.whenLoaded()
@@ -257,13 +239,13 @@ export const browserExtensionDnrRequestDecider: BrowserSessionRequestDecider = {
   },
   beforeSendHeaders: (session, details, headers) => {
     const runtime = getDnrSessionRuntime(session)
-    return runtime?.inUse && isActionable(details)
+    return runtime?.inUse && !isRequestHiddenFromExtensions(details)
       ? decideRequestHeaders(runtime, details, headers)
       : headers
   },
   headersReceived: (session, details) => {
     const runtime = getDnrSessionRuntime(session)
-    return runtime?.evaluatesResponses && isActionable(details)
+    return runtime?.evaluatesResponses && !isRequestHiddenFromExtensions(details)
       ? decideHeadersReceived(runtime, details)
       : null
   }
