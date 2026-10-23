@@ -1,4 +1,5 @@
 import { RateLimitServiceFetchTargets } from './service-fetch-targets'
+import { withoutResetWindows } from './service-result-policy'
 import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
@@ -128,9 +129,11 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       return
     }
     const previous = this.state.claude
+    // Why: a kept snapshot can outlive a window's reset; a post carrying only the other window must not relabel it live.
+    const inherited = previous ? withoutResetWindows(previous, Date.now()) : null
     // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
-    const session = freshSession ?? previous?.session ?? null
-    const weekly = freshWeekly ?? previous?.weekly ?? null
+    const session = freshSession ?? inherited?.session ?? null
+    const weekly = freshWeekly ?? inherited?.weekly ?? null
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
@@ -149,7 +152,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         weekly,
         // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible
         // and let its presence keep the OAuth poll ungated (see shouldSkipAutomatedClaudeFetch).
-        fableWeekly: previous?.fableWeekly ?? null,
+        fableWeekly: inherited?.fableWeekly ?? null,
         updatedAt: Date.now(),
         error: null,
         status: 'ok',

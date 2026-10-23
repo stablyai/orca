@@ -4452,10 +4452,6 @@
               "waiting": {
                 "label": "Updates when Claude runs",
                 "message": "Claude usage updates the next time Claude runs."
-              },
-              "expired": {
-                "label": "Sign-in expired",
-                "message": "Claude usage has expired. Start Claude in this account to refresh it."
               }
             }
           },

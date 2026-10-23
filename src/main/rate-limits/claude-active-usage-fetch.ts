@@ -67,10 +67,8 @@ export async function fetchActiveClaudeRateLimits(
     return makeClaudeUsageResult(
       'error',
       failureKind === 'stale-token'
-        ? // Why: Claude refreshes its own login when it next runs; System Default has no "account".
-          metadata.authProvenance === 'system'
-          ? 'Claude usage updates the next time Claude runs.'
-          : 'Claude usage has expired. Start Claude in this account to refresh it.'
+        ? // Why: an idle login's access token lapsed, not the login; Claude refreshes it when it next runs.
+          'Claude usage updates the next time Claude runs.'
         : (failureKind === 'rate-limited' || failureKind === 'missing-scope') &&
             error instanceof OAuthUsageError
           ? error.message

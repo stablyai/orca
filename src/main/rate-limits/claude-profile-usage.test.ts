@@ -84,7 +84,7 @@ it('lets the server decide a locally expired token and never refreshes it', asyn
   calls.usage.mockRejectedValue(new OAuthUsageError('Invalid OAuth token.', 401, true, null))
   expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
     status: 'error',
-    error: 'Claude usage has expired. Start Claude in this account to refresh it.',
+    error: 'Claude usage updates the next time Claude runs.',
     usageMetadata: { failureKind: 'stale-token' }
   })
   expect(calls.usage.mock.calls.map(([token]) => token)).toEqual(['expired-fake'])

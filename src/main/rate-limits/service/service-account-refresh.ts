@@ -1,5 +1,6 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
+import { hasUsageWindows } from './service-result-policy'
 import {
   normalizeCodexAccountSelectionTarget,
   normalizeClaudeAccountSelectionTarget,
@@ -150,9 +151,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
   ): Promise<RateLimitState> {
     const nextTarget = normalizeClaudeAccountSelectionTarget(target)
     // Why: snapshot the outgoing account's usage before clearing so the switcher's inline bars can show last-known data immediately.
+    // A kept snapshot whose 5h window already reset still carries its weekly one.
     if (
       outgoingAccountId &&
-      this.state.claude?.session &&
+      this.state.claude &&
+      hasUsageWindows(this.state.claude) &&
       this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     ) {
       this.inactiveClaudeCache.set(outgoingAccountId, this.state.claude)

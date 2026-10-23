@@ -109,8 +109,8 @@ export const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProv
   'grok'
 ])
 export const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
-// Why: usage-endpoint 429 windows can outlast the generic threshold (Retry-After ~1h); quota is informational, so a stale snapshot beats a bare "Limited".
-export const RATE_LIMITED_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+// Why: a 429 (Retry-After ~1h) and an idle Claude login's lapsed token (until Claude next runs) outlast the generic threshold; quota is informational, so a stale snapshot beats a bare error.
+export const LONG_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
 // Why: statusline posts arrive on every turn; skip renderer pushes for identical windows so streaming sessions don't spam state updates.
 export const LIVE_CLAUDE_INGEST_DEDUPE_MS = 30 * 1000
 export const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
