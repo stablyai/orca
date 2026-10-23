@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useEffectEvent, type RefObject } from 'react'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { DICTATION_SUBMIT_EVENT } from '../dictation/dictation-auto-send'
 
@@ -7,9 +7,7 @@ export function useNativeChatDictationSubmit(
   inputRef: RefObject<NativeChatComposerInput | null>,
   send: () => void
 ): void {
-  // Why: the countdown outlives renders; the latest send carries the dictated draft.
-  const sendRef = useRef(send)
-  sendRef.current = send
+  const sendLatest = useEffectEvent(send)
 
   useEffect(() => {
     const handleSubmit = (event: Event): void => {
@@ -18,7 +16,7 @@ export function useNativeChatDictationSubmit(
       }
       const element: unknown = event.detail?.element
       if (element instanceof Node && inputRef.current?.contains?.(element)) {
-        sendRef.current()
+        sendLatest()
       }
     }
     document.addEventListener(DICTATION_SUBMIT_EVENT, handleSubmit)
