@@ -1,3 +1,8 @@
+import { saveApiProviderAccount } from '../api-provider-account'
+import {
+  AddApiProviderAccountSchema,
+  type AddApiProviderAccount
+} from '../../shared/api-provider-account'
 import { randomUUID } from 'node:crypto'
 import type {
   ClaudeAccountSignIn,
@@ -39,6 +44,37 @@ export class ClaudeAccountRegistration {
     }
   ) {}
 
+  async addApiKey(input: AddApiProviderAccount): Promise<ClaudeRateLimitAccountsState> {
+    const parsed = AddApiProviderAccountSchema.parse(input)
+    const accountId = randomUUID()
+    const target = { runtime: 'host' } as const
+    const folder = await this.deps.runtimeAuth.prepareAccountFolder(accountId, target)
+    try {
+      const provider = saveApiProviderAccount(folder.readPath, parsed, 'claude')
+      const now = Date.now()
+      this.deps.selection.saveSettings({
+        claudeManagedAccounts: [
+          ...this.deps.store.getSettings().claudeManagedAccounts,
+          {
+            id: accountId,
+            email: '',
+            apiProvider: provider,
+            managedAuthPath: folder.readPath,
+            managedAuthRuntime: 'host',
+            authMethod: 'api-key',
+            createdAt: now,
+            updatedAt: now,
+            lastAuthenticatedAt: now
+          }
+        ]
+      })
+    } catch (error) {
+      await this.deps.runtimeAuth.removeAccountFolder(accountId, target)
+      throw error
+    }
+    return this.deps.selection.list()
+  }
+
   /** A new folder, or a saved account's own folder when `accountId` is given. */
   async begin(request: ClaudeSignInRequest): Promise<ClaudeAccountSignIn> {
     const { accountId, target, folder } = await this.prepare(request)
@@ -73,6 +109,9 @@ export class ClaudeAccountRegistration {
 
   private async prepare(request: ClaudeSignInRequest) {
     const saved = request.accountId ? this.deps.selection.requireAccount(request.accountId) : null
+    if (saved?.apiProvider) {
+      throw new Error('Remove and add this API account to change its key.')
+    }
     const target = saved ? getClaudeSelectionTargetForAccount(saved) : signInTarget(request)
     const accountId = saved?.id ?? randomUUID()
     const folder = await this.deps.runtimeAuth.prepareAccountFolder(accountId, target)

@@ -1,7 +1,10 @@
+import type { AddApiProviderAccount } from '../../shared/api-provider-account'
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
 export const claudeAccountsApi = {
+  addApiKey: (input: AddApiProviderAccount) =>
+    ipcRenderer.invoke('claudeAccounts:addApiKey', input),
   list: () => ipcRenderer.invoke('claudeAccounts:list'),
   add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null; copyLink?: boolean }) =>
     ipcRenderer.invoke('claudeAccounts:add', args),

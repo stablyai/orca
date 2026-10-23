@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import { API_PROVIDER_ACCOUNT_FILE, saveApiProviderAccount } from '../api-provider-account'
 import type { ClaudeProfileSetupReport } from './claude-profile-setup'
 import {
   claudeProfileMarkerPath,
@@ -332,6 +333,44 @@ describe('ClaudeProfileRouter', () => {
     f.setup.settle()
     await expect(fourth).resolves.toMatchObject({ configDir: f.home('a') })
   })
+
+  it.each(['settings', 'metadata'])(
+    'refuses an initialized API profile with missing %s before launching or refreshing',
+    async (missing) => {
+      const f = fixture()
+      mkdirSync(f.home('a'), { recursive: true })
+      const apiProvider = saveApiProviderAccount(
+        f.home('a'),
+        {
+          label: 'API',
+          baseUrl: 'https://provider.test',
+          model: 'claude-test',
+          apiKey: 'private-api-key'
+        },
+        'claude'
+      )
+      f.settings.claudeManagedAccounts = f.settings.claudeManagedAccounts.map((account) =>
+        account.id === 'a' ? { ...account, email: '', authMethod: 'api-key', apiProvider } : account
+      )
+      const profile = describeClaudeProfile(f.dataRoot, 'a', {
+        executionHostId: 'local',
+        runtime: 'host'
+      })
+      writeFileSync(claudeProfileMarkerPath(profile), '{}')
+      signIn(f.userHome, 'personal@example.test')
+      const source = join(f.userHome, '.claude', 'settings.json')
+      const original = JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'personal-token' } })
+      writeFileSync(source, original)
+      rmSync(
+        join(f.home('a'), missing === 'settings' ? 'settings.json' : API_PROVIDER_ACCOUNT_FILE)
+      )
+      await expect(f.router.prepareLaunch()).rejects.toThrow(/API account/)
+      expect(f.setup.calls).toBe(0)
+      expect(() => f.router.publish()).toThrow(/API account/)
+      expect(existsSync(f.router.pointerPath)).toBe(false)
+      expect(readFileSync(source, 'utf8')).toBe(original)
+    }
+  )
 
   it('makes a launch redo a first setup that was cut off after its ownership gate', async () => {
     const f = fixture()

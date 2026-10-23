@@ -1,3 +1,4 @@
+import type { AddApiProviderAccount } from '../../shared/api-provider-account'
 import { execFileSync, spawn } from 'node:child_process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import type {
@@ -161,6 +162,11 @@ export class CodexAccountService {
     const next = this.mutationQueue.then(fn, fn)
     this.mutationQueue = next.catch(() => {})
     return next
+  }
+
+  addApiKeyAccount(input: AddApiProviderAccount): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() => this.registration.addApiKey(input))
   }
 
   listAccounts(): CodexRateLimitAccountsState {

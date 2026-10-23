@@ -114,6 +114,7 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
   return {
     list: async () => (await fetchAccountsSnapshot(false)).claude,
     add: rejectHostOnlySignIn,
+    addApiKey: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: rejectHostOnlySignIn,
     waitForSignInLink: () => Promise.resolve(null),
@@ -149,6 +150,7 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
   return {
     list: async () => (await fetchAccountsSnapshot(false)).codex,
     add: rejectHostOnlySignIn,
+    addApiKey: rejectHostOnlySignIn,
     cancelPendingLogin: () => Promise.resolve(false),
     // Why: the login runs on the desktop host that owns the browser, so a web
     // client has no link to offer and nothing to publish changes from.

@@ -1,3 +1,4 @@
+import { assertApiProviderAccountHome } from '../api-provider-account'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
@@ -111,6 +112,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       return null
     }
     const perAccountHome = resolved.homePath
+    assertApiProviderAccountHome(perAccountHome, account.apiProvider, 'codex')
     if (
       unavailableManagedHomePath &&
       normalizeRuntimePathForComparison(unavailableManagedHomePath) ===

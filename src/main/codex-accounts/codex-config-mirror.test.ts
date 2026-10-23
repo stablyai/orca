@@ -4,6 +4,7 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultSettings } from '../../shared/constants'
+import { API_PROVIDER_ACCOUNT_FILE, saveApiProviderAccount } from '../api-provider-account'
 
 const testState = vi.hoisted(() => ({ fakeHomeDir: '' }))
 
@@ -89,5 +90,60 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
       `model = "gpt-5"\n\n[features]\n${OVERRIDE_LINE}\n`
     )
+  })
+})
+
+describe('Codex API account mirror isolation', () => {
+  it('refuses a missing sidecar without promoting API settings into System default', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-api-mirror-'))
+    testState.fakeHomeDir = root
+    try {
+      const systemHome = join(root, '.codex')
+      const managedHomePath = join(root, 'account')
+      mkdirSync(systemHome)
+      mkdirSync(managedHomePath)
+      const canonical = 'model = "subscription-model"\nmodel_provider = "openai"\n'
+      writeFileSync(join(systemHome, 'config.toml'), canonical)
+      const settings = getDefaultSettings(root)
+      const mirror = new CodexConfigMirror({ getSettings: () => settings }, (path) => path)
+      mirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
+      const apiProvider = saveApiProviderAccount(
+        managedHomePath,
+        {
+          label: 'API',
+          baseUrl: 'https://provider.test/v1',
+          model: 'api-model',
+          apiKey: 'private-api-key'
+        },
+        'codex'
+      )
+      settings.codexManagedAccounts = [
+        {
+          id: 'acct',
+          email: '',
+          apiProvider,
+          managedHomePath,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+      mirror.safeSyncToManagedHomes()
+      const runtimeBefore = readFileSync(join(managedHomePath, 'config.toml'), 'utf8')
+      expect(runtimeBefore).toContain('orca_api_account')
+      rmSync(join(managedHomePath, API_PROVIDER_ACCOUNT_FILE))
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        mirror.safeSyncToManagedHomes()
+        mirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
+        expect(readFileSync(join(systemHome, 'config.toml'), 'utf8')).toBe(canonical)
+        expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf8')).toBe(runtimeBefore)
+        expect(warning).toHaveBeenCalled()
+      } finally {
+        warning.mockRestore()
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

@@ -14,6 +14,7 @@ vi.mock('../codex-accounts/fs-utils', async (original) => {
 })
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { provisionClaudeProfile } from './claude-profile-provisioning'
+import { API_PROVIDER_ACCOUNT_FILE, saveApiProviderAccount } from '../api-provider-account'
 
 const USER_HOOK = { matcher: '', hooks: [{ type: 'command', command: 'notify-me' }] }
 const ORCA_HOOK = {
@@ -170,6 +171,94 @@ describe('Claude profile refresh from the default home', () => {
       expect(f.read(elsewhere)).toEqual({ mine: true })
     }
   )
+  it('preserves API credentials through repeated refreshes and never copies provider metadata from System default', async () => {
+    const f = fixture()
+    const provider = {
+      label: 'API',
+      baseUrl: 'https://provider.test',
+      model: 'claude-test',
+      apiKey: 'private-api-key'
+    }
+    saveApiProviderAccount(f.profileHome, provider, 'claude')
+    f.json(join(f.source, API_PROVIDER_ACCOUNT_FILE), { ...provider, label: 'wrong account' })
+    f.json(join(f.source, 'settings.json'), {
+      env: { SHARED: 'new' },
+      hooks: { Stop: [USER_HOOK] }
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toMatchObject({
+      env: {
+        SHARED: 'new',
+        ANTHROPIC_AUTH_TOKEN: provider.apiKey,
+        ANTHROPIC_BASE_URL: provider.baseUrl
+      },
+      hooks: { Stop: [USER_HOOK] }
+    })
+    expect(f.read(join(f.profileHome, API_PROVIDER_ACCOUNT_FILE))).toEqual({
+      label: provider.label,
+      baseUrl: provider.baseUrl,
+      model: provider.model
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
+    expect(f.read(join(f.source, 'settings.json'))).not.toHaveProperty('env.ANTHROPIC_AUTH_TOKEN')
+  })
+
+  it.each(['missing', 'corrupt'])(
+    'refuses an API settings refresh with %s credentials instead of copying another account',
+    async (kind) => {
+      const f = fixture()
+      saveApiProviderAccount(
+        f.profileHome,
+        {
+          label: 'API',
+          baseUrl: 'https://provider.test',
+          model: 'claude-test',
+          apiKey: 'private-api-key'
+        },
+        'claude'
+      )
+      const target = join(f.profileHome, 'settings.json')
+      f.json(join(f.source, 'settings.json'), { env: { ANTHROPIC_AUTH_TOKEN: 'another-account' } })
+      if (kind === 'missing') {
+        fs.rmSync(target)
+      } else {
+        fs.writeFileSync(target, '{corrupt')
+      }
+      expect((await provision(f)).surfaces['settings.json']).toBe('failed')
+      if (kind === 'missing') {
+        expect(fs.existsSync(target)).toBe(false)
+      } else {
+        expect(fs.readFileSync(target, 'utf8')).toBe('{corrupt')
+      }
+    }
+  )
+
+  itLinks(
+    'never writes API credentials through a settings symlink into System default',
+    async () => {
+      const f = fixture()
+      saveApiProviderAccount(
+        f.profileHome,
+        {
+          label: 'API',
+          baseUrl: 'https://provider.test',
+          model: 'claude-test',
+          apiKey: 'private-api-key'
+        },
+        'claude'
+      )
+      const target = join(f.profileHome, 'settings.json')
+      const source = join(f.source, 'settings.json')
+      const original = fs.readFileSync(target, 'utf8')
+      fs.writeFileSync(source, original)
+      fs.rmSync(target)
+      fs.symlinkSync(source, target)
+      expect((await provision(f)).surfaces['settings.json']).toBe('failed')
+      expect(fs.readFileSync(source, 'utf8')).toBe(original)
+      expect(fs.lstatSync(target).isSymbolicLink()).toBe(true)
+    }
+  )
+
   it('copies state except the login, caches and install ids, and never copies credentials', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')

@@ -1,3 +1,4 @@
+import { AddApiProviderAccountSchema } from '../../shared/api-provider-account'
 import { ipcMain } from 'electron'
 import type { CodexAccountAddTarget, CodexAccountService } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
@@ -35,6 +36,9 @@ export function registerCodexAccountHandlers(
     }
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
   })
+  ipcMain.handle('codexAccounts:addApiKey', (_event, input: unknown) =>
+    codexAccounts.addApiKeyAccount(AddApiProviderAccountSchema.parse(input))
+  )
   ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)

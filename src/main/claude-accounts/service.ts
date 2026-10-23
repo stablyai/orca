@@ -1,3 +1,4 @@
+import type { AddApiProviderAccount } from '../../shared/api-provider-account'
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
@@ -39,6 +40,11 @@ export class ClaudeAccountService {
       runtimeAuth,
       selection: this.selection
     })
+  }
+
+  addApiKeyAccount(input: AddApiProviderAccount): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() => this.registration.addApiKey(input))
   }
 
   listAccounts(): ClaudeRateLimitAccountsState {

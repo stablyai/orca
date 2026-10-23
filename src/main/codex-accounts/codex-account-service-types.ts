@@ -64,6 +64,7 @@ export function toCodexManagedAccountSummary(
 ): CodexManagedAccountSummary {
   return {
     id: account.id,
+    apiProvider: account.apiProvider,
     email: account.email,
     managedHomeRuntime: account.managedHomeRuntime ?? 'host',
     wslDistro: account.wslDistro ?? null,

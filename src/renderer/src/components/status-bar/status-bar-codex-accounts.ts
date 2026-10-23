@@ -148,6 +148,7 @@ function getCodexStatusAccountsFromSettings(
       .map((account) => ({
         id: account.id,
         email: account.email,
+        apiProvider: account.apiProvider,
         managedHomeRuntime: account.managedHomeRuntime ?? 'host',
         wslDistro: account.wslDistro ?? null,
         providerAccountId: account.providerAccountId ?? null,

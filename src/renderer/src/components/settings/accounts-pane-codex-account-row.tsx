@@ -84,7 +84,9 @@ export function renderCodexAccountRow(
           className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
         >
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-medium">{account.email}</span>
+            <span className="truncate text-sm font-medium">
+              {account.apiProvider?.label ?? account.email}
+            </span>
             <Badge
               variant="outline"
               className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
@@ -150,7 +152,7 @@ export function renderCodexAccountRow(
                 getProviderAccountRuntime(account)
               )
             }}
-            disabled={isRemoteAccountScope || isBusy}
+            disabled={!!account.apiProvider || isRemoteAccountScope || isBusy}
             className="h-6 px-2 text-muted-foreground hover:text-foreground"
           >
             {isReauthing ? (

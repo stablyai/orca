@@ -1,3 +1,4 @@
+import { assertApiProviderAccountHome } from '../api-provider-account'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -108,6 +109,23 @@ export class CodexConfigMirror {
     canonicalConfig = this.readForManagedHome(managedHomePath),
     expectedAccountId?: string
   ): void {
+    const account = this.store
+      .getSettings()
+      .codexManagedAccounts.find((entry) =>
+        expectedAccountId
+          ? entry.id === expectedAccountId
+          : entry.managedHomePath === managedHomePath
+      )
+    if (account?.apiProvider) {
+      const trustedPath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
+      assertApiProviderAccountHome(trustedPath, account.apiProvider, 'codex')
+      syncSystemConfigIntoManagedCodexHome({
+        runtimeHomePath: trustedPath,
+        systemHomePath: canonicalConfig?.sourceHomePath ?? join(homedir(), '.codex'),
+        systemConfigDir: canonicalConfig?.sourceConfigDir
+      })
+      return
+    }
     if (canonicalConfig === null) {
       // Why: with no ~/.codex/config.toml there is nothing to mirror, but Codex still cannot start in a long home without the daemon guard.
       // WSL homes are skipped: their ownership check is a blocking wsl.exe call (startup, account switch), and WSL launch prep guards the home it launches.

@@ -96,6 +96,10 @@ export class ClaudeAccountSelection {
 
   private summarize(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
     const summary = this.savedSummary(account)
+    if (account.apiProvider) {
+      this.runtimeAuth.router.accountHome(account.id)
+      return summary
+    }
     if (account.managedAuthRuntime === 'wsl') {
       // Why no read: listing must not start a stopped distro. Only an older Orca's folder layout
       // is known to hold no login; a launch refuses a missing folder with its own reason.
@@ -121,6 +125,7 @@ export class ClaudeAccountSelection {
   private savedSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
     return {
       id: account.id,
+      apiProvider: account.apiProvider,
       email: account.email,
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
       wslDistro: account.wslDistro ?? null,

@@ -535,6 +535,26 @@ describe('ClaudeAccountService', () => {
     expect(f.settings().activeClaudeManagedAccountIdsByRuntime?.host).toBe('b')
   })
 
+  it('marks an invalid API profile for repair and refuses selection before changing the active account', async () => {
+    const f = fixture([
+      account('a'),
+      account('b', {
+        authMethod: 'api-key',
+        apiProvider: { label: 'API', baseUrl: 'https://provider.test/anthropic', model: 'opus' }
+      })
+    ])
+    vi.spyOn(f.runtimeAuth.router, 'accountHome').mockImplementation((id) => {
+      if (id === 'b') {
+        throw new Error('The API account key is missing.')
+      }
+      return f.home(id)
+    })
+    expect(f.service.listAccounts().accounts.find((row) => row.id === 'b')?.needsSignIn).toBe(true)
+    await expect(f.service.selectAccount('b')).rejects.toThrow('The API account key is missing.')
+    expect(f.settings().activeClaudeManagedAccountIdsByRuntime?.host).toBe('a')
+    expect(f.runtimeAuth.syncForCurrentSelection).not.toHaveBeenCalled()
+  })
+
   it('refuses to select a WSL account for the host', async () => {
     const f = fixture([
       account('a'),

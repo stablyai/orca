@@ -1,3 +1,9 @@
+import { saveApiProviderAccount } from '../api-provider-account'
+import {
+  AddApiProviderAccountSchema,
+  type AddApiProviderAccount,
+  type ApiProviderAccount
+} from '../../shared/api-provider-account'
 import { randomUUID } from 'node:crypto'
 import type {
   CodexManagedAccount,
@@ -76,11 +82,32 @@ export class CodexAccountRegistration {
     }
   }
 
+  async addApiKey(input: AddApiProviderAccount): Promise<CodexRateLimitAccountsState> {
+    const parsed = AddApiProviderAccountSchema.parse(input)
+    const accountId = randomUUID()
+    const home = await this.dependencies.managedHomes.create(accountId, { runtime: 'host' })
+    try {
+      this.dependencies.configMirror.safeSyncIntoManagedHome(
+        home.managedHomePath,
+        undefined,
+        accountId
+      )
+      const provider = saveApiProviderAccount(home.managedHomePath, parsed, 'codex')
+      return await this.persistCapturedAccount(accountId, home, provider)
+    } catch (error) {
+      this.dependencies.managedHomes.removeUnlessUnproven(error, home.managedHomePath, accountId)
+      throw error
+    }
+  }
+
   async reauthenticate(
     accountId: string,
     options?: CodexAccountReauthenticateOptions
   ): Promise<CodexRateLimitAccountsState> {
     const account = this.dependencies.selection.requireAccount(accountId)
+    if (account.apiProvider) {
+      throw new Error('Remove and add this API account to change its key.')
+    }
     const managedHomePath =
       await this.dependencies.managedHomePaths.ensureForReauthentication(account)
     const accountTarget = getCodexSelectionTargetForAccount(account)
@@ -148,16 +175,18 @@ export class CodexAccountRegistration {
 
   private async persistCapturedAccount(
     accountId: string,
-    managedHome: ManagedCodexHomeLocation
+    managedHome: ManagedCodexHomeLocation,
+    apiProvider?: ApiProviderAccount
   ): Promise<CodexRateLimitAccountsState> {
     const identity = this.dependencies.readIdentityFromHome(managedHome.managedHomePath, accountId)
-    if (!identity.email) {
+    if (!identity.email && !apiProvider) {
       throw new Error('Codex login completed, but Orca could not resolve the account email.')
     }
     const now = Date.now()
     const account: CodexManagedAccount = {
       id: accountId,
-      email: identity.email,
+      email: identity.email ?? '',
+      apiProvider,
       managedHomePath: managedHome.managedHomePath,
       managedHomeRuntime: managedHome.managedHomeRuntime,
       wslDistro: managedHome.wslDistro,

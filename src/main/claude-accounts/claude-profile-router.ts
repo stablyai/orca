@@ -1,3 +1,4 @@
+import { assertApiProviderAccountHome, apiProviderUsageNotice } from '../api-provider-account'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -123,10 +124,10 @@ export class ClaudeProfileRouter {
    * same email, so an account saved before per-account folders logs nobody out.
    */
   coveredBySystemDefault(accountId: string): boolean {
-    if (this.accountLogin(accountId)) {
+    const saved = findClaudeAccount(this.args.getSettings(), accountId)
+    if (saved?.apiProvider || this.accountLogin(accountId)) {
       return false
     }
-    const saved = findClaudeAccount(this.args.getSettings(), accountId)
     const systemDefault = this.systemDefaultLogin()
     return Boolean(saved && systemDefault && isSameClaudeLogin(saved, systemDefault))
   }
@@ -242,10 +243,13 @@ export class ClaudeProfileRouter {
   }
 
   private describe(accountId: string): ClaudeProfileDescriptor {
-    return describeClaudeProfile(this.args.dataRoot, accountId, {
+    const profile = describeClaudeProfile(this.args.dataRoot, accountId, {
       executionHostId: 'local',
       runtime: 'host'
     })
+    const account = findClaudeAccount(this.args.getSettings(), accountId)
+    assertApiProviderAccountHome(profile.home, account?.apiProvider, 'claude')
+    return profile
   }
 
   /** One setup per account at a time; a later request reuses the running one. */
@@ -319,7 +323,6 @@ export class ClaudeProfileRouter {
   }
 
   preparation(): ClaudeRuntimeAuthPreparation {
-    const profile = this.routedProfile()
     const home = this.routedHome()
     return {
       configDir: home ?? this.systemDefaultHome(),
@@ -327,7 +330,8 @@ export class ClaudeProfileRouter {
       wslDistro: null,
       wslLinuxConfigDir: null,
       envPatch: this.launchEnv(),
-      provenance: home ? `profile:${profile?.accountId}` : 'system'
+      ...apiProviderUsageNotice(home),
+      provenance: home ? `profile:${this.selectedProfile()?.accountId}` : 'system'
     }
   }
 
@@ -366,6 +370,7 @@ export class ClaudeProfileRouter {
     return {
       configDir: home,
       envPatch: { CLAUDE_CONFIG_DIR: home },
+      ...apiProviderUsageNotice(home),
       provenance: `profile:${accountId}`
     }
   }

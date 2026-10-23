@@ -77,7 +77,7 @@ export function createCodexAccountActionRunner(
 
   // Why: remote Windows flattens host and WSL rows, so mutation follow-up must
   // compare the selected row's runtime slot instead of the forced host view.
-  return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
+  return async (action, operation, actionRuntime = accountRuntime, options): Promise<void> => {
     const previousActiveAccountId = getProviderAccountActiveIdForView(codexAccounts, actionRuntime)
     setCodexAction(action)
     try {
@@ -135,6 +135,9 @@ export function createCodexAccountActionRunner(
       if (isCodexAccountCancellation(error)) {
         return
       }
+      if (options?.rethrowErrors) {
+        throw error
+      }
       toast.error(
         translate(
           'auto.components.settings.AccountsPane.5bf8764953',
@@ -187,7 +190,7 @@ export function createClaudeAccountActionRunner(
     }
   }
 
-  return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
+  return async (action, operation, actionRuntime = accountRuntime, options): Promise<void> => {
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
     try {
@@ -234,6 +237,9 @@ export function createClaudeAccountActionRunner(
     } catch (error) {
       if (isClaudeAccountCancellation(error)) {
         return
+      }
+      if (options?.rethrowErrors) {
+        throw error
       }
       toast.error(
         translate(

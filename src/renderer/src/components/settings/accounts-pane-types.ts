@@ -55,13 +55,15 @@ export type ProviderAccountVisibilityOptions = {
 export type CodexAccountActionRunner = (
   action: CodexAccountAction,
   operation: () => Promise<CodexRateLimitAccountsState>,
-  actionRuntime?: ProviderAccountRuntimeView
+  actionRuntime?: ProviderAccountRuntimeView,
+  options?: { rethrowErrors?: boolean }
 ) => Promise<void>
 
 export type ClaudeAccountActionRunner = (
   action: ClaudeAccountAction,
   operation: () => Promise<ClaudeRateLimitAccountsState>,
-  actionRuntime?: ProviderAccountRuntimeView
+  actionRuntime?: ProviderAccountRuntimeView,
+  options?: { rethrowErrors?: boolean }
 ) => Promise<void>
 
 export type AccountsPaneSectionModel = {

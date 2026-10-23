@@ -1,6 +1,7 @@
 export type CodexDisplayAccount = {
   id: string
   email: string
+  apiProvider?: { label: string; model: string }
   workspaceLabel?: string | null
 }
 
@@ -13,6 +14,9 @@ export function getCodexAccountDisplayDetail(
   account: CodexDisplayAccount,
   accounts: readonly CodexDisplayAccount[]
 ): string | null {
+  if (account.apiProvider) {
+    return account.apiProvider.model
+  }
   const workspace = account.workspaceLabel?.trim() || null
   const email = normalizeCodexAccountEmail(account.email)
   const peers = accounts.filter(
@@ -42,6 +46,9 @@ export function getCodexAccountDisplayLabel(
   account: CodexDisplayAccount,
   accounts: readonly CodexDisplayAccount[]
 ): string {
+  if (account.apiProvider) {
+    return account.apiProvider.label
+  }
   const detail = getCodexAccountDisplayDetail(account, accounts)
   return detail ? `${account.email} (${detail})` : account.email
 }

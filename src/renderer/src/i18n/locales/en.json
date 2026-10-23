@@ -20719,7 +20719,21 @@
       "cancelFailed": "Could not reach the server to cancel yet.",
       "cancel": "Cancel"
     },
-    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser."
+    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "api": {
+      "name": "Account name",
+      "endpoint": "API endpoint",
+      "model": "Model",
+      "key": "API key",
+      "invalidDetails": "Check the account details and HTTPS endpoint.",
+      "saveFailed": "Could not save the API account.",
+      "add": "Add API account",
+      "title": "Add {{agent}} API account",
+      "description": "Save a provider key and endpoint for the account picker. Usage is billed by your API provider.",
+      "saving": "Saving…",
+      "save": "Save account",
+      "billingModel": "API key billing · {{model}}"
+    }
   },
   "fileSearch": {
     "failed": "Search failed. Try again.",

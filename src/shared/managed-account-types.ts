@@ -1,3 +1,5 @@
+import type { ApiProviderAccount } from './api-provider-account'
+
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
 export type ManagedDataAccountSummary = {
@@ -13,6 +15,7 @@ export type ManagedDataAccountsState = {
 }
 
 export type CodexManagedAccount = {
+  apiProvider?: ApiProviderAccount
   id: string
   email: string
   managedHomePath: string
@@ -28,6 +31,7 @@ export type CodexManagedAccount = {
 }
 
 export type CodexManagedAccountSummary = {
+  apiProvider?: ApiProviderAccount
   id: string
   email: string
   managedHomeRuntime?: 'host' | 'wsl'
@@ -70,13 +74,14 @@ export type CodexManagedAccountRuntimeSelection = {
 }
 
 export type ClaudeManagedAccount = {
+  apiProvider?: ApiProviderAccount
   id: string
   email: string
   managedAuthPath: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxAuthPath?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: 'subscription-oauth' | 'api-key' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number
@@ -85,11 +90,12 @@ export type ClaudeManagedAccount = {
 }
 
 export type ClaudeManagedAccountSummary = {
+  apiProvider?: ApiProviderAccount
   id: string
   email: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: 'subscription-oauth' | 'api-key' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number

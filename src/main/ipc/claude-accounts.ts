@@ -1,3 +1,4 @@
+import { AddApiProviderAccountSchema } from '../../shared/api-provider-account'
 import { ipcMain } from 'electron'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
@@ -5,6 +6,9 @@ import { openAccountSignInLink } from './account-sign-in-link-opener'
 
 export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountService): void {
   claudeAccounts.setWslSignInLinkOpener((signInLink) => openAccountSignInLink('claude', signInLink))
+  ipcMain.handle('claudeAccounts:addApiKey', (_event, input: unknown) =>
+    claudeAccounts.addApiKeyAccount(AddApiProviderAccountSchema.parse(input))
+  )
   ipcMain.handle('claudeAccounts:list', () => claudeAccounts.listAccounts())
   ipcMain.handle(
     'claudeAccounts:add',

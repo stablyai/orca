@@ -1,6 +1,13 @@
+import {
+  API_PROVIDER_ACCOUNT_FILE,
+  assertApiProviderAccountHome,
+  preserveClaudeApiProviderSettings,
+  readApiProviderAccount,
+  writeApiAccountFile
+} from '../api-provider-account'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   resolveClaudeGlobalConfigFile,
@@ -98,6 +105,7 @@ const CLAUDE_RUNTIME_STATE_ENTRIES = [
 const UNSHARED_ENTRIES: ReadonlySet<string> = new Set<string>([
   ...CLAUDE_RUNTIME_STATE_ENTRIES,
   'settings.json',
+  API_PROVIDER_ACCOUNT_FILE,
   ...CLAUDE_PROFILE_HISTORY_DIRS
 ])
 
@@ -171,6 +179,24 @@ function settingsWithoutOrcaHooks(value: Record<string, unknown>): string {
 function copySettings(source: string, target: string): ClaudeProfileSurfaceOutcome {
   const input = readClaudeProfileObject(source)
   const current = readClaudeProfileObject(target)
+  const provider = readApiProviderAccount(dirname(target))
+  if (provider) {
+    assertApiProviderAccountHome(dirname(target), provider, 'claude')
+    if (current.kind !== 'present' || input.kind === 'unavailable') {
+      throw new Error('The API account settings could not be refreshed safely.')
+    }
+    const sourceValue = input.kind === 'present' ? input.value : {}
+    const merged = preserveClaudeApiProviderSettings(dirname(target), sourceValue, current.value)
+    if (settingsWithoutOrcaHooks(merged) === settingsWithoutOrcaHooks(current.value)) {
+      return 'unchanged'
+    }
+    writeApiAccountFile(
+      target,
+      `${JSON.stringify(merged, null, 2)}\n`,
+      () => !lstatIfPresent(target)?.isSymbolicLink()
+    )
+    return 'synced'
+  }
   // Why by value: the hook installer rewrites the copy in its own layout after every refresh.
   if (
     input.kind === 'present' &&

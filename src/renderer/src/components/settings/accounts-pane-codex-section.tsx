@@ -1,3 +1,4 @@
+import { ApiProviderAccountDialog } from './ApiProviderAccountDialog'
 import { AlertTriangle, Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
@@ -161,6 +162,14 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {!isRemoteAccountScope && accountRuntime.runtime === 'host' ? (
+              <ApiProviderAccountDialog
+                agent="codex"
+                disabled={codexAction !== 'idle' || accountRuntimeUnavailable}
+                runAction={runCodexAccountAction}
+              />
+            ) : null}
+
             <Button
               variant="outline"
               size="xs"

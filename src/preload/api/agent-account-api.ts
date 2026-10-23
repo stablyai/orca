@@ -1,3 +1,4 @@
+import type { AddApiProviderAccount } from '../../shared/api-provider-account'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -8,6 +9,7 @@ import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
 import type { MiniMaxCredentialsStatus } from '../../shared/minimax-credentials-status'
 
 export type CodexAccountsApi = {
+  addApiKey: (input: AddApiProviderAccount) => Promise<CodexRateLimitAccountsState>
   list: () => Promise<CodexRateLimitAccountsState>
   add: (args?: {
     runtime?: 'host' | 'wsl'
@@ -42,6 +44,7 @@ export type CodexAccountsApi = {
 }
 
 export type ClaudeAccountsApi = {
+  addApiKey: (input: AddApiProviderAccount) => Promise<ClaudeRateLimitAccountsState>
   list: () => Promise<ClaudeRateLimitAccountsState>
   add: (args?: {
     runtime?: 'host' | 'wsl'

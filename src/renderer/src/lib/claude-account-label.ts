@@ -8,5 +8,6 @@ export function getClaudeAccountLabel(
   if (accountId == null) {
     return 'System default'
   }
-  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Claude account'
+  const account = state.accounts.find((entry) => entry.id === accountId)
+  return account?.apiProvider?.label ?? account?.email ?? 'Claude account'
 }
