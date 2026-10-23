@@ -8,7 +8,7 @@ import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind, TerminalInputOrigin } from '../../shared/terminal-input-kind'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
@@ -81,16 +81,23 @@ export const ptySessionControlApi = {
     agentResumeUnavailable?: true
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
-  write: (id: string, data: string, inputKind: TerminalInputKind): void => {
-    ipcRenderer.send('pty:write', { id, data, inputKind })
+  write: (
+    id: string,
+    data: string,
+    inputKind: TerminalInputKind,
+    inputOrigin?: TerminalInputOrigin
+  ): void => {
+    ipcRenderer.send('pty:write', { id, data, inputKind, ...(inputOrigin ? { inputOrigin } : {}) })
   },
   writeAccepted: (
     id: string,
     data: string,
     inputKind: TerminalInputKind,
-    options?: { requireWriteSettlement?: true }
+    options?: { requireWriteSettlement?: true; inputOrigin?: TerminalInputOrigin }
   ): Promise<boolean> =>
     ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind, ...options }),
+  interruptSubmissionPaste: (id: string): void =>
+    ipcRenderer.send('pty:interruptSubmissionPaste', id),
   onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
       callback(payload)

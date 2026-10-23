@@ -25,7 +25,7 @@ describe('sendCapturedTerminalInput', () => {
         data: '\r'
       })
     ).toBe(true)
-    expect(transport.sendInput).toHaveBeenCalledWith('\r', 'driving')
+    expect(transport.sendInput).toHaveBeenCalledWith('\r', 'driving', 'human')
   })
 
   it('runs the accepted callback only after a successful captured send', () => {

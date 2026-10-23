@@ -1,11 +1,11 @@
+import { installPtyGridDriftRepair } from './pty-grid-drift-repair'
+import type { TerminalInputOrigin } from '../../../../../shared/terminal-input-kind'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
-import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
-import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { getAppliedSizeReadE2eDelayMs } from '../pty-applied-size-read-e2e-delay'
@@ -19,7 +19,6 @@ import {
   type PanePtyResizeHoldFlushDetail
 } from '@/lib/pane-manager/pane-pty-resize-hold'
 
-import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
@@ -28,7 +27,11 @@ import { initializePaneGeometry, readPaneSize } from './read-pane-size'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
-  session.forwardPtyInput = (data: string, wasUserInput = false): void => {
+  session.forwardPtyInput = (
+    data: string,
+    wasUserInput = false,
+    inputOrigin?: TerminalInputOrigin
+  ): void => {
     // Why: replaying recorded PTY bytes makes xterm auto-reply to embedded
     // queries (DA1/DECRQM/OSC 10-11/CPR) via onData; those must not leak into
     // the shell, but keystrokes typed mid-restore must survive. Pointer input
@@ -116,8 +119,11 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
         session.cancelSuspendedShellCommandInference()
       }
       session.clearPendingTerminalInputIntent()
-      const writePromise = session.transport
-        .sendInputAccepted(data, inputKind)
+      const writePromise = (
+        inputOrigin
+          ? session.transport.sendInputAccepted(data, inputKind, { inputOrigin })
+          : session.transport.sendInputAccepted(data, inputKind)
+      )
         .then((accepted): boolean | Promise<boolean> | null => {
           if (accepted) {
             // Why: rejected writes use transport recovery and must not arm a parser probe.
@@ -146,7 +152,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
     if (intent) {
       session.claimViewportForUserActivity(data)
-      if (session.transport.sendInput(data, inputKind)) {
+      const accepted = inputOrigin
+        ? session.transport.sendInput(data, inputKind, inputOrigin)
+        : session.transport.sendInput(data, inputKind)
+      if (accepted) {
         session.markAcceptedTerminalInputSent()
         session.observeAcceptedShellCommandInput(data)
         session.observeAcceptedTerminalInput(data, intent)
@@ -157,7 +166,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       return
     }
     session.claimViewportForUserActivity(data)
-    if (session.transport.sendInput(data, inputKind)) {
+    const accepted = inputOrigin
+      ? session.transport.sendInput(data, inputKind, inputOrigin)
+      : session.transport.sendInput(data, inputKind)
+    if (accepted) {
       session.markAcceptedTerminalInputSent()
       session.observeAcceptedShellCommandInput(data)
       session.observeAcceptedTerminalInput(data)
@@ -169,12 +181,19 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   }
   // Why bind once: provenance must survive deferPtyInput's later callback, and
   // this is the per-keystroke hot path, so no closure allocation per onData event.
-  const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
+  const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true, 'human')
+  const forwardProgrammaticInput = (data: string): void =>
+    session.forwardPtyInput(data, true, 'programmatic')
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
   session.onDataDisposable = subscribeToTerminalInputData(
     session.pane.terminal,
-    (data, wasUserInput) => {
-      const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
+    (data, wasUserInput, inputOrigin) => {
+      const forward =
+        inputOrigin === 'programmatic'
+          ? forwardProgrammaticInput
+          : wasUserInput
+            ? forwardUserInput
+            : forwardUnclassifiedInput
       if (session.deps.deferPtyInput) {
         session.deps.deferPtyInput(session.pane.id, data, forward)
         return
@@ -312,61 +331,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       }
     }
   }
-  session.pendingForegroundGridDriftCheckRaf = null
-  session.lastForegroundGridDriftCheckAt = Number.NEGATIVE_INFINITY
-  session.readProposedTerminalGrid = (): { cols: number; rows: number } | null => {
-    try {
-      const proposed = session.pane.fitAddon.proposeDimensions()
-      if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
-        return null
-      }
-      return proposed
-    } catch {
-      return null
-    }
-  }
-  session.terminalGridDriftedFromFit = (): boolean => {
-    const proposed = session.readProposedTerminalGrid()
-    return Boolean(
-      proposed &&
-      (session.pane.terminal.cols !== proposed.cols || session.pane.terminal.rows !== proposed.rows)
-    )
-  }
-  session.scheduleForegroundGridDriftCheck = (force = false): void => {
-    if (
-      session.disposed ||
-      !session.deps.isVisibleRef.current ||
-      session.shouldSuppressDesktopPtyResize() ||
-      session.pendingForegroundGridDriftCheckRaf !== null ||
-      (!force && session.terminalSelectionFitGuard?.isActive())
-    ) {
-      return
-    }
-    const now = performance.now()
-    if (
-      !force &&
-      now - session.lastForegroundGridDriftCheckAt < FOREGROUND_GRID_DRIFT_CHECK_MIN_MS
-    ) {
-      return
-    }
-    session.lastForegroundGridDriftCheckAt = now
-    session.pendingForegroundGridDriftCheckRaf = requestAnimationFrame(() => {
-      session.pendingForegroundGridDriftCheckRaf = null
-      if (
-        session.disposed ||
-        !session.deps.isVisibleRef.current ||
-        session.shouldSuppressDesktopPtyResize() ||
-        session.terminalSelectionFitGuard?.isActive() ||
-        !session.terminalGridDriftedFromFit()
-      ) {
-        return
-      }
-      requestStablePaneFit(session.pane as ManagedPaneInternal, () =>
-        session.ptySizeReassertion.request({ fit: false })
-      )
-    })
-  }
-
+  installPtyGridDriftRepair(session)
   session.readPaneSize = () => readPaneSize(session)
   initializePaneGeometry(session)
 }

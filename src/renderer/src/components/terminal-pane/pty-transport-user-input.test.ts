@@ -86,4 +86,33 @@ describe('createIpcPtyTransport: input kind', () => {
       ['pty-1', 'startup', 'launch']
     ])
   })
+  it('preserves submit authors across a deferred remount, coalescing, and accepted IPC writes', async () => {
+    const spawn = createDeferred<Awaited<ReturnType<typeof window.api.pty.spawn>>>()
+    vi.mocked(window.api.pty.spawn).mockReturnValue(spawn.promise)
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const captured: PtyPreconnectInputEntry[] = []
+    const predecessor = createIpcPtyTransport({
+      bufferInputUntilConnect: true,
+      onPreconnectInput: (entry) => captured.push(entry)
+    })
+    void predecessor.connect({ url: '', callbacks: {} })
+    predecessor.sendInput('draft', 'driving', 'human')
+    predecessor.sendInput('\r', 'driving', 'programmatic')
+    predecessor.sendInput('\r', 'driving', 'human')
+    predecessor.destroy?.()
+    const successor = createIpcPtyTransport({ preconnectInput: captured })
+    spawn.resolve({ id: 'pty-1' })
+    await successor.connect({ url: '', callbacks: {} })
+    await flushAsyncTicks()
+    await successor.sendInputAccepted?.('\r', 'driving', { inputOrigin: 'human' })
+    expect(vi.mocked(window.api.pty.write).mock.calls).toEqual([
+      ['pty-1', 'draft', 'driving', 'human'],
+      ['pty-1', '\r', 'driving', 'programmatic'],
+      ['pty-1', '\r', 'driving', 'human']
+    ])
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\r', 'driving', {
+      inputOrigin: 'human'
+    })
+    successor.disconnect()
+  })
 })

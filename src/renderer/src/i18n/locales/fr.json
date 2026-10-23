@@ -8210,7 +8210,9 @@
           "274af61bc0": "système",
           "6e6df3a09a": "Choisir un fichier personnalisé",
           "76e02467b8": "Changer de fichier personnalisé",
-          "d3756cf5bc": "désactivé"
+          "d3756cf5bc": "désactivé",
+          "a5e9bc227c": "Mettre Orca au premier plan",
+          "0472617283": "Lorsqu’un agent finit de répondre à votre prompt pendant que vous êtes dans une autre app, met Orca au premier plan et bascule vers son onglet."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Enregistrer la clé",
@@ -10697,6 +10699,9 @@
             "a4c3b29a3c": "focus",
             "7247b97a31": "Évitez de notifier quand Orca est au premier plan sur le worktree actif.",
             "96562a72c6": "Masquer quand la fenêtre est active",
+            "foreground": "premier plan",
+            "reply": "réponse",
+            "tab": "onglet",
             "a2ab73b325": "attention",
             "ae0487f8fd": "cloche",
             "c638ae989d": "terminal",

@@ -458,7 +458,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       for (const forward of deferred.splice(0)) {
         forward()
       }
-      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
+      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith(
+        'input_under_flood\r',
+        'driving',
+        'human'
+      )
 
       // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
       pane.terminal.buffer.active.type = 'alternate'
@@ -469,7 +473,11 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       for (const forward of deferred.splice(0)) {
         forward()
       }
-      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
+      expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith(
+        'input_under_flood\r',
+        'driving',
+        'human'
+      )
 
       // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
       pane.terminal.buffer.active.type = 'normal'
@@ -481,7 +489,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
         forward()
       }
       expect(transport.sendInput).toHaveBeenCalledTimes(2)
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving', 'human')
 
       // Once the guard releases, the same mouse report is ordinary input again.
       deps.replayingPanesRef.current.delete(pane.id)
@@ -492,7 +500,7 @@ export function registerPtyConnectionFreshSpawnGuardsTests(): void {
       for (const forward of deferred.splice(0)) {
         forward()
       }
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', 'driving')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', 'driving', 'human')
     })
 
     it('settles a queued startup only after the pane binds its spawned PTY', async () => {

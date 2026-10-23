@@ -156,6 +156,14 @@ export function installInterruptInputIntent(session: ConnectPanePtySession): voi
   ): void => {
     if (intent === 'ctrl-c' || data === '\x03') {
       markTerminalBracketedPasteInterrupted(session.pane.terminal)
+      const ptyId = session.transport.getPtyId()
+      if (
+        ptyId &&
+        session.pane.terminal.modes.bracketedPasteMode &&
+        useAppStore.getState().settings?.notifications?.bringToFrontOnAgentTaskComplete
+      ) {
+        window.api.pty.interruptSubmissionPaste?.(ptyId)
+      }
     }
     // Why: every delivered-input path funnels through here, so this is where a
     // submit keystroke into a waiting AskUserQuestion pane becomes the

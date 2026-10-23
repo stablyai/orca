@@ -5261,6 +5261,9 @@
             "a4c3b29a3c": "em foco",
             "7247b97a31": "Evita notificar quando o Orca está em foco na worktree ativa.",
             "96562a72c6": "Suprimir Enquanto em Foco",
+            "foreground": "primeiro plano",
+            "reply": "resposta",
+            "tab": "aba",
             "a2ab73b325": "atenção",
             "ae0487f8fd": "sino",
             "c638ae989d": "terminal",
@@ -5887,6 +5890,8 @@
           "dictationModesDescription": "Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado."
         },
         "NotificationsPane": {
+          "a5e9bc227c": "Trazer Orca para o Primeiro Plano",
+          "0472617283": "Quando um agente terminar de responder ao seu prompt enquanto você estiver em outro app, traga o Orca para o primeiro plano e mude para a aba dele.",
           "906b4afebf": "Enviar Notificação de Teste",
           "2772d2f257": "Ignora notificações quando a worktree que as acionou já está visível.",
           "00cd406dbb": "Suprimir Enquanto em Foco",

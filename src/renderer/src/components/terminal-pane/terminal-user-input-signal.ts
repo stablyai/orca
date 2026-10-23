@@ -1,4 +1,19 @@
 import type { Terminal } from '@xterm/xterm'
+import type { TerminalInputOrigin } from '../../../../shared/terminal-input-kind'
+
+const programmaticInput = new WeakSet<object>()
+
+export function withProgrammaticTerminalInput<T>(terminal: object, action: () => T): T {
+  const nested = programmaticInput.has(terminal)
+  programmaticInput.add(terminal)
+  try {
+    return action()
+  } finally {
+    if (!nested) {
+      programmaticInput.delete(terminal)
+    }
+  }
+}
 
 // Why: xterm's public onData stream mixes real user input (keyboard, IME,
 // paste, mouse reports) with parser-generated auto-replies (focus in/out
@@ -47,7 +62,7 @@ export function subscribeToTerminalUserInput(
 /** Preserve xterm's input provenance across deferred PTY forwarding. */
 export function subscribeToTerminalInputData(
   terminal: Terminal,
-  listener: (data: string, wasUserInput: boolean) => void
+  listener: (data: string, wasUserInput: boolean, inputOrigin?: TerminalInputOrigin) => void
 ): { dispose: () => void } {
   let pendingUserInput = false
   const userInput = subscribeToTerminalUserInput(terminal, () => {
@@ -56,7 +71,11 @@ export function subscribeToTerminalInputData(
   const dataInput = terminal.onData((data) => {
     const wasUserInput = pendingUserInput
     pendingUserInput = false
-    listener(data, wasUserInput)
+    listener(
+      data,
+      wasUserInput,
+      programmaticInput.has(terminal) ? 'programmatic' : wasUserInput ? 'human' : undefined
+    )
   })
   return {
     dispose: () => {

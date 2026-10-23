@@ -1,3 +1,4 @@
+import { withProgrammaticTerminalInput } from './terminal-user-input-signal'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { executeTerminalPastePlan } from './terminal-paste-executor'
 import { planTerminalPasteWithYield } from './terminal-paste-coordinator'
@@ -48,8 +49,19 @@ export async function pasteTextIntoTerminalPane({
   })
   return executeTerminalPastePlan(plan, {
     pasteText: (pasteText, pasteOptions) =>
-      pasteTerminalText(pane.terminal, pasteText, pasteOptions),
-    writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, inputKind, signal),
+      source === 'programmatic' || inputKind === 'launch'
+        ? withProgrammaticTerminalInput(pane.terminal, () =>
+            pasteTerminalText(pane.terminal, pasteText, pasteOptions)
+          )
+        : pasteTerminalText(pane.terminal, pasteText, pasteOptions),
+    writePty: (data, signal) =>
+      writeTerminalPastePtyInput(
+        transport,
+        data,
+        inputKind,
+        signal,
+        source === 'programmatic' || inputKind === 'launch' ? 'programmatic' : 'human'
+      ),
     isTargetCurrent,
     canContinue
   })

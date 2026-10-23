@@ -12,10 +12,7 @@ import {
 import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
-import {
-  normalizeClaudePromptId,
-  normalizeGrokPromptId
-} from './agent-hook-listener/listener-limits'
+import { normalizeProviderPromptId } from './agent-hook-listener/listener-limits'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
 import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
@@ -132,12 +129,7 @@ export function normalizeHookPayload(
   if (tuiAdmission !== 'preserve-poster') {
     trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   }
-  const providerPromptId =
-    source === 'claude'
-      ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
-      : source === 'grok'
-        ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
-        : undefined
+  const providerPromptId = normalizeProviderPromptId(source, hookPayloadRecord)
   const compactTrigger =
     source === 'claude' &&
     (eventName === 'PreCompact' || eventName === 'PostCompact') &&

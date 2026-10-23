@@ -3,7 +3,8 @@ import {
   type PtySpawnCommitOrigin
 } from '../persistence/loading-store/pty-binding-span'
 import { isUntypedTerminalInput } from '../../shared/terminal-untyped-input'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import { TerminalSubmitKeys } from './terminal-submit-keys'
+import type { TerminalInputKind, TerminalInputOrigin } from '../../shared/terminal-input-kind'
 
 export type TerminalRunFacts = {
   /** This process was started for its pane, not reattached, adopted or cold-restored. */
@@ -29,6 +30,24 @@ type TerminalRunRecord = {
 
 /** Main's per-process facts about one PTY run, keyed by the incarnation they describe. */
 export class TerminalRunFactsRegister {
+  private submissionTracking = false
+  private readonly submitKeys = new Map<string, TerminalSubmitKeys>()
+
+  setSubmissionTracking(enabled: boolean): void {
+    if (this.submissionTracking !== enabled) {
+      this.submitKeys.clear()
+    }
+    this.submissionTracking = enabled
+  }
+
+  takeSubmitAuthor(ptyId: string): TerminalInputOrigin | undefined {
+    return this.submitKeys.get(ptyId)?.take()
+  }
+
+  interruptSubmissionPaste(ptyId: string): void {
+    this.submitKeys.get(ptyId)?.interruptPaste()
+  }
+
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
@@ -79,6 +98,9 @@ export class TerminalRunFactsRegister {
       origin === 'reattach' && (incarnationId === null || !previous?.incarnationId)
     if (!sameProcess) {
       this.lastInputAtByPtyId.delete(commit.id)
+      if (previous) {
+        this.submitKeys.delete(commit.id)
+      }
     }
     this.runsByPtyId.set(commit.id, {
       incarnationId,
@@ -94,9 +116,26 @@ export class TerminalRunFactsRegister {
   /** The one record point both write funnels call just before the provider write, because input
    *  such as `exit` can end the process before the write returns. The payload check backs up a
    *  writer that labels a reply or focus report as driving. */
-  recordInput(ptyId: string, inputKind: TerminalInputKind, data: string, now = Date.now()): void {
+  recordInput(
+    ptyId: string,
+    inputKind: TerminalInputKind,
+    data: string,
+    now = Date.now(),
+    inputOrigin?: TerminalInputOrigin
+  ): void {
     if (inputKind === 'query-reply' || isUntypedTerminalInput(data)) {
       return
+    }
+    if (this.submissionTracking) {
+      let keys = this.submitKeys.get(ptyId)
+      if (!keys) {
+        keys = new TerminalSubmitKeys()
+        this.submitKeys.set(ptyId, keys)
+      }
+      keys.record(
+        data,
+        inputKind === 'launch' || inputOrigin !== 'human' ? 'programmatic' : 'human'
+      )
     }
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)
@@ -135,6 +174,7 @@ export class TerminalRunFactsRegister {
   }
 
   delete(ptyId: string): void {
+    this.submitKeys.delete(ptyId)
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.pendingByPtyId.delete(ptyId)

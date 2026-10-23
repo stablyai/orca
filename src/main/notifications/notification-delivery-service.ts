@@ -34,6 +34,9 @@ export type NotificationDeliveryDependencies = {
     options: ReturnType<typeof buildNotificationOptions>,
     settings: NotificationSettings
   ) => NotificationDispatchResult | Promise<NotificationDispatchResult>
+  bringSubjectToFront?: (request: NotificationDispatchRequest) => void
+  canBringAgentReply?: (request: NotificationDispatchRequest) => boolean | Promise<boolean>
+  isAgentReplyCurrent?: (request: NotificationDispatchRequest) => boolean
   platform: NodeJS.Platform
   now: () => number
   /** Told once per path that actually announced the request: a desktop banner shown, or a mobile alert sent. */
@@ -161,6 +164,35 @@ export function createNotificationDeliveryService(
         ) {
           return { delivered: false, reason: 'cooldown' }
         }
+      }
+
+      if (
+        deps.platform === 'darwin' &&
+        settings.bringToFrontOnAgentTaskComplete &&
+        request.source === 'agent-task-complete' &&
+        browserWindow &&
+        !browserWindow.isFocused()
+      ) {
+        // Reading provenance must never hold up the banner, sound, or badge.
+        void Promise.resolve()
+          .then(() => deps.canBringAgentReply?.(request))
+          .then((eligible) => {
+            const latest = deps.readNotificationSettings()
+            const window = deps.findActiveWindow()
+            if (
+              eligible &&
+              (deps.isAgentReplyCurrent?.(request) ?? true) &&
+              latest.enabled &&
+              latest.agentTaskComplete &&
+              latest.bringToFrontOnAgentTaskComplete &&
+              window &&
+              !window.isDestroyed() &&
+              !window.isFocused()
+            ) {
+              deps.bringSubjectToFront?.(request)
+            }
+          })
+          .catch(() => undefined)
       }
 
       if (!deps.isNotificationSupported()) {

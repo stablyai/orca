@@ -2,6 +2,8 @@ import type { PtyRendererDelivery } from '../session'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { createPtyWriteInput } from './write-input'
+import { ptyOwnership } from '../provider/ownership-state'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 export function installPtyWriteIpcHandlers(deps: {
   mainWindow?: PtyRendererDelivery
@@ -18,6 +20,17 @@ export function installPtyWriteIpcHandlers(deps: {
   } = createPtyWriteInput(deps)
 
   const hostViewportClaimTails = new Map<string, Promise<boolean>>()
+
+  ipcMain.removeAllListeners('pty:interruptSubmissionPaste')
+  ipcMain.on('pty:interruptSubmissionPaste', (event, id: unknown) => {
+    if (
+      isPtyWriteEventFromMainWindow(event) &&
+      typeof id === 'string' &&
+      ptyOwnership.get(id) === LOCAL_EXECUTION_HOST_ID
+    ) {
+      runtime?.terminalRunFacts?.interruptSubmissionPaste(id)
+    }
+  })
 
   ipcMain.on('pty:write', (event, args: unknown) => {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {

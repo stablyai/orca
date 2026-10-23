@@ -1,4 +1,5 @@
 import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
+import { createStructuredReplyJournal } from './structured-agent-session-reply-journal'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
@@ -29,6 +30,7 @@ import {
 
 /** Owns every host-to-client publication edge, including compatibility waits. */
 export class StructuredAgentSessionClientDelivery {
+  readonly replyJournal: ReturnType<typeof createStructuredReplyJournal>
   readonly subscribers: AgentSessionSubscribers
   readonly waitForSendSettlement: StructuredAgentSessionSendSettlement['wait']
   private stopAtRestCommandUpdates: () => void = () => undefined
@@ -51,6 +53,7 @@ export class StructuredAgentSessionClientDelivery {
     // Required: an opening frame without the roster reads as "no tasks" to current clients.
     readBackgroundTasks: NonNullable<SubscriberFieldHooks['readBackgroundTasks']>
   ) {
+    this.replyJournal = createStructuredReplyJournal(sessions)
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({
       sessions,
       now,

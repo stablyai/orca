@@ -1,3 +1,5 @@
+import { createNotificationSubjectReveal } from './notification-subject-reveal'
+import { createAgentReplyEligibility } from '../notifications/agent-reply-eligibility'
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence'
@@ -29,6 +31,8 @@ import {
   recordNotificationDeliveryOutcome,
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
+
+let disposeReplyEligibility: (() => void) | undefined
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
@@ -146,6 +150,9 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
   )
 
+  disposeReplyEligibility?.()
+  const replyEligibility = createAgentReplyEligibility(store, runtime)
+  disposeReplyEligibility = replyEligibility.dispose
   const deliveryService = createNotificationDeliveryService({
     readNotificationSettings: () => store.getSettings().notifications,
     findActiveWindow: () =>
@@ -159,6 +166,9 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     readAuthorizationStatus: readNotificationAuthorizationStatus,
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
     deliverNative: deliverNativeNotification,
+    bringSubjectToFront: (request) => createNotificationSubjectReveal(request)?.(),
+    canBringAgentReply: replyEligibility.canBring,
+    isAgentReplyCurrent: replyEligibility.stillEligible,
     platform: process.platform,
     now: () => Date.now(),
     recordAnnounced: (request) => {

@@ -6,3 +6,6 @@
  * - `query-reply`: the terminal's automatic answer to a query the running program made.
  */
 export type TerminalInputKind = 'driving' | 'launch' | 'query-reply'
+
+/** The author of a local PTY write; absent on older senders. */
+export type TerminalInputOrigin = 'human' | 'programmatic'

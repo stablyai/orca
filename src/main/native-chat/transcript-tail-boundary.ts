@@ -11,7 +11,8 @@ export async function readTranscriptByteAt(
   handle: TranscriptFileHandle,
   filePath: string,
   position: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onRead?: (bytes: number) => void
 ): Promise<number | null> {
   const byte = Buffer.allocUnsafe(1)
   const { bytesRead } = await readTranscriptFile(
@@ -24,6 +25,7 @@ export async function readTranscriptByteAt(
     'exact',
     signal
   )
+  onRead?.(bytesRead)
   signal?.throwIfAborted()
   return bytesRead === 1 ? byte[0] : null
 }
@@ -33,10 +35,11 @@ export async function findLastCompleteLineEnd(
   handle: TranscriptFileHandle,
   filePath: string,
   end: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onRead?: (bytes: number) => void
 ): Promise<number> {
   signal?.throwIfAborted()
-  const lastByte = await readTranscriptByteAt(handle, filePath, end - 1, signal)
+  const lastByte = await readTranscriptByteAt(handle, filePath, end - 1, signal, onRead)
   if (lastByte === null) {
     // File shrank between stat and probe.
     return 0
@@ -59,6 +62,7 @@ export async function findLastCompleteLineEnd(
       'exact',
       signal
     )
+    onRead?.(bytesRead)
     signal?.throwIfAborted()
     if (bytesRead < buffer.length) {
       // File shrank mid-walk: any boundary computed from stale offsets is wrong.

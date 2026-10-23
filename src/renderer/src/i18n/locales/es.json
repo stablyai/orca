@@ -8034,7 +8034,9 @@
           "274af61bc0": "sistema",
           "6e6df3a09a": "Elegir archivo personalizado",
           "76e02467b8": "Cambiar archivo personalizado",
-          "d3756cf5bc": "desactivado"
+          "d3756cf5bc": "desactivado",
+          "a5e9bc227c": "Traer Orca al frente",
+          "0472617283": "Cuando un agente termina de responder a tu prompt mientras estás en otra app, trae Orca al frente y cambia a su pestaña."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Guardar clave",
@@ -10511,6 +10513,9 @@
             "a4c3b29a3c": "enfocado",
             "7247b97a31": "Evita enviar notificaciones cuando Orca esté enfocado en el worktree activo.",
             "96562a72c6": "Suprimir mientras está enfocado",
+            "foreground": "primer plano",
+            "reply": "respuesta",
+            "tab": "pestaña",
             "a2ab73b325": "atención",
             "ae0487f8fd": "campana",
             "c638ae989d": "terminal",

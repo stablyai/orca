@@ -1,3 +1,4 @@
+import type { AgentHookSource } from '../agent-hook-relay'
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV } from '../agent-hook-relay'
 import type { HookListenerState } from './listener-state'
@@ -78,4 +79,17 @@ export function warnOnHookEnvOrVersionMismatch(
       )
     }
   }
+}
+
+export function normalizeProviderPromptId(
+  source: AgentHookSource,
+  hookPayloadRecord: Record<string, unknown>
+): string | undefined {
+  return source === 'claude'
+    ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
+    : source === 'codex' && typeof hookPayloadRecord.turn_id === 'string'
+      ? hookPayloadRecord.turn_id.trim() || undefined
+      : source === 'grok'
+        ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
+        : undefined
 }

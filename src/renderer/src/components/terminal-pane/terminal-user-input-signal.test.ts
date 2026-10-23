@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
 import {
+  withProgrammaticTerminalInput,
   subscribeToTerminalInputData,
   subscribeToTerminalUserInput
 } from './terminal-user-input-signal'
@@ -93,14 +94,35 @@ describe('subscribeToTerminalInputData', () => {
     core.triggerDataEvent('\x1b[200~paste\x1b[201~', true)
     core.triggerDataEvent('\x1b[O', false)
     expect(listener.mock.calls).toEqual([
-      ['keyboard', true],
-      ['\x1b[?1;2c', false],
-      ['\x1b[200~paste\x1b[201~', true],
-      ['\x1b[O', false]
+      ['keyboard', true, 'human'],
+      ['\x1b[?1;2c', false, undefined],
+      ['\x1b[200~paste\x1b[201~', true, 'human'],
+      ['\x1b[O', false, undefined]
     ])
     subscription.dispose()
     core.triggerDataEvent('after-dispose', true)
     expect(listener).toHaveBeenCalledTimes(4)
     terminal.dispose()
   })
+})
+
+it('keeps a program paste separate from the person who presses Enter afterward', () => {
+  const terminal = new Terminal({ allowProposedApi: true })
+  const listener = vi.fn()
+  const subscription = subscribeToTerminalInputData(terminal, listener)
+  const core: unknown = Reflect.get(terminal, '_core')
+  if (!core || typeof core !== 'object') {
+    throw new Error('xterm core missing')
+  }
+  // Clipboard cleanup only needs this value slot; no DOM or window is created.
+  Reflect.set(core, 'textarea', { value: '' })
+  withProgrammaticTerminalInput(terminal, () => terminal.paste('invented draft'))
+  Reflect.set(core, 'textarea', undefined)
+  terminal.input('\r', true)
+  expect(listener.mock.calls).toEqual([
+    ['invented draft', true, 'programmatic'],
+    ['\r', true, 'human']
+  ])
+  subscription.dispose()
+  terminal.dispose()
 })

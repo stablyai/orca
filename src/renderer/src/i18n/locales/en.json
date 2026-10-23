@@ -8318,7 +8318,9 @@
           "274af61bc0": "system",
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
-          "d3756cf5bc": "disabled"
+          "d3756cf5bc": "disabled",
+          "a5e9bc227c": "Bring Orca to Front",
+          "0472617283": "When an agent finishes replying to your prompt while you are in another app, bring Orca forward and switch to its tab."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -10805,6 +10807,9 @@
             "a4c3b29a3c": "focused",
             "7247b97a31": "Avoid notifying when Orca is focused on the active worktree.",
             "96562a72c6": "Suppress While Focused",
+            "foreground": "foreground",
+            "reply": "reply",
+            "tab": "tab",
             "a2ab73b325": "attention",
             "ae0487f8fd": "bell",
             "c638ae989d": "terminal",

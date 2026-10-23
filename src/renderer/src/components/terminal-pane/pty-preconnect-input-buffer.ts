@@ -1,5 +1,5 @@
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind, TerminalInputOrigin } from '../../../../shared/terminal-input-kind'
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
 // Why: a retention budget, not the 16MB single-write ceiling. The deferral lasts
@@ -14,10 +14,11 @@ export type PtyPreconnectInputEntry = {
   data: string
   kind: PtyPreconnectInputKind
   inputKind: TerminalInputKind
+  inputOrigin?: TerminalInputOrigin
 }
 
 /** Lets the caller of an acknowledged write give it up; a held or journaled copy is then never sent. */
-export type AcceptedInputOptions = { signal?: AbortSignal }
+export type AcceptedInputOptions = { signal?: AbortSignal; inputOrigin?: TerminalInputOrigin }
 
 type BufferedInput = PtyPreconnectInputEntry & {
   resolve?: (accepted: boolean) => void
@@ -26,7 +27,11 @@ type BufferedInput = PtyPreconnectInputEntry & {
 
 export type PreconnectInputWriter = {
   isCurrent: () => boolean
-  sendInput: (data: string, inputKind: TerminalInputKind) => boolean
+  sendInput: (
+    data: string,
+    inputKind: TerminalInputKind,
+    inputOrigin?: TerminalInputOrigin
+  ) => boolean
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (
     data: string,
@@ -47,7 +52,8 @@ export type PtyPreconnectInputBuffer = {
     data: string,
     kind: 'ordinary' | 'immediate',
     inputKind: TerminalInputKind,
-    onRetained?: (entry: PtyPreconnectInputEntry) => void
+    onRetained?: (entry: PtyPreconnectInputEntry) => void,
+    inputOrigin?: TerminalInputOrigin
   ) => boolean
   enqueueAccepted: (
     data: string,
@@ -92,6 +98,7 @@ export function createPtyPreconnectInputBuffer(
       input.kind === 'ordinary' &&
       tail?.kind === 'ordinary' &&
       tail.inputKind === input.inputKind &&
+      tail.inputOrigin === input.inputOrigin &&
       input.data.length <= PTY_PRECONNECT_INPUT_MAX_CODE_UNITS - pendingCodeUnits - activeCodeUnits
     ) {
       tail.data += input.data
@@ -114,11 +121,13 @@ export function createPtyPreconnectInputBuffer(
     kind: PtyPreconnectInputKind,
     inputKind: TerminalInputKind,
     resolve?: BufferedInput['resolve'],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    inputOrigin?: TerminalInputOrigin
   ): BufferedInput => ({
     data,
     kind,
     inputKind,
+    ...(inputOrigin ? { inputOrigin } : {}),
     ...(resolve ? { resolve } : {}),
     ...(signal ? { signal } : {})
   })
@@ -137,7 +146,12 @@ export function createPtyPreconnectInputBuffer(
     input: BufferedInput
   ): void => {
     try {
-      onRetained?.({ data: input.data, kind: input.kind, inputKind: input.inputKind })
+      onRetained?.({
+        data: input.data,
+        kind: input.kind,
+        inputKind: input.inputKind,
+        ...(input.inputOrigin ? { inputOrigin: input.inputOrigin } : {})
+      })
     } catch {
       // Handoff capture is advisory; a callback failure must not reject input admission.
     }
@@ -146,7 +160,9 @@ export function createPtyPreconnectInputBuffer(
   // Seeded entries came from a predecessor transport and must not be reported
   // back to that predecessor's handoff owner as newly typed input.
   for (const entry of initialEntries) {
-    retain(createInput(entry.data, entry.kind, entry.inputKind))
+    retain(
+      createInput(entry.data, entry.kind, entry.inputKind, undefined, undefined, entry.inputOrigin)
+    )
   }
   const clear = (): void => {
     const dropped = pending
@@ -190,12 +206,13 @@ export function createPtyPreconnectInputBuffer(
             accepted = await Promise.race([
               Promise.resolve(
                 writer.sendInputAccepted
-                  ? writer.sendInputAccepted(
-                      input.data,
-                      input.inputKind,
-                      input.signal ? { signal: input.signal } : undefined
-                    )
-                  : writer.sendInput(input.data, input.inputKind)
+                  ? writer.sendInputAccepted(input.data, input.inputKind, {
+                      ...(input.signal ? { signal: input.signal } : {}),
+                      ...(input.inputOrigin ? { inputOrigin: input.inputOrigin } : {})
+                    })
+                  : input.inputOrigin
+                    ? writer.sendInput(input.data, input.inputKind, input.inputOrigin)
+                    : writer.sendInput(input.data, input.inputKind)
               ),
               flushStopped.then(() => null)
             ])
@@ -223,7 +240,9 @@ export function createPtyPreconnectInputBuffer(
         const accepted =
           input.kind === 'immediate'
             ? writer.sendInputImmediate(input.data)
-            : writer.sendInput(input.data, input.inputKind)
+            : input.inputOrigin
+              ? writer.sendInput(input.data, input.inputKind, input.inputOrigin)
+              : writer.sendInput(input.data, input.inputKind)
         if (!accepted) {
           clear()
           return
@@ -258,8 +277,8 @@ export function createPtyPreconnectInputBuffer(
   return {
     isBuffering: () => buffering,
     hasPendingInput: () => pending.length > 0 || activeAcceptedInput !== null,
-    enqueue(data, kind, inputKind, onRetained) {
-      const input = createInput(data, kind, inputKind)
+    enqueue(data, kind, inputKind, onRetained, inputOrigin) {
+      const input = createInput(data, kind, inputKind, undefined, undefined, inputOrigin)
       const retained = retain(input)
       if (retained) {
         notifyRetained(onRetained, input)
@@ -279,7 +298,14 @@ export function createPtyPreconnectInputBuffer(
           signal?.removeEventListener('abort', onAbort)
           resolve(accepted)
         }
-        const input = createInput(data, 'accepted', inputKind, settle, signal)
+        const input = createInput(
+          data,
+          'accepted',
+          inputKind,
+          settle,
+          signal,
+          options?.inputOrigin
+        )
         if (!retain(input)) {
           resolve(false)
           return

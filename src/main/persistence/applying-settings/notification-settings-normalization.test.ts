@@ -48,3 +48,17 @@ describe('muted notification machines', () => {
     expect(persistedNotificationSettingsRepaired(persisted, normalized)).toBe(true)
   })
 })
+
+describe('bring to front on agent completion', () => {
+  it('stays off unless a boolean true was stored', () => {
+    expect(normalizeNotificationSettings({}).bringToFrontOnAgentTaskComplete).toBe(false)
+    expect(
+      normalizeNotificationSettings({ bringToFrontOnAgentTaskComplete: 'true' })
+        .bringToFrontOnAgentTaskComplete
+    ).toBe(false)
+    expect(
+      normalizeNotificationSettings({ bringToFrontOnAgentTaskComplete: true })
+        .bringToFrontOnAgentTaskComplete
+    ).toBe(true)
+  })
+})

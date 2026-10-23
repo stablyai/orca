@@ -1,12 +1,7 @@
+import { expectCompletedHumanReply, textOf } from './structured-session-journal.test-fixture'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { scriptedCodexCatalogSession } from './scripted-codex-model-catalog.test-fixture'
-// One structured Codex session driven end to end over `agentSession.*`.
-//
-// Nothing here is stubbed except the Codex child itself: the RPC dispatcher, the
-// zod schemas, the capability gate, the durable record store, the journal, the
-// lease, the Codex adapter, and the event-to-journal translation are all the ones
-// that ship. The fake app-server answers the same JSON-RPC calls the real one
-// does and pushes the same notifications and blocking requests back.
+// Only the Codex child is fake; RPC, persistence, journal, and adapters use production code.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -290,13 +285,6 @@ function drainStreamedEvents(): Promise<void> {
   return getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION) ?? Promise.resolve()
 }
 
-function textOf(item: AgentJournalRenderItem): string {
-  const body = item.body
-  return body?.kind === 'message'
-    ? body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    : ''
-}
-
 /** The durable submission row, which settlement rewrites after the send returns. */
 async function submissionOf(clientMessageId: string): Promise<AgentJournalSubmission | undefined> {
   return (await getStructuredAgentSessionHost()?.journalSnapshot(SESSION))?.submissions.find(
@@ -521,6 +509,7 @@ describe('a structured codex session over agentSession.*', () => {
         providerItemId: `codex:${THREAD}:${TURN}:0`
       })
     )
+    await expectCompletedHumanReply(codex, drainStreamedEvents, SESSION, TURN)
   })
 
   it('runs create → send → stream → approval → cancel → reconnect → page history', async () => {

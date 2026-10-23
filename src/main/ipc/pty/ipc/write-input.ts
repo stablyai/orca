@@ -10,7 +10,7 @@ import {
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind, TerminalInputOrigin } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 import { isSettledWrite, type WriteSettlement } from '../../../../shared/pty-write-settlement'
 
@@ -32,6 +32,7 @@ export type PtyWritePayload = {
   id: string
   data: string
   inputKind: TerminalInputKind
+  inputOrigin?: TerminalInputOrigin
   /** Accepted-write callers only: wait for the provider's settlement, on any provider. */
   requireWriteSettlement?: true
 }
@@ -207,7 +208,13 @@ export function createPtyWriteInput(deps: {
   const noteRendererPtyInput = (args: PtyWritePayload): void => {
     lastInputAtByPty.set(args.id, performance.now())
     interactiveOutputCharsByPty.set(args.id, 0)
-    runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
+    runtime?.terminalRunFacts?.recordInput(
+      args.id,
+      args.inputKind,
+      args.data,
+      undefined,
+      args.inputOrigin
+    )
     runtime?.noteRemoteDesktopHostInput(args.id, args.inputKind, args.data)
   }
 

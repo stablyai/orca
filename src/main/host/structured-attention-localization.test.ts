@@ -142,6 +142,7 @@ describe('structured host notification localization', () => {
         native.push(options)
         return { delivered: true }
       },
+      bringSubjectToFront: () => {},
       platform: 'linux',
       now: () => 60_000
     })
