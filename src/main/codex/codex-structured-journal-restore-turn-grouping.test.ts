@@ -7,7 +7,7 @@ import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
 import { selectStructuredAgentTurnBars } from '../../shared/structured-agent-session-turn-timing'
 import { JournalDerivedTurnScope } from '../native-chat/agent-session-journal/journal-derived-turn-scope'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { createCodexHistoryTranslator } from './codex-structured-journal-translation'
 
 const THREAD_ID = 'thread-abc'
 
@@ -35,7 +35,7 @@ function historicalTurn(index: number): Record<string, unknown> {
 function restoredJournal(turnCount: number, statesScope: boolean): AgentJournalRenderItem[] {
   const items: AgentJournalRenderItem[] = []
   const derived = new JournalDerivedTurnScope()
-  const translator = createCodexJournalTranslator({
+  const translator = createCodexHistoryTranslator({
     sink: {
       appendItem: (identity, body, options) => {
         const sequence = items.length + 1

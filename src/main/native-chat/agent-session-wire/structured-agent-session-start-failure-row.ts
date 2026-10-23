@@ -117,6 +117,7 @@ export async function recordStructuredAgentSessionStartFailure(
   }
   await session.journal.appendLifecycleBatch({
     settlementId: `start-failure:${startKey}`,
+    keepFailedStart: true,
     fence: session.fence,
     recovered: true,
     mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],

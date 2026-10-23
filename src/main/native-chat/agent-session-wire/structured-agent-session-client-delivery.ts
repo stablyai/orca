@@ -236,10 +236,9 @@ export class StructuredAgentSessionClientDelivery {
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {
     return {
-      // A send the child stopped holding unanswered settles the wait as doubt (`publishedSubmission`).
-      submissions: () =>
-        journal.submissions().map(this.currentWork(sessionId, journal).publishedSubmission),
+      submissions: () => journal.submissions(),
       cursor: () => journal.cursor(),
+      attemptEnded: (id: string) => journal.queuedMessages.attemptEnded(id),
       activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId()
     }
   }

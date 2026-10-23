@@ -185,7 +185,7 @@ describe('rewind behind a clear boundary', () => {
     expect(rewind).not.toHaveBeenCalled()
   })
 
-  it('rewrites only the suffix, retires its aliases, and keeps prefix bytes and epoch', async () => {
+  it('rewrites only suffix presentation, retaining canonical facts, aliases, prefix bytes and context', async () => {
     const { old, target, floor, prefix, raw, params } = await seed()
     rewind.mockImplementationOnce(async () => {
       const prepared = rig.store.getRecord(SESSION)!.rewind!
@@ -219,10 +219,10 @@ describe('rewind behind a clear boundary', () => {
       journal()
         .snapshot()
         .submissions.map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
-    ).toEqual([old])
-    expect(
-      journal().canonicalItemId(rig.store.getRecord(SESSION)!.rewind!.providerItemId!)
-    ).not.toBe(target)
+    ).toContain(old)
+    expect(journal().canonicalItemId(rig.store.getRecord(SESSION)!.rewind!.providerItemId!)).toBe(
+      target
+    )
     const reopened = await replayedJournal()
     expect(reopened.snapshot()).toEqual(journal().snapshot())
   })

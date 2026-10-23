@@ -33,7 +33,10 @@ import {
   pendingSendsAsMessages,
   shouldPruneLaunchPrompt
 } from './native-chat-pending'
-import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
+import {
+  useNativeChatPendingDelivery,
+  useNativeChatOptimisticSend
+} from './use-native-chat-pending-delivery'
 import {
   appendCommandMarkerCache,
   applyCommandMarkerBoundaries,
@@ -140,7 +143,7 @@ export function NativeChatResolvedView({
     () => ({ paneKey, agent, sessionId }),
     [paneKey, agent, sessionId]
   )
-  const delivery = useNativeChatPendingDelivery({ paneKey, agent, session })
+  const delivery = useNativeChatPendingDelivery({ paneKey, agent, session, composerRef })
   const { pending, record, clear } = delivery
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
@@ -159,13 +162,7 @@ export function NativeChatResolvedView({
     }
     clearNativeChatLaunchPrompt(terminalTabId)
   }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
-  const onOptimisticSend = useCallback(
-    (text: string, imagePaths?: string[]) => {
-      setWorkingInterrupted(false)
-      return record(text, imagePaths)
-    },
-    [record]
-  )
+  const onOptimisticSend = useNativeChatOptimisticSend(record, setWorkingInterrupted)
   const onSlashCommand = useCallback(
     (command: string, output?: string) => {
       setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command, Date.now(), output))

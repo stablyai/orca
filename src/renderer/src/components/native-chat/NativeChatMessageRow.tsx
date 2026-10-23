@@ -26,8 +26,14 @@ import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
  *  place of its time, or that it did not go through, with its own Retry when the surface can send
  *  it again. */
 export type NativeChatDeliveryNotice =
-  | { sending: true; text?: never; onDismiss?: never }
-  | { sending?: never; text: string; onDismiss?: () => void }
+  | { sending: true; text?: never; onDismiss?: never; onEdit?: never; onSend?: never }
+  | {
+      sending?: never
+      text: string
+      onDismiss?: () => void
+      onEdit?: () => void
+      onSend?: () => void
+    }
 
 export type MessageRowProps = {
   message: NativeChatMessage

@@ -38,7 +38,7 @@ async function queuedBehindPrompt(
     ...(probeOwner ? { probeOwner } : {})
   })
   const current = rig
-  await current.workingSend()
+  await current.settleAccepted(await current.workingSend(), 'received')
   await leaveUnfinishedWork(current, { prompt: true })
   const queued = await current.send('after this', 'queue-if-active').result
   if (!queued.ok || !('queued' in queued.value)) {

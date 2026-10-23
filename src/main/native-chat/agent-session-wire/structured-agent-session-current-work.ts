@@ -149,6 +149,23 @@ export class StructuredAgentSessionCurrentWork {
     private readonly heldSends?: () => ReadonlySet<string> | undefined
   ) {}
 
+  allowsRecovery(): boolean {
+    return !this.ownerUnverifiable
+  }
+
+  generationEnded(submission: AgentJournalSubmission): boolean {
+    if (this.ownerUnverifiable) {
+      return false
+    }
+    const fence = submission.fence
+    return (
+      (this.liveFence !== null && fence < this.liveFence) ||
+      this.liveFence === null ||
+      (this.replaced !== undefined && fence <= this.replaced.fence) ||
+      (this.ended?.rootGone === true && fence === this.ended.fence)
+    )
+  }
+
   /** What a reader that published this answer compares to learn it changed with no row: the live
    *  generation, since every answer here is the journal read through it. Not the revision, which
    *  moves on every generation-end signal: an end that changed nothing is published once. */
@@ -163,6 +180,15 @@ export class StructuredAgentSessionCurrentWork {
       (submission) => `${submission.clientMessageId}:${this.holds(submission) ? 1 : 0}`
     )
     return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
+  }
+
+  recoveryViewKey(): string {
+    const held = this.heldSends?.()
+    return JSON.stringify([
+      this.viewKey(),
+      held ? [...held].sort() : null,
+      [...structuredAgentSessionHandingOver(this.journal)].sort()
+    ])
   }
 
   /** A send as clients are told it. One handed to the live child that it no longer holds, with no

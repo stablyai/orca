@@ -8,7 +8,10 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
+import {
+  bindStructuredAgentSessionRecoveryWork,
+  hostStructuredAgentSessionCurrentWork
+} from './structured-agent-session-host-current-work'
 import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
 import {
   deleteQueuedStructuredAgentMessage,
@@ -48,6 +51,11 @@ export function wireStructuredAgentSessionQueuedMessages(
     drain,
     /** A conversation (re)opened: its edit leases wake the queue when a deadline passes. */
     onOpened: (sessionId: string) => {
+      bindStructuredAgentSessionRecoveryWork(
+        context().deps.store,
+        sessionId,
+        sessions.get(sessionId)
+      )
       const journal = sessions.get(sessionId)?.journal
       journal?.queuedMessages.editLeases.onDeadline(() => {
         void context()

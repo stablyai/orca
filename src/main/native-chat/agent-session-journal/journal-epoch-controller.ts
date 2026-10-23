@@ -2,17 +2,15 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalHostDatabase } from './journal-host-database'
-import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
-import type { JournalQueuePauseRestatement } from './queued-message-pause'
-import type { JournalQueueRestatement } from './journal-queued-messages'
+import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import type { JournalLoad } from './journal-open'
 import type { AgentJournalEpochReason } from './journal-row-schema'
-import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
-import type { JournalWriteBody } from './journal-write-queue'
-import type { JournalOperationReceipt } from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
+import { rewindJournalContext } from './journal-context-rewind'
 
 export class JournalEpochController {
   constructor(
@@ -20,16 +18,9 @@ export class JournalEpochController {
       identity: AgentSessionJournalIdentity
       now: () => number
       mintEpoch: () => string
-      serialize: <T>(run: JournalWriteBody<T>) => Promise<T>
       database: () => JournalHostDatabase
-      readOnly: () => boolean
-      highestFence: () => number
       state: () => JournalReducerState
-      /** What of the live epoch's Stop and Resume a replacement restates. */
-      queuePauseRestatement: () => JournalQueuePauseRestatement
-      /** The cards a new epoch writes again (`retainedQueueFacts`). */
-      queueRestatement: () => JournalQueueRestatement
-      cursor: () => AgentJournalCursor
+      writer: JournalRowWriter
       adopt: (loaded: JournalLoad) => void
     }
   ) {}
@@ -42,50 +33,28 @@ export class JournalEpochController {
       reason,
       fence,
       now: this.deps.now(),
-      queue: this.deps.queueRestatement(),
       onPublished: this.deps.adopt
     })
   }
 
-  /**
-   * Every reason takes the same writable guard: a newer Orca's database refuses a roll like any
-   * other write, and `schema_unreadable` has no production caller.
-   *
-   * Serialized like every other write, so the discard cannot land between an
-   * admitted append's sequence assignment and its commit.
-   */
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
-    return this.deps.serialize(() => {
-      assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      this.start(reason, fence)
-      return this.deps.cursor()
-    })
+    return this.replace(reason, fence, [])
   }
 
   replace(
     reason: AgentJournalEpochReason,
     fence: number,
     items: readonly JournalReplacementItem[],
-    receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
+    receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt,
+    providerHandle = agentSessionJournalProviderHandle(this.deps.identity)
   ): Promise<AgentJournalCursor> {
-    return this.deps.serialize(() => {
-      assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      assertJournalFence(fence, this.deps.highestFence())
-      replaceJournalEpoch({
-        database: this.deps.database(),
-        identity: this.deps.identity,
-        reason,
-        fence,
-        items,
-        receipt,
-        previous: this.deps.state(),
-        queuePause: this.deps.queuePauseRestatement(),
-        queue: this.deps.queueRestatement(),
-        now: this.deps.now,
-        mintEpoch: this.deps.mintEpoch,
-        onPublished: this.deps.adopt
-      })
-      return this.deps.cursor()
+    return rewindJournalContext({
+      state: this.deps.state,
+      writer: this.deps.writer,
+      fence,
+      items,
+      receipt,
+      boundary: { reason, providerHandle }
     })
   }
 }

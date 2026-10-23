@@ -117,7 +117,10 @@ export class JournalSubmissionWriter {
     const { rowWriter, state } = this.deps
     await rowWriter.enqueueRows(() =>
       journalDispatchRowApplies(state().submissions.get(input.clientMessageId))
-        ? [journalDispatchRowBuilder(state, input)]
+        ? [
+            ...this.deps.queuedMessages.proofWitness(input.clientMessageId),
+            journalDispatchRowBuilder(state, input)
+          ]
         : []
     )
   }

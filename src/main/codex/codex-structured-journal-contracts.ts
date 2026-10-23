@@ -1,6 +1,9 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
+import type {
+  CodexDispatchEchoes,
+  CodexDispatchRequestOrigin
+} from './codex-structured-dispatch-echo'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
@@ -42,6 +45,7 @@ export type CodexJournalTranslatorDeps = {
   onUserMessageEcho?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   primaryThreadId?: () => string | null
   /** Submission origin for one exact client message still awaiting its echo. */
+  dispatchEchoes?: CodexDispatchEchoes
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number
@@ -59,12 +63,16 @@ export type CodexJournalTranslator = {
   /** The provider turn a Stop naming `turnId` interrupts; undefined while a command has none. */
   commandProviderTurnId: (turnId: string) => string | undefined
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
+  resolvePrompt: (journalItemId: string) => void
+  flush: () => void
+  dispose: () => void
+}
+
+export type CodexHistoryTranslator = {
   restoreThread: (
     threadId: string,
     thread: Record<string, unknown>
   ) => CodexJournalTranslationAdmission
-  resolvePrompt: (journalItemId: string) => void
-  flush: () => void
   dispose: () => void
 }
 

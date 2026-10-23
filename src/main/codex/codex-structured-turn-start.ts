@@ -21,11 +21,7 @@ import {
   codexRunningOrOpeningTurn,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
-import {
-  codexAnsweredTurn,
-  codexDispatchRejection,
-  codexTurnEndRejection
-} from './codex-structured-turn-end-settlement'
+import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 
 // Writing a Codex turn and learning which message landed where, which are not
 // the same event. The answer proves admission and nothing about identity, which
@@ -116,6 +112,13 @@ async function steerCodexTurn(
 ): Promise<{ turnId: string; via: 'steer' } | null> {
   try {
     checkDispatchAuthority(host, input.clientMessageId, input.signal)
+    host.dispatchEchoes.expect(
+      input.clientMessageId,
+      host.threadId,
+      'steer',
+      turnInputFor(host, input.body),
+      expectedTurnId
+    )
     const answer = await host.connection.request(
       'turn/steer',
       {
@@ -192,6 +195,12 @@ export async function startCodexTurn(
   const requested = codexTurnRequestOptions(host)
   let answer: unknown
   try {
+    host.dispatchEchoes.expect(
+      input.clientMessageId,
+      host.threadId,
+      'start',
+      turnInputFor(host, input.body)
+    )
     answer = await host.connection.request(
       'turn/start',
       {
@@ -278,23 +287,16 @@ export async function dispatchCodexTurn(
       answeredAt ?? session.dispatchEchoes.tick()
     )
   }
-  const endedFirst = answer.turnId
-    ? session.dispatchEchoes.bindTurn(
-        input.clientMessageId,
-        session.threadId,
-        answer.turnId,
-        answer.via,
-        answeredAt
-      )
-    : null
-  const rejection = endedFirst ? codexTurnEndRejection(endedFirst, session.account) : null
-  return rejection && answer.turnId
-    ? {
-        state: 'rejected',
-        ...codexAnsweredTurn(session, input.sessionId, answer.turnId, answer.via),
-        ...rejection
-      }
-    : { state: 'admitted', ranOptions: codexRanOptions(session) }
+  if (answer.turnId) {
+    session.dispatchEchoes.bindTurn(
+      input.clientMessageId,
+      session.threadId,
+      answer.turnId,
+      answer.via,
+      answeredAt
+    )
+  }
+  return { state: 'admitted', ranOptions: codexRanOptions(session) }
 }
 
 /** What a turn on this child runs, a steer its running turn's: the request's model and effort over

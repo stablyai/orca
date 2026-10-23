@@ -1,7 +1,10 @@
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import {
+  createCodexJournalTranslator,
+  type CodexJournalTranslator
+} from './codex-structured-journal-translation'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import type {
   CodexAcquisitionAttempt,
@@ -18,7 +21,7 @@ export function createCodexSessionJournalTranslator(input: {
   dispatchEchoes: CodexDispatchEchoes
   subagentExecutions: CodexSubagentExecutions
   prompts: CodexAcquisitionAttempt['window']['prompts']
-}) {
+}): CodexJournalTranslator | null {
   const { sink, account, sessionId, acquisitionId, deps, dispatchEchoes, prompts } = input
   return sink
     ? createCodexJournalTranslator({
@@ -28,6 +31,7 @@ export function createCodexSessionJournalTranslator(input: {
         acquisitionId,
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: input.primaryThreadId,
+        dispatchEchoes,
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
         subagentExecutions: input.subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>

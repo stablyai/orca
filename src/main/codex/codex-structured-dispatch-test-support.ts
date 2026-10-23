@@ -108,7 +108,9 @@ export async function acquiredCodexAdapter(input: {
     openConnection: input.codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    onDispatchSettledLate: (settlement) => input.settlements.push(settlement),
+    onDispatchSettledLate: (settlement) => {
+      input.settlements.push(settlement)
+    },
     ...(input.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: input.requestTimeoutMs })
   })
   const identity: AgentSessionJournalIdentity = {

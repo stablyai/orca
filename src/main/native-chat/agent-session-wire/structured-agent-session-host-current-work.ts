@@ -55,3 +55,20 @@ export function heldStructuredAgentSessionCurrentWork(
     revision: session?.operationalRevision ?? 0
   })
 }
+
+/** Canonical recovery remains available independently of provider startup presentation. */
+export function bindStructuredAgentSessionRecoveryWork(
+  store: StructuredAgentSessionCurrentWorkHost['store'],
+  sessionId: string,
+  session:
+    | Pick<
+        StructuredAgentSessionHostSession,
+        'journal' | 'child' | 'lastEndedChild' | 'operationalRevision'
+      >
+    | undefined
+): void {
+  if (session) {
+    session.journal.queuedMessages.recoveryWork = () =>
+      heldStructuredAgentSessionCurrentWork(store, sessionId, session.journal, session)
+  }
+}

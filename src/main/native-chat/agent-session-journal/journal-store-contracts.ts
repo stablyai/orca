@@ -101,13 +101,14 @@ export type JournalLifecycleBatchInput = {
    *  follows the messages it failed, and no reader meets one without the other. With none still
    *  queued, the batch is not written either. */
   rejectsQueued?: AgentJournalDispatchRejection
+  keepFailedStart?: boolean
 }
 
 /** A lifecycle batch whose rows are chosen at its own turn in the write queue, so a write queued
  *  ahead of it (an answer, a Stop) is what it plans from. */
 export type JournalPlannedLifecycleBatchInput = Pick<
   JournalLifecycleBatchInput,
-  'settlementId' | 'fence' | 'recovered'
+  'settlementId' | 'fence' | 'recovered' | 'keepFailedStart'
 > & {
   plan: () => {
     mutations: readonly JournalLifecycleMutationInput[]

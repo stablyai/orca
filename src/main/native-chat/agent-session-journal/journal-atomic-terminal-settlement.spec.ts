@@ -403,9 +403,9 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
         database.db.exec('DROP TRIGGER reject_submission_settlement_item')
         expect(await settleObservedExitForTest(input)).toMatchObject({ ok: true })
         expect(journal.submission('unanswered')).toMatchObject({
-          dispatchState: 'rejected',
+          dispatchState: mode === 'stop' ? 'unknown' : 'rejected',
           recovered: true,
-          rejection: { kind: mode === 'stop' ? 'cancelled' : 'providerStartFailed' }
+          ...(mode === 'stop' ? {} : { rejection: { kind: 'providerStartFailed' } })
         })
         const committed = rows().slice(diskBefore.length)
         expect(committed.filter((row) => row.kind === 'dispatch')).toHaveLength(1)

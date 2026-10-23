@@ -493,7 +493,7 @@ describe('a /compact that waits in line', () => {
   it('a direct /compact (no opt-in, as on a host without the queue) cut short by a restart is never a card', async () => {
     await rig.dispose()
     rig = await createQueuedMessageTestRig({ restartable: true })
-    await rig.workingSend()
+    const working = await rig.workingSend()
     await rig.host.close(SESSION, 'evict')
     const release = rig.holdNextStart()
     const startsBefore = rig.starts.mock.calls.length
@@ -501,8 +501,8 @@ describe('a /compact that waits in line', () => {
     await eventually(() => expect(rig.starts.mock.calls.length).toBeGreaterThan(startsBefore))
     rig.crashRestartHostProcess()
     release()
-    // A command in flight is not resumed: the person runs it again. No card, kept or otherwise.
-    expect(await rig.drafts()).toEqual([])
+    // Only the earlier unconfirmed message is recoverable; the command must be run again.
+    expect(await rig.drafts()).toEqual([{ messageId: `recovery:${working}`, state: 'returned' }])
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected' })
   })
 

@@ -27,7 +27,7 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     title: translate('components.settings.nativeChat.queueFollowUpsTitle', 'Queue follow-ups'),
     description: translate(
       'components.settings.nativeChat.queueFollowUpsCopy',
-      'Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.'
+      'Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images wait as cards too.'
     ),
     keywords: [
       translate('components.settings.nativeChat.queueSearchQueue', 'queue'),

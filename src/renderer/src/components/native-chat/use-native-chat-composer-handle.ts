@@ -12,6 +12,7 @@ import type { NativeChatComposerInput } from './native-chat-composer-input'
 type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInsertion>[0] &
   Omit<UseNativeChatComposerPasteArgs, 'insertTypedText'> & {
     /** Intake only: captured with the paste action, never consulted during settlement. */
+    resend?: NativeChatComposerHandle['resend']
     pastesInline: () => boolean
     /** A structured chat's editor while it shows this scope, where a long paste saved as a file lands. */
     pastedTextEditor: (() => NativeChatComposerInput | null) | null
@@ -51,6 +52,7 @@ export function useNativeChatComposerHandle(
     ref,
     () => ({
       focus,
+      resend: args.resend,
       insertTypedText,
       acceptsText,
       appendText,
@@ -60,6 +62,7 @@ export function useNativeChatComposerHandle(
     }),
     [
       focus,
+      args.resend,
       insertTypedText,
       acceptsText,
       appendText,

@@ -46,6 +46,7 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
+  project?: (rows: readonly JournalRow[]) => JournalRow[]
   commit: (rows: readonly JournalRow[], savedAt: number) => void
   /** Rows an OS crash may lose without losing anything but streamed text; they commit without
    *  the per-commit fsync (`isJournalStreamedTextRevision`). */
@@ -68,7 +69,7 @@ export class JournalRowWriter {
       this.deps.database().transaction(
         (db) => {
           insertJournalRow(db, this.deps.sessionId, row, savedAt)
-          receipt?.write(db, row)
+          receipt?.write(db, this.project([row])[0])
         },
         !receipt && this.streamed([row])
       )
@@ -77,7 +78,7 @@ export class JournalRowWriter {
       // sequence the table already holds. The ledger first: it cannot throw, the fold can.
       receipt?.committed()
       this.deps.commit([row], savedAt)
-      return row
+      return this.project([row])[0]!
     })
   }
 
@@ -113,13 +114,17 @@ export class JournalRowWriter {
         for (const row of rows) {
           insertJournalRow(db, this.deps.sessionId, row, ts)
         }
-        receipt?.write(db, receiptRow?.(rows))
+        receipt?.write(db, receiptRow?.(this.project(rows)))
       },
       !receipt && this.streamed(rows)
     )
     receipt?.committed()
     this.deps.commit(rows, ts)
-    return rows
+    return this.project(rows)
+  }
+
+  private project(rows: readonly JournalRow[]): JournalRow[] {
+    return this.deps.project?.(rows) ?? [...rows]
   }
 
   /** Assign the next sequence, make the row durable, and fold it through the SAME reducer

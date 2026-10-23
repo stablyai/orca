@@ -11,11 +11,12 @@ import { oldestQueuedSubmission } from './structured-agent-session-start-failure
 export function structuredAgentSessionSendOpeningTurnInJournal(
   journal: Pick<AgentSessionJournal, 'submissions' | 'visitItemsWithLinkage'>,
   fence: number,
-  work?: Pick<StructuredAgentSessionCurrentWork, 'publishedSubmission'> | null
+  work?: Pick<StructuredAgentSessionCurrentWork, 'owesSend'> | null
 ): boolean {
   return structuredAgentSessionSendOpeningTurn(
-    // One the child stopped holding unanswered opens nothing (`publishedSubmission`).
-    work ? journal.submissions().map(work.publishedSubmission) : journal.submissions(),
+    work
+      ? journal.submissions().filter((submission) => work.owesSend(submission))
+      : journal.submissions(),
     (visit) =>
       journal.visitItemsWithLinkage((itemId, sequence, body, linkage) =>
         visit({ itemId, sequence, body, turnScope: linkage.turnScope, agentId: linkage.agentId })
@@ -29,7 +30,7 @@ export function structuredAgentSessionSendOpeningTurnInJournal(
 export function structuredAgentSessionNextHandover(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>,
   fence: number,
-  work?: Pick<StructuredAgentSessionCurrentWork, 'publishedSubmission'> | null
+  work?: Pick<StructuredAgentSessionCurrentWork, 'owesSend'> | null
 ): ReturnType<typeof oldestQueuedSubmission> {
   return structuredAgentSessionSendOpeningTurnInJournal(session.journal, fence, work)
     ? undefined

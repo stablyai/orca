@@ -46,34 +46,13 @@ export function restoreCodexHistoryItem(
   return translated.handled ? translated.admission : { accepted: false, reason: 'untranslated' }
 }
 
-/** Old providers may return the complete thread from resume. Keep that fallback
- * bounded before admitting any rows to the asynchronous sink. */
+/** Optional history plans are admitted whole within these operation and byte bounds. */
 export const CODEX_RESTORE_MAX_OPERATIONS = 1_024
 export const CODEX_RESTORE_MAX_BYTES = 16 * 1024 * 1024
-
-/** One import's size against the restore budget: its items, lifecycle rows and any extra rows. */
-export function codexRestoreFits(turns: readonly unknown[], extraOperations = 0): boolean {
-  const items = turns.flatMap((rawTurn) => {
-    const turn = readCodexJournalRecord(rawTurn)
-    const turnId = readCodexJournalString(turn, 'id')
-    return turnId
-      ? (Array.isArray(turn.items) ? turn.items : []).map((item) => ({ turnId, item }))
-      : []
-  })
-  const lifecycles = turns.filter((rawTurn) =>
-    readCodexJournalString(readCodexJournalRecord(rawTurn), 'id')
-  ).length
-  return (
-    items.length + lifecycles + extraOperations <= CODEX_RESTORE_MAX_OPERATIONS &&
-    Buffer.byteLength(JSON.stringify(items), 'utf8') <= CODEX_RESTORE_MAX_BYTES
-  )
-}
 
 export function restoreCodexJournalThread(input: {
   threadId: string
   thread: Record<string, unknown>
-  /** The isolated recorder bounds actual translated mutations instead of the old raw fallback. */
-  historyImport?: true
   currentTurnIds: Map<string, Set<string>>
   ordinals: CodexTurnOrdinals
   handleItem: (event: CodexHistoryItemEvent) => CodexJournalTranslationAdmission
@@ -84,9 +63,6 @@ export function restoreCodexJournalThread(input: {
   flush: () => void
 }): CodexJournalTranslationAdmission {
   const turns = Array.isArray(input.thread.turns) ? input.thread.turns : []
-  if (!input.historyImport && !codexRestoreFits(turns)) {
-    return { accepted: false, reason: 'backpressure' }
-  }
   for (const rawTurn of turns) {
     const turn = readCodexJournalRecord(rawTurn)
     const turnId = readCodexJournalString(turn, 'id')

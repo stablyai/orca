@@ -1,6 +1,6 @@
 // A refused queued card comes back as a returned card that holds the cards behind it, read from the
-// chat's own rows with no card write of its own: through a rewind that retires its refused hand-off,
-// a new epoch, a restart and a Resume. Only its own Send and Delete act on it.
+// chat's own rows with no card write of its own: through provider context replacement, a restart
+// and a Resume. Only its own Send and Delete act on it.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -101,7 +101,7 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
   // The refusal is the dispatch row alone: no card row records it.
   expect(queueRows()).toEqual([a, b, c].map((messageId) => ({ messageId, op: 'queued' })))
 
-  // A rewind past the refused hand-off retires its submission; the card stays returned.
+  // A rewind hides the refused bubble while retaining its canonical refusal and returned card.
   const rewound = { itemId: target, expectedEpoch: journal().cursor().epoch }
   expect(
     await rig.host.rewind(CALLER, {
@@ -109,11 +109,12 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
       envelope: rig.envelope(rewound, 'agentSession.rewind', hostTestOperationId())
     })
   ).toMatchObject({ ok: true })
-  expect(journal().submission(refused)).toBeUndefined()
+  expect(journal().submission(refused)?.dispatchState).toBe('rejected')
+  expect(journal().item(agentJournalSubmissionKey(refused))).toBeNull()
   expect(await rig.drafts()).toEqual(held)
   await expectNothingSent(b, c)
 
-  // A new epoch deletes the refusal's rows: it is restated with the card, and replay reads it.
+  // Another context boundary retains the refusal's original rows for replay.
   await journal().rollEpoch('handle_forked', rig.store.getRecord(SESSION)!.lease.runtimeFence)
   await rig.restartHostProcess()
   expect(await rig.drafts()).toEqual(held)

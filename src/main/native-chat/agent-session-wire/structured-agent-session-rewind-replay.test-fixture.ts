@@ -1,4 +1,5 @@
-import { expect, type Mock } from 'vitest'
+import { expect, vi, type Mock } from 'vitest'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -65,4 +66,37 @@ export async function expectRetainedPrefixRewindReplay({
   )
   expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
   expect(rewind).toHaveBeenCalledTimes(1)
+}
+
+export async function expectAtomicRewindCompletion({
+  host,
+  store,
+  seed,
+  params,
+  attachAndStart
+}: Pick<RewindReplayFixture, 'host' | 'store' | 'seed' | 'params'> & {
+  attachAndStart: (fence: number | null) => Promise<unknown>
+}) {
+  const target = await seed()
+  const request = await params(target)
+  const replaceBeforeCrash = AgentSessionJournal.prototype.replaceEpochItems
+  const checkpoint = vi
+    .spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
+    .mockImplementationOnce(async function (this: AgentSessionJournal, ...args) {
+      await replaceBeforeCrash.apply(this, args)
+      throw new Error('completion write failed')
+    })
+  await expect(host.rewind(caller, request)).rejects.toThrow('completion write failed')
+  const committed = await host.journalSnapshot(HOST_TEST_SESSION)
+  expect(committed.cursor.epoch).not.toBe(request.expectedEpoch)
+  expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+  checkpoint.mockRestore()
+  const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
+  expect(
+    await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
+  ).toMatchObject({ ok: true })
+  expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(committed)
+  expect(replace).not.toHaveBeenCalled()
+  replace.mockRestore()
+  expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
 }

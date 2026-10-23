@@ -1,6 +1,10 @@
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import {
+  agentSessionJournalProviderHandle,
+  claudeProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 import { isDeepStrictEqual } from 'node:util'
 import { structuredRewindCut, type StructuredRewindCut } from './structured-rewind-cut'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
@@ -224,18 +228,6 @@ export async function applyStructuredRewindRecovery(
   if (rewind.phase !== 'provider-succeeded') {
     return
   }
-  if (rewind.providerFork?.materialized && !rewind.contextClearOperationId && !alreadyReplaced) {
-    const completed = rewind
-    await journal.replaceEpochItems(
-      'handle_forked',
-      fence,
-      cut!.kept,
-      (cursor) =>
-        receipt?.(completed, fence, cursor) ??
-        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
-    )
-    return
-  }
   if (rewind.contextClearOperationId && rewind.contextClearSequence) {
     if (
       store.getRecord(sessionId)?.providerContextBoundary?.operationId !==
@@ -256,9 +248,27 @@ export async function applyStructuredRewindRecovery(
     )
     return
   }
-  const cursor = alreadyReplaced
-    ? journal.cursor()
-    : await journal.replaceEpochItems('handle_forked', fence, cut!.kept)
+  if (!alreadyReplaced) {
+    const completed = rewind
+    const record = store.getRecord(sessionId)!
+    const providerHandle = completed.providerFork
+      ? claudeProviderHandle(
+          completed.providerFork.sessionId,
+          completed.providerFork.resumeCursor ?? null
+        )
+      : agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
+    await journal.replaceEpochItems(
+      'handle_forked',
+      fence,
+      cut!.kept,
+      (cursor) =>
+        receipt?.(completed, fence, cursor) ??
+        store.conversationReceipts.rewind(sessionId, fence, completed, cursor),
+      agentSessionJournalProviderHandle({ agent: record.provider, providerHandle })
+    )
+    return
+  }
+  const cursor = journal.cursor()
   await persistRewindRecord(store, sessionId, fence, {
     ...rewind,
     phase: 'completed',

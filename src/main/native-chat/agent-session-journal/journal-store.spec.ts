@@ -483,16 +483,20 @@ export function registerJournalStoreTests(): void {
       handoverRecorded: true as const
     })
 
-    it('names rows an earlier handle wrote, and never a row of a later epoch', async () => {
+    it('keeps physical open provenance across a context boundary', async () => {
       const earlier = await open()
       await earlier.appendItem(item(1), body('one'), {
         fence: 1,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
       await earlier.appendSubmission(submission('earlier'))
+      for (let i = 0; i < 10; i++) {
+        await earlier.appendItem(item(1), body(String(i)), { fence: 1 })
+      }
       await earlier.close()
 
       const journal = await open()
+      const openedCursor = journal.cursor()
       const leftover = journal.submissions().find((entry) => entry.clientMessageId === 'earlier')
       expect(journal.wroteBeforeOpen(leftover?.acceptedSequence)).toBe(true)
 
@@ -502,11 +506,13 @@ export function registerJournalStoreTests(): void {
         reason: 'unconfirmed from an earlier host',
         fence: 1
       })
-      // Sequences restart with an epoch, so a row accepted after it can sit below the open cursor.
+      // The public context token changes; physical source order and open provenance do not.
       await journal.replaceEpochItems('handle_forked', 1, [])
       await journal.appendSubmission(submission('later'))
       const later = journal.submissions().find((entry) => entry.clientMessageId === 'later')
-      expect(later?.acceptedSequence).toBeLessThanOrEqual(2)
+      expect(journal.cursor().epoch).not.toBe(openedCursor.epoch)
+      expect(journal.wroteBeforeOpen(leftover?.acceptedSequence)).toBe(true)
+      expect(later?.acceptedSequence).toBeGreaterThan(openedCursor.sequence)
       expect(journal.wroteBeforeOpen(later?.acceptedSequence)).toBe(false)
     })
   })

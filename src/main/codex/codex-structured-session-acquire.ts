@@ -67,7 +67,11 @@ export async function acquireCodexStructuredSession(input: {
       ? provenHandle.nativeId
       : null
   const subagentExecutions = new CodexSubagentExecutions()
-  const dispatchEchoes = createCodexDispatchEchoes(() => deps.onHeldSendsChanged?.({ sessionId }))
+  const dispatchEchoes = createCodexDispatchEchoes(
+    () => deps.onHeldSendsChanged?.({ sessionId }),
+    (clientMessageId, providerIdentity) =>
+      deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
+  )
   let account: AgentSessionAccountKind | undefined
   // Minted before the translator, which names this connection's frame rows with it.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)

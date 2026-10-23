@@ -1,3 +1,4 @@
+import { finishFirstRecoveryPresentation } from './structured-agent-session-queued-publication'
 import type { StructuredRewindRecoveryEvidence } from './structured-rewind-recovery'
 import {
   publishAttachedChild,
@@ -217,7 +218,6 @@ async function runAttachUnderAbort(
     bound: BoundAttach | null
     rewind: StructuredRewindRecoveryEvidence
   } = { candidate: null, committed: false, startup: null, bound: null, rewind: null }
-  const { startupAttempts } = context.runtimeState
   try {
     const attached = await performAttach({
       models: priorRecord ? undefined : options.catalogModels,
@@ -253,7 +253,7 @@ async function runAttachUnderAbort(
       ...(options.startupAttemptId ? { startupAttemptId: options.startupAttemptId } : {}),
       onStartupAttempt: (startup) => {
         attempt.startup = startup
-        return startupAttempts.track(sessionId, startup)
+        return context.runtimeState.startupAttempts.track(sessionId, startup)
       },
       ...(options.startupOptions ? { startupOptions: options.startupOptions } : {}),
       launchPermissionMode: async (record) =>
@@ -327,9 +327,12 @@ async function runAttachUnderAbort(
     return stampFailedCreateOwnerVerdict(context.deps.store, callerKey, params.envelope, attached)
   } finally {
     if (!attempt.committed) {
+      if (attempt.bound && attempt.candidate) {
+        finishFirstRecoveryPresentation(attempt.bound.journal, attempt.candidate.child)
+      }
       attemptSink.close()
       if (attempt.startup) {
-        startupAttempts.abandon(sessionId, attempt.startup.attemptId)
+        context.runtimeState.startupAttempts.abandon(sessionId, attempt.startup.attemptId)
       }
     }
   }

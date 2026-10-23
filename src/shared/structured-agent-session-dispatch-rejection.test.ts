@@ -41,7 +41,7 @@ describe('classifyDispatchRejection', () => {
   })
 
   it('fails the send for every kind but a withdrawal, a restart, a close, or a lost send', () => {
-    const noOneFailed = ['cancelled', 'hostRestarted', 'chatClosed', 'notDelivered']
+    const noOneFailed = ['cancelled', 'hostRestarted', 'chatClosed', 'notDelivered', 'unconfirmed']
     for (const kind of AGENT_SESSION_FAILURE_KINDS.filter(isSubmissionRejectionKind)) {
       const verdict = classifyDispatchRejection({ reason: 'x', rejection: { kind } }).verdict
       expect([kind, verdict]).toEqual([kind, noOneFailed.includes(kind) ? null : 'failure'])

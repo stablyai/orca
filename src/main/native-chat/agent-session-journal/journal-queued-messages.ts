@@ -1,3 +1,4 @@
+import { journalInputAttemptEnded } from './journal-input-obligations'
 // The queue's one view and its writes. A card is folded from the chat's own rows
 // (`journal-queue-fold.ts`), so every change to one is a journal row on the journal's own lane,
 // committed with whatever else the action writes: the queue keeps no second copy to fall behind.
@@ -12,7 +13,7 @@ import {
   type JournalQueueRow
 } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
-import { retainedQueueFacts } from './journal-queue-retention'
+import { queuedChangeOf, queueNeedsReopen } from './journal-queue-retention'
 import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
 import {
@@ -30,6 +31,11 @@ import {
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import { QueuedMessageEditLeases } from './queued-message-edit-leases'
 import { queuedMessageUpdateDecision, type QueuedMessageUpdate } from './queued-message-update'
+import {
+  adoptUnconfirmedRecovery,
+  unconfirmedRecoveryCards,
+  type JournalRecoveryWork
+} from './journal-unconfirmed-recovery'
 import type { JournalReducerState } from './journal-reducer'
 
 /** Card rows to write in one transaction, with what must commit beside them. */
@@ -38,15 +44,10 @@ export type JournalQueuePlan = {
   receipt: JournalOperationReceipt
 }
 
-/** What a new epoch writes again of the queue (`retainedQueueFacts`). */
-export type JournalQueueRestatement = {
-  cards: readonly JournalQueueCardChange[]
-  receipt: JournalOperationReceipt
-}
-
 export class JournalQueuedMessages {
   readonly editLeases = new QueuedMessageEditLeases(() => this.list())
   private readonly legacy: LegacyQueuedCards
+  recoveryWork: () => JournalRecoveryWork | null = () => null
   private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {
@@ -58,13 +59,13 @@ export class JournalQueuedMessages {
   }
 
   displayState(): JournalReducerState {
-    return this.legacy.displayState()
+    return this.deps.state()
   }
 
   /** Moves with every card change, so publication memos recompute only when they must. */
   revision(): string {
     const { epoch, queue } = this.deps.state()
-    return `${epoch}:${queue.revision}:${this.legacy.key()}`
+    return `${epoch}:${queue.revision}:${this.legacy.key()}:${this.deps.state().inputs.revision}:${this.recoveryWork()?.recoveryViewKey() ?? ''}`
   }
 
   /** The cards every reader sees, in queue order: the fold's, and any an earlier build wrote that
@@ -73,17 +74,24 @@ export class JournalQueuedMessages {
     const key = this.revision()
     if (this.viewed?.key !== key) {
       const cards = [...this.deps.state().queue.cards.values(), ...this.legacy.cards()]
+      cards.push(...unconfirmedRecoveryCards(this.deps.state(), cards, this.recoveryWork()))
       this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
     }
     return this.viewed.cards
   }
 
+  isDerivedRecovery(messageId: string): boolean {
+    return messageId.startsWith('recovery:') && !this.deps.state().queue.cards.has(messageId)
+  }
+
+  attemptEnded(clientMessageId: string): boolean {
+    const state = this.deps.state()
+    const send = state.submissions.get(clientMessageId)
+    return send !== undefined && journalInputAttemptEnded(state, send, this.recoveryWork())
+  }
+
   get(messageId: string): QueuedMessageRow | null {
-    return (
-      this.deps.state().queue.cards.get(messageId) ??
-      this.legacy.cards().find((card) => card.messageId === messageId) ??
-      null
-    )
+    return this.list().find((card) => card.messageId === messageId) ?? null
   }
 
   /** Attachments and the send receipt commit with the card. */
@@ -146,18 +154,30 @@ export class JournalQueuedMessages {
     }
     return this.write<AgentSessionQueuedMessageUpdateResult>(() => {
       edit = undefined
-      const decision = queuedMessageUpdateDecision(
-        this.get(input.messageId),
-        this.deps.sessionId,
-        input
-      )
+      const card = this.get(input.messageId)
+      const decision = queuedMessageUpdateDecision(card, this.deps.sessionId, input)
+      const derived =
+        card?.recovers &&
+        !this.deps.state().queue.cards.has(card.messageId) &&
+        !this.legacy.adoption(card.messageId)
       if (decision.status !== 'ready') {
-        return { changes: [], result: decision }
+        const result =
+          decision.status === 'unchanged' && derived
+            ? { ...decision, status: 'updated' as const }
+            : decision
+        return { changes: [], result }
       }
       edit = { body: decision.body, previous: decision.previous }
       const { messageId } = input
       return {
-        changes: [{ messageId, change: { op: 'edited', body: decision.body } }],
+        changes: [
+          {
+            messageId,
+            change: derived
+              ? { ...queuedChangeOf(card), body: decision.body }
+              : { op: 'edited', body: decision.body }
+          }
+        ],
         result: { status: 'updated', messageId, fingerprint: decision.fingerprint }
       }
     }, receipt)
@@ -200,14 +220,27 @@ export class JournalQueuedMessages {
     }, receipt)
   }
 
-  /** On the journal's lane: rows for these changes, each card an earlier build wrote moved into the
-   *  journal first, its legacy row deleted in the same transaction (`journal-queue-import.ts`). */
+  /** Adopt each selected legacy witness with its action; deletion is optional cleanup after commit. */
   plan(changes: readonly JournalQueueCardChange[]): JournalQueuePlan {
     const rows: JournalQueuePlan['rows'] = []
     const adopted: string[] = []
+    const witness = (id: string) => {
+      const value = this.legacy.witness(id)
+      if (value && !adopted.includes(value.messageId)) {
+        rows.push(journalQueueRowBuilder(this.deps.state, value.messageId, value.change))
+        adopted.push(value.messageId)
+      }
+    }
     for (const { messageId, change } of changes) {
+      const source = this.get(messageId)?.recovers
+      if (source) {
+        witness(source)
+      }
       const own = this.deps.state().queue.cards.has(messageId) || adopted.includes(messageId)
-      const adoption = own ? null : this.legacy.adoption(messageId)
+      const adoption = own
+        ? null
+        : (this.legacy.adoption(messageId) ??
+          adoptUnconfirmedRecovery(this.list(), messageId, change))
       if (adoption) {
         rows.push(journalQueueRowBuilder(this.deps.state, messageId, adoption))
         adopted.push(messageId)
@@ -216,7 +249,14 @@ export class JournalQueuedMessages {
         rows.push(journalQueueRowBuilder(this.deps.state, messageId, change))
       }
     }
-    return { rows, receipt: this.legacy.deletion(adopted) }
+    return { rows, receipt: { write: () => {}, committed: () => this.legacy.cleanup(adopted) } }
+  }
+
+  proofWitness(clientMessageId: string): JournalQueuePlan['rows'] {
+    const witness = this.legacy.witness(clientMessageId)
+    return witness
+      ? [journalQueueRowBuilder(this.deps.state, witness.messageId, witness.change)]
+      : []
   }
 
   /** On the lane, before a hand-off's submission is written: the card is what the person acted
@@ -243,21 +283,6 @@ export class JournalQueuedMessages {
     throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
   }
 
-  /** What a new epoch restates, with every legacy card: their rows go in the same transaction. */
-  restatement(): JournalQueueRestatement {
-    return {
-      cards: retainedQueueFacts(this.list(), this.deps.state().submissions),
-      receipt: this.legacy.deletionOfAll()
-    }
-  }
-
-  /** Every legacy card moved into the journal, every legacy row deleted, with a write that retires
-   *  hand-offs: each card's reading is then latched in the fold before its hand-off is gone. */
-  adoptionOfAll(): JournalQueuePlan {
-    const { rows } = this.plan(this.legacy.messageIds().map((messageId) => ({ messageId })))
-    return { rows, receipt: this.legacy.deletionOfAll() }
-  }
-
   /** The bulk move of an earlier build's cards, once per open (`LegacyQueuedCards.importAtOpen`). */
   importAtOpen(): Promise<void> {
     return this.legacy.importAtOpen()
@@ -271,19 +296,7 @@ export class JournalQueuedMessages {
   /** A card waits, or is mid-hand-off and may come back to waiting: a chat that stops running
    *  marks it (`AgentSessionJournal.markQueueReopen`). */
   awaitReopenMark(): boolean {
-    const { submissions } = this.deps.state()
-    return this.list().some((card) => {
-      if (card.state === 'waiting') {
-        return true
-      }
-      const handOff = card.consumedAs ? submissions.get(card.consumedAs) : undefined
-      // A recovered doubt outlived its writer: nothing brings that card back to waiting.
-      return (
-        card.state === 'dispatched' &&
-        (handOff?.dispatchState === 'pending' ||
-          (handOff?.dispatchState === 'unknown' && handOff.recovered !== true))
-      )
-    })
+    return queueNeedsReopen(this.list(), this.deps.state().submissions)
   }
 
   /** The person's Stop still pausing the queue, if any (`journalUserStopInForce`). */

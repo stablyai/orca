@@ -58,7 +58,7 @@ const refusedSteer = (message: string): CodexAppServerRequestError =>
   )
 
 describe('a Codex send while a turn runs', () => {
-  it('steers into that turn by name, and that turn ending unechoed withdraws it', async () => {
+  it('steers into that turn by name, and its end makes no delivery verdict', async () => {
     const { connection, settlements, send, methods, endTurn } = await rig({
       'turn/steer': () => ({ turnId: 'turn-1' }),
       // A Codex before 0.148 answers a steered start with a turn that never opens.
@@ -77,14 +77,7 @@ describe('a Codex send while a turn runs', () => {
 
     endTurn('turn-1', 'interrupted')
 
-    expect(settlements).toEqual([
-      expect.objectContaining({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        state: 'rejected',
-        rejection: { kind: 'cancelled' }
-      })
-    ])
+    expect(settlements).toEqual([])
   })
 
   it('settles on its echo when the turn completes with it', async () => {
@@ -147,9 +140,7 @@ describe('a Codex send while a turn runs', () => {
     expect(connection.calls.at(-1)?.params).toMatchObject({ expectedTurnId: 'turn-2' })
     endTurn('turn-2', 'interrupted')
 
-    expect(settlements).toEqual([
-      expect.objectContaining({ clientMessageId: 'client-1', state: 'rejected' })
-    ])
+    expect(settlements).toEqual([])
   })
 
   it('is rejected in Codex words when Codex refuses the steer and the start', async () => {
@@ -222,7 +213,7 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
     return { ...rig, sending, methods }
   }
 
-  it('waits for that turn to open and steers it, so a Stop withdraws both', async () => {
+  it('waits for that turn to open and steers it, with no delivery verdict from Stop', async () => {
     const rig = await answeredUnopened()
 
     rig.turns.start()
@@ -233,13 +224,7 @@ describe('a Codex send made after Codex answered an earlier one, before it opene
       cancelled: true,
       turnId: 'turn-1'
     })
-    // Codex answers the interrupt, then ends the turn, which settles both.
-    await vi.waitFor(() =>
-      expect(rig.settlements.map(({ clientMessageId }) => clientMessageId).sort()).toEqual([
-        'client-1',
-        'client-2'
-      ])
-    )
+    expect(rig.settlements).toEqual([])
   })
 
   it('starts its own turn when that turn ends without opening', async () => {

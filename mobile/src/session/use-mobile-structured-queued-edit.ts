@@ -1,3 +1,4 @@
+import type { MobileComposerWriter } from './mobile-native-chat-draft-store'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   AgentSessionQueuedMessage,
@@ -33,6 +34,9 @@ type Edit = {
   text: string
   fingerprint: string
   saving: boolean
+  handBack: (text: string) => boolean
+  detached?: boolean
+  returned?: boolean
   lease: MobileQueuedEditLease
 }
 
@@ -45,7 +49,7 @@ export function useMobileStructuredQueuedEdit(args: {
   messages: readonly AgentSessionQueuedMessage[] | null
   cards: readonly MobileQueuedMessageCard[]
   mutate: MobileStructuredAgentMutate
-  appendComposerText: ((text: string) => boolean) | undefined
+  appendComposerText: MobileComposerWriter | undefined
   onSendError: (text: string) => void
   onActionResolved?: () => void
 }) {
@@ -62,11 +66,20 @@ export function useMobileStructuredQueuedEdit(args: {
     active.current = edit
     setShown(edit ? { ...edit } : null)
   }, [])
-  const close = useCallback(() => {
-    const edit = active.current
-    render(null)
-    edit?.lease.end()
-  }, [render])
+  const close = useCallback(
+    (preserve = false) => {
+      const edit = active.current
+      render(null)
+      if (edit) {
+        edit.detached = true
+        if (preserve && !edit.saving) {
+          handBackEdit(edit)
+        }
+        edit.lease.end()
+      }
+    },
+    [render]
+  )
 
   useEffect(() => {
     return () => {
@@ -74,7 +87,13 @@ export function useMobileStructuredQueuedEdit(args: {
       active.current = null
       reopen.current = null
       setShown(null)
-      edit?.lease.end()
+      if (edit) {
+        edit.detached = true
+        if (!edit.saving) {
+          handBackEdit(edit)
+        }
+        edit.lease.end()
+      }
     }
   }, [sessionKey, args.chatActive])
 
@@ -97,6 +116,8 @@ export function useMobileStructuredQueuedEdit(args: {
         text,
         fingerprint,
         saving: false,
+        handBack:
+          args.appendComposerText?.captureOrigin?.() ?? args.appendComposerText ?? (() => false),
         lease: startMobileQueuedEditLease({
           getClient: () =>
             clientRef.current.sessionKey === sessionKey ? clientRef.current.client : client,
@@ -112,7 +133,7 @@ export function useMobileStructuredQueuedEdit(args: {
             return
           }
           if (answer.status === 'gone') {
-            close()
+            close(true)
           } else if (answer.status === 'changed') {
             onSendError('This message changed while you were editing.')
           } else if (answer.status === 'not-editable') {
@@ -123,7 +144,17 @@ export function useMobileStructuredQueuedEdit(args: {
       )
       return true
     },
-    [args.messages, client, close, enabled, onSendError, render, sessionId, sessionKey]
+    [
+      args.appendComposerText,
+      args.messages,
+      client,
+      close,
+      enabled,
+      onSendError,
+      render,
+      sessionId,
+      sessionKey
+    ]
   )
   const change = useCallback(
     (text: string) => {
@@ -157,11 +188,20 @@ export function useMobileStructuredQueuedEdit(args: {
       { messageId: edit.messageId, expectedBodyFingerprint: edit.fingerprint, text: edit.text },
       () => isOpen(active, edit)
     )
+    const saved =
+      result.status === 'accepted' &&
+      (result.value.status === 'updated' || result.value.status === 'unchanged')
+    edit.saving = false
+    if (edit.detached) {
+      if (!saved) {
+        handBackEdit(edit)
+      }
+      return saved
+    }
     // A reply landing mid chat switch belongs to the chat being left.
     if (!isOpen(active, edit) || clientRef.current.sessionKey !== edit.scope) {
       return false
     }
-    edit.saving = false
     if (result.status === 'accepted') {
       if (result.value.status === 'updated' || result.value.status === 'unchanged') {
         close()
@@ -169,13 +209,16 @@ export function useMobileStructuredQueuedEdit(args: {
         return true
       }
       if (result.value.status === 'gone') {
+        if (edit.text.trim() !== '' && !edit.handBack(edit.text)) {
+          return false
+        }
         close()
         return false
       }
       // Someone else's edit landed first: the typing goes to the chat box, and the editor
       // opens again on the newer text.
       const typed = edit.text.trim() !== ''
-      if (result.value.status === 'changed' && (!typed || args.appendComposerText?.(edit.text))) {
+      if (result.value.status === 'changed' && (!typed || edit.handBack(edit.text))) {
         onSendError(
           typed
             ? 'This message changed while you were editing. Your edit is in the chat box.'
@@ -201,7 +244,7 @@ export function useMobileStructuredQueuedEdit(args: {
       args.messages?.some((message) => message.messageId === messageId) === true &&
       args.cards.some((card) => card.messageId === messageId)
     if (edit && edit.scope === sessionKey && args.messages !== null && !listed(edit.messageId)) {
-      close()
+      close(true)
     }
     const pending = reopen.current
     if (!pending || active.current || args.messages === null || !sessionId) {
@@ -236,4 +279,10 @@ export function useMobileStructuredQueuedEdit(args: {
 
 function isOpen(active: { current: Edit | null }, edit: Edit): boolean {
   return active.current === edit
+}
+
+function handBackEdit(edit: Edit): void {
+  if (!edit.returned && edit.text !== queuedMessageEditableText(edit.body) && edit.text.trim()) {
+    edit.returned = edit.handBack(edit.text)
+  }
 }

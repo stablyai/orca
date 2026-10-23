@@ -307,18 +307,14 @@ describe('a send a Stop took back, then a send made while it read Stopping', () 
     const second = await send('sent while stopping')
     turns.start()
     await settledWithin(stopping, 3_000)
-    await vi.waitFor(async () => expect(verdictOf(await submissions(), first)).toBe('withdrawn'))
+    expect(['pending', 'unknown']).toContain(verdictOf(await submissions(), first))
     await vi.waitFor(() => expect(answers).toBe(2))
     turns.start()
     turns.echo(second)
     turns.end('completed')
     await vi.waitFor(async () => expect(verdictOf(await submissions(), second)).toBe('accepted'))
     const live = await drawn()
-    expect(live).toEqual([
-      'look around',
-      NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
-      'sent while stopping'
-    ])
+    expect(live).toEqual(['look around', 'Cancellation requested.', 'sent while stopping'])
 
     // Restart: the resume reports each finished turn with its start in Codex's whole seconds.
     resumeTurns = (await host.journalSnapshot(SESSION)).items.flatMap((item) => {
@@ -356,7 +352,7 @@ describe('a send a Stop took back before Codex echoed it', () => {
     await vi.waitFor(() => expect(answers).toBe(1))
     turns.start()
     await stop('turn-1')
-    await vi.waitFor(async () => expect(verdictOf(await submissions(), sent)).toBe('withdrawn'))
+    expect(['pending', 'unknown']).toContain(verdictOf(await submissions(), sent))
 
     // Codex opened its turn before echoing it, so that turn, ended interrupted, is the send's: it
     // carries the stop, and no row of its own follows the send.
@@ -370,7 +366,7 @@ describe('a send a Stop took back before Codex echoed it', () => {
     expect(await drawn()).toEqual(['look around', 'Cancellation requested.'])
   })
 
-  it('is drawn where it was sent, then the one row saying it never started, when no turn opened', async () => {
+  it('keeps the message where it was sent without claiming it never started', async () => {
     const warmUp = await send('warm up')
     await vi.waitFor(() => expect(answers).toBe(1))
     turns.start()
@@ -408,16 +404,8 @@ describe('a send a Stop took back before Codex echoed it', () => {
       openWaits.releaseAll?.()
       await stopping
     }
-    expect(verdictOf(await submissions(), sent)).toBe('withdrawn')
+    expect(verdictOf(await submissions(), sent)).toBe('unknown')
 
-    // Every client draws the send where it was sent, then the one row saying it never started.
-    await host.flushStreamedEvents(SESSION)
-    const { items, submissions: settled } = await host.journalSnapshot(SESSION)
-    const messages = projectStructuredAgentSessionMessages(items, [], settled)
-    expect(messages.slice(-2).map((message) => [message.role, message.blocks])).toEqual([
-      ['user', [{ type: 'text', text: 'look around' }]],
-      ['system', [expect.objectContaining({ text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT })]]
-    ])
-    expect(await drawn()).toEqual(['warm up', 'look around', NATIVE_CHAT_STOPPED_BEFORE_START_TEXT])
+    expect(await drawn()).toEqual(['warm up', 'look around', 'Cancellation requested.'])
   })
 })

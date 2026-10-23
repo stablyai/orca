@@ -8,6 +8,11 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
+import {
+  setMobileNativeChatDraftText,
+  useMobileNativeChatDraft
+} from './mobile-native-chat-draft-store'
 import {
   CAPABLE,
   SESSION_ID,
@@ -30,12 +35,16 @@ function withText(body: AgentSessionQueuedMessage['body'], text: string) {
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
 }))
+vi.mock('./use-mobile-native-chat-session', () => ({ useMobileNativeChatSession: () => ({}) }))
 
 describe('mobile in-place queued Edit', () => {
   let renderer: ReactTestRenderer | undefined
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | undefined
   let listener: ((data: unknown) => void) | undefined
   const append = vi.fn(() => true)
+  const appendRef: { current: (text: string) => boolean } = { current: append }
+  let originDraft = ''
+  let nextDraft = ''
   const error = vi.fn()
   const resolved = vi.fn()
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
@@ -66,12 +75,15 @@ describe('mobile in-place queued Edit', () => {
     connected?: boolean
     transport?: RpcClient | null
   }): null {
-    hook = useMobileStructuredAgentSession({
+    hook = useMobileNativeChatSessionLane({
       client: transport,
+      structured: true,
       sessionId,
+      resolvedAgent: 'codex',
+      transcriptPath: null,
       sourceIdentity: 'host-a',
       enabled,
-      connected,
+      connState: connected ? 'connected' : 'disconnected',
       agent: 'codex',
       hostSupport:
         editSupport === null
@@ -81,10 +93,12 @@ describe('mobile in-place queued Edit', () => {
               queuedMessages: false,
               queuedMessageEdit: editSupport
             },
-      appendComposerText: append,
+      appendComposerTextRef: appendRef,
       onSendError: error,
       onActionResolved: resolved
-    })
+    }).structuredSession
+    originDraft = useMobileNativeChatDraft('origin')
+    nextDraft = useMobileNativeChatDraft('next')
     return null
   }
   async function mount(message: AgentSessionQueuedMessage, editSupport: boolean | null = true) {
@@ -109,7 +123,49 @@ describe('mobile in-place queued Edit', () => {
   afterEach(async () => {
     await act(async () => renderer?.unmount())
     vi.useRealTimers()
+    appendRef.current = append
   })
+
+  it.each(['navigate', 'accepted-save', 'failed-save'] as const)(
+    'keeps dirty input with the captured origin through %s',
+    async (mode) => {
+      const message = queuedDraft({ messageId: 'origin-edit' })
+      appendRef.current = (text) => {
+        setMobileNativeChatDraftText('origin', (old) => `${old}${text}`)
+        return true
+      }
+      await mount(message)
+      act(() => hook!.queued.editor!.change('typing at origin'))
+      const answer = Promise.withResolvers<RpcResponse>()
+      let saving: Promise<boolean> | undefined
+      if (mode !== 'navigate') {
+        sendRequest.mockImplementationOnce(() => answer.promise)
+        act(() => {
+          saving = hook!.queued.editor!.save()
+        })
+      }
+      appendRef.current = (text) => {
+        setMobileNativeChatDraftText('next', (old) => `${old}${text}`)
+        return true
+      }
+      await act(async () => renderer?.update(createElement(Harness, { sessionId: 'next-session' })))
+      if (saving) {
+        await act(async () => {
+          answer.resolve(
+            mode === 'accepted-save'
+              ? mutationOk({ status: 'updated', messageId: message.messageId, fingerprint: 'new' })
+              : mutationOk({ status: 'gone' })
+          )
+          await saving
+        })
+      }
+      expect(originDraft).toBe(mode === 'accepted-save' ? '' : 'typing at origin')
+      expect(nextDraft).toBe('')
+      await act(async () => renderer?.unmount())
+      renderer = undefined
+      setMobileNativeChatDraftText('origin', '')
+    }
+  )
 
   it('waits for the capability probe before offering the legacy fallback', async () => {
     await mount(queuedDraft({ messageId: 'draft-1' }), null)
@@ -231,11 +287,11 @@ describe('mobile in-place queued Edit', () => {
     expect(append).toHaveBeenCalledTimes(1)
   })
 
-  it('abandons unsaved typing and releases the hold when changing chats', async () => {
+  it('hands dirty typing back and releases the hold when changing chats', async () => {
     await mount(queuedDraft({ messageId: 'draft-1' }))
     act(() => hook!.queued.editor!.change('unsaved'))
     await act(async () => renderer?.update(createElement(Harness, { sessionId: 'other-chat' })))
-    expect(append).not.toHaveBeenCalled()
+    expect(append).toHaveBeenCalledWith('unsaved')
     expect(hook!.queued.editor).toBeUndefined()
     expect(
       sendRequest.mock.calls
@@ -269,7 +325,11 @@ describe('mobile in-place queued Edit', () => {
         answer?.(mutationOk({ status, messageId: message.messageId, fingerprint: 'new' }))
         await save
       })
-      expect(append).not.toHaveBeenCalled()
+      if (status === 'updated') {
+        expect(append).not.toHaveBeenCalled()
+      } else {
+        expect(append).toHaveBeenCalledWith('edited in place')
+      }
       expect(error).not.toHaveBeenCalled()
       expect(resolved).not.toHaveBeenCalled()
       expect(hook!.queued.editor).toBeUndefined()
@@ -319,7 +379,7 @@ describe('mobile in-place queued Edit', () => {
       text: 'next edit',
       saving: false
     })
-    expect(append).not.toHaveBeenCalled()
+    expect(append).toHaveBeenCalledWith('submitted edit')
     expect(error).not.toHaveBeenCalled()
     expect(resolved).not.toHaveBeenCalled()
   })

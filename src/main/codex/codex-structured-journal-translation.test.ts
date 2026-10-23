@@ -9,7 +9,10 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD
@@ -111,7 +114,8 @@ function hardWatermarkDeferred() {
 
 describe('codex journal translation', () => {
   it('projects turns restored by thread/resume into durable conversation rows', () => {
-    const { translator, tap } = translatorWith()
+    const tap = recorder()
+    const translator = createCodexHistoryTranslator({ sink: tap.sink })
 
     translator.restoreThread(THREAD_ID, {
       turns: [
@@ -141,26 +145,6 @@ describe('codex journal translation', () => {
         blocks: [{ type: 'text', text: 'existing answer' }]
       }
     ])
-  })
-
-  it('refuses an old-provider restore above the operation bound before partial import', () => {
-    const { translator, tap } = translatorWith()
-    const result = translator.restoreThread(THREAD_ID, {
-      turns: [
-        {
-          id: 'turn-restored',
-          items: Array.from({ length: 1_025 }, (_, index) => ({
-            type: 'agentMessage',
-            id: `agent-${index}`,
-            text: `answer-${index}`
-          }))
-        }
-      ]
-    })
-
-    expect(result).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(tap.rows).toEqual([])
-    expect(tap.publishes()).toBe(0)
   })
 
   it('durably opens and closes the primary turn cancellation lifecycle', () => {

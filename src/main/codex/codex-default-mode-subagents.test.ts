@@ -19,7 +19,7 @@ import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subj
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { createCodexHistoryTranslator } from './codex-structured-journal-translation'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
 import type { CodexThreadItem } from './codex-thread-item-identity'
@@ -605,7 +605,7 @@ describe('a restored thread', () => {
   function restored(replayed = [spawnCompleted, waitCompleted]) {
     const executions = new CodexSubagentExecutions()
     const rows = new Map<string, AgentJournalItemBody>()
-    const translator = createCodexJournalTranslator({
+    const translator = createCodexHistoryTranslator({
       sink: {
         appendItem: (identity, body) => rows.set(JSON.stringify(identity), body),
         appendTombstone: () => {},

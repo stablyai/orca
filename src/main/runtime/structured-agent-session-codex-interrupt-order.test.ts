@@ -148,7 +148,12 @@ async function expectInterruptedThroughout(): Promise<void> {
 
 async function owesWork(): Promise<boolean> {
   const snapshot = await host.journalSnapshot(SESSION)
-  return owesStructuredAgentSessionWork(snapshot.items, snapshot.submissions, fence)
+  return owesStructuredAgentSessionWork(
+    snapshot.items,
+    snapshot.submissions,
+    fence,
+    host.currentWork(SESSION)?.scope
+  )
 }
 
 beforeEach(async () => {

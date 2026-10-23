@@ -106,7 +106,7 @@ export type NativeChatComposerProps = {
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
   /** Render an optimistic echo until the real transcript turn lands. */
-  onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  onOptimisticSend?: (text: string, imagePaths?: string[], recovery?: boolean) => string | undefined
   /** Settle an optimistic echo whose write was refused or never acknowledged. */
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   /** Remove an optimistic echo when its delayed submit is canceled. */
@@ -148,6 +148,7 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  resend?: (text: string, imagePaths?: string[]) => boolean
   focus: () => boolean
   insertTypedText: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */

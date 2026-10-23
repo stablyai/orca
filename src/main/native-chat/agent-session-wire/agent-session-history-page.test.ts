@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  agentJournalItemKey,
   agentJournalSubmissionKey,
   boundJournalKeyComponent
 } from '../../../shared/agent-session-journal-item-key'
@@ -130,6 +131,99 @@ describe('readAgentSessionHistory', () => {
     }
     expect(older.page.items.map((entry) => entry.body)).toEqual([body('item-2'), body('item-3')])
     expect(older.page.hasNewer).toBe(true)
+  })
+
+  it('resets old contexts and resumes the projected cursor after an atomic retained-log replacement', async () => {
+    await appendItems(4)
+    const before = journal.cursor()
+    const kept = journal
+      .snapshot()
+      .items.slice(0, 2)
+      .map((entry, index) => ({
+        identity: item(index + 1),
+        body: entry.body,
+        observedAt: entry.observedAt,
+        turnScope: entry.turnScope,
+        ownerFence: journal.itemFence(entry.itemId) ?? 0
+      }))
+    let receipt = before
+    await journal.replaceEpochItems('handle_forked', 1, kept, (cursor) => ({
+      write: () => {
+        receipt = cursor
+      },
+      committed: () => {}
+    }))
+    expect(receipt).toEqual(journal.cursor())
+    for (const direction of ['before', 'after'] as const) {
+      expect(
+        readAgentSessionHistory(journal, {
+          sessionId: IDENTITY.sessionId,
+          direction,
+          cursor: before
+        })
+      ).toMatchObject({
+        ok: false,
+        reset: 'epoch_changed',
+        page: {
+          epoch: receipt.epoch,
+          items: kept.map((entry) => expect.objectContaining({ body: entry.body }))
+        }
+      })
+    }
+    const physical = journal.physicalCursor()
+    expect(physical.epoch).toBe(before.epoch)
+    expect(physical.sequence).toBeGreaterThan(before.sequence)
+    let appendedReceipt = before
+    const appended = await journal.appendItem(
+      item(5),
+      body('after boundary'),
+      { fence: 1 },
+      {
+        write: (_db, row) => {
+          appendedReceipt = { epoch: row!.epoch, sequence: row!.seq }
+        },
+        committed: () => {}
+      }
+    )
+    expect(appended.cursor).toEqual(journal.cursor())
+    expect(appendedReceipt).toEqual(appended.cursor)
+    expect(
+      readAgentSessionHistory(journal, {
+        sessionId: IDENTITY.sessionId,
+        direction: 'after',
+        cursor: receipt
+      })
+    ).toMatchObject({
+      ok: true,
+      page: {
+        epoch: receipt.epoch,
+        liveCursor: appended.cursor,
+        items: [expect.objectContaining({ body: body('after boundary') })]
+      }
+    })
+    await journal.close()
+    journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+    expect(journal.cursor()).toEqual(appended.cursor)
+    const tail = readAgentSessionHistory(journal, {
+      sessionId: IDENTITY.sessionId,
+      direction: 'tail',
+      limit: 2
+    })
+    expect(tail).toMatchObject({ ok: true, page: { epoch: receipt.epoch, hasOlder: true } })
+    if (!tail.ok) {
+      throw new Error('missing tail')
+    }
+    expect(
+      readAgentSessionHistory(journal, {
+        sessionId: IDENTITY.sessionId,
+        direction: 'before',
+        cursor: tail.page.window.nextCursor,
+        limit: 2
+      })
+    ).toMatchObject({
+      ok: true,
+      page: { items: [expect.objectContaining({ body: body('item-1') })] }
+    })
   })
 
   it('catches a live reader up from its cursor and stops at the limit', async () => {
@@ -445,7 +539,7 @@ describe('projectJournalBatch', () => {
     expect(projected.batch.items).toHaveLength(0)
   })
 
-  it('publishes a mismatched provider echo under its submission slot', async () => {
+  it('publishes a mismatched provider echo under its kept submission slot after replacement', async () => {
     const message: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
@@ -461,6 +555,14 @@ describe('projectJournalBatch', () => {
       body: message,
       fence: 1
     })
+    await journal.replaceEpochItems('handle_forked', 1, [
+      {
+        identity: { provider: 'orca', clientMessageId: 'client-follow-up' },
+        body: message,
+        ownerFence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }
+    ])
     const cursor = journal.cursor()
     await journal.resolveDispatch({
       clientMessageId: 'client-follow-up',
@@ -488,8 +590,18 @@ describe('projectJournalBatch', () => {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }
     expect(page.page.items).toMatchObject([
-      { itemId: agentJournalSubmissionKey('client-follow-up'), revision: 1 }
+      { itemId: agentJournalSubmissionKey('client-follow-up'), revision: 2 }
     ])
+    expect(
+      journal.canonicalItemId(
+        agentJournalItemKey({
+          provider: 'codex',
+          threadId: 'thread-1',
+          turnId: 'root-turn',
+          ordinal: 2
+        })
+      )
+    ).toBe(agentJournalSubmissionKey('client-follow-up'))
     expect(page.page.removedItemIds).toEqual([])
   })
 })

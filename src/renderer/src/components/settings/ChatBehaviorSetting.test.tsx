@@ -190,7 +190,7 @@ describe('ChatBehaviorSetting queue follow-ups', () => {
     setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
     const updateSettings = vi.fn()
     const { container } = renderSetting({}, updateSettings)
-    expect(container.textContent).toContain('Messages with images send right away.')
+    expect(container.textContent).toContain('Messages with images wait as cards too.')
     fireEvent.click(container.querySelector(QUEUE_TOGGLE)!)
     expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
   })

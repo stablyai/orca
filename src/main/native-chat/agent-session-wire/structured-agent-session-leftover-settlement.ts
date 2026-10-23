@@ -80,6 +80,7 @@ export async function settleStructuredAgentSessionLeftovers(
         : `${STALE_SESSION_ROW_PREFIX}${sessionId}:${fence}:seq-${journal.cursor().sequence}`,
       fence,
       recovered: true,
+      keepFailedStart: exit?.exitedDuringStartup !== undefined,
       plan: () => {
         const exited = exit
           ? planStructuredAgentSessionDeadGeneration(

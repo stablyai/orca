@@ -54,7 +54,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   })
 
   // The structured session draws, or holds, what the host took; the composer stays cleared.
-  it.each(['accepted', 'unknown', 'queued'] as const)(
+  it.each(['accepted', 'queued'] as const)(
     'leaves a %s send of a command the active agent owns to the structured session',
     async (outcome) => {
       sendStructured.mockResolvedValue(outcome)
@@ -67,22 +67,26 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     }
   )
 
-  it('keeps host-command reconciliation for Codex', async () => {
+  it('restores unknown text and reports the same lost-result notice as desktop', async () => {
     sendStructured.mockResolvedValue('unknown')
     mount('codex')
 
     await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
 
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
+    expect(onSendError).toHaveBeenCalledOnce()
+    expect(onSendError).toHaveBeenCalledWith(
+      "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed."
+    )
   })
 
-  it("reads another agent's sends by that agent's commands, never Codex's", async () => {
+  it('restores unknown text for every agent', async () => {
     sendStructured.mockResolvedValue('unknown')
     mount('grok')
 
     await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
 
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
   })
 
   it('puts a refused send back in the composer', async () => {

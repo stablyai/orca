@@ -6,8 +6,6 @@ export function retireRewoundJournalSubmission(state: JournalReducerState, itemI
   if (identity?.provider !== 'orca') {
     return
   }
-  state.submissions.delete(identity.clientMessageId)
-  state.receipts.delete(identity.clientMessageId)
   for (const [providerItemId, submissionItemId] of state.aliases) {
     if (submissionItemId === itemId) {
       state.aliases.delete(providerItemId)

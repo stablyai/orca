@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
@@ -71,7 +72,7 @@ function writeUnreadableReceipt(id: string, method: string): void {
     .run(id, SESSION, CALLER.callerKey, method)
 }
 
-/** Simulates an older host retiring the whole epoch, including its unsent submissions. */
+/** Replaces provider presentation while retaining the canonical hand-off. */
 async function rewindConversation(): Promise<void> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {
@@ -239,7 +240,7 @@ describe('Send now', () => {
     expect(await rig.handoff(draftId)).toBeUndefined()
   })
 
-  it('answers a retry after a rewind dropped its hand-off as lost, and never sends under that id again', async () => {
+  it('keeps an old-context receipt stale without dropping or repeating its canonical hand-off', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('rewound away')
     const id = opId()
@@ -249,10 +250,10 @@ describe('Send now', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'resultLost' } }
     })
-    // The dropped hand-off was never handed over, so its card waits again; it never goes out
-    // under the retried id.
+    // A cursor reset keeps the existing receipt contract, but does not release its consumed card.
     const { submissions } = await rig.host.journalSnapshot(SESSION)
-    expect(submissions.some((entry) => entry.clientMessageId === id)).toBe(false)
+    expect(submissions.filter((entry) => entry.clientMessageId === id)).toHaveLength(1)
+    expect(await rig.handoff(draftId)).toMatchObject({ clientMessageId: id })
   })
 })
 
@@ -638,8 +639,10 @@ describe('source-bound ordinary Continue', () => {
 it.each(['send-now', 'automatic'] as const)(
   'clears Sleep on queued submission only: %s',
   async (mode) => {
-    await rig.workingSend()
+    const working = await rig.workingSend()
     const draftId = await queuedDraft('retained through Sleep')
+    await openRigTurnFor(rig, working)
+    await rig.settleAccepted(working, 'received')
     expect(await rig.host.sleepWorkspace('workspace-1', true)).toEqual({
       stoppedSessionIds: [SESSION]
     })

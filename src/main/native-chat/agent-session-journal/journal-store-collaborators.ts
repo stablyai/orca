@@ -16,7 +16,7 @@ import type { JournalLoad } from './journal-open'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import { JournalStopMarks } from './journal-stop-marks'
 import { JournalStopAcceptor } from './journal-stop-acceptance'
-import { journalQueuePauseRestatement } from './queued-message-pause'
+import { projectJournalRows } from './journal-context-cursor'
 import type { JournalReducerState } from './journal-reducer'
 import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
 import { JournalStepWriter } from './journal-step-writer'
@@ -68,25 +68,6 @@ export type JournalStoreCollaborators = {
 }
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
-  const epochController = new JournalEpochController({
-    identity: host.identity,
-    now: host.now,
-    mintEpoch: host.mintEpoch,
-    serialize: host.serialize,
-    database: host.database,
-    readOnly: host.readOnly,
-    highestFence: () => host.state().highestFence,
-    state: host.state,
-    queuePauseRestatement: () =>
-      journalQueuePauseRestatement(
-        host.state().queuePauseMarks,
-        host.state().latestAcceptedTurnSequence,
-        host.journal().queuedMessages.pauses()
-      ),
-    queueRestatement: () => host.journal().queuedMessages.restatement(),
-    cursor: host.cursor,
-    adopt: host.adopt
-  })
   const claimAttachments: JournalAttachmentClaim = (db, body, required, previous) =>
     claimAgentSessionAttachmentsInTransaction(db, {
       // Uploaded attachments are stored beside the journal database.
@@ -106,7 +87,17 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
     commit: host.commit,
+    project: (rows) => projectJournalRows(host.state(), rows),
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
+  })
+  const epochController = new JournalEpochController({
+    identity: host.identity,
+    now: host.now,
+    mintEpoch: host.mintEpoch,
+    database: host.database,
+    state: host.state,
+    writer: rowWriter,
+    adopt: host.adopt
   })
   const queuedMessages = new JournalQueuedMessages({
     sessionId: host.identity.sessionId,

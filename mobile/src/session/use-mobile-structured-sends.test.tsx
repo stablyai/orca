@@ -26,8 +26,6 @@ import { useMobileStructuredSends } from './use-mobile-structured-sends'
 const asyncStorage = vi.hoisted(() => ({ getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
-const UNCONFIRMED = 'Delivery unconfirmed — check chat before retrying'
-
 function recorded(
   clientMessageId: string,
   dispatchState: AgentJournalDispatchState = 'accepted',
@@ -315,7 +313,7 @@ describe('a structured send whose answer was lost', () => {
     vi.useRealTimers()
   })
 
-  it('is never drawn, and says so once if the host never shows it', () => {
+  it('expires silently because the send bridge already restored the draft and showed the notice', () => {
     render({ sessionKey: 'a' })
     hold('lost')
     expect(drawn()).toEqual([])
@@ -326,8 +324,7 @@ describe('a structured send whose answer was lost', () => {
       vi.advanceTimersByTime(30_000)
     })
     expect(drawn()).toEqual(['next'])
-    expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith(UNCONFIRMED)
+    expect(onSendError).not.toHaveBeenCalled()
   })
 
   it.each([

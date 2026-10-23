@@ -56,6 +56,7 @@ let acknowledgeSessionRelease: Mock<
 >
 /** Codex's answer by default: its Stop keeps the child. */
 let stopEndsSession: boolean
+let heldSends: ReadonlySet<string> | undefined
 let log: ReturnType<typeof recordingStructuredAgentSessionLogger>
 let events: StructuredAgentSessionEventSink | undefined
 
@@ -74,6 +75,7 @@ beforeEach(async () => {
   setOption = vi.fn(async () => undefined)
   acknowledgeSessionRelease = vi.fn()
   stopEndsSession = false
+  heldSends = undefined
   log = recordingStructuredAgentSessionLogger()
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
@@ -102,6 +104,7 @@ beforeEach(async () => {
       },
       open: async () => ({ reportedOptions: { model: '' } }),
       dispatch,
+      heldSends: () => heldSends,
       closeSession,
       acknowledgeSessionRelease,
       releaseAcquisition: vi.fn(async () => true),
@@ -261,13 +264,12 @@ describe('a Stop that names no turn', () => {
     })
   })
 
-  // Codex can abort a turn before it starts: it answers the interrupt, then ends the turn it never
-  // started. That turn ran nothing, so it draws no turn of its own, whichever of the two is read first.
+  // An unopened turn can end on either side of the interrupt answer; neither order proves delivery.
   it.each([
     ['its end follows the answer', 'after'],
     ['its end is read before the answer', 'before'],
     ['no end comes', 'none']
-  ])('withdraws a send whose turn Codex never started when it takes a Stop: %s', async (_, end) => {
+  ])('keeps delivery unconfirmed when Codex stops an unopened turn: %s', async (_, end) => {
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => ({ turn: { id: 'turn-1' } })
     const ended = () =>
@@ -301,12 +303,11 @@ describe('a Stop that names no turn', () => {
     await host.flushStreamedEvents(SESSION)
 
     expect(await submission(first.id)).toMatchObject({
-      dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
+      dispatchState: 'pending'
     })
     const { items } = await host.journalSnapshot(SESSION)
     expect(items.filter((item) => item.body.kind === 'turn')).toEqual([])
-    expect(await statusRows()).toEqual([])
+    expect(await statusRows()).toEqual(['Cancellation requested.'])
   })
 
   it('keeps the record of a turn Codex never started when something of it was read', async () => {
@@ -430,20 +431,21 @@ describe('a Stop that names no turn', () => {
     pending.resolve({ data: [], nextCursor: null })
   })
 
-  // The provider took the Stop on the turn it named and never opened it: no turn-ended event will
-  // come, so the Stop's answer settles the send, and its own row says it never started.
-  it('delivers a newly accepted message after Stop withdraws the prior send', async () => {
+  // An answered Stop ends execution without requiring a delivery verdict for the earlier send.
+  it('delivers a newly accepted message after Stop leaves the prior send unconfirmed', async () => {
     const first = send('first send')
     await first.result
     await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
-    cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-never-opened' })
+    cancelTurn.mockImplementationOnce(async () => {
+      heldSends = new Set()
+      return { cancelled: true, turnId: 'turn-never-opened' }
+    })
 
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(await submission(first.id)).toMatchObject({
-      dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
+      dispatchState: 'pending'
     })
-    expect(await statusRows()).toEqual([])
+    expect(await statusRows()).toEqual(['Cancellation requested.'])
     const replacement = send('replacement send')
     await replacement.result
 
@@ -516,26 +518,6 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: false } })
 
     expect((await submission(first.id))?.dispatchState).toBe('pending')
-  })
-
-  it('answers the Stop when settling the send it took fails, and reports the failure', async () => {
-    const first = send('first send')
-    await first.result
-    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
-    const journal = host.collaboratorsForTests().sessions.get(SESSION)?.journal
-    if (!journal) {
-      throw new Error('expected the conversation open')
-    }
-    vi.spyOn(journal, 'resolveDispatch').mockRejectedValueOnce(new Error('the journal threw'))
-    cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-never-opened' })
-
-    expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
-
-    expect(log.entries).toContainEqual(
-      expect.objectContaining({
-        fields: expect.objectContaining({ scope: 'stop-settle', sessionId: SESSION })
-      })
-    )
   })
 
   it('is a valid cancel, and only a plain Stop may omit the turn', () => {
@@ -622,9 +604,9 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    // Its turn never opened, so the child's end took the send back: no row stays to report on it.
-    expect((await submission(id))?.dispatchState).toBe('rejected')
-    expect(await statusRows()).toEqual([])
+    // The child's end proves execution stopped; it does not prove whether the send arrived.
+    expect((await submission(id))?.dispatchState).toBe('unknown')
+    expect(await statusRows()).toEqual(['Cancellation requested.'])
   })
 
   it('says the agent did not stop, in its words, when it refused because its turn is not running', async () => {
@@ -655,9 +637,9 @@ describe('a Stop that names no turn', () => {
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
     expect(closeSession).toHaveBeenCalledExactlyOnceWith(SESSION)
-    // Its turn never opened, so the child's end took the send back: no row stays to report on it.
-    expect((await submission(id))?.dispatchState).toBe('rejected')
-    expect(await statusRows()).toEqual([])
+    // The child's end proves execution stopped; it does not prove whether the send arrived.
+    expect((await submission(id))?.dispatchState).toBe('unknown')
+    expect(await statusRows()).toEqual(['Cancellation requested.'])
   })
 
   it('says the agent did not stop, in its words, when it could not interrupt and the child end is unproven', async () => {
@@ -699,8 +681,8 @@ describe('a Stop that names no turn', () => {
         fields: expect.objectContaining({ scope: 'exit-wind-down', sessionId: SESSION })
       })
     )
-    expect((await submission(id))?.dispatchState).toBe('rejected')
-    expect(await statusRows()).toEqual([])
+    expect((await submission(id))?.dispatchState).toBe('unknown')
+    expect(await statusRows()).toEqual(['Cancellation requested.'])
   })
 
   it('says the Stop is unconfirmed, not that nothing ran, when neither the interrupt nor the child end is proven', async () => {

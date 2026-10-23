@@ -1,4 +1,6 @@
+import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
 import { translate } from '@/i18n/i18n'
 import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
@@ -23,6 +25,7 @@ const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
 export function useNativeChatPendingDelivery(args: {
   paneKey: string
   agent: AgentType
+  composerRef?: { current: NativeChatComposerHandle | null }
   /** `readPhase` 'ready' with a `sessionId` means an empty `messages` was a real read. */
   session: {
     messages: NativeChatMessage[]
@@ -30,7 +33,7 @@ export function useNativeChatPendingDelivery(args: {
     sessionId?: string | null
   }
 }) {
-  const { paneKey, agent } = args
+  const { paneKey, agent, composerRef } = args
   const { messages } = args.session
   const sessionId = args.session.sessionId ?? null
   // Why sessionId too: with none, 'ready' is a placeholder that read nothing.
@@ -58,12 +61,13 @@ export function useNativeChatPendingDelivery(args: {
     save((entries) => prunePendingSends(releaseEmptyTranscriptClaims(entries, sessionId), messages))
   }, [messages, save, sessionId])
   const record = useCallback(
-    (text: string, imagePaths?: string[]) => {
+    (text: string, imagePaths?: string[], recovery = false) => {
       const sentAt = Date.now()
       const boundary = messages.at(-1)
       const entry: NativeChatPendingSend = {
         id: nextNativeChatPendingSendId(sentAt),
         text,
+        ...(recovery ? { recovery: true } : {}),
         sentAt,
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
@@ -76,7 +80,8 @@ export function useNativeChatPendingDelivery(args: {
     [messages, readEmptySessionId, scope]
   )
   const cancel = useCallback(
-    (id: string) => save((entries) => entries.filter((entry) => entry.id !== id)),
+    (id: string, discard = false) =>
+      save((entries) => entries.filter((entry) => entry.id !== id || (entry.recovery && !discard))),
     [save]
   )
   const reject = useCallback(
@@ -90,8 +95,10 @@ export function useNativeChatPendingDelivery(args: {
     (id: string) =>
       save((entries) =>
         entries.map((entry) =>
-          entry.id === id && !entry.delivery && entry.writeUnconfirmedAt === undefined
-            ? { ...entry, writeUnconfirmedAt: Date.now() }
+          entry.id === id &&
+          (!entry.delivery || entry.recovery) &&
+          entry.writeUnconfirmedAt === undefined
+            ? { ...entry, delivery: undefined, writeUnconfirmedAt: Date.now() }
             : entry
         )
       ),
@@ -99,7 +106,7 @@ export function useNativeChatPendingDelivery(args: {
   )
   // Why keep outcomes: Stop cannot affect a settled failure, and its bubble holds the only copy.
   const clear = useCallback(
-    () => save((entries) => entries.filter((entry) => entry.delivery)),
+    () => save((entries) => entries.filter((entry) => entry.delivery || entry.recovery)),
     [save]
   )
 
@@ -165,12 +172,44 @@ export function useNativeChatPendingDelivery(args: {
             ? translate('components.native-chat.messageNotSent', 'Message not sent')
             : translate(
                 'components.native-chat.deliveryUnconfirmed',
-                'Delivery unconfirmed — check chat before retrying'
+                "Couldn't confirm whether this was sent. It hasn't been resent."
               ),
-        onDismiss: () => cancel(entry.id)
+        ...(composerRef
+          ? {
+              onSend: () => {
+                if (composerRef.current?.resend?.(entry.text, entry.imagePaths)) {
+                  cancel(entry.id, true)
+                }
+              }
+            }
+          : {}),
+        onEdit: () => {
+          if (
+            returnMessageToComposer(paneKey, `pending-${entry.id}`, [
+              { type: 'text', text: entry.text },
+              ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path }))
+            ])
+          ) {
+            cancel(entry.id, true)
+          }
+        },
+        onDismiss: () => cancel(entry.id, true)
       })
     }
     return result
-  }, [pending, cancel])
+  }, [pending, cancel, paneKey, composerRef])
   return { pending, record, cancel, reject, holdUnconfirmed, clear, notices }
+}
+
+export function useNativeChatOptimisticSend(
+  record: ReturnType<typeof useNativeChatPendingDelivery>['record'],
+  setWorkingInterrupted: (value: boolean) => void
+) {
+  return useCallback(
+    (...input: Parameters<typeof record>) => {
+      setWorkingInterrupted(false)
+      return record(...input)
+    },
+    [record, setWorkingInterrupted]
+  )
 }

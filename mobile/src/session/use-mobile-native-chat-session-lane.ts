@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import type { MobileComposerWriter } from './mobile-native-chat-draft-store'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
@@ -46,9 +47,9 @@ export function useMobileNativeChatSessionLane({
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
 } {
-  const appendComposerText = useCallback(
-    (text: string) => appendComposerTextRef.current(text),
-    [appendComposerTextRef]
+  const appendComposerText: MobileComposerWriter = Object.assign(
+    useCallback((text: string) => appendComposerTextRef.current(text), [appendComposerTextRef]),
+    { captureOrigin: () => appendComposerTextRef.current }
   )
   const bridgeSession = useMobileNativeChatSession({
     client,

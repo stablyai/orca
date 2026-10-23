@@ -13,12 +13,12 @@ export function createStructuredAgentSessionDispatchFollowUps(input: {
 }): {
   onDispatchSettledLate: (
     settlement: Parameters<StructuredAgentSessionHost['settleLateDispatch']>[0]
-  ) => void
+  ) => void | Promise<void>
 } {
   const { logger } = input
   return {
     onDispatchSettledLate: (settlement) => {
-      void input
+      return input
         .host()
         ?.settleLateDispatch(settlement)
         .catch((error: unknown) =>

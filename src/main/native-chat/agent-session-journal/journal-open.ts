@@ -1,8 +1,7 @@
 // Loading a journal: the session projection names the live epoch, and that
 // epoch's rows are folded through the reducer in sequence order.
 //
-// There is no snapshot to anchor to and no superseded-epoch rows to drop — a
-// roll deletes them in the same transaction that publishes the new epoch. A row
+// Context boundaries stay in this ordered range beside canonical input. A row
 // this build cannot parse, a gap, or a first row that is not the epoch's is
 // damage, and a row a newer Orca wrote is one this build cannot place: the load
 // names either and the open fails on it. Nothing is deleted.
@@ -20,7 +19,7 @@ import {
 } from './journal-row-table'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 
-/** Every epoch row is sequence 1, and no compaction moves that floor. */
+/** The physical anchor is sequence 1; later epoch rows are context boundaries. */
 const FIRST_JOURNAL_SEQUENCE = 1
 
 /** Where a journal stops being one this build can read as written. */

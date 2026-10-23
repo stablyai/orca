@@ -420,7 +420,12 @@ describe("a person's Stop pause and the Stop events after it", () => {
 
     expect(rig.closeSession).toHaveBeenCalledTimes(1)
     expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop'])
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(await rig.queuePause()).toBeNull()
+    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toContain('stopped')
+    expect(await rig.drafts()).toContainEqual({
+      messageId: `recovery:${lost.id}`,
+      state: 'returned'
+    })
   })
 
   // A start that carries no send ends no turn and no send, so stopping it writes nothing.
@@ -476,7 +481,7 @@ describe("a person's Stop pause and the Stop events after it", () => {
     // The agent at rest goes, writing nothing; mail then starts a new child, which never lands.
     await idleSweep().tick()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    rig.send('mail for the lead')
+    const mail = rig.send('mail for the lead')
     await eventually(async () =>
       expect(rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child?.phase).toBe(
         'starting'
@@ -488,7 +493,12 @@ describe("a person's Stop pause and the Stop events after it", () => {
 
     expect(atClose.events?.map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
     expect(await rig.queuePause()).not.toEqual({ reason: 'stopped' })
-    // The pause ended with the host's stop, so the card goes out to the next start.
+    // The failed start returns its own message, which must be resolved before the next card.
+    await eventually(async () =>
+      expect(await rig.drafts()).toContainEqual({ messageId: mail.id, state: 'returned' })
+    )
+    expect(await rig.handoff(held)).toBeUndefined()
+    expect(await rig.deleteQueued(mail.id)).toMatchObject({ value: { deleted: true } })
     await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
   })
 })

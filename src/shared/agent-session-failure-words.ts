@@ -239,6 +239,7 @@ const FAILURE_SENTENCES = {
   writeFailed: (_context, _fact, _surface, say) => say('writeFailed'),
   cancelled: (_context, _fact, _surface, say) => say('cancelled'),
   chatClosed: (_context, _fact, _surface, say) => say('chatClosed'),
+  unconfirmed: (_context, _fact, _surface, say) => say('unconfirmed'),
   hostRestarted: (_context, _fact, _surface, say) => say('hostRestarted'),
   notDelivered: ({ retryControl }, _fact, _surface, say) =>
     say(retryControl ? 'notDelivered' : 'notDeliveredSendAgain'),

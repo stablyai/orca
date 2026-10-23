@@ -55,8 +55,7 @@ function stillRunsStoppedTurn(
   return stoppedTurnId === null || work.activeTurnId() === stoppedTurnId
 }
 
-/** Whether the Stop took back every send it found in flight, none of them having run
- *  (`withdrawCodexSendsNoTurnOpenedFor`). */
+/** Whether the host took back every send it found in flight before the agent could run it. */
 function tookBackEverySend(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   inFlight: readonly AgentJournalSubmission[]

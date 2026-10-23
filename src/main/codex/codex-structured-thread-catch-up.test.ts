@@ -43,7 +43,7 @@ export function turn(index: number, view: 'full' | 'summary' = 'full'): Record<s
 }
 
 /** Serves Codex's saved turns newest first, two to a page. */
-function codexWith(turns: Record<string, unknown>[]) {
+export function codexWith(turns: Record<string, unknown>[]) {
   return {
     request: async (method: string, params?: Record<string, unknown>) => {
       expect(method).toBe('thread/turns/list')
@@ -145,7 +145,308 @@ export async function chat(clock: { now: number }) {
 }
 
 describe('Codex chat catch-up', () => {
-  registerCodexCatchUpEchoTests({ chat, turn, sessionId: SESSION, threadId: THREAD })
+  registerCodexCatchUpEchoTests({ chat, turn, codexWith, sessionId: SESSION, threadId: THREAD })
+
+  it('settles recent unresolved exact proof before unrelated known history or a failed import', async () => {
+    const c = await chat({ now: 1_000 })
+    for (let n = 0; n < 1_030; n++) {
+      await c.journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: `turn-${n}`, ordinal: 0 },
+        { kind: 'turn', turnId: `turn-${n}`, state: 'completed' },
+        { fence: 1 }
+      )
+    }
+    const proof = (id: string) => ({
+      ...turn(1_029),
+      items: [
+        {
+          type: 'userMessage',
+          id: 'receipt',
+          clientId: id,
+          content: [{ type: 'text', text: 'rendering' }]
+        },
+        { type: 'userMessage', id: 'accepted', clientId: 'already-accepted', content: [] }
+      ]
+    })
+    for (const id of ['already-accepted', 'U', 'failed-import']) {
+      await c.journal.appendSubmission({
+        clientMessageId: id,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
+        payloadFingerprint: id,
+        fence: 1,
+        handoverRecorded: true
+      })
+    }
+    await c.journal.resolveDispatch({
+      clientMessageId: 'already-accepted',
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1029', ordinal: 2 },
+      fence: 1
+    })
+    const settled: string[] = []
+    const onReceipt = async (
+      clientMessageId: string,
+      providerIdentity: Parameters<typeof c.journal.resolveDispatch>[0]['providerIdentity']
+    ) => {
+      settled.push(clientMessageId)
+      await c.journal.resolveDispatch({
+        clientMessageId,
+        providerIdentity,
+        state: 'accepted',
+        fence: 1
+      })
+    }
+    const history = Array.from({ length: 1_030 }, (_, n) => turn(n))
+    // This known old turn exceeds the independent full-import budget, but need not be translated.
+    history[0] = {
+      ...turn(0),
+      items: Array.from({ length: 2_000 }, (_, n) => ({
+        type: 'agentMessage',
+        id: `large-${n}`,
+        text: 'old'
+      }))
+    }
+    history[1_029] = proof('U')
+    await c.open(history, { onReceipt })
+    expect(settled).toEqual(['U'])
+    expect(c.journal.submission('U')?.dispatchState).toBe('accepted')
+    await c.open([], {
+      onReceipt,
+      connection: {
+        request: async (_method, params) => {
+          if (params?.itemsView === 'summary') {
+            throw new Error('unrelated transcript failure')
+          }
+          return { data: [proof('failed-import')], nextCursor: null }
+        }
+      }
+    })
+    expect(settled).toEqual(['U', 'failed-import'])
+    await c.reopen()
+    expect(c.journal.submission('failed-import')?.dispatchState).toBe('accepted')
+    await c.journal.appendSubmission({
+      clientMessageId: 'cancelled',
+      body: { kind: 'message', role: 'user', blocks: [] },
+      payloadFingerprint: 'cancelled',
+      fence: 1
+    })
+    await c.open([], {
+      onReceipt,
+      assertCurrent: () => {
+        throw new Error('obsolete open')
+      },
+      connection: { request: async () => ({ data: [proof('cancelled')], nextCursor: null }) }
+    })
+    expect(settled).toEqual(['U', 'failed-import'])
+
+    for (const id of ['old-gap', 'fetched-known', 'V']) {
+      await c.journal.appendSubmission({
+        clientMessageId: id,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'same input' }] },
+        payloadFingerprint: id,
+        fence: 1,
+        handoverRecorded: true
+      })
+    }
+    const olderTurns = [
+      {
+        ...proof('old-gap'),
+        id: 'old-gap-turn',
+        items: [
+          ...proof('old-gap').items,
+          ...Array.from({ length: 1_100 }, (_, n) => ({
+            type: 'agentMessage',
+            id: `oversized-${n}`,
+            text: 'answer'
+          }))
+        ]
+      },
+      { ...proof('fetched-known'), id: 'turn-0' },
+      { ...turn(0), id: 'failing-gap' },
+      ...history.slice(1)
+    ]
+    const server = codexWith(olderTurns)
+    await c.open([], {
+      onReceipt,
+      connection: {
+        request: async (method, params) => {
+          if (params?.itemsView === 'full' && params.cursor === '1028') {
+            throw new Error('later import page failed')
+          }
+          return server.request(method, params)
+        }
+      }
+    })
+    // Recent proof stops at 1024 known turns. The oldest import page also contains a known turn.
+    expect(settled).toEqual(['U', 'failed-import', 'old-gap', 'fetched-known'])
+    expect(
+      c.journal.item(
+        agentJournalItemKey({
+          provider: 'codex',
+          threadId: THREAD,
+          turnId: 'old-gap-turn',
+          ordinal: 0
+        })
+      )
+    ).toBeNull()
+    await c.reopen()
+    expect(c.journal.submission('old-gap')?.dispatchState).toBe('accepted')
+    expect(c.journal.submission('fetched-known')?.dispatchState).toBe('accepted')
+    expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+
+    for (const n of [100, 1_000]) {
+      for (const id of [`tail-${n}`, `second-${n}`]) {
+        await c.journal.appendSubmission({
+          clientMessageId: id,
+          body: { kind: 'message', role: 'user', blocks: [] },
+          payloadFingerprint: id,
+          fence: 1
+        })
+      }
+      let visits = 0
+      const tail = Array.from({ length: n }, (_, i) => ({
+        get type() {
+          visits++
+          return 'agentMessage'
+        },
+        id: `tail-${i}`,
+        text: 'old answer'
+      }))
+      const exact = (id: string) => ({ type: 'userMessage', id, clientId: id, content: [] })
+      const ordinals: number[] = []
+      await c.open([], {
+        onReceipt: async (id, identity) => {
+          if (identity.provider === 'codex') {
+            ordinals.push(identity.ordinal)
+          }
+          await onReceipt(id, identity)
+        },
+        connection: {
+          request: async (_method, params) => ({
+            data:
+              params?.itemsView === 'summary'
+                ? []
+                : [
+                    {
+                      ...turn(0),
+                      items: [exact(`tail-${n}`), ...tail, exact(`second-${n}`), ...tail]
+                    }
+                  ],
+            nextCursor: null
+          })
+        }
+      })
+      // Other unresolved controls remain in this session, so all tail must still be inspected.
+      expect(ordinals).toEqual([0, n + 1])
+      expect(visits).toBeGreaterThanOrEqual(n)
+    }
+
+    for (const fence of ['abort', 'owner']) {
+      const abort = new AbortController()
+      let current = true
+      const first = `${fence}-committed`
+      const next = `${fence}-blocked`
+      for (const id of [first, next]) {
+        await c.journal.appendSubmission({
+          clientMessageId: id,
+          body: { kind: 'message', role: 'user', blocks: [] },
+          payloadFingerprint: id,
+          fence: 1,
+          handoverRecorded: true
+        })
+      }
+      const read = {
+        signal: abort.signal,
+        assertCurrent: () => {
+          if (!current) {
+            throw new Error('owner changed')
+          }
+        },
+        onReceipt,
+        connection: {
+          request: async () => ({ data: [proof(first), proof(next)], nextCursor: null })
+        }
+      }
+      await c.open([], {
+        ...read,
+        onReceipt: async (id, identity) => {
+          await onReceipt(id, identity)
+          if (fence === 'abort') {
+            abort.abort()
+          } else {
+            current = false
+          }
+        }
+      })
+      expect(settled).toContain(first)
+      expect(settled).not.toContain(next)
+      await c.reopen()
+      expect(c.journal.submission(first)?.dispatchState).toBe('accepted')
+      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
+      expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+      // Losing ownership or cancellation during a read forbids a new proof callback.
+      const blocked = new AbortController()
+      current = true
+      await c.open([], {
+        ...read,
+        signal: blocked.signal,
+        connection: {
+          request: async () => {
+            if (fence === 'abort') {
+              blocked.abort()
+            } else {
+              current = false
+            }
+            return { data: [proof(next)], nextCursor: null }
+          }
+        }
+      })
+      expect(settled).not.toContain(next)
+    }
+  })
+
+  it('does zero proof-only item work after its final target at N and 10N', async () => {
+    for (const n of [100, 1_000]) {
+      const c = await chat({ now: 1_000 })
+      await c.journal.appendSubmission({
+        clientMessageId: 'last',
+        body: { kind: 'message', role: 'user', blocks: [] },
+        payloadFingerprint: 'last',
+        fence: 1
+      })
+      let visits = 0
+      const known = {
+        ...turn(0),
+        items: [
+          { type: 'userMessage', id: 'exact', clientId: 'last', content: [] },
+          ...Array.from({ length: n }, (_, i) => ({
+            get type() {
+              visits++
+              return 'agentMessage'
+            },
+            id: `tail-${i}`,
+            text: 'old'
+          }))
+        ]
+      }
+      await c.journal.appendItem(
+        { provider: 'codex', threadId: THREAD, turnId: 'turn-0', ordinal: 0 },
+        { kind: 'turn', turnId: 'turn-0', state: 'completed' },
+        { fence: 1 }
+      )
+      await c.open([known], {
+        onReceipt: (id, providerIdentity) =>
+          c.journal.acceptLate({
+            clientMessageId: id,
+            providerIdentity,
+            state: 'accepted',
+            fence: 1
+          })
+      })
+      expect(visits).toBe(0)
+      expect(c.journal.submission('last')?.dispatchState).toBe('accepted')
+    }
+  })
 
   it('retains the complete outside answer tail through catch-up, disk reopen and display', async () => {
     const c = await chat({ now: 1_000 })
@@ -421,7 +722,19 @@ describe('Codex chat catch-up', () => {
     clock.now = 500_000
     const deps = () => ({ store, logger: testEventSinkLogging().logger })
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
-    expect(c.journal.snapshot().items.slice(0, original.length)).toEqual(original)
+    expect(
+      c.journal
+        .snapshot()
+        .items.slice(0, original.length)
+        .map(({ itemId, body, observedAt, turnScope }) => ({ itemId, body, observedAt, turnScope }))
+    ).toEqual(
+      original.map(({ itemId, body, observedAt, turnScope }) => ({
+        itemId,
+        body,
+        observedAt,
+        turnScope
+      }))
+    )
     await c.reopen()
     store = await openTestAgentSessionRecordStore(c.root)
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
@@ -433,7 +746,19 @@ describe('Codex chat catch-up', () => {
       'assistant:answer 250',
       'assistant:answer 600'
     ])
-    expect(c.journal.snapshot().items.slice(0, original.length)).toEqual(original)
+    expect(
+      c.journal
+        .snapshot()
+        .items.slice(0, original.length)
+        .map(({ itemId, body, observedAt, turnScope }) => ({ itemId, body, observedAt, turnScope }))
+    ).toEqual(
+      original.map(({ itemId, body, observedAt, turnScope }) => ({
+        itemId,
+        body,
+        observedAt,
+        turnScope
+      }))
+    )
     const complete = c.journal.snapshot()
     await c.reopen()
     await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])

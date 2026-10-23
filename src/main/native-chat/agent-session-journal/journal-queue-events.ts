@@ -31,6 +31,8 @@ export type JournalQueueChange =
       options?: AgentSessionExecutionOptions
       /** A restated or imported card's hand-off: the submission it went out as. */
       attempt?: string
+      /** The doubtful submission resolved by the person's action on this card. */
+      recovers?: string
       /** Only where the refusal's own rows are gone (a replaced epoch, an imported card whose hand-off
        *  is not in this one), so exactly one copy of a refusal exists at any time. */
       returned?: { reason: string | null; rejection?: UnreadAgentSessionFailureFact }

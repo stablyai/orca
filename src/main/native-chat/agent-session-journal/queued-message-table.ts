@@ -51,6 +51,7 @@ export type QueuedMessageRow = {
    *  one, cleared when a withdrawal sends it back to waiting. Host-only; the published link is
    *  the submission's `queuedMessageId`. */
   consumedAs: string | null
+  recovers?: string
   /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
    *  it. Null on cards from builds before it was recorded, which read as queued before any Stop. */
   queuedAt: AgentJournalCursor | null

@@ -5,10 +5,8 @@
 // with no identity, so the import wraps them: the wrapper
 // reads an identity anchor off the SAME raw line, then delegates the content.
 //
-// Import always opens a fresh epoch. The imported timeline is a best-effort
-// reconstruction with import-scoped identities for most providers, so it must
-// never be spliced into a sequence space that a structured session is also
-// writing; a later structured resume rolls the epoch again and rebuilds.
+// Import replaces provider presentation at a context boundary. Canonical input stays in the
+// ordered log; later structured history replaces only this reconstructed presentation.
 
 import {
   adoptedTranscriptSourceObserver,

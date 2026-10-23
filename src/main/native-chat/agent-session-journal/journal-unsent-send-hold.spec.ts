@@ -196,7 +196,7 @@ export function registerJournalUnsentSendHoldTests(): void {
       }
     })
 
-    it('rejects mail, a dispatch preamble, a continuation, /compact, an image, and a send no one can attribute', async () => {
+    it('keeps an image but rejects mail, commands and unattributed sends', async () => {
       const image: AgentJournalMessageItem = {
         kind: 'message',
         role: 'user',
@@ -224,13 +224,13 @@ export function registerJournalUnsentSendHoldTests(): void {
       })
       await hold(journal)
 
-      expect(journal.queuedMessages.list()).toEqual([])
+      expect(journal.queuedMessages.list()).toMatchObject([{ messageId: 'image', body: image }])
+      expect(journal.submission('image')?.keptAsQueuedMessageId).toBe('image')
       for (const id of [
         'mail',
         'dispatch',
         'continuation',
         'compact',
-        'image',
         'legacy-host',
         'no-origin'
       ]) {
@@ -463,7 +463,7 @@ export function registerJournalUnsentSendHoldTests(): void {
       const reopened = await open()
       await hold(reopened)
 
-      expect(reopened.queuedMessages.get('A')?.queuedAt?.epoch).not.toBe(
+      expect(reopened.queuedMessages.get('A')?.queuedAt?.epoch).toBe(
         reopened.queuedMessages.get('B')?.queuedAt?.epoch
       )
       expect(cardOrder(reopened)).toEqual(['A', 'B'])

@@ -1,3 +1,4 @@
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
@@ -25,9 +26,7 @@ function methodNotFound(id: string): RpcResponse {
     _meta: { runtimeId: 'r' }
   }
 }
-function sendResult(accepted: boolean): RpcSuccess {
-  return { id: 'send', ok: true, result: { send: { accepted } }, _meta: { runtimeId: 'r' } }
-}
+const sendResult = (accepted: boolean): RpcSuccess => ok('send', { send: { accepted } })
 
 function makeClient(responses: (RpcResponse | Promise<RpcResponse>)[]): Pick<
   RpcClient,
@@ -88,6 +87,7 @@ describe('useMobileNativeChatImageAttachments', () => {
   }
 
   beforeEach(() => {
+    resetMobileNativeChatDraftStoreForTests()
     pick.mockReset()
     // Stale markers and write locks live at module scope (they outlive the
     // screen), so they also outlive a test.

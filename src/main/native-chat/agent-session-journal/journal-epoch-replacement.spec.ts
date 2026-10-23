@@ -10,8 +10,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalHostDatabase } from './journal-host-database'
-import { replaceJournalEpoch } from './journal-epoch-replacement'
-import type { JournalLoad } from './journal-open'
+import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { AgentSessionJournal } from './journal-store'
 import { readJournalSessionEpoch } from './journal-row-table'
 import {
@@ -37,14 +36,8 @@ export function registerJournalEpochReplacementTests(): void {
   }
 
   let root: string
-  let clock = 1_000
   let database: JournalHostDatabase
   const journals = createTrackedJournalOpener()
-
-  function now(): number {
-    clock += 1
-    return clock
-  }
 
   /** Rows stored under the chat and epoch, whatever the chat's pointer names. */
   function storedRows(sessionId: string, epoch: string): number {
@@ -59,27 +52,8 @@ export function registerJournalEpochReplacementTests(): void {
     return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
   }
 
-  function replace(input: {
-    items: Parameters<typeof replaceJournalEpoch>[0]['items']
-    onPublished?: (loaded: JournalLoad) => void
-  }): void {
-    replaceJournalEpoch({
-      database,
-      identity: IDENTITY,
-      reason: 'legacy_import',
-      fence: 1,
-      items: input.items,
-      queuePause: { lifted: false, liveStop: null, reopened: false },
-      queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
-      now,
-      mintEpoch: () => `epoch-${clock}`,
-      onPublished: input.onPublished ?? (() => undefined)
-    })
-  }
-
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-replace-'))
-    clock = 1_000
     database = openTestJournalHostDatabase(root)
   })
 
@@ -94,20 +68,34 @@ export function registerJournalEpochReplacementTests(): void {
   })
 
   describe('journal epoch replacement', () => {
-    it('publishes one observable replacement', () => {
-      const published: JournalLoad[] = []
-
-      replace({
-        items: [
-          { identity: item(1), body: { kind: 'status', text: 'republished' }, ownerFence: 1 }
-        ],
-        onPublished: (loaded) => published.push(loaded)
-      })
-
-      expect(published).toHaveLength(1)
-      const epoch = readJournalSessionEpoch(database.db, IDENTITY.sessionId)
-      expect(epoch).toBe(published[0]?.state.epoch)
-      expect(readTestJournalRows(database.db, IDENTITY.sessionId, epoch ?? '')).toHaveLength(2)
+    it('publishes one observable replacement and rolls back a failed receipt', async () => {
+      const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+      const items: JournalReplacementItem[] = [
+        { identity: item(1), body: { kind: 'status', text: 'republished' }, ownerFence: 1 }
+      ]
+      const before = journal.cursor()
+      await expect(
+        journal.replaceEpochItems('legacy_import', 1, items, () => ({
+          write: () => {
+            throw new Error('receipt failed')
+          },
+          committed: () => {}
+        }))
+      ).rejects.toThrow('receipt failed')
+      expect(journal.cursor()).toEqual(before)
+      let acknowledged = before
+      await journal.replaceEpochItems('legacy_import', 1, items, (cursor) => ({
+        write: () => {
+          acknowledged = cursor
+        },
+        committed: () => {}
+      }))
+      expect(acknowledged).toEqual(journal.cursor())
+      expect(journal.readSince(before)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(readJournalSessionEpoch(database.db, IDENTITY.sessionId)).toBe(before.epoch)
+      const reopened = await journals.open({ identity: IDENTITY, stateDirectory: root })
+      expect(reopened.cursor()).toEqual(journal.cursor())
+      expect(reopened.snapshot()).toEqual(journal.snapshot())
     })
 
     // Keyed by identity: a retired epoch's rows go by (chat, epoch), and no other chat's go with them.
@@ -120,7 +108,7 @@ export function registerJournalEpochReplacementTests(): void {
           ])
       ],
       ['a rollover', (journal: AgentSessionJournal) => journal.rollEpoch('handle_forked', 1)]
-    ])('discards every superseded row in the same transaction as %s', async (_name, retire) => {
+    ])('retains canonical order while replacing presentation in %s', async (_name, retire) => {
       const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
       const peer = await journals.open({ identity: PEER, stateDirectory: root })
       const scope = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
@@ -132,8 +120,17 @@ export function registerJournalEpochReplacementTests(): void {
       await retire(journal)
 
       expect(journal.epoch).not.toBe(before)
-      expect(storedRows(IDENTITY.sessionId, before)).toBe(0)
-      expect(storedRows(IDENTITY.sessionId, journal.epoch)).toBe(journal.cursor().sequence)
+      expect(storedRows(IDENTITY.sessionId, before)).toBe(journal.cursor().sequence)
+      expect(
+        readTestJournalRows(database.db, IDENTITY.sessionId, before)
+          .slice(0, 3)
+          .map((row) => row.seq)
+      ).toEqual([1, 2, 3])
+      expect(
+        journal
+          .snapshot()
+          .items.some((row) => row.body.kind === 'status' && row.body.text === 'old')
+      ).toBe(false)
       expect(storedRows(PEER.sessionId, peer.epoch)).toBe(2)
     })
   })

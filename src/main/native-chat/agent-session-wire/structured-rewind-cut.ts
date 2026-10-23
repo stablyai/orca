@@ -11,7 +11,6 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import type {
-  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
@@ -61,7 +60,7 @@ export function structuredRewindCut(
     })
     return {
       beforeMessage: { sessionId: key.sessionId, uuid: key.uuid },
-      kept: keptRows.map((item) => keptRow(journal, item, providerKey))
+      kept: keptRows.map((item) => keptRow(journal, item))
     }
   }
   if (
@@ -92,7 +91,7 @@ export function structuredRewindCut(
       key.threadId,
       providerKey
     ),
-    kept: keptRows.map((item) => keptRow(journal, item, providerKey))
+    kept: keptRows.map((item) => keptRow(journal, item))
   }
 }
 
@@ -142,8 +141,7 @@ export function providerItemIdOf(journal: AgentSessionJournal, itemId: string): 
   return submissionKeys(journal.snapshot().submissions).providerKey(itemId)
 }
 
-// Accepted messages keep Orca's key in the journal; the rebuilt epoch has no submission to tie them
-// to, so they take the provider's.
+// Target lookup uses the provider identity; kept presentation retains its canonical identity.
 function submissionKeys(submissions: readonly AgentJournalSubmission[]): {
   providerKey: (itemId: string) => string
   /** Messages a rewind never keeps: queued ones survive it on their own, rejected ones never ran. */
@@ -192,11 +190,10 @@ function turnMembership(
 
 function keptRow(
   journal: AgentSessionJournal,
-  { itemId, observedAt, turnScope, ...linkage }: AgentJournalRenderItem,
-  providerKey: (itemId: string) => string
+  { itemId, observedAt, turnScope, ...linkage }: AgentJournalRenderItem
 ): JournalReplacementItem {
   const body = journal.itemBody(itemId)
-  const identity = parseAgentJournalItemKey(providerKey(itemId))
+  const identity = parseAgentJournalItemKey(itemId)
   if (!body || !identity) {
     throw new Error('agent_session_rewind:missing-retained-item')
   }
@@ -204,7 +201,7 @@ function keptRow(
   return {
     identity,
     ...echo,
-    body: renameRewindTurnOpener(body, providerKey),
+    body,
     observedAt,
     ...(turnScope ? { turnScope } : {}),
     // The old fold's provenance, so a rewind never makes a dead generation's work current.
@@ -212,18 +209,4 @@ function keptRow(
     ...(executionOwner === undefined ? {} : { executionOwner }),
     ...agentJournalLinkageFields(linkage)
   }
-}
-
-/** A turn record names the message that opened it; it follows that message to its provider key. */
-function renameRewindTurnOpener(
-  body: AgentJournalItemBody,
-  rename: (itemId: string) => string
-): AgentJournalItemBody {
-  if (body.kind === 'turn' && body.userItemId !== undefined) {
-    return { ...body, userItemId: rename(body.userItemId) }
-  }
-  const lifecycle = body.kind === 'status' ? body.turnLifecycle : undefined
-  return body.kind === 'status' && lifecycle?.userItemId !== undefined
-    ? { ...body, turnLifecycle: { ...lifecycle, userItemId: rename(lifecycle.userItemId) } }
-    : body
 }

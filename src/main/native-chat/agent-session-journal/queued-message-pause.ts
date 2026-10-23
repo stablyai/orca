@@ -297,13 +297,18 @@ export function resumableQueuePause(
 /** A turn sent after `pause` began that the agent has not answered yet: its acceptance lifts the
  *  pause, whoever sent it, so the pause is not shown meanwhile; a refusal shows it again. A send
  *  made before a Stop lifts nothing, so it never counts. */
-export function queuePauseLiftOnItsWay(
+export function queuePauseLiftOnItsWay<
+  Submission extends Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>
+>(
   pause: DerivedQueuePause,
-  submissions: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>[]
+  submissions: readonly Submission[],
+  owesSend: (submission: Submission) => boolean = () => true
 ): boolean {
   const anchor = pause.since?.sequence ?? 0
   return submissions.some(
     (submission) =>
-      submission.dispatchState === 'pending' && (submission.acceptedSequence ?? 0) > anchor
+      submission.dispatchState === 'pending' &&
+      (submission.acceptedSequence ?? 0) > anchor &&
+      owesSend(submission)
   )
 }

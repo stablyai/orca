@@ -53,7 +53,14 @@ export class CodexJournalItems {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'now' | 'historyImport'
+      | 'sink'
+      | 'coalesceMs'
+      | 'maxRetainedBytes'
+      | 'schedule'
+      | 'now'
+      | 'historyImport'
+      | 'dispatchEchoes'
+      | 'onUserMessageEcho'
     > & { attributionFor: CodexRowAttribution },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void,
@@ -90,7 +97,7 @@ export class CodexJournalItems {
     const identity = this.identityFor(event.threadId, turnId, item)
     // Count echoes for stable resume ordinals, but user bubbles come from submissions.
     if (source === 'live' && item.type === 'userMessage') {
-      const echo = readCodexDispatchEcho(item, identity)
+      const echo = readCodexDispatchEcho(item, identity, this.deps.dispatchEchoes)
       return {
         handled: true,
         admission: CODEX_JOURNAL_ADMITTED,

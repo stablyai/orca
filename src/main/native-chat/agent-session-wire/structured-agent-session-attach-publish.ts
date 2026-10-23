@@ -1,3 +1,7 @@
+import {
+  deferFirstRecoveryPresentation,
+  finishFirstRecoveryPresentation
+} from './structured-agent-session-queued-publication'
 // The attach's last commit: the child it spawned or kept becomes the session's, its sink the one
 // the session's events go through, and its open begins.
 
@@ -103,6 +107,9 @@ export async function publishAttachedChild(
       attempt.rewind
     )
   }
+  if (child?.phase === 'starting') {
+    deferFirstRecoveryPresentation(attached.journal, child)
+  }
   if (input.fenceBefore !== null && fence !== input.fenceBefore) {
     context.subscribers.snapshot(sessionId, attached.journal, fence)
   } else {
@@ -121,6 +128,7 @@ export async function publishAttachedChild(
   const exited = context.runtimeState.startFlights.takeExit(sessionId, candidate.child)
   const indexed = conversation.child
   if (exited && indexed) {
+    finishFirstRecoveryPresentation(attached.journal, indexed)
     await context.endExitedChild(sessionId, indexed, structuredAgentSessionEndedEventExit(exited))
   } else if (attempt.startup) {
     context.runtimeState.startupAttempts.published(

@@ -46,6 +46,9 @@ export function updateQueuedStructuredAgentMessage(
         fields,
         queuedImageCards !== false
       )
+      if (decision.status === 'unchanged') {
+        return { ok: true, value: await queued.update(fields) }
+      }
       if (decision.status !== 'ready') {
         return { ok: true, value: decision }
       }

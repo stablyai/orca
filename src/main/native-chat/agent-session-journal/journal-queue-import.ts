@@ -4,9 +4,11 @@
 // the same before and after it moves, and every action on one moves it in its own transaction. The
 // bulk import runs once per open and is never retried in a loop: the next open tries again.
 
+import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { journalDispatchRowApplies, queuedHandOffOutcome } from './journal-dispatch-settlement'
 import { journalQueueRowBuilder, type JournalQueuedChange } from './journal-queue-events'
+import { refreshJournalInputCandidate } from './journal-input-obligations'
 import { queuedCardFromChange } from './journal-queue-fold'
 import { queuedChangeOf } from './journal-queue-retention'
 import type { JournalReducerState } from './journal-reducer'
@@ -44,6 +46,7 @@ export function legacyQueuedChange(
     ...queuedChangeOf(row),
     ...(holdReason !== null ? { holdReason } : {}),
     ...(attempt !== null ? { attempt } : {}),
+    ...(unconfirmed?.recovers ? { recovers: unconfirmed.recovers } : {}),
     ...(row.state === 'returned' && (attempt === null || !state.submissions.has(attempt))
       ? {
           returned: {
@@ -69,7 +72,7 @@ function unconfirmedHandOff(
   row: QueuedMessageRow
 ):
   | { attempt: string; holdReason?: undefined }
-  | { attempt?: undefined; holdReason: string }
+  | { attempt?: undefined; holdReason: string; recovers?: string }
   | null {
   const attempts = [...state.submissions.values()]
     .filter((submission) => submission.queuedMessageId === row.messageId)
@@ -80,7 +83,12 @@ function unconfirmedHandOff(
   const latest = attempts.at(-1)!
   return handOffInDoubt(latest) && latest.payloadFingerprint === row.fingerprint
     ? { attempt: latest.clientMessageId }
-    : { holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED }
+    : {
+        holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
+        ...(handOffInDoubt(latest) && (!dispatchWasWithdrawn(latest) || latest.answeredInTurn)
+          ? { recovers: latest.clientMessageId }
+          : {})
+      }
 }
 
 function handOffInDoubt(submission: AgentJournalSubmission): boolean {
@@ -105,6 +113,8 @@ export class LegacyQueuedCards {
   /** Moves after every commit that deleted legacy rows. */
   private revision = 0
   private stored: { revision: number; rows: readonly QueuedMessageRow[] } | null = null
+  private readonly changes = new Map<string, JournalQueuedChange>()
+  private readonly witnesses = new Map<string, { messageId: string; change: JournalQueuedChange }>()
   private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
 
   constructor(private readonly deps: LegacyDeps) {}
@@ -127,7 +137,7 @@ export class LegacyQueuedCards {
     if (this.viewed?.key !== key) {
       const state = this.deps.state()
       const cards = this.rows().flatMap((row) => {
-        const change = legacyQueuedChange(state, row)
+        const change = this.change(row)
         return change ? [queuedCardFromChange(state, row.messageId, change)] : []
       })
       this.viewed = { key, cards }
@@ -135,33 +145,16 @@ export class LegacyQueuedCards {
     return this.viewed.cards
   }
 
-  /** Failed adoption must not hide a spent message; derive its adopted display on copies only. */
-  displayState(): JournalReducerState {
-    const state = this.deps.state()
-    const handedOff = this.cards().flatMap((card) => {
-      const submission =
-        card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
-      return submission && handOffInDoubt(submission) ? [{ ...submission }] : []
-    })
-    if (handedOff.length === 0) {
-      return state
-    }
-    const display = {
-      ...state,
-      items: new Map(state.items),
-      submissions: new Map(state.submissions)
-    }
-    for (const submission of handedOff) {
-      display.submissions.set(submission.clientMessageId, submission)
-      foldQueuedHandOffInDoubt(display, submission)
-    }
-    return display
+  /** Derived during the existing import pass; the selected operation persists this witness. */
+  witness(clientMessageId: string): { messageId: string; change: JournalQueuedChange } | undefined {
+    const witness = this.witnesses.get(clientMessageId)
+    return witness && !this.deps.state().queue.cards.has(witness.messageId) ? witness : undefined
   }
 
   /** On the journal's lane: the change that moves this card into the journal, read from disk now;
    *  null when it is not a legacy card. */
   adoption(messageId: string): JournalQueuedChange | null {
-    if (this.key() === '') {
+    if (this.deps.state().queue.cards.has(messageId) || this.key() === '') {
       return null
     }
     const { db } = this.deps.database()
@@ -171,7 +164,21 @@ export class LegacyQueuedCards {
       )
       .get(this.deps.sessionId, messageId)
     const card = row === undefined ? null : readStoredQueuedMessageRow(row)
-    return card && legacyQueuedChange(this.deps.state(), card)
+    return card && this.change(card)
+  }
+
+  private change(row: QueuedMessageRow): JournalQueuedChange | null {
+    const state = this.deps.state()
+    if (state.queue.cards.has(row.messageId)) {
+      return null
+    }
+    const cached = this.changes.get(row.messageId)
+    if (cached) {
+      return unanswered(queuedCardFromChange(state, row.messageId, cached), state.submissions)
+        ? cached
+        : null
+    }
+    return legacyQueuedChange(state, row)
   }
 
   /** Deletes these legacy rows in the caller's transaction; the view re-reads once it commits. */
@@ -191,14 +198,20 @@ export class LegacyQueuedCards {
     }
   }
 
-  /** Every readable legacy row's card id. */
-  messageIds(): string[] {
-    return this.rows().map((row) => row.messageId)
-  }
-
-  /** `deletion` of every readable legacy row: a new epoch restates their cards with its own. */
-  deletionOfAll(): JournalOperationReceipt {
-    return this.deletion(this.messageIds())
+  cleanup(messageIds: readonly string[]): void {
+    if (!messageIds.length) {
+      return
+    }
+    const receipt = this.deletion(messageIds)
+    try {
+      this.deps.database().transaction((db) => receipt.write(db))
+      receipt.committed()
+    } catch (error) {
+      console.warn('[journal-queue] legacy cleanup skipped:', {
+        sessionId: this.deps.sessionId,
+        error
+      })
+    }
   }
 
   /** Every readable row, unanswered ones as journal rows, all deleted, in ONE transaction; a
@@ -212,7 +225,16 @@ export class LegacyQueuedCards {
         const rows = this.read()
         const deletion = this.deletion(rows.map((row) => row.messageId))
         const plan = rows.flatMap((row) => {
-          const change = legacyQueuedChange(this.deps.state(), row)
+          const change = this.deps.state().queue.cards.has(row.messageId)
+            ? null
+            : legacyQueuedChange(this.deps.state(), row)
+          if (change) {
+            this.changes.set(row.messageId, change)
+            const original = change.attempt ?? change.recovers
+            if (original) {
+              this.witnesses.set(original, { messageId: row.messageId, change })
+            }
+          }
           return change ? [journalQueueRowBuilder(this.deps.state, row.messageId, change)] : []
         })
         if (plan.length > 0) {
@@ -225,6 +247,19 @@ export class LegacyQueuedCards {
         this.deps.committed()
       })
       .catch((error: unknown) => {
+        const state = this.deps.state()
+        for (const [id, witness] of this.witnesses) {
+          if (!state.queue.cards.has(witness.messageId)) {
+            const send = state.submissions.get(id)
+            if (send && handOffInDoubt(send)) {
+              foldQueuedHandOffInDoubt(state, send)
+              refreshJournalInputCandidate(state, id)
+              if (witness.change.recovers === id) {
+                state.inputs.candidates.delete(id)
+              }
+            }
+          }
+        }
         console.warn('[journal-open] queued-message import skipped:', {
           sessionId: this.deps.sessionId,
           error: error instanceof Error ? error.message : String(error)

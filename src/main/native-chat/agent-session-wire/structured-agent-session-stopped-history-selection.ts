@@ -6,7 +6,6 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   agentSessionSendCarriesStoppedHistory,
   agentSessionSendDeliversStoppedHistory,
@@ -17,7 +16,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 type StoppedHistoryContext = {
-  journal: Pick<AgentSessionJournal, 'submissions' | 'itemBody' | 'stoppedHistoryCarried'> & {
+  journal: Pick<AgentSessionJournal, 'submissions' | 'submissionBody' | 'stoppedHistoryCarried'> & {
     context: Pick<AgentSessionJournal['context'], 'floor'>
   }
 }
@@ -43,7 +42,7 @@ export function carriedStoppedHistory(
       submissions: ctx.journal.submissions(),
       carried: ctx.journal.stoppedHistoryCarried(),
       clearSequence: ctx.journal.context.floor()?.sequence ?? 0,
-      body: (id) => ctx.journal.itemBody(agentJournalSubmissionKey(id))
+      body: (id) => ctx.journal.submissionBody(id)
     }),
     body
   )

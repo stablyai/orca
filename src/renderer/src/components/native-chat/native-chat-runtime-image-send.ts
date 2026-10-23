@@ -65,7 +65,7 @@ export function sendNativeChatMessageWithImageAttachments(
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       if (isCancelled()) {
         return
       }
@@ -73,6 +73,7 @@ export function sendNativeChatMessageWithImageAttachments(
         if (isCancelled()) {
           return
         }
+        markWriteStarted()
         for (const payload of agentImagePasteWrites(
           agent,
           imagePaths.map((path) =>

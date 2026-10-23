@@ -17,10 +17,7 @@ import {
 import { mergeSentImagePreviews } from './mobile-native-chat-draft-reconcile'
 import type { MobileQueuedMessageFeed } from './mobile-structured-queued-message-feed'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
-import {
-  UNCONFIRMED_SEND_DEADLINE_MS,
-  UNCONFIRMED_SEND_MESSAGE
-} from './use-mobile-native-chat-unconfirmed-sends'
+import { UNCONFIRMED_SEND_DEADLINE_MS } from './use-mobile-native-chat-unconfirmed-sends'
 
 type MobileStructuredSend = StructuredAgentSessionOptimisticMessage & { unconfirmed?: true }
 
@@ -42,7 +39,7 @@ export function useMobileStructuredSends(args: {
   queuedMessages: MobileQueuedMessageFeed
   onSendError: MobileNativeChatSendErrorReporter
 }): MobileStructuredSends {
-  const { cursor, onSendError, queuedMessages, sessionKey, submissions } = args
+  const { cursor, queuedMessages, sessionKey, submissions } = args
   const [sendsBySession, setSendsBySession] = useState<
     Record<string, readonly MobileStructuredSend[]>
   >({})
@@ -98,12 +95,11 @@ export function useMobileStructuredSends(args: {
         setTimeout(() => {
           deadlinesRef.current.delete(id)
           forget(new Set([id]))
-          onSendError(UNCONFIRMED_SEND_MESSAGE)
         }, UNCONFIRMED_SEND_DEADLINE_MS)
       )
       keep({ ...send, unconfirmed: true })
     },
-    [forget, keep, onSendError]
+    [forget, keep]
   )
 
   const sends = sendsBySession[sessionKey] ?? NO_SENDS

@@ -1,3 +1,4 @@
+import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 // What a Stop's row says when Codex took the interrupt, against the real host, journal and Codex
@@ -14,6 +15,8 @@ import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session
 import {
   THREAD_ID as THREAD,
   adapterFor,
+  acquireReadyCodexForTest,
+  identityFor,
   fakeCodex
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
@@ -29,7 +32,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import {
+  recordingStructuredAgentSessionLogger,
+  testEventSinkLogging
+} from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
@@ -37,6 +43,7 @@ const CALLER = { callerKey: 'client-1' }
 let events: AgentSessionSubscribeEvent[]
 let unconfirmedNote: AgentJournalRenderItem | undefined
 let root: string
+let store: Awaited<ReturnType<typeof openTestAgentSessionRecordStore>>
 let host: StructuredAgentSessionHost
 let turns: ReturnType<typeof codexTurnLifecycleFake>
 let codex: ReturnType<typeof fakeCodex>
@@ -64,11 +71,11 @@ beforeEach(async () => {
     )
     return {}
   }
-  const store = await openTestAgentSessionRecordStore(root)
+  store = await openTestAgentSessionRecordStore(root)
   // The runtime's wiring: an echo accepts its send, and every exit reaches the host.
   launch = {}
   adapter = adapterFor(codex, launch, [], {
-    onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
+    onDispatchSettledLate: (settlement) => host.settleLateDispatch(settlement),
     onEvent: (event) => {
       if (event.type === 'options-reported' || (event.type === 'ended' && 'cause' in event)) {
         void host.handleAdapterEvent(event)
@@ -251,4 +258,106 @@ it('keeps the note unconfirmed when the turn completes', async () => {
     expect(notes).toHaveLength(1)
     expect(notes[0]?.body).toMatchObject({ failure: { kind: 'cancelUnconfirmed' } })
   })
+})
+
+it('isolates legacy acquired history from live matching and saves exact proof before optional overflow', async () => {
+  const journal = () => host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const body = hostTestMessage('same input')
+  for (const id of ['U', 'K', 'V']) {
+    await journal().appendSubmission({
+      clientMessageId: id,
+      body,
+      payloadFingerprint: id,
+      fence: 1,
+      origin: 'client',
+      handoverRecorded: true
+    })
+    await journal().resolveDispatch({ clientMessageId: id, state: 'unknown', fence: 1 })
+  }
+  await journal().replaceEpochItems('handle_forked', store.getRecord(SESSION)!.lease.runtimeFence, [
+    { identity: { provider: 'orca', clientMessageId: 'U' }, body }
+  ])
+  expect(journal().item('orca:U')?.revision).toBeGreaterThan(1)
+  const user = (id: string | null) => ({
+    type: 'userMessage',
+    id: 'old-user',
+    clientId: id,
+    content: [{ type: 'text', text: 'same input', text_elements: [] }]
+  })
+  const oldTurn = (items: unknown[]) => ({ id: 'legacy-turn', status: 'completed', items })
+  const pages = vi.fn(() => {
+    throw new Error('old provider has no pagination')
+  })
+  codex.routes['thread/turns/list'] = pages
+  const reopen = async (returned: unknown[]) => {
+    await host.close(SESSION, 'evict')
+    launch.resumeThreadId = THREAD
+    codex.routes['thread/resume'] = () => ({ thread: { id: THREAD, turns: returned } })
+    await host.journalSnapshot(SESSION)
+    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    deferred.bind({
+      journal: journal(),
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      publish: () => {}
+    })
+    const resumed = adapterFor(codex, { resumeThreadId: THREAD }, [], {
+      onDispatchSettledLate: (settlement) => host.settleLateDispatch(settlement)
+    })
+    try {
+      await acquireReadyCodexForTest(resumed, {
+        identity: identityFor(SESSION),
+        fence: store.getRecord(SESSION)!.lease.runtimeFence,
+        spawnToken: 'recorded-fixture-child',
+        events: deferred.sink
+      })
+      await deferred.drained()
+    } finally {
+      deferred.close()
+      await resumed.closeAll()
+    }
+  }
+  await reopen([
+    oldTurn([user(null), { type: 'agentMessage', id: 'old-answer', text: 'historical answer' }])
+  ])
+  expect(journal().submission('U')?.dispatchState).toBe('unknown')
+  expect(journal().receiptFor('U')).toBeNull()
+  const before = journal().cursor()
+  await reopen([
+    oldTurn([user(null), { type: 'agentMessage', id: 'old-answer', text: 'historical answer' }])
+  ])
+  expect(journal().cursor()).toEqual(before)
+  await journal().replaceEpochItems(
+    'handle_forked',
+    store.getRecord(SESSION)!.lease.runtimeFence,
+    []
+  )
+  await reopen([
+    oldTurn([
+      user('U'),
+      { type: 'agentMessage', id: 'previously-unseen', text: 'must stay hidden' }
+    ])
+  ])
+  expect(journal().submission('U')?.dispatchState).toBe('accepted')
+  expect(journal().snapshot().items).toEqual([])
+  await reopen([
+    {
+      id: 'huge',
+      status: 'completed',
+      items: [
+        user('K'),
+        ...Array.from({ length: 1_100 }, (_, n) => ({
+          type: 'agentMessage',
+          id: `large-${n}`,
+          text: 'outside answer'
+        }))
+      ]
+    }
+  ])
+  expect(journal().submission('K')?.dispatchState).toBe('accepted')
+  expect(journal().snapshot().items).toEqual([])
+  expect(journal().submission('V')?.dispatchState).toBe('unknown')
+  expect(pages).not.toHaveBeenCalled()
+  await reopen([])
+  expect(journal().receiptFor('K')).not.toBeNull()
+  expect(journal().submission('V')?.dispatchState).toBe('unknown')
 })

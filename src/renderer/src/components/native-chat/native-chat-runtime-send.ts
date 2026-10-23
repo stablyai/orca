@@ -1,3 +1,4 @@
+import type { NativeChatPtySubmissionOutcome } from './native-chat-pty-send-queue'
 // Runtime send for native chat: clear any unsubmitted TUI line, write the framed
 // body, then Enter as a SEPARATE delayed pty write. Kept apart from the pure
 // byte builders in native-chat-send.ts so those stay IO-free and unit-testable.
@@ -43,6 +44,7 @@ export type NativeChatSendHandle = {
   settleAfterMs: number
   /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
   settled?: Promise<void>
+  outcome?: Promise<NativeChatPtySubmissionOutcome>
 }
 
 /**
@@ -71,7 +73,7 @@ export function sendNativeChatMessage(
   return enqueueNativeChatPtySend(
     ptyId,
     NATIVE_CHAT_SUBMIT_DELAY_MS + clearConfirmDurationMs(options),
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       if (isCancelled()) {
         return
       }
@@ -79,6 +81,7 @@ export function sendNativeChatMessage(
         if (isCancelled()) {
           return
         }
+        markWriteStarted()
         sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.

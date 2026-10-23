@@ -1,6 +1,6 @@
 // Stop writes one event row before it interrupts, and the queue's pause is derived from it:
 // through the real host, the cards queued before a Stop wait, a card queued after it sends
-// normally but never ahead of them, a card already handed over stays sent, a crash keeps the
+// normally but never ahead of them, an unconfirmed hand-off returns for a decision, a crash keeps the
 // pause, any turn sent after it ends it, and no stored pause is ever written.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -174,7 +174,7 @@ describe("Stop's event", () => {
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
   })
 
-  it('a card handed over and stopped before the agent confirms it reads as sent, never sent again; only the cards behind it send', async () => {
+  it('a stopped unconfirmed hand-off blocks the waiting cards until its recovery is deleted', async () => {
     const working = await rig.workingSend()
     await openRigTurnFor(rig, working)
     const steered = await queuedDraft('sent now into the turn')
@@ -197,8 +197,9 @@ describe("Stop's event", () => {
     })
     await rig.settleAccepted(working, 'stopped')
     await openRigTurnFor(rig, working, 'interrupted')
-    await expectHeld('stopped', opening, last)
+    await expectHeld(null, opening, last)
     expect(await rig.drafts()).toEqual([
+      { messageId: `recovery:${steer}`, state: 'returned' },
       { messageId: opening, state: 'waiting' },
       { messageId: last, state: 'waiting' }
     ])
@@ -206,7 +207,9 @@ describe("Stop's event", () => {
     expect(await send(steer)).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await drawn(steer)).toEqual({ stoppedBeforeStart: undefined })
 
-    // Resume hands the next card over; a Stop before its turn opens takes it back, unconfirmed.
+    expect(await rig.deleteQueued(`recovery:${steer}`)).toMatchObject({ value: { deleted: true } })
+    await expectHeld('stopped', opening, last)
+    // Resume hands the next card over; an explicit refusal before it opens is still a rejection.
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
     await eventually(async () => expect((await rig.handoff(opening))?.handedOverAt).toBeDefined())
     const opener = await rig.handoffId(opening)
@@ -231,8 +234,10 @@ describe("Stop's event", () => {
     expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).not.toContain('restarted')
   })
 
-  it('survives a host crash, unshown: the next open marks the hand-off unknown, nothing sends, Resume releases', async () => {
-    await openRigTurnFor(rig, await rig.workingSend())
+  it('survives a host crash: the unconfirmed hand-off needs a decision before Resume releases', async () => {
+    const working = await rig.workingSend()
+    await openRigTurnFor(rig, working)
+    await rig.settleAccepted(working, 'received')
     const sentId = await queuedDraft('sent now into the turn')
     const waiting = await queuedDraft('waiting behind it')
     await rig.sendNow(sentId)
@@ -241,12 +246,20 @@ describe("Stop's event", () => {
     // The process dies with no close; a new host opens the same state directory.
     rig.crashRestartHostProcess()
     expect((await rig.handoff(sentId))?.dispatchState).toBe('unknown')
-    // After a restart no row shows, the Stop's included, and nothing sends.
+    // The returned copy holds the queue; it never resends automatically.
     await expectHeld(null, waiting)
     expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual([
       'stopped',
       'restarted'
     ])
+    const handoff = await rig.handoffId(sentId)
+    expect(await rig.drafts()).toContainEqual({
+      messageId: `recovery:${handoff}`,
+      state: 'returned'
+    })
+    expect(await rig.deleteQueued(`recovery:${handoff}`)).toMatchObject({
+      value: { deleted: true }
+    })
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
     await eventually(async () => expect(await rig.handoff(waiting)).toBeDefined())
   })
@@ -265,10 +278,7 @@ describe("a restart's hold over a card queued after a Stop", () => {
     // The new host opens the conversation for its first reader. The card came after the Stop, so
     // only the restart holds it, and a restart's hold is never published.
     await rig.queuePause()
-    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual([
-      'stopped',
-      'restarted'
-    ])
+    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual(['restarted'])
     await expectHeld(null, typed)
   })
 

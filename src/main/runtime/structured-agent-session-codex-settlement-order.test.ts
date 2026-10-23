@@ -182,7 +182,7 @@ afterEach(async () => {
 })
 
 describe('a settlement Codex proves keeps its place behind the frame that proved it', () => {
-  it('rejects a send only after the failed turn that refused it has ended', async () => {
+  it('keeps the failed turn end without a rejection for its unechoed send', async () => {
     const sent = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
     turns.start()
@@ -190,14 +190,21 @@ describe('a settlement Codex proves keeps its place behind the frame that proved
     streamedReplyAhead()
     turns.end('failed', 'The model is overloaded.')
 
-    await vi.waitFor(() => expect(seqOf(dispatchRow(sent, 'rejected'))).toBeDefined())
+    await vi.waitFor(() =>
+      expect(
+        seqOf((entry) => {
+          const turn = turnOf(entry)
+          return turn !== null && turn.state !== 'running'
+        })
+      ).toBeDefined()
+    )
     await host.flushStreamedEvents(SESSION)
     const ended = seqOf((entry) => {
       const turn = turnOf(entry)
       return turn !== null && turn.state !== 'running'
     })
     expect(ended).toBeDefined()
-    expect(seqOf(dispatchRow(sent, 'rejected'))).toBeGreaterThan(ended!)
+    expect(seqOf(dispatchRow(sent, 'rejected'))).toBeUndefined()
   })
 
   it('accepts a send only after the echo that proves it has landed', async () => {

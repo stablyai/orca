@@ -1,3 +1,4 @@
+import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import {
   codexItemIdentity,
@@ -22,13 +23,15 @@ import {
   continuedOutsideRecordId,
   createHistoryCatchUpBatch
 } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { createCodexHistoryTranslator } from './codex-structured-journal-translation'
+import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 
 /** Invocation-local shared translation: nothing reaches the live sink until this plan is whole. */
 export function createCodexHistoryImportPlan(input: {
   sessionId: string
   threadId: string
   journal: StructuredAgentSessionTransitionJournal
+  subagentExecutions?: CodexSubagentExecutions
   nativePromptKeys: ReadonlySet<string>
   outsideNotice?: AgentJournalItemBody
   check: () => void
@@ -37,15 +40,18 @@ export function createCodexHistoryImportPlan(input: {
   const encoded = new Map<string, string>()
   const turnIds: string[] = []
   let outsideNoted = false
+  let outsideTurn: string | null = null
   let omitted = new Map<string, string>()
+  let existingIdentities = new Map<string, AgentJournalItemIdentity>()
   const append = (
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     options: StructuredAgentSessionItemAppendOptions
   ) => {
     input.check()
+    identity = existingIdentities.get(agentJournalItemKey(identity)) ?? identity
     const key = agentJournalItemKey(identity)
-    if (omitted.has(key)) {
+    if (omitted.has(key) || input.journal.presentationRemoved(key)) {
       return { accepted: true } as const
     }
     // The saved relation is display-only: name the original prompt without accepting its send.
@@ -67,7 +73,36 @@ export function createCodexHistoryImportPlan(input: {
       }
       return { accepted: true } as const
     }
-    batch.push(mutation, serialized)
+    const existing = input.journal.item(input.journal.canonicalItemId(key))
+    if (
+      existing &&
+      ((body.kind === 'message' && body.role === 'user') ||
+        (existing.body.kind === 'turn' &&
+          existing.body.state !== 'running' &&
+          existing.body.state !== 'unverifiable') ||
+        JSON.stringify(existing.body) === JSON.stringify(body))
+    ) {
+      return { accepted: true } as const
+    }
+    if (outsideTurn && !outsideNoted && input.outsideNotice) {
+      const turnId = outsideTurn
+      outsideNoted = true
+      append(
+        {
+          provider: 'legacy',
+          agent: 'codex',
+          sessionId: input.sessionId,
+          recordId: continuedOutsideRecordId(turnId)
+        },
+        input.outsideNotice,
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    }
+    if (existing && mutation.kind === 'item') {
+      batch.revise(mutation, { canonicalItemId: existing.itemId, revision: existing.revision })
+    } else {
+      batch.push(mutation, serialized)
+    }
     encoded.set(key, serialized)
     return { accepted: true } as const
   }
@@ -84,11 +119,12 @@ export function createCodexHistoryImportPlan(input: {
       return item ? append(item.identity, item.body, options) : { accepted: true }
     }
   }
-  const translator = createCodexJournalTranslator({
+  const translator = createCodexHistoryTranslator({
     sink,
     sessionId: input.sessionId,
     primaryThreadId: () => input.threadId,
-    historyImport: true
+    historyImport: true,
+    subagentExecutions: input.subagentExecutions
   })
   return {
     append,
@@ -97,9 +133,18 @@ export function createCodexHistoryImportPlan(input: {
       if (typeof turn.id !== 'string') {
         throw new Error('invalid-turn')
       }
+      if (
+        input.journal.presentationRemoved(
+          agentJournalItemKey(codexTurnLifecycleIdentity(input.sessionId, turn.id))
+        )
+      ) {
+        return
+      }
       omitted = new Map<string, string>()
+      existingIdentities = new Map<string, AgentJournalItemIdentity>()
       const ordinals = new CodexTurnOrdinals()
       let native = false
+      let hidden = false
       let outsideUser = false
       for (const value of Array.isArray(turn.items) ? turn.items : []) {
         const item = readCodexThreadItem(value)
@@ -113,6 +158,21 @@ export function createCodexHistoryImportPlan(input: {
           ordinals,
           historyImport: true
         })
+        const key = agentJournalItemKey(identity)
+        const canonical = input.journal.canonicalItemId(key)
+        if (input.nativePromptKeys.has(canonical)) {
+          native = true
+          hidden ||= input.journal.presentationRemoved(canonical)
+          omitted.set(key, canonical)
+        }
+        const liveIdentity: AgentJournalItemIdentity = {
+          provider: 'orca',
+          clientMessageId: `codex-item:${input.threadId}:${item.id}`
+        }
+        const liveKey = agentJournalItemKey(liveIdentity)
+        if (identity.provider === 'orca' && input.journal.item(liveKey)) {
+          existingIdentities.set(key, liveIdentity)
+        }
         if (item.type === 'userMessage') {
           if (
             typeof item.clientId === 'string' &&
@@ -120,25 +180,17 @@ export function createCodexHistoryImportPlan(input: {
             input.nativePromptKeys.has(agentJournalSubmissionKey(item.clientId))
           ) {
             native = true
+            hidden ||= input.journal.presentationRemoved(agentJournalSubmissionKey(item.clientId))
             omitted.set(agentJournalItemKey(identity), agentJournalSubmissionKey(item.clientId))
-          } else {
+          } else if (!input.nativePromptKeys.has(canonical)) {
             outsideUser = true
           }
         }
       }
-      if ((!native || outsideUser) && !outsideNoted && input.outsideNotice) {
-        append(
-          {
-            provider: 'legacy',
-            agent: 'codex',
-            sessionId: input.sessionId,
-            recordId: continuedOutsideRecordId(turn.id)
-          },
-          input.outsideNotice,
-          { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-        outsideNoted = true
+      if (hidden) {
+        return
       }
+      outsideTurn = !native || outsideUser ? turn.id : null
       const restored = translator.restoreThread(input.threadId, { turns: [turn] })
       if (!restored.accepted) {
         throw new Error(restored.reason)
@@ -148,6 +200,9 @@ export function createCodexHistoryImportPlan(input: {
     finish: () => {
       input.check()
       const keys = [...encoded.keys()]
+      if (batch.size === 0) {
+        return null
+      }
       const plan = batch.finish('codex-history-import', [
         input.journal.epoch,
         input.threadId,

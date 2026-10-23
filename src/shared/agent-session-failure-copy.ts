@@ -24,6 +24,7 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
  *  host fills them in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
+  unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   runCommandAgain: 'Run /{{command}} again.',
   sendToTryAgain: 'Send your message to try again.',

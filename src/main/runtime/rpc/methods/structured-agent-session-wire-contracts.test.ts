@@ -5,6 +5,8 @@ import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shar
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
   RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -439,6 +441,63 @@ describe('prompt response parameters', () => {
 })
 
 describe('agentSession.send reply timing', () => {
+  it('answers an actual ended legacy send as unknown while keeping raw delivery pending for later proof', async () => {
+    const rig = await createQueuedMessageTestRig()
+    hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
+    hostCalls.waitForSendSettlement.mockImplementation(
+      rig.host.waitForSendSettlement.bind(rig.host)
+    )
+    const held = new Set<string>()
+    rig.host.deps.adapter.heldSends = () => held
+    rig.dispatch.mockImplementation(async ({ clientMessageId }) => {
+      held.add(clientMessageId)
+      return { state: 'admitted' }
+    })
+    const body = hostTestMessage('legacy answered consumer')
+    const id = hostTestOperationId()
+    const action = call(
+      'agentSession.send',
+      { envelope: rig.envelope({ body }, 'agentSession.send', id), body },
+      {
+        ...STRUCTURED_CLIENT,
+        clientCapabilities: STRUCTURED_CLIENT.clientCapabilities.filter(
+          (capability) =>
+            capability !== AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY &&
+            capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+        )
+      }
+    )
+    try {
+      await eventually(() => expect(rig.dispatch).toHaveBeenCalledOnce())
+      held.delete(id)
+      rig.providerEvents().appendItem(
+        { provider: 'legacy', agent: 'codex', sessionId: 'thread-1', recordId: 'final' },
+        {
+          kind: 'status',
+          tone: 'error',
+          text: 'final error',
+          providerFrame: {
+            provider: 'codex',
+            kind: 'notification:error',
+            payload: { head: '{}', byteLength: 2, digest: '', truncated: false }
+          }
+        },
+        { turnScope: { kind: 'thread' } }
+      )
+      await rig.host.flushStreamedEvents(HOST_SESSION)
+      expect(await action).toMatchObject({
+        ok: true,
+        result: { value: { submission: { dispatchState: 'unknown' } } }
+      })
+      expect((await rig.submission(id))?.dispatchState).toBe('pending')
+      await rig.settleAccepted(id, 'late')
+      expect((await rig.submission(id))?.dispatchState).toBe('accepted')
+    } finally {
+      await rig.host.close(HOST_SESSION, 'user-close')
+      await action
+      await rig.dispose()
+    }
+  })
   it('holds a pending reply until handover for a client that cannot show a later rejection', async () => {
     hostCalls.send.mockResolvedValueOnce(pendingSendResult())
     hostCalls.waitForSendSettlement.mockResolvedValueOnce(undefined)
@@ -471,7 +530,7 @@ describe('agentSession.send reply timing', () => {
     expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
   })
 
-  it('keeps an old phone image send immediate and never recovers its interrupted send as a hidden card', async () => {
+  it('keeps an old phone image send immediate and returns its interrupted unsent image as a card', async () => {
     const rig = await createQueuedMessageTestRig()
     hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
     const imageSend = () => {
@@ -512,12 +571,12 @@ describe('agentSession.send reply timing', () => {
       release()
       await closed
       rig.crashRestartHostProcess()
-      expect(await rig.drafts()).toEqual([])
+      expect(await rig.drafts()).toEqual([{ messageId: interrupted.id, state: 'waiting' }])
       expect(await rig.submission(interrupted.id)).toMatchObject({
         source: { kind: 'user' },
         dispatchState: 'rejected'
       })
-      expect(await rig.submission(interrupted.id)).not.toHaveProperty('keptAsQueuedMessageId')
+      expect((await rig.submission(interrupted.id))?.keptAsQueuedMessageId).toBe(interrupted.id)
     } finally {
       release()
       await rig.dispose()

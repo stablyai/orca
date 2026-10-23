@@ -60,6 +60,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'chatClosed',
   'hostRestarted',
   'notDelivered',
+  'unconfirmed',
   /** A conversation command the chat's state refused when its turn to run came. */
   'commandRefused',
   'compactionFailed',

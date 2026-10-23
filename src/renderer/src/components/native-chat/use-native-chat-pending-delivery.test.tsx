@@ -112,7 +112,9 @@ describe('terminal Chat pending delivery', () => {
     await tick(NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS - 1)
     expect(result.current.notices.size).toBe(0)
     await tick(1)
-    expect([...result.current.notices.values()][0]?.text).toMatch(/Delivery unconfirmed/)
+    expect([...result.current.notices.values()][0]?.text).toBe(
+      "Couldn't confirm whether this was sent. It hasn't been resent."
+    )
     expect(result.current.pending[0]?.text).toBe('lost ack')
   })
   it('clears a held send whose echo lands, before or after the hold ends', async () => {

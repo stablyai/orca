@@ -18861,6 +18861,7 @@
         "cancelled": "This message was withdrawn before the agent started it.",
         "chatClosed": "The chat closed before this message was sent.",
         "hostRestarted": "Orca restarted before this message was sent.",
+        "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
         "notDelivered": "This message was not delivered.",
         "notDeliveredSendAgain": "This message was not delivered. Send it again to continue.",
         "commandRefused": "This command didn't run.",
@@ -19494,9 +19495,10 @@
         "orcaSessionIdTooltip": "Orca's ID for this chat, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
       },
       "dismissDeliveryNotice": "Dismiss",
+      "editDeliveryNotice": "Edit",
       "addSelectionToChat": "Add to chat",
       "messageNotSent": "Message not sent",
-      "deliveryUnconfirmed": "Delivery unconfirmed — check chat before retrying",
+      "deliveryUnconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
       "messageSending": "Sending…",
       "userMessage": {
         "showFull": "Show full message",
@@ -19966,7 +19968,7 @@
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
-        "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.",
+        "queueFollowUpsCopy": "Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images wait as cards too.",
         "queueFollowUpsToggleLabel": "Toggle queue follow-ups",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",

@@ -39,7 +39,7 @@ export function useNativeChatPtyComposerSend(args: {
   readTerminalScreen?: () => string | null
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
-  onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  onOptimisticSend?: (text: string, imagePaths?: string[], recovery?: boolean) => string | undefined
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string, output?: string) => void
   answerCommandLocally?: NativeChatLocalCommandAnswer
@@ -52,96 +52,114 @@ export function useNativeChatPtyComposerSend(args: {
   clearSkillOrigin: () => void
   clearImageAttachments: () => void
   setNotice: (notice: string | null) => void
-}): () => void {
-  return useCallback(() => {
-    let text = args.draft
-    const imagePaths = args.imageAttachments.map((attachment) => attachment.path)
-    if ((text.trim() === '' && imagePaths.length === 0) || args.disabled) {
-      return
-    }
-    // Why: keep option-command and prompt writes from interleaving on the PTY input line.
-    if (args.isDispatchingSessionOption) {
-      return
-    }
-    const target = args.resolveTarget()
-    if (!target) {
-      return
-    }
-    const classification = args.classifySend(text)
-    if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
-      return
-    }
-    if (!admitNativeChatPastedText(args.draftScopeKey, text, args.setNotice)) {
-      return
-    }
-    text = resolveNativeChatPastedText(args.draftScopeKey, text)
-    const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
-      launchDraft: args.launchDraft,
-      launchDraftResolved: args.launchDraftResolved,
-      agent: args.agent,
-      readScreen: () => args.readTerminalScreen?.()
-    })
-    let pendingId: string | undefined
-    const sendOptions =
-      args.agent === 'claude' && classification === 'chat'
-        ? {
-            ...launchSendOptions,
-            onWriteRejected: () => {
-              if (pendingId) {
-                args.optimisticSendOutcome?.reject(pendingId)
-              }
-            },
-            onWriteUnconfirmed: () => {
-              if (pendingId) {
-                args.optimisticSendOutcome?.holdUnconfirmed(pendingId)
+}): (retry?: { text: string; imagePaths?: string[] }) => boolean {
+  return useCallback(
+    (retry) => {
+      let text = retry?.text ?? args.draft
+      const imagePaths =
+        retry?.imagePaths ??
+        (retry ? [] : args.imageAttachments.map((attachment) => attachment.path))
+      if ((text.trim() === '' && imagePaths.length === 0) || args.disabled) {
+        return false
+      }
+      // Why: keep option-command and prompt writes from interleaving on the PTY input line.
+      if (args.isDispatchingSessionOption) {
+        return false
+      }
+      const target = args.resolveTarget()
+      if (!target) {
+        return false
+      }
+      const classification = args.classifySend(text)
+      if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
+        return false
+      }
+      if (!admitNativeChatPastedText(args.draftScopeKey, text, args.setNotice)) {
+        return false
+      }
+      text = resolveNativeChatPastedText(args.draftScopeKey, text)
+      const { sendOptions: launchSendOptions } = resolveNativeChatLaunchDraftSend({
+        launchDraft: args.launchDraft,
+        launchDraftResolved: args.launchDraftResolved,
+        agent: args.agent,
+        readScreen: () => args.readTerminalScreen?.()
+      })
+      let pendingId: string | undefined
+      const sendOptions =
+        args.agent === 'claude' && classification === 'chat'
+          ? {
+              ...launchSendOptions,
+              onWriteRejected: () => {
+                if (pendingId) {
+                  args.optimisticSendOutcome?.reject(pendingId)
+                }
+              },
+              onWriteUnconfirmed: () => {
+                if (pendingId) {
+                  args.optimisticSendOutcome?.holdUnconfirmed(pendingId)
+                }
               }
             }
+          : launchSendOptions
+      let pendingHandle: NativeChatSendHandle | null = null
+      // Why: slash-like text must not silently drop its attached images.
+      if (classification !== 'chat' && imagePaths.length === 0) {
+        pendingHandle =
+          args.agent === 'codex' && isSlashCommandDraft(text)
+            ? sendNativeChatTypedCommand(target.ptyId, text)
+            : sendNativeChatMessage(target.ptyId, text, sendOptions)
+      } else if (imagePaths.length > 0) {
+        pendingHandle = sendNativeChatMessageWithImageAttachments(
+          args.agent,
+          target.ptyId,
+          text,
+          imagePaths,
+          sendOptions
+        )
+      } else if (text.trim().length > 0) {
+        pendingHandle = sendNativeChatMessage(target.ptyId, text, sendOptions)
+      } else {
+        submitNativeChatPrompt(target.ptyId)
+      }
+      if (classification !== 'chat') {
+        if (pendingHandle) {
+          args.trackPendingSend(pendingHandle)
+        }
+        if (classification === 'command') {
+          args.onSlashCommand?.(text.trim())
+          args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
+        }
+      } else {
+        pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)
+        if (pendingHandle) {
+          args.trackPendingSend(pendingHandle, pendingId)
+          if (retry && pendingId) {
+            const id = pendingId
+            void pendingHandle.outcome?.then((outcome) => {
+              if (outcome === 'not-submitted') {
+                args.optimisticSendOutcome?.reject(id)
+              } else if (outcome === 'uncertain') {
+                args.optimisticSendOutcome?.holdUnconfirmed(id)
+              }
+            })
           }
-        : launchSendOptions
-    let pendingHandle: NativeChatSendHandle | null = null
-    // Why: slash-like text must not silently drop its attached images.
-    if (classification !== 'chat' && imagePaths.length === 0) {
-      pendingHandle =
-        args.agent === 'codex' && isSlashCommandDraft(text)
-          ? sendNativeChatTypedCommand(target.ptyId, text)
-          : sendNativeChatMessage(target.ptyId, text, sendOptions)
-    } else if (imagePaths.length > 0) {
-      pendingHandle = sendNativeChatMessageWithImageAttachments(
-        args.agent,
-        target.ptyId,
-        text,
-        imagePaths,
-        sendOptions
-      )
-    } else if (text.trim().length > 0) {
-      pendingHandle = sendNativeChatMessage(target.ptyId, text, sendOptions)
-    } else {
-      submitNativeChatPrompt(target.ptyId)
-    }
-    if (classification !== 'chat') {
-      if (pendingHandle) {
-        args.trackPendingSend(pendingHandle)
+        }
       }
-      if (classification === 'command') {
-        args.onSlashCommand?.(text.trim())
-        args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
+      emitNativeChatMessageSent({
+        agent: args.agent,
+        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+      })
+      args.onSubmitted?.()
+      if (!retry) {
+        args.setDraft('')
+        args.setCaret(0)
+        args.clearSkillOrigin()
+        args.clearImageAttachments()
+        args.setNotice(null)
+        useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
       }
-    } else {
-      pendingId = args.onOptimisticSend?.(text, imagePaths)
-      if (pendingHandle) {
-        args.trackPendingSend(pendingHandle, pendingId)
-      }
-    }
-    emitNativeChatMessageSent({
-      agent: args.agent,
-      runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
-    })
-    args.onSubmitted?.()
-    args.setDraft('')
-    args.setCaret(0)
-    args.clearSkillOrigin()
-    args.clearImageAttachments()
-    args.setNotice(null)
-    useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
-  }, [args])
+      return true
+    },
+    [args]
+  )
 }

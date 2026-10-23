@@ -204,6 +204,7 @@ export async function createQueuedMessageTestRig(
   }
 
   async function settleAccepted(id: string, itemId: string): Promise<void> {
+    await host.history({ sessionId: SESSION, direction: 'tail' })
     await host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: id,

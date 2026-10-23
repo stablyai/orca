@@ -1,7 +1,6 @@
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
@@ -107,18 +106,11 @@ export async function openCodexStructuredSession(
   )
   current()
   start.setPrimaryThreadId(opened.threadId)
-  const restored = translator?.restoreThread(opened.threadId, opened.thread ?? {})
-  if (restored && !restored.accepted) {
-    throw AgentSessionAcquisitionRefusal.historyTooLarge(
-      'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
-    )
-  }
+  const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
   if (
     translator &&
     input.events &&
-    launch.resumeThreadId !== null &&
-    !opened.supersededThreadId &&
-    !threadReturnedTurns(opened.thread)
+    (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
   ) {
     await waitForPromiseWithSignal(
       catchUpCodexThread({
@@ -126,6 +118,11 @@ export async function openCodexStructuredSession(
         threadId: opened.threadId,
         sessionId,
         sink: input.events,
+        returnedTurns,
+        paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
+        subagentExecutions: start.subagentExecutions,
+        onReceipt: (clientMessageId, providerIdentity) =>
+          deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity }),
         signal: openInput.signal,
         assertCurrent: current,
         ...(deps.requestTimeoutMs !== undefined ? { timeoutMs: deps.requestTimeoutMs } : {}),
@@ -192,9 +189,4 @@ export async function openCodexStructuredSession(
     }),
     reportedOptions: reportedCodexSessionOptions(session)
   }
-}
-
-/** An older Codex may still answer a resume with the whole thread, which the restore above took. */
-function threadReturnedTurns(thread: Record<string, unknown> | undefined): boolean {
-  return Array.isArray(thread?.turns) && thread.turns.length > 0
 }

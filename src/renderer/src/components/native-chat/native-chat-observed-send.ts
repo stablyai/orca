@@ -22,7 +22,7 @@ export function sendNativeChatObservedWrites(
     writes.reduce((total, write) => total + write.delayBeforeMs, 0) +
       clearConfirmDurationMs(options) +
       (options.settleDelayMs ?? 0),
-    ({ isCancelled, delay, markSubmitted }) => {
+    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       let reportedUnconfirmed = false
       let acknowledged = true
       const writeAt = (index: number): void => {
@@ -33,7 +33,7 @@ export function sendNativeChatObservedWrites(
         if (!write) {
           const finish = (): void => {
             options.onDeliverySettled?.(acknowledged)
-            markSubmitted()
+            markSubmitted(acknowledged ? 'submitted' : 'uncertain')
           }
           if (options.settleDelayMs) {
             delay(options.settleDelayMs, finish)
@@ -46,6 +46,7 @@ export function sendNativeChatObservedWrites(
           if (isCancelled()) {
             return
           }
+          markWriteStarted()
           void sendRuntimePtyInputVerified(ptyId, write.data, 'driving', writeOptions)
             .then((accepted) => {
               if (isCancelled()) {
@@ -54,7 +55,7 @@ export function sendNativeChatObservedWrites(
               if (!accepted) {
                 options.onWriteRejected?.()
                 options.onDeliverySettled?.(false)
-                markSubmitted()
+                markSubmitted(index === 0 ? 'not-submitted' : 'uncertain')
                 return
               }
               writeAt(index + 1)
@@ -72,7 +73,7 @@ export function sendNativeChatObservedWrites(
               }
               if (options.stopOnUnconfirmed) {
                 options.onDeliverySettled?.(false)
-                markSubmitted()
+                markSubmitted('uncertain')
                 return
               }
               writeAt(index + 1)

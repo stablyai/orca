@@ -251,6 +251,8 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.compactionUnconfirmed
       ),
     ...STOP_FAILURE_PIECES,
+    unconfirmed: () =>
+      translate('components.native-chat.failureWords.unconfirmed', COPY.unconfirmed),
     answerUnconfirmed: () =>
       translate('components.native-chat.failureWords.answerUnconfirmed', COPY.answerUnconfirmed),
     hostFault: () => translate('components.native-chat.failureWords.hostFault', COPY.hostFault),

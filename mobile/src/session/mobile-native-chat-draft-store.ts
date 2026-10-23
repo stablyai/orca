@@ -1,8 +1,15 @@
-import { useSyncExternalStore, type SetStateAction } from 'react'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { useSyncExternalStore, useCallback, type SetStateAction } from 'react'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 
 // Text and its edit revision outlive the screen, including callbacks from an older mount.
-type Draft = { text: string; editGeneration: number }
+type Draft = {
+  text: string
+  editGeneration: number
+  images?: PendingNativeChatImage[]
+  files?: readonly PendingNativeChatFile[]
+}
 
 const drafts = new Map<string, Draft>()
 const listeners = new Set<() => void>()
@@ -28,7 +35,11 @@ function writeDraft(draftKey: string, update: SetStateAction<string>, userEdit: 
   if (next === text && !userEdit) {
     return
   }
-  drafts.set(draftKey, { text: next, editGeneration: (current?.editGeneration ?? 0) + 1 })
+  drafts.set(draftKey, {
+    ...current,
+    text: next,
+    editGeneration: (current?.editGeneration ?? 0) + 1
+  })
   if (next === text) {
     return
   }
@@ -70,5 +81,40 @@ export function useMobileNativeChatDraft(draftKey: string | null): string {
 
 export function resetMobileNativeChatDraftStoreForTests(): void {
   drafts.clear()
+  attachmentId = 0
   mobileNativeChatLaunchDraftSeeds.clear()
+}
+
+const noImages: PendingNativeChatImage[] = []
+const noFiles: readonly PendingNativeChatFile[] = []
+let attachmentId = 0
+export function nextMobileDraftAttachmentId(prefix: string): string {
+  return `${prefix}-${++attachmentId}`
+}
+
+export function useMobileDraftAttachments<K extends 'images' | 'files'>(
+  scope: string | null,
+  kind: K
+) {
+  const empty = kind === 'images' ? noImages : noFiles
+  const read = () => (scope ? drafts.get(scope)?.[kind] : undefined) ?? empty
+  // SAFETY: the selected key and fallback always have Draft[K]'s element type.
+  const value = useSyncExternalStore(subscribe, read, read) as NonNullable<Draft[K]>
+  const update = useCallback(
+    (key: string, change: (current: NonNullable<Draft[K]>) => NonNullable<Draft[K]>) => {
+      const current = drafts.get(key) ?? { text: '', editGeneration: 0 }
+      // SAFETY: the key selects the same attachment type for reading and writing.
+      const next = change((current[kind] ?? empty) as NonNullable<Draft[K]>)
+      drafts.set(key, { ...current, [kind]: next })
+      for (const listener of listeners) {
+        listener()
+      }
+    },
+    [kind, empty]
+  )
+  return [value, update] as const
+}
+
+export type MobileComposerWriter = ((text: string) => boolean) & {
+  captureOrigin?: () => (text: string) => boolean
 }

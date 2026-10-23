@@ -87,7 +87,7 @@ export async function expectRawStopNoteRewindRecovery({
     })
   ).rejects.toThrow('crashed after commit')
   crash.mockRestore()
-  expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
+  expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   expect(
     await host.attach(
       caller,

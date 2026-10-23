@@ -7,12 +7,93 @@ import {
   continuationCannotFold,
   startAgent
 } from './structured-agent-session-restart-interruption-test-harness'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD
+} from './structured-agent-session-host-test-data'
 import { createRestartResumeProgress } from './structured-agent-session-restart-resume-progress'
 import { journal } from './structured-agent-session-restart-resume-test-harness'
 import type { StructuredAgentSessionRestartOfferSession } from './structured-agent-session-restart-offer-withdrawal'
 
 afterEach(() => vi.restoreAllMocks())
+
+it('finishes an ended restart continuation as unknown without changing its pending delivery', async () => {
+  const { host, dispatch, acquire } = await interruptedRestart()
+  await host.restartResume.list()
+  const held = new Set<string>()
+  host.deps.adapter.heldSends = () => held
+  dispatch.mockImplementation(async ({ clientMessageId }) => {
+    held.add(clientMessageId)
+    return { state: 'admitted' }
+  })
+  const phases: (string | undefined)[] = []
+  const release = host.subscribeStatus({
+    id: 'ended-continuation',
+    emit: (event) => {
+      if (event.type === 'status') {
+        phases.push(event.session.restartResume?.phase)
+      }
+    }
+  })
+  let finished = false
+  const action = host.restartResume.continueAfterRestart([SESSION], 'modal').then((result) => {
+    finished = true
+    return result
+  })
+  try {
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+    const id = dispatch.mock.calls[0]?.[0].clientMessageId
+    const events = acquire.mock.calls.at(-1)?.[0].events
+    if (!id || !events) {
+      throw new Error('continuation did not reach provider')
+    }
+    // STA-11160: releasing the execution hold alone must not complete the observation.
+    held.delete(id)
+    events.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'unopened', ordinal: 10 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'unrelated output' }] },
+      { turnScope: { kind: 'thread' } }
+    )
+    await host.flushStreamedEvents(SESSION)
+    expect(finished).toBe(false)
+    events.appendItem(
+      { provider: 'legacy', agent: 'codex', sessionId: THREAD, recordId: 'legacy-final-error' },
+      {
+        kind: 'status',
+        tone: 'error',
+        text: 'provider failed',
+        providerFrame: {
+          provider: 'codex',
+          kind: 'notification:error',
+          payload: { head: '{}', byteLength: 2, digest: '', truncated: false }
+        }
+      },
+      { turnScope: { kind: 'thread' } }
+    )
+    await host.flushStreamedEvents(SESSION)
+    await vi.waitFor(() => expect(finished).toBe(true))
+    expect(await action).toMatchObject({ continued: [{ sessionId: SESSION, outcome: 'unknown' }] })
+    expect(phases).toContain('unconfirmed')
+    expect(phases.at(-1)).toBeUndefined()
+    expect(
+      (await host.journalSnapshot(SESSION)).submissions.find((send) => send.clientMessageId === id)
+        ?.dispatchState
+    ).toBe('pending')
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: id,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'late', ordinal: 0 }
+    })
+    expect(
+      (await host.journalSnapshot(SESSION)).submissions.find((send) => send.clientMessageId === id)
+        ?.dispatchState
+    ).toBe('accepted')
+  } finally {
+    await host.close(SESSION, 'user-close')
+    await action
+    release()
+  }
+})
 
 it.each(['queued', 'starting', 'continued', 'refused', 'unconfirmed'] as const)(
   "keeps %s owned by the admitted action through another action's skip and cleanup",

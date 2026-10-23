@@ -3,7 +3,6 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import {
@@ -71,48 +70,6 @@ async function turnEndRig() {
 }
 
 describe('a Codex send its turn ended without echoing', () => {
-  it('is withdrawn when the turn is interrupted, once', async () => {
-    const rig = await turnEndRig()
-    await expect(rig.sendAndOpen('client-1')).resolves.toMatchObject({ state: 'admitted' })
-
-    rig.turns.end('interrupted')
-
-    expect(rig.settlements).toEqual([
-      // Codex took it into a turn: no proof it never reached Codex.
-      expect.objectContaining({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        state: 'rejected',
-        rejection: { kind: 'cancelled' }
-      })
-    ])
-    expect(rig.categoryOf(rig.settlements[0])).toBe('withdrawn')
-  })
-
-  it('is rejected in Codex words when its failed turn ends without echoing it', async () => {
-    const rig = await turnEndRig()
-    await rig.sendAndOpen('client-1')
-
-    rig.codex.connections[0]!.handlers.onNotification?.('error', {
-      threadId: CODEX_TEST_THREAD_ID,
-      turnId: 'turn-1',
-      willRetry: false,
-      error: { message: 'usage limit reached' }
-    })
-    rig.turns.end('failed', 'usage limit reached')
-
-    expect(rig.settlements).toEqual([
-      expect.objectContaining({
-        clientMessageId: 'client-1',
-        state: 'rejected',
-        rejection: {
-          kind: 'providerRejected',
-          detail: { text: 'usage limit reached', audience: 'person' }
-        }
-      })
-    ])
-  })
-
   it('is accepted when Codex records it after the error that fails its turn', async () => {
     const rig = await turnEndRig()
     await rig.sendAndOpen('client-1')
@@ -176,71 +133,6 @@ describe('a Codex send its turn ended without echoing', () => {
     ])
   })
 
-  it('settles each of two sends steered into one interrupted turn once', async () => {
-    const rig = await turnEndRig()
-    await rig.sendAndOpen('client-1')
-    await rig.send('client-2')
-    expect(rig.turns.turnId).toBe('turn-1')
-
-    rig.turns.end('interrupted')
-
-    expect(rig.settledIds().sort()).toEqual(['client-1', 'client-2'])
-  })
-
-  it('settles a send whose answer arrived after turn/started when the turn is interrupted', async () => {
-    const rig = await turnEndRig()
-    const release = rig.turns.holdNextAnswer()
-    const sending = rig.send('client-1')
-    await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
-    rig.turns.start()
-    release()
-    await expect(sending).resolves.toMatchObject({ state: 'admitted' })
-
-    rig.turns.end('interrupted')
-
-    expect(rig.settledIds()).toEqual(['client-1'])
-  })
-
-  it('settles a send by the recorded end of a turn that finished before its answer arrived', async () => {
-    const rig = await turnEndRig()
-    const release = rig.turns.holdNextAnswer()
-    const sending = rig.send('client-1')
-    await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
-    rig.turns.start()
-    rig.turns.end('interrupted')
-    const rowsAtEnd = rig.bodies.filter((body) => body.kind === 'turn').length
-    release()
-
-    const outcome = await sending
-    expect(outcome.state === 'rejected' && classifyDispatchRejection(outcome).category).toBe(
-      'withdrawn'
-    )
-    expect(rig.settlements).toEqual([])
-    // The answer opens nothing: the turn keeps its terminal row.
-    expect(rig.bodies.filter((body) => body.kind === 'turn')).toHaveLength(rowsAtEnd)
-    expect(rig.bodies.findLast((body) => body.kind === 'turn')).toMatchObject({
-      state: 'interrupted'
-    })
-  })
-
-  it('rejects a send in Codex words by the recorded end of a failed turn that finished before its answer', async () => {
-    const rig = await turnEndRig()
-    const release = rig.turns.holdNextAnswer()
-    const sending = rig.send('client-1')
-    await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
-    rig.turns.start()
-    rig.turns.end('failed', 'usage limit reached')
-    release()
-
-    await expect(sending).resolves.toMatchObject({
-      state: 'rejected',
-      rejection: {
-        kind: 'providerRejected',
-        detail: { text: 'usage limit reached', audience: 'person' }
-      }
-    })
-  })
-
   it('leaves a send pending, still armed, when its answer is read after its turn completed', async () => {
     const rig = await turnEndRig()
     const release = rig.turns.holdNextAnswer()
@@ -295,73 +187,6 @@ describe('a Codex send its turn ended without echoing', () => {
   })
 })
 
-describe('the turn a withdrawn Codex send names', () => {
-  it('is the record of the turn it opened, when that turn is interrupted', async () => {
-    const rig = await turnEndRig()
-    await rig.sendAndOpen('client-1')
-
-    rig.turns.end('interrupted')
-
-    expect(rig.turnRecords.length).toBeGreaterThan(0)
-    expect(new Set(rig.turnRecords.map(agentJournalItemKey)).size).toBe(1)
-    expect(rig.settlements).toEqual([
-      expect.objectContaining({
-        clientMessageId: 'client-1',
-        answeredInTurn: { turn: rig.turnRecords[0], via: 'start' }
-      })
-    ])
-  })
-
-  it('is the running turn for a send steered into it', async () => {
-    const rig = await turnEndRig()
-    await rig.sendAndOpen('client-1')
-    await rig.send('client-2')
-
-    rig.turns.end('interrupted')
-
-    expect(rig.settlements.map((settlement) => [settlement.clientMessageId, settlement])).toEqual([
-      [
-        'client-1',
-        expect.objectContaining({ answeredInTurn: { turn: rig.turnRecords[0], via: 'start' } })
-      ],
-      [
-        'client-2',
-        expect.objectContaining({ answeredInTurn: { turn: rig.turnRecords[0], via: 'steer' } })
-      ]
-    ])
-  })
-
-  it('is the ended turn whose end was read before the answer', async () => {
-    const rig = await turnEndRig()
-    const release = rig.turns.holdNextAnswer()
-    const sending = rig.send('client-1')
-    await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
-    rig.turns.start()
-    rig.turns.end('interrupted')
-    release()
-
-    await expect(sending).resolves.toMatchObject({
-      state: 'rejected',
-      answeredInTurn: { turn: rig.turnRecords[0], via: 'start' }
-    })
-  })
-
-  it('is not named when its turn completes without echoing it: the send stays pending', async () => {
-    const rig = await turnEndRig()
-    const release = rig.turns.holdNextAnswer()
-    const sending = rig.send('client-1')
-    await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
-    rig.turns.start()
-    rig.turns.end('completed')
-    release()
-
-    await expect(sending).resolves.toMatchObject({ state: 'admitted' })
-    await rig.sendAndOpen('client-2')
-    rig.turns.end('completed')
-    expect(rig.settlements).toEqual([])
-  })
-})
-
 describe('a send bound to a turn', () => {
   it('dies with the settlement its turn end makes', () => {
     const echoes = createCodexDispatchEchoes()
@@ -398,7 +223,7 @@ describe('a send bound to a turn', () => {
   })
 })
 
-it('settles the first un-echoed unauthorized turn as signed out, with Codex detail', async () => {
+it('releases an unauthorized turn without deciding whether its un-echoed send was delivered', async () => {
   const rig = await turnEndRig()
   await rig.sendAndOpen('auth-first')
   const error = { codexErrorInfo: 'unauthorized', message: 'The authentication token has expired.' }
@@ -408,14 +233,6 @@ it('settles the first un-echoed unauthorized turn as signed out, with Codex deta
     threadId: CODEX_TEST_THREAD_ID,
     turn: { id: 'turn-1', status: 'failed', error }
   })
-  expect(rig.settlements).toEqual([
-    expect.objectContaining({
-      clientMessageId: 'auth-first',
-      state: 'rejected',
-      rejection: { kind: 'notSignedIn', detail: { text: error.message, audience: 'person' } }
-    })
-  ])
-  expect(
-    rig.settlements[0] && 'reason' in rig.settlements[0] ? rig.settlements[0].reason : ''
-  ).toContain('codex login')
+  expect(rig.settlements).toEqual([])
+  expect(rig.adapter.heldSends?.('session-1')).toEqual(new Set())
 })

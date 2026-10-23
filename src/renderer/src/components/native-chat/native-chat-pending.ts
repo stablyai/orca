@@ -28,6 +28,7 @@ export type NativeChatPendingSend = {
   id: string
   /** Definite send outcome; absent while the send is simply awaiting its transcript row. */
   delivery?: 'unconfirmed' | 'rejected'
+  recovery?: true
   /** When a write's acknowledgment was lost, so a remount keeps the original hold deadline. */
   writeUnconfirmedAt?: number
   /** The exact draft text the user submitted. */

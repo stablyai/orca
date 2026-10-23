@@ -142,6 +142,7 @@ export function acceptSubmissionFromProviderItem(
   if (providerItemId === resolvedItemId) {
     return
   }
+  state.inputs.echoes.add(resolvedItemId)
   const submission = [...state.submissions.values()].find(
     (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
   )
@@ -150,6 +151,8 @@ export function acceptSubmissionFromProviderItem(
   }
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
+  state.inputs.candidates.delete(submission.clientMessageId)
+  state.inputs.revision++
   noteTurnAccepted(state, submission)
   submission.providerItemId = providerItemId
   submission.reason = null

@@ -17,7 +17,10 @@ import {
   type StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from './codex-structured-journal-translation'
 import {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_USER_INPUT_METHOD,
@@ -499,7 +502,11 @@ describe('codex turn lifecycle rows', () => {
 
   it('restores historical turn rows with optional endpoints in milliseconds', () => {
     const tap = recorder()
-    const translator = translatorFor(tap)
+    const translator = createCodexHistoryTranslator({
+      sink: tap.sink,
+      sessionId: SESSION_ID,
+      primaryThreadId: () => THREAD_ID
+    })
 
     expect(
       translator.restoreThread(THREAD_ID, {
@@ -620,7 +627,7 @@ describe('codex turn lifecycle rows', () => {
 
   it('restores no lifecycle rows without a session identity to key them by', () => {
     const tap = recorder()
-    const translator = createCodexJournalTranslator({
+    const translator = createCodexHistoryTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID
     })

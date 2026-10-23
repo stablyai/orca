@@ -200,6 +200,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const handlePasteEvent = useNativeChatComposerHandle(ref, {
       attachmentScopeKey: draftScopeKey,
+      resend: (text, imagePaths) => !structuredTransport && sendPty({ text, imagePaths }),
       textareaRef,
       isComposing: imeEnterGesture.isComposing,
       caret,
@@ -390,10 +391,9 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         imeEnterGesture={imeEnterGesture}
         onDraftChange={handleDraftChange}
         onTextareaSelect={(element) => {
-          const value = element.value
-          const nextCaret = element.selectionStart ?? value.length
+          const nextCaret = element.selectionStart ?? element.value.length
           setCaret(nextCaret)
-          handleDraftOrCaretChange(value, nextCaret)
+          handleDraftOrCaretChange(element.value, nextCaret)
           setActiveSuggestion(0)
         }}
         onKeyDown={handleKeyDown}

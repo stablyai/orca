@@ -153,9 +153,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
     if (event.type === 'notification') {
       // Only an admitted turn end settles; a refused one settles on the retry that lands.
-      settleCodexSendsInEndedTurn(session, event, (settlement) =>
-        this.deps.onDispatchSettledLate?.({ sessionId: event.sessionId, ...settlement })
-      )
+      settleCodexSendsInEndedTurn(session, event)
       // After the admission check, so a refused frame is observed by the child records
       // only on the retry that also reaches the journal.
       session.backgroundTasks.observe(event, session.prompts.takeAbandonedCommands())

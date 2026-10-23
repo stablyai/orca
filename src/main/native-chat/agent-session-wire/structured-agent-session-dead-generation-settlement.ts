@@ -41,7 +41,6 @@ import {
   hasUnfinishedStructuredAgentSessionWork,
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
-import { codexUnopenedSendResolutions } from './structured-agent-session-unopened-send-withdrawal'
 
 export { settleStaleStructuredAgentSessionState } from './structured-agent-session-stale-state-settlement'
 
@@ -93,13 +92,10 @@ export function planStructuredAgentSessionDeadGeneration(
   const closed = input.unrunRejection
   const unrun =
     startupFailure ?? (closed && agentSessionFailureWords(closed, { surface: 'rejection' }))
-  const withdrawn = unrun ? [] : codexUnopenedSendResolutions(input.journal, input.fence)
-  const withdrawnIds = new Set(withdrawn.map((entry) => entry.clientMessageId))
   const dispatches = [
-    ...withdrawn,
     ...journalPendingSubmissionResolutions(
       (input.journal.submissions?.() ?? input.journal.pendingSubmissions?.() ?? []).filter(
-        (entry) => !withdrawnIds.has(entry.clientMessageId) && owns(entry.fence)
+        (entry) => owns(entry.fence)
       ),
       input.fence,
       unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }

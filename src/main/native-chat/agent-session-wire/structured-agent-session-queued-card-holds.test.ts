@@ -213,14 +213,14 @@ describe('a Stop holds the queue, in order', () => {
 
 describe('after a restart, nothing sends by itself', () => {
   /** A turn runs with cards A and B waiting, and Orca quits: a quit writes no Stop event. */
-  async function restartedWithCards(): Promise<{ first: string; second: string }> {
-    await rig.workingSend()
+  async function restartedWithCards(): Promise<{ first: string; second: string; working: string }> {
+    const working = await rig.workingSend()
     const first = await queuedDraft('A')
     const second = await queuedDraft('B')
     rig.crashRestartHostProcess()
     // The new host opens the chat for its first reader.
     await published()
-    return { first, second }
+    return { first, second, working }
   }
 
   /** The same, through a restart whose old agent this rig can still settle, so the next turn can
@@ -236,7 +236,7 @@ describe('after a restart, nothing sends by itself', () => {
   }
 
   it('idle: no card is handed off across opens and commits, and no pause or next card is published', async () => {
-    const { first, second } = await restartedWithCards()
+    const { first, second, working } = await restartedWithCards()
     const views = await watchClient()
     await expectNothingSent(first, second)
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
@@ -245,15 +245,16 @@ describe('after a restart, nothing sends by itself', () => {
     await rig.host.close(HOST_TEST_SESSION, 'evict')
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     await expectNothingSent(first, second)
-    // The chat reads idle with plain cards: no paused row, no Resume.
+    // The unconfirmed opener needs attention; the other cards wait behind its recovery copy.
     expect(views.at(-1)).toMatchObject({
       working: false,
       header: false,
-      cards: 2,
-      holds: ['turn', 'turn'],
-      steers: [true, true]
+      cards: 3,
+      holds: ['returned', 'behind-returned', 'behind-returned'],
+      steers: [false, true, true]
     })
     expect(await rig.drafts()).toEqual([
+      { messageId: `recovery:${working}`, state: 'returned' },
       { messageId: first, state: 'waiting' },
       { messageId: second, state: 'waiting' }
     ])

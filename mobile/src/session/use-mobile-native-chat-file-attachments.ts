@@ -1,17 +1,17 @@
-import { useCallback, useRef, useState } from 'react'
+import {
+  useMobileDraftAttachments,
+  nextMobileDraftAttachmentId
+} from './mobile-native-chat-draft-store'
+import { useCallback } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMediaPicker } from '../platform/media-picker'
 import { uploadMobileAgentSessionAttachment } from './mobile-agent-session-attachment-upload'
-import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
 import {
   uploadPickedNativeChatFiles,
   type PendingNativeChatFile
 } from './mobile-native-chat-file-attachment'
 
 type ShowToast = (message: string, durationMs?: number) => void
-type FilesByScope = Readonly<Record<string, readonly PendingNativeChatFile[]>>
-
-const NO_FILES: readonly PendingNativeChatFile[] = []
 
 export type MobileNativeChatFileAttachments = {
   /** Files for the active scope (tab) only. */
@@ -32,20 +32,8 @@ export function useMobileNativeChatFileAttachments(args: {
   showToast: ShowToast
 }): MobileNativeChatFileAttachments {
   const { client, sessionId, scopeKey, enabled, showToast } = args
-  const [filesByScope, setFilesByScope] = useState<FilesByScope>({})
+  const [files, updateScope] = useMobileDraftAttachments(scopeKey, 'files')
   const picker = useMediaPicker()
-  const idCounter = useRef(0)
-  const files = (scopeKey ? filesByScope[scopeKey] : undefined) ?? NO_FILES
-
-  const updateScope = useCallback(
-    (
-      scope: string,
-      next: (current: readonly PendingNativeChatFile[]) => readonly PendingNativeChatFile[]
-    ) =>
-      setFilesByScope((prev) => withScopeAttachments(prev, scope, next(prev[scope] ?? NO_FILES))),
-    []
-  )
-
   const attachFiles = useCallback(async (): Promise<void> => {
     const scope = scopeKey
     if (!client || !sessionId || !scope || !enabled) {
@@ -60,8 +48,7 @@ export function useMobileNativeChatFileAttachments(args: {
           base64: file.base64
         }),
       nextId: () => {
-        idCounter.current += 1
-        return `file-${idCounter.current}`
+        return nextMobileDraftAttachmentId('file')
       },
       onPicked: (file) => updateScope(scope, (current) => [...current, file]),
       onStored: (id, stored) =>

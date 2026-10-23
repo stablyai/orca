@@ -22,11 +22,12 @@ import type { QueuedMessageRow } from './queued-message-table'
 export type JournalQueueState = {
   cards: Map<string, QueuedMessageRow>
   /** Moves with every card change, so a reader's memo recomputes only when it must. */
+  returnedCommands: Set<string>
   revision: number
 }
 
 export function createJournalQueueState(): JournalQueueState {
-  return { cards: new Map(), revision: 0 }
+  return { cards: new Map(), returnedCommands: new Set(), revision: 0 }
 }
 
 /**
@@ -90,7 +91,8 @@ export function queuedCardFromChange(
     returnedRejection: null,
     consumedAs: null,
     queuedAt: readQueuedAt(change.queuedAt),
-    ...(options ? { options } : {})
+    ...(options ? { options } : {}),
+    ...(typeof change.recovers === 'string' ? { recovers: change.recovers } : {})
   }
   const attempt =
     typeof change.attempt === 'string' && change.attempt.length > 0 ? change.attempt : null
@@ -157,6 +159,12 @@ function applyQueueRow(state: JournalReducerState, row: JournalQueueRow): void {
   if (change.op === 'queued') {
     const card = queuedCardFromChange(state, row.messageId, change)
     setCard(state, card)
+    if (
+      change.recovers &&
+      state.submissions.get(change.recovers)?.queuedMessageId === row.messageId
+    ) {
+      settleHandOffInDoubt(state, change.recovers)
+    }
     if (card.consumedAs !== null) {
       settleHandOffInDoubt(state, card.consumedAs)
     }
@@ -216,7 +224,11 @@ function settleHandOffInDoubt(state: JournalReducerState, clientMessageId: strin
 
 /** A returned command card is spent once its own turn's row reports the refusal. */
 function spendReportedCommandCards(state: JournalReducerState): void {
-  for (const card of state.queue.cards.values()) {
+  for (const id of state.queue.returnedCommands) {
+    const card = state.queue.cards.get(id)
+    if (!card) {
+      continue
+    }
     if (
       card.state === 'returned' &&
       card.body.command &&
@@ -231,6 +243,11 @@ function spendReportedCommandCards(state: JournalReducerState): void {
 function setCard(state: JournalReducerState, card: QueuedMessageRow): void {
   if (state.queue.cards.get(card.messageId) !== card) {
     state.queue.cards.set(card.messageId, card)
+    if (card.state === 'returned' && card.body.command && card.consumedAs !== null) {
+      state.queue.returnedCommands.add(card.messageId)
+    } else {
+      state.queue.returnedCommands.delete(card.messageId)
+    }
     state.queue.revision += 1
   }
 }

@@ -50,6 +50,9 @@ export async function interruptCodexTurn(input: {
   }
   if (threadId === session.threadId) {
     session.abortedTurnIds?.add(turnId)
+    if (!session.dispatchEchoes.hasOpened(threadId, turnId)) {
+      session.dispatchEchoes.endTurn(threadId, turnId, { status: 'interrupted' })
+    }
   }
   const promptAdmission = input.onConfirmed?.()
   if (promptAdmission && !promptAdmission.accepted) {
