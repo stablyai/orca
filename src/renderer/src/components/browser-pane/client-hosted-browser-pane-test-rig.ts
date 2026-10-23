@@ -55,6 +55,7 @@ export function installClientHostedPaneApi(overrides?: {
         onFocusBrowserAddressBar: inert,
         onFindInBrowserPage: inert,
         onBrowserHistoryNavigate: inert,
+        onBrowserPageSwipe: inert,
         onReloadBrowserPage: inert,
         onHardReloadBrowserPage: inert,
         onZoomBrowserPage: inert,

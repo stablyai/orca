@@ -7,6 +7,7 @@ import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-t
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { addBrowserPageZoomEventListener, type BrowserPageZoomCommand } from './browser-page-zoom'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isBrowserPageAtScreenPoint } from './browser-page-screen-point'
 
 /**
  * History, reload and zoom chords for a <webview>-backed pane — local and client-hosted alike.
@@ -85,6 +86,24 @@ export function useBrowserPageWebviewShortcuts({
       }
     })
   }, [browserTabId, isActive, webviewRef])
+
+  // macOS history swipe: a window-level event, so the page under the cursor claims it
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    return window.api.ui.onBrowserPageSwipe(({ direction, screenX, screenY }) => {
+      const webview = webviewRef.current
+      if (!isBrowserPageAtScreenPoint(webview, screenX, screenY)) {
+        return
+      }
+      if (direction === 'back') {
+        webview?.goBack()
+      } else {
+        webview?.goForward()
+      }
+    })
+  }, [isActive, webviewRef])
 
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
   // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.

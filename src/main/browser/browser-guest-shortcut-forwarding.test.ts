@@ -395,7 +395,11 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
   })
 
-  it('consumes repeated workspace delete shortcuts from focused guest pages', () => {
+  // Why: Orca claims these on every repeat but acts once, so a held chord's repeats never reach the page.
+  it.each([
+    ['workspace delete', { code: 'Backspace', key: 'Backspace' }],
+    ['next tab', { code: 'BracketRight', key: '}' }]
+  ])('consumes repeated %s shortcuts from focused guest pages', (_name, chord) => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -404,8 +408,7 @@ describe('setupGuestShortcutForwarding', () => {
 
     const isMac = process.platform === 'darwin'
     const preventDefault = triggerBeforeInput({
-      code: 'Backspace',
-      key: 'Backspace',
+      ...chord,
       meta: isMac,
       control: !isMac,
       shift: true,
@@ -564,7 +567,9 @@ describe('setupGuestShortcutForwarding', () => {
     const secondDownPreventDefault = triggerBeforeInput(modifierInput)
 
     expect(secondDownPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:browserPageTabShortcut', {
+      doubleTapModifier: 'Shift'
+    })
   })
 
   it('resets guest double-tap detection on blur', () => {

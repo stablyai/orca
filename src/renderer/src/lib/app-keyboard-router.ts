@@ -55,6 +55,11 @@ export function installAppKeyboardRouter(target: Window = window): void {
   installedOn = target
 }
 
+/** Runs a key that reached Orca outside this window (a focused page) through every app owner. */
+export function replayAppKeyDown(event: KeyboardEvent): void {
+  dispatch('keydown', event)
+}
+
 /** Window-capture key listener for app shortcut owners; terminal panes keep their own. */
 export function addAppKeyListener(type: AppKeyEventType, listener: AppKeyListener): void {
   installAppKeyboardRouter(installedOn ?? window)

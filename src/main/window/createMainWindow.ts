@@ -19,6 +19,7 @@ import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-win
 import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
+import { installMainWindowSwipeNavigation } from './main-window-swipe-navigation'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
 import {
   forceRepaint,
@@ -198,6 +199,7 @@ export function createMainWindow(
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
   installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
+  installMainWindowSwipeNavigation(mainWindow)
   const closeLifecycle = installMainWindowCloseLifecycle({
     focus,
     mainWindow,

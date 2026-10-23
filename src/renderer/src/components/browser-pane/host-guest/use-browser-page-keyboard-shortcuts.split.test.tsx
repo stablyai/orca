@@ -153,6 +153,7 @@ beforeEach(() => {
       },
       ui: {
         onBrowserHistoryNavigate: historyNavigate.subscribe,
+        onBrowserPageSwipe: () => () => {},
         onReloadBrowserPage: reloadRequests.subscribe,
         onHardReloadBrowserPage: hardReloadRequests.subscribe,
         onZoomBrowserPage: zoomRequests.subscribe

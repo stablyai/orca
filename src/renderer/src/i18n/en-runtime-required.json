@@ -2911,6 +2911,7 @@
         "nativeDropTempCopyFailed_other": "Orca couldn't copy {{count}} dropped files."
       },
       "useIpcEvents": {
+        "56d3ec4203": "Failed to create untitled markdown file.",
         "60428567b4": "Local terminal reveal is unavailable while a remote runtime is active",
         "f6300deb8b": "New Browser Tab"
       },

@@ -184,6 +184,7 @@ function createMockGuest(
   const guest = {
     id,
     isDestroyed: vi.fn(() => false),
+    setIgnoreMenuShortcuts: vi.fn(),
     getType: vi.fn(() => 'webview'),
     getURL: vi.fn(() => currentUrl),
     getTitle: vi.fn(() => currentTitle),

@@ -3,7 +3,9 @@ import { admitCloseActiveTabPayload } from '../close-active-tab-payload-admissio
 import type { CloseActiveTabPayload } from '../api/ui-command-event-api'
 import type {
   BrowserHistoryNavigateCommand,
-  BrowserPageCommandTarget
+  BrowserPageCommandTarget,
+  BrowserPageSwipe,
+  BrowserPageTabShortcut
 } from '../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
 import type {
@@ -54,10 +56,11 @@ export const uiTabAndBrowserCommandsApi = {
   }): void => {
     ipcRenderer.send('browser:tabCloseReply', reply)
   },
-  onNewTerminalTab: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:newTerminalTab', listener)
-    return () => ipcRenderer.removeListener('ui:newTerminalTab', listener)
+  onBrowserPageTabShortcut: (callback: (input: BrowserPageTabShortcut) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, input: BrowserPageTabShortcut) =>
+      callback(input)
+    ipcRenderer.on('ui:browserPageTabShortcut', listener)
+    return () => ipcRenderer.removeListener('ui:browserPageTabShortcut', listener)
   },
   onFocusBrowserAddressBar: (
     callback: (target: BrowserPageCommandTarget) => void
@@ -81,6 +84,19 @@ export const uiTabAndBrowserCommandsApi = {
       callback(command)
     ipcRenderer.on('ui:browserHistoryNavigate', listener)
     return () => ipcRenderer.removeListener('ui:browserHistoryNavigate', listener)
+  },
+  onBrowserPagePointerDown: (
+    callback: (target: BrowserPageCommandTarget) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target: BrowserPageCommandTarget) =>
+      callback(target)
+    ipcRenderer.on('ui:browserPagePointerDown', listener)
+    return () => ipcRenderer.removeListener('ui:browserPagePointerDown', listener)
+  },
+  onBrowserPageSwipe: (callback: (swipe: BrowserPageSwipe) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, swipe: BrowserPageSwipe) => callback(swipe)
+    ipcRenderer.on('ui:browserPageSwipe', listener)
+    return () => ipcRenderer.removeListener('ui:browserPageSwipe', listener)
   },
   onZoomBrowserPage: (callback: (command: BrowserPageZoomCommand) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, command: BrowserPageZoomCommand) =>
@@ -128,25 +144,10 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:selectFloatingIndex', listener)
     return () => ipcRenderer.removeListener('ui:selectFloatingIndex', listener)
   },
-  onSwitchTab: (callback: (direction: 1 | -1) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
-    ipcRenderer.on('ui:switchTab', listener)
-    return () => ipcRenderer.removeListener('ui:switchTab', listener)
-  },
-  onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
-    ipcRenderer.on('ui:switchTabAcrossAllTypes', listener)
-    return () => ipcRenderer.removeListener('ui:switchTabAcrossAllTypes', listener)
-  },
   onSwitchRecentTab: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:switchRecentTab', listener)
     return () => ipcRenderer.removeListener('ui:switchRecentTab', listener)
-  },
-  onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
-    ipcRenderer.on('ui:switchTerminalTab', listener)
-    return () => ipcRenderer.removeListener('ui:switchTerminalTab', listener)
   },
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { shiftKey: boolean }) =>

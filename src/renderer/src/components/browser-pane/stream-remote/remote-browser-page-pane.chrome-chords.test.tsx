@@ -147,7 +147,7 @@ beforeEach(() => {
   mocks.viewportRenders.current = 0
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { ui: { onFocusBrowserAddressBar: () => () => {} } }
+    value: { ui: { onFocusBrowserAddressBar: () => () => {}, onBrowserPageSwipe: () => () => {} } }
   })
 })
 
@@ -298,6 +298,24 @@ describe('streamed browser pane chrome chords', () => {
 
     expect(event.defaultPrevented).toBe(false)
     expect(mocks.runRemoteNavigation).not.toHaveBeenCalled()
+  })
+
+  it('walks remote history with the mouse side buttons and keeps the outer browser from following', () => {
+    renderPane()
+    const press = (type: 'mousedown' | 'mouseup', button: number): MouseEvent => {
+      const event = new MouseEvent(type, { button, bubbles: true, cancelable: true })
+      act(() => {
+        screen.getByTestId('frame').dispatchEvent(event)
+      })
+      return event
+    }
+
+    expect(press('mousedown', 3).defaultPrevented).toBe(true)
+    expect(press('mouseup', 3).defaultPrevented).toBe(true)
+    press('mouseup', 4)
+    press('mouseup', 0)
+
+    expect(mocks.runRemoteNavigation.mock.calls).toEqual([['browser.back'], ['browser.forward']])
   })
 
   it('walks remote history from the address bar only inside its own overlay when no split is focused', () => {
