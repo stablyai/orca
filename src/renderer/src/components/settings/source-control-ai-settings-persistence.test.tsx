@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import { ChatNamingSetting } from './ChatNamingSetting'
@@ -43,6 +43,11 @@ it('consumes an actual Git toggle failure and lets the following Chat write succ
   const model = settingsModel()
   persist.mockRejectedValueOnce(new Error('Settings disk is unavailable'))
   render(<GitPersistenceHarness model={model} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const toggle = screen.getByRole('switch', { name: 'Show Source Control AI actions' })
   fireEvent.click(toggle)
   await waitFor(() =>
@@ -81,6 +86,11 @@ it('does not let a failed actual Git agent selection roll back a queued Chat sel
       })
   )
   render(<GitPersistenceHarness model={settingsModel()} />)
+  const naming = document.getElementById('chat-names')
+  if (!naming) {
+    throw new Error('Chat naming section is missing')
+  }
+  fireEvent.click(within(naming).getByRole('button', { name: 'Advanced' }))
   const agents = screen.getAllByRole('combobox')
   const gitAgent = agents[0]
   const chatAgent = agents.at(-1)

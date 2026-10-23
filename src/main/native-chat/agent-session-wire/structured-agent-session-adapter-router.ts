@@ -182,6 +182,14 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.requireAgent(input.identity).adapter.providerHistoryWindow?.(input) ??
     Promise.resolve(null)
 
+  generateText: NonNullable<StructuredAgentSessionAdapter['generateText']> = (input) => {
+    const { adapter } = this.requireAgent(input)
+    if (!adapter.generateText) {
+      return Promise.reject(new Error(`${input.agent} cannot run an independent text task`))
+    }
+    return adapter.generateText(input)
+  }
+
   copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) => {
     const { adapter } = this.requireAgent(input.identity)
     if (!adapter.copyConversation) {
@@ -300,7 +308,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return route?.state === 'live' ? route.registration.adapter : null
   }
 
-  private requireAgent(identity: AgentSessionJournalIdentity): StructuredAgentRegistration {
+  private requireAgent(
+    identity: Pick<AgentSessionJournalIdentity, 'agent'>
+  ): StructuredAgentRegistration {
     const registration = this.agents.registration(identity.agent)
     if (!registration) {
       throw new Error(`structured sessions do not support ${identity.agent}`)

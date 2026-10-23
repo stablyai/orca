@@ -45,6 +45,7 @@ export async function installWslChatFixture(lane: WslChatHost) {
     value: quotePosixShell(cli)
   })
   await lane.rpc('settings.update', {
+    nativeChatAutoName: false,
     nativeChatPermissionMode: 'ask',
     agentDefaultEnv: {
       claude: {

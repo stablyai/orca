@@ -147,6 +147,14 @@ function createAcpAdapter(
     })
     return new AcpStructuredSessionAdapter({
       spec,
+      textTaskLaunch: {
+        resolveEnvironment: sources.resolveBaseEnvironment,
+        resolveLaunchEnv: sources.resolveAgentLaunchEnv,
+        resolveCommandSettings: sources.resolveCommandSettings,
+        refreshEnvironmentAfterMiss: sources.refreshAfterMissingProgram,
+        ...deps.acpLaunchCommand,
+        dataDirectory: deps.stateDirectory
+      },
       readJournal,
       resolveLaunch: composeStructuredLaunch(definition, sources, part),
       readLaunch: composeStructuredLaunchRead(definition, sources, part),

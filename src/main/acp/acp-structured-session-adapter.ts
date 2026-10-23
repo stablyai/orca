@@ -1,3 +1,4 @@
+import { AcpTextTasks } from './acp-text-task'
 // A structured chat over the Agent Client Protocol: one adapter per registered ACP agent, which
 // the router drives like the Claude and Codex lanes. Rewind and goals are absent, so the chat hides
 // them; compaction is the agent's own `/compact` prompt, for an agent whose launch spec offers it.
@@ -25,7 +26,6 @@ import type { ProviderStartAttempt } from '../provider-process/provider-acquisit
 import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-connection'
 import { AcpConnectionClosedError } from './acp-errors'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { awaitAcpTurnEnd, interruptAcpTurn } from './acp-structured-stop'
 import { acpDispatchPrompt } from './acp-prompt-content'
 import {
@@ -33,7 +33,7 @@ import {
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
-import { readAcpLiveOptions, writeAcpSessionOption } from './acp-structured-options'
+import { readAcpLiveOptions, setAcpLiveOption } from './acp-structured-options'
 import { readAcpRecoveryHistory } from './acp-recovery-history'
 import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 import { acpStartupFailure, isAcpReadySession } from './acp-structured-child'
@@ -43,16 +43,21 @@ import { supportsAcpStructuredLocation } from './acp-structured-location-support
 
 export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly children: AcpStructuredChildren
+  private readonly textTasks: AcpTextTasks
   private readonly copies: AcpConversationCopies
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {
     this.children = new AcpStructuredChildren(deps)
     this.copies = new AcpConversationCopies(deps)
+    this.textTasks = new AcpTextTasks(deps)
   }
 
   /** Restart recovery's evidence; null for an agent whose own store Orca cannot read. */
   providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = (
     input
   ) => readAcpRecoveryHistory(this.deps, input.identity)
+
+  generateText: NonNullable<StructuredAgentSessionAdapter['generateText']> = (input) =>
+    this.textTasks.generate(input)
 
   copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) =>
     this.copies.copy(input)
@@ -252,23 +257,11 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
   async setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<Readonly<Record<string, string>>> {
-    const session = this.live(input.sessionId)
-    const write = session.options.write(input.key, input.value)
-    if (!write) {
-      throw new AgentSessionOptionRejectedError(
-        `${session.spec.agent} offers no session option named ${input.key}`
-      )
-    }
-    session.options.notePick(input.key)
-    // Bounded, and abandoned by a close or Stop: the session's queue waits on it.
-    await writeAcpSessionOption(session.connection, session.options, write, {
-      key: input.key,
-      value: input.value,
-      agent: session.spec.agent,
-      timeoutMs: this.deps.optionWriteTimeoutMs ?? ACP_OPTION_WRITE_TIMEOUT_MS,
-      ...(input.signal ? { signal: input.signal } : {})
-    })
-    return session.options.reported()
+    return setAcpLiveOption(
+      this.live(input.sessionId),
+      input,
+      this.deps.optionWriteTimeoutMs ?? ACP_OPTION_WRITE_TIMEOUT_MS
+    )
   }
 
   readOptions = async (input: { sessionId: string; fence: number }) =>
@@ -318,16 +311,17 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
   forceCloseSession = (sessionId: string): Promise<boolean> => this.children.stop(sessionId, false)
 
   async closeAll(): Promise<void> {
-    const copiedChildren = this.copies.closeAll()
     const ids = new Set([
       ...this.children.sessions.keys(),
       ...this.children.starts.failedSessionIds()
     ])
     // A start still under way is the host's to abort: its teardown does, before this runs.
-    const proven = await Promise.all(
-      [...ids].map((sessionId) => this.children.stop(sessionId, true))
-    )
-    if (!(await copiedChildren) || proven.includes(false)) {
+    const proven = await Promise.all([
+      this.copies.closeAll(),
+      this.textTasks.closeAll(),
+      ...[...ids].map((sessionId) => this.children.stop(sessionId, true))
+    ])
+    if (proven.includes(false)) {
       throw new Error('an ACP agent child could not be proven stopped')
     }
   }

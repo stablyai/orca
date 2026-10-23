@@ -3,6 +3,9 @@
 // Kept as the agent last reported it; nothing here is guessed or listed by Orca itself.
 
 import { abortSignalReason } from '../../shared/abort-signal-reason'
+import type { StructuredAgentSessionSetOptionInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import type { AcpStructuredSession } from './acp-structured-session'
 
 import type {
   AgentSessionModelOption,
@@ -245,6 +248,29 @@ export async function readAcpLiveOptions(
   const acceptsImages = await acpSessionAcceptsImages(session)
   // Only the start says what the config resolved: the session may have moved since.
   return { ...withLiveCatalogListing(session.options.read()), acceptsImages }
+}
+
+export async function setAcpLiveOption(
+  session: Pick<AcpStructuredSession, 'options' | 'connection' | 'spec'>,
+  input: Pick<StructuredAgentSessionSetOptionInput, 'key' | 'value' | 'signal'>,
+  timeoutMs: number
+): Promise<Readonly<Record<string, string>>> {
+  const write = session.options.write(input.key, input.value)
+  if (!write) {
+    throw new AgentSessionOptionRejectedError(
+      `${session.spec.agent} offers no session option named ${input.key}`
+    )
+  }
+  session.options.notePick(input.key)
+  // Bounded, and abandoned by a close or Stop: the session's queue waits on it.
+  await writeAcpSessionOption(session.connection, session.options, write, {
+    key: input.key,
+    value: input.value,
+    agent: session.spec.agent,
+    timeoutMs,
+    ...(input.signal ? { signal: input.signal } : {})
+  })
+  return session.options.reported()
 }
 
 /** Only the current, still-awaited write may establish reusable option proof. */
