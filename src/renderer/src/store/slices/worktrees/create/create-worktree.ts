@@ -28,6 +28,7 @@ import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../.
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
+import { showLocalBaseRefDriftWarningToast } from './local-base-ref-drift-warning-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
 import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
 import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
@@ -256,6 +257,7 @@ export function createCreateWorktree(
           }
           const { result } = outcome
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
+          showLocalBaseRefDriftWarningToast(result.localBaseRefDriftWarning, result.worktree)
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }

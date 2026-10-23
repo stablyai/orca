@@ -35,6 +35,8 @@ When creating a worktree you pick what to branch from. This can be:
 - A specific commit SHA.
 - An existing remote branch — Orca will fetch and check it out.
 
+If a saved local base branch is behind or has diverged from the detected default branch, Orca warns after creation without changing the selected base. This advisory check does not block creation if Git cannot compare the branches, and does not apply to explicit branch overrides, remote-tracking refs, or commit pins.
+
 ## Shared directories & gitignored files
 
 A brand-new worktree is a clean checkout. Dependencies, caches, and local secrets that live in gitignored paths are missing until you recreate them.
