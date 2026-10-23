@@ -1,4 +1,6 @@
-export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `  function getComputedStyleSubset(el) {
+import { BROWSER_SHADOW_DOM_SCRIPT } from '../../shared/browser-shadow-dom-script'
+
+export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `${BROWSER_SHADOW_DOM_SCRIPT}  function getComputedStyleSubset(el) {
     var cs = window.getComputedStyle(el);
     var result = {};
     for (var i = 0; i < STYLE_PROPS.length; i++) {
@@ -47,9 +49,9 @@ export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `  function getComputedStyleSub
     return tag;
   }
 
-  function isUniqueSelector(selector) {
+  function isUniqueSelector(root, selector) {
     try {
-      return document.querySelectorAll(selector).length === 1;
+      return root.querySelectorAll(selector).length === 1;
     } catch(e) {
       return false;
     }
@@ -73,18 +75,19 @@ export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `  function getComputedStyleSub
     return '';
   }
 
-  function buildSelector(el) {
+  function buildRootSelector(el) {
+    var root = el.getRootNode();
     var parts = [];
     var current = el;
     while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body && parts.length < 10) {
       var part = buildSelectorPart(current);
       var parent = current.parentElement;
-      if (parent && !isUniqueSelector(parts.concat([part]).reverse().join(' > '))) {
+      if (current.parentNode && !isUniqueSelector(root, [part].concat(parts).join(' > '))) {
         part += getNthOfTypeSuffix(current);
       }
       parts.unshift(part);
       var selector = parts.join(' > ');
-      if (isUniqueSelector(selector)) {
+      if (isUniqueSelector(root, selector)) {
         return clampStr(selector, BUDGET.selectorMaxLength);
       }
       current = parent;
@@ -92,7 +95,7 @@ export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `  function getComputedStyleSub
     return clampStr(parts.join(' > ') || el.tagName.toLowerCase(), BUDGET.selectorMaxLength);
   }
 
-  function buildReadablePath(el) {
+  function buildRootReadablePath(el) {
     var parts = [];
     var current = el;
     while (current && current !== document.documentElement && parts.length < 6) {
@@ -117,7 +120,7 @@ export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `  function getComputedStyleSub
     return clampStr(parts.join(' > '), BUDGET.pathMaxLength);
   }
 
-  function buildFullPath(el) {
+  function buildRootFullPath(el) {
     var parts = [];
     var current = el;
     while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement && parts.length < 20) {
@@ -127,9 +130,34 @@ export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `  function getComputedStyleSub
     return clampStr(parts.join(' > '), BUDGET.pathMaxLength);
   }
 
+  // Each segment is scoped to its own root; >>> denotes an open shadow boundary.
+  function buildShadowPath(el, buildLocalPath, maxLength) {
+    var parts = [];
+    var current = el;
+    for (var depth = 0; current && depth < 32; depth++) {
+      parts.unshift(buildLocalPath(current));
+      var root = current.getRootNode();
+      current = root && root.host;
+    }
+    if (current) parts.unshift('[shadow depth limit]');
+    return clampStr(parts.join(' >>> '), maxLength);
+  }
+
+  function buildSelector(el) {
+    return buildShadowPath(el, buildRootSelector, BUDGET.selectorMaxLength);
+  }
+
+  function buildReadablePath(el) {
+    return buildShadowPath(el, buildRootReadablePath, BUDGET.pathMaxLength);
+  }
+
+  function buildFullPath(el) {
+    return buildShadowPath(el, buildRootFullPath, BUDGET.pathMaxLength);
+  }
+
   function getNearbyText(el) {
     var results = [];
-    var parent = el.parentElement;
+    var parent = el.parentNode;
     if (!parent) return results;
 
     function addSiblingText(sibling) {
@@ -170,18 +198,21 @@ export const GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT = `  function getComputedStyleSub
 
   function getAncestorPath(el) {
     var path = [];
-    var current = el.parentElement;
-    while (current && current !== document.documentElement && path.length < BUDGET.ancestorPathMaxEntries) {
+    var current = el;
+    while (current && path.length < BUDGET.ancestorPathMaxEntries) {
+      var root = current.getRootNode();
+      if (!current.parentElement && root && root.host) path.push('#shadow-root (open)');
+      current = shadowComposedParent(current);
+      if (!current || current === document.documentElement || path.length >= BUDGET.ancestorPathMaxEntries) break;
       var tag = current.tagName.toLowerCase();
       var role = current.getAttribute('role');
-      path.push(role ? tag + '[role=' + role + ']' : tag);
-      current = current.parentElement;
+      path.push(role && !containsSecret(role) ? tag + '[role=' + role + ']' : tag);
     }
     return path;
   }
 
   function getNearbyElements(el) {
-    var parent = el.parentElement;
+    var parent = el.parentNode;
     if (!parent) return [];
     var result = [];
 

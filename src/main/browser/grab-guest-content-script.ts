@@ -132,7 +132,8 @@ export const GRAB_GUEST_CONTENT_SCRIPT = `  function getSelectedText() {
       var parts = getAriaLabelledByIds(ariaLabelledBy);
       var names = [];
       for (var i = 0; i < parts.length; i++) {
-        var ref = document.getElementById(parts[i]);
+        var root = el.getRootNode();
+        var ref = typeof root.getElementById === 'function' ? root.getElementById(parts[i]) : null;
         if (ref) names.push(getBoundedText(ref, 100));
       }
       if (names.length) accessibleName = names.join(' ');

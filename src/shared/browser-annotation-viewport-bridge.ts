@@ -1,3 +1,4 @@
+import { BROWSER_SHADOW_DOM_SCRIPT } from './browser-shadow-dom-script'
 import type { BrowserGrabRect } from './browser-grab-types'
 import { isValidBrowserGrabRect } from './browser-annotation-viewport-report'
 
@@ -83,6 +84,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const hostAttribute = 'data-orca-browser-annotation-overlay';
   const selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
   const markerSize = 24;
+  ${BROWSER_SHADOW_DOM_SCRIPT}
 
   const removeOverlay = (state) => {
     if (state && state.host && state.host.parentNode) {
@@ -106,6 +108,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
     if (state.targetObserver) {
       state.targetObserver.disconnect();
     }
+    (state.targetRoots || []).forEach((root) => root.removeEventListener('scroll', state.requestUpdate, true));
     removeOverlay(state);
   };
 
@@ -128,17 +131,12 @@ export function buildBrowserAnnotationViewportBridgeScript({
   // marks it in the shared DOM because this world cannot see the page's objects.
   const trackTarget = (state) => {
     const current = state.target;
-    let next = null;
-    if (emitViewportMessages && selectionId) {
-      for (const candidate of document.querySelectorAll('[' + selectedAttribute + ']')) {
-        if (candidate.getAttribute(selectedAttribute) !== selectionId) continue;
-        if (next) {
-          next = null;
-          break;
-        }
-        next = candidate;
-      }
-    }
+    const next = emitViewportMessages && selectionId
+      ? shadowFindSelected(selectedAttribute, selectionId) : null;
+    const roots = next ? shadowSelectionRoots(next) : [];
+    (state.targetRoots || []).forEach((root) => root.removeEventListener('scroll', state.requestUpdate, true));
+    roots.forEach((root) => root.addEventListener('scroll', state.requestUpdate, true));
+    state.targetRoots = roots;
     if (next !== current) {
       state.target = next;
       if (state.targetObserver) {
@@ -272,6 +270,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
     requestUpdate: null,
     onBeforeUnload: null,
     target: null,
+    targetRoots: [],
     targetObserver: null
   };
 
