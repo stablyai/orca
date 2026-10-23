@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => ({
   dismissed: vi.fn(async () => false),
   schedule: vi.fn(async () => 'scheduled-1'),
   setChannel: vi.fn(async () => null),
-  vibrate: vi.fn(),
   appState: { currentState: 'active' },
   platform: { OS: 'android' }
 }))
@@ -51,8 +50,7 @@ vi.mock('expo-notifications', () => ({
 }))
 vi.mock('react-native', () => ({
   AppState: mocks.appState,
-  Platform: mocks.platform,
-  Vibration: { vibrate: mocks.vibrate }
+  Platform: mocks.platform
 }))
 
 const enabledPreferences = (
@@ -218,27 +216,14 @@ describe('presentSocketNotificationFallback', () => {
     expect(mocks.schedule).toHaveBeenCalledOnce()
   })
 
-  it('still shows the in-app capsule and vibrates when OS banner is suppressed while viewing', async () => {
+  it('suppresses both the OS notification and in-app capsule when viewing the target workspace', async () => {
     mocks.eligible.mockResolvedValue(false)
     await presentSocketNotificationFallback(alert({ agentState: 'waiting' }), 'host-1')
     expect(mocks.schedule).not.toHaveBeenCalled()
-    expect(getCurrentInAppNotificationBanner()?.title).toBe('Needs input')
-    expect(mocks.vibrate).toHaveBeenCalledWith(URGENT_VIBRATION_PATTERN)
-  })
-
-  it('does not schedule or show in-app banner when already dismissed or disposed', async () => {
-    mocks.dismissed.mockResolvedValue(true)
-    await presentSocketNotificationFallback(alert(), 'host-1')
-    expect(mocks.schedule).not.toHaveBeenCalled()
-    expect(getCurrentInAppNotificationBanner()).toBeNull()
-
-    mocks.dismissed.mockResolvedValue(false)
-    await presentSocketNotificationFallback(alert(), 'host-1', () => true)
-    expect(mocks.schedule).not.toHaveBeenCalled()
     expect(getCurrentInAppNotificationBanner()).toBeNull()
   })
 
-  it('does not schedule when eligibility flips the subscription to disposed', async () => {
+  it('does not schedule or show in-app banner when eligibility flips the subscription to disposed', async () => {
     let disposed = false
     mocks.eligible.mockImplementation(async () => {
       disposed = true
@@ -246,6 +231,7 @@ describe('presentSocketNotificationFallback', () => {
     })
     await presentSocketNotificationFallback(alert(), 'host-1', () => disposed)
     expect(mocks.schedule).not.toHaveBeenCalled()
+    expect(getCurrentInAppNotificationBanner()).toBeNull()
   })
 
   it('does not schedule a banner with no title and no body', async () => {

@@ -1,4 +1,4 @@
-import { AppState, Platform, Vibration } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { loadHostCatalog } from '../transport/host-store'
 import {
@@ -15,7 +15,6 @@ import {
   type NotificationTone
 } from './in-app-notification-banner-store'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
-import { wasPushDismissed } from './push-dismissal-watermarks'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import type { OrcaPushPayload } from './push-payload'
 import { isHostPushRegistered } from './push-registration'
@@ -113,7 +112,8 @@ export async function presentSocketNotificationFallback(
       ? { executionHost: event.executionHost }
       : {})
   }
-  if ((await wasPushDismissed(payload)) || isDisposed?.()) {
+  const { canPresentForegroundPush } = await import('./push-receive')
+  if (!(await canPresentForegroundPush(payload)) || isDisposed?.()) {
     return
   }
   const tone = classifyNotificationTone(event)
@@ -121,11 +121,6 @@ export async function presentSocketNotificationFallback(
   const osNotificationIdentifier = payload.notificationId
     ? `${hostFingerprint}:${payload.notificationId}`
     : undefined
-  const { canPresentForegroundPush } = await import('./push-receive')
-  const canScheduleOsBanner = await canPresentForegroundPush(payload)
-  if (isDisposed?.()) {
-    return
-  }
   if (AppState.currentState === 'active') {
     publishInAppNotificationBanner({
       id: osNotificationIdentifier ?? `${hostId}:${Date.now()}`,
@@ -141,12 +136,6 @@ export async function presentSocketNotificationFallback(
       osNotificationIdentifier,
       createdAt: Date.now()
     })
-    if (!canScheduleOsBanner && preferences.sound) {
-      triggerVibrationPattern(tone)
-    }
-  }
-  if (!canScheduleOsBanner) {
-    return
   }
   await ensureDesktopNotificationChannel()
   const Notifications = await import('expo-notifications')
@@ -218,12 +207,4 @@ function notificationChannelId(sound: boolean, tone: NotificationTone): string {
   return tone === 'urgent'
     ? DESKTOP_NOTIFICATION_URGENT_CHANNEL_ID
     : DESKTOP_NOTIFICATION_COMPLETE_CHANNEL_ID
-}
-
-function triggerVibrationPattern(tone: NotificationTone): void {
-  try {
-    Vibration?.vibrate?.(tone === 'urgent' ? URGENT_VIBRATION_PATTERN : COMPLETE_VIBRATION_PATTERN)
-  } catch {
-    // Best-effort tactile feedback when OS banner is suppressed while viewing.
-  }
 }

@@ -13,8 +13,7 @@ import {
 import { getNotificationNavigationTarget } from './notification-routing'
 import { useOpenNotificationRoute } from './use-open-notification-route'
 
-const URGENT_AUTO_DISMISS_MS = 25000
-const COMPLETE_AUTO_DISMISS_MS = 15000
+const AUTO_DISMISS_MS = 12000
 
 function paramMatches(actual: string | undefined, expected: string | undefined): boolean {
   if (!actual || !expected) {
@@ -45,18 +44,16 @@ export function InAppNotificationBanner() {
   }>()
   const openNotificationRoute = useOpenNotificationRoute()
   const bannerId = banner?.id
-  const bannerTone = banner?.tone
 
   useEffect(() => {
-    if (!bannerId || !bannerTone) {
+    if (!bannerId) {
       return
     }
-    const timeoutMs = bannerTone === 'urgent' ? URGENT_AUTO_DISMISS_MS : COMPLETE_AUTO_DISMISS_MS
     const timer = setTimeout(() => {
       dismissInAppNotificationBanner(bannerId)
-    }, timeoutMs)
+    }, AUTO_DISMISS_MS)
     return () => clearTimeout(timer)
-  }, [bannerId, bannerTone])
+  }, [bannerId])
 
   if (!banner) {
     return null
