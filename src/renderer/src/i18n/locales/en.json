@@ -21110,6 +21110,6 @@
     "failed": "Couldn't stop every terminal session, so Orca stayed open.",
     "ok": "OK",
     "unavailableMessage": "Orca can't stop every terminal session right now.",
-    "unavailableDetail": "Nothing was stopped. Try again once your terminals have opened. If a terminal says it was opened in a newer version of Orca, reopen it first."
+    "unavailableDetail": "Nothing was stopped. Try again once your terminals have opened. If a terminal says it was opened in a newer version of Orca, reopen it first. If your terminals are already open, quit and reopen Orca, then try again."
   }
 }

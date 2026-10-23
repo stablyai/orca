@@ -20800,6 +20800,6 @@
     "failed": "No se pudieron detener todas las sesiones de terminal, así que Orca sigue abierto.",
     "ok": "Aceptar",
     "unavailableMessage": "Orca no puede detener todas las sesiones de terminal en este momento.",
-    "unavailableDetail": "No se detuvo nada. Vuelve a intentarlo cuando se hayan abierto tus terminales. Si una terminal indica que se abrió en una versión más reciente de Orca, vuelve a abrirla primero."
+    "unavailableDetail": "No se detuvo nada. Vuelve a intentarlo cuando se hayan abierto tus terminales. Si una terminal indica que se abrió en una versión más reciente de Orca, vuelve a abrirla primero. Si tus terminales ya están abiertas, cierra Orca, vuelve a abrirlo y vuelve a intentarlo."
   }
 }

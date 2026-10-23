@@ -20810,6 +20810,6 @@
     "failed": "Impossible d'arrêter toutes les sessions de terminal, Orca reste donc ouvert.",
     "ok": "OK",
     "unavailableMessage": "Orca ne peut pas arrêter toutes les sessions de terminal pour le moment.",
-    "unavailableDetail": "Rien n'a été arrêté. Réessayez une fois vos terminaux ouverts. Si un terminal indique qu'il a été ouvert dans une version plus récente d'Orca, rouvrez-le d'abord."
+    "unavailableDetail": "Rien n'a été arrêté. Réessayez une fois vos terminaux ouverts. Si un terminal indique qu'il a été ouvert dans une version plus récente d'Orca, rouvrez-le d'abord. Si vos terminaux sont déjà ouverts, quittez puis relancez Orca, et réessayez."
   }
 }

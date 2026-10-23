@@ -32,7 +32,7 @@ export async function confirmQuitAndStopAllSessions(
   return response === CONFIRM_BUTTON_INDEX
 }
 
-/** Explains that nothing was stopped because not every session can be listed yet; never confirms. */
+/** Explains that nothing was stopped because not every session can be listed; never confirms. */
 export async function explainStopAllSessionsUnavailable(
   showMessageBox: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
 ): Promise<false> {
@@ -49,7 +49,7 @@ export async function explainStopAllSessionsUnavailable(
     ),
     detail: translateMain(
       'quitAndStopAllSessions.unavailableDetail',
-      'Nothing was stopped. Try again once your terminals have opened. If a terminal says it was opened in a newer version of Orca, reopen it first.'
+      'Nothing was stopped. Try again once your terminals have opened. If a terminal says it was opened in a newer version of Orca, reopen it first. If your terminals are already open, quit and reopen Orca, then try again.'
     )
   })
   return false

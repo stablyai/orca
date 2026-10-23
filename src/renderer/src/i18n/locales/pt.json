@@ -20929,6 +20929,6 @@
     "failed": "Não foi possível encerrar todas as sessões de terminal, então o Orca continuou aberto.",
     "ok": "OK",
     "unavailableMessage": "O Orca não consegue encerrar todas as sessões de terminal agora.",
-    "unavailableDetail": "Nada foi encerrado. Tente novamente depois que seus terminais abrirem. Se um terminal indicar que foi aberto em uma versão mais recente do Orca, reabra-o primeiro."
+    "unavailableDetail": "Nada foi encerrado. Tente novamente depois que seus terminais abrirem. Se um terminal indicar que foi aberto em uma versão mais recente do Orca, reabra-o primeiro. Se seus terminais já estiverem abertos, saia do Orca, abra-o novamente e tente outra vez."
   }
 }
