@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
@@ -24,10 +24,21 @@ import {
 import { useTerminalPaneSplitActions } from './use-terminal-pane-split-actions'
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
 import { useAppStore } from '@/store'
+import { openRoutedHttpLink } from '@/lib/http-link-destinations'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { openDetectedFilePath } from './terminal-file-open-routing'
+import {
+  getTerminalContextMenuLinkCopyText,
+  resolveTerminalContextMenuLinkTarget,
+  type TerminalContextMenuLinkTarget
+} from './terminal-context-menu-link-target'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
 import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
+import type { TerminalLinkRoutingPreferenceRequester } from './terminal-url-link-hit-testing'
+import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
+import { runTerminalCopy } from './terminal-copy-rejection-guards'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -48,6 +59,7 @@ type UseTerminalPaneContextMenuDeps = {
   onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
   forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
+  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
 
 type TerminalMenuState = {
@@ -57,6 +69,10 @@ type TerminalMenuState = {
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
+  linkTarget: TerminalContextMenuLinkTarget | null
+  onOpenLinkTarget: () => void
+  onCopyLinkTarget: () => Promise<void>
+  onRevealLinkTarget: () => void
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
@@ -100,9 +116,11 @@ export function useTerminalPaneContextMenu({
   onAgentSessionForkReady,
   onAgentSessionContinuationReady,
   forceBracketedMultilineTextPaste,
-  rightClickToPaste
+  rightClickToPaste,
+  requestOpenLinksInAppPreference
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
+  const [linkTarget, setLinkTarget] = useState<TerminalContextMenuLinkTarget | null>(null)
 
   const resolveMenuPane = useCallback((): ManagedPane | null => {
     const manager = managerRef.current
@@ -133,6 +151,41 @@ export function useTerminalPaneContextMenu({
       source
     )
 
+  const prepareContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLElement>, clickedPaneId: number | null): boolean => {
+      const manager = managerRef.current
+      const clickedPane =
+        manager && clickedPaneId !== null
+          ? (manager.getPanes().find((pane) => pane.id === clickedPaneId) ?? null)
+          : null
+      if (!clickedPane) {
+        setLinkTarget(null)
+        return false
+      }
+      const state = useAppStore.getState()
+      const worktree = state.getKnownWorktreeById(worktreeId)
+      const worktreePath =
+        worktree && 'path' in worktree && typeof worktree.path === 'string'
+          ? worktree.path
+          : fallbackCwd
+      const startupCwd = paneCwdRef.current.get(clickedPane.id)?.cwd || fallbackCwd || worktreePath
+      const resolved = startupCwd
+        ? resolveTerminalContextMenuLinkTarget(clickedPane.terminal, event.nativeEvent, {
+            startupCwd,
+            worktreeId,
+            worktreePath: worktreePath || startupCwd,
+            runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
+            sourceOwner: resolveTerminalHttpLinkSourceOwner(
+              paneTransportsRef.current.get(clickedPane.id)
+            )
+          })
+        : null
+      setLinkTarget(resolved)
+      return resolved !== null
+    },
+    [fallbackCwd, managerRef, paneCwdRef, paneTransportsRef, worktreeId]
+  )
+
   const {
     open,
     setOpen,
@@ -146,8 +199,57 @@ export function useTerminalPaneContextMenu({
     containerRef,
     contextPaneIdRef,
     rightClickToPaste,
-    pasteResolvedPane
+    pasteResolvedPane,
+    prepareContextMenu
   })
+
+  const onOpenLinkTarget = useCallback((): void => {
+    if (!linkTarget) {
+      return
+    }
+    if (linkTarget.kind === 'http') {
+      openRoutedHttpLink(linkTarget.url, {
+        worktreeId,
+        sourceOwner: linkTarget.sourceOwner,
+        requestOpenLinksInAppPreference
+      })
+      return
+    }
+    const state = useAppStore.getState()
+    const worktree = state.getKnownWorktreeById(worktreeId)
+    const worktreePath =
+      worktree && 'path' in worktree && typeof worktree.path === 'string'
+        ? worktree.path
+        : fallbackCwd
+    openDetectedFilePath(linkTarget.absolutePath, linkTarget.line, linkTarget.column, {
+      worktreeId,
+      worktreePath: worktreePath || fallbackCwd,
+      runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    })
+  }, [fallbackCwd, linkTarget, requestOpenLinksInAppPreference, worktreeId])
+
+  const onCopyLinkTarget = useCallback(async (): Promise<void> => {
+    if (!linkTarget) {
+      return
+    }
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    await runTerminalCopy({
+      selection: getTerminalContextMenuLinkCopyText(linkTarget),
+      writeClipboardText: window.api.ui.writeClipboardText,
+      // Why: a rejected clipboard write must not leave xterm unfocused after Radix closes the menu.
+      focus: () => pane.terminal.focus()
+    })
+  }, [linkTarget, resolveMenuPane])
+
+  const onRevealLinkTarget = useCallback((): void => {
+    if (!linkTarget || linkTarget.kind !== 'file') {
+      return
+    }
+    void window.api.shell.openInFileManager(linkTarget.absolutePath)
+  }, [linkTarget])
 
   const { onSplitRight, onSplitDown } = useTerminalPaneSplitActions({
     managerRef,
@@ -304,6 +406,10 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    linkTarget,
+    onOpenLinkTarget,
+    onCopyLinkTarget,
+    onRevealLinkTarget,
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu,

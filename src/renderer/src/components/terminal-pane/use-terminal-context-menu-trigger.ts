@@ -16,6 +16,8 @@ type UseTerminalContextMenuTriggerDeps = {
   pasteResolvedPane: (
     source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
   ) => Promise<void>
+  // Returns true when the click is on a link and the menu should win over right-click paste.
+  prepareContextMenu?: (event: React.MouseEvent<HTMLElement>, clickedPaneId: number | null) => boolean
 }
 
 type TerminalContextMenuTrigger = {
@@ -33,7 +35,8 @@ export function useTerminalContextMenuTrigger({
   containerRef,
   contextPaneIdRef,
   rightClickToPaste,
-  pasteResolvedPane
+  pasteResolvedPane,
+  prepareContextMenu
 }: UseTerminalContextMenuTriggerDeps): TerminalContextMenuTrigger {
   const menuOpenedAtRef = useRef(0)
   const [open, setOpen] = useState(false)
@@ -67,10 +70,12 @@ export function useTerminalContextMenuTrigger({
         ? (manager.getPanes().find((pane) => pane.id === clickedPaneId) ?? null)
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
+    const forceMenu = prepareContextMenu?.(event, clickedPane?.id ?? null) === true
 
     // Why: when users opt into terminal-style right-click, a selection copies
     // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
-    if (rightClickToPaste && !event.ctrlKey) {
+    // A detected URL or path still opens the menu so the link actions stay reachable (#9279).
+    if (rightClickToPaste && !event.ctrlKey && !forceMenu) {
       event.stopPropagation()
       if (!clickedPane) {
         return
