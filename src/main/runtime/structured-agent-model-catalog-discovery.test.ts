@@ -90,13 +90,13 @@ describe('the model catalog contract on every registration', () => {
     expect([...listingNamesConfiguredModel].sort()).toEqual(['codex'])
   })
 
-  // OpenCode 2.x and OMP list in a session opened in the chat's folder, which a prewarm does not have.
+  // Project-aware listings need the chat's folder, which a prewarm does not have.
   it('marks the agents whose listing runs in a chat folder', () => {
     const { listsInChatFolder } = registeredModelCatalogDiscovery(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
       context()
     )
-    expect([...listsInChatFolder].sort()).toEqual(['omp', 'opencode', 'opencode2'])
+    expect([...listsInChatFolder].sort()).toEqual(['omp', 'opencode', 'opencode2', 'pi'])
   })
 
   it('maps an ACP agent with no session-free listing to an unavailable registration', () => {

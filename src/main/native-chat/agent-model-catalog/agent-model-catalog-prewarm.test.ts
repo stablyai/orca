@@ -99,6 +99,51 @@ describe('model catalog prewarm', () => {
     expect(grok).toHaveBeenCalledTimes(2)
   })
 
+  it.each([10, 100])(
+    'joins %i same-folder reads and bounds distinct-folder acquisition',
+    async (count) => {
+      let gate = deferred<void>()
+      let active = 0
+      let peak = 0
+      const probe = vi.fn(
+        async (_home: AgentSessionAccountHome, options?: { workspacePath?: string }) => {
+          peak = Math.max(peak, ++active)
+          await gate.promise
+          active--
+          return listing(options?.workspacePath ?? 'missing folder')
+        }
+      )
+      const service = createAgentModelCatalogService({
+        store: new AgentModelCatalogStore(),
+        getRecord: () => undefined,
+        drivesRecord: () => true,
+        resolveAccountHome: async () => HOME('PI_CODING_AGENT_DIR', '/homes/a'),
+        probes: { pi: probe },
+        listsInChatFolder: new Set(['pi'])
+      })
+      const read = (workspacePath: string) =>
+        service.read({ agent: 'pi', workspacePath, waitForListing: true })
+      const joined = Array.from({ length: count }, () => read('/work/shared'))
+      await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
+      gate.resolve()
+      await Promise.all(joined)
+      await Promise.all(Array.from({ length: count }, () => read('/work/shared')))
+      expect(probe).toHaveBeenCalledTimes(1)
+      const folders = Array.from({ length: count }, (_, index) => `/work/${index}`)
+      gate = deferred<void>()
+      const pending = folders.map(read)
+      await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(3))
+      gate.resolve()
+      const results = await Promise.all(pending)
+      expect(results.map((result) => result.origin !== 'unknown' && result.models[0]?.id)).toEqual(
+        folders
+      )
+      expect(probe).toHaveBeenCalledTimes(count + 1)
+      expect(peak).toBeLessThanOrEqual(2)
+      service.stop()
+    }
+  )
+
   // A project's opencode.json can add or remove models, so its folder keeps its own list.
   // The folder lookup can answer the earlier report last; the later report must still win.
   it("saves a running chat's reports in the order it sent them, per folder", async () => {
@@ -133,56 +178,79 @@ describe('model catalog prewarm', () => {
     expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['newer'])
   })
 
-  it('keeps one catalog per folder for an agent whose project config changes its models', async () => {
-    const store = new AgentModelCatalogStore()
-    const probe = vi.fn(
-      async (_home: AgentSessionAccountHome, options?: { workspacePath?: string }) =>
-        listing(options?.workspacePath === '/work/b' ? 'only-in-b' : 'big-pickle')
-    )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome, location and launchDirectory.
-    const chatInB = {
-      sessionId: 'chat-b',
-      provider: 'opencode2',
-      accountHome: HOME('OPENCODE_HOME', '/homes/a'),
-      launchDirectory: '/work/b',
-      location: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'ws-b',
-        workspaceKind: 'folder'
+  it.each(['opencode2', 'pi'])(
+    'keeps %s inventory scoped to folder and account across cold and live reads',
+    async (agent) => {
+      const store = new AgentModelCatalogStore()
+      let selected = '/homes/a'
+      const variable = agent === 'pi' ? 'PI_CODING_AGENT_DIR' : 'OPENCODE_HOME'
+      const probe = vi.fn(
+        async (home: AgentSessionAccountHome, options?: { workspacePath?: string }) =>
+          listing(
+            'variable' in home && home.path === '/homes/b'
+              ? 'account-b'
+              : options?.workspacePath === '/work/b'
+                ? 'only-in-b'
+                : 'big-pickle'
+          )
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only provider, accountHome, location and launchDirectory.
+      const chatInB = {
+        sessionId: 'chat-b',
+        provider: agent,
+        accountHome: HOME(variable, '/homes/a'),
+        launchDirectory: '/work/b',
+        location: {
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceId: 'ws-b',
+          workspaceKind: 'folder'
+        }
+      } as AgentSessionRecord
+      const oldKey = agentModelCatalogFingerprintForRecord(chatInB)
+      store.recordSuccess(oldKey, agent, listing('old-account-only'), 'discovery')
+      const service = createAgentModelCatalogService({
+        store,
+        getRecord: (sessionId) => (sessionId === 'chat-b' ? chatInB : undefined),
+        drivesRecord: () => true,
+        resolveAccountHome: async () => HOME(variable, selected),
+        hasChatRecords: () => true,
+        probes: { [agent]: probe },
+        listsInChatFolder: new Set([agent]),
+        recordWorkspacePath: async (record) => record.launchDirectory ?? null
+      })
+      const ids = async (workspacePath: string) => {
+        const read = await service.read({ agent, workspacePath, waitForListing: true })
+        return read.origin === 'unknown' ? [] : read.models.map((model) => model.id)
       }
-    } as AgentSessionRecord
-    const service = createAgentModelCatalogService({
-      store,
-      getRecord: (sessionId) => (sessionId === 'chat-b' ? chatInB : undefined),
-      drivesRecord: () => true,
-      resolveAccountHome: async () => HOME('OPENCODE_HOME', '/homes/a'),
-      probes: { opencode2: probe },
-      listsInChatFolder: new Set(['opencode2']),
-      recordWorkspacePath: async (record) => record.launchDirectory ?? null
-    })
-    const ids = async (workspacePath: string) => {
-      const read = await service.read({ agent: 'opencode2', workspacePath, waitForListing: true })
-      return read.origin === 'unknown' ? [] : read.models.map((model) => model.id)
-    }
 
-    // Asked at once, neither folder joins the other's listing.
-    expect(await Promise.all([ids('/work/a'), ids('/work/b')])).toEqual([
-      ['big-pickle'],
-      ['only-in-b']
-    ])
-    expect(probe.mock.calls.map(([, options]) => options?.workspacePath).sort()).toEqual([
-      '/work/a',
-      '/work/b'
-    ])
-    // A chat running in B saves what it lists for B only.
-    service.recordLiveListing('chat-b', { models: listing('live-b').models })
-    await vi.waitFor(async () => expect(await ids('/work/b')).toEqual(['live-b']))
-    expect(await ids('/work/a')).toEqual(['big-pickle'])
-    expect(probe).toHaveBeenCalledTimes(2)
-    const answer = await service.read({ agent: 'opencode2', workspacePath: '/work/a' })
-    expect(answer).toMatchObject({ modelsDifferByWorkspace: true })
-  })
+      await service.prewarm()
+      expect(probe).not.toHaveBeenCalled()
+
+      // Asked at once, neither folder joins the other's listing.
+      expect(await Promise.all([ids('/work/a'), ids('/work/b')])).toEqual([
+        ['big-pickle'],
+        ['only-in-b']
+      ])
+      expect(probe.mock.calls.map(([, options]) => options?.workspacePath).sort()).toEqual([
+        '/work/a',
+        '/work/b'
+      ])
+      // A chat running in B saves what it lists for B only.
+      service.recordLiveListing('chat-b', { models: listing('live-b').models })
+      await vi.waitFor(async () => expect(await ids('/work/b')).toEqual(['live-b']))
+      expect(await ids('/work/a')).toEqual(['big-pickle'])
+      expect(probe).toHaveBeenCalledTimes(2)
+      const answer = await service.read({ agent, workspacePath: '/work/a' })
+      expect(answer).toMatchObject({ modelsDifferByWorkspace: true })
+      selected = '/homes/b'
+      expect(await ids('/work/b')).toEqual(['account-b'])
+      expect(probe.mock.calls.at(-1)?.[0]).toEqual(HOME(variable, '/homes/b'))
+      selected = '/homes/a'
+      expect(await ids('/work/b')).toEqual(['live-b'])
+      expect(store.get(oldKey)).toMatchObject({ models: [{ id: 'old-account-only' }] })
+    }
+  )
 
   // A picker that joined a prewarm listing with no chat folder was answered nothing at all.
   it('never prewarms a listing that runs in a chat folder, so a picker lists in its own', async () => {

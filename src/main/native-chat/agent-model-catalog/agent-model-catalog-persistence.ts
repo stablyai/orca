@@ -1,5 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { createAgentModelCatalogJson } from './agent-model-catalog-json'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
@@ -16,9 +15,13 @@ const SCHEMA_VERSION = 3
 const SAVE_COALESCE_MS = 500
 
 export type AgentModelCatalogPersistence = {
+  attach?: (
+    source: () => Iterable<AgentModelCatalogEntry>,
+    hydrate: (entries: AgentModelCatalogEntry[]) => void
+  ) => Promise<void>
   load: () => Promise<AgentModelCatalogEntry[]>
   /** Fire-and-forget, coalesced; a failed write never surfaces to a caller. */
-  save: (entries: readonly AgentModelCatalogEntry[]) => void
+  save: (entries: () => Iterable<AgentModelCatalogEntry>) => void
   /** Writes a coalesced save now; the delay timer is unref'd, so quit must not rely on it. */
   flush: () => Promise<void>
 }
@@ -159,67 +162,124 @@ function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   }
 }
 
-/** One JSON file of last-good entries. Success-only by construction: failures
- *  are never handed to `save`, and a malformed file loads as empty. */
+/** One paced drain publishes complete generations of the retained source entries. */
 export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
-  const filePath = join(directory, 'agent-model-catalog.json')
-  let pending: readonly AgentModelCatalogEntry[] | null = null
+  const file = createAgentModelCatalogJson(directory, parseEntry, persistedEntry, SCHEMA_VERSION)
+  let entries: () => Iterable<AgentModelCatalogEntry> = () => []
+  let hydrate = (_rows: AgentModelCatalogEntry[]): void => {}
+  let acknowledged: AgentModelCatalogEntry[] = []
+  let ready = false
+  let initializing: Promise<void> | null = null
+  let accepted = 0
+  let durable = 0
+  let due = 0
+  let lastStart = -Infinity
   let timer: ReturnType<typeof setTimeout> | null = null
-  let writing = Promise.resolve()
-
+  let writing: Promise<void> | null = null
+  let flushing = false
+  const diagnose = (error: unknown): void =>
+    console.warn('[agent-model-catalog] persistence failed:', error)
+  const initialize = (): Promise<void> => {
+    if (ready) {
+      return Promise.resolve()
+    }
+    initializing ??= file
+      .read()
+      .then((rows) => {
+        acknowledged = rows
+        hydrate(rows)
+        ready = true
+      })
+      .finally(() => {
+        initializing = null
+      })
+    return initializing
+  }
+  const unchanged = (rows: AgentModelCatalogEntry[]): boolean => {
+    const current = [...entries()]
+    return current.length === rows.length && current.every((entry, index) => entry === rows[index])
+  }
+  const schedule = (): void => {
+    if (timer !== null || writing || accepted === durable) {
+      return
+    }
+    timer = setTimeout(
+      () => {
+        timer = null
+        void drain()
+      },
+      Math.max(0, due - Date.now(), lastStart + SAVE_COALESCE_MS - Date.now())
+    )
+    timer.unref?.()
+  }
+  const drain = (): Promise<void> => {
+    writing ??= Promise.resolve().then(async () => {
+      try {
+        await initialize()
+        do {
+          lastStart = Date.now()
+          due = 0
+          const revision = accepted
+          const rows = [...entries()]
+          await file.write(rows)
+          acknowledged = rows
+          durable = revision
+          if (!unchanged(rows) && accepted === revision) {
+            accepted++
+            due ||= Date.now() + SAVE_COALESCE_MS
+          }
+        } while (flushing && durable !== accepted)
+      } catch (error) {
+        due = 0
+        diagnose(error)
+      } finally {
+        writing = null
+        flushing = false
+        if (due) {
+          schedule()
+        }
+      }
+    })
+    return writing
+  }
   const flush = (): Promise<void> => {
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
-    const entries = pending
-    pending = null
-    if (!entries) {
-      return writing
+    if (accepted === durable && (!ready || !unchanged(acknowledged))) {
+      accepted++
     }
-    writing = writing.then(async () => {
-      try {
-        await mkdir(dirname(filePath), { recursive: true })
-        const tmpPath = `${filePath}.tmp`
-        await writeFile(
-          tmpPath,
-          JSON.stringify({
-            version: SCHEMA_VERSION,
-            entries: entries.map(persistedEntry)
-          }),
-          'utf8'
-        )
-        await rename(tmpPath, filePath)
-      } catch {
-        // Bookkeeping only; the in-memory store stays authoritative this run.
-      }
-    })
-    return writing
+    if (accepted === durable) {
+      return writing ?? Promise.resolve()
+    }
+    flushing = true
+    return drain()
   }
-
   return {
+    async attach(source, apply) {
+      entries = source
+      hydrate = apply
+      await initialize().catch(diagnose)
+    },
     async load() {
+      while (writing) {
+        await writing
+      }
       try {
-        const parsed: unknown = JSON.parse(await readFile(filePath, 'utf8'))
-        const root = asRecord(parsed)
-        if (!root || root.version !== SCHEMA_VERSION || !Array.isArray(root.entries)) {
-          return []
-        }
-        return root.entries
-          .map(parseEntry)
-          .filter((entry): entry is AgentModelCatalogEntry => entry !== null)
-      } catch {
+        return await file.read()
+      } catch (error) {
+        diagnose(error)
         return []
       }
     },
-    save(entries) {
-      pending = [...entries]
-      if (timer === null) {
-        timer = setTimeout(flush, SAVE_COALESCE_MS)
-        timer.unref?.()
-      }
+    save(source) {
+      entries = source
+      accepted++
+      due ||= Date.now() + SAVE_COALESCE_MS
+      schedule()
     },
     flush
   }

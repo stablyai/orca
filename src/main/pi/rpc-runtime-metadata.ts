@@ -13,8 +13,8 @@ export const PI_RPC_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   definition: PI_RPC_AGENT,
   modelCatalog: (context) => ({
     kind: 'probe',
-    // `--list-models` marks no model as the one Pi runs by default.
     listingNamesConfiguredModel: false,
+    listsInChatFolder: true,
     probe: createPiModelCatalogProbe({
       // The environment a chat's launch starts from too.
       resolveEnvironment: () => context.environment.resolveAgentEnvironment('pi'),

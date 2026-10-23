@@ -64,6 +64,7 @@ export class AgentModelCatalogStore {
   private readonly partialAttempts = new Map<string, { agent: string; at: number }>()
   private nextListingOrder = 0
   private persistence: AgentModelCatalogPersistence | null = null
+  private readonly persistedEntries = () => this.entries.values()
   private readonly now: () => number
 
   constructor(options?: { now?: () => number }) {
@@ -74,15 +75,18 @@ export class AgentModelCatalogStore {
   /** Hydrates last-good entries from disk. Anything this run already listed wins. */
   async attachPersistence(persistence: AgentModelCatalogPersistence): Promise<void> {
     this.persistence = persistence
-    for (const entry of await persistence.load()) {
-      if (!this.entries.has(entry.fingerprint)) {
-        this.entries.set(entry.fingerprint, entry)
-        if (independentAgentModelCatalog(entry.agent)) {
-          this.dueEntries.add(entry.fingerprint)
+    const hydrate = (loaded: AgentModelCatalogEntry[]): void => {
+      for (const entry of loaded) {
+        if (!this.entries.has(entry.fingerprint)) {
+          this.entries.set(entry.fingerprint, entry)
+          if (independentAgentModelCatalog(entry.agent)) {
+            this.dueEntries.add(entry.fingerprint)
+          }
         }
       }
+      this.evictOverCap()
     }
-    this.evictOverCap()
+    return persistence.attach?.(this.persistedEntries, hydrate) ?? persistence.load().then(hydrate)
   }
 
   flushPersistence(): Promise<void> {
@@ -198,7 +202,7 @@ export class AgentModelCatalogStore {
       return
     }
     this.entries.set(fingerprint, entry)
-    this.persistence?.save([...this.entries.values()])
+    this.persistence?.save(this.persistedEntries)
     this.listingWaiters.notify(fingerprint)
   }
 
@@ -246,7 +250,7 @@ export class AgentModelCatalogStore {
     this.evictOverCap()
     // Live sessions re-list every turn; an unchanged listing only refreshes the in-memory age.
     if (!previous || agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry)) {
-      this.persistence?.save([...this.entries.values()])
+      this.persistence?.save(this.persistedEntries)
     }
     return entry
   }

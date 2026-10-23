@@ -221,7 +221,8 @@ export function createAgentModelCatalogService(
           ...(result ?? { origin: 'unknown' }),
           ...extra,
           ...(holdsEverywhere ? { defaultHoldsInEveryWorkspace: true as const } : {}),
-          ...(result && (folder !== undefined || exact)
+          ...(result &&
+          (deps.listsInChatFolder?.has(params.agent) === true || folder !== undefined || exact)
             ? { modelsDifferByWorkspace: true as const }
             : {}),
           ...(!params.savedOnly &&

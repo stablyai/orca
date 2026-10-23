@@ -13,7 +13,8 @@ export async function readStreamedSessionDocument<T>(args: {
   create: () => T
   consume: (state: T, value: unknown) => void
   signal?: AbortSignal
-}): Promise<{ record: Record<string, unknown>; state: T } | null> {
+  includeArrayValidity?: boolean
+}): Promise<{ record: Record<string, unknown>; state: T; arrayValid?: boolean } | null> {
   const record: Record<string, unknown> = Object.create(null)
   const fields = new Set(args.fields)
   const objectFields = new Map(
@@ -22,6 +23,7 @@ export async function readStreamedSessionDocument<T>(args: {
   const foldedArray = Symbol('folded session array')
   let state = args.create()
   let consumeFailure: { error: unknown } | undefined
+  let arrayValid = false
   let inFoldedArray = false
   const reset = (): void => {
     state = args.create()
@@ -50,6 +52,7 @@ export async function readStreamedSessionDocument<T>(args: {
         create: () => record,
         add: (target, key, value) => {
           if (key === args.arrayKey) {
+            arrayValid = value === foldedArray
             if (value !== foldedArray) {
               reset()
             }
@@ -136,5 +139,7 @@ export async function readStreamedSessionDocument<T>(args: {
   if (consumeFailure) {
     throw consumeFailure.error
   }
-  return assembler.current === record ? { record, state } : null
+  return assembler.current === record
+    ? { record, state, ...(args.includeArrayValidity ? { arrayValid } : {}) }
+    : null
 }

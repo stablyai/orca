@@ -29,7 +29,9 @@ describe('streamed session document contracts', () => {
   it.each(['[]', 'null', 'false', '0', '"not an array"', '{}'])(
     'a later messages value %s clears an earlier fold',
     async (last) => {
-      expect(await read(`{"messages":[1,2],"messages":${last}}`)).toEqual({ record: {}, state: [] })
+      expect(
+        await read(`{"messages":[1,2],"messages":${last}}`, { includeArrayValidity: true })
+      ).toEqual({ record: {}, state: [], arrayValid: last === '[]' })
     }
   )
 

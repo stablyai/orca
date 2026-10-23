@@ -1,17 +1,18 @@
 import { homedir } from 'node:os'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { parsePiModels } from '../../shared/commit-message-model-parsers'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type {
   AgentModelCatalogProbe,
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { JsonlRpcAgentConnection } from '../jsonl-rpc/agent-connection'
+import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { buildPiRpcLaunch, piRpcSessionlessEnvironment } from './rpc-launch'
 import { checkPiRpcVersion, resolvePiRpcInvocation } from './rpc-launch-resolution'
-import { PI_UNMAPPED_THINKING_LEVELS } from './rpc-options'
+import { piModelCatalogFromRpc, type PiRpcRequester } from './rpc-options'
 
 export type PiModelCatalogProbeDeps = {
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
@@ -19,29 +20,16 @@ export type PiModelCatalogProbeDeps = {
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveCommand?: typeof resolveCliCommand
-  /** Test seams; production runs the shared supervised listing. */
+  /** Test seams; production uses the shared supervised RPC connection. */
   probeVersion?: AgentCliVersionReader
-  runListing?: typeof runAgentModelCatalogListing
+  connect?: (launch: ProviderProcessLaunch) => PiRpcRequester & { close(): Promise<unknown> }
   homePath?: string
 }
 
-/** Pi's table names each model and whether it reasons; its live thinking menu is model-specific,
- *  so a reasoning model lists the levels every map keeps and names no default. */
-export function piModelCatalogFromListing(stdout: string): AgentModelCatalogSuccess['models'] {
-  return parsePiModels(stdout).map((model) => ({
-    id: model.id,
-    label: model.label,
-    isDefault: false,
-    efforts: model.thinkingLevels
-      ? PI_UNMAPPED_THINKING_LEVELS.map((level) => ({ value: level, label: level }))
-      : []
-  }))
-}
-
-/** Lists Pi's models with `pi --list-models`, under the binary and environment its chats run. */
+/** Reads Pi's runtime inventory in a disposable, sessionless RPC child. */
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
-    const cwd = deps.homePath ?? homedir()
+    const cwd = options?.workspacePath ?? deps.homePath ?? homedir()
     const { env, command } = await resolvePiRpcInvocation({
       accountDir: requireLegacyAgentSessionAccountHome(accountHome).path,
       resolveEnvironment: deps.resolveEnvironment,
@@ -53,18 +41,20 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
     if ((await checkPiRpcVersion({ command, cwd, env }, deps.probeVersion)).status === 'tooOld') {
       throw new Error(`pi at ${command} does not run structured chats`)
     }
-    // The chat launch's own env rules; only the arguments differ.
     const launch = buildPiRpcLaunch({
       command,
       cwd,
       ...piRpcSessionlessEnvironment(env),
       fullAccess: true
     })
-    const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
-      { ...launch, args: ['--list-models'] },
-      { site: 'pi-model-catalog-probe', signal: options?.signal }
+    const models = await runAgentModelCatalogSession(
+      () => {
+        const discovery = { ...launch, args: [...launch.args, '--no-session'] }
+        return deps.connect?.(discovery) ?? new JsonlRpcAgentConnection(discovery)
+      },
+      async (connection) => piModelCatalogFromRpc(await connection.request('get_available_models')),
+      { label: 'pi', signal: options?.signal }
     )
-    const models = piModelCatalogFromListing(stdout)
     if (models.length === 0) {
       throw new Error('pi listed no models')
     }
