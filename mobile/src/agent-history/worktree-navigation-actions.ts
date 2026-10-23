@@ -32,13 +32,12 @@ export function openHistorySession(
     return
   }
   const query = name === undefined ? '' : `?name=${encodeURIComponent(name)}`
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Expo Router's typed Href union does not model the optional `?name=` and `executionHost` query suffixes on `/h/[hostId]/session/[worktreeId]`.
-  router.replace(
-    workspaceRouteHref(
-      `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(toWorktreeId)}${query}`,
-      executionHost ?? undefined
-    ) as Parameters<RouteHandoff['replace']>[0]
+  const href = workspaceRouteHref(
+    `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(toWorktreeId)}${query}`,
+    executionHost ?? undefined
   )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Expo Router's typed Href union does not model the optional name and executionHost query on this session route.
+  router.replace(href as Parameters<RouteHandoff['replace']>[0])
 }
 
 // Why: builds the per-worktree "navigate to a screen" action-sheet actions
