@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { removeBootstrapFatalExitGuard } from './bootstrap-fatal-exit-guard'
 
@@ -63,7 +64,7 @@ let recordsSuppressed = 0
 
 /** Durably record a main-process fatal/near-fatal error before default handling runs. Exported for tests. */
 export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, error: unknown): void {
-  // Why: only rejections can storm; the one uncaught-exception record before the fatal re-throw
+  // Why: only rejections can storm; the one uncaught-exception record before the fatal exit
   // must never be lost to a window a storm already exhausted.
   if (kind === 'main_unhandled_rejection') {
     const now = Date.now()
@@ -99,23 +100,24 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
   }
 }
 
-export function installUncaughtPipeErrorGuard(): void {
-  const onUncaughtException = (error: unknown): void => {
+export function installUncaughtPipeErrorGuard(
+  exit: (code: number) => void = (code) => app.exit(code)
+): void {
+  let exiting = false
+  // Why: never removed. Electron's own listener stays silent only while another exists; alone it
+  // shows a modal error box and never exits, which froze main behind a hidden dialog.
+  process.on('uncaughtException', (error: unknown): void => {
     const errorCode = readErrorProperty(error, 'code')
-    if (errorCode === 'EIO' || errorCode === 'EPIPE') {
+    if (errorCode === 'EIO' || errorCode === 'EPIPE' || exiting) {
       return
     }
-
-    // Why (issue #9441): the re-throw below exits with a clean code and no macOS crash report; record durably first or the death is undiagnosable in the field.
+    exiting = true
+    // Why (issue #9441): app.exit leaves no macOS crash report; record durably first or the death is undiagnosable in the field.
     recordFatalMainProcessError('main_uncaught_exception', error)
-    process.off('uncaughtException', onUncaughtException)
-    // Why: throwing inside an uncaughtException handler exits with status 7 and hides the fault; re-throw next tick for the real stack.
-    setImmediate(() => {
-      throw error
-    })
-  }
-
-  process.on('uncaughtException', onUncaughtException)
+    // Why: terminals live in the daemon and survive; exiting beats running main on corrupt state.
+    exit(1)
+  })
+  // Why: this guard now exits explicitly, so the bootstrap exit guard is redundant.
   removeBootstrapFatalExitGuard()
 }
 
