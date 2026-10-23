@@ -9,7 +9,6 @@ import type {
 import * as toolFold from '../../../src/shared/native-chat-tool-fold'
 import { projectStructuredItemsToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
-import { styles } from './mobile-native-chat-message-styles'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 vi.mock('react-native', async () => {
@@ -35,19 +34,33 @@ vi.mock('react-native', async () => {
     Text,
     View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    useWindowDimensions: () => ({ width: 400, height: 800 })
   }
 })
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Bot: 'Bot',
   Brain: 'Brain',
+  Check: 'Check',
   ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
   Copy: 'Copy',
+  Eye: 'Eye',
+  FileMinus2: 'FileMinus2',
+  FilePen: 'FilePen',
+  FilePlus2: 'FilePlus2',
+  Folder: 'Folder',
+  Globe: 'Globe',
+  ListChecks: 'ListChecks',
+  MessageSquareMore: 'MessageSquareMore',
+  Pencil: 'Pencil',
+  Plug: 'Plug',
+  Search: 'Search',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
-  Wrench: 'Wrench',
-  ChevronRight: 'ChevronRight'
+  Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
@@ -55,6 +68,10 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './mobile-native-chat-disclosure-store'
 
 function message(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'source', role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -76,14 +93,11 @@ function button(root: ReactTestInstance, label: string): ReactTestInstance {
   return root.find((node) => String(node.type) === 'Pressable' && textIn(node).includes(label))
 }
 
+/** A run's own rows: the presses inside its opened box. */
 function toolLines(root: ReactTestInstance): ReactTestInstance[] {
-  return root.findAll(
-    (node) =>
-      String(node.type) === 'Pressable' &&
-      node.findAll(
-        (child) => String(child.type) === 'Text' && child.props.style === styles.toolName
-      ).length > 0
-  )
+  return root
+    .findAll((node) => String(node.type) === 'ScrollView')
+    .flatMap((box) => box.findAll((node) => String(node.type) === 'Pressable'))
 }
 
 function press(node: ReactTestInstance): void {
@@ -101,14 +115,68 @@ describe('mobile tool result availability', () => {
     vi.restoreAllMocks()
   })
 
-  function render(row: NativeChatMessage, turnExpanded = true): ReactTestRenderer {
+  /** The row with its run opened by its header, its lines left closed. */
+  function render(row: NativeChatMessage, openRun = true): ReactTestRenderer {
     act(() => {
-      renderer = create(createElement(MobileNativeChatMessage, { message: row, turnExpanded }))
+      renderer = create(createElement(MobileNativeChatMessage, { message: row }))
     })
+    if (openRun) {
+      press(
+        renderer!.root.find(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+        )
+      )
+    }
     return renderer!
   }
 
-  it('counts every orphan and lets the reader reveal the seventh output and hide it again', () => {
+  // The page's window unmounts a row scrolled past; older messages joining its fold change its id.
+  it('keeps what the reader opened in a windowed-out row by its row key', () => {
+    const row = message([
+      { type: 'tool-call', callId: 'one', name: 'Bash', input: 'first input' },
+      { type: 'tool-result', callId: 'one', output: 'first output' },
+      { type: 'tool-call', callId: 'two', name: 'Bash', input: 'second input' },
+      { type: 'tool-result', callId: 'two', output: 'second output' }
+    ])
+    function Window({ shown, id }: { shown: boolean; id: string }) {
+      const disclosures = useMobileNativeChatDisclosures('chat')
+      return createElement(
+        MobileNativeChatDisclosureContext.Provider,
+        { value: disclosures },
+        shown
+          ? createElement(MobileNativeChatMessage, {
+              message: { ...row, id },
+              rowKey: 'kept'
+            })
+          : null
+      )
+    }
+    const draw = (shown: boolean, id = 'source') =>
+      act(() => {
+        const element = createElement(Window, { shown, id })
+        if (renderer) {
+          renderer.update(element)
+        } else {
+          renderer = create(element)
+        }
+      })
+    const header = () =>
+      renderer!.root.find(
+        (node) =>
+          String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+      )
+    draw(true)
+    press(header())
+    press(button(renderer!.root, 'first input'))
+    draw(false)
+    draw(true, 'older-head')
+    expect(toolLines(renderer!.root)).toHaveLength(2)
+    expect(textIn(renderer!.root)).toContain('first output')
+    expect(textIn(renderer!.root)).not.toContain('second output')
+  })
+
+  it('draws each orphan output as its own Result row under one Result header', () => {
     const raw = message(
       Array.from({ length: 8 }, (_, index) => ({
         type: 'tool-result' as const,
@@ -116,31 +184,20 @@ describe('mobile tool result availability', () => {
         output: `preview ${index}\ncomplete output ${index}`
       }))
     )
-    const [row] = foldMobileNativeChatMessages([raw])
+    const [row] = foldMobileNativeChatMessages([raw], 'claude')
     expect(row?.role).toBe('tool')
-    expect(foldMobileNativeChatMessages([row!])).toEqual([row])
+    expect(foldMobileNativeChatMessages([row!], 'claude')).toEqual([row])
     const tree = render(row!)
-    expect(textIn(tree.root)).toContain('8×')
-    expect(
-      tree.root.find(
-        (node) => String(node.type) === 'Text' && node.props.style === styles.toolRunLabel
-      ).props.children
-    ).toBe('Result')
-    expect(toolLines(tree.root)).toHaveLength(6)
-    expect(textIn(tree.root)).not.toContain('preview 6')
-
-    press(button(tree.root, 'Show more'))
+    expect(textIn(tree.root).filter((text) => text === 'Result')).toHaveLength(9)
     expect(toolLines(tree.root)).toHaveLength(8)
+    expect(textIn(tree.root)).not.toContain('preview 6\ncomplete output 6')
+
     press(button(tree.root, 'preview 6'))
     expect(textIn(tree.root)).toContain('preview 6\ncomplete output 6')
     expect(textIn(tree.root)).not.toContain('preview 7\ncomplete output 7')
-
-    press(button(tree.root, 'Show less'))
-    expect(toolLines(tree.root)).toHaveLength(6)
-    expect(textIn(tree.root)).not.toContain('preview 6\ncomplete output 6')
   })
 
-  it('reveals a named completion beyond silent calls without attaching it to the prefix', () => {
+  it('gives a named completion to its own call past silent calls, not to the first', () => {
     const calls: NativeChatMessage['blocks'] = Array.from({ length: 18 }, (_, index) => ({
       type: 'tool-call',
       callId: `call-${index}`,
@@ -151,48 +208,32 @@ describe('mobile tool result availability', () => {
       ...calls,
       { type: 'tool-result', callId: 'call-17', output: 'late named output' }
     ])
-    const [row] = foldMobileNativeChatMessages([raw])
-    const pairs = toolFold.pairToolBlocks(row!.blocks)
-    expect(pairs.slice(0, 17).every((pair) => pair.result === undefined)).toBe(true)
-    expect(pairs[17]?.result?.output).toBe('late named output')
+    const [row] = foldMobileNativeChatMessages([raw], 'claude')
     const tree = render(row!)
-    expect(toolLines(tree.root)).toHaveLength(6)
-    expect(textIn(tree.root)).not.toContain('late named output')
-
-    press(button(tree.root, 'Show more'))
-    expect(toolLines(tree.root)).toHaveLength(12)
-    press(button(tree.root, 'Show more'))
     expect(toolLines(tree.root)).toHaveLength(18)
+    expect(textIn(tree.root)).not.toContain('late named output')
     press(button(tree.root, 'command 17'))
     expect(textIn(tree.root)).toContain('late named output')
-    expect(textIn(tree.root)).not.toContain('command 0\nlate named output')
+    press(button(tree.root, 'command 17'))
+    // A call with no result has nothing to open.
+    expect(button(tree.root, 'command 0').props.disabled).toBe(true)
   })
 
-  it.each(['calls', 'results'] as const)(
-    'retains only the requested prefix and one reveal sentinel for 2,049 %s',
-    (kind) => {
-      const blocks: NativeChatMessage['blocks'] = Array.from({ length: 2049 }, (_, index) =>
-        kind === 'calls'
-          ? { type: 'tool-call', callId: `call-${index}`, name: 'Bash', input: `input ${index}` }
-          : { type: 'tool-result', callId: `missing-${index}`, output: `output ${index}` }
-      )
-      const pairing = vi.spyOn(toolFold, 'pairToolBlocks')
-      const tree = render(message(blocks), false)
-      expect(toolLines(tree.root)).toHaveLength(0)
-      expect(pairing).not.toHaveBeenCalled()
-      press(button(tree.root, '2049×'))
-      expect(toolLines(tree.root)).toHaveLength(6)
-      expect(pairing).toHaveBeenCalledTimes(1)
-      expect(pairing).toHaveBeenLastCalledWith(blocks, 7)
-      expect(pairing.mock.results[0]?.value).toHaveLength(7)
-      expect(textIn(tree.root)).toContain('2049×')
-      expect(button(tree.root, 'Show more').props.accessibilityRole).toBe('button')
-      press(button(tree.root, 'Show more'))
-      expect(pairing).toHaveBeenLastCalledWith(blocks, 13)
-      expect(pairing.mock.results[1]?.value).toHaveLength(13)
-      expect(toolLines(tree.root)).toHaveLength(12)
-    }
-  )
+  it('pairs nothing while its run is collapsed', () => {
+    const blocks: NativeChatMessage['blocks'] = Array.from({ length: 2049 }, (_, index) => ({
+      type: 'tool-call',
+      callId: `call-${index}`,
+      name: 'Bash',
+      input: { command: `input ${index}` }
+    }))
+    const pairing = vi.spyOn(toolFold, 'pairToolBlocks')
+    const tree = render(message(blocks), false)
+    expect(toolLines(tree.root)).toHaveLength(0)
+    expect(pairing).not.toHaveBeenCalled()
+    press(button(tree.root, 'Ran 2049 commands'))
+    expect(pairing).toHaveBeenCalled()
+    expect(toolLines(tree.root)).toHaveLength(2049)
+  })
 
   it.each([true, false])(
     'draws derived outputs ahead of a prompt queued while stopping (host scopes: %s)',
@@ -254,7 +295,7 @@ describe('mobile tool result availability', () => {
         const raw = projectStructuredItemsToNativeChat(journal).map((row) =>
           row.id === 'queued' ? { ...row, queued: true as const } : row
         )
-        const rows = foldMobileNativeChatMessages(raw)
+        const rows = foldMobileNativeChatMessages(raw, 'claude')
         const disclosure = useMobileNativeChatTurnDisclosure({
           messages: rows,
           enabled: true,
@@ -276,8 +317,7 @@ describe('mobile tool result availability', () => {
               key: row.id,
               message: row,
               ...disclosure.resolveRow(index, row),
-              structuredActivityUi: true,
-              toolsExpanded: true
+              structuredActivityUi: true
             })
           )
         )
@@ -286,6 +326,18 @@ describe('mobile tool result availability', () => {
         renderer = create(createElement(Phone, { journal: items }))
       })
       const tree = renderer!
+      // Open every run, then every line in it, as a reader would.
+      const headers = () =>
+        tree.root.findAll(
+          (node) =>
+            String(node.type) === 'Pressable' && node.props.accessibilityLiveRegion === 'polite'
+        )
+      for (let index = 0; index < headers().length; index += 1) {
+        press(headers()[index]!)
+      }
+      for (let index = 0; index < toolLines(tree.root).length; index += 1) {
+        press(toolLines(tree.root)[index]!)
+      }
       const orphan = drawn.find((row) => row.role === 'tool')!
       expect(orphan.id).not.toBe('source')
       expect(orphan.journalPosition).toEqual({ sequence: 5, index: 0 })
@@ -300,7 +352,7 @@ describe('mobile tool result availability', () => {
       expect(drawn.find((row) => row.role === 'tool')?.id).toBe(orphan.id)
       expect(waiting).toEqual(['queued'])
       expect(button(tree.root, 'output one')).toBe(firstOutput)
-      expect(foldMobileNativeChatMessages(drawn)).toEqual(drawn)
+      expect(foldMobileNativeChatMessages(drawn, 'claude')).toEqual(drawn)
     }
   )
 
@@ -322,9 +374,7 @@ describe('mobile tool result availability', () => {
       { type: 'tool-result', callId: 'duplicate', output: 'second output' },
       { type: 'tool-call', callId: 'later', name: 'Bash', input: 'later input' }
     ])
-    act(() =>
-      tree.update(createElement(MobileNativeChatMessage, { message: updated, turnExpanded: true }))
-    )
+    act(() => tree.update(createElement(MobileNativeChatMessage, { message: updated })))
     expect(button(tree.root, 'changed first input')).toBe(first)
     expect(button(tree.root, 'changed second input')).toBe(second)
     expect(textIn(tree.root)).toContain('first output')

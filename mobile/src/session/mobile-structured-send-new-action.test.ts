@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { fieldsOf } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 
 const storage = vi.hoisted(() => ({ getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: storage }))
@@ -80,7 +81,13 @@ describe('a new phone send after an acknowledgement was lost', () => {
         attachments: [],
         onError
       }
-      const send = () => sendMobileStructuredAgentSessionMessage({ ...message, client })
+      // Each Send makes its own id, as the session's send seam does.
+      const send = () =>
+        sendMobileStructuredAgentSessionMessage({
+          ...message,
+          client,
+          clientMessageId: structuredSessionOperationId()
+        })
 
       expect(await send()).toBe('unknown')
       if (relaunch) {

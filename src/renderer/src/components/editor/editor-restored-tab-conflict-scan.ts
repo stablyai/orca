@@ -10,8 +10,9 @@ import {
   requireRuntimeTargetForFileOwner
 } from '@/lib/file-owner-runtime-target'
 import { canAutoSaveOpenFile } from './editor-autosave'
-import { getDiskBaselineSignature } from './diff-content-signature'
+import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
+import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
 
 type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 
@@ -21,11 +22,45 @@ const VERIFY_SLOW_RETRY_MS = 15_000
 const VERIFY_FAST_ATTEMPTS = 30
 // Cap concurrent reads: many restored dirty tabs would otherwise fire N concurrent 15s RPCs competing with startup connection recovery.
 const MAX_CONCURRENT_VERIFY_READS = 3
+// Why: an unreachable host must not suspend autosave forever; give up with the conflict banner instead.
+export const MAX_VERIFY_ATTEMPTS = VERIFY_FAST_ATTEMPTS + 10
+
+// Why: a disk check requested while one is in flight must not be answered by the older read.
+// A global sequence, so dropping a closed tab's entry can't let a reopened tab's request reuse an old read's number.
+const verifyRequestGenerationByFileId = new Map<string, number>()
+let verifyRequestGenerationSeq = 0
+
+/** Asks for a fresh disk check of a tab; a read already in flight is followed by one more. */
+export function requestRestoredTabReverification(fileId: string): void {
+  verifyRequestGenerationSeq += 1
+  verifyRequestGenerationByFileId.set(fileId, verifyRequestGenerationSeq)
+}
+
+export function getRestoredTabReverificationRequestCountForTest(): number {
+  return verifyRequestGenerationByFileId.size
+}
+
+function forgetClosedTabReverificationRequests(openFiles: readonly OpenFile[]): void {
+  if (verifyRequestGenerationByFileId.size === 0) {
+    return
+  }
+  const openIds = new Set(openFiles.map((file) => file.id))
+  for (const fileId of verifyRequestGenerationByFileId.keys()) {
+    if (!openIds.has(fileId)) {
+      verifyRequestGenerationByFileId.delete(fileId)
+    }
+  }
+}
+
+function verifyRequestGeneration(fileId: string): number {
+  return verifyRequestGenerationByFileId.get(fileId) ?? 0
+}
 
 export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   // Dedupes queued + in-flight verifications; the store's pending flag is the durable "needs verification" signal.
   const inFlightFileIds = new Set<string>()
   const attemptsByFileId = new Map<string, number>()
+  const supersededReadsByFileId = new Map<string, number>()
   const retryTimers = new Set<ReturnType<typeof setTimeout>>()
   // Queue ids, not OpenFile snapshots: a snapshot can go stale (close/reopen or same-path save) while it waits for a slot.
   const verifyQueue: string[] = []
@@ -48,9 +83,32 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       file.worktreeId,
       file.runtimeEnvironmentId
     )
-    // Why `!owner`: with no single owner, a client stat cannot prove the file gone.
-    if (owner?.kind !== 'local') {
+    // Why `!owner`: with no single owner, nothing can prove the file gone.
+    if (!owner) {
       return false
+    }
+    if (owner.kind !== 'local') {
+      try {
+        const [row] = await runtimePathsExist(
+          {
+            target: owner,
+            worktreeId: file.worktreeId,
+            // Why: tabs keep their root implicitly as filePath minus relativePath.
+            worktreePath: file.filePath.slice(
+              0,
+              Math.max(0, file.filePath.length - file.relativePath.length - 1)
+            ),
+            connectionId: getFileConnectionId(file)
+          },
+          [file.filePath],
+          undefined,
+          // Why: only a per-path ENOENT on the owning host proves absence.
+          { codedAbsenceOnly: true }
+        )
+        return row !== undefined && 'exists' in row && !row.exists
+      } catch {
+        return false
+      }
     }
     try {
       const connectionId = getFileConnectionId(file)
@@ -67,9 +125,30 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     }
   }
 
+  // Why: a newer check was requested mid-read; this answer may predate it, so keep the flag and read once more.
+  const rereadIfSuperseded = (fileId: string, requestGeneration: number): boolean => {
+    if (verifyRequestGeneration(fileId) === requestGeneration) {
+      return false
+    }
+    // Why back off, not cap: a superseded answer may predate the newer check, so it never resolves; churn only delays the fresh read.
+    const superseded = (supersededReadsByFileId.get(fileId) ?? 0) + 1
+    supersededReadsByFileId.set(fileId, superseded)
+    const timer = setTimeout(
+      () => {
+        retryTimers.delete(timer)
+        inFlightFileIds.delete(fileId)
+        scan()
+      },
+      Math.min((superseded - 1) * VERIFY_RETRY_MS, VERIFY_SLOW_RETRY_MS)
+    )
+    retryTimers.add(timer)
+    return true
+  }
+
   const verify = async (file: OpenFile): Promise<void> => {
     // ids are file paths: a stray leftover marker would skip a reopened same-path tab, so only a scheduled retry keeps it set.
     let retryScheduled = false
+    const requestGeneration = verifyRequestGeneration(file.id)
     try {
       const state = store.getState()
       const result = await readRuntimeFileContent({
@@ -88,6 +167,12 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       if (!liveFile) {
         return
       }
+      if (rereadIfSuperseded(file.id, requestGeneration)) {
+        retryScheduled = true
+        return
+      }
+      attemptsByFileId.delete(file.id)
+      supersededReadsByFileId.delete(file.id)
       // Verification resolved: lift autosave suspension regardless of outcome; wasPending flags a save that already re-baselined.
       const wasPending = liveFile.pendingDiskBaselineVerification === true
       store.getState().clearPendingDiskBaselineVerification(file.id)
@@ -113,6 +198,10 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         if (disposed) {
           return
         }
+        if (rereadIfSuperseded(file.id, requestGeneration)) {
+          retryScheduled = true
+          return
+        }
         // Definitive not-found = resolved: no newer disk content for a save to clobber, so mark deleted instead of retrying forever.
         const liveFile = store.getState().openFiles.find((f) => f.id === file.id)
         if (!liveFile) {
@@ -130,6 +219,10 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       }
       const attempts = (attemptsByFileId.get(file.id) ?? 0) + 1
       attemptsByFileId.set(file.id, attempts)
+      if (attempts >= MAX_VERIFY_ATTEMPTS) {
+        giveUp(file)
+        return
+      }
       retryScheduled = true
       const timer = setTimeout(
         () => {
@@ -144,6 +237,23 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       if (!retryScheduled) {
         inFlightFileIds.delete(file.id)
       }
+    }
+  }
+
+  // Why: still unverifiable after every retry; resume nothing silently — the banner makes the user choose.
+  const giveUp = (file: OpenFile): void => {
+    attemptsByFileId.delete(file.id)
+    supersededReadsByFileId.delete(file.id)
+    const liveFile = store.getState().openFiles.find((f) => f.id === file.id)
+    if (!liveFile?.pendingDiskBaselineVerification) {
+      return
+    }
+    store.getState().clearPendingDiskBaselineVerification(file.id)
+    if (liveFile.isDirty && liveFile.externalMutation !== 'changed') {
+      markFileChangedOnDisk(store.getState(), liveFile, {
+        connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+        origin: 'restore'
+      })
     }
   }
 
@@ -201,6 +311,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       return
     }
     previousOpenFiles = nextOpenFiles
+    forgetClosedTabReverificationRequests(nextOpenFiles)
     scan()
   })
   scan()

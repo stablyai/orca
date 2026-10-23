@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
-import '../orca-runtime-test-mocks.spec'
 
 describe('terminal side-effect fact channel', () => {
   it('arms the stale-title timer for a seeded working title', async () => {
@@ -39,7 +39,7 @@ describe('terminal side-effect fact channel', () => {
           rawTitle: 'Codex',
           staleWorkingTitleClear: true
         },
-        { kind: 'agent-idle', title: 'Codex', staleWorkingTitleClear: true }
+        { kind: 'agent-idle', title: 'Codex', status: 'idle', staleWorkingTitleClear: true }
       ])
     } finally {
       vi.useRealTimers()
@@ -124,5 +124,79 @@ describe('terminal side-effect fact channel', () => {
       .leaves
     // The seed must not stomp the leaf record (worktree ps status source) back to the renderer's stale title.
     expect([...leaves.values()][0]?.lastOscTitle).toBe('⠋ Claude working')
+  })
+})
+
+describe('terminal output runtime re-entry', () => {
+  it('writes provenance into the current runtime output map', () => {
+    const runtime = new OrcaRuntimeService()
+    const replacement = new Map(runtime['recentPtyOutputById'])
+    runtime['recentPtyOutputById'] = replacement
+    runtime['recordRecentPtyOutputForPathProvenance']('pty-provenance', 'wrote artifact.txt\n')
+    expect(replacement.get('pty-provenance')?.read()).toBe('wrote artifact.txt\n')
+  })
+
+  it('uses a later title handler replacement with the runtime receiver', () => {
+    const runtime = new OrcaRuntimeService()
+    const ptyId = 'pty-reentry'
+    runtime['getOrCreatePtyTitleTrackerEntry'](ptyId)
+    const original = runtime['applyTrackedPtyTitle']
+    const receivers: OrcaRuntimeService[] = []
+    const titles: string[] = []
+    runtime['applyTrackedPtyTitle'] = function (
+      this: OrcaRuntimeService,
+      ...args: Parameters<typeof original>
+    ): boolean {
+      receivers.push(this)
+      titles.push(args[1])
+      return false
+    }
+    try {
+      runtime.ingestSyntheticTitleFrame(ptyId, '\x1b]0;Codex working\x07')
+      expect(receivers).toEqual([runtime])
+      expect(titles).toEqual(['Codex working'])
+    } finally {
+      runtime['applyTrackedPtyTitle'] = original
+      runtime.onPtyExit(ptyId, 0)
+    }
+  })
+
+  it('calls the current injected listener with the runtime receiver', () => {
+    const receivers: OrcaRuntimeService[] = []
+    const calls: string[] = []
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      onTerminalSideEffects: function (this: OrcaRuntimeService) {
+        receivers.push(this)
+        calls.push('initial')
+      }
+    })
+    runtime['setTerminalSideEffectConsumerAvailable'](true)
+    runtime['emitTerminalSideEffectBatch']('pty-reentry', [{ kind: 'bell' }])
+    Object.defineProperty(runtime, 'onTerminalSideEffects', {
+      value: function (this: OrcaRuntimeService) {
+        receivers.push(this)
+        calls.push('replacement')
+      }
+    })
+    runtime['emitTerminalSideEffectBatch']('pty-reentry', [{ kind: 'bell' }])
+    expect(receivers).toEqual([runtime, runtime])
+    expect(calls).toEqual(['initial', 'replacement'])
+  })
+
+  it('keeps optional reconciliation lazy after its callback is removed', () => {
+    const receivers: OrcaRuntimeService[] = []
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      reconcileAgentStatusForEndedProcess: function (this: OrcaRuntimeService) {
+        receivers.push(this)
+      }
+    })
+    const collectPaneKeys = vi.fn(() => new Set<string>())
+    runtime['collectAgentStatusPaneKeysForPty'] = collectPaneKeys
+    runtime['resetTrackedTerminalStateForProviderGeneration']('pty-reentry')
+    expect(receivers).toEqual([runtime])
+    expect(collectPaneKeys).toHaveBeenCalledOnce()
+    Object.defineProperty(runtime, 'reconcileAgentStatusForEndedProcessFn', { value: null })
+    runtime['resetTrackedTerminalStateForProviderGeneration']('pty-reentry')
+    expect(collectPaneKeys).toHaveBeenCalledOnce()
   })
 })

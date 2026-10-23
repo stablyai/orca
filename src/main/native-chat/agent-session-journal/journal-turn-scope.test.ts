@@ -163,9 +163,7 @@ describe('stated turn scope', () => {
     const expected = [agentJournalItemKey(row('result')), agentJournalSubmissionKey('held')]
     const onPhone = () => {
       const { items, submissions } = renderJournalState(state)
-      return projectStructuredAgentSessionMessages(items, [], submissions, {
-        rejectedInPlace: false
-      })
+      return projectStructuredAgentSessionMessages(items, [], submissions)
     }
     // Still waiting: drawn after everything the agent did, the command's result included.
     expect(drawn(onPhone())).toEqual(expected)

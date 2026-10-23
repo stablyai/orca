@@ -137,7 +137,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
 
   // Why: the daemon's kill-all-and-shutdown path suppresses onExit fanout (session.ts:246-252), so synthesize pty:exit
   // for every live session before teardown or renderer panes black-hole writes to a disposed adapter forever.
-  fanoutSyntheticExits(code: number): void {
+  fanoutSyntheticExits(code: number, exit: { replacedByRestart?: true } = {}): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.sessionsAwaitingDaemonRecovery.clear()
@@ -158,7 +158,11 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       // Why: don't catch listener throws — matches the natural onExit fanout so synthetic exits keep the same error semantics.
       emitPtyListeners(this.exitListeners, (listener) =>
         listener(
-          createPtyExitPayload(id, { code, incarnationId: this.sessionIncarnations.get(id) })
+          createPtyExitPayload(id, {
+            code,
+            incarnationId: this.sessionIncarnations.get(id),
+            ...exit
+          })
         )
       )
       this.sessionIncarnations.delete(id)

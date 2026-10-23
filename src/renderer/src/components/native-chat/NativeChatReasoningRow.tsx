@@ -40,7 +40,8 @@ export function NativeChatReasoningRow({
   allowFileUriLinks?: boolean
 }): React.JSX.Element | null {
   // Keyed like the live line, so a block opened while it streamed lands open, and windowing keeps it.
-  const disclosure = useNativeChatDisclosure(nativeChatReasoningDisclosureKey(message.id), false)
+  const disclosureKey = nativeChatReasoningDisclosureKey(message.id)
+  const disclosure = useNativeChatDisclosure(disclosureKey, false)
   if (!markdown.trim()) {
     return null
   }
@@ -66,6 +67,7 @@ export function NativeChatReasoningRow({
         </CollapsibleTrigger>
         <CollapsibleContent animation="height" data-native-chat-member-detail>
           <NativeChatReasoningBody
+            rowKey={disclosureKey}
             markdown={markdown}
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}

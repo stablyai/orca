@@ -28,6 +28,10 @@ export const ptyStreamAndSerializationApi = {
     id: string,
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ): Promise<boolean> => ipcRenderer.invoke('pty:openedBeforeClaudeAccounts', { id, target }),
+  claudeDiffPanelMayAutoOpen: (
+    id: string,
+    target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
+  ): Promise<boolean> => ipcRenderer.invoke('pty:claudeDiffPanelMayAutoOpen', { id, target }),
   readNewerDaemonHeldScreen: (sessionId: string): Promise<NewerDaemonHeldScreen | null> =>
     ipcRenderer.invoke('pty:readNewerDaemonHeldScreen', { sessionId }),
   reopenNewerDaemonTerminals: (): Promise<NewerDaemonReopenResult> =>
@@ -163,6 +167,7 @@ export const ptyStreamAndSerializationApi = {
   reportRendererSerializerReady: (ptyId: string): Promise<void> =>
     ipcRenderer.invoke('pty:reportRendererSerializerReady', { ptyId }),
   management: {
+    asyncIoHealth: () => ipcRenderer.invoke('pty:management:asyncIoHealth'),
     listSessions: () => ipcRenderer.invoke('pty:management:listSessions'),
     killAll: () => ipcRenderer.invoke('pty:management:killAll'),
     killOne: (args: { sessionId: string }) => ipcRenderer.invoke('pty:management:killOne', args),

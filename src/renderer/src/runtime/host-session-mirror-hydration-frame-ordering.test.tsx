@@ -60,7 +60,7 @@ import {
   WT
 } from './host-session-mirror-frame-fixtures'
 import {
-  expectReplayedResume,
+  expectHostOwnedRecordNotResumed,
   findSubscription,
   installFrameOrderingHarness,
   publish,
@@ -289,19 +289,8 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
       snapshots: [makeHostSnapshot(WT, HOST_SURFACE_ID, 'host-tab-1')]
     })
 
-    // The background mirror tab was retracted by the inventory, so recovery is
-    // finally justified: the record is consumed INTO a replacement tab that
-    // claims the session. Asserting only the record would pass for a replay
-    // that cleared it and launched nothing.
-    const replayed = useAppStore.getState()
-    expect(replayed.sleepingAgentSessionsByPaneKey[backgroundPaneKey]).toBeUndefined()
-    const backgroundTabIds = tabIds(BG_WT)
-    expect(backgroundTabIds).toHaveLength(1)
-    expect(backgroundTabIds[0]).not.toBe(BG_MIRROR_TAB_ID)
-    expect(replayed.automaticAgentResumeClaimsByTabId[backgroundTabIds[0]!]).toMatchObject({
-      launchAgent: 'codex',
-      providerSession: { key: 'session_id', id: 'codex-session-bg-1' }
-    })
+    expect(tabIds(BG_WT)).toEqual([BG_MIRROR_TAB_ID])
+    expectHostOwnedRecordNotResumed(backgroundPaneKey, BG_WT, 'codex-session-bg-1')
   })
 
   // The three tests below pin the remaining release sites one frame at a time:
@@ -321,8 +310,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-listall-release')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // The inventory retracts the mirror tab, so the host HAS spoken: this pane
-    // is gone and the resume it parked is finally justified.
+    // A settled inventory can retract a closed tab without authorizing another resume.
     await act(async () => {
       resolveListAll({
         id: 'listall',
@@ -336,7 +324,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     })
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-listall-release')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-listall-release')
   })
 
   it('a single frame on the global stream releases the pane it parked', async () => {
@@ -351,7 +339,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     })
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-global-frame')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-global-frame')
   })
 
   it('the active-worktree scoped frame releases the pane it parked', async () => {
@@ -366,7 +354,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     })
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-scoped-frame')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-scoped-frame')
   })
 
   it('does not let a scoped frame from before tracking reset release its pane', async () => {
@@ -454,7 +442,7 @@ describe('mirror latch verdicts against real stream failures', () => {
 
     expect(mocks.createTerminal).toHaveBeenCalled()
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-spawn-reject')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-spawn-reject')
   })
 
   it('a rejection before the patch settles nothing', async () => {
@@ -506,7 +494,7 @@ describe('a parked wake replay keeps the mount contract of its caller', () => {
   beforeEach(takeAllPendingBackgroundTerminalWorktreeMounts)
   afterEach(takeAllPendingBackgroundTerminalWorktreeMounts)
 
-  it('background-mounts the resume tab a parked sweep replayed', async () => {
+  it('does not resume or mount a retracted host tab after a phone opens the workspace', async () => {
     renderHook(() => useWebSessionTabsSync())
     await act(settle)
     const paneKey = seedSleepingRecord(BG_MIRROR_TAB_ID, BG_WT, 'codex-session-parked-wake')
@@ -522,11 +510,9 @@ describe('a parked wake replay keeps the mount contract of its caller', () => {
       snapshots: [makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)]
     })
 
-    expectReplayedResume(paneKey, BG_WT, 'codex-session-parked-wake')
-    const launchedTabId = Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)[0]!
-    // Why: the replayed tab is created activate:false, so nothing else mounts it
-    // and its queued `--resume` never reaches a PTY.
-    expect(takePendingBackgroundTerminalWorktreeMount(BG_WT)?.tabIds).toEqual([launchedTabId])
+    expectHostOwnedRecordNotResumed(paneKey, BG_WT, 'codex-session-parked-wake')
+    expect(tabIds(BG_WT)).toEqual([BG_MIRROR_TAB_ID])
+    expect(takePendingBackgroundTerminalWorktreeMount(BG_WT)).toBeNull()
   })
 })
 
@@ -576,6 +562,6 @@ describe('an inventory whose post-patch bookkeeping throws', () => {
       ENV
     )
     expect(tabIds(BG_WT)).not.toContain(BG_MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, BG_WT, 'codex-session-bookkeeping-throw')
+    expectHostOwnedRecordNotResumed(paneKey, BG_WT, 'codex-session-bookkeeping-throw')
   })
 })

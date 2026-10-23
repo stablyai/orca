@@ -10,6 +10,7 @@ import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
 import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,
@@ -139,11 +140,12 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     store.getAllWorktreeMeta,
     store.captureNativeLocalWorktreeMetadataScanExpectation,
     store.setWorktreeMeta,
-    store.setWorktreeMetaForHost,
     store.getProjectHostSetups,
     store.removeWorktreeMeta,
     store.pruneSessionlessMissingLocalWorktreeMetadataForRepo,
     store.removeWorkspaceSessionStateForWorktree,
+    store.getWorkspaceSessionHostIds,
+    store.getWorkspaceSession,
     store.getAllWorktreeLineage,
     store.removeWorktreeLineage,
     store.getAllWorkspaceLineage,
@@ -207,9 +209,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
   resetRetirementCollisionKeyCacheForTests()
   store.setWorktreeMeta.mockReturnValue({})
-  store.setWorktreeMetaForHost.mockImplementation((...args: unknown[]) =>
-    store.setWorktreeMeta(args[0] as string, args[2] as object)
-  )
   store.getProjectHostSetups.mockReturnValue([
     {
       id: 'repo-1',
@@ -224,6 +223,8 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
       updatedAt: 0
     }
   ])
+  store.getWorkspaceSessionHostIds.mockReturnValue(['local'])
+  store.getWorkspaceSession.mockReturnValue(getDefaultWorkspaceSession())
   store.getAllWorktreeLineage.mockReturnValue({})
   store.getAllWorkspaceLineage.mockReturnValue({})
   store.getFolderWorkspaces.mockReturnValue([])

@@ -49,6 +49,7 @@ export type PRCheckJob = {
   completedAt: string | null
   url: string | null
   logTail: string | null
+  logState?: 'available' | 'empty' | 'error' | 'not_requested'
   steps: PRCheckStep[]
 }
 

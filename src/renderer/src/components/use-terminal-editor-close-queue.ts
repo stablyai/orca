@@ -1,9 +1,9 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../store'
+import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { isPinnedActiveEditorTab } from './terminal-workspace-model'
-import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
-import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
+import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import type { TerminalEditorCloseFoundation } from './use-terminal-editor-close-foundation'
 
 export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFoundation) {
@@ -16,7 +16,6 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     proceedToNativeWindowClose,
     setActiveFile,
     setActiveTabType,
-    setActiveWorktree,
     setSaveDialogFileId,
     windowCloseAfterDirtyRef
   } = controller
@@ -61,12 +60,12 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (inFlightSaveFileIdRef.current === fileId) {
         return null
       }
-      const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
-      if (!file) {
+      const state = useAppStore.getState()
+      if (!state.openFiles.some((candidate) => candidate.id === fileId)) {
         settleQueuedClose(fileId)
         continue
       }
-      if (!file.isDirty) {
+      if (!needsSavePromptOnClose(state, fileId)) {
         closeFile(fileId)
         settleQueuedClose(fileId)
         continue
@@ -82,12 +81,8 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     if (nextFileId) {
       const state = useAppStore.getState()
       const file = state.openFiles.find((candidate) => candidate.id === nextFileId)
-      // Why: the prompt names the file, so show it where it lives. The floating panel is never the
-      // active worktree; activating it would take the main window over.
-      if (file && isFloatingWorkspaceId(file.worktreeId)) {
-        revealFloatingWorkspacePanel(state)
-      } else if (file && file.worktreeId !== state.activeWorktreeId) {
-        setActiveWorktree(file.worktreeId)
+      if (file && file.worktreeId !== state.activeWorktreeId) {
+        selectWorkspaceSurface(state, file.worktreeId)
       }
       setActiveFile(nextFileId)
       setActiveTabType('editor', file?.worktreeId ?? state.activeWorktreeId)
@@ -101,13 +96,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       proceedToNativeWindowClose(pendingWindowClose.isQuitting)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [
-    getNextQueuedEditorClose,
-    proceedToNativeWindowClose,
-    setActiveFile,
-    setActiveTabType,
-    setActiveWorktree
-  ])
+  }, [getNextQueuedEditorClose, proceedToNativeWindowClose, setActiveFile, setActiveTabType])
 
   const queueEditorCloseRequests = useCallback(
     (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
@@ -131,8 +120,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
       if (activeWorktreeId && isPinnedActiveEditorTab(state, activeWorktreeId, fileId)) {
         return
       }
-      const file = state.openFiles.find((candidate) => candidate.id === fileId)
-      if (file?.isDirty) {
+      if (needsSavePromptOnClose(state, fileId)) {
         queueEditorCloseRequests([fileId])
         return
       }

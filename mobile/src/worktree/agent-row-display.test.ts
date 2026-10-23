@@ -7,6 +7,9 @@ import {
 import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../../src/shared/agent-status-freshness'
+import {
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
@@ -144,6 +147,18 @@ describe('agentDotState', () => {
     expect(
       agentDotState(row({ state: 'done', updatedAt: 0, ...mainAgentDone('interruption') }), stale)
     ).toBe('failed')
+  })
+
+  // The host advances updatedAt for a newer neutral title but keeps the evidence's own time.
+  it('ages a status by its evidence, not by a later title renewal, as desktop does', () => {
+    const now = 100 * 60 * 1000
+    const renewed = {
+      state: 'blocked' as const,
+      updatedAt: now,
+      evidenceObservedAt: now - 31 * 60 * 1000
+    }
+    expect(isAgentStatusFresh(renewed, now)).toBe(false)
+    expect(agentDotState(renewed, now)).toBe('idle')
   })
 })
 

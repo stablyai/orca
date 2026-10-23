@@ -1,10 +1,13 @@
 import { translate } from '@/i18n/i18n'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { getOwnerNotSetUpLabel, getOwnerNotSetUpNote } from './owner-not-set-up-copy'
 import { getProviderUsageStatusLabel } from './usage-error-copy'
 
 export type UsageRosterRowState = {
   kind: 'usage' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'
   statusLabel: string | null
+  /** A second line under the row, for context the label cannot fit. */
+  detail?: string | null
 }
 
 const CONFIRMED_SIGN_OUT_PATTERNS = [
@@ -36,6 +39,14 @@ export function getUsageRosterRowState(
 ): UsageRosterRowState {
   if (hasUsage) {
     return { kind: 'usage', statusLabel: null }
+  }
+  const placeholder = provider.usageMetadata?.ownerNotSetUp
+  if (placeholder) {
+    return {
+      kind: 'unavailable',
+      statusLabel: getOwnerNotSetUpLabel(placeholder),
+      detail: getOwnerNotSetUpNote(placeholder)
+    }
   }
   if (provider.status === 'idle' || provider.status === 'fetching') {
     return {

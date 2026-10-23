@@ -1,5 +1,5 @@
 import type { AppState } from '@/store'
-import type { SplitTerminalPaneDetail } from '@/constants/terminal'
+import type { SetTerminalPaneTitleDetail, SplitTerminalPaneDetail } from '@/constants/terminal'
 import type {
   TerminalLeafIntoTabRequest,
   TerminalLeafIntoTabResult
@@ -28,6 +28,7 @@ export type TerminalTabIntoPaneDeps = {
   mountedLeafIds: (tabId: string) => string[] | null
   dispatchSplit: (detail: SplitTerminalPaneDetail) => void
   dispatchToggleExpand: (tabId: string) => void
+  dispatchPaneTitle: (detail: SetTerminalPaneTitleDetail) => void
   scheduleGraphSync: () => void
   resyncParkedWatchers: (worktreeId: string, targetTabId: string) => void
   /** Main's current session, for settling an IPC call whose answer never arrived. */

@@ -364,7 +364,7 @@ describe('a restart between a Stop and its turn end', () => {
       return new Promise<never>(() => undefined)
     })
     void rig.stop()
-    await expect.poll(() => journal().activeTurnId()).toBe(TURN)
+    await expect.poll(() => journal().runningTurn()?.turnId ?? null).toBe(TURN)
     expect(journal().stopMarks.latest()?.event.turnId).toBeUndefined()
 
     await restartAndSettle('exit-observed')

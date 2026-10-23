@@ -15,6 +15,7 @@ import {
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
+  UI_LANGUAGE_PORTUGUESE,
   UI_LANGUAGE_SPANISH
 } from '../../shared/ui-language'
 import {
@@ -55,6 +56,9 @@ describe('main-i18n lazy locale loading', () => {
     expect(translateMain('menu.file', 'File')).not.toBe('File')
 
     await setMainUiLanguage(UI_LANGUAGE_CHINESE)
+    expect(translateMain('menu.file', 'File')).not.toBe('File')
+
+    await setMainUiLanguage(UI_LANGUAGE_PORTUGUESE)
     expect(translateMain('menu.file', 'File')).not.toBe('File')
   })
 

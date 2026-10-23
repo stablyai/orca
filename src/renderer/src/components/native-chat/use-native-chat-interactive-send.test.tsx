@@ -33,8 +33,7 @@ vi.mock('../../store', () => ({
 }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args),
-  sendRuntimePtyInputVerified: (...args: unknown[]) => mocks.sendRuntimePtyInputVerified(...args)
+  sendRuntimePtyInput: (...args: unknown[]) => mocks.sendRuntimePtyInput(...args)
 }))
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: (...args: unknown[]) => mocks.sendRuntimePtyInputVerified(...args)
@@ -63,6 +62,23 @@ describe('useNativeChatInteractiveSend', () => {
     const handle = { cancel: mocks.cancel, settleAfterMs: 500 }
     mocks.sendNativeChatAskAnswer.mockReturnValue(handle)
     mocks.sendNativeChatMessage.mockReturnValue(handle)
+  })
+
+  it('refuses OMP question answers and cancellation without writing or clearing the wait', async () => {
+    const { result } = renderHook(() => useNativeChatInteractiveSend(PANE_KEY, 'pty-1', 'omp'))
+    const settled = vi.fn()
+    act(() => {
+      expect(result.current.sendAnswer(PROMPT, [{ indices: [1] }], settled)).toEqual({
+        settleAfterMs: 0
+      })
+    })
+    expect(settled).toHaveBeenCalledWith(false)
+    await expect(result.current.cancelAsk()).resolves.toBe(false)
+    expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
   })
 
   it('routes a non-selector answer through the pasted-text send path', () => {

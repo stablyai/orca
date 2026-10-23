@@ -38,6 +38,8 @@ export XDG_CONFIG_HOME="$state_dir/config"
 export XDG_CACHE_HOME="$state_dir/cache"
 export XDG_RUNTIME_DIR="$state_dir/runtime"
 export LIBGL_ALWAYS_SOFTWARE=1
+# Every entrypoint must serve the profile the caller chose, not the default one.
+export ORCA_USER_DATA_PATH="$state_dir/profile"
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
@@ -78,6 +80,12 @@ fi
 if [[ -z "$ready_line" ]]; then
   cat "$stdout_log" "$stderr_log" >&2
   echo "FAIL: entrypoint exited or timed out before orca_server_ready" >&2
+  exit 1
+fi
+
+if [[ ! -f "$ORCA_USER_DATA_PATH/orca-runtime.json" || -e "$XDG_CONFIG_HOME/orca/orca-runtime.json" ]]; then
+  ls -la "$ORCA_USER_DATA_PATH" "$XDG_CONFIG_HOME" >&2 || true
+  echo "FAIL: serve ignored ORCA_USER_DATA_PATH; its runtime metadata is not in $ORCA_USER_DATA_PATH" >&2
   exit 1
 fi
 

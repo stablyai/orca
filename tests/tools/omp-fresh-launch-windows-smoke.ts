@@ -33,13 +33,12 @@ try {
         delete env.ORCA_OMP_FRESH_CONFIG
       }
       const command = withFreshOmpLaunch('omp', shell, ' "task with spaces"')
-      const runner = join(root, 'run.cmd')
-      writeFileSync(runner, `@echo off\r\n${command}\r\n`)
+      // Typed like a pane: a batch file would need the guard's `%!` written as `%%!`.
       const result = await runProcess({
-        program: shell === 'cmd' ? runner : 'powershell.exe',
+        program: shell === 'cmd' ? 'cmd.exe' : 'powershell.exe',
         args:
           shell === 'cmd'
-            ? []
+            ? ['/d']
             : [
                 '-NoProfile',
                 '-NonInteractive',
@@ -48,6 +47,7 @@ try {
                   command
                 }; exit $global:LASTEXITCODE`
               ],
+        input: shell === 'cmd' ? `${command}\r\nexit %errorlevel%\r\n` : undefined,
         cwd: root,
         env
       })

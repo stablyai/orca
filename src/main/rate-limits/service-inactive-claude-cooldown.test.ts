@@ -33,16 +33,7 @@ const fixture = vi.hoisted((): CooldownFixture => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => fixture.userData },
-  session: { defaultSession: {} },
-  net: {
-    fetch: (url: string, options: RequestInit) => {
-      if (url !== 'https://api.anthropic.com/api/oauth/usage') {
-        throw new Error('Unexpected endpoint in local usage fixture')
-      }
-      return globalThis.fetch(fixture.origin, options)
-    }
-  }
+  app: { getPath: () => fixture.userData }
 }))
 
 vi.mock('../network/proxy-settings', () => ({
@@ -163,6 +154,17 @@ vi.mock('./antigravity-usage-fetcher', () => ({
 import { RateLimitService } from './service'
 import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { setMainHttpClient } from '../network/http-client'
+
+setMainHttpClient({
+  fetch: (url, options) => {
+    if (url !== 'https://api.anthropic.com/api/oauth/usage') {
+      throw new Error('Unexpected endpoint in local usage fixture')
+    }
+    return globalThis.fetch(fixture.origin, options)
+  },
+  proxySession: () => null
+})
 
 let activeId = 'A'
 let inactiveIds = ['A', 'B']

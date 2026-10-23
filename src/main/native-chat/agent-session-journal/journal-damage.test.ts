@@ -206,8 +206,8 @@ describe('a row the reader would reject', () => {
 
     await expect(
       journal.replaceEpochItems('legacy_import', 1, [
-        { identity: item(5), body: body('replacement') },
-        { identity: item(6), body: blankCallId }
+        { identity: item(5), body: body('replacement'), ownerFence: 1 },
+        { identity: item(6), body: blankCallId, ownerFence: 1 }
       ])
     ).rejects.toMatchObject({ code: 'journal_row_rejected' })
 

@@ -2,6 +2,7 @@
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -93,12 +94,15 @@ export type RpcContext = {
   connectionId?: string
   // An unsubscribe cannot retire a registration created after its dispatch began.
   subscriptionRegistrationVersion?: number
+  structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
   // Why: shared-control multiplexes many logical streams over one socket; the frame id lets handlers register cleanup per logical stream.
   requestId?: string
   // Why: paired mobile device token; state-owning handlers use it to clean up when that device disconnects.
   clientId?: string
   // Why: navigation is keyed by revocable device identity, never by the bearer credential or transient socket id.
   pairedDeviceId?: string
+  // Why: a delegated phone's desktop device; its workspaces are that desktop's, not this host's.
+  pairedDeviceParentId?: string
   // Why: host-assigned from the transport (rpc-caller-identity.ts); absent when the transport could not name its caller.
   caller?: RpcCallerIdentity
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).

@@ -6,7 +6,7 @@ import {
 } from './persistence/loading-store/profile-state-maintenance-fixture'
 import { Store } from './persistence/loading-store/store'
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))

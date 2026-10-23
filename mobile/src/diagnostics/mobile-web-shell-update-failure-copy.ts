@@ -41,7 +41,9 @@ const WALL_COPY: Record<MobileWebShellUpdateFailureWall, string> = {
   'bundle-unavailable': 'the host has no workspace bundle',
   'bundle-shell-too-old': 'this app is too old for the saved bundle',
   'host-too-old-for-bundle': 'the host is too old for the saved bundle',
-  'bundle-too-old-for-host': 'the saved bundle is too old for the host'
+  'bundle-too-old-for-host': 'the saved bundle is too old for the host',
+  'page-route-unlisted': "the host's workspace does not include this screen",
+  'page-route-grant-missing': 'this screen needs a newer app'
 }
 
 function generation(buildId: string): string {
@@ -61,6 +63,8 @@ function outcomeCopy(failure: MobileWebShellUpdateFailure): string {
         : `Blocked: ${WALL_COPY[failure.wall]}.`
     case 'native-route':
       return 'Showed the native screen.'
+    case 'route-unavailable':
+      return 'Showed that the screen is not available.'
     case 'failed':
       return 'Showed the failure screen.'
     case 'waiting':

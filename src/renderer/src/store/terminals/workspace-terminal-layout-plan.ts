@@ -5,8 +5,8 @@ import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
-import { resolveTerminalLayoutPtyOwnershipTransfers } from '@/components/terminal-pane/terminal-layout-pty-ownership'
-import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
+import { resolveTerminalLayoutPtyOwnershipTransfers } from '../../../../shared/terminal-layout-pty-ownership'
+import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/terminal-pane-title-sanitization'
 import type { TerminalLayoutPtyOwnershipTransfer } from './workspace-terminal-hydration-patch'
 
 export function buildWorkspaceTerminalLayoutPlan({

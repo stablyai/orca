@@ -1,7 +1,9 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
 import {
   ORCAD_CANCEL_MANAGED_STOP_FLAG,
   OrcadManagedStopCancellationSchema,
@@ -18,11 +20,29 @@ import { completeOrcadManagedStop } from './orcad-managed-stop-completion'
 import { runOrcadManagedStopCancelCommand } from './orcad-managed-stop-command'
 import { installOrcadStopRequestListeners } from './orcad-stop-request-listener'
 
+const hardening = vi.hoisted(() => ({ pending: new Set<Promise<void>>() }))
+
+vi.mock('../../shared/secure-path-windows-acl', async (importOriginal) => {
+  const acl = await importOriginal<typeof WindowsAcl>()
+  return {
+    ...acl,
+    restrictWindowsDirectory: (dirPath: string): Promise<boolean> => {
+      const restricted = acl.restrictWindowsDirectory(dirPath)
+      const pending = restricted.then(() => undefined)
+      hardening.pending.add(pending)
+      void pending.then(() => hardening.pending.delete(pending))
+      return restricted
+    }
+  }
+})
+
 const roots: string[] = []
-afterEach(() => {
+afterEach(async () => {
+  // ACL updates must finish before their temporary directories disappear.
+  await Promise.all(hardening.pending)
   vi.restoreAllMocks()
   for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
+    await rm(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 })
   }
 })
 

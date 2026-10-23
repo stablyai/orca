@@ -11,6 +11,7 @@ import {
 } from '../../shared/orcad-local-serve-selection'
 import { selectServeRuntime } from './orcad-local-serve-selection'
 import { pruneDesktopOrcadArtifactCache } from './orcad-artifact-cache-retention'
+import { findAppImageNodeRuntime } from '../node-runtime/appimage-bundled-node-runtime'
 
 function flagValue(argv: readonly string[], flag: string): string | null {
   const index = argv.indexOf(flag)
@@ -30,7 +31,8 @@ async function run(argv: readonly string[]): Promise<void> {
     templateDirs: [
       ...(process.resourcesPath ? [join(process.resourcesPath, 'orcad-template')] : []),
       join(appRoot, 'out', 'orcad-template')
-    ]
+    ],
+    bundledNodeRuntime: findAppImageNodeRuntime(process.resourcesPath)
   })
   // orcad serve never starts the desktop's startup pass, so the slot cache is bounded here too.
   await pruneDesktopOrcadArtifactCache(

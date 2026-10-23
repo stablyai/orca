@@ -16,7 +16,7 @@ const dependencyExports: [string, string[]][] = [
     '../runtime/structured-agent-session-runtime-teardown',
     ['setStructuredAgentSessionTeardownTrigger']
   ],
-  ['../runtime/orca-runtime-files', ['awaitRuntimeFileWatcherUnsubscribes']],
+  ['../runtime/files/watch/file-watcher-leases', ['awaitRuntimeFileWatcherUnsubscribes']],
   ['../runtime/runtime-metadata', ['clearRuntimeMetadataIfOwned']],
   [
     '../browser/paired-runtime-browser-client-host-runtime',

@@ -2,7 +2,7 @@
  * Which execution host a worktree create runs on.
  *
  * Two entry points create the same workspace and disagreed about how to read its host. The runtime
- * path resolved (`orca-runtime-create-managed-worktree.ts`) and then normalized the row; the IPC
+ * path resolved (`workspaces/workspace-creation.ts`) and then normalized the row; the IPC
  * handler branched on raw `repo.connectionId`, so a row naming its owner only as
  * `executionHostId: 'ssh:<target>'` ran `git worktree add` on the client against a remote path
  * (#11163). Same repo, two entry points, two answers.

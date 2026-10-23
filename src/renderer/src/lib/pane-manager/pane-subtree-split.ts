@@ -10,6 +10,7 @@ import { splitManagedPane } from './pane-split-close'
 export type SplitPaneAroundLeafIdsOptions = {
   ratio?: number
   cwd?: string
+  cwdPromise?: Promise<string>
   leafId?: string
   ptyId?: string
   placement?: 'before' | 'after'

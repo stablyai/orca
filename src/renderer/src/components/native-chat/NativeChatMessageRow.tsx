@@ -10,6 +10,7 @@ import type {
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { nativeChatNoticeBlock } from '../../../../shared/native-chat-notice'
 import { nativeChatBlocksInOwnWords } from './native-chat-stopped-before-start-row'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
@@ -114,17 +115,13 @@ export const MessageRow = memo(function MessageRow(
     return null
   }
 
-  const notice = isSystem
-    ? blocks.find(
-        (block) =>
-          block.type === 'text' && (block.presentation !== undefined || block.tone !== undefined)
-      )
-    : undefined
-  if (notice?.type === 'text') {
+  const notice = isSystem ? nativeChatNoticeBlock(blocks) : undefined
+  if (notice) {
     return (
       <div ref={rowRef}>
         <NativeChatNoticeRow
           block={notice}
+          messageId={message.id}
           agentName={agentName}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}

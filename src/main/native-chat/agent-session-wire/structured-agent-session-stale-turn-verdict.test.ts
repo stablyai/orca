@@ -17,6 +17,7 @@ import {
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import { plannedBatchThrough } from './structured-agent-session-settlement-double.test-fixture'
 import {
   runningTurnLifecycleRevisions,
   turnVerdictFromDeathEvidence,
@@ -314,7 +315,8 @@ describe('stale session state on a cold acquire', () => {
       lastProviderActivityAt: () => undefined,
       stopMarks: { latest: () => null },
       cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
-      appendLifecycleBatch
+      submissions: () => [],
+      appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
     } as unknown as AgentSessionJournal
     return { journal, appendLifecycleBatch }
   }
@@ -339,6 +341,7 @@ describe('stale session state on a cold acquire', () => {
       settlementId: 'stale-session:session-1:14:generation-2',
       fence: 14,
       recovered: true,
+      dispatches: [],
       mutations: [
         {
           kind: 'item',
@@ -369,6 +372,7 @@ describe('stale session state on a cold acquire', () => {
       settlementId: 'stale-session:session-1:14:generation-2',
       fence: 14,
       recovered: true,
+      dispatches: [],
       mutations: [
         {
           kind: 'item',

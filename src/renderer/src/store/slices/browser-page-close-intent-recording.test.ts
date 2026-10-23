@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
@@ -17,6 +18,11 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+mocks.callRuntimeRpc.mockImplementation((_target: unknown, method: string, params: unknown) =>
+  method === 'layout.apply' ? layoutApplyTestTransport.call(params) : undefined
+)
 
 const WORKTREE_ID = 'repo1::/path/wt1'
 const DOC_LOCATION = {

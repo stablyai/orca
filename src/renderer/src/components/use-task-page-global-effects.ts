@@ -1,6 +1,7 @@
-import type { TaskPageJiraIssueCreationModel } from './use-task-page-jira-issue-creation'
+import type { TaskPageJiraSummaryGenerationModel } from './use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
-export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) {
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
   const {
     closeTaskPage,
     activeModal,
@@ -72,13 +73,8 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
       event.preventDefault()
       closeTaskPage()
     }
-    window.addEventListener('keydown', onKeyDown, {
-      capture: true
-    })
-    return () =>
-      window.removeEventListener('keydown', onKeyDown, {
-        capture: true
-      })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [
     activeModal,
     closeTaskPage,

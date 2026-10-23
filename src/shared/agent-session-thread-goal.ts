@@ -75,17 +75,17 @@ export function currentAgentSessionThreadGoal(
   return undefined
 }
 
-/** The same answer for items a caller holds unordered, such as the host's own map. */
-export function currentAgentSessionThreadGoalBySequence(
-  items: Iterable<GoalCandidate>
-): AgentJournalThreadGoal | null | undefined {
-  let latest: GoalCandidate | null = null
+/** The same answer and its source for items a caller holds unordered, such as the host's map. */
+export function currentAgentSessionThreadGoalSourceBySequence<T extends GoalCandidate>(
+  items: Iterable<T>
+): { item: T; goal: AgentJournalThreadGoal | null } | undefined {
+  let latest: T | null = null
   for (const item of items) {
     if (isGoalTransition(item) && (latest === null || item.sequence > latest.sequence)) {
       latest = item
     }
   }
-  return latest === null ? undefined : goalFromRow(latest.body)
+  return latest === null ? undefined : { item: latest, goal: goalFromRow(latest.body) }
 }
 
 /** Goal statuses that still describe work in progress, so readers keep them in view. */

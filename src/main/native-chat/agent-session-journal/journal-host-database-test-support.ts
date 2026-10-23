@@ -15,7 +15,6 @@ import {
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
-import { openAgentSessionJournal } from './journal-store-factory'
 
 const opened = new Map<string, JournalHostDatabase>()
 
@@ -61,6 +60,7 @@ export function createTrackedJournalOpener(): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
   return {
     open: async ({ stateDirectory, ...options }) => {
+      const { openAgentSessionJournal } = await import('./journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
         database: openTestJournalHostDatabase(stateDirectory)

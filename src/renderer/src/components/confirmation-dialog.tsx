@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Dialog,
@@ -35,6 +36,7 @@ export function ConfirmationDialogProvider({
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
   const setContextualToursBlockingSurfaceVisible = useAppStore(
@@ -48,6 +50,16 @@ export function ConfirmationDialogProvider({
   // Why: Radix keeps dialog content mounted while closing; keep labels stable without a post-render Effect.
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
   const Icon = displayedRequest?.options.icon
+  const compact = displayedRequest?.options.compact === true
+  const buttonSize = compact ? 'sm' : 'default'
+  const guarded = displayedRequest?.options.ignoresOpeningGesture === true
+  // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
+  const ignoreRepeatedKey = (event: React.KeyboardEvent): void => {
+    if (guarded && event.repeat) {
+      event.preventDefault()
+    }
+  }
+  const isFreshClick = (event: React.MouseEvent): boolean => !guarded || event.detail <= 1
 
   useEffect(() => {
     // Why: this provider's dialog is not represented by activeModal. Block
@@ -58,12 +70,31 @@ export function ConfirmationDialogProvider({
 
   const confirm = useCallback<ConfirmationDialogContextValue>((options) => {
     return new Promise((resolve) => {
+      const { signal } = options
+      if (signal?.aborted) {
+        resolve(false)
+        return
+      }
       const request: ConfirmationDialogRequest = {
         id: nextIdRef.current,
         options,
         resolve
       }
       nextIdRef.current += 1
+      signal?.addEventListener(
+        'abort',
+        () => {
+          if (activeRequestRef.current?.id === request.id) {
+            setDontAskAgain(false)
+            setFieldValues({})
+          }
+          resolve(false)
+          setQueue((currentQueue) =>
+            currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
+          )
+        },
+        { once: true }
+      )
       setQueue((currentQueue) => [...currentQueue, request])
     })
   }, [])
@@ -78,8 +109,12 @@ export function ConfirmationDialogProvider({
       if (confirmed && dontAskAgain) {
         request.options.dontAskAgain?.onConfirmed()
       }
-      // Why: queued prompts must not inherit this request's preference.
+      if (confirmed) {
+        request.options.fields?.onConfirmed(fieldValues)
+      }
+      // Why: queued prompts must not inherit this request's preference or typed values.
       setDontAskAgain(false)
+      setFieldValues({})
       request.resolve(confirmed)
       setQueue((currentQueue) => {
         if (currentQueue[0]?.id === request.id) {
@@ -88,7 +123,7 @@ export function ConfirmationDialogProvider({
         return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
       })
     },
-    [dontAskAgain]
+    [dontAskAgain, fieldValues]
   )
 
   return (
@@ -100,7 +135,13 @@ export function ConfirmationDialogProvider({
       >
         <DialogContent
           showCloseButton={false}
+          size={compact ? 'compact' : 'default'}
           className={cn('sm:max-w-md', Icon && 'gap-6')}
+          onInteractOutside={(event) => {
+            if (guarded) {
+              event.preventDefault()
+            }
+          }}
           onOpenAutoFocus={(event) => {
             if (activeRequest?.options.initialFocus === 'confirm') {
               event.preventDefault()
@@ -115,10 +156,13 @@ export function ConfirmationDialogProvider({
               </div>
             )}
             <DialogHeader className={cn(Icon && 'min-w-0 gap-2 text-left')}>
-              <DialogTitle>{displayedRequest?.options.title}</DialogTitle>
+              <DialogTitle size={compact ? 'compact' : 'default'}>
+                {displayedRequest?.options.title}
+              </DialogTitle>
               {displayedRequest?.options.description ? (
                 // Callers pass multi-line descriptions (e.g. one path per line).
                 <DialogDescription
+                  size={compact ? 'compact' : 'default'}
                   className={cn(
                     'whitespace-pre-line',
                     displayedRequest.options.descriptionClassName
@@ -129,6 +173,31 @@ export function ConfirmationDialogProvider({
               ) : null}
             </DialogHeader>
           </div>
+          {displayedRequest?.options.fields ? (
+            <div className="space-y-3">
+              {displayedRequest.options.fields.inputs.map((field) => (
+                <div key={field.id} className="space-y-2">
+                  <Label htmlFor={`confirmation-dialog-field-${field.id}`}>{field.label}</Label>
+                  <Input
+                    id={`confirmation-dialog-field-${field.id}`}
+                    type={field.type ?? 'text'}
+                    autoComplete={field.autoComplete}
+                    value={fieldValues[field.id] ?? ''}
+                    onChange={(event) => {
+                      const { value } = event.target
+                      setFieldValues((current) => ({ ...current, [field.id]: value }))
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        settleActiveRequest(true)
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
           {displayedRequest?.options.dontAskAgain ? (
             <div className="flex items-center gap-2">
               <Checkbox
@@ -153,7 +222,15 @@ export function ConfirmationDialogProvider({
             <Button
               type="button"
               variant={displayedRequest?.options.cancelVariant ?? 'outline'}
-              onClick={() => settleActiveRequest(false)}
+              size={buttonSize}
+              onKeyDown={ignoreRepeatedKey}
+              onClick={(event) => {
+                if (!isFreshClick(event)) {
+                  return
+                }
+                activeRequestRef.current?.options.onCancelClicked?.()
+                settleActiveRequest(false)
+              }}
             >
               {displayedRequest?.options.cancelLabel ??
                 translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
@@ -162,7 +239,13 @@ export function ConfirmationDialogProvider({
               ref={confirmButtonRef}
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
-              onClick={() => settleActiveRequest(true)}
+              size={buttonSize}
+              onKeyDown={ignoreRepeatedKey}
+              onClick={(event) => {
+                if (isFreshClick(event)) {
+                  settleActiveRequest(true)
+                }
+              }}
             >
               {displayedRequest?.options.confirmLabel ??
                 translate('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}

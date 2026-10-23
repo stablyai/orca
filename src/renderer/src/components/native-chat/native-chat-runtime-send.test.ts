@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const sendRuntimePtyInput = vi.fn()
 const sendRuntimePtyInputVerified = vi.fn()
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args),
+  sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args)
+}))
+vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: (...args: unknown[]) => sendRuntimePtyInputVerified(...args)
 }))
 

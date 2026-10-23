@@ -1,9 +1,11 @@
 // The one tab order from stored data whose three orders can disagree (written by older builds).
-// Fixed precedence, no merging: group tab order, then tab-bar sortOrder, then row sortOrder, then
-// creation time.
+// Fixed precedence, no merging: the owning group's tab order, then tab-bar sortOrder, then row
+// sortOrder, then creation time.
 
 import type { TabGroup } from '../tab-types'
 import type { LayoutGroup } from './workspace-layout-model'
+import { rootGroupSeed } from './workspace-layout-minted-ids'
+import { resolveTabGroupOwners } from './tab-group-owners'
 
 export type OrderCandidate = {
   id: string
@@ -26,7 +28,7 @@ export function resolveGroupOrder(args: {
   workspaceKey: string
   mintId: (seed: string) => string
 }): LayoutGroup[] {
-  const known = new Set(args.candidates.map((candidate) => candidate.id))
+  const owners = resolveTabGroupOwners(args.candidates, args.storedGroups)
   const placed = new Set<string>()
   const groups: LayoutGroup[] = []
   for (const stored of args.storedGroups) {
@@ -35,7 +37,7 @@ export function resolveGroupOrder(args: {
     }
     const tabOrder: string[] = []
     for (const tabId of stored.tabOrder) {
-      if (known.has(tabId) && !placed.has(tabId)) {
+      if (owners.get(tabId) === stored.id && !placed.has(tabId)) {
         placed.add(tabId)
         tabOrder.push(tabId)
       }
@@ -46,7 +48,7 @@ export function resolveGroupOrder(args: {
   for (const candidate of [...unplaced].sort(compareUnplaced)) {
     let group = groups.find((entry) => entry.id === candidate.groupId) ?? groups[0]
     if (!group) {
-      group = { id: args.mintId(`group:${args.workspaceKey}`), tabOrder: [] }
+      group = { id: args.mintId(rootGroupSeed(args.workspaceKey)), tabOrder: [] }
       groups.push(group)
     }
     group.tabOrder.push(candidate.id)

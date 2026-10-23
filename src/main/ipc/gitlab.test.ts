@@ -580,7 +580,24 @@ describe('GitLab IPC handlers', () => {
       undefined,
       null,
       undefined,
-      localGitOptions
+      localGitOptions,
+      { includeReviewDetails: undefined }
+    )
+    await ipcHandlers.get('gitlab:workItemDetails')?.(null, {
+      repoPath: '/local/orca',
+      iid: 8,
+      type: 'mr',
+      includeReviewDetails: false
+    })
+    expect(getWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      '/local/orca',
+      8,
+      'mr',
+      undefined,
+      null,
+      undefined,
+      localGitOptions,
+      { includeReviewDetails: false }
     )
     expect(closeMRMock).toHaveBeenCalledWith(
       '/local/orca',

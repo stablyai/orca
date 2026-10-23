@@ -14,7 +14,6 @@ import type {
   ConflictReviewState,
   DiffSource,
   OpenCheckRunDetailsState,
-  OpenChatVisualTabState,
   OpenConflictMetadata
 } from '../../../../../../shared/editor-tab-view-types'
 
@@ -88,8 +87,6 @@ export type OpenFile = {
   fileContentReloadNonce?: number
   /** Why: CI check-details tabs are virtual editor tabs backed by fetched PR check-run metadata, not a file on disk. */
   checkRunDetails?: OpenCheckRunDetailsState
-  /** Why: chat-visual tabs are virtual editor tabs showing a chat's visual, not a file on disk. */
-  chatVisual?: OpenChatVisualTabState
   /** Why: web-client tab mirrored from the host snapshot; only mirrored tabs may be culled when they vanish, locally-opened tabs must survive. */
   mirroredFromRuntimeSession?: boolean
   /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
@@ -98,7 +95,7 @@ export type OpenFile = {
   csvPreviewOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'chat-visual'
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
 export type ActivityBarPosition = 'top' | 'side'

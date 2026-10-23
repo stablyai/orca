@@ -69,6 +69,48 @@ The default shell on Windows is configurable between PowerShell, Command Prompt,
 
 For repos on a WSL filesystem (`\\wsl.localhost\...`), Orca launches through `wsl.exe -d <distro>`. For Windows-path repos opened in WSL, Orca translates the cwd to `/mnt/<drive>/...` and drops you into a login bash.
 
+## Windows administrator mode
+
+Open **Settings → Terminal → Administrator mode** to see whether the Orca app
+is running as **Administrator** or **Standard user**. **Unable to determine**
+means Orca could not read its Windows elevation status. Existing terminals can
+have different permissions from the app.
+
+In the installed Windows app, choose **Restart as administrator**, review the
+confirmation, then approve Windows’ prompt using your usual account. After
+approval, Orca replaces its current local terminal host. This ends that host’s
+terminals and running agents; restored terminal tabs open new administrator
+shells. SSH and WSL permissions remain controlled on their hosts. Terminals on
+retained older hosts keep their original permissions.
+
+If you cancel Windows’ prompt or elevation fails, Orca reopens with its previous
+permissions and retains its terminal sessions.
+
+For a manual launch, finish your local terminal work and exit Orca. Find Orca in
+the Windows Start menu, right-click it, and choose **Run as administrator**.
+If new terminals still have ordinary permissions, use **Settings → Terminal →
+Manage Sessions → Restart daemon**. This ends terminals on the current local
+host; newly opened local shells inherit the administrator app’s permissions.
+The setting’s manual instructions include a direct link to Manage Sessions.
+
+To check a PowerShell terminal’s own permissions, run:
+
+```powershell
+([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+```
+
+`True` means that PowerShell process has administrator permissions.
+
+Administrator mode applies to the whole app. When running `orca` commands in an
+external PowerShell window, run that window with the same administrator mode as
+Orca.
+
+To return to ordinary permissions, finish and close all local terminal sessions,
+exit Orca, and launch it normally. Closing the sessions lets the retained
+terminal host retire after Orca disconnects; leaving sessions running can retain
+an administrator host even after the app exits. The Administrator status offers
+**Standard mode guide** with these steps.
+
 ## Shortcuts
 
 - `Cmd-T` — new terminal tab in the current worktree.

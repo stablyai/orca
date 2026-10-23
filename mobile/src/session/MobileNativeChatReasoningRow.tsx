@@ -1,5 +1,7 @@
+import { mobileNativeChatMemberId } from './MobileNativeChatScrollHold'
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { Brain, ChevronRight } from 'lucide-react-native'
 import {
   nativeChatReasoningDisclosureKey,
@@ -7,10 +9,32 @@ import {
   nativeChatReasoningHeadlineText
 } from '../../../src/shared/native-chat-reasoning-row'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../src/shared/native-chat-row-content'
+import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
-import { styles } from './mobile-native-chat-message-styles'
+import { CHAT_PROSE_SCALE, styles } from './mobile-native-chat-message-styles'
+
+/** A grouped thought keeps its own source recovery when its original transcript row is hidden. */
+export function MobileNativeChatGroupedThought({
+  message,
+  ...props
+}: Omit<React.ComponentProps<typeof MobileNativeChatReasoningRow>, 'message' | 'markdown'> & {
+  message: NativeChatMessage
+}): React.JSX.Element {
+  const { shown, showFull } = useMobileNativeChatFullMessage(message)
+  return (
+    <>
+      <MobileNativeChatReasoningRow
+        {...props}
+        message={shown}
+        markdown={deriveNativeChatRowContent(shown.blocks).markdown}
+      />
+      {showFull}
+    </>
+  )
+}
 
 /** A reasoning row, collapsed to its headline; its text mounts only once opened. Desktop parity:
  *  `NativeChatReasoningRow`. */
@@ -43,7 +67,7 @@ export function MobileNativeChatReasoningRow({
   const headline = nativeChatReasoningHeadlineText(nativeChatReasoningHeadline(message, { live }))
   const label = nativeChatReasoningHeadlineText({ kind: 'reasoning' })
   return (
-    <View>
+    <View testID={mobileNativeChatMemberId(`thought:${message.id}`)}>
       <Pressable
         style={({ pressed }) => [styles.reasoningToggle, pressed && styles.reasoningPressed]}
         onPress={toggle}
@@ -63,6 +87,7 @@ export function MobileNativeChatReasoningRow({
       </Pressable>
       {expanded ? (
         <MobileNativeChatReasoningBody
+          positionKey={nativeChatReasoningDisclosureKey(message.id)}
           markdown={markdown}
           fontScale={fontScale}
           onOpenFile={onOpenFile}
@@ -76,27 +101,33 @@ export function MobileNativeChatReasoningRow({
 /** A reasoning block's text, under its row or the live activity line. Capped and scrollable, so an
  *  open block streaming at the tail cannot grow without bound. */
 export function MobileNativeChatReasoningBody({
+  positionKey,
   markdown,
   fontScale,
   onOpenFile,
   onLongPress
 }: {
+  positionKey: string
   markdown: string
   fontScale: number
   onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element {
   return (
-    <ScrollView style={styles.reasoningBody} nestedScrollEnabled>
+    <MobileNativeChatOwnedScrollView
+      positionKey={positionKey}
+      style={styles.reasoningBody}
+      nestedScrollEnabled
+    >
       <MobileNativeChatLongPressContent onLongPress={onLongPress} style={styles.reasoning}>
         <MobileMarkdown
           content={markdown}
           rangeSelectable
-          textScale={1.25 * fontScale}
+          textScale={CHAT_PROSE_SCALE * fontScale}
           onOpenFile={onOpenFile}
           onLongPress={onLongPress}
         />
       </MobileNativeChatLongPressContent>
-    </ScrollView>
+    </MobileNativeChatOwnedScrollView>
   )
 }

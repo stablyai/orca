@@ -10,6 +10,7 @@ import {
   OrcadCompletedStopReceiptSchema,
   OrcadManagedStopRequestSchema,
   OrcadDaemonRetirementRecordSchema,
+  orcadManagedStopRequestKey,
   type OrcadCompletedStopReceipt,
   type OrcadDaemonRetirementRecord,
   type OrcadManagedStopRequest
@@ -49,8 +50,7 @@ export function readOrcadStopReceipt<T extends { request: OrcadManagedStopReques
   const receipt = schema.parse(
     JSON.parse(readNodeFileSyncWithinLimit(path, RECEIPT_MAX_BYTES).buffer.toString('utf8'))
   )
-  const expected = OrcadManagedStopRequestSchema.parse(request)
-  if (JSON.stringify(receipt.request) !== JSON.stringify(expected)) {
+  if (orcadManagedStopRequestKey(receipt.request) !== orcadManagedStopRequestKey(request)) {
     throw new Error('orcad_stop_receipt_mismatch')
   }
   return receipt
@@ -105,6 +105,9 @@ export function persistOrcadDaemonRetirementRecord(
     schemaVersion: 1,
     kind: 'orcad_managed_stop_retirement',
     request: OrcadManagedStopRequestSchema.parse(request),
-    ...outcome
+    // Named, not spread: an in-process outcome may carry fields the strict record rejects.
+    retirement: outcome.retirement,
+    liveSessions: outcome.liveSessions,
+    reason: outcome.reason
   })
 }

@@ -2,7 +2,7 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from './locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,

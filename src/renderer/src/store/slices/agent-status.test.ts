@@ -1,12 +1,32 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { flushMicrotasks } from './agent-status-test-harness'
-import { createTestStore, makeTab } from './store-test-helpers'
+import { createTestStore, makeTab, makeUnifiedTab } from './store-test-helpers'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/structured-agent-session-projection'
+import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
+import { createStoreSessionMockApi } from './store-session-test-harness'
+
+vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
+  beginStructuredAgentSessionTabClose: vi.fn()
+}))
+
+beforeEach(() => {
+  // Track the original global before the shared fixture installs the renderer API.
+  vi.stubGlobal('window', undefined)
+  createStoreSessionMockApi()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 {
   describe('agent status freshness expiry', () => {
@@ -336,6 +356,9 @@ import type { RetainedAgentEntry } from './agent-status'
             makeTab({ id: 'tab-live', worktreeId: 'wt-1' })
           ],
           'wt-2': []
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [makeUnifiedTab({ id: 'tab-orphan', worktreeId: 'wt-1', groupId: 'group-1' })]
         }
       })
       store
@@ -390,6 +413,110 @@ import type { RetainedAgentEntry } from './agent-status'
       expect(s.agentStatusByPaneKey['tab-active-child:0']).toBeDefined()
       expect(s.agentStatusByPaneKey['tab-live:0']).toBeDefined()
       expect(s.agentStatusByPaneKey['tab-other-orphan:0']).toBeDefined()
+    })
+
+    it.each(['wt-1', 'folder-workspace-1'])(
+      'preserves an open chat and its read state when an unrelated terminal closes in %s',
+      (worktreeId) => {
+        vi.useFakeTimers()
+        const store = createTestStore()
+        const sessionId = 'chat-1'
+        const chat = makeUnifiedTab({
+          id: structuredAgentSessionTabId(sessionId),
+          entityId: sessionId,
+          contentType: 'agent-session',
+          executionHostId: 'local',
+          worktreeId,
+          groupId: 'group-1'
+        })
+        const paneKey = structuredAgentSessionPaneKey(chat.id, sessionId)
+        const missingOwnerPaneKey = structuredAgentSessionPaneKey(
+          structuredAgentSessionTabId('missing-chat'),
+          'missing-chat'
+        )
+        store.setState({
+          tabsByWorktree: {
+            [worktreeId]: [
+              makeTab({ id: 'tab-closed', worktreeId }),
+              makeTab({ id: 'tab-live', worktreeId })
+            ]
+          },
+          unifiedTabsByWorktree: { [worktreeId]: [chat] }
+        })
+        for (const key of [paneKey, missingOwnerPaneKey]) {
+          store
+            .getState()
+            .setAgentStatus(
+              key,
+              { state: 'done', prompt: 'completed chat', agentType: 'codex' },
+              undefined,
+              undefined,
+              { worktreeId }
+            )
+        }
+        store.getState().acknowledgeAgents([paneKey, missingOwnerPaneKey])
+        store.setState({
+          activityClearedAtByPaneKey: { [paneKey]: 100, [missingOwnerPaneKey]: 100 },
+          manuallyUnreadTurnsByPaneKey: { [paneKey]: 200, [missingOwnerPaneKey]: 200 }
+        })
+        const before = store.getState()
+
+        store.getState().closeTab('tab-closed')
+
+        const after = store.getState()
+        expect(after.agentStatusByPaneKey[paneKey]).toBe(before.agentStatusByPaneKey[paneKey])
+        expect(after.acknowledgedAgentsByPaneKey[paneKey]).toBe(
+          before.acknowledgedAgentsByPaneKey[paneKey]
+        )
+        expect(after.activityClearedAtByPaneKey[paneKey]).toBe(100)
+        expect(after.manuallyUnreadTurnsByPaneKey[paneKey]).toBe(200)
+        expect(after.agentStatusByPaneKey[missingOwnerPaneKey]).toBeUndefined()
+        expect(after.acknowledgedAgentsByPaneKey[missingOwnerPaneKey]).toBeUndefined()
+        expect(after.activityClearedAtByPaneKey[missingOwnerPaneKey]).toBeUndefined()
+        expect(after.manuallyUnreadTurnsByPaneKey[missingOwnerPaneKey]).toBeUndefined()
+
+        store.getState().closeUnifiedTab(chat.id)
+        store.getState().closeTab('tab-live')
+
+        const closed = store.getState()
+        expect(closed.unifiedTabsByWorktree[worktreeId]).toEqual([])
+        expect(closed.agentStatusByPaneKey[paneKey]).toBeUndefined()
+        expect(closed.acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
+        expect(closed.activityClearedAtByPaneKey[paneKey]).toBeUndefined()
+        expect(closed.manuallyUnreadTurnsByPaneKey[paneKey]).toBeUndefined()
+      }
+    )
+
+    it('keeps an exact-pane remote retirement scoped to that pane', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const retiringPaneKey = 'host-tab:11111111-1111-4111-8111-111111111111'
+      const siblingPaneKey = 'host-tab:22222222-2222-4222-8222-222222222222'
+      for (const paneKey of [retiringPaneKey, siblingPaneKey, 'missing-owner:0']) {
+        store
+          .getState()
+          .setAgentStatus(
+            paneKey,
+            { state: 'done', prompt: 'remote chat', agentType: 'codex' },
+            undefined,
+            undefined,
+            { worktreeId: 'wt-1' }
+          )
+      }
+      const before = store.getState()
+
+      const { patch } = buildAgentStatusTabPrefixDropPatch(before, 'host-tab', [], {
+        worktreeId: 'wt-1',
+        paneKeys: new Set([retiringPaneKey])
+      })
+
+      expect(patch.agentStatusByPaneKey?.[retiringPaneKey]).toBeUndefined()
+      expect(patch.agentStatusByPaneKey?.[siblingPaneKey]).toBe(
+        before.agentStatusByPaneKey[siblingPaneKey]
+      )
+      expect(patch.agentStatusByPaneKey?.['missing-owner:0']).toBe(
+        before.agentStatusByPaneKey['missing-owner:0']
+      )
     })
 
     it('on a paneKey with neither live nor retained entry: no-op (same state reference, no epoch bumps)', () => {

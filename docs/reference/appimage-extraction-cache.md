@@ -42,3 +42,22 @@ pre-lease builds extract, stay as exposed as they were before this change.
 One gap is accepted. A process that `exec`s from a generation just as `installed` is republished and a
 pruner runs may lose its copy before `/proc` shows it. `installed` and the pruner's own generation are
 never deleted, so only a launch in that instant is exposed.
+
+## The desktop terminal daemon
+
+AppImage builds carry the pinned Node at `resources/node-runtime/bin/node`. deb and rpm drop that file
+at packaging time. When a window starts a terminal daemon, it tries these in order:
+
+1. **The extracted copy.** The bundled Node in the generation for the file now at `$APPIMAGE` runs that
+   generation's `daemon-entry.js`. It is used only when the generation is complete, has the Node and the
+   entry, and its stamped version equals the running app's. Nothing it runs from is on a FUSE mount. Its
+   executable keeps the generation `live` for pruners, and it writes a lease at startup.
+2. **The AppImage's own mount.** `$APPIMAGE -e` starts the daemon on Electron (#18200).
+3. **The window's mount.** This is the original launch.
+
+The desktop never extracts a generation itself; CLI registration and `orca serve` do. Each launch that
+cannot use rung 1 logs `[daemon] AppImage daemon host fallback reason=<reason>`, where the reason is
+`no-extracted-copy`, `no-bundled-node`, `no-daemon-entry` or `version-mismatch`. A rung that fails to
+start logs before the next one runs. Rungs 1 and 2 record the same identity, `$APPIMAGE/<entry>`. That
+means a running daemon is adopted whichever rung started it: as a normal target at the same version,
+and preserved while busy across an upgrade, as for any other daemon.

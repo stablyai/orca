@@ -22,6 +22,9 @@ export type NativeChatDisclosureStore = {
 
 export const NativeChatDisclosureContext = createContext<NativeChatDisclosureStore | null>(null)
 
+/** The transcript row whose markdown is rendering, so a code block inside it can key its wrap. */
+export const NativeChatMarkdownRowKeyContext = createContext<string | undefined>(undefined)
+
 /** Bounded like the transcript's other per-turn map: a session that ran for a day
  *  should not carry every disclosure it ever opened. */
 export const MAX_NATIVE_CHAT_DISCLOSURES = 512

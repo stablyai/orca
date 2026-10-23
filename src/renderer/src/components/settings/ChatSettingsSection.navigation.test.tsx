@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { ChatSettingsSection } from './ChatSettingsSection'
+import { TooltipProvider } from '../ui/tooltip'
 import { ActiveSettingsSectionProvider } from './SettingsSection'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatNamingSearchEntry } from './chat-naming-search'
@@ -91,21 +92,23 @@ function NavigationHarness({
     terminal as SettingsTerminalModel
   )
   return (
-    <ActiveSettingsSectionProvider value={activeSectionId}>
-      <output aria-label="Selected settings page">{activeSectionId}</output>
-      <ChatSettingsSection
-        settings={settings}
-        updateSettings={vi.fn()}
-        writeSourceControlAiSettings={async () => {}}
-        searchEntries={[
-          ...getChatAppearanceSearchEntries(),
-          getChatNamingSearchEntry(),
-          getChatInlineVisualsSearchEntry()
-        ]}
-        showDesktopOnlySettings
-        isMounted
-      />
-    </ActiveSettingsSectionProvider>
+    <TooltipProvider>
+      <ActiveSettingsSectionProvider value={activeSectionId}>
+        <output aria-label="Selected settings page">{activeSectionId}</output>
+        <ChatSettingsSection
+          settings={settings}
+          updateSettings={vi.fn()}
+          writeSourceControlAiSettings={async () => {}}
+          searchEntries={[
+            ...getChatAppearanceSearchEntries(),
+            getChatNamingSearchEntry(),
+            getChatInlineVisualsSearchEntry()
+          ]}
+          showDesktopOnlySettings
+          isMounted
+        />
+      </ActiveSettingsSectionProvider>
+    </TooltipProvider>
   )
 }
 

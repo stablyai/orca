@@ -5,13 +5,21 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { nativeChatStreamingMessage } from '../../../src/shared/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat-provider-frame-summary'
-import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
-import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
-  isImageSourceUserTurn,
-  normalizeImageTranscriptMessages
-} from './mobile-native-chat-image-transcript-markers'
+  foldToolMessages,
+  isUndrawnProviderFrameMessage
+} from '../../../src/shared/native-chat-tool-fold'
+import { projectNativeChatTaskListFrames } from '../../../src/shared/native-chat-task-list-frames'
+import { foldSubagentItems } from '../../../src/shared/native-chat-subagent-items'
+import { prepareNativeChatMessages } from '../../../src/shared/native-chat-message-preparation'
+import {
+  isImageRefBlock,
+  type AgentType,
+  type NativeChatMessage
+} from '../../../src/shared/native-chat-types'
+import { isImageSourceUserTurn } from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
@@ -25,11 +33,11 @@ export function mobileNativeChatEmptyState(
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
-    // A live agent with no transcript yet — an unwritten transcript file, or a
-    // loaded-but-empty one — is "start a chat"; invite the first message instead
-    // of implying the agent is still starting up.
+    // No conversation found yet: the agent has not reported one, or its file is unwritten. That is
+    // a new chat or one whose history the host cannot see, so it promises neither.
     case 'waiting-session':
     case 'awaiting-transcript':
+      return formatNativeChatEmptyStateCopy('notFound', agentLabel)
     case 'ready':
       return formatNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
@@ -51,26 +59,36 @@ export type MobileNativeChatPendingItem = {
    *  that row, so a send whose row never arrives stays where it was sent instead
    *  of trailing every turn that lands afterwards. */
   baselineTailMessageId?: string | null
+  /** When it was sent: the echo's time until the transcript row brings its own. */
+  sentAt?: number
 }
 
 export function foldMobileNativeChatMessages(
-  messages: readonly NativeChatMessage[]
+  messages: readonly NativeChatMessage[],
+  agent: AgentType
 ): NativeChatMessage[] {
   // The conversation only: a subagent's rows are that subagent's, and mobile shows
   // each spawn as its roster row (one line per child) rather than the child's own rows.
-  // Normalize first (desktop assembler parity): image marker turns fold into
-  // image-ref blocks instead of rendering as raw `[Image: …]` text. An unrecognised event
-  // with no words of its own is stored, not drawn; mobile draws no task list, so a plan update
-  // goes too, before folding, so it never splits a tool run.
-  return stripNoiseMessages(
-    foldToolMessages(
-      normalizeImageTranscriptMessages(
-        messages.filter(
-          (message) => isRootAgentJournalItem(message) && !isWordlessProviderFrameMessage(message)
+  // Prepared as desktop prepares them, so a skill turn and an image marker turn draw as the
+  // user's message. An unrecognised event with no words of its own is stored, not drawn, so
+  // it goes before folding and never splits a tool run. A Codex plan update draws as its task
+  // list, projected after folding as desktop does, so it never takes another call's result; one
+  // whose payload cannot be read draws nothing, as on desktop.
+  return projectNativeChatTaskListFrames(
+    stripNoiseMessages(
+      foldToolMessages(
+        foldSubagentItems(
+          prepareNativeChatMessages(
+            messages.filter(
+              (message) =>
+                isRootAgentJournalItem(message) && !isUndrawnProviderFrameMessage(message)
+            ),
+            agent
+          )
         )
       )
     )
-  )
+  ).filter((message) => !isWordlessProviderFrameMessage(message))
 }
 
 /** Assemble the folded transcript, streaming text, and optimistic user echoes. */
@@ -161,7 +179,7 @@ export function buildMobileNativeChatTransientData({
         ...(item.text ? [{ type: 'text' as const, text: item.text }] : []),
         ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
       ],
-      timestamp: null,
+      timestamp: item.sentAt ?? null,
       source: 'transcript'
     }
     // Tool/noise rows fold backward; image-source rows fold into their following prompt.
@@ -196,13 +214,7 @@ export function buildMobileNativeChatTransientData({
     }
   }
   if (streaming) {
-    data.push({
-      id: 'streaming',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: streaming }],
-      timestamp: null,
-      source: 'hook'
-    })
+    data.push(nativeChatStreamingMessage(streaming))
   }
   data.push(...trailingPending)
   return { folded: renderedFolded, streaming, data }

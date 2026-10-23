@@ -28,9 +28,7 @@ import { THREAD_ID } from './codex-structured-session-adapter-fixture'
 /** The delegation the parent's newest tool run reads as, the row a running chat's frontier judges. */
 async function newestRunDelegation(frames: Frame[]): Promise<NativeChatSubagentDelegation | null> {
   const { conversation } = projectNativeChatTranscript(
-    projectStructuredAgentSessionMessages(await publishedRows(frames), [], [], {
-      rejectedInPlace: true
-    })
+    projectStructuredAgentSessionMessages(await publishedRows(frames), [], [])
   )
   const runs = conversation.filter((message: NativeChatMessage) =>
     message.blocks.some((block) => block.type === 'tool-call')
@@ -90,7 +88,7 @@ describe("a Codex default-mode collab call row as the parent's delegation", () =
     ).toBeNull()
   })
 
-  it('keeps naming the helper when its prompt is past the journal limit', async () => {
+  it('keeps naming the helper and saves a long prompt whole', async () => {
     const prompt = `Review lane a. ${'x'.repeat(20_000)}`
     const longSpawn = [
       turn('turn/started', THREAD_ID, PARENT_TURN),
@@ -108,7 +106,7 @@ describe("a Codex default-mode collab call row as the parent's delegation", () =
     const input = row?.kind === 'tool-call' ? row.input : undefined
     expect(input).toMatchObject({
       description: expect.stringMatching(/^Review lane a\. x+…$/),
-      prompt: expect.stringContaining('[Orca: output truncated')
+      prompt
     })
     expect(codexCollabRowAgentIds(input)).toEqual([HELPER])
     expect(await newestRunDelegation(longSpawn)).toEqual({ kind: 'call', agentId: HELPER })

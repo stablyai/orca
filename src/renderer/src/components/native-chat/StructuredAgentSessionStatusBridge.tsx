@@ -38,6 +38,7 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { useStructuredChatSleepProjection } from './structured-chat-sleep-projection'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 
 // Re-exported so the bridge stays the one import site its consumers already know.
@@ -61,6 +62,23 @@ export function useStructuredAgentSessionStatusSummary(
     () => 'unverifiable' as const
   )
   return { summary, observation }
+}
+
+/** The host status's option values as one stamp: another device's pick moves it, so options re-read. */
+export function useStructuredAgentSessionOptionStamp(
+  sessionId: string,
+  target: RuntimeClientTarget
+): string {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => {
+      const summary = feed.getSnapshot().get(sessionId)
+      return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
+    },
+    () => ''
+  )
 }
 
 /** Only the host's startup phase, so a chat re-renders when that changes, not on every status. */
@@ -91,14 +109,19 @@ export function useStructuredAgentSessionHostStopping(
   )
 }
 
-/** The host's startup phase and its word on a Stop, each re-rendering the chat only on a change. */
+/** Startup phase, Stop and option stamp, each re-rendering the chat only on a change. */
 export function useStructuredAgentSessionHostExecution(
   sessionId: string,
   target: RuntimeClientTarget
-): { phase: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>; stopping: boolean } {
+): {
+  phase: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>
+  stopping: boolean
+  optionStamp: string
+} {
   return {
     phase: useStructuredAgentSessionHostExecutionPhase(sessionId, target),
-    stopping: useStructuredAgentSessionHostStopping(sessionId, target)
+    stopping: useStructuredAgentSessionHostStopping(sessionId, target),
+    optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target)
   }
 }
 
@@ -295,6 +318,7 @@ function StructuredAgentSessionStatusProjection({
 }): React.JSX.Element | null {
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
+  useStructuredChatSleepProjection(tab, target)
   return target ? <StructuredAgentSessionOwnedStatusProjection tab={tab} target={target} /> : null
 }
 

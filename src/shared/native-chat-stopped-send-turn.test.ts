@@ -80,7 +80,7 @@ const stopped = (id: string, overrides: Partial<AgentJournalSubmission> = {}) =>
 function drawn(items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) {
   const journal = { items, submissions }
   const { conversation } = projectNativeChatTranscript(
-    projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: false }),
+    projectStructuredAgentSessionMessages(items, [], submissions),
     undefined,
     journal
   )

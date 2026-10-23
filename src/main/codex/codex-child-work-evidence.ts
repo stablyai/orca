@@ -34,9 +34,6 @@ import { codexThreadWaitsOnUser, readCodexTurnId } from './codex-structured-thre
 import { CODEX_TOKEN_USAGE_METHOD, readCodexThreadTokenTotal } from './codex-subagent-activity'
 import type { CodexExecutionChild, CodexSubagentExecutions } from './codex-subagent-executions'
 
-/** The executions' own child bound. */
-const MAX_CHILD_FACTS = 128
-const MAX_OPEN_CALLS_PER_CHILD = 16
 const CHILD_FRAME_METHODS: ReadonlySet<string> = new Set([
   'item/started',
   'item/completed',
@@ -113,7 +110,7 @@ export class CodexChildWorkEvidence {
     this.queueCommands(commands)
     for (const threadId of this.childThreads(event, frame)) {
       const facts = this.factsFor(threadId)
-      if (facts && event.threadId === threadId) {
+      if (event.threadId === threadId) {
         this.record(facts, event)
       }
       this.queueChild(threadId)
@@ -196,9 +193,6 @@ export class CodexChildWorkEvidence {
     const call = codexChildToolCall(item)
     if (call && !facts.openCalls.has(item.id)) {
       facts.openCalls.set(item.id, { ...call, turnId })
-      for (const stale of [...facts.openCalls.keys()].slice(0, -MAX_OPEN_CALLS_PER_CHILD)) {
-        facts.openCalls.delete(stale)
-      }
     }
   }
 
@@ -299,19 +293,10 @@ export class CodexChildWorkEvidence {
     }
   }
 
-  private factsFor(threadId: string): ChildFacts | undefined {
+  private factsFor(threadId: string): ChildFacts {
     const existing = this.facts.get(threadId)
     if (existing) {
       return existing
-    }
-    if (this.facts.size >= MAX_CHILD_FACTS) {
-      const idle = [...this.facts.keys()].find(
-        (id) => this.executions.find(id)?.execution?.state !== 'working'
-      )
-      if (idle === undefined) {
-        return undefined
-      }
-      this.facts.delete(idle)
     }
     const facts: ChildFacts = { openCalls: new Map(), waiting: false }
     this.facts.set(threadId, facts)

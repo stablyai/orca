@@ -9,14 +9,8 @@ import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { resolveAiVaultHistorySessionResumeState } from '../right-sidebar/ai-vault-session-resume'
-import { resolveAiVaultHistoryRowResume } from '../right-sidebar/ai-vault-session-resume-in-chat-workspace'
-import { resolveAiVaultSessionSurfaceSwitchTargets } from '../right-sidebar/ai-vault-session-surface-switch'
-import {
-  aiVaultSessionOwnerWorkspaces,
-  useAiVaultSessionWorktreeMap,
-  withAiVaultCurrentWorktreeStatus
-} from '../right-sidebar/ai-vault-session-worktree'
+import { resolveAiVaultSessionRowChatActions } from '../right-sidebar/ai-vault-session-chat-action'
+import { useAiVaultPanelSessionResume } from '../right-sidebar/use-ai-vault-panel-session-resume'
 import {
   resolveTabSessionSwitch,
   type TabSessionHistorySubject
@@ -83,30 +77,24 @@ function makeState(): AppState {
 
 /** What AiVaultPanel + AiVaultVirtualRow compute for this row while WORKTREE_ID is active. */
 function panelTargets(state: AppState, session: AiVaultSession) {
-  const worktrees = aiVaultSessionOwnerWorkspaces(
-    getIndexedAllWorktrees(state.worktreesByRepo),
-    state.folderWorkspaces
+  const { result } = renderHook(() =>
+    useAiVaultPanelSessionResume({
+      sessions: [session],
+      repos: state.repos,
+      allWorktrees: getIndexedAllWorktrees(state.worktreesByRepo),
+      workspaceId: WORKTREE_ID,
+      resumeTargetState: state,
+      settings: state.settings
+    })
   )
-  const { result: worktreeMap } = renderHook(() =>
-    useAiVaultSessionWorktreeMap({ sessions: [session], repos: state.repos, worktrees })
-  )
-  const worktreeInfo = withAiVaultCurrentWorktreeStatus(
-    worktreeMap.current.get(session.id) ?? null,
-    WORKTREE_ID
-  )
-  const rowArgs = {
+  return resolveAiVaultSessionRowChatActions({
     session,
-    worktreeInfo,
-    activeWorktreeId: WORKTREE_ID,
-    worktrees,
-    repos: state.repos,
-    targetState: state
-  }
-  return resolveAiVaultSessionSurfaceSwitchTargets(
-    session,
-    resolveAiVaultHistorySessionResumeState(rowArgs),
-    resolveAiVaultHistoryRowResume({ ...rowArgs, settings: state.settings }).resumeInChat
-  )
+    originalPaneTarget: null,
+    structuredSessionOpen: false,
+    resumeState: result.current.getSessionResumeState(session),
+    resumeInChat: result.current.getSessionResumeInChat(session),
+    searchHit: undefined
+  })
 }
 
 const request = { scopePaths: [], executionHostScope: 'local', sessionLimit: 250 } as const
@@ -116,7 +104,7 @@ beforeEach(() => {
 })
 
 describe('the tab menu offers exactly what the Session History row offers', () => {
-  it('Resume in New Native Chat for a CLI conversation', () => {
+  it('Switch to Chat for a CLI conversation', () => {
     const state = useAppStore.getState()
     const session = row()
     const subject: TabSessionHistorySubject = {
@@ -135,7 +123,24 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     })
   })
 
-  it("Resume in New Native Chat in the conversation's own worktree when that differs", () => {
+  it('nothing for a CLI conversation a native chat already holds', () => {
+    const state = useAppStore.getState()
+    const owned = row({
+      structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
+    })
+    expect(panelTargets(state, owned).resumeInNewChatWorkspaceId).toBeNull()
+    expect(
+      resolveTabSessionSwitch(state, owned, {
+        kind: 'cli',
+        agent: 'claude',
+        providerSessionId: owned.sessionId,
+        workspaceId: WORKTREE_ID,
+        request
+      })
+    ).toBeNull()
+  })
+
+  it("Switch to Chat in the conversation's own worktree when that differs", () => {
     const state = useAppStore.getState()
     const session = row({ cwd: '/repo/sibling' })
     const panel = panelTargets(state, session)
@@ -152,7 +157,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     ).toEqual({ action: 'resume-in-new-chat', worktreeId: SIBLING_ID })
   })
 
-  it('Resume in New CLI for a native chat, and nothing once it has no saved turns', () => {
+  it('Switch to Terminal for a native chat, and nothing once it has no saved turns', () => {
     const state = useAppStore.getState()
     const subject: TabSessionHistorySubject = {
       kind: 'chat',
@@ -176,7 +181,7 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     expect(resolveTabSessionSwitch(state, emptyChat, subject)).toBeNull()
   })
 
-  it("Resume in New Native Chat in the conversation's own folder workspace", () => {
+  it("Switch to Chat in the conversation's own folder workspace", () => {
     useAppStore.setState({
       folderWorkspaces: [
         {

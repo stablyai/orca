@@ -1,22 +1,21 @@
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import { OrchestrationError } from './orchestration-error'
 import type {
   WorkerTerminalArchiveKind,
   WorkerTerminalArchiveRow,
   WorkerTerminalArchiveStatus
 } from './worker-terminal-ownership'
-import {
-  MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT,
-  redactWorkerTerminalLines
-} from './worker-transcript-payload'
+import { MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT } from './worker-transcript-payload'
+import { redactWorkerTerminalLines } from './worker-terminal-redaction'
 import { readWorkerTranscript } from './worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 import { captureStructuredWorkerArchive } from '../rpc/methods/orchestration-structured-worker-lifecycle'
 import type { WorkerStructuredJournalArchive } from './structured-worker-journal-archive'
 import { structuredWorkerAgent } from '../structured-worker-authority'
 import type { StructuredWorkerIdentity } from '../structured-worker-identity'
+import { readWorkerTerminalArchive } from './worker-terminal-archive-read'
 
 // Bound the durable copy of raw terminal output; the tail end is the evidence that matters.
 const TERMINAL_ARCHIVE_MAX_CHARS = 262_144
@@ -82,7 +81,7 @@ export function summarizeWorkerOutputArchive(archive: WorkerTerminalArchiveRow):
 // hook-reported provider transcript; falls back to bounded redacted terminal output. Throws
 // typed archive_failed so release retains the live terminal when no evidence can be preserved.
 export async function captureWorkerOutputArchive(args: {
-  runtime: OrcaRuntimeService
+  runtime: WorkerTerminalReleaseRuntime
   dispatchId: string
   terminalHandle: string
   attachedAtMs: number
@@ -142,7 +141,7 @@ export async function captureWorkerOutputArchive(args: {
   }
   let terminal
   try {
-    terminal = await args.runtime.readTerminal(args.terminalHandle, {})
+    terminal = await readWorkerTerminalArchive(args.runtime, args.terminalHandle)
   } catch (error) {
     throw new OrchestrationError(
       'archive_failed',
@@ -170,9 +169,10 @@ export async function captureWorkerOutputArchive(args: {
       warnings: empty
         ? [
             ...redacted.warnings,
+            ...terminal.warnings,
             'The live terminal buffer was empty at release; structured transcript output was unavailable.'
           ]
-        : redacted.warnings,
+        : [...redacted.warnings, ...terminal.warnings],
       fallbackReason: transcriptFallbackReason,
       clipping: [
         'terminal_fallback',

@@ -28,7 +28,6 @@ export function useAutomationsPageSetupState({
 }) {
   const { repos, settings, projectHostSetups, worktreesByRepo } = store
   const {
-    createTarget,
     automationYamlHooksByRepoKey,
     automationHookCheckPromisesRef,
     setAutomationYamlHooksByRepoKey,
@@ -74,7 +73,6 @@ export function useAutomationsPageSetupState({
         : projectHostSetups
       const hookKey = `${setupHostId ?? getRuntimeEnvironmentIdForRepo({ repos, settings }, candidate.projectId) ?? 'local'}:${candidate.projectId}`
       return getVisibleAutomationSetupDecision({
-        createTarget,
         workspaceMode: candidate.workspaceMode,
         repoId: candidate.projectId,
         repos: setupRepos,
@@ -84,7 +82,6 @@ export function useAutomationsPageSetupState({
     },
     [
       automationYamlHooksByRepoKey,
-      createTarget,
       list.hostCatalog.entries,
       local.editingAutomationId,
       local.editingHostStableKey,
@@ -148,12 +145,11 @@ export function useAutomationsPageSetupState({
   const getDraftSetupDecisionDefaultSignature = useCallback(
     (candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>): string =>
       [
-        createTarget,
         candidate.workspaceMode,
         candidate.projectId,
         getDraftSetupDecisionDefault(candidate) ?? 'none'
       ].join(':'),
-    [createTarget, getDraftSetupDecisionDefault]
+    [getDraftSetupDecisionDefault]
   )
   const markSetupDecisionTouched = useCallback((): void => {
     setupDecisionTouchedRef.current = true

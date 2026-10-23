@@ -3,6 +3,7 @@ import { getOpenFilesForExternalFileChange, type EditorPathMutationTarget } from
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'
 import type { AppStoreApi, EditorSaveQueue } from './editor-save-queue'
+import { editorModelSiblingTabs, isEditorModelDirty } from './editor-save-disk-precondition'
 
 type EditorExternalChangeTabResetOptions = {
   store: AppStoreApi
@@ -22,15 +23,30 @@ export function createEditorExternalChangeTabReset({
     }
 
     const state = store.getState()
-    const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail)
+    const pathMatches = getOpenFilesForExternalFileChange(state.openFiles, detail)
+    // Why: a tab of another workspace showing the same model shares the text this change touches.
+    const matchingFiles = [
+      ...new Map(
+        pathMatches
+          .flatMap((file) => (file.mode === 'edit' ? editorModelSiblingTabs(state, file) : [file]))
+          .map((file) => [file.id, file])
+      ).values()
+    ]
     if (matchingFiles.length === 0) {
       return
     }
 
     // Why: keep dirty drafts on external writes (data-loss half of #7265); mark changed-on-disk as backstop for tabs turned dirty during the notify debounce.
-    const reloadingFiles = matchingFiles.filter((file) => !file.isDirty)
+    // Why model-level: a clean tab of a model another tab is editing shows that unsaved text.
+    const modelDirty = new Set(
+      matchingFiles.filter((file) => isEditorModelDirty(state, file)).map((file) => file.id)
+    )
+    const reloadingFiles = matchingFiles.filter((file) => !modelDirty.has(file.id))
     for (const file of matchingFiles) {
-      if (file.isDirty) {
+      if (modelDirty.has(file.id)) {
+        if (!file.isDirty) {
+          continue
+        }
         // Why: skip Orca's own-save echo, which routes here bypassing the watch hook's echo verification.
         if (!hasRecentSelfWrite(file.filePath, file.runtimeEnvironmentId)) {
           markFileChangedOnDisk(state, file, {

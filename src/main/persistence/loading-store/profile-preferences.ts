@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
@@ -29,6 +30,7 @@ type ProfilePreferencesRuntime = Pick<
   | 'activeViewPreference'
   | 'githubCacheDirty'
   | 'githubCacheGeneration'
+  | 'githubCacheWriteListeners'
   | 'protectedSecrets'
   | 'runDurableMutation'
   | 'settingsChangeListeners'
@@ -117,6 +119,7 @@ export class ProfilePreferences {
             }
           }
           runtime.state.settings = restoredSettings
+          retireAtRestCommandSettings(updateKeys)
         }
       }
     })
@@ -189,6 +192,17 @@ export class ProfilePreferences {
     this[profilePreferencesContext].runtime.state.githubCache = cache
     this[profilePreferencesContext].runtime.githubCacheDirty = true
     this[profilePreferencesContext].runtime.githubCacheGeneration += 1
+    for (const listener of this[profilePreferencesContext].runtime.githubCacheWriteListeners) {
+      listener()
+    }
+  }
+
+  /** Hears every PR cache save, so a reader keyed off the cache needs no re-read on its own. */
+  onGitHubCacheWritten(listener: () => void): () => void {
+    this[profilePreferencesContext].runtime.githubCacheWriteListeners.add(listener)
+    return () => {
+      this[profilePreferencesContext].runtime.githubCacheWriteListeners.delete(listener)
+    }
   }
 }
 

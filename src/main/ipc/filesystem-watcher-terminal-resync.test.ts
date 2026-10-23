@@ -20,13 +20,13 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import {
-  closeAllWatchers,
   closeRemoteWatcherForWorktreePath,
   forgetRemoteWatcherRemovalSnapshot,
-  registerFilesystemWatcherHandlers,
   restoreRemoteWatcherAfterFailedRemoval
-} from './filesystem-watcher'
+} from './filesystem-watcher-remote-removal'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 type TerminalErrorHandler = (error: Error) => void
@@ -35,7 +35,9 @@ const WORKTREE_PATH = '/home/me/repo'
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
 const OVERFLOW_PAYLOAD = {
   worktreePath: WORKTREE_PATH,
-  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
+  events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }],
+  resync: true,
+  connectionId: 'conn-1'
 }
 
 type MockSender = {
@@ -131,7 +133,7 @@ describe('remote filesystem watcher terminal retry resync', () => {
     expect(senderTwo.send).toHaveBeenCalledTimes(1)
   })
 
-  it('does not resync a fast retry for an initial setup failure', async () => {
+  it('resyncs once a retried initial setup installs', async () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
@@ -145,7 +147,9 @@ describe('remote filesystem watcher terminal retry resync', () => {
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(watchMock).toHaveBeenCalledTimes(2)
-    expect(sender.send).not.toHaveBeenCalled()
+    // Why: writes before the retry landed were never reported, so the renderer must re-read.
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', OVERFLOW_PAYLOAD)
   })
 
   it('lets provider registration supersede a pending terminal retry', async () => {

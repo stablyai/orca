@@ -1,5 +1,5 @@
-import { app } from 'electron'
 import { join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-environment'
 import type { StatsSummary } from '../../shared/process-stats-types'
 import type { StatsEvent, StatsAggregates } from './types'
 import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
@@ -20,16 +20,15 @@ const DEBOUNCE_MS = 5_000
 // comment block in persistence.ts:20-28 for the full explanation.
 let _statsFile: string | null = null
 
-export function initStatsPath(): void {
-  _statsFile = join(app.getPath('userData'), 'orca-stats.json')
+/** Why the app environment, not Electron's `app`: orcad (plain Node) records stats too (#31112). */
+export function initStatsPath(userDataPath = getAppEnvironment().getPath('userData')): string {
+  _statsFile = join(userDataPath, 'orca-stats.json')
+  return _statsFile
 }
 
 function getStatsFile(): string {
-  if (!_statsFile) {
-    // Safety fallback — should not be hit in normal startup.
-    _statsFile = join(app.getPath('userData'), 'orca-stats.json')
-  }
-  return _statsFile
+  // Safety fallback — should not be hit in normal startup.
+  return _statsFile ?? initStatsPath()
 }
 
 export class StatsCollector {

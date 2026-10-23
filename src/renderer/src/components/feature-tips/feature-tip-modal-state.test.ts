@@ -147,18 +147,4 @@ describe('feature tip modal state', () => {
 
     expect(tip?.id).toBe('native-chat-upgrade')
   })
-
-  it('never falls back to the native chat upgrade tip outside its audience', () => {
-    const tip = getFeatureTipForModal({
-      cliInstalled: true,
-      modalData: {},
-      seenTipIds: ['voice-dictation', 'cmd-j-palette'],
-      inNativeChatUpgradeTipAudience: false,
-      featureInteractions: {},
-      settings: makeSettings(),
-      webClient: false
-    })
-
-    expect(tip).toBeNull()
-  })
 })

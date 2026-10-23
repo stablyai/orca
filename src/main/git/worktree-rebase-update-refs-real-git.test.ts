@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '@orca/process-host'
+import { GitBinaryTestFixture } from '../../shared/git-binary.test-fixture'
 
 vi.mock('./runner', () => ({ gitExecFileAsync: vi.fn(), gitExecFileSync: vi.fn() }))
 vi.mock('./local-repo-ref-maintenance', () => ({
@@ -11,51 +11,19 @@ vi.mock('./local-repo-ref-maintenance', () => ({
 
 import { forceDeleteLocalBranch } from './worktree-branch-removal'
 
-const image = process.env.ORCA_GIT_COMPAT_IMAGE
-const binary = process.env.ORCA_GIT_COMPAT_BINARY ?? 'git'
-const dockerUser =
-  typeof process.getuid === 'function' && typeof process.getgid === 'function'
-    ? ['--user', `${process.getuid()}:${process.getgid()}`]
-    : []
+let fixture: GitBinaryTestFixture
 let root = ''
 let repo = ''
 let checkout = ''
 
 async function git(args: string[], cwd = repo): Promise<{ stdout: string; stderr: string }> {
-  const result = await runProcess({
-    program: image ? 'docker' : binary,
-    args: image
-      ? [
-          'run',
-          '--rm',
-          '--network=none',
-          ...dockerUser,
-          '-v',
-          `${root}:${root}`,
-          '-w',
-          cwd,
-          image,
-          '-c',
-          `safe.directory=${cwd}`,
-          ...args
-        ]
-      : args,
-    cwd,
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: join(root, 'empty-config'),
-      GIT_CONFIG_NOSYSTEM: '1'
-    },
-    maxOutputBytes: 2 * 1024 * 1024
-  })
-  if (result.code !== 0) {
-    throw Object.assign(new Error(result.stderr), { code: result.code, stderr: result.stderr })
-  }
-  return result
+  return fixture.exec(args, cwd, { GIT_CONFIG_GLOBAL: join(root, 'empty-config') })
 }
 
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'orca-rebase-reservation-')))
+  fixture = new GitBinaryTestFixture(root)
+  await fixture.start()
   repo = join(root, 'repo')
   checkout = join(root, 'checkout')
   await mkdir(repo)
@@ -77,7 +45,11 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true })
+  try {
+    await fixture.stop()
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 describe('rebase branch reservations with real Git', () => {

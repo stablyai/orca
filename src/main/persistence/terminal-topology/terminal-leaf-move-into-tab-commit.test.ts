@@ -15,6 +15,12 @@ import {
 import { moveLeafIntoTab } from './terminal-topology-commit-into-tab'
 import type { TerminalTopologyCommitContext } from './terminal-topology-commit'
 
+const frozen = vi.hoisted(() => ({ worktrees: new Set<string>() }))
+vi.mock('../moving-wsl-projects/wsl-move-scope-guard', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isWslMoveWorkspaceSessionFrozen: (worktreeId: string) => frozen.worktrees.has(worktreeId)
+}))
+
 function contextWith(aliases: LegacyPaneKeyAliasEntry[] = []) {
   const markDirty = vi.fn()
   const state: TerminalTopologyCommitContext['state'] = {
@@ -137,5 +143,31 @@ describe('committing a join into an existing tab', () => {
     expect(committed.persist).toBe(false)
     expect(markDirty).not.toHaveBeenCalled()
     expect(state).toEqual(before)
+  })
+})
+
+describe('a join in a workspace paused by a WSL move', () => {
+  it('is refused up front: nothing is written, so the window never closes the source tab', () => {
+    frozen.worktrees.add(WT)
+    try {
+      const { state, context, markDirty } = contextWith()
+      const before = state.workspaceSession
+
+      const committed = commit(intoRequest, context)
+
+      expect(committed.value).toEqual({ status: 'refused', reason: 'workspace_frozen' })
+      expect(committed.persist).toBe(false)
+      expect(state.workspaceSession).toBe(before)
+      expect(state.legacyPaneKeyAliasEntries).toEqual([])
+      expect(markDirty).not.toHaveBeenCalled()
+    } finally {
+      frozen.worktrees.clear()
+    }
+  })
+
+  it('joins normally once the workspace is not paused', () => {
+    const { context } = contextWith()
+
+    expect(commit(intoRequest, context).value).toMatchObject({ status: 'moved' })
   })
 })

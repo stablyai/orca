@@ -136,6 +136,19 @@ describe('Codex child-work evidence', () => {
     expect(log.flat().filter((edge) => edge.type === 'live')).toHaveLength(1)
   })
 
+  it('keeps usage that arrives before the child is announced, and never credits the parent its own', () => {
+    const { send, byKind } = harness()
+    const usage = (threadId: string, totalTokens: number): CodexBackgroundTaskEvent => ({
+      method: 'thread/tokenUsage/updated',
+      threadId,
+      params: { threadId, tokenUsage: { total: { totalTokens } } }
+    })
+    send(turn('turn/started', PRIMARY, PARENT_TURN), usage(PRIMARY, 9_000), usage(CHILD, 1_500))
+    expect(byKind('agent')).toEqual([])
+    send(spawned(), turn('turn/started', CHILD, 'c1'))
+    expect(byKind('agent')).toEqual([expect.objectContaining({ totalTokens: 1_500 })])
+  })
+
   it('makes no record for a child whose turn began before its announcement, until it lands', () => {
     const { send, records } = harness()
     send(turn('turn/started', PRIMARY, PARENT_TURN), turn('turn/started', CHILD, 'c1'))
@@ -535,7 +548,7 @@ describe('Codex child-work evidence', () => {
     expect(byKind('command')).toEqual([expect.objectContaining({ membership: 'live' })])
   })
 
-  it('leaves no record behind a finished shell, so none displaces a finished child', () => {
+  it('leaves no record behind a finished shell', () => {
     const { send, byKind, records, log } = runningChild()
     send(turn('turn/completed', CHILD, 'c1'))
     const before = log.length

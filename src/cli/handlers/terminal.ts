@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalSetPaneTitle,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -16,6 +17,7 @@ import {
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
+  formatTerminalSetPaneTitle,
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
@@ -24,7 +26,8 @@ import {
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getRequiredStringFlag
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import {
   annotateOmittedHostScope,
@@ -42,6 +45,7 @@ import {
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import { revealPairedTerminalOnLocalDesktop } from '../paired-terminal-desktop-reveal'
 import { terminalCloseHandler } from './terminal-close'
 import { terminalSendHandler } from './terminal-send'
 
@@ -51,10 +55,14 @@ import { terminalSendHandler } from './terminal-send'
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
+  const terminal = await getTerminalHandle(flags, cwd, client)
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
-    terminal: await getTerminalHandle(flags, cwd, client),
+    terminal,
     navigation: 'host'
   })
+  if (client.isRemote && result.result.focus.navigated === false) {
+    result.result.focus.navigated = await revealPairedTerminalOnLocalDesktop(client, terminal)
+  }
   printResult(result, json, formatTerminalFocus)
 }
 
@@ -69,7 +77,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         includeVisualLayouts: !json || flags.has('include-visual-layouts')
       }
     )
-    await annotateOmittedHostScope(client, result.result)
+    await annotateOmittedHostScope(result.result)
     printResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
@@ -147,6 +155,14 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatTerminalRename)
   },
+  'terminal set-pane-title': async ({ flags, client, cwd, json }) => {
+    const title = getRequiredStringFlagAllowingEmpty(flags, 'title')
+    const result = await client.call<{ paneTitle: RuntimeTerminalSetPaneTitle }>(
+      'terminal.setPaneTitle',
+      { terminal: await getTerminalHandle(flags, cwd, client), title }
+    )
+    printResult(result, json, formatTerminalSetPaneTitle)
+  },
   'terminal create': async ({ flags, client, cwd, json }) => {
     if (client.isRemote && !flags.has('worktree')) {
       throw new RuntimeClientError(
@@ -193,11 +209,11 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       command,
       ...(shell !== undefined ? { shell } : {}),
       title: getOptionalStringFlag(flags, 'title'),
-      // Why: interactive local agent TUIs need the renderer-backed terminal
-      // path for browser-side features, but CLI creates must stay backgrounded
-      // unless the caller explicitly asks for focus.
       focus,
       ...(focus ? { presentation: 'focused' } : {}),
+      // Compat: hosts before v1.4.211 (#22384) leave a background-started agent's startup queries
+      // unanswered, so they need this to start it in the window; newer hosts ignore it. Delete
+      // once the minimum supported host version is v1.4.211 or later.
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)

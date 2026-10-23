@@ -277,3 +277,94 @@ describe('launchDaemonChild AppImage fallback', () => {
     }
   })
 })
+
+describe('launchDaemonChild on the extracted AppImage copy', () => {
+  const APPIMAGE_LAUNCH = {
+    appImagePath: '/apps/Orca.AppImage',
+    entryPathInAppDir: 'resources/app.asar.unpacked/out/main/daemon-entry.js',
+    appPathInAppDir: 'resources/app.asar',
+    appVersion: '1.0.0'
+  }
+  const GENERATION_LAUNCH = {
+    generationRoot: '/cache/ns/gen',
+    nodePath: '/cache/ns/gen/resources/node-runtime/bin/node',
+    entryPath: '/cache/ns/gen/resources/app.asar.unpacked/out/main/daemon-entry.js',
+    identityPath: '/apps/Orca.AppImage/resources/app.asar.unpacked/out/main/daemon-entry.js'
+  }
+
+  function rungOf(options: DaemonChildSpawnOptions): string {
+    return options.extractedGeneration ? 'copy' : options.appImage ? 'own-mount' : 'in-mount'
+  }
+
+  it('runs on the copy alone when it starts', async () => {
+    const child = fakeDaemonChild(4242)
+    spawnDaemonChildProcessMock.mockImplementation(() => {
+      queueMicrotask(() => child.emit('message', { type: 'ready', pid: 4242, startedAtMs: 1 }))
+      return child
+    })
+    await launchDaemonChild({
+      ...LAUNCH_OPTIONS,
+      appImage: APPIMAGE_LAUNCH,
+      extractedGeneration: GENERATION_LAUNCH
+    })
+    expect(spawnDaemonChildProcessMock.mock.calls.map(([options]) => rungOf(options))).toEqual([
+      'copy'
+    ])
+  })
+
+  it('falls back to its own mount, then the current mount, and says so each time', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const children: FakeDaemonChild[] = []
+    spawnDaemonChildProcessMock.mockImplementation((options: DaemonChildSpawnOptions) => {
+      const child = fakeDaemonChild(4300 + children.length)
+      children.push(child)
+      queueMicrotask(() => {
+        if (rungOf(options) === 'in-mount') {
+          child.emit('message', { type: 'ready', pid: child.pid, startedAtMs: 1 })
+        } else {
+          child.exitCode = 1
+          child.emit('exit', 1)
+        }
+      })
+      return child
+    })
+    try {
+      const launched = await launchDaemonChild({
+        ...LAUNCH_OPTIONS,
+        appImage: APPIMAGE_LAUNCH,
+        extractedGeneration: GENERATION_LAUNCH
+      })
+      const attempts = spawnDaemonChildProcessMock.mock.calls.map(([options]) => ({
+        rung: rungOf(options),
+        launchNonce: options.launchNonce
+      }))
+      expect(attempts.map(({ rung }) => rung)).toEqual(['copy', 'own-mount', 'in-mount'])
+      expect(new Set(attempts.map(({ launchNonce }) => launchNonce)).size).toBe(3)
+      expect(launched.identity).toMatchObject({ launchNonce: 'nonce-a' })
+      const fallbacks = warn.mock.calls.map(([message]) => String(message))
+      expect(fallbacks.some((line) => line.includes('extracted AppImage copy'))).toBe(true)
+      expect(fallbacks.some((line) => line.includes('retrying from the current mount'))).toBe(true)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('never starts a second daemon beside a copy that lost the endpoint race', async () => {
+    const child = fakeDaemonChild(4242)
+    spawnDaemonChildProcessMock.mockImplementation(() => {
+      queueMicrotask(() => {
+        child.exitCode = DAEMON_EXIT_ENDPOINT_OCCUPIED
+        child.emit('exit', DAEMON_EXIT_ENDPOINT_OCCUPIED)
+      })
+      return child
+    })
+    await expect(
+      launchDaemonChild({
+        ...LAUNCH_OPTIONS,
+        appImage: APPIMAGE_LAUNCH,
+        extractedGeneration: GENERATION_LAUNCH
+      })
+    ).rejects.toMatchObject({ reason: 'occupied' })
+    expect(spawnDaemonChildProcessMock).toHaveBeenCalledOnce()
+  })
+})

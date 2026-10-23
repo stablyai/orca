@@ -8,7 +8,7 @@ import {
   nextSavedAt,
   notifyScope,
   records,
-  unverifiedScopes
+  reconcileRestoredImageChecks
 } from './native-chat-composer-draft-memory'
 import {
   flushNativeChatComposerDrafts,
@@ -80,8 +80,8 @@ function applyLoaded(
       continue
     }
     const { draft, changed } = withAppends(scopeKey, stored, readAtSequence)
+    reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
     records.set(scopeKey, draft)
-    unverifiedScopes.add(scopeKey)
     if (changed) {
       dirtyScopes.add(scopeKey)
     }

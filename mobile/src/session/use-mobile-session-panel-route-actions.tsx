@@ -8,9 +8,15 @@ import {
   panelRouteDescriptor
 } from './session-panel-host'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import {
+  useWorkspaceExecutionHost,
+  workspaceRouteHref,
+  workspaceRouteParams
+} from '../navigation/workspace-execution-host'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
+  const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
     worktreeId,
@@ -110,12 +116,12 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 if (!delivery) {
                   return
                 }
-                void sendDiffNotesToNewAgent(delivery, () =>
-                  handleCreateTerminal(option.agent, {
+                void sendDiffNotesToNewAgent(delivery, async () => {
+                  await handleCreateTerminal(option.agent, {
                     initialPrompt: delivery.prompt,
                     onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
                   })
-                )
+                })
               }
             }))
           : createTabAgentLoadState === 'loaded'
@@ -163,14 +169,20 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         // SC + PR both land on the source-control hub with origin:'session' for post-diff-open dismissal (U2); Files opts out.
         ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
         // The PR panel routes into the hub's Pull Request segment via descriptor params.
-        ...descriptor.params
+        ...descriptor.params,
+        ...workspaceRouteParams(executionHost)
       }
     })
   }
 
   const openAgentSessionHistory = () => {
     const params = new URLSearchParams({ name: worktreeName || '' })
-    router.push(`/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+    router.push(
+      workspaceRouteHref(
+        `/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`,
+        executionHost
+      )
+    )
   }
   const showAgentSessionHistoryAction =
     !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && agentSessionHistorySupported === true

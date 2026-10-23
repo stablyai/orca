@@ -15,7 +15,7 @@ export function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispat
  * starts — an interval bounded only by the previous turn. Elapsed time is
  * therefore not evidence about delivery, and nothing here expires. Waiters end
  * by provider and process facts instead: an echo, a `command_lifecycle` frame,
- * the CLI's idle after `started` (`claude-command-lifecycle.ts`), a failed
+ * the CLI's idle after open (`claude-command-lifecycle.ts`), a failed
  * write, or child exit.
  */
 export function waitForReplay(

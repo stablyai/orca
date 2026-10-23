@@ -374,43 +374,6 @@
       "sessionTabs": [],
       "terminals": []
     },
-    "a25f5365fc53": {
-      "name": "session.tabs.createTerminal#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "afterTabId": "tab-0",
-            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:wt-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
     "a9d892293481": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
@@ -755,19 +718,6 @@
           },
           "state": "6275ace50da2",
           "effects": []
-        }
-      },
-      {
-        "id": "session-create-terminal-with-prompt.prelude:cleanup",
-        "observation": {
-          "sender": ["a25f5365fc53"],
-          "payloads": ["cce8a731064a"],
-          "settlements": {
-            "mount": "eb79a9b3682a",
-            "create": "eb79a9b3682a"
-          },
-          "state": "6275ace50da2",
-          "effects": ["b1152db10a02"]
         }
       },
       {

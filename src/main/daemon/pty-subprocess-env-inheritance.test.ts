@@ -129,8 +129,10 @@ describe('createPtySubprocess', () => {
       ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
       ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID,
-      ORCA_WSL_CLI_DIR: process.env.ORCA_WSL_CLI_DIR
+      ORCA_WSL_CLI_DIR: process.env.ORCA_WSL_CLI_DIR,
+      ORCA_ORCAD_MANAGED_ACTIVATION_ROOT: process.env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT
     }
+    process.env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT = '/home/u/.orca-remote/.activation'
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
@@ -153,6 +155,8 @@ describe('createPtySubprocess', () => {
     expect(env.ORCA_TAB_ID).toBeUndefined()
     expect(env.ORCA_WORKTREE_ID).toBeUndefined()
     expect(env.ORCA_WSL_CLI_DIR).toBeUndefined()
+    // A user's `orcad --port` in this shell must stay operator-run, not client-managed.
+    expect(env.ORCA_ORCAD_MANAGED_ACTIVATION_ROOT).toBeUndefined()
   })
 
   it('preserves explicit child Orca pane identity over parent env', async () => {

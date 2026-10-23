@@ -6,9 +6,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import { useTabDragSplit } from './useTabDragSplit'
+import { moveTerminalTabIntoPaneInApp } from '../terminal-pane/terminal-tab-into-pane-deps'
 import {
   BODY,
   C,
+  dragEndEventAt,
   dragMoveEventAt,
   dragStartEventAt,
   GROUP,
@@ -22,6 +24,16 @@ import {
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
+// The window-applied join exists only while the layout-owner switch is off.
+const switchState = vi.hoisted(() => ({ on: false }))
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return switchState.on
+  }
+}))
+vi.mock('../terminal-pane/terminal-tab-into-pane-deps', () => ({
+  moveTerminalTabIntoPaneInApp: vi.fn(() => Promise.resolve('moved'))
+}))
 vi.mock('../browser-pane/host-guest/webview-registry', () => ({
   acquireWebviewsDragPassthrough: vi.fn(() => vi.fn())
 }))
@@ -77,6 +89,7 @@ function renderDragHook(): { current: () => ReturnType<typeof useTabDragSplit> }
 }
 
 beforeEach(() => {
+  switchState.on = false
   useAppStore.setState({
     ...leafTargetState({ target: singleLeafTargetLayout() }),
     activeWorktreeId: WT,
@@ -174,5 +187,38 @@ describe('useTabDragSplit leaf hover', () => {
     act(() => drag.current().onDragMove(dragMoveEventAt({ x: 790, y: 316 }, { drag: editor })))
 
     expect(drag.current().hoveredLeafTarget).toBeNull()
+  })
+
+  it('shows no join target in a layout-owner build, over the same pane edge', () => {
+    switchState.on = true
+    const drag = renderDragHook()
+    act(() => drag.current().onDragStart(dragStartEventAt({ x: 790, y: 316 })))
+    act(() => drag.current().onDragMove(dragMoveEventAt({ x: 790, y: 316 })))
+
+    expect(drag.current().hoveredLeafTarget).toBeNull()
+  })
+
+  it('does not join on a drop that lands before the overlay for that edge is committed', () => {
+    const drag = renderDragHook()
+    act(() => drag.current().onDragStart(dragStartEventAt({ x: 790, y: 316 })))
+
+    // Inside one act the hover state is set but React has not drawn the overlay yet.
+    act(() => {
+      drag.current().onDragMove(dragMoveEventAt({ x: 790, y: 316 }))
+      drag.current().onDragEnd(dragEndEventAt({ x: 790, y: 316 }, { overGroupId: GROUP }))
+    })
+
+    expect(moveTerminalTabIntoPaneInApp).not.toHaveBeenCalled()
+  })
+
+  it('joins on a drop after the overlay for that edge is committed', () => {
+    const drag = renderDragHook()
+    act(() => drag.current().onDragStart(dragStartEventAt({ x: 790, y: 316 })))
+    act(() => drag.current().onDragMove(dragMoveEventAt({ x: 790, y: 316 })))
+    expect(drag.current().hoveredLeafTarget).not.toBeNull()
+
+    act(() => drag.current().onDragEnd(dragEndEventAt({ x: 790, y: 316 }, { overGroupId: GROUP })))
+
+    expect(moveTerminalTabIntoPaneInApp).toHaveBeenCalledTimes(1)
   })
 })

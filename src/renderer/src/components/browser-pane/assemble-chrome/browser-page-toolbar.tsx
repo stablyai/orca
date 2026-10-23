@@ -11,7 +11,14 @@ import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import { SshEgressIndicator } from './browser-egress-indicator'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
-import { readBrowserHtmlArtifactRequest } from '../describe-page/browser-artifact-upload'
+import {
+  getShareableBrowserArtifactFile,
+  readBrowserHtmlArtifactRequest
+} from '../describe-page/browser-artifact-upload'
+import {
+  canOpenBrowserFileInWorkspaceEditor,
+  openBrowserFileSource
+} from '../navigate/browser-file-editor-open'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type {
   BrowserPageConversionOrigin,
@@ -114,6 +121,15 @@ export function BrowserPageToolbar({
       : browserTourStep === 1
         ? ('annotate' as const)
         : undefined
+  const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
+  // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
+  const canOpenSourceFile = useAppStore(
+    (state) => localHtmlFilePath !== null && canOpenBrowserFileInWorkspaceEditor(state, worktreeId)
+  )
+  const openSourceFile =
+    canOpenSourceFile && localHtmlFilePath !== null
+      ? () => openBrowserFileSource(worktreeId, localHtmlFilePath)
+      : null
 
   return (
     <BrowserChromeToolbar
@@ -204,13 +220,24 @@ export function BrowserPageToolbar({
             }
           : undefined
       }
-      viewSource={{
-        onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
-        label: translate(
-          'auto.components.browser.pane.BrowserPane.ec75d0c412',
-          'Open browser devtools'
-        )
-      }}
+      viewSource={
+        openSourceFile
+          ? {
+              onSelect: openSourceFile,
+              label: translate(
+                'auto.components.editor.HtmlDocPreview.openSourceControl',
+                'Open source file'
+              ),
+              alreadyInOverflowMenu: true
+            }
+          : {
+              onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
+              label: translate(
+                'auto.components.browser.pane.BrowserPane.ec75d0c412',
+                'Open browser devtools'
+              )
+            }
+      }
       openExternal={{
         onSelect: () => {
           if (!externalUrl) {
@@ -224,6 +251,7 @@ export function BrowserPageToolbar({
         ),
         disabled: !externalUrl
       }}
+      // oxlint-disable-next-line react-doctor/no-unstable-nested-components -- BrowserChromeToolbar calls this as a function, so BrowserToolbarMenu stays one stable component.
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
           currentProfileId={sessionProfileId}
@@ -232,6 +260,7 @@ export function BrowserPageToolbar({
           viewportPresetId={viewportPresetId}
           onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
           isActive={isActive}
+          onOpenSourceFile={openSourceFile}
           overflow={overflow}
         />
       )}

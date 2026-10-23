@@ -51,6 +51,7 @@ export type RepositoryApi = {
         | 'worktreeBasePath'
         | 'kind'
         | 'issueSourcePreference'
+        | 'defaultJiraProject'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
@@ -130,6 +131,7 @@ export type ProjectGroupsApi = {
     projectId: string
     groupId: string | null
     order?: number
+    hostId?: string
   }) => Promise<Repo | null>
   scanNested: (args: {
     path: string

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
+import type * as NodeFs from 'node:fs'
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -23,6 +25,7 @@ import {
 } from '../../shared/node-runtime-pin'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
+  ORCAD_MOBILE_WEB_MANIFEST,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
@@ -34,6 +37,7 @@ import {
   orcadTemplateTargetFilenames
 } from '../../shared/orcad-artifacts'
 import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
+import { ORCAD_ARTIFACT_VERIFICATION_RECORD_FILENAME } from './orcad-artifact-verification-record'
 import {
   getAppEnvironment,
   hasAppEnvironment,
@@ -48,6 +52,20 @@ import {
 } from './orcad-artifact-materializer'
 
 const TARGET = 'linux-x64-glibc' as const
+const PAGE_ASSETS = ['out/mobile-web/index.html']
+const fileReads = vi.hoisted(() => ({ count: 0 }))
+
+// Counts whole-file hash reads without changing read behavior.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  return {
+    ...actual,
+    createReadStream: (...args: Parameters<typeof actual.createReadStream>) => {
+      fileReads.count += 1
+      return actual.createReadStream(...args)
+    }
+  }
+})
 const temporaryDirs: string[] = []
 
 afterEach(() => {
@@ -87,6 +105,13 @@ function targetContents(target: NodeRuntimeTarget, filename: string): string {
   return `${target}:${filename}`
 }
 
+function commonContents(filename: string): string {
+  if (filename === ORCAD_MOBILE_WEB_MANIFEST) {
+    return JSON.stringify({ assets: [{ path: 'index.html' }] })
+  }
+  return filename === 'orcad.js' ? 'orcad-entry' : filename
+}
+
 function createTemplate(target: NodeRuntimeTarget = TARGET): {
   templateDir: string
   cacheRoot: string
@@ -96,8 +121,8 @@ function createTemplate(target: NodeRuntimeTarget = TARGET): {
   const templateDir = join(root, 'template')
   const cacheRoot = join(root, 'cache')
   const commonSha256: Record<string, string> = {}
-  for (const filename of orcadTemplateCommonFilenames()) {
-    write(join(templateDir, filename), filename === 'orcad.js' ? 'orcad-entry' : filename)
+  for (const filename of orcadTemplateCommonFilenames(PAGE_ASSETS)) {
+    write(join(templateDir, filename), commonContents(filename))
     commonSha256[filename] = sha256(join(templateDir, filename))
   }
   const targetDir = join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target)
@@ -231,7 +256,7 @@ describe('assembleOrcadArtifact', () => {
     expect(readFileSync(join(artifactDir, ORCAD_NODE_RUNTIME_MARKER_FILENAME), 'utf8').trim()).toBe(
       NODE_RUNTIME_ASSETS[TARGET].executableSha256
     )
-    for (const filename of orcadArtifactFilenames(TARGET)) {
+    for (const filename of orcadArtifactFilenames(TARGET, PAGE_ASSETS)) {
       expect(readFileSync(join(artifactDir, filename)).byteLength).toBeGreaterThan(0)
     }
     // A Bun-era client's selector would exit 78 on this file without a Bun runtime (R5).
@@ -253,6 +278,33 @@ describe('assembleOrcadArtifact', () => {
 
     await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
       'node_modules/node-pty/build/Release/pty.node checksum mismatch'
+    )
+  })
+
+  it('copies the page phones load into the slot, verified like every other file', async () => {
+    const fixture = createTemplate()
+    const artifactDir = await assembleOrcadArtifact({ ...fixture, target: TARGET })
+    expect(readFileSync(join(artifactDir, 'out/mobile-web/index.html'), 'utf8')).toBe(
+      'out/mobile-web/index.html'
+    )
+    expect(existsSync(join(artifactDir, ORCAD_MOBILE_WEB_MANIFEST))).toBe(true)
+
+    const corrupted = createTemplate()
+    write(join(corrupted.templateDir, 'out/mobile-web/index.html'), 'corrupted')
+    await expect(assembleOrcadArtifact({ ...corrupted, target: TARGET })).rejects.toThrow(
+      'out/mobile-web/index.html checksum mismatch'
+    )
+  })
+
+  it('refuses a template page asset name that escapes the slot', async () => {
+    const fixture = createTemplate()
+    rewriteManifest(fixture.templateDir, (manifest) => {
+      manifest.commonSha256['out/mobile-web/../../escape.js'] = sha256(
+        join(fixture.templateDir, 'out/mobile-web/index.html')
+      )
+    })
+    await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
+      'unsafe page asset: out/mobile-web/../../escape.js'
     )
   })
 
@@ -317,6 +369,18 @@ describe('assembleOrcadArtifact', () => {
     )
   })
 
+  // Regression: a browser digest keyed like orcad.js must not replace the common digest.
+  it('rejects a browser named like a required slot file', async () => {
+    const fixture = createTemplate()
+    rewriteManifest(fixture.templateDir, (manifest) => {
+      manifest.targets[TARGET]!.browserName = 'orcad.js'
+    })
+
+    await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
+      'browser name collides with a slot file'
+    )
+  })
+
   it('rejects a manifest that omits a required common artifact checksum', async () => {
     const fixture = createTemplate()
     rewriteManifest(fixture.templateDir, (manifest) => {
@@ -326,6 +390,146 @@ describe('assembleOrcadArtifact', () => {
     await expect(assembleOrcadArtifact({ ...fixture, target: TARGET })).rejects.toThrow(
       'manifest omits orcad.js'
     )
+  })
+})
+
+describe('assembleOrcadArtifact verification record', () => {
+  // Every fixture file was written this instant; a later clock makes their signatures settled.
+  const later = (): number => Date.now() + 60_000
+  const recordPath = (cacheRoot: string): string =>
+    join(cacheRoot, TARGET, ORCAD_ARTIFACT_VERIFICATION_RECORD_FILENAME)
+
+  async function assembleUntilSlotRecorded(fixture: {
+    templateDir: string
+    cacheRoot: string
+  }): Promise<string> {
+    // The first call copies a fresh slot; the second hashes it once and records it.
+    const first = await assembleOrcadArtifact({
+      ...fixture,
+      target: TARGET,
+      now: later,
+      trustVerificationRecord: true
+    })
+    expect(
+      await assembleOrcadArtifact({
+        ...fixture,
+        target: TARGET,
+        now: later,
+        trustVerificationRecord: true
+      })
+    ).toBe(first)
+    return first
+  }
+
+  // Regression: SSH and local serve keep hashing every launch; a forged record must not bypass it.
+  it('neither reads nor writes a record unless the caller trusts it', async () => {
+    const fixture = createTemplate()
+    const slot = await assembleUntilSlotRecorded(fixture)
+    const recorded = readFileSync(recordPath(fixture.cacheRoot), 'utf8')
+    const before = fileReads.count
+    expect(await assembleOrcadArtifact({ ...fixture, target: TARGET, now: later })).toBe(slot)
+    // Template pass plus the slot's own check, exactly as with no record at all.
+    expect(fileReads.count - before).toBe(
+      (orcadArtifactFilenames(TARGET, PAGE_ASSETS).length + 1) * 2
+    )
+    rmSync(recordPath(fixture.cacheRoot))
+    await assembleOrcadArtifact({ ...fixture, target: TARGET, now: later })
+    expect(existsSync(recordPath(fixture.cacheRoot))).toBe(false)
+    expect(recorded.length).toBeGreaterThan(0)
+  })
+
+  it('records nothing while the files may still change under the same timestamps', async () => {
+    const fixture = createTemplate()
+    await assembleOrcadArtifact({ ...fixture, target: TARGET, trustVerificationRecord: true })
+    expect(existsSync(recordPath(fixture.cacheRoot))).toBe(false)
+  })
+
+  it('reuses recorded digests without reading the template or the slot again', async () => {
+    const fixture = createTemplate()
+    const slot = await assembleUntilSlotRecorded(fixture)
+    const before = fileReads.count
+    expect(
+      await assembleOrcadArtifact({
+        ...fixture,
+        target: TARGET,
+        now: later,
+        trustVerificationRecord: true
+      })
+    ).toBe(slot)
+    expect(fileReads.count).toBe(before)
+  })
+
+  it('hashes the template once per launch when nothing is recorded', async () => {
+    const fixture = createTemplate()
+    const before = fileReads.count
+    const slot = await assembleOrcadArtifact({ ...fixture, target: TARGET })
+    const sources = orcadArtifactFilenames(TARGET, PAGE_ASSETS).length + 1
+    // One template pass plus the copied slot's own check, where three template passes ran before.
+    expect(fileReads.count - before).toBe(sources * 2)
+    expect(slot).toContain(fixture.cacheRoot)
+  })
+
+  it('hashes again when a template file is rewritten in place at the same size', async () => {
+    const fixture = createTemplate()
+    await assembleUntilSlotRecorded(fixture)
+    const templateEntry = join(fixture.templateDir, 'orcad.js')
+    writeFileSync(templateEntry, 'orcad-ENTRY')
+
+    await expect(
+      assembleOrcadArtifact({
+        ...fixture,
+        target: TARGET,
+        now: later,
+        trustVerificationRecord: true
+      })
+    ).rejects.toThrow('orcad template orcad.js checksum mismatch')
+  })
+
+  it('hashes again when the manifest no longer lists the recorded digest', async () => {
+    const fixture = createTemplate()
+    await assembleUntilSlotRecorded(fixture)
+    rewriteManifest(fixture.templateDir, (manifest) => {
+      manifest.commonSha256['orcad.js'] = 'f'.repeat(64)
+    })
+
+    await expect(
+      assembleOrcadArtifact({
+        ...fixture,
+        target: TARGET,
+        now: later,
+        trustVerificationRecord: true
+      })
+    ).rejects.toThrow('orcad template orcad.js checksum mismatch')
+  })
+
+  it('repairs a recorded slot whose file was rewritten in place at the same size', async () => {
+    const fixture = createTemplate()
+    const slot = await assembleUntilSlotRecorded(fixture)
+    writeFileSync(join(slot, 'orcad.js'), 'orcad-ENTRY')
+
+    const repaired = await assembleOrcadArtifact({
+      ...fixture,
+      target: TARGET,
+      now: later,
+      trustVerificationRecord: true
+    })
+    expect(repaired).toBe(`${slot}.repair-1`)
+    expect(readFileSync(join(repaired, 'orcad.js'), 'utf8')).toBe('orcad-entry')
+  })
+
+  it('ignores an unreadable record and hashes as before', async () => {
+    const fixture = createTemplate()
+    const slot = await assembleUntilSlotRecorded(fixture)
+    writeFileSync(recordPath(fixture.cacheRoot), '{"version":1,')
+
+    expect(
+      await assembleOrcadArtifact({
+        ...fixture,
+        target: TARGET,
+        now: later,
+        trustVerificationRecord: true
+      })
+    ).toBe(slot)
   })
 })
 

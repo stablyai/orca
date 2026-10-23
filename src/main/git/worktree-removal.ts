@@ -112,26 +112,35 @@ function deleteBranchOfRemovedWorktree(
 }
 
 /**
- * Finishes a removal whose checkout Git no longer registers (it finished deleting, or an earlier
- * run did): leftover files, stale admin records, then the branch. Already-gone parts are done.
- * `assertLeftover` refuses unless the path still holds the removed checkout's own leftover.
+ * Finishes a removal whose checkout Git no longer registers and is gone from disk: stale admin
+ * records, then the branch. Deletes no files: Orca removes a checkout only through Git.
+ * `assertCheckoutGone` refuses while anything is still at the path.
  */
 export async function finishUnregisteredWorktreeRemoval(
   repoPath: string,
   worktreePath: string,
   branch: { name: string; head: string } | null,
-  assertLeftover: () => Promise<void>,
+  assertCheckoutGone: () => Promise<void>,
+  options: RemoveWorktreeOptions = {}
+): Promise<RemoveWorktreeResult> {
+  await assertCheckoutGone()
+  await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options)).catch(
+    (error: unknown) => console.warn(`[git] worktree prune failed in ${repoPath}`, error)
+  )
+  return deleteBranchOfUnregisteredWorktree(repoPath, worktreePath, branch, options)
+}
+
+/**
+ * The branch step of a removal once Git no longer registers the checkout, whatever is left on disk:
+ * merged only, as `removeWorktree` does. Prunes nothing and deletes no files.
+ */
+export async function deleteBranchOfUnregisteredWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branch: { name: string; head: string } | null,
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   try {
-    await runUnderWorktreeDeleteLimit(async () => {
-      // Why in the slot: the wait can outlast two large deletes, and the path may change meanwhile.
-      await assertLeftover()
-      await removeCheckoutLeftByGit(worktreePath, options)
-    })
-    await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options)).catch(
-      (error: unknown) => console.warn(`[git] worktree prune failed in ${repoPath}`, error)
-    )
     if (!branch?.name || !(await localBranchExists(repoPath, branch.name, options))) {
       return {}
     }

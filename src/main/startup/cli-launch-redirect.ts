@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs'
-import { posix, win32 } from 'node:path'
+import { posix, resolve, win32 } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { CLI_BOOLEAN_FLAGS, findCliCommandIndex } from '../../shared/cli-argument-boundary'
+import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
 import { CLI_COMMAND_NAMES } from './cli-command-names'
-import { VALUE_TAKING_FLAGS } from './serve-mode-argv'
+import { reexecHeadlessServeOnX11IfNeeded } from './headless-serve-x11-reexec'
+import { argvRequestsServeMode, VALUE_TAKING_FLAGS } from './serve-mode-argv'
 
 export type CliLaunchRedirectResult = { redirected: false } | { redirected: true; status: number }
 
@@ -17,6 +19,10 @@ export type CliLaunchRedirectOptions = {
   commandNames?: readonly string[]
   exists?: typeof existsSync
   run?: typeof runProcessSync
+  /** Replaces this process; null when the runtime cannot, which keeps serve in-process. */
+  execve?: ((file: string, args: string[], env: NodeJS.ProcessEnv) => void) | null
+  /** The Ozone platform Electron resolved before main ran; defaults to Electron's switch. */
+  readOzonePlatform?: () => string
 }
 
 const CLI_EARLY_EXIT_FLAGS = new Set(['--help', '-h', 'help', '--version', '-v'])
@@ -47,6 +53,25 @@ export function maybeRedirectCliLaunch(
   })
 
   if (!cliArgs) {
+    const serve = getDirectServeLaunch(argv, {
+      platform,
+      isPackaged,
+      commandNames: options.commandNames ?? CLI_COMMAND_NAMES
+    })
+    const execve = options.execve === undefined ? defaultExecve() : options.execve
+    if (serve && execve && exists(cliEntryPath)) {
+      execDirectServe(execve, execPath, cliEntryPath, serve, env)
+    }
+    // In-process serve (direct `--serve`, or a CLI exec that failed) never got the CLI's X11 pin.
+    reexecHeadlessServeOnX11IfNeeded({
+      isServeMode: argvRequestsServeMode(argv),
+      argv,
+      platform,
+      execPath,
+      env,
+      execve: execve ?? null,
+      readResolvedOzonePlatform: options.readOzonePlatform
+    })
     return { redirected: false }
   }
   if (env[REDIRECT_ATTEMPT_ENV] === '1') {
@@ -72,6 +97,76 @@ export function maybeRedirectCliLaunch(
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return { redirected: true, status: 1 }
   }
+}
+
+type DirectServeLaunch = { args: string[]; userDataPath: string | null; noSandbox: boolean }
+
+/**
+ * A direct `<binary> serve` on Linux. It runs through the CLI like `orca-ide serve` does, so it
+ * honours ORCA_USER_DATA_PATH and --supervise; exec keeps the pid, so signals still reach it.
+ */
+export function getDirectServeLaunch(
+  argv: string[],
+  options: { platform: NodeJS.Platform; isPackaged: boolean; commandNames: readonly string[] }
+): DirectServeLaunch | null {
+  if (!options.isPackaged || options.platform !== 'linux') {
+    return null
+  }
+  const args = argv.slice(1)
+  const commandIndex = findCommandIndex(args, options.commandNames)
+  if (commandIndex === -1 || args[commandIndex] !== 'serve') {
+    return null
+  }
+  // Why: the CLI has no --user-data-dir; it reads the profile from ORCA_USER_DATA_PATH.
+  let userDataPath: string | null = null
+  const leading: string[] = []
+  for (let index = 0; index < commandIndex; index += 1) {
+    const arg = args[index]!
+    if (arg.startsWith('--user-data-dir=')) {
+      userDataPath = arg.slice('--user-data-dir='.length)
+    } else if (arg === '--user-data-dir' && index + 1 < commandIndex) {
+      userDataPath = args[++index]!
+    } else {
+      leading.push(arg)
+    }
+  }
+  const rest = [...leading, ...args.slice(commandIndex)]
+  return {
+    // Why everywhere: serve has no such flags, and in-process serve tolerated them after the command.
+    args: stripDesktopFlags(rest, rest.length),
+    userDataPath: userDataPath ? resolve(userDataPath) : null,
+    noSandbox: rest.includes('--no-sandbox')
+  }
+}
+
+function execDirectServe(
+  execve: NonNullable<CliLaunchRedirectOptions['execve']>,
+  execPath: string,
+  cliEntryPath: string,
+  serve: DirectServeLaunch,
+  env: NodeJS.ProcessEnv
+): void {
+  const childEnv = buildElectronRunAsNodeEnv(env)
+  // Why no fence: exec sets ELECTRON_RUN_AS_NODE itself, and the server's terminals inherit this env.
+  delete childEnv[REDIRECT_ATTEMPT_ENV]
+  if (serve.userDataPath) {
+    childEnv.ORCA_USER_DATA_PATH = serve.userDataPath
+  }
+  if (serve.noSandbox) {
+    childEnv[ELECTRON_NO_SANDBOX_REQUEST_ENV] = '1'
+  }
+  try {
+    execve(execPath, [execPath, cliEntryPath, ...serve.args], childEnv)
+  } catch (error) {
+    process.stderr.write(
+      `[serve] Serving in-process; could not start the Orca CLI: ${error instanceof Error ? error.message : String(error)}\n`
+    )
+  }
+}
+
+function defaultExecve(): CliLaunchRedirectOptions['execve'] {
+  const execve = process.execve
+  return execve ? (file, args, env) => execve.call(process, file, args, env) : null
 }
 
 export function getCliLaunchArgs(
@@ -118,7 +213,7 @@ function getCommandLaunchArgs(
   const commandIndex = findCommandIndex(args, options.commandNames)
   const cliArgs = stripDesktopFlags(args, commandIndex)
   const command = commandIndex === -1 ? null : args[commandIndex]
-  // Keep direct serve in-process so signals reach its full child tree.
+  // Direct serve is exec'd into the CLI instead (getDirectServeLaunch), keeping its pid.
   if (command && command !== 'serve') {
     return cliArgs
   }

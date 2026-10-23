@@ -8,11 +8,12 @@ import type {
   LastCompletionIdentity
 } from './agent-completion-identity-store'
 import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
+import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-transitions'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
 
 const COMPLETION_REPLAY_GUARD_MS = 1_000
-const HOOK_DONE_QUIET_MS = 1_500
+const HOOK_DONE_QUIET_MS = AGENT_DONE_QUIET_MS
 
 export type CompletionState = {
   currentTurn: number
@@ -72,9 +73,13 @@ export function createAgentCompletionNotificationController({
 
   function hookCompletionIdentity(payload: AgentCompletionStatusSnapshot): string | null {
     // Why: `stateStartedAt` is pinned while the reported state does not change. A Claude pane held at `working` by background inventory would otherwise give every turn in the run the same identity.
+    // Why: `stateStartedAt` is also pinned across done→done, so a later turn end in one done
+    // segment is told from a restatement only by the host's turn-end stamp.
     const timestamp = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt
-      : payload.stateStartedAt
+      : payload.state === 'done' && isFiniteTurnCompletedAt(payload.turnEndedAt)
+        ? payload.turnEndedAt
+        : payload.stateStartedAt
     if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
       return null
     }
@@ -141,6 +146,10 @@ export function createAgentCompletionNotificationController({
     )
   }
 
+  function canAnnounceCompletion(): boolean {
+    return !state.requiresFreshWorking && options.isLive() && processState.hasAgentRunEvidence
+  }
+
   function dispatchCompletion(
     source: CompletionSource,
     title: string,
@@ -156,10 +165,7 @@ export function createAgentCompletionNotificationController({
     if (source !== 'hook' && state.pendingHookDoneTimer !== null) {
       return false
     }
-    if (state.requiresFreshWorking || state.lastCompletedTurn === state.currentTurn) {
-      return false
-    }
-    if (!options.isLive() || !processState.hasAgentRunEvidence) {
+    if (!canAnnounceCompletion() || state.lastCompletedTurn === state.currentTurn) {
       return false
     }
     const now = Date.now()
@@ -203,8 +209,12 @@ export function createAgentCompletionNotificationController({
         ...(optionsOverride.terminalIdleConfirmed === true ? { terminalIdleConfirmed: true } : {}),
         ...(optionsOverride.agentStatus ? { agentStatus: optionsOverride.agentStatus } : {})
       })
-    } else if (optionsOverride.notifyWithoutLifecycle === true && optionsOverride.agentStatus) {
-      // Why: the pane is still `working`; the synthetic done must carry its own snapshot or the notification would read the pinned working row.
+    } else if (
+      optionsOverride.agentStatus &&
+      (optionsOverride.notifyWithoutLifecycle === true ||
+        options.usesHookTurnEnds?.(optionsOverride.agentStatus) === true)
+    ) {
+      // Why: carry the hook's own snapshot; the stored row may be a newer state (a pinned `working`) or too old to lend content.
       options.dispatchCompletion(title, {
         source,
         quietedHookDone: false,
@@ -283,6 +293,7 @@ export function createAgentCompletionNotificationController({
     dispatchCompletion,
     dispatchAttention,
     scheduleHookDoneCompletion,
-    hasPendingHookDone: () => state.pendingHookDoneTimer !== null
+    hasPendingHookDone: () => state.pendingHookDoneTimer !== null,
+    canAnnounceCompletion
   }
 }

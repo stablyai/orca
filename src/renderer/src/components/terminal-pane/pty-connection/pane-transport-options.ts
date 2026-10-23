@@ -18,10 +18,6 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.deps.onPreconnectInput
       ? { onPreconnectInput: session.deps.onPreconnectInput }
       : {}),
-    // Why: only fresh local IPC spawns may recover from a saved startup cwd
-    // whose directory was deleted (#7239); remote-runtime spawns resolve cwd
-    // on another host and must keep exact cwd semantics.
-    ...(session.runtimeEnvironmentId === null ? { cwdFallback: 'worktree' as const } : {}),
     env: session.paneEnv,
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste
@@ -69,6 +65,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...(session.paneStartup?.agentLaunch ? { agentLaunch: session.paneStartup.agentLaunch } : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
     onPtyExit: session.onExit,
     onPtySpawn: session.onPtySpawn,

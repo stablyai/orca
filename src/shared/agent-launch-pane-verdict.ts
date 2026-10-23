@@ -4,11 +4,9 @@
  * only fails with `AGENT_LAUNCH_PANE_REFUSED_CODE`, so nothing is parsed out of error text.
  */
 
-import { z } from 'zod'
-
-/** The launch's fate for its pane once nothing more can change it; the tab keeps it for its life. */
+/** Why a launch pane shows no agent, kept on the tab for this session only. */
 export type AgentLaunchPaneOutcome =
-  /** The launch failed before its agent ran; `code` is the recorded reason, for the window to word. */
+  /** The launch failed before its agent ran; `code` is the reason, for the window to word. */
   | { kind: 'not-started'; code: string }
   /** The launch may have started its agent and nothing can tell. */
   | { kind: 'unconfirmed' }
@@ -30,22 +28,11 @@ export type AgentLaunchPaneVerdictEvent = AgentLaunchPaneAddress & {
   verdict: AgentLaunchPaneVerdict
 }
 
-/** A tab's launch-pane state as persisted; a malformed one is dropped, never the session. */
-export const agentLaunchPaneOnTabSchema = z
-  .object({
-    leafId: z.string(),
-    operationId: z.string().optional(),
-    outcome: z.custom<AgentLaunchPaneOutcome>(isAgentLaunchPaneOutcome).optional()
-  })
-  .optional()
-  .catch(undefined)
-
-export function isAgentLaunchPaneOutcome(value: unknown): value is AgentLaunchPaneOutcome {
-  if (typeof value !== 'object' || value === null || !('kind' in value)) {
-    return false
-  }
-  return (
-    value.kind === 'unconfirmed' ||
-    (value.kind === 'not-started' && 'code' in value && typeof value.code === 'string')
-  )
+/** A launch pane as the window saves it: only a pending one, since its outcome is this session's. */
+export function pendingAgentLaunchPane<T extends { outcome?: unknown }>(
+  pane: T
+): Omit<T, 'outcome'> {
+  const { outcome: _outcome, ...pending } = pane
+  void _outcome
+  return pending
 }

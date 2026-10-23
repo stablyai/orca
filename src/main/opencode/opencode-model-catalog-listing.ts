@@ -1,5 +1,6 @@
-// OpenCode's session-free model listing: `opencode models --verbose` prints each `provider/model` id
-// on its own line, followed by that model's metadata as indented JSON closed by a bare `}` line.
+// OpenCode 1.x's session-free model listing: `opencode models --verbose` prints each
+// `provider/model` id on its own line, followed by that model's metadata as indented JSON closed by
+// a bare `}` line.
 
 import { z } from 'zod'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'

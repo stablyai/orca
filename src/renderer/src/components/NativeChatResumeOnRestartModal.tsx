@@ -155,10 +155,10 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     open
   })
   useEffect(() => {
-    if (offerEnabled && open && run) {
+    if (offerEnabled && open && run && runPanel?.finishedRowsVisible) {
       markFinishedNativeChatRestartRunShown(run)
     }
-  }, [offerEnabled, open, run])
+  }, [offerEnabled, open, run, runPanel?.finishedRowsVisible])
   const allSelection = resumeSelectionState(selectable, ticked)
   const choosing = runPanel?.choosing ?? true
   // While the setting is off the box stays, before and after Resume; an automatic run explains itself.
@@ -335,6 +335,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
             </div>
           )}
           <ResumeOnRestartGroups
+            key={run?.inFlight ? 'running' : 'finished'}
             candidates={runPanel?.rows ?? rows}
             listedAt={listedAt}
             busy={busy}

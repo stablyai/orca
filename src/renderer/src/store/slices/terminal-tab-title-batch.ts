@@ -48,7 +48,7 @@ function getFallbackTabTitle(tab: TerminalTab): string {
   )
 }
 
-function getTabIdFromPaneKey(paneKey: string): string | null {
+export function getTabIdFromPaneKey(paneKey: string): string | null {
   return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
 }
 

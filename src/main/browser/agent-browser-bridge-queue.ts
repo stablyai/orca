@@ -6,6 +6,14 @@ import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
+import { runWithRemoteCliPageAdmission } from './remote-cli-page-admission'
+import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
+import { releaseHeldPageInput } from './guest-direct-key-input'
+import {
+  captureRemoteCliBrowserRevocation,
+  captureRemoteCliBrowserScope,
+  runOutsideRemoteCliBrowserScope
+} from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
   // Why: route tab switch through the command queue so it can't race in-flight commands targeting the old tab.
@@ -59,6 +67,9 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     this.assertCommandAdmission()
+    const assertNotRevoked = captureRemoteCliBrowserRevocation()
+    const origin = captureRemoteCliBrowserScope()
+    assertNotRevoked()
     const { browserPageId: pageId } = this.resolveCommandTarget(
       worktreeId,
       browserPageId,
@@ -73,7 +84,25 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         this.commandQueues.set(sessionName, queue)
       }
       queue.push({
-        execute: () => this.executeQueuedCommand(worktreeId, pageId, execute, options),
+        execute: () => {
+          assertNotRevoked()
+          const run = (): Promise<T> =>
+            this.executeQueuedCommand(
+              worktreeId,
+              pageId,
+              (session, target) => {
+                const gate = (): void => assertNotRevoked(target.webContentsId)
+                gate()
+                return origin.bridged
+                  ? this.runHostCommand(session, target.webContentsId, gate, origin, () =>
+                      execute(session, target)
+                    )
+                  : execute(session, target)
+              },
+              options
+            )
+          return origin.run(run)
+        },
         resolve: resolve as (value: unknown) => void,
         reject
       })
@@ -95,6 +124,48 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       await this.ensureSession(sessionName, browserPageId, target.webContentsId)
     }
     return execute(sessionName, target)
+  }
+
+  /** Holds the page for a host's command, so a revocation stops every later step of it. */
+  private runHostCommand<T>(
+    sessionName: string,
+    webContentsId: number,
+    gate: () => void,
+    { revoked, hostRevoked }: { revoked?: AbortSignal; hostRevoked?: AbortSignal },
+    execute: () => Promise<T>
+  ): Promise<T> {
+    return runWithRemoteCliPageAdmission(webContentsId, gate, execute, {
+      revoked,
+      hostRevoked,
+      inPageTurn: (work) => this.enqueueDesktopPageWork(sessionName, work),
+      // Why keep the queue: commands waiting on the page still run, on a fresh helper session.
+      retire: () =>
+        this.destroySession(sessionName, {
+          closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS,
+          keepQueuedCommands: true
+        }),
+      releaseHeld: (release) => {
+        const wc = this.getWebContents(webContentsId)
+        return wc
+          ? releaseHeldPageInput(wc, release, () =>
+              this.browserManager.guardUserFocusForAgentInput(webContentsId)
+            )
+          : Promise.resolve()
+      }
+    })
+  }
+
+  /** Desktop-owned page work, run in the page's turn so it cannot interleave with a command. */
+  private enqueueDesktopPageWork(sessionName: string, work: () => Promise<void>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      let queue = this.commandQueues.get(sessionName)
+      if (!queue) {
+        queue = []
+        this.commandQueues.set(sessionName, queue)
+      }
+      queue.push({ execute: () => runOutsideRemoteCliBrowserScope(work), resolve, reject })
+      void this.processQueue(sessionName)
+    })
   }
 
   protected async processQueue(sessionName: string): Promise<void> {

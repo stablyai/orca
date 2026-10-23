@@ -4,11 +4,18 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
+type NativeChatPortalMenuActions = {
+  onClosePane: () => void
+  onCopyAgentSessionContext: () => void
+  canClearPaneTitle: boolean
+  onClearPaneTitle: () => void
+}
+
 const mocks = vi.hoisted(
   (): {
     nativeChatViewProps: null | {
       isFocusedGroup: boolean
-      contextMenuActions: { onClosePane: () => void }
+      contextMenuActions: NativeChatPortalMenuActions
     }
   } => ({ nativeChatViewProps: null })
 )
@@ -31,7 +38,7 @@ vi.mock('@/store', () => ({
 vi.mock('../native-chat/NativeChatView', () => ({
   default: (props: {
     isFocusedGroup: boolean
-    contextMenuActions: { onClosePane: () => void }
+    contextMenuActions: NativeChatPortalMenuActions
   }) => {
     mocks.nativeChatViewProps = props
     return <span data-focused-group={String(props.isFocusedGroup)} />
@@ -59,6 +66,30 @@ describe('TerminalPaneNativeChatPortal', () => {
     expect(controller.contextMenu.runForPane).toHaveBeenCalledWith(
       42,
       controller.contextMenu.onClosePane
+    )
+  })
+
+  it("runs the chat pane's Copy Context and Clear Pane Title, offering the latter only when titled", () => {
+    const portalContainer = document.createElement('div')
+    const controller = makeController(portalContainer, { activePaneIsChatLeaf: false })
+    render(<TerminalPaneNativeChatPortal controller={controller} />)
+    expect(mocks.nativeChatViewProps?.contextMenuActions.canClearPaneTitle).toBe(false)
+
+    controller.paneTitles = { 1: 'Build agent' }
+    controller.contextMenu.onCopyAgentSessionContext = vi.fn()
+    controller.contextMenu.onClearPaneTitle = vi.fn()
+    render(<TerminalPaneNativeChatPortal controller={controller} />)
+    const actions = mocks.nativeChatViewProps?.contextMenuActions
+    expect(actions?.canClearPaneTitle).toBe(true)
+    actions?.onCopyAgentSessionContext()
+    actions?.onClearPaneTitle()
+    expect(controller.contextMenu.runForPane).toHaveBeenCalledWith(
+      1,
+      controller.contextMenu.onCopyAgentSessionContext
+    )
+    expect(controller.contextMenu.runForPane).toHaveBeenCalledWith(
+      1,
+      controller.contextMenu.onClearPaneTitle
     )
   })
 
@@ -94,6 +125,7 @@ function makeController(
     container: portalContainer,
     terminal: { element: document.createElement('div'), focus: vi.fn() }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the portal reads only the controller fields this fixture sets.
   return {
     chatPane,
     chatPaneLaunchAgent: null,
@@ -109,6 +141,7 @@ function makeController(
     isActive: true,
     isRendererVisible: true,
     managedPanes: [chatPane, { id: 2, leafId: '22222222-2222-4222-8222-222222222222' }],
+    paneTitles: {},
     readNativeChatTerminalScreen: vi.fn(),
     resolveAgentForLeaf: vi.fn(() => null),
     switchNativeChatToTerminal: vi.fn(),

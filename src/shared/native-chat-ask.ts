@@ -41,7 +41,8 @@ function parseCanonicalQuestionsInput(input: unknown): AskPrompt | null {
         multiSelect:
           'multiSelect' in raw
             ? raw.multiSelect === true
-            : 'multiple' in raw && raw.multiple === true,
+            : ('multiple' in raw && raw.multiple === true) ||
+              ('multi' in raw && raw.multi === true),
         options
       })
     }

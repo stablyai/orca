@@ -11,7 +11,7 @@ import {
   supervisorsDir,
   type ServeParkRecord
 } from '../../shared/serve-bundle-coordination'
-import { openServeBundlePark } from './serve-bundle-park'
+import { openServeBundlePark } from '../../shared/serve-bundle-park'
 import { superviseServeService } from './serve-supervised-service'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
 

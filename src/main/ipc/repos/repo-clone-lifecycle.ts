@@ -25,6 +25,8 @@ import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cac
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
+import { resolveClonedFolderConversion } from '../../folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
 
 type ActiveCloneMetadata = {
   path: string
@@ -252,9 +254,19 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           // Why: check after clone (path didn't exist before); reuse+upgrade a folder repo clone landed into instead of duplicating.
           const existing = findSaved()
           if (existing) {
-            if (isFolderRepo(existing)) {
-              const updated = store.updateRepo(existing.id, {
+            const conversion = await resolveClonedFolderConversion(store, existing)
+            const current = findSaved()
+            if (
+              current &&
+              conversion &&
+              findExtraFolderWorkspaceIds(current, store.getAllWorktreeMeta()).length === 0 &&
+              current.path === existing.path &&
+              isFolderRepo(current) &&
+              getRepoExecutionHostId(current) === getRepoExecutionHostId(existing)
+            ) {
+              const updated = store.updateRepo(current, {
                 kind: 'git',
+                ...conversion,
                 projectHostSetupMethod: 'cloned'
               })
               if (updated) {
@@ -268,11 +280,13 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
             }
             // Why: git re-created this project's folder, so its worktree root is gone with it and
             // the authorized-roots cache still holds the answers from before the folder came back.
-            await prepareLocalWorktreeRootForRepo(store, existing)
-            invalidateAuthorizedRootsCache()
-            notifyReposChanged(mainWindow)
-            emitRepoAdded('clone_url', true, true)
-            return existing
+            if (current) {
+              await prepareLocalWorktreeRootForRepo(store, current)
+              invalidateAuthorizedRootsCache()
+              notifyReposChanged(mainWindow)
+              emitRepoAdded('clone_url', true, true)
+              return current
+            }
           }
 
           const detected = await detectRepoIconAndUpstream({

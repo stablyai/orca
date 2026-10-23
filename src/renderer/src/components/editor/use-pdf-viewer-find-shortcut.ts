@@ -3,6 +3,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isEditableTarget } from '@/lib/editable-target'
 import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 /**
  * Find is this PDF's when the key comes from inside it, or when it owns the panel's commands (the
@@ -55,7 +56,7 @@ export function usePdfViewerFindShortcut({
       e.stopPropagation()
       openFind()
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [keybindings, openFind, ownsCommands, rootRef])
 }

@@ -13,7 +13,6 @@ import {
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
-  mobileShellBuildKind,
   readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
@@ -505,40 +504,5 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
-  })
-})
-
-/** The build-time constant the release workflow sets. Under Metro this name is inlined before the
- *  bundle is written, so these cases measure the answer the inlined value produces, not the read. */
-function setShellBuildSwitch(value: string | undefined): void {
-  if (value === undefined) {
-    Reflect.deleteProperty(process.env, 'EXPO_PUBLIC_MOBILE_SHELL')
-    return
-  }
-  process.env.EXPO_PUBLIC_MOBILE_SHELL = value
-}
-
-describe('the mobile shell build kind', () => {
-  beforeEach(() => {
-    setShellBuildSwitch(undefined)
-  })
-
-  it('is native when the build set no switch at all, which is every default build', () => {
-    expect(mobileShellBuildKind()).toBe('native')
-  })
-
-  it.each([[''], ['native'], ['OTA'], [' ota'], ['ota-preview'], ['true']])(
-    'is native for %p, so only the exact word opts in',
-    (value) => {
-      setShellBuildSwitch(value)
-
-      expect(mobileShellBuildKind()).toBe('native')
-    }
-  )
-
-  it('is ota when the build set exactly that', () => {
-    setShellBuildSwitch('ota')
-
-    expect(mobileShellBuildKind()).toBe('ota')
   })
 })

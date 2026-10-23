@@ -5,11 +5,6 @@ import { RuntimeGitStatusCommands } from './runtime-git-status-commands'
 import { RuntimeGitSyncCommands } from './runtime-git-sync-commands'
 import type { RuntimeGitCommandHost } from './runtime-git-command-target'
 
-export type {
-  ResolvedRuntimeGitWorktree,
-  RuntimeGitCommandHost
-} from './runtime-git-command-target'
-
 export class RuntimeGitCommands {
   readonly getRuntimeGitStatus: RuntimeGitStatusCommands['getRuntimeGitStatus']
   readonly getRuntimeGitSubmoduleStatus: RuntimeGitStatusCommands['getRuntimeGitSubmoduleStatus']

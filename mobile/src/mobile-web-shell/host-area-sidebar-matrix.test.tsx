@@ -75,7 +75,7 @@ vi.mock('lucide-react-native', mocks['lucide-react-native'])
 vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 // The screen's session is the reducer's, as `sessionFor` carried it.
 vi.mock('./use-mobile-web-shell-session', () => ({
@@ -118,7 +118,7 @@ vi.mock('../navigation/host-stack', async () => {
       return (
         <serving.HostAreaServingContext.Provider value={recorded}>
           {env.hostSession === null ? null : (
-            <MobileWebShellScreen hostId="host-1" route={{ pathname: HOST }} fallback={null} />
+            <MobileWebShellScreen hostId="host-1" route={{ pathname: HOST }} />
           )}
         </serving.HostAreaServingContext.Provider>
       )

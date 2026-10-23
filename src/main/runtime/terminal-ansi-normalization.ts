@@ -138,6 +138,11 @@ export function normalizeTerminalChunk(
       textStart = index + 1
       continue
     }
+    if (code === 0x0d && index + 1 === combined.length) {
+      // A final CR may be half of CRLF; keep the painted row until the next byte decides.
+      appendTerminalNormalizedSpan(parts, combined, textStart, index)
+      return { text: parts.join(''), pendingAnsi: '\r' }
+    }
     if (code === 0x0d && combined.charCodeAt(index + 1) === 0x0a) {
       // CRLF keeps only its LF, which starts the next span.
       appendTerminalNormalizedSpan(parts, combined, textStart, index)

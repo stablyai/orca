@@ -8,12 +8,19 @@ name: Windows packaged orcad serve switch E2E
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/daemon/**'
       - '!src/main/daemon/**/*.test.ts'
+      - '!src/main/daemon/serialize-grid-roundtrip.ts'
+      - '!src/main/daemon/mock-descendant-sweep.ts'
+      - '!src/main/daemon/daemon-host-relocation.test-fixture.ts'
+      - '!src/main/daemon/daemon-endpoint-reachability-test-harness.ts'
+      # D7 packages production entries; the unit jobs own these test roots.
       - 'src/main/orcad/**'
+      - '!src/main/orcad/**/*.test.ts'
       - 'src/cli/runtime/**'
+      - '!src/cli/runtime/**/*.test.ts'
       - 'src/shared/orcad-local-serve-selection.ts'
       - 'tests/tools/win-update-e2e/**'
       - '.github/workflows/win-orcad-serve-switch-e2e.yml'
@@ -52,18 +59,28 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: dist/orca-windows-setup.exe
-          key: serve-switch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/**', 'mobile/**', 'patches/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
+          key: serve-switch-installer-v2-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/**', 'mobile/**', 'patches/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
 
       - uses: ./.github/actions/install-mobile-dependencies
         if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - uses: ./.github/actions/prepare-windows-agent-hook
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        with:
+          bun-version-file: config/.bun-version
 
       # Before the template exists: packaging verifies a present template for every target.
       - name: Build Windows installer (unsigned)
         if: steps.cache-installer.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
         run: |
           node config/scripts/ensure-native-runtime.mjs --runtime=electron
-          pnpm run build:desktop
+          pnpm run build:desktop:ci
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
 
       - name: Cache the built installer
@@ -81,12 +98,14 @@ jobs:
       - uses: ./.github/actions/prepare-windows-cli-launcher
         with:
           arches: x64
+      - uses: ./.github/actions/build-mobile-web-bundle
       - name: Build the win32-x64 orcad template
         shell: bash
+        env:
+          ORCA_REUSE_PREPARED_WINDOWS_SECURITY: 'true'
         run: |
           node config/scripts/ensure-native-runtime.mjs --runtime=node
-          pnpm build:orcad
-          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-addon.mjs --arch=x64 --reuse-prepared-runtime
           node config/scripts/build-orcad-template.mjs --targets win32-x64
 
       - name: Switch serve hosts on the installed app's profile

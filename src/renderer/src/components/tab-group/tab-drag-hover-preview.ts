@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
 import { useAppStore } from '../../store'
 import type { useHoveredTabInsertion } from './tab-insertion'
-import { applyDragPreviewTab, type TabDragActivationSnapshot } from './tab-drag-preview-activation'
+import type { TabDragActivationSnapshot } from '../../store/slices/tabs/tabs-slice-contract'
 import { resolveDragPreviewTabId } from './tab-drag-preview-target'
 import { getDragPointer } from './tab-drag-pointer'
 import {
@@ -55,9 +55,11 @@ export function useTabDragHoverPreview({
   handleDragUpdate: (event: DragMoveEvent | DragOverEvent) => void
   hoveredDropTarget: HoveredTabDropTarget | null
   hoveredLeafTarget: TabDragLeafTarget | null
+  shownLeafTargetRef: RefObject<TabDragLeafTarget | null>
 } {
   const [hoveredDropTarget, setHoveredDropTarget] = useState<HoveredTabDropTarget | null>(null)
   const [hoveredLeafTarget, setHoveredLeafTarget] = useState<TabDragLeafTarget | null>(null)
+  const shownLeafTargetRef = useRef<TabDragLeafTarget | null>(null)
   const lastPreviewRef = useRef<{ groupId: string; tabId: string | null } | null>(null)
   const lastHoveredTabPreviewRef = useRef<{ groupId: string; tabId: string } | null>(null)
 
@@ -87,7 +89,7 @@ export function useTabDragHoverPreview({
         return
       }
       lastPreviewRef.current = preview
-      applyDragPreviewTab({
+      useAppStore.getState().previewDragActiveTab({
         worktreeId,
         groupId: preview.groupId,
         tabId: preview.tabId,
@@ -120,6 +122,11 @@ export function useTabDragHoverPreview({
   const updateHoveredLeafTarget = useCallback((next: TabDragLeafTarget | null) => {
     setHoveredLeafTarget((prev) => (isSameLeafTarget(prev, next) ? prev : next))
   }, [])
+
+  // Only a committed overlay counts as shown: a drop before React draws it must not join.
+  useLayoutEffect(() => {
+    shownLeafTargetRef.current = hoveredLeafTarget
+  }, [hoveredLeafTarget])
 
   const handleDragUpdate = useCallback(
     (event: DragMoveEvent | DragOverEvent) => {
@@ -169,9 +176,10 @@ export function useTabDragHoverPreview({
   const clear = useCallback(() => {
     setHoveredDropTarget(null)
     setHoveredLeafTarget(null)
+    shownLeafTargetRef.current = null
     lastPreviewRef.current = null
     lastHoveredTabPreviewRef.current = null
   }, [])
 
-  return { clear, handleDragUpdate, hoveredDropTarget, hoveredLeafTarget }
+  return { clear, handleDragUpdate, hoveredDropTarget, hoveredLeafTarget, shownLeafTargetRef }
 }

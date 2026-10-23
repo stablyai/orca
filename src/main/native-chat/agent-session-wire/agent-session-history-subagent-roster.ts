@@ -11,10 +11,8 @@ import {
 } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubagentRosterEntry } from '../../../shared/agent-session-wire'
-import {
-  isSubagentGroupBlock,
-  type NativeChatSubagentEntry
-} from '../../../shared/native-chat-types'
+import { namedSubagents } from '../../../shared/native-chat-subagent-items'
+import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
 
 /** Bounds the field well inside the page's envelope reserve. */
 const MAX_ENTRIES = 64
@@ -24,7 +22,7 @@ function rosterEntries(item: AgentJournalRenderItem): readonly NativeChatSubagen
   if (!isRootAgentJournalItem(item) || item.body.kind !== 'message') {
     return []
   }
-  return item.body.blocks.flatMap((block) => (isSubagentGroupBlock(block) ? block.agents : []))
+  return item.body.blocks.flatMap(namedSubagents)
 }
 
 /** `journal` in journal order; `page` a run of it. Undefined when the page names every

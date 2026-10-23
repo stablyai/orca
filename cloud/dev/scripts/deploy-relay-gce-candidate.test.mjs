@@ -62,6 +62,39 @@ test('retries evacuation-status HTTP 500 without widening other admin retries', 
   assert.equal(calls, 1)
 })
 
+test('a reserve-cell refusal names the flip back to db; other 404s keep their error', async () => {
+  const post = (body) => createAdminPost({}, {
+    fetch: async () => Response.json(body, { status: 404 }),
+    emit: () => {},
+    wait: async () => {},
+    random: () => 0
+  }, 'token')
+  await assert.rejects(
+    post({ error: 'cell_in_reserve_mode' })(
+      'https://relay.example',
+      '/v1/admin/cell-status',
+      { v: 1, cellId: 'production-gce-c7' }
+    ),
+    /production-gce-c7 is in reserve mode .*flip it to admitMode=db/
+  )
+  await assert.rejects(
+    post({ error: 'cell_not_found' })(
+      'https://relay.example',
+      '/v1/admin/cell-status',
+      { v: 1, cellId: 'production-gce-c7' }
+    ),
+    /cell-status failed: cell_not_found/
+  )
+  await assert.rejects(
+    post({ error: 'cell_in_reserve_mode' })(
+      'https://relay.example',
+      '/v1/admin/evacuation-status',
+      { v: 1, sourceCellId: 'production-gce-c7', targetCellId: 'production-gce-c8' }
+    ),
+    /production-gce-c7 or production-gce-c8 is in reserve mode/
+  )
+})
+
 test('verifies a 1,000-cap cell against both runtime and director telemetry', () => {
   const expected = deployment(
     {

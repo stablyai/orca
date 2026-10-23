@@ -17,7 +17,7 @@ runs:
           .build/windows-cli-launcher
           native/windows-cli-launcher/target
           ~/.cargo/registry
-        key: orcad-windows-cli-launcher-${{ runner.arch }}-${{ inputs.arches }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'resources/build/icon.ico', 'package.json') }}
+        key: orcad-windows-cli-launcher-${{ runner.arch }}-${{ inputs.arches }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'resources/build/icon.ico', 'package.json') }}
 
     # Why explicit: a runner image without cargo would otherwise fail inside the orcad build.
     - name: Build the launcher for each architecture

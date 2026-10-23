@@ -7,7 +7,7 @@ import {
   nativeChatWorkRunEntries
 } from '../../../../shared/native-chat-work-run'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
-import { buildEditCards } from './native-chat-edit-cards'
+import { buildEditCards } from '../../../../shared/native-chat-edit-cards'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 
 function item(
@@ -53,9 +53,7 @@ const diff = (id: string, sequence: number, file: string) =>
 
 /** As the transcript list gets them: projected, then adjacent tool rows folded. */
 function messagesOf(items: AgentJournalRenderItem[]): NativeChatMessage[] {
-  return foldToolMessages(
-    projectStructuredAgentSessionMessages(items, [], [], { rejectedInPlace: false })
-  )
+  return foldToolMessages(projectStructuredAgentSessionMessages(items, [], []))
 }
 
 /** Each edit card's call input and the files it draws. */

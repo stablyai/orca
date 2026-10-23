@@ -1,3 +1,4 @@
+import { journalItemDeclaresEcho } from './journal-item-echo'
 // THE reducer. One implementation folds rows into the render model, and both
 // the live append path and replay call it — a live-only shortcut is how a
 // reconnect starts disagreeing with the screen it replaced.
@@ -16,6 +17,7 @@ import type {
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
+import { journalHistoryOrigin, type JournalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
 import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import {
@@ -32,6 +34,7 @@ import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './jour
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
 import { isWriteFailureSubmission } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { projectJournalStopNote } from './journal-stop-note-projection'
+import { journalItemExecutionFence } from './journal-item-provenance'
 import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
 import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
 import {
@@ -51,17 +54,24 @@ export type JournalReducerState = {
   oldestSequence: number
   highestFence: number
   items: Map<string, AgentJournalRenderItem>
-  /** Fence of the writer that created each item: the generation a running turn belongs to. */
+  /** Each item's execution provenance (`JournalItemRow.ownerFence`): the generation whose work it
+   *  is, which decides whether it is current. */
   itemFences: Map<string, number>
+  /** The run executing a reusable child's item now (`JournalItemRow.executionOwner`), when one said. */
+  itemExecutionOwners: Map<string, number>
   /** Latest saved output per owner, rebuilt during the existing row fold. */
   providerActivityAt: Map<number, number>
   /** Revision of a removed item, so a late lower revision cannot resurrect it. */
   tombstones: Map<string, number>
+  /** Turn ids whose record a tombstone removed, as a rewind does: over, though no row shows it. */
+  removedTurnIds: Set<string>
   submissions: Map<string, AgentJournalSubmission>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
   /** Provider item id → the submission slot that adopted it. Stops an accepted
    *  echo from appending a second copy of the user's own message. */
   aliases: Map<string, string>
+  /** First declared echo contract per item, rebuilt from rows and kept through tombstones. */
+  itemEchoes: Map<string, unknown>
   appliedSettlementIds: Set<string>
   /** Scope for rows stored without one; rebuilt by replay, never persisted. */
   derivedTurnScope: JournalDerivedTurnScope
@@ -69,6 +79,10 @@ export type JournalReducerState = {
   latestAcceptedTurnSequence: number
   /** The latest person's Stop event and Resume, what the queue's pause is derived from. */
   queuePauseMarks: JournalQueuePauseMarks
+  /** Host-only: each handed-over send's stopped-message history, from its latest `pending` row. */
+  stoppedHistoryCarried: Map<string, readonly string[]>
+  /** Original adoption evidence, independent of the current epoch's reason/time. */
+  historyOrigin: JournalHistoryOrigin | null
 }
 
 export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
@@ -81,15 +95,20 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     highestFence: 0,
     items: new Map(),
     itemFences: new Map(),
+    itemExecutionOwners: new Map(),
     providerActivityAt: new Map(),
     tombstones: new Map(),
+    removedTurnIds: new Set(),
     submissions: new Map(),
     receipts: new Map(),
     aliases: new Map(),
+    itemEchoes: new Map(),
     appliedSettlementIds: new Set(),
     derivedTurnScope: new JournalDerivedTurnScope(),
     latestAcceptedTurnSequence: 0,
-    queuePauseMarks: createJournalQueuePauseMarks()
+    queuePauseMarks: createJournalQueuePauseMarks(),
+    stoppedHistoryCarried: new Map(),
+    historyOrigin: null
   }
 }
 
@@ -101,6 +120,7 @@ export function applyJournalRow(
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
+    state.historyOrigin = journalHistoryOrigin(row)
     return
   }
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
@@ -108,16 +128,22 @@ export function applyJournalRow(
     if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
       return
     }
+    if (!state.itemEchoes.has(row.itemId) && Object.hasOwn(row, 'echoOf')) {
+      state.itemEchoes.set(row.itemId, row.echoOf)
+    }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
-    observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt)
-    acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
+    if (!state.itemEchoes.has(row.itemId)) {
+      acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
+    }
     upsertJournalItem(
       state,
       itemId,
       row.revision,
       journalRenderItem(itemId, row.revision, row.body, row, statedOrDerivedTurnScope(state, row)),
-      row.fence
+      { fence: row.fence, ownerFence: row.ownerFence, executionOwner: row.executionOwner }
     )
+    const fence = journalItemExecutionFence(state, itemId) ?? row.fence
+    observeJournalProviderActivity(state, row, row.itemId, row.body, savedAt, fence)
     return
   }
   if (isJournalStopOrResumeRow(row)) {
@@ -140,14 +166,23 @@ export function applyJournalRow(
         if (journalItemRevisionIsStale(state, mutation.itemId, mutation.revision)) {
           continue
         }
+        if (!state.itemEchoes.has(mutation.itemId) && Object.hasOwn(mutation, 'echoOf')) {
+          state.itemEchoes.set(mutation.itemId, mutation.echoOf)
+        }
         const { revision, body } = mutation
-        observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt)
         const itemId = resolveJournalItemId(state, mutation.itemId, body)
-        acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
+        if (!state.itemEchoes.has(mutation.itemId)) {
+          acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
+        }
         const producer = journalBatchMutationProducer(row, mutation)
         const scope = statedOrDerivedTurnScope(state, mutation)
         const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
-        upsertJournalItem(state, itemId, revision, item, row.fence)
+        upsertJournalItem(state, itemId, revision, item, {
+          fence: row.fence,
+          ownerFence: mutation.ownerFence
+        })
+        const fence = journalItemExecutionFence(state, itemId) ?? row.fence
+        observeJournalProviderActivity(state, row, mutation.itemId, body, savedAt, fence)
       } else {
         removeJournalItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
       }
@@ -214,7 +249,11 @@ export function journalEchoClaimant(
   itemId: string,
   body?: AgentJournalRenderItem['body']
 ): string | null {
-  if (!body || !isProviderUserMessageEcho(itemId, body)) {
+  if (
+    !body ||
+    journalItemDeclaresEcho(state.itemEchoes, itemId) ||
+    !isProviderUserMessageEcho(itemId, body)
+  ) {
     return null
   }
   const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)

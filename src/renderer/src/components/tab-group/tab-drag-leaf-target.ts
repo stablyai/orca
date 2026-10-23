@@ -1,3 +1,4 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PaneSide } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import type { AppState } from '../../store/types'
 import {
@@ -47,6 +48,17 @@ const UNRELATED_REFUSALS: ReadonlySet<TerminalTabIntoPaneRefusal> = new Set([
   'host_authoritative'
 ])
 
+/** Whether two targets name the same pane edge of the same shown tab. */
+export function isSameJoinTarget(a: TabDragLeafTarget, b: TabDragLeafTarget | null): boolean {
+  return (
+    b !== null &&
+    a.groupId === b.groupId &&
+    a.targetTabId === b.targetTabId &&
+    a.leafId === b.leafId &&
+    a.zone === b.zone
+  )
+}
+
 /** The mounted, visible panes of a terminal tab, in viewport coordinates. */
 export function readMountedLeafRects(tabId: string): LeafRect[] {
   const roots = document.querySelectorAll<HTMLElement>(
@@ -89,7 +101,7 @@ function contains(rect: PaneRect, point: { x: number; y: number }): boolean {
  * The pane edge a dragged terminal tab is over, when dropping it would join it there. Null means
  * "not a leaf drop": the strip, the Level 1 band, a leaf's center, a source that cannot join, or a
  * shown tab that is not a terminal all keep today's behaviour. A target that cannot take the tab
- * is still returned, with its refusal, so the overlay can say why.
+ * is still returned, with its refusal, so the overlay can say why. Always null in a layout-owner build.
  */
 export function resolveTabDragLeafTarget({
   activeDrag,
@@ -106,7 +118,13 @@ export function resolveTabDragLeafTarget({
   geometry: TabGroupPanelGeometrySnapshot | null
   readLeafRects?: (tabId: string) => LeafRect[]
 }): TabDragLeafTarget | null {
-  if (!pointer || activeDrag.tabType !== 'terminal' || activeDrag.worktreeId !== worktreeId) {
+  // A layout-owner build draws every move from main's frames: no overlay, no window-applied join.
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN ||
+    !pointer ||
+    activeDrag.tabType !== 'terminal' ||
+    activeDrag.worktreeId !== worktreeId
+  ) {
     return null
   }
   const panelHit = findTabGroupPanelUnderPointer(worktreeId, pointer, { geometry })

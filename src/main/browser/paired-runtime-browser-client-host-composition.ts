@@ -8,7 +8,8 @@ import { isBrowserClientHostAuthorityReplaced } from './browser-client-host-auth
 import { BrowserClientHostAuthorityReplacementWait } from './browser-client-host-authority-replacement-wait'
 import {
   asCompositionError,
-  closeBrowserClientHostComposition
+  closeBrowserClientHostComposition,
+  fenceBrowserClientHostComposition
 } from './paired-runtime-browser-client-host-teardown'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
 import type { BrowserClientPageAuthorityIdentity as BrowserClientHostAuthorityTransitionInput } from './browser-client-page-command-executor-dependencies'
@@ -24,6 +25,7 @@ type ComposedPageExecutor = {
   ): Promise<BrowserClientHostCommandResult>
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean
+  hostsPage(browserPageId: string): boolean
   snapshotPageInventory(): readonly BrowserClientHostedPageInventory[]
   beginAuthorityTransition(): void
   completeAuthorityTransition(input: BrowserClientHostAuthorityTransitionInput): void
@@ -133,6 +135,10 @@ export class PairedRuntimeBrowserClientHostComposition<
     return this.startPromise
   }
 
+  hostsPage(browserPageId: string): boolean {
+    return !this.closed && this.executor.hostsPage(browserPageId)
+  }
+
   async retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
     if (this.closed) {
       throw new Error('paired_runtime_browser_client_host_composition_closed')
@@ -162,7 +168,9 @@ export class PairedRuntimeBrowserClientHostComposition<
       } catch (closingError) {
         this.reportCleanupError(asCompositionError(closingError))
       }
-      this.fenceTerminalAuthority(error)
+      fenceBrowserClientHostComposition(this.routeSets, this.executor, error, (fenceError) =>
+        this.reportCleanupError(fenceError)
+      )
     }
     this.closePromise ??= this.closeComposition(error)
     return this.closePromise
@@ -278,15 +286,6 @@ export class PairedRuntimeBrowserClientHostComposition<
       })
   }
 
-  private fenceTerminalAuthority(error: Error): void {
-    this.routeSets.fence(error)
-    try {
-      this.executor.fenceNavigation()
-    } catch (navigationError) {
-      this.reportCleanupError(asCompositionError(navigationError))
-    }
-  }
-
   private closeComposition(error: Error): Promise<boolean> {
     return closeBrowserClientHostComposition({
       host: this.host,
@@ -310,9 +309,7 @@ export class PairedRuntimeBrowserClientHostComposition<
       return
     }
     this.errorReported = true
-    try {
-      this.options.onError?.(error)
-    } catch {}
+    this.reportCleanupError(error)
   }
 
   private reportCleanupError(error: Error): void {

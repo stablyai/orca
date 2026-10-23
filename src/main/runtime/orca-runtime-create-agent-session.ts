@@ -1,5 +1,6 @@
-// @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './orca-runtime-get-agent-session-execution-namespace'
+import type { BrowserWindow } from 'electron'
+import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './session-construction/agent-session/get-agent-session-execution-namespace'
 import type {
   RuntimeAgentSessionRpcCaller,
   RuntimeCreateAgentSessionRequest,
@@ -12,8 +13,6 @@ import {
 } from '../../shared/agent-session-host-authority'
 import { createHash } from 'node:crypto'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildExecutionHostAgentStartupPlan } from '../opencode/opencode-model-startup-plan'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -23,9 +22,30 @@ import {
   deterministicAgentSessionUuid,
   isAgentSessionOperationOutcomeUnknown
 } from './runtime-agent-launch-resolution'
-import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
+import { AgentLaunchUnbuildableError } from './runtime-agent-terminal-startup'
 
-export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
+export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSessionExecutionNamespace {
+  abstract resolveWorkspaceTerminalStartupCwd(
+    workspace: Pick<TerminalWorkspaceLaunchScope, 'path'>,
+    requestedCwd?: string | null
+  ): string | undefined
+
+  protected abstract buildTerminalWorkspaceEnv(
+    scope: TerminalWorkspaceLaunchScope,
+    baseEnv: Record<string, string>,
+    agentTeamsEnv?: Record<string, string>
+  ): Record<string, string>
+
+  abstract getAuthoritativeWindow(): BrowserWindow
+
+  abstract waitForTerminalHandle(tabId: string, timeoutMs?: number): Promise<string>
+
+  protected abstract reconcileRemoteTerminalCreate(
+    worktreeId: string,
+    terminalHandle: string,
+    connectionId?: string | null
+  ): Promise<RuntimeTerminalCreate | null>
+
   async createAgentSession(
     request: RuntimeCreateAgentSessionRequest,
     caller: RuntimeAgentSessionRpcCaller = {}
@@ -130,30 +150,6 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
         throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
       }
-      const startupArgs = resolveAgentStartupPlanInputs({
-        agent: request.agent,
-        settings,
-        platform: this.getAgentLaunchPlatformForWorkspace(workspace),
-        // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
-        // shape must match the PTY route this scope already resolved.
-        isRemote: Boolean(workspace.connectionId),
-        ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
-        sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
-      })
-      const startup = await buildExecutionHostAgentStartupPlan({
-        inputs: startupArgs,
-        cwd: startupCwd ?? workspace.path,
-        prompt: request.prompt ?? '',
-        promptDelivery: request.promptDelivery,
-        hostIdentity: this.runtimeId,
-        signal: caller.signal
-      })
-      if (!startup) {
-        throw new Error('agent_session_identity_required')
-      }
-      if (caller.signal?.aborted) {
-        throw new Error('client_disconnected')
-      }
       let terminal: RuntimeTerminalCreate
       const executionOperationId = createHash('sha256')
         .update(this.runtimeId)
@@ -176,14 +172,19 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
-          command: startup.launchCommand,
-          env: startup.env,
-          launchConfig: startup.launchConfig,
-          launchAgent: request.agent,
+          // A fresh agent the host planner builds; the request has no surface field, so its launch
+          // counts as `unknown`.
+          startupAgent: request.agent,
+          ...(request.prompt ? { startupPrompt: request.prompt } : {}),
+          startupPromptDelivery: request.promptDelivery,
+          // TEMPORARY: see `startupPromptCarry`.
+          startupPromptCarry: 'force-line',
+          ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
+          launchPreferences: request.launchPreferences,
+          // Why outside both fingerprints: the desktop re-prepares it per attempt; the first spawn wins.
+          accountEnv: request.accountEnv,
+          terminalImageViewerSupported: caller.terminalImageViewerSupported,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
-          startupCommandDelivery: startup.startupCommandDelivery,
-          // A fresh agent this host built; the request has no surface field, so it counts as `unknown`.
-          telemetry: agentStartedTelemetry(request.agent, undefined),
           cwd: startupCwd,
           presentation: request.presentation ?? 'background',
           tabId: operationTabId,
@@ -197,6 +198,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           }
         })
       } catch (error) {
+        if (error instanceof AgentLaunchUnbuildableError) {
+          throw new Error('agent_session_identity_required')
+        }
         if (isAgentSessionOperationOutcomeUnknown(error)) {
           retainReplayFence = true
         }

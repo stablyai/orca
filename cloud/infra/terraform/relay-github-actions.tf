@@ -20,6 +20,7 @@ locals {
     "deploy-relay-production.yml",
     "operate-relay-asia-admission.yml",
     "operate-relay-production-cell-flags.yml",
+    "operate-relay-production-reserve-watch.yml",
     "publish-relay-production.yml"
 
   ]
@@ -377,6 +378,16 @@ resource "google_project_iam_member" "github_logging_viewer" {
 
   project = var.project_id
   role    = "roles/logging.viewer"
+  member  = google_service_account.github_deploy[0].member
+}
+
+# The reserve watch logs its paging alarm line (orca_relay_reserve_watch_alarm) from the runner.
+# Accepted risk: Cloud Logging cannot narrow writes to one log, so this identity can write any line.
+resource "google_project_iam_member" "github_log_writer" {
+  count = local.relay_create_production_ops_identity ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/logging.logWriter"
   member  = google_service_account.github_deploy[0].member
 }
 

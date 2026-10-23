@@ -13,7 +13,14 @@ vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
 }))
 
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
-import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
+import {
+  beginDirectWorkItemStructuredLaunch,
+  resolveDirectWorkItemAgent
+} from './launch-work-item-direct-agent-routing'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { Repo } from '../../../shared/repo-types'
 
 const structuredPlan: AgentSessionLaunchPlan = adoptAgentSessionLaunchVerdict({
   requestId: 'request-1',
@@ -79,5 +86,39 @@ describe('beginDirectWorkItemStructuredLaunch', () => {
       })
     ).toEqual({ completed: false, structuredLaunch: false, primaryTabId: null })
     expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
+  })
+})
+
+// Why (#29599): a paired server's new workspace picks from that workspace's agents on the server.
+describe('resolveDirectWorkItemAgent', () => {
+  it("asks the paired server for the new workspace's agents", async () => {
+    const store = createTestStore()
+    const ensureRuntimeDetectedAgents = vi.fn(async (): Promise<TuiAgent[]> => ['claude'])
+    const ensureDetectedAgents = vi.fn(async (): Promise<TuiAgent[]> => ['codex'])
+    const repo: Repo = {
+      ...TEST_REPO,
+      connectionId: 'server-ssh-target',
+      executionHostId: 'runtime:env-1'
+    }
+    store.setState({
+      repos: [repo],
+      worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] },
+      settings: { ...store.getState().settings!, defaultTuiAgent: 'claude' },
+      ensureRuntimeDetectedAgents,
+      ensureDetectedAgents
+    })
+
+    await expect(
+      resolveDirectWorkItemAgent({
+        worktreeId: 'wt-1',
+        repoHost: repo,
+        launchConnectionId: 'server-ssh-target',
+        repoConnectionId: 'server-ssh-target',
+        detectedAgentsPromise: null,
+        latestStore: store.getState()
+      })
+    ).resolves.toEqual({ agent: 'claude', unavailable: false })
+    expect(ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1', 'wt-1')
+    expect(ensureDetectedAgents).not.toHaveBeenCalled()
   })
 })

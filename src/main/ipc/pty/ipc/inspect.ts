@@ -163,7 +163,11 @@ export function installPtyInspectIpcHandlers(deps: {
       return null
     }
     try {
-      return provider.hasPty(args.id)
+      if (provider.hasPty(args.id)) {
+        return true
+      }
+      // Why: hasPty only knows sessions attached this run, so a session that survived a restart reads absent until the host answers.
+      return provider.probePtyLiveness ? await provider.probePtyLiveness(args.id) : false
     } catch {
       // Why: liveness is only allowed to close panes on an authoritative false.
       return null

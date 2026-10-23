@@ -1,16 +1,13 @@
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import BrowserTab from './BrowserTab'
 import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
-
-let mockTabAgent: TuiAgent | null = null
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: ({ id }: { id: string }) => ({
@@ -97,13 +94,13 @@ vi.mock('../../../../shared/agent-title-decoration', () => ({
     title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title
 }))
 
-vi.mock('@/lib/use-tab-agent', () => ({
-  useTabAgent: () => mockTabAgent
-}))
-
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: { unreadTerminalTabs: Record<string, boolean> }) => unknown) =>
-    selector({ unreadTerminalTabs: {} })
+  useAppStore: (
+    selector: (state: {
+      unreadTerminalTabs: Record<string, boolean>
+      agentStatusByPaneKey: Record<string, never>
+    }) => unknown
+  ) => selector({ unreadTerminalTabs: {}, agentStatusByPaneKey: {} })
 }))
 
 vi.mock('@/store', () => ({
@@ -112,8 +109,15 @@ vi.mock('@/store', () => ({
       openMarkdownPreview: () => void
       settings: null
       unreadTerminalTabs: Record<string, boolean>
+      agentStatusByPaneKey: Record<string, never>
     }) => unknown
-  ) => selector({ openMarkdownPreview: vi.fn(), settings: null, unreadTerminalTabs: {} })
+  ) =>
+    selector({
+      openMarkdownPreview: vi.fn(),
+      settings: null,
+      unreadTerminalTabs: {},
+      agentStatusByPaneKey: {}
+    })
 }))
 
 vi.mock('@/store/selectors', () => ({
@@ -251,14 +255,11 @@ function makeEditorFile(overrides: Partial<OpenFile & { tabId?: string }> = {}):
 }
 
 describe('tab title tooltips', () => {
-  beforeEach(() => {
-    mockTabAgent = null
-  })
-
   it('uses the terminal custom title for the visible label and tooltip trigger content', () => {
     const markup = renderToStaticMarkup(
       <SortableTab
         tab={makeTerminalTab({ customTitle: 'Custom terminal title' })}
+        agent={null}
         unifiedTabId="terminal-1"
         groupId="group-1"
         tabCount={1}
@@ -292,10 +293,10 @@ describe('tab title tooltips', () => {
   })
 
   it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {
-    mockTabAgent = 'claude'
     const markup = renderToStaticMarkup(
       <SortableTab
         tab={makeTerminalTab({ title: '✳ Claude Code' })}
+        agent="claude"
         unifiedTabId="terminal-1"
         groupId="group-1"
         tabCount={1}

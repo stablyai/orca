@@ -15,6 +15,7 @@ vi.mock('@/lib/telemetry', () => ({
 import {
   buildCompletedOnboardingNotificationSettings,
   buildOnboardingDismissedPayload,
+  onboardingChatPermissionSetting,
   useCloseWith,
   type DismissedExtras,
   trackOnboardingDismissed
@@ -125,7 +126,8 @@ describe('onboarding flow persistence', () => {
       customSoundId: 'two-tone',
       customSoundPath: null,
       customSoundVolume: 60,
-      mutedNotificationSourceIds: []
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     })
 
     expect(notifications).toEqual({
@@ -136,8 +138,18 @@ describe('onboarding flow persistence', () => {
       customSoundId: 'two-tone',
       customSoundPath: null,
       customSoundVolume: 60,
-      mutedNotificationSourceIds: []
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     })
+  })
+
+  // Yolo mode says agents run without asking, chats included; a replay left untouched keeps them.
+  it('sets new chats from a flipped Yolo mode, keeping a custom mode and an untouched replay', () => {
+    const set = (mode: string) => ({ nativeChatPermissionMode: mode })
+    expect(onboardingChatPermissionSetting('full-access', false, true)).toEqual(set('ask'))
+    expect(onboardingChatPermissionSetting('ask', true, true)).toEqual(set('full-access'))
+    expect(onboardingChatPermissionSetting('ask', true, false)).toEqual({})
+    expect(onboardingChatPermissionSetting('auto', false, true)).toEqual({})
   })
 
   it('schedules the star toast after every completed close path', async () => {

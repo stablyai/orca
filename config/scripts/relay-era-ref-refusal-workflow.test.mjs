@@ -25,7 +25,7 @@ async function runAt(run, relayEra) {
   return runProcess({ program: 'bash', args: ['step.sh'], cwd: checkout })
 }
 
-describe.each([
+const refusalTargets = [
   // The refusal must precede everything that tags, signs or publishes.
   [
     'adhoc-mac-build.yml',
@@ -36,21 +36,29 @@ describe.each([
   // Dispatchable on its own with any tag, so release-cut's refusal does not cover it.
   ['release-mac-build.yml', 'build-mac', 'Build app'],
   ['dev-channel-win-build.yml', 'build-win', 'Build app']
-])('%s refuses a relay-era ref', (workflow, job, laterStep) => {
+].map(([workflow, job, laterStep]) => {
   const jobSteps = steps(workflow, job)
   const index = jobSteps.findIndex((step) => step.name === STEP)
+  return { workflow, laterStep, jobSteps, index }
+})
 
-  it('checks the ref before it builds or tags anything', () => {
-    expect(index).toBeGreaterThan(0)
-    expect(jobSteps[index - 1].uses).toMatch(/^actions\/checkout@/)
-    const sparse = jobSteps[index - 1].with['sparse-checkout']
-    expect(sparse?.split('\n').includes('/config/tsconfig.relay.json') ?? true).toBe(true)
-    expect(index).toBeLessThan(jobSteps.findIndex((step) => step.name === laterStep))
-  })
+describe.each(refusalTargets)(
+  '$workflow refuses a relay-era ref',
+  ({ jobSteps, index, laterStep }) => {
+    it('checks the ref before it builds or tags anything', () => {
+      expect(index).toBeGreaterThan(0)
+      expect(jobSteps[index - 1].uses).toMatch(/^actions\/checkout@/)
+      const sparse = jobSteps[index - 1].with['sparse-checkout']
+      expect(sparse?.split('\n').includes('/config/tsconfig.relay.json') ?? true).toBe(true)
+      expect(index).toBeLessThan(jobSteps.findIndex((step) => step.name === laterStep))
+    })
+  }
+)
 
-  it('fails only when the checkout still has the relay', async () => {
-    const run = jobSteps[index].run
+it('fails only when the checkout still has the relay for each distinct refusal command', async () => {
+  const commands = new Set(refusalTargets.map(({ jobSteps, index }) => jobSteps[index].run))
+  for (const run of commands) {
     expect((await runAt(run, true)).code).toBe(1)
     expect((await runAt(run, false)).code).toBe(0)
-  })
+  }
 })

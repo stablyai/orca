@@ -3,12 +3,14 @@ import {
   BROWSER_UNAVAILABLE_ERROR_CODE,
   type RuntimeBrowserUnavailableReason
 } from '../../shared/runtime-types'
-import type { RuntimeBrowserCommandHost, RuntimeBrowserCommands } from './orca-runtime-browser'
+import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
+import type { RuntimeBrowserCommands } from './browser/browser-commands'
+import { closeBrowserPageWithoutEngine } from './browser/browser-client-page-close'
 
 /**
  * How `OrcaRuntimeService` obtains its browser-automation commands.
  *
- * Why a factory rather than a direct import: `orca-runtime-browser.ts` reaches the
+ * Why a factory rather than a direct import: `browser/browser-commands.ts` reaches the
  * whole Chromium cluster — `BrowserWindow`, `session`, `webContents`, cookie jars —
  * 15 modules that a Node host cannot load at all. Importing the class for its *type*
  * is free; constructing it is what drags the cluster in.
@@ -28,6 +30,8 @@ export type RuntimeBrowserCommandsFactory = (
 export type RuntimeBrowserCommandsFactoryOptions = {
   /** The provider creates pages against this runtime's client-host lease registry. */
   clientHosting?: boolean
+  /** Client pages live in this runtime's own registries, so they need no healthy engine. */
+  clientHostingWithoutEngine?: boolean
   /** The provider owns browser pages without a renderer window. */
   headless?: boolean
   /** Live health probe; failure must remove advertised capability. */
@@ -60,6 +64,9 @@ export function runtimeBrowserCommandsFactoryIsHeadless(): boolean {
 }
 
 export function runtimeBrowserCommandsFactorySupportsClientHosting(): boolean {
+  if (currentFactory && currentOptions.clientHostingWithoutEngine === true) {
+    return true
+  }
   return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.clientHosting === true
 }
 
@@ -81,17 +88,16 @@ export function setRuntimeBrowserUnavailableCause(
 }
 
 /**
- * The cause this process can prove. An installed factory outranks any recorded note: it
- * means resolution succeeded, so the failure is later and elsewhere — a dead provider, or
- * a renderer-backed factory with no window. Unknown beats guessing.
+ * The cause this process can prove. A healthy factory outranks any recorded note: the failure
+ * is a renderer-backed factory with no window. An unhealthy one keeps the resolver's note, since
+ * a factory serving only client pages stays installed when no engine resolved; with no note the
+ * engine started and later died. Unknown beats guessing.
  */
 export function runtimeBrowserUnavailableCause(): RuntimeBrowserUnavailableCause {
-  if (currentFactory) {
-    return runtimeBrowserCommandsFactoryIsAvailable()
-      ? { reason: 'desktop_window_unavailable' }
-      : { reason: 'provider_unhealthy' }
+  if (currentFactory && runtimeBrowserCommandsFactoryIsAvailable()) {
+    return { reason: 'desktop_window_unavailable' }
   }
-  return unavailableCause ?? { reason: 'unknown' }
+  return unavailableCause ?? { reason: currentFactory ? 'provider_unhealthy' : 'unknown' }
 }
 
 /**
@@ -111,12 +117,21 @@ export function createRuntimeBrowserCommands(
         // Why: an awaited undefined must not look like a thenable.
         return undefined
       }
+      if (property === 'browserTabClose') {
+        // Why: a stale client-hosted tab must stay closeable when this host has no engine.
+        return (params: Parameters<RuntimeBrowserCommands['browserTabClose']>[0]) =>
+          closeBrowserPageWithoutEngine(host, params ?? {}, browserUnavailableError)
+      }
       return () => {
-        throw new BrowserError(
-          BROWSER_UNAVAILABLE_ERROR_CODE,
-          'Browser automation is unavailable on this host.'
-        )
+        throw browserUnavailableError()
       }
     }
   })
+}
+
+export function browserUnavailableError(): BrowserError {
+  return new BrowserError(
+    BROWSER_UNAVAILABLE_ERROR_CODE,
+    'Browser automation is unavailable on this host.'
+  )
 }

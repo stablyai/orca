@@ -1,3 +1,5 @@
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira-review-title'
 import { useCallback } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -106,6 +108,15 @@ export function useSourceControlPullRequestGeneration({
         worktreeId: activeWorktreeId,
         worktreePath,
         connectionId: getConnectionId(activeWorktreeId) ?? undefined,
+        jiraIssueKey:
+          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          activeWorktreeId
+            ? getWorkspaceJiraIssueKey(
+                useAppStore
+                  .getState()
+                  .getKnownWorktreeById(activeWorktreeId, getRepoExecutionHostId(activeRepo))
+              )
+            : null,
         requestId,
         repoId: activeRepo.id,
         branch: branchName,

@@ -2,7 +2,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { resolveWorkspaceDirectory, type WorkspaceDirectoryState } from '@/lib/workspace-directory'
 import type { StructuredSessionLaunchDirectory } from '@/store/slices/structured-session-launch-directories'
-import { isStructuredTab } from './structured-agent-session-tabs'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 
 type NativeChatDirectoryTab = {
   id: string

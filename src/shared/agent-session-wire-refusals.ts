@@ -62,6 +62,8 @@ export type AgentSessionRefusalOf<C extends AgentSessionWireRefusalCode> = {
     message: string
     /** Absent from older hosts. */
     details?: AgentSessionRefusalDetails<K>
+    /** This create attempt refused before commit; earlier attempts may still have committed. */
+    createAttemptRefusedBeforeCommit?: true
   } & AgentSessionLegacyRefusalFields
 }[C]
 

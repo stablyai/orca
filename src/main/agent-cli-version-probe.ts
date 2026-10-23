@@ -12,12 +12,39 @@ function warnRefused(program: string, why: string, output = ''): void {
   console.warn(`[agent-cli-version] ${program} --version: ${why}${said ? `: ${said}` : ''}`)
 }
 
-/** Runs `<program> --version` on this host and asks `supports` about the version it prints. False
- *  when it cannot tell: a failed spawn, a non-zero exit, a timeout, or output with no version. */
+/** What one `--version` run showed; `inconclusive` is no verdict on the installed release. */
+export type AgentCliVersionObservation = 'supported' | 'unsupported' | 'inconclusive'
+
+/** Runs `<program> --version` on this host and asks `supports` about the version it prints.
+ *  Inconclusive when it cannot tell: a failed spawn, a non-zero exit, a timeout, or no version. */
+export async function observeAgentCliVersion(
+  input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
+  supports: (version: string) => boolean
+): Promise<AgentCliVersionObservation> {
+  const result = await readAgentCliVersion(input)
+  if (result.version === null) {
+    return 'inconclusive'
+  }
+  if (!supports(result.version)) {
+    warnRefused(input.program, `${result.version} is not a supported release`)
+    return 'unsupported'
+  }
+  console.info(`[agent-cli-version] ${input.program} --version: ${result.version} is supported`)
+  return 'supported'
+}
+
+/** A launch's projection: only an observed supported release runs; an inconclusive run refuses. */
 export async function probeAgentCliVersion(
   input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
   supports: (version: string) => boolean
 ): Promise<boolean> {
+  return (await observeAgentCliVersion(input, supports)) === 'supported'
+}
+
+export async function readAgentCliVersion(
+  input: Pick<ProcessSpec, 'program' | 'cwd' | 'env'>,
+  parseVersion: typeof parseCliVersion = parseCliVersion
+): Promise<{ version: string | null }> {
   let result
   try {
     result = await runProcess({
@@ -29,7 +56,7 @@ export async function probeAgentCliVersion(
     })
   } catch (error) {
     warnRefused(input.program, `did not start (${String(error)})`)
-    return false
+    return { version: null }
   }
   const output = `${result.stdout}\n${result.stderr}`
   if (result.timedOut || result.outputTruncated || result.code !== 0) {
@@ -39,19 +66,14 @@ export async function probeAgentCliVersion(
         ? 'printed too much'
         : `exited ${result.code ?? result.signal}`
     warnRefused(input.program, why, output)
-    return false
+    return { version: null }
   }
-  const version = parseCliVersion(result.stdout)
+  const version = parseVersion(parseVersion === parseCliVersion ? result.stdout : output)
   if (version === null) {
     warnRefused(input.program, 'printed no version', output)
-    return false
+    return { version: null }
   }
-  if (!supports(version)) {
-    warnRefused(input.program, `${version} is not a supported release`)
-    return false
-  }
-  console.info(`[agent-cli-version] ${input.program} --version: ${version} is supported`)
-  return true
+  return { version }
 }
 
 /** A stable release at or after `floor`, on any later major line too. */

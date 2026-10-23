@@ -1,5 +1,5 @@
 import { readStreamedSessionDocument } from './session-document-stream'
-import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
@@ -28,13 +28,15 @@ type ParserSessionOptions = {
 export async function parseDevinSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseDevinSessionRecord(
+  return parseDevinSessionDocument(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    openTranscriptReadStream(file.path, {}, 'scan'),
     platform,
     {},
+    signal,
     messages
   )
 }
@@ -179,15 +181,23 @@ export async function parseDevinSessionDocument(
   bytes: AsyncIterable<Buffer>,
   platform: NodeJS.Platform,
   options: ParserSessionOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const parsed = await readStreamedSessionDocument({
     bytes,
     arrayKey: 'steps',
     fields: ['session_id', 'sessionId', 'generation_model', 'working_directory'],
     objectFields: { agent: ['model_name', 'model'] },
-    create: () =>
-      createAccumulator({ agent: 'devin', file, sessionId: sessionIdFromFileName(file.path) }),
+    create: () => {
+      messages?.reset?.()
+      return createAccumulator({
+        agent: 'devin',
+        file,
+        sessionId: sessionIdFromFileName(file.path),
+        messages
+      })
+    },
     consume: consumeDevinSessionStep,
     signal
   })

@@ -5,16 +5,18 @@ const mocks = vi.hoisted(() => {
   const settings: { activeRuntimeEnvironmentId: string | null } = {
     activeRuntimeEnvironmentId: null
   }
+  const tabGroups: Record<string, unknown> = {}
   return {
     canOpenWithSystemDefault: true,
     openDetectedFilePath: vi.fn(),
     settings,
-    worktreeRoot: false
+    worktreeRoot: false,
+    tabGroups
   }
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => ({ settings: mocks.settings }) }
+  useAppStore: { getState: () => ({ settings: mocks.settings, ...mocks.tabGroups }) }
 }))
 
 vi.mock('./terminal-file-open-routing', () => ({
@@ -72,6 +74,7 @@ beforeEach(() => {
   mocks.canOpenWithSystemDefault = true
   mocks.settings = { activeRuntimeEnvironmentId: null }
   mocks.worktreeRoot = false
+  mocks.tabGroups = {}
   vi.clearAllMocks()
 })
 
@@ -289,5 +292,84 @@ describe('terminal file link actions', () => {
       expect(shellApi.openInFileManager).not.toHaveBeenCalled()
       expect(fsApi.stat).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('open in this group', () => {
+  function seedGroups(groupIds: string[]): void {
+    const tabs = groupIds.map((groupId) => ({
+      id: `${groupId}-tab`,
+      entityId: `${groupId}-terminal`,
+      groupId,
+      contentType: 'terminal'
+    }))
+    mocks.tabGroups = {
+      unifiedTabsByWorktree: { 'wt-1': tabs },
+      groupsByWorktree: {
+        'wt-1': groupIds.map((id) => ({ id, activeTabId: `${id}-tab`, tabOrder: [`${id}-tab`] }))
+      },
+      layoutByWorktree: {
+        'wt-1':
+          groupIds.length === 1
+            ? { type: 'leaf', groupId: groupIds[0] }
+            : {
+                type: 'split',
+                direction: 'horizontal',
+                first: { type: 'leaf', groupId: groupIds[0] },
+                second: { type: 'leaf', groupId: groupIds[1] }
+              }
+      }
+    }
+  }
+
+  function rowLabels(request: ReturnType<typeof vi.fn>): string[] {
+    const actionRequest = request.mock.calls[0][0]
+    return (actionRequest.secondaryActions ?? []).map((row: { label: string }) => row.label)
+  }
+
+  it('pins the source group when the source has a neighbor', () => {
+    seedGroups(['A', 'B'])
+    const request = vi.fn()
+    const sourceDeps = { ...deps, sourceTabId: 'A-terminal' }
+    handleTerminalFileLink('/repo/src/main.ts', 3, null, plainEvent(), sourceDeps, context(request))
+
+    const rows = request.mock.calls[0][0].secondaryActions
+    expect(rowLabels(request)).toContain('Open in this group')
+    rows.find((row: { label: string }) => row.label === 'Open in this group').run()
+    expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/src/main.ts', 3, null, {
+      ...sourceDeps,
+      openInSourceGroup: true
+    })
+  })
+
+  it('omits the row for a single group, an unknown source, or a workspace switch', () => {
+    seedGroups(['A'])
+    const single = vi.fn()
+    handleTerminalFileLink(
+      '/repo/a.ts',
+      null,
+      null,
+      plainEvent(),
+      { ...deps, sourceTabId: 'A-terminal' },
+      context(single)
+    )
+    expect(rowLabels(single)).not.toContain('Open in this group')
+
+    seedGroups(['A', 'B'])
+    const unknown = vi.fn()
+    handleTerminalFileLink('/repo/a.ts', null, null, plainEvent(), deps, context(unknown))
+    expect(rowLabels(unknown)).not.toContain('Open in this group')
+
+    mocks.worktreeRoot = true
+    const root = vi.fn()
+    handleTerminalFileLink(
+      '/repo',
+      null,
+      null,
+      plainEvent(),
+      { ...deps, sourceTabId: 'A-terminal' },
+      context(root)
+    )
+    expect(rowLabels(root)).not.toContain('Open in this group')
   })
 })

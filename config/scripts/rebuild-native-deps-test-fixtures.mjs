@@ -431,6 +431,12 @@ export function writeFakeWindowsRegistry(projectDir) {
   )
 }
 
+export function writeFakeWindowsSecurity(projectDir) {
+  const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
+  mkdirSync(securityDir, { recursive: true })
+  writeFileSync(join(securityDir, 'index.js'), "exports.currentUserSid = () => 'S-1-5-18'\n")
+}
+
 /**
  * A healthy one: the addon reports CreationTime, which is what a build of the
  * patched source does and what the probe has required since the creation-time

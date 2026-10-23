@@ -87,7 +87,7 @@ export function exitedChatDispatchesForSession(
   hiddenSessionId: string,
   db: OrchestrationDb,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-): DispatchContextRow[] {
+): (DispatchContextRow & { assignee_handle: string })[] {
   if (!store) {
     return []
   }
@@ -98,12 +98,14 @@ export function exitedChatDispatchesForSession(
     )
     .all(ORCA_SESSION_ADDRESS_PREFIX.length, ORCA_SESSION_ADDRESS_PREFIX)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The schema-pinned complete Dispatch projection returns Dispatch rows; the adapter exposes unknown.
-  return (rows as DispatchContextRow[]).filter((dispatch) => {
-    const chat = chatAssigneeSessionId(dispatch.assignee_handle)
-    return (
-      chat !== null &&
-      lineageLiveSession(store, chat)?.sessionId === hiddenSessionId &&
-      observeChatAssignee(chat, db, store).status === 'exited'
-    )
-  })
+  return (rows as DispatchContextRow[]).filter(
+    (dispatch): dispatch is DispatchContextRow & { assignee_handle: string } => {
+      const chat = chatAssigneeSessionId(dispatch.assignee_handle)
+      return (
+        chat !== null &&
+        lineageLiveSession(store, chat)?.sessionId === hiddenSessionId &&
+        observeChatAssignee(chat, db, store).status === 'exited'
+      )
+    }
+  )
 }

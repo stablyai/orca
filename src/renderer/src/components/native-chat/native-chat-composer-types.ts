@@ -1,4 +1,4 @@
-import type { NativeChatQueueResume } from './native-chat-composer-primary-action'
+import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
@@ -25,27 +25,24 @@ export type NativeChatComposerErrorDetail = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
 
+/** One opening of the picker, asked for by a slash command. */
 export type NativeChatOptionPickerRequest = {
   id: string
-  sequence: number
-}
-
-/** A queue the host holds, with cards waiting. */
-export type NativeChatQueueHold = {
-  /** Every card shown, held or not. */
-  count: number
-  /** Delete every card; false when one could not be (already reported). */
-  clear: () => Promise<boolean>
+  /** Drops the request once the picker has seen it, whether or not it could open. */
+  consume: () => void
 }
 
 export type NativeChatStructuredComposerTransport = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
   send: (
     text: string,
-    attachments: readonly NativeChatComposerImageAttachment[]
+    attachments: readonly NativeChatComposerImageAttachment[],
+    request?: StructuredAgentSessionSendRequest
   ) => boolean | 'queued'
   /** A send is out: Send stays disabled, and a send returns false, until it settles. */
   sendOut?: boolean
+  /** Send is held for this reason, which the disabled button says. */
+  sendBlockedReason?: string
   dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
@@ -53,6 +50,9 @@ export type NativeChatStructuredComposerTransport = {
   /** The `/` surface the running session reports. Absent keeps the curated
    *  per-agent catalog, which is what an older host leaves the client with. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Asks the host to bring a resting chat's `/` surface up to date; the answer arrives as
+   *  `sessionCommands`. */
+  refreshCommands?: () => void
   /** False when the agent takes no image input, as its host registered it. */
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
@@ -68,11 +68,9 @@ export type NativeChatStructuredComposerTransport = {
   sessionId: string
   /** Owning runtime for that report; null is the local runtime. */
   runtimeEnvironmentId: string | null
-  /** Present while the queue is held: a message sent now first asks whether to clear its cards. */
-  queueHold?: NativeChatQueueHold
-  /** Present while the host holds the queue and no turn runs: an empty composer's primary
-   *  action becomes Resume, which releases it. */
-  queueResume?: NativeChatQueueResume
+  /** The host has not confirmed this chat: session uploads wait for publication. */
+  sessionPending?: boolean
+  sessionPendingNotice?: string
 }
 
 export type NativeChatOptimisticSendOutcome = {
@@ -95,6 +93,9 @@ export type NativeChatComposerProps = {
   agent: AgentType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
+  /** The chat can't take input yet (a program it needs isn't installed): the composer is disabled
+   *  and this is its placeholder. */
+  unavailableHint?: string | undefined
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */

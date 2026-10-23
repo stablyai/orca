@@ -10,7 +10,7 @@ import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-br
 import type { ForceDeleteWorktreeBranchResult } from '../../../../../../shared/worktree/create-types'
 import type { PreservedBranchCleanup } from '../../../../../../shared/preserved-branch-cleanup'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
-import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from '../listing/worktree-slice-constants'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
 
 export function createForceDeletePreservedBranch(
   _set: WorktreeSliceSet,
@@ -62,7 +62,7 @@ export function createForceDeletePreservedBranch(
       const target =
         retainedTarget?.target ?? runtimeTargetForWorkspaceOwner(get(), { workspaceId: worktreeId })
       if (!target) {
-        throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+        throw new Error(ambiguousWorkspaceOwnerMessage(get(), worktreeId))
       }
       const parsedCleanupHost = parseExecutionHostId(cleanupHostId)
       const effectiveHostId =

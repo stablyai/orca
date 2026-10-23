@@ -21,7 +21,9 @@ import {
 } from '../../../shared/delegated-mobile-device-contract'
 import { decodeTerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { mintBrowserScreencastSubscriptionId } from '../browser-screencast-subscription-id'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { setRuntimeBrowserCommandsFactory } from '../runtime-browser-commands-factory'
 import { readRuntimeMetadata } from '../runtime-metadata'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { sendRequest } from '../runtime-rpc-test-harness'
@@ -148,6 +150,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const retirementListeners = new Set<(environmentId: string) => void>()
     const state = {
       capable: true,
+      hostedPages: new Set<string>(),
       retire: (environmentId: string) =>
         retirementListeners.forEach((listener) => listener(environmentId))
     }
@@ -181,10 +184,14 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
             }
           : response
       },
+      hostsBrowserPage: (environmentId, browserPageId) =>
+        environmentId === 'env-1' && state.hostedPages.has(browserPageId),
       onEnvironmentRetired: (listener) => {
         retirementListeners.add(listener)
         return () => retirementListeners.delete(listener)
-      }
+      },
+      onStatusChanged: () => () => {},
+      watchChanges: () => ({ close: () => {}, current: () => true })
     }
     desktop.server.setMobileDesktopRelayHosts(hosts)
     const metadata = readRuntimeMetadata(host.userDataPath)!
@@ -391,7 +398,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     await vi.waitFor(() =>
       expect(
         passthroughOpens.hostReplies.some((frame) =>
-          frame.includes('"clientCapabilities":["relay.test.v1"]')
+          // The server lists client-placed browser tabs only to callers declaring it.
+          frame.includes('"clientCapabilities":["relay.test.v1","browser.clientHost.v1"]')
         )
       ).toBe(true)
     )
@@ -444,19 +452,131 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const phone = await connectPhone(desktop.server, 'iPhone')
     const opensBefore = passthroughOpens.count
 
-    for (const method of ['settings.get', 'status.get']) {
-      phone.send(`${method}:targeted`, method, {})
-      phone.send(`${method}:untargeted`, method, {}, null)
-      const targeted = await phone.next(`${method}:targeted`)
-      const untargeted = await phone.next(`${method}:untargeted`)
-      expect(isOk(targeted)).toBe(true)
-      expect(targeted.result).toEqual(untargeted.result)
-    }
+    phone.send('settings:targeted', 'settings.get', {})
+    phone.send('settings:untargeted', 'settings.get', {}, null)
+    const targeted = await phone.next('settings:targeted')
+    expect(isOk(targeted)).toBe(true)
+    expect(targeted.result).toEqual((await phone.next('settings:untargeted')).result)
     expect(passthroughOpens.count).toBe(opensBefore)
     // An execution-host method under the same target still relays.
     phone.send('list', 'terminal.list', {})
     expect(isOk(await phone.next('list'))).toBe(true)
     expect(passthroughOpens.count).toBe(opensBefore + 1)
+  })
+
+  it('serves a browser call on the desktop when the desktop renders that server page itself', async () => {
+    const { host, desktop, state } = await startTopology()
+    state.hostedPages.add('hosted-page')
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const desktopGoto = vi.spyOn(desktop.runtime, 'browserGoto').mockResolvedValue({
+      url: 'http://example.test/',
+      title: 'Example'
+    })
+    const hostGoto = vi.spyOn(host.runtime, 'browserGoto').mockResolvedValue({
+      url: 'http://example.test/',
+      title: 'Example'
+    })
+
+    phone.send('hosted', 'browser.goto', {
+      worktree: WORKTREE,
+      page: 'hosted-page',
+      url: 'http://example.test/'
+    })
+    expect(isOk(await phone.next('hosted'))).toBe(true)
+    // The server's workspace selector means nothing here; the page id alone names the page.
+    expect(desktopGoto).toHaveBeenCalledWith({ page: 'hosted-page', url: 'http://example.test/' })
+    expect(hostGoto).not.toHaveBeenCalled()
+
+    phone.send('server', 'browser.goto', {
+      worktree: WORKTREE,
+      page: 'server-page',
+      url: 'http://example.test/'
+    })
+    expect(isOk(await phone.next('server'))).toBe(true)
+    expect(hostGoto).toHaveBeenCalledWith(expect.objectContaining({ page: 'server-page' }))
+    expect(desktopGoto).toHaveBeenCalledTimes(1)
+  })
+
+  it('streams a desktop-hosted page and releases it through the subscription id, never on the server', async () => {
+    const { host, desktop, state } = await startTopology()
+    state.hostedPages.add('hosted-page')
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const subscriptionId = mintBrowserScreencastSubscriptionId('hosted-page', 'nonce')
+    let release = (): void => {}
+    const released = new Promise<void>((resolve) => (release = resolve))
+    const desktopScreencast = vi
+      .spyOn(desktop.runtime, 'browserScreencast')
+      .mockImplementation(async (_params, stream) => {
+        stream.emit?.({
+          type: 'ready',
+          subscriptionId,
+          browserPageId: 'hosted-page',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'hosted-page',
+            index: 0,
+            url: 'http://a.test/',
+            title: 'A',
+            active: true
+          }
+        })
+        await released
+      })
+    const desktopCleanup = vi
+      .spyOn(desktop.runtime, 'cleanupSubscription')
+      .mockImplementation(() => release())
+    const hostScreencast = vi.spyOn(host.runtime, 'browserScreencast')
+    const hostCleanup = vi.spyOn(host.runtime, 'cleanupSubscription')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unsubscribe only checks a provider exists; the spies replace every command it would reach.
+    setRuntimeBrowserCommandsFactory(() => ({}) as never)
+    cleanups.push(() => setRuntimeBrowserCommandsFactory(null))
+
+    phone.send('cast', 'browser.screencast', {
+      worktree: WORKTREE,
+      page: 'hosted-page',
+      format: 'jpeg'
+    })
+    expect(
+      await phone.next('cast', (frame) => JSON.stringify(frame).includes(subscriptionId))
+    ).toMatchObject({ ok: true, result: { type: 'ready', subscriptionId } })
+    expect(desktopScreencast).toHaveBeenCalledWith(
+      { page: 'hosted-page', format: 'jpeg' },
+      expect.anything()
+    )
+
+    phone.send('uncast', 'browser.screencast.unsubscribe', { subscriptionId })
+    expect(await phone.next('uncast')).toMatchObject({ ok: true, result: { unsubscribed: true } })
+    expect(desktopCleanup).toHaveBeenCalledWith(subscriptionId)
+    expect(hostScreencast).not.toHaveBeenCalled()
+    expect(hostCleanup).not.toHaveBeenCalledWith(subscriptionId)
+  })
+
+  it('answers a targeted status from the server, so a server workspace gates on its own features', async () => {
+    const { host, desktop } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const StatusSchema = z.looseObject({ runtimeId: z.string(), capabilities: z.array(z.string()) })
+
+    phone.send('status:server', 'status.get', {})
+    phone.send('status:desktop', 'status.get', {}, null)
+    const server = StatusSchema.parse((await phone.next('status:server')).result)
+    const own = StatusSchema.parse((await phone.next('status:desktop')).result)
+    expect(server.runtimeId).toBe(host.runtime.getRuntimeId())
+    expect(own.runtimeId).toBe(desktop.runtime.getRuntimeId())
+    expect(server.capabilities).toEqual(host.runtime.getStatus().capabilities)
+  })
+
+  it("answers a targeted SSH state from the server, which holds a server workspace's SSH targets", async () => {
+    const { desktop } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const answeredByServer = (id: string) =>
+      passthroughOpens.hostReplies.some((frame) => JSON.parse(frame).id === id)
+
+    phone.send('ssh:server', 'ssh.getState', { targetId: 'devbox' })
+    phone.send('ssh:desktop', 'ssh.getState', { targetId: 'devbox' }, null)
+    expect(isOk(await phone.next('ssh:server'))).toBe(true)
+    expect(isOk(await phone.next('ssh:desktop'))).toBe(true)
+    expect(answeredByServer('ssh:server')).toBe(true)
+    expect(answeredByServer('ssh:desktop')).toBe(false)
   })
 
   it('refuses binary-frame methods and unknown servers without running anything on the desktop', async () => {

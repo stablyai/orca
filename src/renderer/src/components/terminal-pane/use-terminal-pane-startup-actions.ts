@@ -30,7 +30,6 @@ import type { TerminalPaneStoreController } from './use-terminal-pane-store-bind
 export function useTerminalPaneStartupActions(controller: TerminalPaneStoreController) {
   const {
     consumeTabIssueCommandSplit,
-    consumeTabSetupSplit,
     consumeTabStartupCommand,
     containerRef,
     issueCommandSplit,
@@ -51,7 +50,6 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     setTerminalError,
     setTerminalErrorsByPaneId,
     settings,
-    setupSplit,
     shouldMeasureHiddenStartup,
     startup,
     tabId,
@@ -149,16 +147,10 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     []
   )
   const saveQuickCommand = useCallback(
-    (command: TerminalQuickCommand): void => {
-      void useAppStore.getState().upsertTerminalQuickCommand(quickCommandEditorHostId, command)
-    },
+    (command: TerminalQuickCommand): Promise<boolean> =>
+      useAppStore.getState().upsertTerminalQuickCommand(quickCommandEditorHostId, command),
     [quickCommandEditorHostId]
   )
-  useEffect(() => {
-    if (setupSplit) {
-      consumeTabSetupSplit(tabId)
-    }
-  }, [setupSplit, tabId, consumeTabSetupSplit])
   useEffect(() => {
     if (issueCommandSplit) {
       consumeTabIssueCommandSplit(tabId)

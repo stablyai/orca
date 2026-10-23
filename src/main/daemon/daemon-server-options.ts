@@ -15,6 +15,7 @@ export type DaemonServerOptions = {
   protocolVersion?: number
   onIdleShutdown?: () => void
   onRpcShutdown?: () => void
+  onShutdownRequested?: () => void
   initialAdoptionTestConfig?: {
     timeoutMs: number
     clock: {

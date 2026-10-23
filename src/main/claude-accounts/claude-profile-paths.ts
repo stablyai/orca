@@ -222,17 +222,24 @@ function assertOutsideDefaultClaudeHomes(
 
 /** The user's own CLAUDE_CONFIG_DIR (their System default), or undefined for `~/.claude`. */
 export function readUserClaudeConfigDir(env: NodeJS.ProcessEnv): string | undefined {
-  const configDir = env.CLAUDE_CONFIG_DIR?.trim()
+  const user = readUserClaudeConfigDirAsSet(env)
+  return user === undefined ? undefined : resolve(user.trim())
+}
+
+/**
+ * The user's own CLAUDE_CONFIG_DIR exactly as they set it. Why unresolved: Claude keys its login by
+ * the literal string, and the shell compares it against what an rc file re-exports.
+ */
+export function readUserClaudeConfigDirAsSet(env: NodeJS.ProcessEnv): string | undefined {
+  const configDir = env.CLAUDE_CONFIG_DIR
   const injected = env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim()
-  if (!configDir) {
+  if (!configDir?.trim()) {
     return undefined
   }
-  if (injected && resolve(injected) === resolve(configDir)) {
-    // Why: an outer Orca's injected value carries the user's own beside it.
-    const user = env[CLAUDE_USER_CONFIG_DIR_ENV]?.trim()
-    return user ? resolve(user) : undefined
+  if (injected && resolve(injected) === resolve(configDir.trim())) {
+    return env[CLAUDE_USER_CONFIG_DIR_ENV]?.trim() ? env[CLAUDE_USER_CONFIG_DIR_ENV] : undefined
   }
-  return resolve(configDir)
+  return configDir
 }
 
 /** The folder profiles share from: the user's own CLAUDE_CONFIG_DIR, else `~/.claude`. */

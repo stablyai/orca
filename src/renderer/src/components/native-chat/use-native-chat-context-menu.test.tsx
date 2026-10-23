@@ -5,6 +5,7 @@ import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as I18n from '@/i18n/i18n'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../shared/clipboard-image'
 import {
@@ -36,26 +37,14 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuTrigger: ({ children }: { children?: ReactNode }) => children
 }))
 
-vi.mock('lucide-react', () => {
+vi.mock('lucide-react', async (importOriginal) => {
   const Icon = () => null
-  return {
-    Clipboard: Icon,
-    Copy: Icon,
-    GitFork: Icon,
-    Image: Icon,
-    Maximize2: Icon,
-    MessageSquarePlus: Icon,
-    Minimize2: Icon,
-    PanelBottomClose: Icon,
-    PanelsTopLeft: Icon,
-    PanelRightClose: Icon,
-    Pencil: Icon,
-    SquareTerminal: Icon,
-    X: Icon
-  }
+  const icons = await importOriginal<Record<string, unknown>>()
+  return Object.fromEntries(Object.keys(icons).map((name) => [name, Icon]))
 })
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18n>()),
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -396,9 +385,9 @@ describe('useNativeChatContextMenu', () => {
     // Keep the assertions tied to the mocked menu item's semantic children.
     const labels = items.list.map((candidate) => childrenText(candidate.children))
 
-    expect(labels.some((label) => label.startsWith('Switch to terminal view'))).toBe(true)
+    expect(labels.some((label) => label.startsWith('Continue with Terminal Agent'))).toBe(true)
     const item = items.list.find((candidate) =>
-      childrenText(candidate.children).startsWith('Switch to terminal view')
+      childrenText(candidate.children).startsWith('Continue with Terminal Agent')
     )
     expect(item).toBeDefined()
     item?.onSelect?.()
@@ -409,7 +398,9 @@ describe('useNativeChatContextMenu', () => {
     renderToStaticMarkup(<Harness />)
 
     expect(
-      items.list.some((candidate) => childrenText(candidate.children) === 'Switch to terminal view')
+      items.list.some(
+        (candidate) => childrenText(candidate.children) === 'Continue with Terminal Agent'
+      )
     ).toBe(false)
   })
 

@@ -13,7 +13,7 @@ afterEach(() => {
 })
 
 describe('host-selected status unavailable', () => {
-  it('removes a completed projection only for an explicit host unavailable clear', () => {
+  it('removes a completed projection only for an explicit unavailable or program-removal clear', () => {
     let clear: ((event: AgentStatusClearIpcPayload) => void) | undefined
     vi.stubGlobal('window', {
       api: {
@@ -37,6 +37,9 @@ describe('host-selected status unavailable', () => {
     clear?.({ paneKey: 'pane' })
     expect(store.removeAgentStatus).not.toHaveBeenCalled()
     clear?.({ paneKey: 'pane', statusUnavailable: true })
+    expect(store.removeAgentStatus).toHaveBeenCalledWith('pane')
+    store.removeAgentStatus.mockClear()
+    clear?.({ paneKey: 'pane', programStatusRemoved: true })
     expect(store.removeAgentStatus).toHaveBeenCalledWith('pane')
   })
 })

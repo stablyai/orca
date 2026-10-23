@@ -6,6 +6,8 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { Store } from '../persistence'
 
+type FloatingTerminalSettings = Pick<GlobalSettings, 'floatingTerminalTrustedCwds'>
+
 const FLOATING_WORKSPACE_DIRNAME = 'floating-workspace'
 
 function expandHomePath(input: string, home: string): string {
@@ -41,7 +43,7 @@ async function canonicalizeAccessibleDirectory(dirPath: string): Promise<string 
   }
 }
 
-function getTrustedFloatingWorkspaceDirectories(settings: GlobalSettings): Set<string> {
+function getTrustedFloatingWorkspaceDirectories(settings: FloatingTerminalSettings): Set<string> {
   return new Set(
     (settings.floatingTerminalTrustedCwds ?? [])
       .map((trustedPath) => trustedPath.trim())
@@ -63,7 +65,7 @@ async function getPreservedTrustedFloatingWorkspaceDirectories(
 
 function isTrustedFloatingWorkspaceDirectory(
   canonicalDirPath: string,
-  settings: GlobalSettings
+  settings: FloatingTerminalSettings
 ): boolean {
   return getTrustedFloatingWorkspaceDirectories(settings).has(path.resolve(canonicalDirPath))
 }
@@ -81,7 +83,7 @@ export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
 }
 
 export async function resolveFloatingTerminalCwd(
-  store: Store,
+  store: { getSettings(): FloatingTerminalSettings },
   args?: FloatingTerminalCwdRequest
 ): Promise<string> {
   const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''

@@ -276,6 +276,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         aria-describedby={undefined}
+        closeButtonVariant="minimize"
         className="scrollbar-sleek max-h-[85vh] overflow-y-auto sm:max-w-xl"
       >
         <DialogHeader>

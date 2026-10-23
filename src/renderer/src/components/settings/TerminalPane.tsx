@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { Separator } from '../ui/separator'
-import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { cn } from '@/lib/utils'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
@@ -15,20 +14,21 @@ import {
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
   getTerminalPaneInteractionSearchEntries,
-  getTerminalRenderingSearchEntries,
-  getTerminalSetupScriptSearchEntries
+  getTerminalRenderingSearchEntries
 } from './terminal-search'
 import {
   getTerminalRightClickToPasteSearchEntry,
   getTerminalWindowsPowershellImplementationSearchEntry,
-  getTerminalWindowsShellSearchEntry
+  getTerminalWindowsShellSearchEntry,
+  getTerminalWindowsAdministratorSearchEntry
 } from './terminal-windows-search'
 import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './TerminalRenderingSection'
-import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
 import { TerminalWindowsShellSection } from './TerminalWindowsShellSection'
+import { TerminalWindowsAdministratorSection } from './TerminalWindowsAdministratorSection'
+import { TerminalCustomShellInput } from './TerminalCustomShellInput'
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
@@ -168,17 +168,17 @@ export function TerminalPane({
           />
           {shellMode === 'custom' ? (
             <div className="space-y-1.5">
-              <Input
+              <TerminalCustomShellInput
                 value={settings.terminalDefaultShell ?? ''}
                 placeholder={translate(
                   'auto.components.settings.TerminalPane.c2bf02ce2f',
                   'fish, nu, or /bin/zsh'
                 )}
-                onChange={(event) => {
+                onEdit={(next) => {
                   setShellValidationError(null)
-                  updateSettings({ terminalDefaultShell: event.target.value.trimStart() })
+                  updateSettings({ terminalDefaultShell: next })
                 }}
-                onBlur={() => void validateShell()}
+                onCommit={() => void validateShell()}
                 className="w-full"
                 aria-label={translate(
                   'auto.components.settings.TerminalPane.5e06e87730',
@@ -300,6 +300,10 @@ export function TerminalPane({
 
   const visibleSections = [
     defaultShellSection,
+    isWindows &&
+    matchesSettingsSearch(searchQuery, getTerminalWindowsAdministratorSearchEntry()) ? (
+      <TerminalWindowsAdministratorSection key="windows-administrator" />
+    ) : null,
     showWindowsHostSettings &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsShellSearchEntry()) ? (
       <TerminalWindowsShellSection
@@ -323,13 +327,6 @@ export function TerminalPane({
         settings={settings}
         updateSettings={updateSettings}
         searchQuery={searchQuery}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getTerminalSetupScriptSearchEntries()) ? (
-      <TerminalSetupScriptSection
-        key="setup-script"
-        settings={settings}
-        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getManageSessionsSearchEntries()) ? (
@@ -356,16 +353,11 @@ export function TerminalPane({
         isMac={isMac}
       />
     ) : null
-  ].filter(Boolean)
+  ]
 
   return (
     <div className="space-y-6">
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-6">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="section" />
     </div>
   )
 }

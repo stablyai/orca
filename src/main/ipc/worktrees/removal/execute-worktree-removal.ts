@@ -33,7 +33,7 @@ import { removeFolderWorkspace } from './remove-folder-workspace'
 import { removeUnregisteredWorktree } from './remove-unregistered-worktree'
 import { removeRegisteredLocalWorktree } from './remove-registered-local-worktree'
 import { retryFailedLocalWorktreeRemoval } from './retry-failed-local-worktree-removal'
-import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-table'
+import { retryFailedRemovalUnlessRegistered } from '../../../worktree-removal-leftover'
 
 export async function executeWorktreeRemoval(
   context: WorktreeIpcContext,
@@ -70,8 +70,11 @@ export async function executeWorktreeRemoval(
     ])
   }
   if (
-    retryFailedRemovalUnlessRegistered(args.worktreeId, worktreePath, registeredWorktrees, () =>
-      retryFailedLocalWorktreeRemoval(context, args, removalHostId)
+    await retryFailedRemovalUnlessRegistered(
+      args.worktreeId,
+      worktreePath,
+      registeredWorktrees,
+      () => retryFailedLocalWorktreeRemoval(context, args, removalHostId)
     )
   ) {
     return { removing: true }
@@ -135,7 +138,7 @@ export async function executeWorktreeRemoval(
     )
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
-      store,
+      { store, runtime },
       args.worktreeId,
       removalHostId,
       args.snapshotPruneBatchId

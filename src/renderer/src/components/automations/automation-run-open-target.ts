@@ -15,7 +15,8 @@ export type AutomationRunPaneTarget = {
   tabId: string
   paneKey: string
   leafId: string
-  ptyId: string
+  /** Null while a hibernated run pane waits for its tab to wake it. */
+  ptyId: string | null
 }
 
 function getAutomationRunOpenTabId(run: Pick<AutomationRun, 'terminalPaneKey'>): string | null {
@@ -41,16 +42,25 @@ export function resolveAutomationRunOpenTarget({
   livePtyIds: readonly string[]
 }): AutomationRunPaneTarget | null {
   const parsed = parsePaneKey(run.terminalPaneKey ?? '')
-  if (!terminalTabExists || !parsed || !run.terminalPtyId || !currentLayout?.root) {
+  if (!terminalTabExists || !parsed || !currentLayout?.root) {
     return null
   }
   if (!terminalLayoutContainsLeaf(currentLayout.root, parsed.leafId)) {
     return null
   }
+  const layoutPtyId = currentLayout.ptyIdsByLeafId?.[parsed.leafId]
+  if (!run.terminalPtyId) {
+    // Why: a slept run pane keeps its key but drops its PTY id; the pane, not a process, is the target.
+    return {
+      tabId: parsed.tabId,
+      paneKey: run.terminalPaneKey!,
+      leafId: parsed.leafId,
+      ptyId: layoutPtyId && livePtyIds.includes(layoutPtyId) ? layoutPtyId : null
+    }
+  }
   if (!livePtyIds.includes(run.terminalPtyId)) {
     return null
   }
-  const layoutPtyId = currentLayout.ptyIdsByLeafId?.[parsed.leafId]
   if (layoutPtyId !== undefined && layoutPtyId !== run.terminalPtyId) {
     return null
   }
@@ -125,10 +135,9 @@ export function buildAutomationRunOpenLayout({
     ...currentLayout,
     activeLeafId: target.leafId,
     expandedLeafId: currentLayout.expandedLeafId === target.leafId ? target.leafId : null,
-    ptyIdsByLeafId: {
-      ...currentLayout.ptyIdsByLeafId,
-      [target.leafId]: target.ptyId
-    }
+    ptyIdsByLeafId: target.ptyId
+      ? { ...currentLayout.ptyIdsByLeafId, [target.leafId]: target.ptyId }
+      : currentLayout.ptyIdsByLeafId
   }
 }
 

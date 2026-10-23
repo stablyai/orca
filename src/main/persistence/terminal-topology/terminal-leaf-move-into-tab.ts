@@ -9,7 +9,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { closeTerminalSurfaceInWorkspaceSession } from '../../runtime/terminal-surface-close'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
-import { leafHeldOutsideTab, moveRecordKey } from './terminal-leaf-move'
+import { leafHeldByOtherTab, moveRecordKey } from './terminal-leaf-move'
 import {
   isTerminalOwnerPartition,
   type TerminalSessionPartition
@@ -167,7 +167,7 @@ export function planTerminalLeafMoveIntoTab(
   const refuse = (reason: TerminalLeafIntoTabRefusal): PlannedLeafMoveIntoTab =>
     stopped({ status: 'refused', reason })
   const owners = partitions.filter(({ hostId }) => isTerminalOwnerPartition(hostId))
-  if (leafHeldOutsideTab(owners, sourceTabId, leafId)) {
+  if (owners.some(({ session }) => leafHeldByOtherTab(session, sourceTabId, leafId))) {
     return refuse('leaf_in_other_tab')
   }
   const holders = owners.flatMap(({ hostId, session }): SourceHolder[] => {

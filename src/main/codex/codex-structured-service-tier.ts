@@ -6,6 +6,8 @@ import type {
 import { readRecord } from './codex-item-field-readers'
 import type { CodexOpenedThread } from './codex-structured-thread-open'
 import type { CodexSession } from './codex-structured-session-state'
+import { codexAcquireCatalogListing } from './codex-structured-catalog-entry'
+import { effectiveServiceTier } from '../../shared/structured-agent-session-effective-tier'
 
 /** Codex's request value for a model's standard tier. */
 export const CODEX_DEFAULT_SERVICE_TIER = 'default'
@@ -84,26 +86,42 @@ export function reportedCodexThreadOptions(
   }
 }
 
-function codexListsServiceTier(
-  model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined,
-  tier: string
-): boolean {
-  return model?.serviceTiers?.some((choice) => choice.value === tier) === true
-}
+const tierValues = (model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined) =>
+  model?.serviceTiers?.map((choice) => choice.value) ?? []
 
 /** Codex also takes the thread's reported tier when no model lists it, such as a configured `flex`. */
 export function codexOffersServiceTier(
-  session: CodexSession,
+  session: Pick<CodexSession, 'reportedOptions'>,
   model: AgentSessionModelOption | undefined,
   models: readonly AgentSessionModelOption[],
   tier: string
 ): boolean {
+  const listedTiers = models.flatMap(tierValues)
+  const reported = tier === session.reportedOptions.serviceTier
   return (
-    tier === CODEX_DEFAULT_SERVICE_TIER ||
-    codexListsServiceTier(model, tier) ||
-    (tier === session.reportedOptions.serviceTier &&
-      !models.some((entry) => codexListsServiceTier(entry, tier)))
+    effectiveServiceTier({ tier, modelTiers: tierValues(model), listedTiers, reported }) === tier
   )
+}
+
+/** A turn's options: an unoffered tier runs as standard; the chat's saved tier is kept. */
+export function codexTurnRequestOptions(
+  session: Pick<CodexSession, 'options' | 'catalogAccess'> & {
+    reportedOptions?: CodexSession['reportedOptions']
+  }
+): Record<string, string> {
+  const options = Object.fromEntries(session.options)
+  const reportedOptions = session.reportedOptions ?? {}
+  const models = codexAcquireCatalogListing(session.catalogAccess)?.models ?? []
+  const model = models.find((entry) => entry.id === (options.model ?? reportedOptions.model))
+  const tier = options.serviceTier
+  if (
+    tier &&
+    model?.serviceTiers &&
+    !codexOffersServiceTier({ reportedOptions }, model, models, tier)
+  ) {
+    options.serviceTier = CODEX_DEFAULT_SERVICE_TIER
+  }
+  return options
 }
 
 /** The chat's tier, picked or reported, falls back to standard where the model does not offer it. */

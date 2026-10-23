@@ -68,6 +68,7 @@ type MobileSessionTabLike =
       title?: string
       sessionId?: string
       agent?: string
+      chatStatus?: unknown
       isActive?: boolean
     }
 
@@ -161,7 +162,12 @@ function mobileSessionTabEqual(
         a.canGoForward === b.canGoForward
       )
     case 'agent-session':
-      return b.type === 'agent-session' && a.sessionId === b.sessionId && a.agent === b.agent
+      return (
+        b.type === 'agent-session' &&
+        a.sessionId === b.sessionId &&
+        a.agent === b.agent &&
+        JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
+      )
   }
 }
 

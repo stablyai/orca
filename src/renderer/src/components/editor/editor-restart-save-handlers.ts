@@ -1,8 +1,8 @@
 import type { OpenFile } from '@/store/slices/editor'
 import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
 import { canAutoSaveOpenFile } from './editor-autosave'
-import { flushPendingEditorChange } from './editor-pending-flush'
-import { getDuplicateDirtySavePaths } from './editor-autosave-state-projections'
+import { flushPendingEditorBuffer } from './editor-pending-flush'
+import { getDuplicateDirtySavePaths, restartSaveTargets } from './editor-autosave-state-projections'
 import type { AppStoreApi, EditorSaveQueue } from './editor-save-queue'
 import type {
   EditorPrepareHotExitDetail,
@@ -37,7 +37,7 @@ export function createEditorRestartSaveHandlers({
     try {
       detail.claim()
 
-      const dirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
+      const dirtyFiles = restartSaveTargets(store.getState())
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
@@ -45,7 +45,7 @@ export function createEditorRestartSaveHandlers({
       }
 
       for (const file of dirtyFiles) {
-        flushPendingEditorChange(file.id)
+        flushPendingEditorBuffer(store.getState(), file.id)
       }
 
       const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
@@ -57,15 +57,19 @@ export function createEditorRestartSaveHandlers({
         return
       }
 
-      await Promise.all(
+      const results = await Promise.all(
         dirtyFiles.map(async (file) => {
           const content = getLatestWritableContent(file)
           if (content === null) {
             throw new Error(`Missing editor buffer for ${file.relativePath}`)
           }
-          await queueSave(file, content)
+          return queueSave(file, content, 'restart')
         })
       )
+      if (results.some((result) => result !== 'written')) {
+        detail.reject('Some unsaved files were not saved. Review them before restarting.')
+        return
+      }
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

@@ -5,7 +5,7 @@ import type { Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 
 /** How close to its target a jump counts as arrived: sub-pixel and zoom rounding. */
-const ALIGN_ARRIVED_PX = 2
+export const ALIGN_ARRIVED_PX = 2
 
 /** Distance from a container's scroll origin down to a descendant, in the
  *  container's own scroll pixels, or null when there is no chain to walk.

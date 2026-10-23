@@ -37,7 +37,7 @@ export function NativeChatResumeAutoNote({
           onOpenSettings()
           openSettingsPage()
           openSettingsTarget({
-            pane: 'experimental',
+            pane: 'chat',
             repoId: null,
             sectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID
           })

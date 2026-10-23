@@ -7,17 +7,33 @@ import {
 } from '../../../shared/execution-host'
 import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
 import { translate } from '@/i18n/i18n'
+import { getWindowsPathAccess } from './windows-path-access'
 
 export type LocalPathOpenOwner =
   | ExecutionHostOwnerMatch<ExecutionHostId>
   | ExecutionHostId
   | 'unresolved'
 
+export function getLocalPathOpenOwnerHostId(
+  owner: LocalPathOpenOwner
+): ExecutionHostId | 'unresolved' {
+  return typeof owner === 'string' ? owner : owner.kind === 'resolved' ? owner.owner : 'unresolved'
+}
+
 /** Only a path whose owner is proven to be this computer may open through the local OS. */
 export function isLocalPathOpenBlocked(owner: LocalPathOpenOwner): boolean {
-  const hostId =
-    typeof owner === 'string' ? owner : owner.kind === 'resolved' ? owner.owner : 'unresolved'
-  return parseRoutableExecutionHostId(hostId)?.kind !== 'local'
+  return parseRoutableExecutionHostId(getLocalPathOpenOwnerHostId(owner))?.kind !== 'local'
+}
+
+/**
+ * Reveal in the file manager and open in an external editor: this computer's paths, plus a WSL
+ * host's, which Windows reaches through `\\wsl.localhost` (D5). Main re-checks the owner.
+ */
+export function isRevealOrEditorOpenBlocked(owner: LocalPathOpenOwner): boolean {
+  return (
+    isLocalPathOpenBlocked(owner) &&
+    getWindowsPathAccess(getLocalPathOpenOwnerHostId(owner)) === null
+  )
 }
 
 /** The owner of a route still spelled as a runtime id plus an SSH connection id. */

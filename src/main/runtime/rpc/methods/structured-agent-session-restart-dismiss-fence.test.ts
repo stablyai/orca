@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // "Dismiss all" from the desktop prompt, through the context the desktop renderer really dispatches
 // with. On a host whose agents it all shows, the dismissal is the unscoped, fenced one; a desktop
 // from before registered agents, which cannot show some agent, leaves that agent's offers alone.

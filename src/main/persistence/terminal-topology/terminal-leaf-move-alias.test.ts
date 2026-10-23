@@ -3,6 +3,7 @@ import { getDefaultUIState } from '../../../shared/constants'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { TerminalLeafMoveRequest } from '../../../shared/terminal-leaf-move'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { commitWindowPaneDetach } from './layout-command-commit'
 import { moveLeaf, type TerminalTopologyCommitContext } from './terminal-topology-commit'
 
 const WT = 'repo-1::/tmp/wt'
@@ -132,5 +133,41 @@ describe('a pane move writes its physical-key alias in the same durable mutation
 
     expect(state.legacyPaneKeyAliasEntries).toEqual([])
     expect(markDirty).not.toHaveBeenCalledWith('legacyPaneKeyAliasEntries')
+  })
+})
+
+describe('a window drag-out through layout.apply writes the same alias in its own mutation', () => {
+  const detach = {
+    type: 'movePaneToNewTab' as const,
+    workspace: WT,
+    tabId: SOURCE,
+    leafId: MOVED,
+    windowDetach: { ptyId: 'pty-agent', tabId: TARGET }
+  }
+
+  it('persists source-key -> target-key with the bound PTY, and restores on rollback', () => {
+    const { state, context, markDirty } = contextWith([])
+
+    const committed = commitWindowPaneDetach(['local'], detach, context)
+
+    expect(committed.value).toMatchObject({ ok: true })
+    expect(state.legacyPaneKeyAliasEntries).toEqual([
+      { ptyId: 'pty-agent', legacyPaneKey: FROM, stablePaneKey: TO, updatedAt: expect.any(Number) }
+    ])
+    expect(markDirty).toHaveBeenCalledWith('legacyPaneKeyAliasEntries')
+    committed.rollback?.()
+    expect(state.legacyPaneKeyAliasEntries).toEqual([])
+  })
+
+  it('writes no alias for a pane that has no PTY', () => {
+    const { state, context } = contextWith([], false)
+
+    commitWindowPaneDetach(
+      ['local'],
+      { ...detach, windowDetach: { ptyId: null, tabId: TARGET } },
+      context
+    )
+
+    expect(state.legacyPaneKeyAliasEntries).toEqual([])
   })
 })

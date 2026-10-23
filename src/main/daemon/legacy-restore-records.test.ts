@@ -7,6 +7,7 @@ import {
   legacyRestoreRecordsPathFor,
   type LegacyRestoreDetails
 } from './legacy-restore-records'
+import { DEFAULT_MAX_HOST_TERMINALS } from './host-terminal-ledger'
 
 const details = (overrides: Partial<LegacyRestoreDetails> = {}): LegacyRestoreDetails => ({
   sessionId: 'wt-1@@aaaa1111',
@@ -64,11 +65,13 @@ describe('LegacyRestoreRecords', () => {
 
   it('keeps the newest records within its bound and forgets old ones', () => {
     const records = open()
-    for (let i = 0; i < 40; i++) {
+    // A storm refusing as many restores as the host could run keeps every handle.
+    for (let i = 0; i < DEFAULT_MAX_HOST_TERMINALS + 8; i++) {
       records.record(details({ command: `claude --resume ${i}` }), 'pressure')
     }
-    expect(records.list()).toHaveLength(32)
-    expect(records.list()[0]?.command).toBe('claude --resume 39')
+    expect(records.list()).toHaveLength(DEFAULT_MAX_HOST_TERMINALS)
+    expect(records.list()[0]?.command).toBe(`claude --resume ${DEFAULT_MAX_HOST_TERMINALS + 7}`)
+    expect(records.list().at(-1)?.command).toBe('claude --resume 8')
     now += 15 * 24 * 60 * 60_000
     expect(open().list()).toEqual([])
   })

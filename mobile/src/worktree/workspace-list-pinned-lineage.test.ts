@@ -1,8 +1,9 @@
+import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from './workspace-list-sections'
-import { buildSections } from './workspace-list-sections'
-import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
+import { NO_PROJECT_SECTION_CATALOG, buildSections } from './workspace-list-sections'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../src/shared/workspace-statuses'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
@@ -16,7 +17,6 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     path: worktreePath,
     liveTerminalCount: 0,
     hasAttachedPty: false,
-    preview: '',
     unread: false,
     isPinned: false,
     linkedPR: null,
@@ -38,12 +38,12 @@ describe('a pinned parent with an unpinned child', () => {
     const sections = buildSections(
       [child, parent],
       'name',
-      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      { ...NO_WORKSPACE_ROW_FILTERS },
       '',
       'repo',
       new Set(),
-      new Map(),
-      DEFAULT_MOBILE_WORKSPACE_STATUSES,
+      NO_PROJECT_SECTION_CATALOG,
+      DEFAULT_WORKSPACE_STATUSES,
       new Set(),
       showPinnedInGroups
     )
@@ -65,7 +65,7 @@ describe('a pinned parent with an unpinned child', () => {
   it('nests the child under its parent in both sections when the desktop setting is on', () => {
     expect(nesting(true)).toEqual([
       { key: 'pinned', rows: nested },
-      { key: 'repo:orca', rows: nested }
+      { key: 'repo:repo-1', rows: nested }
     ])
   })
 })
@@ -86,7 +86,7 @@ it('follows a pin through a child hidden by search, like desktop', () => {
   const sections = buildSections(
     [root, middle, leaf],
     'name',
-    { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+    { ...NO_WORKSPACE_ROW_FILTERS },
     'alpha',
     'repo',
     new Set()

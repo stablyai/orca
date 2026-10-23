@@ -30,6 +30,14 @@ export const DIRECTOR_ADMISSION_ENVIRONMENT = Object.freeze({
 })
 const DIRECTOR_STARTUP_PROBE =
   'tcpSocket.port=8080,timeoutSeconds=120,periodSeconds=120,failureThreshold=1'
+// Why: Cloud Run routes a new revision's floor instances their first request up to ~110 s after
+// they start, so a one-step move lands every assignment on the one pre-started instance.
+export const DIRECTOR_STAGED_TRAFFIC_PERCENT = 20
+// Floor instances have started up to ~220 s after the revision and taken ~110 s more to route.
+const DIRECTOR_SPREAD_TIMEOUT_MS = 6 * 60 * 1000
+const DIRECTOR_SPREAD_POLL_INTERVAL_MS = 15_000
+// A hung read must not hold the 20/80 split past the deadline.
+const DIRECTOR_SPREAD_READ_TIMEOUT_MS = 30_000
 
 export function taggedRevisionOrigin(serviceOrigin, tag) {
   const url = new URL(serviceOrigin)
@@ -461,8 +469,13 @@ export function parseArguments(argv) {
   return values
 }
 
-function commandJson(args) {
-  const result = spawnSync('gcloud', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+function commandJson(args, { timeoutMs } = {}) {
+  const result = spawnSync('gcloud', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: timeoutMs
+  })
+  if (result.error) throw new Error(`gcloud ${args.slice(0, 4).join(' ')} failed: ${result.error.message}`)
   if (result.status !== 0) {
     throw new Error(`gcloud ${args.slice(0, 4).join(' ')} failed: ${result.stderr.trim()}`)
   }
@@ -588,6 +601,29 @@ function updateTraffic(config, args) {
   ])
 }
 
+export function serviceMaximumInstances(service) {
+  const value = service.metadata?.annotations?.['run.googleapis.com/maxScale']
+  return value === undefined ? undefined : Number(value)
+}
+
+function clearServiceMaximumInstances(config) {
+  // `--max=0` resets the service cap to Cloud Run's default without a new revision.
+  commandText(['run', 'services', 'update', config.service, ...serviceArguments(config), '--max=0', '--quiet'])
+}
+
+// Why: a service cap is divided among the revisions taking traffic, so one below two full
+// revisions leaves a 20% candidate a fifth of it while the serving floor holds the rest.
+function ensureServiceRoomForOverlap(config, operations, service, revisionMaximum) {
+  const cap = serviceMaximumInstances(service)
+  if (cap === undefined || cap >= 2 * revisionMaximum) return
+  operations.clearServiceMaximumInstances(config)
+  const cleared = serviceMaximumInstances(operations.describeService(config))
+  if (cleared !== undefined && cleared < 2 * revisionMaximum) {
+    throw new Error(`director service still caps instances at ${cleared}, below two revisions of ${revisionMaximum}`)
+  }
+  console.warn(JSON.stringify({ event: 'director_service_cap_cleared', from: cap, to: cleared ?? null }))
+}
+
 function removeDirectorTrafficTags(config, operations, retained = new Set()) {
   const tags = trafficTags(operations.describeService(config)).filter(
     (tag) => !retained.has(tag)
@@ -623,7 +659,11 @@ function pruneDirectorRevisions(config, operations) {
   }
 }
 
-function deployCandidate(
+function deployCandidate(...candidate) {
+  commandText(candidateUpdateArguments(...candidate))
+}
+
+export function candidateUpdateArguments(
   config,
   tag,
   env = {},
@@ -644,7 +684,8 @@ function deployCandidate(
     tag,
     '--no-traffic'
   ]
-  if (maxInstances !== undefined) args.push('--max', String(maxInstances))
+  // Per revision: gcloud's `--max` is the service cap, which Cloud Run splits by traffic share.
+  if (maxInstances !== undefined) args.push('--max-instances', String(maxInstances))
   if (config.role === 'director') {
     args.push(
       '--update-secrets',
@@ -663,7 +704,7 @@ function deployCandidate(
     args.push('--update-env-vars', environmentUpdateValue(env))
   }
   args.push('--quiet')
-  commandText(args)
+  return args
 }
 
 function revisionShape(revision, mutableEnvironment, allowServiceAccountChange = false) {
@@ -725,6 +766,59 @@ function cellIdentifier(sourceCellId, releaseId) {
   const suffix = releaseLabel(releaseId)
   const available = 128 - suffix.length - 2
   return `${sourceCellId.slice(0, available)}--${suffix}`
+}
+
+// Instances that served a request since `since`, read from Cloud Run's own request log.
+function servingInstanceIds(config, revision, since) {
+  const filter = [
+    'resource.type="cloud_run_revision"',
+    `resource.labels.service_name="${config.service}"`,
+    `resource.labels.revision_name="${revision}"`,
+    `logName="projects/${config.project}/logs/run.googleapis.com%2Frequests"`,
+    `timestamp>="${since}"`
+  ].join(' AND ')
+  const entries = commandJson([
+    'logging',
+    'read',
+    filter,
+    '--project',
+    config.project,
+    '--limit',
+    '1000',
+    '--format=json(labels.instanceId)'
+  ], { timeoutMs: DIRECTOR_SPREAD_READ_TIMEOUT_MS })
+  return new Set(entries.map((entry) => entry.labels?.instanceId).filter(Boolean))
+}
+
+export async function waitForServingInstances(
+  config,
+  revision,
+  required,
+  since,
+  {
+    readInstances = servingInstanceIds,
+    pollIntervalMs = DIRECTOR_SPREAD_POLL_INTERVAL_MS,
+    timeoutMs = DIRECTOR_SPREAD_TIMEOUT_MS
+  } = {}
+) {
+  const deadline = Date.now() + timeoutMs
+  let instances = 0
+  for (;;) {
+    try {
+      instances = readInstances(config, revision, since).size
+      console.warn(JSON.stringify({ event: 'director_candidate_spread', revision, instances, required }))
+      if (instances >= required) return
+    } catch (error) {
+      // A throttled log read is not evidence either way; the deadline still bounds the wait.
+      console.warn(JSON.stringify({ event: 'director_candidate_spread_unread', revision, error: String(error) }))
+    }
+    if (Date.now() >= deadline) {
+      // Fewer than the floor here can mean Cloud Run packs the partial share onto fewer instances.
+      console.warn(JSON.stringify({ event: 'director_candidate_spread_timeout', revision, instances, required }))
+      throw new Error(`candidate ${revision} served from ${instances} of ${required} instances before the deadline`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+  }
 }
 
 async function waitForHealth(origin, connectionCapacityProtocol) {
@@ -948,10 +1042,12 @@ export async function deployDirector(config, tag, overrides = {}) {
     deployCandidate,
     describeService,
     describeRevision,
+    clearServiceMaximumInstances,
     listRevisions,
     deleteRevision,
     updateTraffic,
     waitForHealth,
+    waitForServingInstances,
     assertRegionalRehomeDisabled,
     readReserveCells,
     readDirectorPlacement,
@@ -962,7 +1058,8 @@ export async function deployDirector(config, tag, overrides = {}) {
   // 100% of traffic. Inheriting the serving floor keeps one owner for the number instead of
   // restating it here; public admission is per-instance, so losing it shrinks fleet capacity.
   const initialService = operations.describeService(config)
-  const servingRevision = operations.describeRevision(config, activeRevision(initialService))
+  const servingRevisionName = activeRevision(initialService)
+  const servingRevision = operations.describeRevision(config, servingRevisionName)
   const shapeBaseline = directorShapeBaseline(
     config,
     initialService,
@@ -1056,8 +1153,10 @@ export async function deployDirector(config, tag, overrides = {}) {
   if (!bootstrapRuntimeIdentity) {
     await verifyRehomeDisabled(config['rehome-control-origin'])
   }
+  ensureServiceRoomForOverlap(config, operations, initialService, requiredMaximumInstances)
   removeDirectorTrafficTags(config, operations)
   let deployed
+  let staged = false
   let promoted = false
   try {
     operations.deployCandidate(
@@ -1178,6 +1277,18 @@ export async function deployDirector(config, tag, overrides = {}) {
         })
       )
     }
+    // A floor of one is the pre-started instance itself; nothing else needs to warm.
+    if (requiredMinimumInstances > 1) {
+      const since = new Date().toISOString()
+      staged = true
+      operations.updateTraffic(config, [`--to-tags=${tag}=${DIRECTOR_STAGED_TRAFFIC_PERCENT}`])
+      await operations.waitForServingInstances(
+        config,
+        candidate.revision,
+        requiredMinimumInstances,
+        since
+      )
+    }
     operations.updateTraffic(config, [`--to-tags=${tag}=100`])
     promoted = true
     removeDirectorTrafficTags(config, operations, new Set([SELECTOR_ROLLBACK_TAG]))
@@ -1192,6 +1303,13 @@ export async function deployDirector(config, tag, overrides = {}) {
     if (promoted) {
       try {
         operations.updateTraffic(config, [`--to-tags=${SELECTOR_ROLLBACK_TAG}=100`])
+      } catch (rollbackError) {
+        recoveryErrors.push(rollbackError)
+      }
+    } else if (staged) {
+      // The serving revision still holds most traffic and its warm floor; the cold rollback has neither.
+      try {
+        operations.updateTraffic(config, [`--to-revisions=${servingRevisionName}=100`])
       } catch (rollbackError) {
         recoveryErrors.push(rollbackError)
       }

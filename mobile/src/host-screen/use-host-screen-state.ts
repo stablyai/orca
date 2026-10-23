@@ -1,19 +1,16 @@
 import { useRef, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
-import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { getCachedWorktrees } from '../cache/worktree-cache'
 import { createInitialHostRouteActionState } from '../host-route-action-state'
 import type { RpcClient } from '../transport/rpc-client'
-import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../worktree/mobile-workspace-statuses'
 import { WorktreeCatalogSnapshotClient } from '../worktree/worktree-catalog-snapshot-client'
-import type {
-  MobileGroupMode,
-  MobileSortMode,
-  MobileViewState
-} from '../worktree/workspace-view-settings'
-import type { FilterState, Worktree } from '../worktree/workspace-list-sections'
-import type { MobileHostRepoIcon } from './host-screen-reply-schema'
+import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
+import type { Worktree } from '../worktree/workspace-list-sections'
+import type { ServedProjectSections } from '../worktree/project-sections-operations'
+import type { SectionRepo } from '../worktree/workspace-list-types'
+import { NO_SERVER_WORKSPACES, type ServerWorkspaces } from '../worktree/server-workspaces'
+import type { ProjectGroup } from '../../../src/shared/project-group-types'
 
 export function useHostScreenState(hostId: string | undefined, action: string | undefined) {
   const [initialCache] = useState(() =>
@@ -38,8 +35,6 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [optimisticActiveWorktreeIdentity, setOptimisticActiveWorktreeIdentity] = useState<
     string | null
   >(null)
-  const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
-  const [repoIconsByName, setRepoIconsByName] = useState<Map<string, MobileHostRepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
   // The stored name identity, loaded with the name so the header can label an offline host.
   const [hostStoredDescriptor, setHostStoredDescriptor] = useState<{
@@ -54,19 +49,15 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
-  const [sortMode, setSortMode] = useState<MobileSortMode>('recent')
-  const [filters, setFilters] = useState<FilterState>({
-    filterRepoIds: new Set(),
-    hideSleeping: false,
-    hideDefaultBranch: false,
-    alwaysShowDefaultBranch: true
-  })
-  const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
-  const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
-    DEFAULT_MOBILE_WORKSPACE_STATUSES
+  // The Workspace options this screen shares with the desktop; viewRef mirrors it for writes.
+  const [view, setView] = useState<MobileViewState>(INITIAL_MOBILE_VIEW)
+  const viewRef = useRef(view)
+  // The desktop sidebar's Project grouping inputs; null for a desktop that serves none.
+  const [servedProjectSections, setServedProjectSections] = useState<ServedProjectSections | null>(
+    null
   )
-  // displayName → repo id: filters key on repo id, but section headers/rows key on displayName, so bridge the two.
-  const [repoIdsByName, setRepoIdsByName] = useState<Map<string, string>>(new Map())
+  // The desktop's own repos from repo.list: an older desktop's rows group by these.
+  const [desktopRepos, setDesktopRepos] = useState<readonly SectionRepo[]>([])
   // Host-label inputs for rows: repo → host, SSH/override labels, and the host's own platform.
   const [repoHostIdByRepoId, setRepoHostIdByRepoId] = useState<Map<string, ExecutionHostId>>(
     new Map()
@@ -76,9 +67,11 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     new Map()
   )
   const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
-  const [showSortPicker, setShowSortPicker] = useState(false)
-  const [showGroupPicker, setShowGroupPicker] = useState(false)
-  const [showFilterModal, setShowFilterModal] = useState(false)
+  // The desktop's servers and their rows, listed through the desktop (mobileRelay.hosts.*).
+  const [serverWorkspaces, setServerWorkspaces] = useState<ServerWorkspaces>(NO_SERVER_WORKSPACES)
+  // Why its own banner state: a tap on a server that needs an update says so until dismissed.
+  const [serverNotice, setServerNotice] = useState<string | null>(null)
+  const [showWorkspaceOptions, setShowWorkspaceOptions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
@@ -87,35 +80,23 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   )
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   // Desktop's "Also show pinned worktrees in their original lists"; off by default.
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
-  // Why: ref so the ui.get merge and ui.set writes read the latest values without re-creating callbacks on every state change.
-  const viewStateRef = useRef<MobileViewState>({
-    groupMode: 'repo',
-    sortMode: 'recent',
-    hideSleeping: false,
-    hideDefaultBranch: false,
-    alwaysShowDefaultBranch: true,
-    filterRepoIds: [],
-    collapsedGroups: [],
-    workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
-  })
+  // A feed-built list's project groups on a host with no window to publish them.
+  const [hostProjectGroups, setHostProjectGroups] = useState<readonly ProjectGroup[]>([])
 
   return {
     actionTarget,
     catalogError,
     clientRef,
-    collapsedGroups,
     confirmDelete,
     confirmRemoveHost,
+    hostProjectGroups,
     actionError,
     error,
     fetchRepoMetadataInFlightRef,
     fetchRepoMetadataPendingRef,
     fetchWorktreesInFlightRef,
-    filters,
-    groupMode,
     hostLabelById,
     hostHealthById,
     hostName,
@@ -126,22 +107,21 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     newWorktreeModalVisibleRef,
     optimisticActiveWorktreeIdentity,
     pinnedIds,
-    repoColorsByName,
     repoHostIdByRepoId,
-    repoIconsByName,
-    repoIdsByName,
+    servedProjectSections,
+    desktopRepos,
     repoMetadataFetchedAtRef,
     routeActionState,
     search,
+    serverNotice,
+    serverWorkspaces,
     setActionTarget,
     setCatalogError,
-    setCollapsedGroups,
     setConfirmDelete,
     setConfirmRemoveHost,
+    setHostProjectGroups,
     setActionError,
     setError,
-    setFilters,
-    setGroupMode,
     setHostLabelById,
     setHostHealthById,
     setHostName,
@@ -150,31 +130,26 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
-    setRepoColorsByName,
     setRepoHostIdByRepoId,
-    setRepoIconsByName,
-    setRepoIdsByName,
+    setServedProjectSections,
+    setDesktopRepos,
     setRouteActionState,
     setSearch,
-    setShowFilterModal,
+    setServerNotice,
+    setServerWorkspaces,
+    setShowWorkspaceOptions,
     setShowPinnedInGroups,
-    setShowGroupPicker,
     setShowSearch,
-    setShowSortPicker,
     setSleptIds,
-    setSortMode,
-    setWorkspaceStatuses,
     setWorktrees,
     setWorktreesLoaded,
-    showFilterModal,
+    showWorkspaceOptions,
     showPinnedInGroups,
-    showGroupPicker,
     showSearch,
-    showSortPicker,
+    setView,
+    view,
+    viewRef,
     sleptIds,
-    sortMode,
-    viewStateRef,
-    workspaceStatuses,
     worktreeCatalogRef,
     worktrees,
     worktreesLoaded

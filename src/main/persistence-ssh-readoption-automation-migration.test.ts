@@ -21,7 +21,7 @@ import type { FolderWorkspace } from '../shared/folder-workspace-types'
 import type { ProjectGroup } from '../shared/project-group-types'
 import type { Repo } from '../shared/repo-types'
 import type { RemovedSshTargetTombstone } from '../shared/ssh-types'
-import type { SshConnectionStore } from './ssh/ssh-connection-store'
+import type { SshConnectionStore } from './ssh/connection/ssh-connection-store'
 import { getDefaultPersistedState } from '../shared/constants'
 import { toSshExecutionHostId } from '../shared/execution-host'
 import { hostStableKey } from '../shared/automation-owner-key'
@@ -170,7 +170,7 @@ async function reloadStore() {
 
 async function createSshStore(state: Record<string, unknown>) {
   const store = await createStoreFromState(state)
-  const { SshConnectionStore } = await import('./ssh/ssh-connection-store')
+  const { SshConnectionStore } = await import('./ssh/connection/ssh-connection-store')
   return { store, ssh: new SshConnectionStore(store) }
 }
 
@@ -359,7 +359,8 @@ describe('SSH re-adoption tombstone retention', () => {
 
   it('retains the tombstone when a same-id re-registration leaves the automation on the old incarnation', async () => {
     const { store } = await createSshStore(removedHostState())
-    const { readoptOrphanedWorkspacesForTarget } = await import('./ssh/ssh-target-readoption')
+    const { readoptOrphanedWorkspacesForTarget } =
+      await import('./ssh/targets/ssh-target-readoption')
     // Same id back with a new registration: nothing is re-pointed, so the automation
     // still depends on the tombstone as the only evidence its host was replaced.
     const target = { id: OLD_ID, label: 'Dev box', ...IDENTITY, generation: 9 }

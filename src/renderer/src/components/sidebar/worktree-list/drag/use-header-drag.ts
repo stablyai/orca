@@ -6,8 +6,11 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { HostHeaderRow, HostSectionRow } from '../../host-section-rows'
-import type { Row, WorktreeGroupBy } from '../grouping/row-types'
+import type {
+  HostHeaderRow,
+  HostSectionRow
+} from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { Row, WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import {
   getProjectGroupHeaderSectionEndByGroupId,
@@ -19,6 +22,8 @@ import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-dro
 import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from '../../project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
+
+const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
 
 export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHeaderDrag>
 
@@ -157,8 +162,8 @@ export function useWorktreeSidebarHeaderDrag(args: {
     [sidebarProjectGroupHeaderIdsByBucket]
   )
   const commitProjectGroupOrder = useCallback(
-    (repoId: string, projectGroupId: string | null, order: number) => {
-      void moveProjectToGroup(repoId, projectGroupId, order)
+    (project: Repo, projectGroupId: string | null, order: number) => {
+      void moveProjectToGroup(project, projectGroupId, order)
     },
     [moveProjectToGroup]
   )
@@ -179,6 +184,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
     repoById: repoMap,
+    getLiveRepos: readLiveRepos,
     usesProjectGroupOrdering: hasProjectGroups,
     onCommitRepoOrder: commitRepoReorder,
     onCommitProjectGroupOrder: commitProjectGroupOrder,

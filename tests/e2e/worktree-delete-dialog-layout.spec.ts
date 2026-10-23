@@ -120,9 +120,13 @@ for (const scenario of ['single', 'children', 'batch', 'known-dirty'] as const) 
         confirmFocused: boolean
       }[] = []
       const started = performance.now()
-      while (performance.now() - started < 2400) {
+      // Why a frame floor too: a loaded runner paints fewer than 21 frames in 2.4 s.
+      while (performance.now() - started < 2400 || samples.length <= 20) {
         const dialog = document.querySelector('[data-slot="dialog-content"]')
-        const button = dialog?.querySelector('[data-slot="dialog-footer"] button:last-child')
+        // Why not the last button: force delete is a split button whose menu chevron comes last.
+        const button = Array.from(
+          dialog?.querySelectorAll('[data-slot="dialog-footer"] button:not([aria-haspopup])') ?? []
+        ).at(-1)
         if (!(dialog instanceof HTMLElement) || !(button instanceof HTMLElement)) {
           throw new Error('Missing dialog')
         }
@@ -164,7 +168,6 @@ for (const scenario of ['single', 'children', 'batch', 'known-dirty'] as const) 
     }
     await page.screenshot({ path: testInfo.outputPath('loaded.png') })
     await dialog.screenshot({ path: testInfo.outputPath('loaded-dialog.png') })
-    expect(frames.length).toBeGreaterThan(20)
     expect(frames[0]?.confirmFocused).toBe(true)
     for (const frame of frames) {
       expect(frame).toEqual(frames[0])

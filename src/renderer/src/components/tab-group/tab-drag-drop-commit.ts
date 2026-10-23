@@ -10,15 +10,15 @@ import {
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
 import {
+  isSameJoinTarget,
   resolveTabDragLeafTarget,
   type LeafRect,
   type TabDragLeafTarget
 } from './tab-drag-leaf-target'
-import {
-  restoreTabDragActivationSnapshot,
-  type TabDragActivationSnapshot
-} from './tab-drag-preview-activation'
+import { resolveTerminalTabIntoPaneEligibility } from '../terminal-pane/terminal-tab-into-pane-eligibility'
 import type {
   TerminalTabIntoPaneArgs,
   TerminalTabIntoPaneOutcome
@@ -30,48 +30,33 @@ type AppState = ReturnType<typeof useAppStore.getState>
 export type LeafJoinDeps = {
   moveTabIntoPane: (args: TerminalTabIntoPaneArgs) => Promise<TerminalTabIntoPaneOutcome>
   readLeafRects: (tabId: string) => LeafRect[]
-  getPreDragSnapshot: () => TabDragActivationSnapshot | null
+  /** The join target the overlay is showing right now. */
+  getShownLeafTarget: () => TabDragLeafTarget | null
 }
 
-/** A drop on a pane edge joins the tab there; a refused target is a no-op that restores the preview. */
+/** A drop on a pane edge joins the tab there; a refused join changes nothing, so the hovered tab stays selected. */
 function commitLeafEdgeDrop({
   leafJoin,
   leafTarget,
   activeData,
-  worktreeId,
   finishDrag
 }: {
   leafJoin: LeafJoinDeps
   leafTarget: TabDragLeafTarget
   activeData: TabDragItemData
-  worktreeId: string
   finishDrag: (restoreSnapshot: boolean) => void
 }): void {
-  if (leafTarget.refusal) {
-    finishDrag(true)
-    return
-  }
-  // The drag state is cleared by finishDrag, so the snapshot is taken first.
-  const snapshot = leafJoin.getPreDragSnapshot()
   // The join activates the target tab itself, so the previewed tab is kept rather than restored.
   finishDrag(false)
-  const groupsAfterDrag = useAppStore.getState().groupsByWorktree[worktreeId]
-  void leafJoin
-    .moveTabIntoPane({
-      sourceTabId: activeData.visibleTabId,
-      targetTabId: leafTarget.targetTabId,
-      targetLeafId: leafTarget.leafId,
-      side: leafTarget.side
-    })
-    .then((outcome) => {
-      // Only a refusal changed nothing; an unknown outcome may already be applied.
-      // A group change during the round trip is newer than the snapshot, so it must not be undone.
-      const groupsUntouched =
-        useAppStore.getState().groupsByWorktree[worktreeId] === groupsAfterDrag
-      if (outcome === 'refused' && snapshot && groupsUntouched) {
-        restoreTabDragActivationSnapshot(worktreeId, snapshot)
-      }
-    })
+  if (leafTarget.refusal) {
+    return
+  }
+  void leafJoin.moveTabIntoPane({
+    sourceTabId: activeData.visibleTabId,
+    targetTabId: leafTarget.targetTabId,
+    targetLeafId: leafTarget.leafId,
+    side: leafTarget.side
+  })
 }
 
 /** Turns a finished tab drag into store mutations: pane-column split,
@@ -113,6 +98,20 @@ export function commitTabDragDrop({
     geometry: dragGeometryRef.current
   })
   if (paneColumnSplit) {
+    // Switch point: main places the tab beside the group first; the drag ends now, the move shows
+    // once main answers.
+    if (
+      ORCA_LAYOUT_OWNER_IS_MAIN &&
+      dropTabThroughLayoutOwner(worktreeId, {
+        kind: 'split',
+        tabId: activeData.unifiedTabId,
+        groupId: paneColumnSplit.groupId,
+        direction: paneColumnSplit.zone
+      })
+    ) {
+      finishDrag(true)
+      return
+    }
     const moved = dropUnifiedTab(activeData.unifiedTabId, {
       groupId: paneColumnSplit.groupId,
       splitDirection: paneColumnSplit.zone
@@ -146,8 +145,25 @@ export function commitTabDragDrop({
     geometry: dragGeometryRef.current,
     readLeafRects: leafJoin.readLeafRects
   })
-  if (leafTarget) {
-    commitLeafEdgeDrop({ leafJoin, leafTarget, activeData, worktreeId, finishDrag })
+  // A layout change after the overlay was drawn can move the pointer onto another pane: join only
+  // the target the user was shown, otherwise drop as if no overlay had been shown.
+  if (leafTarget && isSameJoinTarget(leafTarget, leafJoin.getShownLeafTarget())) {
+    commitLeafEdgeDrop({ leafJoin, leafTarget, activeData, finishDrag })
+    return
+  }
+
+  // A shown join that lost eligibility before the drop is a refusal, never a plain drop.
+  const shownTarget = leafJoin.getShownLeafTarget()
+  if (
+    !leafTarget &&
+    shownTarget &&
+    !resolveTerminalTabIntoPaneEligibility(state, {
+      sourceTabId: activeData.visibleTabId,
+      targetTabId: shownTarget.targetTabId,
+      targetLeafId: shownTarget.leafId
+    }).ok
+  ) {
+    finishDrag(false)
     return
   }
 
@@ -191,6 +207,19 @@ export function commitTabDragDrop({
       if (oldIndex !== -1 && oldIndex !== nextIndex) {
         const nextOrder = targetGroup.tabOrder.filter((id) => id !== activeData.unifiedTabId)
         nextOrder.splice(nextIndex, 0, activeData.unifiedTabId)
+        // Switch point: main reorders the group first.
+        if (
+          ORCA_LAYOUT_OWNER_IS_MAIN &&
+          dropTabThroughLayoutOwner(worktreeId, {
+            kind: 'reorder',
+            tabId: activeData.unifiedTabId,
+            groupId: overData.groupId,
+            tabOrder: nextOrder
+          })
+        ) {
+          finishDrag(true)
+          return
+        }
         reorderUnifiedTabs(overData.groupId, nextOrder)
         mirrorWebRuntimeTabMove({
           kind: 'reorder',
@@ -202,6 +231,19 @@ export function commitTabDragDrop({
       }
     } else {
       const index = overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
+      // Switch point: main moves the tab into the group first.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        dropTabThroughLayoutOwner(worktreeId, {
+          kind: 'move',
+          tabId: activeData.unifiedTabId,
+          groupId: overData.groupId,
+          index
+        })
+      ) {
+        finishDrag(true)
+        return
+      }
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId,
         index
@@ -227,6 +269,18 @@ export function commitTabDragDrop({
 
   if (isPaneDropData(overData)) {
     if (activeData.groupId !== overData.groupId) {
+      // Switch point: main moves the tab into the group first.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        dropTabThroughLayoutOwner(worktreeId, {
+          kind: 'move',
+          tabId: activeData.unifiedTabId,
+          groupId: overData.groupId
+        })
+      ) {
+        finishDrag(true)
+        return
+      }
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId
       })

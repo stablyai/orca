@@ -208,6 +208,32 @@ it('merges held option overrides with host seeds before the first acquisition', 
   )
 })
 
+it('keeps the seeded permission mode beside explicit picks on an acquired create', async () => {
+  // The fixture's Codex intent, seeded with a permission mode.
+  const resolveStructuredAgentSessionCreateIntent = async (input: { envelope: unknown }) => ({
+    envelope: input.envelope,
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree'
+    },
+    provider: 'codex',
+    agent: 'codex',
+    accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+    options: { model: 'gpt-5.6-sol', effort: 'medium', permissionMode: 'full-access' },
+    runtimeKind: 'native'
+  })
+  expect(
+    await call('agentSession.create', params({ model: 'held-model' }), legacy, {
+      resolveStructuredAgentSessionCreateIntent
+    })
+  ).toMatchObject({ ok: true, result: { ok: true } })
+  expect(rig.adapter.acquire).toHaveBeenCalledWith(
+    expect.objectContaining({ options: { model: 'held-model' }, permissionMode: 'full-access' })
+  )
+})
+
 it('rejects an explicit option the resting agent would reject before founding', async () => {
   expect(
     await call('agentSession.create', params({ unknownOption: 'yes' }), capable)
@@ -257,3 +283,21 @@ it.each(['options', 'firstMessage'] as const)(
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
   }
 )
+
+it('answers an old client whose start failed before spawning in plain words', async () => {
+  const raw = 'codex sessions pin CODEX_HOME, not CLAUDE_CONFIG_DIR'
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  rig.adapter.acquire.mockRejectedValueOnce(new AgentSessionPreSpawnError(new Error(raw)))
+
+  const answer = await call('agentSession.create', params(), legacy)
+
+  // Thrown as before, so the wire code an old client reads is unchanged; only the words are new.
+  expect(answer).toMatchObject({
+    ok: false,
+    error: {
+      code: 'runtime_error',
+      message: "Codex couldn't start. Send your message to try again."
+    }
+  })
+  expect(JSON.stringify(answer)).not.toContain(raw)
+})

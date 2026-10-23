@@ -1,5 +1,5 @@
 import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
-import { OAuthUsageError } from './claude-oauth-usage-error'
+import { ClaudeUsageRequestError, OAuthUsageError } from './claude-oauth-usage-error'
 
 export type ClaudeUsageErrorClassification = {
   failureKind: UsageRateLimitFailureKind
@@ -27,15 +27,9 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
     return terminal('usage-unavailable')
   }
 
-  if (error instanceof SyntaxError) {
-    return fallbackOnly('parse')
+  if (error instanceof ClaudeUsageRequestError) {
+    return fallbackOnly(error.failureKind)
   }
-
-  const message = error instanceof Error ? error.message : String(error)
-  if (/\babort|network|econn|enotfound|etimedout|fetch failed|dns\b/i.test(message)) {
-    return fallbackOnly('network')
-  }
-
   return fallbackOnly('unknown')
 }
 

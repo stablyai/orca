@@ -8,7 +8,10 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { clampLinearIssueListLimit } from '../../../../../shared/linear/issue-read-limits'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import {
+  credentialDecryptionMessage,
+  isIntegrationCredentialDecryptionError
+} from '../../../../../shared/integration-credential-errors'
 import {
   isLinearIssueAttributeFilterUnsupportedError,
   linearListIssues,
@@ -91,9 +94,10 @@ export function createLinearIssueListActions(
         })
         .catch((error) => {
           console.warn('[linear] searchLinearIssues failed:', error)
+          const credentialError = isIntegrationCredentialDecryptionError(error)
           if (
             !(scope.explicitSource && options?.workspaceId !== undefined) &&
-            (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+            (credentialError || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
               contextKey,
               requestCacheGeneration,
@@ -105,7 +109,13 @@ export function createLinearIssueListActions(
             if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
               void get().checkLinearConnection(true)
             }
-            return []
+            if (!credentialError) {
+              return []
+            }
+          }
+          // Why: [] would read as "no matches"; the caller shows this read's own error.
+          if (credentialError) {
+            throw new Error(credentialDecryptionMessage('Linear'))
           }
           return get().linearSearchCache[cacheKey]?.data ?? []
         })
@@ -203,9 +213,10 @@ export function createLinearIssueListActions(
           if (isLinearIssueAttributeFilterUnsupportedError(error)) {
             throw error
           }
+          const credentialError = isIntegrationCredentialDecryptionError(error)
           if (
             !(scope.explicitSource && options?.workspaceId !== undefined) &&
-            (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
+            (credentialError || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
               contextKey,
               requestCacheGeneration,
@@ -217,7 +228,12 @@ export function createLinearIssueListActions(
             if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
               void get().checkLinearConnection(true)
             }
-            return emptyLinearCollection<LinearIssue>()
+            if (!credentialError) {
+              return emptyLinearCollection<LinearIssue>()
+            }
+          }
+          if (credentialError) {
+            throw new Error(credentialDecryptionMessage('Linear'))
           }
           return get().linearListCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
         })

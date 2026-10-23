@@ -104,6 +104,7 @@ export type GitLabApi = {
     args: GitLabRepoSelectorArgs & {
       iid: number
       type: 'issue' | 'mr'
+      includeReviewDetails?: boolean
     }
   ) => Promise<GitLabWorkItemDetails | null>
   closeMR: (

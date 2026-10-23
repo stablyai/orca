@@ -11,7 +11,7 @@
 import { gitExecFileAsync } from '../git/runner'
 import { listWorktrees } from '../git/worktree'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import { WORKTREE_ID_SEPARATOR, worktreeIdComparisonKey } from '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR, worktreeIdentityKey } from '../../shared/worktree/id'
 import { parseGitRemoteFetchUrls } from '../../shared/git-remote-url-index'
 import {
   findWorktreeMetaReferencingRemote,
@@ -66,10 +66,9 @@ async function shouldReclaimPrRemote(
   if (!referencingEntries.some(({ meta }) => meta.pushTarget?.remoteCreated === true)) {
     return false
   }
-  const stillClaimedByLiveWorktree = referencingEntries.some(({ worktreeId }) => {
-    const key = worktreeIdComparisonKey(worktreeId)
-    return key !== null && liveWorktreeKeys.has(key)
-  })
+  const stillClaimedByLiveWorktree = referencingEntries.some(({ worktreeId }) =>
+    liveWorktreeKeys.has(worktreeIdentityKey(worktreeId))
+  )
   if (stillClaimedByLiveWorktree) {
     return false
   }
@@ -93,9 +92,7 @@ export async function reconcileOrphanedPrRemotesWithExec(
   liveWorktreePaths: readonly string[]
 ): Promise<string[]> {
   const liveWorktreeKeys = new Set(
-    liveWorktreePaths
-      .map((path) => worktreeIdComparisonKey(`${repoId}${WORKTREE_ID_SEPARATOR}${path}`))
-      .filter((key): key is string => key !== null)
+    liveWorktreePaths.map((path) => worktreeIdentityKey(`${repoId}${WORKTREE_ID_SEPARATOR}${path}`))
   )
   const reclaimed: string[] = []
   for (const remote of await listPrRemoteCandidates(execGit, repoPath)) {

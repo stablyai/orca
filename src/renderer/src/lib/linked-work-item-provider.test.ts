@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getLinkedWorkItemProvider } from './new-workspace'
+import { getLinkedWorkItemProvider } from './linked-work-item-provider'
 
 describe('getLinkedWorkItemProvider', () => {
   it.each([

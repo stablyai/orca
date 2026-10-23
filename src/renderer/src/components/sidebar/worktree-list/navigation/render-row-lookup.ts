@@ -11,7 +11,7 @@ import {
   getWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { RenderRow } from '../listing/render-row'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
 
 export function getRenderRowSidebarKey(row: RenderRow): string | null {

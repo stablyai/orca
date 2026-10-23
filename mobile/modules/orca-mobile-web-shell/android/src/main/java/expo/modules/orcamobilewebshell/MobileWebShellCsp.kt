@@ -36,8 +36,9 @@ internal val MOBILE_WEB_SHELL_CSP = listOf(
   //
   // `http:` stays out: it reaches no image TLS cannot serve, and a cleartext image is readable and
   // replaceable in flight by anything on the path.
-  "img-src 'self' data: https:",
-  "font-src 'none'",
+  "img-src 'self' data: blob: https:",
+  // Terminal fonts use bundled same-origin assets or embedded data URLs.
+  "font-src 'self' data:",
   // The origin is one read-only directory behind the manifest map, so 'self' reaches nothing the
   // page cannot already read, and the bootstrap page reads ./manifest.json through it. This is the
   // fence for fetch and XMLHttpRequest; the document-start script covers only the two things the

@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SearchResult } from '../../../../shared/code-search-types'
 import { useFileSearchRunner } from './useFileSearchRunner'
+import { localAndSshTwinRows } from '@/lib/workspace-twin-rows.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   getConnectionId: vi.fn(),
@@ -101,6 +102,21 @@ describe('useFileSearchRunner result ownership', () => {
     })
   })
 
+  it('does not search a workspace that two hosts publish', async () => {
+    const worktreeId = 'twin-repo::/repo'
+    const state = {
+      settings: { activeRuntimeEnvironmentId: 'ambient-runtime-b' },
+      ...localAndSshTwinRows('twin-repo', worktreeId),
+      fileSearchStateByWorktree: { [worktreeId]: {} }
+    }
+    const { hook, updates } = renderSearchRunner(state, worktreeId)
+
+    await finishSearch(hook.result.current.executeSearch)
+
+    expect(mocks.searchRuntimeFiles).not.toHaveBeenCalled()
+    expect(updates).toContainEqual({ results: null, resultOwner: null, loading: false })
+  })
+
   it('commits explicit local ownership without inheriting an ambient runtime', async () => {
     const worktreeId = 'repo-a::/repo'
     const state = {
@@ -187,6 +203,63 @@ describe('useFileSearchRunner result ownership', () => {
         executionHostId: 'local'
       }
     })
+  })
+
+  it.each([
+    ['local', 'local', null, false],
+    ['local regex', 'local', null, true],
+    ['SSH', 'ssh:ssh-target', 'ssh-target', false],
+    ['SSH regex', 'ssh:ssh-target', 'ssh-target', true],
+    ['paired host', 'runtime:search-runtime-a', null, false],
+    ['paired host regex', 'runtime:search-runtime-a', null, true]
+  ] as const)(
+    'preserves significant whitespace for %s searches',
+    async (_name, hostId, connectionId, useRegex) => {
+      const worktreeId = 'folder-a::/repo'
+      const { hook } = renderSearchRunner(
+        {
+          settings: {},
+          repos: [{ id: 'folder-a', kind: 'folder', connectionId }],
+          worktreesByRepo: {
+            'folder-a': [{ id: worktreeId, repoId: 'folder-a', hostId }]
+          },
+          fileSearchStateByWorktree: { [worktreeId]: { useRegex } }
+        },
+        worktreeId
+      )
+      mocks.getConnectionId.mockReturnValue(connectionId)
+
+      for (const query of [' needle ', ' needle', 'needle ', '\tneedle\t']) {
+        await act(async () => {
+          hook.result.current.executeSearch(query)
+          await vi.advanceTimersByTimeAsync(300)
+        })
+        expect(mocks.searchRuntimeFiles).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            target:
+              hostId === 'runtime:search-runtime-a'
+                ? { kind: 'environment', environmentId: 'search-runtime-a' }
+                : { kind: 'local' },
+            connectionId: connectionId ?? undefined
+          }),
+          expect.objectContaining({ query, useRegex, wholeWord: false }),
+          expect.any(AbortSignal)
+        )
+      }
+    }
+  )
+
+  it.each(['', ' ', '\t \t'])('keeps a blank query %j from starting a search', async (query) => {
+    const { hook, updates } = renderSearchRunner(
+      { settings: {}, repos: [], worktreesByRepo: {}, fileSearchStateByWorktree: {} },
+      'folder:search-root'
+    )
+    await act(async () => {
+      hook.result.current.executeSearch(query)
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    expect(mocks.searchRuntimeFiles).not.toHaveBeenCalled()
+    expect(updates).toContainEqual({ results: null, resultOwner: null, loading: false })
   })
 
   it('shows an active failure and clears it when the next search succeeds or is empty', async () => {

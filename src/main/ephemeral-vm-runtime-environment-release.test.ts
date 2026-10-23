@@ -14,7 +14,9 @@ vi.mock('../shared/runtime-environment-store', () => ({
 vi.mock('../shared/runtime-environment-managed-orcad-store', () => ({
   removeManagedOrcadEnvironment: mocks.removeManaged
 }))
-vi.mock('./ssh/orcad-managed-tunnel', () => ({ closeOrcadManagedTunnel: mocks.closeTunnel }))
+vi.mock('./managed-server/lifecycle/orcad-managed-tunnel', () => ({
+  closeOrcadManagedTunnel: mocks.closeTunnel
+}))
 
 import { releaseEphemeralVmRuntimeEnvironments } from './ephemeral-vm-runtime-environment-release'
 

@@ -29,7 +29,9 @@ export class CodexStructuredSessionTeardown {
   constructor(private readonly deps: CodexStructuredSessionTeardownDeps) {}
 
   close = async (sessionId: string): Promise<boolean> => {
-    const connection = this.deps.sessions.get(sessionId)?.connection
+    const connection =
+      this.deps.sessions.get(sessionId)?.connection ??
+      this.deps.acquisitions.get(sessionId)?.window.connection
     const closed = this.settled(
       sessionId,
       await closeCodexSession(
@@ -50,11 +52,13 @@ export class CodexStructuredSessionTeardown {
   }
 
   forceClose = async (sessionId: string): Promise<boolean> => {
-    const closed = await closeCodexPublishedSession(
-      this.deps.sessions,
+    const closed = await closeCodexSession(
       sessionId,
+      this.deps.sessions,
+      this.deps.acquisitions,
       this.deps.onEvent,
-      { requestedClose: false }
+      this.deps.logger,
+      false
     )
     return this.settled(sessionId, closed)
   }

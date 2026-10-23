@@ -6,20 +6,22 @@ import { resolveComposerManualBranchNameChange } from '../../../src/shared/compo
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'
 import type { RpcClient } from '../transport/rpc-client'
+import type { JiraIssue } from '../../../src/shared/jira-types'
 import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
+  buildJiraLinkedWorkItem,
   buildLinearLinkedWorkItem,
   buildSmartNameSelection,
   resolveComposerBranchPick,
   resolveComposerCreateSelection,
+  resolveJiraAutoName,
   resolveLinearAutoName,
-  resolveWorkItemAutoName,
-  shouldApplyAutoName
+  resolveWorkItemAutoName
 } from './composer-linked-work-item'
 import {
-  resolveComposerMrBase,
-  resolveComposerPrBase,
+  resolveComposerHostedItemBase,
+  toComposerBaseState,
   type ComposerHostedBase
 } from './composer-source-base-resolve'
 import type {
@@ -80,12 +82,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
           if (resolveTokenRef.current !== token) {
             return
           }
-          setBase({
-            baseBranch: result.baseBranch,
-            compareBaseRef: result.compareBaseRef,
-            pushTarget: result.pushTarget,
-            branchNameOverride: result.branchNameOverride
-          })
+          setBase(toComposerBaseState(result))
           setForkPushWarning(getForkPushWarning(result))
         })
         .catch((error: unknown) => {
@@ -104,113 +101,120 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     [onError]
   )
 
+  // A cross-repo selection can precede the selectedRepoId update.
+  const selectHostedItem = useCallback(
+    (args: {
+      item: {
+        repoId?: string
+        type: 'issue' | 'pr' | 'mr'
+        number: number
+        branchName?: string
+        baseRefName?: string
+        isCrossRepository?: boolean
+      }
+      provider: 'github' | 'gitlab'
+      linked: MobileLinkedWorkItem
+      autoName: string
+    }) => {
+      const token = (resolveTokenRef.current += 1)
+      const repoId = args.item.repoId || selectedRepoId
+      setLinkedWorkItem(args.linked)
+      applyAutoName(args.autoName, name)
+      clearBaseAndBranch()
+      if (!client || !repoId) {
+        return
+      }
+      const pending = resolveComposerHostedItemBase({
+        ...args.item,
+        client,
+        repoId,
+        provider: args.provider
+      })
+      if (pending) {
+        runBaseResolve(token, pending)
+      }
+    },
+    [applyAutoName, clearBaseAndBranch, client, name, runBaseResolve, selectedRepoId]
+  )
+
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem) => {
-      const token = (resolveTokenRef.current += 1)
       const identity = resolveGitHubWorkItemIdentity(item)
-      // Resolve the PR base against the item's OWN repo — a cross-repo accept
-      // switches repos then selects synchronously, so selectedRepoId is stale.
-      const repoId = item.repoId || selectedRepoId
-      setLinkedWorkItem(
-        buildGitHubLinkedWorkItem({
-          type: identity.type,
-          number: identity.number,
+      selectHostedItem({
+        item: { ...item, ...identity },
+        provider: 'github',
+        linked: buildGitHubLinkedWorkItem({
+          ...identity,
           title: item.title,
           url: item.url,
           repoId: item.repoId
-        })
-      )
-      applyAutoName(
-        resolveWorkItemAutoName({ ...identity, title: item.title, provider: 'github' }),
-        name
-      )
-      clearBaseAndBranch()
-      if (identity.type !== 'pr' || !client || !repoId) {
-        return
-      }
-      runBaseResolve(
-        token,
-        resolveComposerPrBase({
-          client,
-          repoId,
-          prNumber: identity.number,
-          ...(item.branchName ? { headRefName: item.branchName } : {}),
-          ...(item.baseRefName ? { baseRefName: item.baseRefName } : {}),
-          ...(item.isCrossRepository !== undefined
-            ? { isCrossRepository: item.isCrossRepository }
-            : {})
-        })
-      )
+        }),
+        autoName: resolveWorkItemAutoName({ ...identity, title: item.title, provider: 'github' })
+      })
     },
-    [applyAutoName, clearBaseAndBranch, client, name, runBaseResolve, selectedRepoId]
+    [selectHostedItem]
   )
 
   const handleSmartGitLabItemSelect = useCallback(
     (item: GitLabWorkItem) => {
-      const token = (resolveTokenRef.current += 1)
-      // Resolve the MR base against the item's OWN repo (see the GitHub handler).
-      const repoId = item.repoId || selectedRepoId
-      setLinkedWorkItem(
-        buildGitLabLinkedWorkItem({
+      selectHostedItem({
+        item,
+        provider: 'gitlab',
+        linked: buildGitLabLinkedWorkItem({
           type: item.type,
           number: item.number,
           title: item.title,
           url: item.url,
           repoId: item.repoId
-        })
-      )
-      applyAutoName(
-        resolveWorkItemAutoName({
+        }),
+        autoName: resolveWorkItemAutoName({
           type: item.type,
           number: item.number,
           title: item.title,
           provider: 'gitlab'
-        }),
-        name
-      )
-      clearBaseAndBranch()
-      if (item.type !== 'mr' || !client || !repoId) {
-        return
-      }
-      runBaseResolve(
-        token,
-        resolveComposerMrBase({
-          client,
-          repoId,
-          mrIid: item.number,
-          ...(item.branchName ? { sourceBranch: item.branchName } : {}),
-          ...(item.baseRefName ? { targetBranch: item.baseRefName } : {}),
-          ...(item.isCrossRepository !== undefined
-            ? { isCrossRepository: item.isCrossRepository }
-            : {})
         })
-      )
+      })
     },
-    [applyAutoName, clearBaseAndBranch, client, name, runBaseResolve, selectedRepoId]
+    [selectHostedItem]
+  )
+
+  // Jira and Linear issues share the same naming and base-reset rules.
+  const selectIdentifiedIssue = useCallback(
+    (args: { linked: MobileLinkedWorkItem; suggested: string; identifier: string }) => {
+      resolveTokenRef.current += 1
+      setLinkedWorkItem(args.linked)
+      // A bare issue key is lookup text, so it can adopt the issue's name.
+      const identifierTyped =
+        !linkedWorkItem && name.trim().toLowerCase() === args.identifier.toLowerCase()
+      if (identifierTyped && args.suggested) {
+        setNameState(args.suggested)
+        lastAutoNameRef.current = args.suggested
+      } else {
+        applyAutoName(args.suggested, name)
+      }
+      clearBaseAndBranch()
+    },
+    [applyAutoName, clearBaseAndBranch, lastAutoNameRef, linkedWorkItem, name, setNameState]
   )
 
   const handleSmartLinearIssueSelect = useCallback(
-    (issue: LinearIssue) => {
-      resolveTokenRef.current += 1
-      setLinkedWorkItem(buildLinearLinkedWorkItem(issue))
-      const suggested = resolveLinearAutoName(issue)
-      const identifierTyped =
-        !linkedWorkItem && name.trim().toLowerCase() === issue.identifier.toLowerCase()
-      if (
-        suggested &&
-        (identifierTyped ||
-          shouldApplyAutoName({
-            currentName: name,
-            lastAutoName: lastAutoNameRef.current,
-            lookupTextIsQuery: !linkedWorkItem
-          }))
-      ) {
-        setNameState(suggested)
-        lastAutoNameRef.current = suggested
-      }
-      clearBaseAndBranch()
-    },
-    [clearBaseAndBranch, linkedWorkItem, name]
+    (issue: LinearIssue) =>
+      selectIdentifiedIssue({
+        linked: buildLinearLinkedWorkItem(issue),
+        suggested: resolveLinearAutoName(issue),
+        identifier: issue.identifier
+      }),
+    [selectIdentifiedIssue]
+  )
+
+  const handleSmartJiraIssueSelect = useCallback(
+    (issue: JiraIssue) =>
+      selectIdentifiedIssue({
+        linked: buildJiraLinkedWorkItem(issue),
+        suggested: resolveJiraAutoName(issue),
+        identifier: issue.key
+      }),
+    [selectIdentifiedIssue]
   )
 
   const handleSmartBranchSelect = useCallback(
@@ -266,17 +270,13 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
 
   const handleBranchNameOverrideChange = useCallback(
     (value: string) => {
-      const next = resolveComposerManualBranchNameChange({
+      const { forkPushWarning: nextWarning, ...nextBase } = resolveComposerManualBranchNameChange({
         value,
         pushTarget: base.pushTarget,
         forkPushWarning
       })
-      setBase({
-        ...base,
-        branchNameOverride: next.branchNameOverride,
-        pushTarget: next.pushTarget
-      })
-      setForkPushWarning(next.forkPushWarning)
+      setBase({ ...base, ...nextBase })
+      setForkPushWarning(nextWarning)
     },
     [base, forkPushWarning]
   )
@@ -317,6 +317,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     handleSmartGitHubItemSelect,
     handleSmartGitLabItemSelect,
     handleSmartLinearIssueSelect,
+    handleSmartJiraIssueSelect,
     handleSmartBranchSelect,
     handleSmartCreateBranch,
     handleClearSmartNameSelection

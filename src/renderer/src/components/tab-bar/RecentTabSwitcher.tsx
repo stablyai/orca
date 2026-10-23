@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChartColumn, FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
+import { FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
@@ -15,6 +15,7 @@ import {
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
 import { translate } from '@/i18n/i18n'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type SwitcherState = {
   items: RecentTabSwitcherItem[]
@@ -33,9 +34,6 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   }
   if (item.type === 'browser') {
     return <Globe2 className={className} />
-  }
-  if (item.contentType === 'chat-visual') {
-    return <ChartColumn className={className} />
   }
   if (
     item.contentType === 'diff' ||
@@ -139,12 +137,12 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
       consumeKeyboardEvent(event)
       commit()
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    addAppKeyListener('keyup', onKeyUp)
     window.addEventListener('blur', cancel)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
+      removeAppKeyListener('keydown', onKeyDown)
+      removeAppKeyListener('keyup', onKeyUp)
       window.removeEventListener('blur', cancel)
     }
   }, [cancel, commit, openOrAdvance])

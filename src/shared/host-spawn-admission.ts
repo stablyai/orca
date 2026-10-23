@@ -242,10 +242,12 @@ export function decideSpawnAdmission(args: {
       ? { kind: 'refuse_retryable' }
       : { kind: 'wait', charge, retryAt: null }
   }
-  if (negotiated && mode.kind === 'paused') {
+  // Why: a user's resume past its allowance is paced, never put back to sleep in front of them.
+  const mayDefer = negotiated && facts.declaredIntent !== 'user-resume'
+  if (mayDefer && mode.kind === 'paused') {
     return { kind: 'defer', reason: 'paused' }
   }
-  if (negotiated && state.liveAutomatic + state.inFlight.automatic >= limits.maxLiveAutomatic) {
+  if (mayDefer && state.liveAutomatic + state.inFlight.automatic >= limits.maxLiveAutomatic) {
     return { kind: 'defer', reason: 'live_cap' }
   }
   const bucket = refill(
@@ -263,7 +265,7 @@ export function decideSpawnAdmission(args: {
     : now + Math.ceil((1 - bucket.tokens) / automaticTokensPerMs(limits))
   if (retryAt !== null ? retryAt > facts.deadlineAt : now >= facts.deadlineAt) {
     // Why: an old caller is admitted at its deadline rather than refused (degraded pacing).
-    return negotiated ? { kind: 'defer', reason: 'deadline' } : { kind: 'admit', charge }
+    return mayDefer ? { kind: 'defer', reason: 'deadline' } : { kind: 'admit', charge }
   }
   return { kind: 'wait', charge, retryAt }
 }

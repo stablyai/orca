@@ -1,6 +1,6 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeWithListManagedWorktrees } from './orca-runtime-list-managed-worktrees'
+import { OrcaRuntimeWithListManagedWorktrees } from './workspaces/managed-workspace-operations'
 
 const scanWorkspacePortsMock = vi.hoisted(() => vi.fn())
 

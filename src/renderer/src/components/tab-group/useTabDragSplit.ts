@@ -13,13 +13,9 @@ import {
 } from '@dnd-kit/core'
 import type { TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
+import type { TabDragActivationSnapshot } from '../../store/slices/tabs/tabs-slice-contract'
 import { useHoveredTabInsertion, type HoveredTabInsertion } from './tab-insertion'
-import {
-  captureTabDragActivationSnapshot,
-  restoreSourceGroupActiveTabAfterCrossGroupDrop,
-  restoreTabDragActivationSnapshot,
-  type TabDragActivationSnapshot
-} from './tab-drag-preview-activation'
+import { captureTabDragActivationSnapshot } from './tab-drag-preview-activation'
 import { getDragPointer } from './tab-drag-pointer'
 import { TabDragPointerSensor } from './tab-drag-pointer-sensor'
 import {
@@ -121,7 +117,8 @@ export function useTabDragSplit({
     clear: clearHoveredDropTarget,
     handleDragUpdate,
     hoveredDropTarget,
-    hoveredLeafTarget
+    hoveredLeafTarget,
+    shownLeafTargetRef
   } = useTabDragHoverPreview({
     worktreeId,
     preDragActivationSnapshotRef,
@@ -166,7 +163,7 @@ export function useTabDragSplit({
     if (!snapshot) {
       return
     }
-    restoreTabDragActivationSnapshot(worktreeId, snapshot)
+    useAppStore.getState().restoreDragActivationSnapshot(worktreeId, snapshot)
   }, [worktreeId])
 
   const restoreSourceGroupAfterCrossGroupDrop = useCallback(
@@ -175,7 +172,7 @@ export function useTabDragSplit({
       if (!snapshot) {
         return
       }
-      restoreSourceGroupActiveTabAfterCrossGroupDrop({
+      useAppStore.getState().restoreSourceGroupActiveTabAfterDrop({
         worktreeId,
         snapshot,
         sourceGroupId: activeData.groupId,
@@ -235,9 +232,9 @@ export function useTabDragSplit({
     () => ({
       moveTabIntoPane: moveTerminalTabIntoPaneInApp,
       readLeafRects: readMountedLeafRects,
-      getPreDragSnapshot: () => preDragActivationSnapshotRef.current
+      getShownLeafTarget: () => shownLeafTargetRef.current
     }),
-    []
+    [shownLeafTargetRef]
   )
 
   const onDragEnd = useCallback(

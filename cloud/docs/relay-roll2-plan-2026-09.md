@@ -21,7 +21,7 @@ lands regardless of how the code review goes.
 - **Code PR** (rebase #18565 onto main, resolve two conflicts):
   - `cloud/apps/relay/src/host-session-registry.ts`: conflict with #18698 (signed-out signal).
     Keep both; the accept-abandonment and lease changes are orthogonal to the signed-out path.
-  - `src/main/runtime/relay/relay-origin-pool.ts`: **drop this branch's version**. #18719 already
+  - `src/main/runtime/mobile-cloud-relay/relay-origin-pool.ts`: **drop this branch's version**. #18719 already
     merged the desktop early-window jitter (1 to 6 min). Also drop
     `relay-session-broker.test.ts` additions that only exercise the dropped change.
   - Keep: relay accept abandonment (`orca_relay_client_accept_abandoned` event), relay-side lease

@@ -2,6 +2,7 @@ name: pnpm verification cache pilot
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths: ['.github/workflows/ci-pnpm-verification-pilot.yml']
   workflow_dispatch:
 
@@ -17,6 +18,7 @@ env:
 
 jobs:
   seed:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       matrix:
         runner: [ubuntu-latest, ubuntu-24.04-arm]

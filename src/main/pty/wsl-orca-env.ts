@@ -15,6 +15,7 @@ import {
   RUNTIME_SOURCE_INCARNATION_ENV,
   RUNTIME_SOURCE_PROFILE_PATH_ENV
 } from '../../shared/runtime-source-env'
+import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from '../ipc/pty/host-env/codex-terminal-clipboard'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -117,6 +118,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `ORCA_OMP_STATUS_EXTENSION/${env.ORCA_OMP_STATUS_EXTENSION?.startsWith('/') ? 'u' : 'p'}`,
     ...(env.ORCA_PI_SOURCE_AGENT_DIR?.startsWith('/') ? ['ORCA_PI_SOURCE_AGENT_DIR/u'] : []),
     `${ORCA_IMAGE_PROTOCOL_ENV}/u`,
+    'CLAUDE_CODE_FORCE_TERMINAL_IMAGES/u',
+    // Why only Orca's marker: a real Windows-side SSH session must not leak into bare guest shells.
+    ...(env.SSH_CONNECTION === CODEX_REMOTE_VIEWER_SSH_CONNECTION ? ['SSH_CONNECTION/u'] : []),
     'ORCA_OMP_FRESH_CONFIG/p',
     ...worktreeSetupWslenvEntries(env)
   ]

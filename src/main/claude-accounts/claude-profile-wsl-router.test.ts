@@ -147,6 +147,15 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     expect(f.setup.calls).toBe(3)
   })
 
+  it('reads usage from the same guest folder a launch (local or WSL-host) runs in', async () => {
+    const f = fixture()
+    const launch = await f.router.prepareLaunch('Ubuntu')
+    const usage = await f.router.accountUsagePreparation('Ubuntu', 'a')
+    const poll = await f.router.preparation('Ubuntu')
+    expect(usage.wslLinuxConfigDir).toBe(launch.envPatch.CLAUDE_CONFIG_DIR)
+    expect(poll.wslLinuxConfigDir).toBe(launch.envPatch.CLAUDE_CONFIG_DIR)
+  })
+
   it('makes a launch redo a first setup that was cut off after its ownership gate', async () => {
     const f = fixture()
     mkdirSync(f.profileHome, { recursive: true })

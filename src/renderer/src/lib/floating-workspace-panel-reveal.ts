@@ -12,7 +12,11 @@ function toggleFloatingWorkspacePanel(): void {
 export function revealFloatingWorkspacePanel(
   state: Pick<AppState, 'settings' | 'updateSettings' | 'floatingWorkspacePanelOpen'>
 ): void {
-  if (state.settings?.floatingTerminalEnabled === true) {
+  // Why: host reveals can beat settings hydration; enabling then would overwrite a saved `false`.
+  if (!state.settings) {
+    return
+  }
+  if (state.settings.floatingTerminalEnabled === true) {
     if (!selectFloatingWorkspacePanelVisible(state)) {
       toggleFloatingWorkspacePanel()
     }

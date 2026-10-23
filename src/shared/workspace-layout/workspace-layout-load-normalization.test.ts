@@ -16,7 +16,7 @@ import {
   leaf,
   SSH_KEY
 } from './workspace-layout-session.test-fixture'
-import { sleepingRecord } from './workspace-layout-profile.test-fixture'
+import { localDesktopSession, sleepingRecord } from './workspace-layout-profile.test-fixture'
 
 const onDisk = (session: WorkspaceSessionState): WorkspaceSessionState =>
   JSON.parse(JSON.stringify(session))
@@ -122,6 +122,22 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     stored.unifiedTabs![GIT_KEY]![0]!.sortOrder = 5
     const loaded = load(stored)
     expect(loaded.layout.workspaces[GIT_KEY]!.groups[0]!.tabOrder).toEqual(['tab-b', 'tab-a'])
+  })
+
+  it('keeps a tab in the group its tab-bar entry names, as the window does', () => {
+    const stored = addWorkspace(emptySession(), GIT_KEY, [
+      { id: 'g1', tabs: [{ id: 'tab-a', leaves: [[leaf(1), 'pty-a']] }] },
+      { id: 'g2', tabs: [{ id: 'tab-b', leaves: [[leaf(2), 'pty-b']] }] },
+      { id: 'g3', tabs: [{ id: 'tab-c', leaves: [[leaf(3), 'pty-c']] }] }
+    ])
+    // An earlier group also lists tab-b; tab-c's entry names g1, which does not list it.
+    stored.tabGroups![GIT_KEY]![0]!.tabOrder.push('tab-b')
+    stored.unifiedTabs![GIT_KEY]![2]!.groupId = 'g1'
+    const groups = load(stored).layout.workspaces[GIT_KEY]!.groups
+    expect(groups.map((group) => [group.id, group.tabOrder])).toEqual([
+      ['g1', ['tab-a', 'tab-c']],
+      ['g2', ['tab-b']]
+    ])
   })
 
   it('unbinds the later of two panes bound to one terminal, in tab order', () => {
@@ -255,6 +271,21 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(saved.unifiedTabs![GIT_KEY]![0]!.color).toBeNull()
     expect(saved.tabGroups![GIT_KEY]![0]!.worktreeId).toBe(GIT_KEY)
     expect(saved.unifiedTabs![GIT_KEY]![1]!.executionHostId).toBe(LOCAL_EXECUTION_HOST_ID)
+  })
+
+  it('saves a moved editor tab an older build left naming its old workspace under its own', () => {
+    // Before #29930 a tab Orca moved to its file's workspace kept the source's worktree id.
+    const stored = localDesktopSession()
+    const ownedId = `editor:${encodeURIComponent(GIT_KEY)}:local:${encodeURIComponent('/Users/dev/orca/src/app.ts')}`
+    const entry = stored.unifiedTabs![GIT_KEY]!.find((tab) => tab.contentType === 'editor')!
+    entry.entityId = ownedId
+    entry.worktreeId = 'repo-2::/Users/dev/other'
+    const saved = saveWorkspaceLayout(load(stored))
+    expect(saved.unifiedTabs![GIT_KEY]!.find((tab) => tab.entityId === ownedId)).toMatchObject({
+      worktreeId: GIT_KEY
+    })
+    expect(saved.unifiedTabs![GIT_KEY]!.every((tab) => tab.worktreeId === GIT_KEY)).toBe(true)
+    expect(load(saved).changes).toEqual([])
   })
 
   function withEditorTabs(

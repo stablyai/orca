@@ -9,8 +9,8 @@ const MAX_DESCRIPTION_CHARS = 512
  *  qualification exists to remove, in the other direction. */
 const MAX_LABEL_CHARS = 96
 
-/** Every cut goes through here, clipped the way `boundSubagentField` clips the same provider
- *  string on the agent row: never mid surrogate pair, since a lone surrogate is lossy through any
+/** Every cut goes through here, clipped the way a subagent's saved row clips the same provider
+ *  string: never mid surrogate pair, since a lone surrogate is lossy through any
  *  non-JSON UTF-8 hop. A composed row is cut a SECOND time, so a clip that is safe only where the
  *  label is bounded is not safe. */
 function boundText(value: string, max: number): string {

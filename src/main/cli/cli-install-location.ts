@@ -12,6 +12,7 @@ import {
   resolveAppImageExtractedRoot,
   type AppImageExtractionOptions
 } from './appimage-extracted-root'
+import { resolveGenerationStableLauncherPath } from './appimage-generation-stable-launcher'
 import { getBundledLauncherPath, LINUX_CLI_COMMAND_NAME } from './bundled-cli-launcher-path'
 import { DEFAULT_MAC_COMMAND_PATH, DEV_COMMAND_NAME } from './cli-install-constants'
 import { ensureDevLauncher } from './cli-dev-launcher'
@@ -258,6 +259,11 @@ export abstract class CliInstallLocation {
     }
 
     if (this.isPackaged) {
+      const stableLauncher =
+        this.platform === 'linux' ? resolveGenerationStableLauncherPath(this.resourcesPath) : null
+      if (stableLauncher) {
+        return stableLauncher
+      }
       const bundledPath = getBundledLauncherPath(this.platform, this.resourcesPath)
       return bundledPath && existsSync(bundledPath) ? bundledPath : null
     }

@@ -4,7 +4,7 @@ import { getQuickOpenRgOutputMode } from '../../shared/quick-open-ripgrep-output
 import { RipgrepFilenameDecoder, RipgrepFilenameError } from '../../shared/ripgrep-filename-decoder'
 import { sep } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
-import type { Store } from '../persistence'
+import type { RuntimeStore as Store } from '../runtime/runtime-store-contract'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { toWindowsWslPath } from '../wsl'
 import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'

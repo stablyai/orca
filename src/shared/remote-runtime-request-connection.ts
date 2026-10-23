@@ -49,6 +49,10 @@ export class RemoteRuntimeRequestConnection {
     private readonly additionalClientCapabilities: readonly RuntimeCapability[] = []
   ) {}
 
+  isReady(): boolean {
+    return this.state === 'ready' && this.ws?.readyState === WebSocket.OPEN && !!this.handshake
+  }
+
   request<TResult>(
     method: string,
     params: unknown,
@@ -131,11 +135,8 @@ export class RemoteRuntimeRequestConnection {
 
     const closeError = error ?? remoteRuntimeUnavailableError()
     rejectRemoteRuntimeRequestReadyWaiters(this.readyWaiters, closeError)
-    for (const [requestId, pending] of this.pendingRequests) {
-      clearTimeout(pending.timeout)
-      this.pendingRequests.delete(requestId)
-      releaseRemoteRuntimePreparedRequest(pending)
-      pending.reject(closeError)
+    for (const requestId of this.pendingRequests.keys()) {
+      this.rejectPendingRequest(requestId, closeError)
     }
 
     try {
@@ -148,7 +149,7 @@ export class RemoteRuntimeRequestConnection {
 
   private ensureReady(signal?: AbortSignal): Promise<void> {
     const ws = this.ws
-    if (this.state === 'ready' && ws?.readyState === WebSocket.OPEN && this.handshake) {
+    if (this.isReady()) {
       return Promise.resolve()
     }
 

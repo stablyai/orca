@@ -13,6 +13,7 @@ import { WorktreePreparationLockOwnershipError } from './git/worktree-preparatio
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from './host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'
+import { profileStateAccessMachineIdentity } from './persistence/profile-state/profile-state-access-identity'
 import type { PreparationActivity } from './worktree-create-preparation-activity'
 import {
   deferPreparationForClaim,
@@ -215,7 +216,10 @@ function startBackgroundPreparation({
   const key = preparationEntryKey(repoPathKey, workspaceRootKey, canonicalBase, wslDistro)
   enforcePreparationLimit(repoPathKey, workspaceRootKey, wslDistro)
   const preparationId = `${process.pid}-${randomUUID()}`
-  const lockReason = createWorktreePreparationLockReason(preparationId)
+  const lockReason = createWorktreePreparationLockReason(
+    preparationId,
+    profileStateAccessMachineIdentity()
+  )
   const paths = isWindowsAbsolutePathLike(workspaceRoot) ? win32 : posix
   const preparationRoot = paths.join(workspaceRoot, WORKTREE_CREATE_PREPARATION_DIRECTORY)
   const preparedPath = paths.join(preparationRoot, preparationId)

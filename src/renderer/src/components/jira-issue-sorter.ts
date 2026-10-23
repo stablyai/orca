@@ -1,7 +1,8 @@
+import type { JiraListColumnId } from './jira-list-columns'
 import type { JiraIssue, JiraPriority } from '../../../shared/jira-types'
-import { compareNumericLocaleText } from '@/lib/locale-text-collators'
+import { compareNumericLocaleText } from '../../../shared/locale-text-collators'
 
-export type JiraIssueSortColumn = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
+export type JiraIssueSortColumn = JiraListColumnId
 
 export type JiraIssueSortDirection = 'asc' | 'desc'
 export type JiraPrioritiesBySite = ReadonlyMap<string, readonly JiraPriority[]>
@@ -86,6 +87,16 @@ export function sortJiraIssues(
       comparison = userA.localeCompare(userB)
     } else if (orderBy === 'updated') {
       comparison = numericKeys.get(a)! - numericKeys.get(b)!
+    } else if (orderBy === 'parent') {
+      comparison = compareNumericLocaleText(a.parent?.title ?? '', b.parent?.title ?? '')
+    } else if (orderBy === 'sprint') {
+      comparison = compareNumericLocaleText(a.sprint ?? '', b.sprint ?? '')
+    } else if (orderBy === 'storyPoints') {
+      comparison = (a.storyPoints ?? -1) - (b.storyPoints ?? -1)
+    } else if (orderBy === 'originalEstimate') {
+      comparison = (a.originalEstimateSeconds ?? -1) - (b.originalEstimateSeconds ?? -1)
+    } else if (orderBy === 'remainingEstimate') {
+      comparison = (a.remainingEstimateSeconds ?? -1) - (b.remainingEstimateSeconds ?? -1)
     }
     return orderDirection === 'asc' ? comparison : -comparison
   })

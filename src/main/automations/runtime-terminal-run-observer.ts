@@ -70,18 +70,19 @@ async function judgeIdleTail(
 /**
  * After a satisfied wait inside the agent-start window. An idle shell never produces a new idle
  * edge, so a fresh wait would only time out; instead the pane stays idle while its output is
- * unchanged, and that state is re-judged until the window passes or the agent reports.
- * Null once the pane changes: something is running, so the caller waits again.
+ * unchanged, and that state is re-judged until the window passes, the agent reports, or the
+ * observation deadline ends it. Null once the pane changes or the deadline passes.
  */
 async function settleIdlePane(
   runtime: AutomationRunTerminalHost,
   handle: string,
   judged: { evidence: AutomationRunAgentEvidence; run: AutomationRun },
   runStartedAt: number,
-  signal: AbortSignal
+  signal: AbortSignal,
+  deadlineAt: number
 ): Promise<AutomationRunCompletionObservation | null> {
   const idleTail = (await readTail(runtime, handle)).join('\n')
-  for (;;) {
+  while (Date.now() < deadlineAt) {
     const tail = await readTail(runtime, handle)
     if (tail.join('\n') !== idleTail) {
       return null
@@ -92,6 +93,7 @@ async function settleIdlePane(
     }
     await sleep(AGENT_EVIDENCE_POLL_INTERVAL_MS, signal)
   }
+  return null
 }
 
 function isTerminalWaitTimeout(error: unknown): boolean {
@@ -240,13 +242,20 @@ export function createRuntimeAutomationRunTerminalObserver(
         }
       }
       const deadlineAt = startedAt + OBSERVE_DEADLINE_MS
-      for (;;) {
+      while (Date.now() < deadlineAt) {
         try {
           const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
           if (!judged || !wait.satisfied) {
             return await buildObservation(runtime, handle, wait)
           }
-          const observation = await settleIdlePane(runtime, handle, judged, runStartedAt, signal)
+          const observation = await settleIdlePane(
+            runtime,
+            handle,
+            judged,
+            runStartedAt,
+            signal,
+            deadlineAt
+          )
           if (observation) {
             return observation
           }
@@ -256,15 +265,13 @@ export function createRuntimeAutomationRunTerminalObserver(
           if (signal.aborted || !isTerminalWaitTimeout(error)) {
             throw error
           }
-          if (Date.now() >= deadlineAt) {
-            return await buildUnobservedObservation(
-              runtime,
-              handle,
-              'Orca stopped watching this run after 6h without a completion signal.'
-            )
-          }
         }
       }
+      return await buildUnobservedObservation(
+        runtime,
+        handle,
+        'Orca stopped watching this run after 6h without a completion signal.'
+      )
     }
   }
 }

@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { ORCAD_SERVER_ENTRY_FILENAME } from '../../shared/orcad-artifacts'
 import { assertOrcadServerRuntime, handoffToBundledOrcad } from './orcad-bundled-runtime'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
+import { enableManagedOrcadCompileCache } from './orcad-compile-cache'
 
 declare const ORCAD_SERVER_SHA256: string
 
@@ -18,7 +19,10 @@ try {
     if (createHash('sha256').update(readFileSync(server)).digest('hex') !== ORCAD_SERVER_SHA256) {
       throw new Error('The Orca server does not match its launcher')
     }
-    loadServer = () => createRequire(entry)(server)
+    loadServer = () => {
+      enableManagedOrcadCompileCache(dirname(entry))
+      createRequire(entry)(server)
+    }
   }
 } catch (error) {
   console.error('orcad: failed to launch:', error)

@@ -1,13 +1,13 @@
-import { globSync, readFileSync, writeFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript-api'
 import {
   diffCounts,
-  formatBaseline,
-  parseBaseline,
-  parseBaselineNotes
-} from './check-focus-read-ratchet.mjs'
+  parseCountBaseline,
+  pruneCountBaseline,
+  totalCount
+} from './ratchet-baseline.mjs'
 import { literalString, propertyName, unwrap } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
@@ -19,13 +19,7 @@ const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const BASELINE_PATH = 'config/main-sync-spawn-baseline.txt'
 const SCAN_DIRECTORIES = ['src/main', 'src/shared']
 const PROCESS_ADVICE = 'use runProcess or spawnProcess from @orca/process-host'
-const SECURE_ADVICE = `no async secure writer exists yet; keep the synchronous one and raise this file's count in ${BASELINE_PATH} (or add a row), never a plain write (it loses the Windows ACL hardening)`
-const SECURE_WRITERS = [
-  'writeSecureFile',
-  'writeSecureJsonFile',
-  'writeDurableSecureJsonFile',
-  'writeSecureJsonFileWithinLimit'
-]
+const SECURE_ADVICE = `rewrites a DACL on the calling thread, and a directory rewrite blocks on its whole subtree; use restrictWindowsDirectory for a directory, or raise this file's count in ${BASELINE_PATH} (or add a row)`
 // Gated modules (package names, or repo-relative paths without extension, re-exporters included)
 // and the advice for each gated function they export.
 const GATED_FAMILIES = [
@@ -34,12 +28,6 @@ const GATED_FAMILIES = [
     advice: { execFileSync: PROCESS_ADVICE, spawnSync: PROCESS_ADVICE, execSync: PROCESS_ADVICE }
   },
   { modules: ['@orca/process-host'], advice: { runProcessSync: PROCESS_ADVICE } },
-  {
-    modules: ['src/shared/secure-file', 'src/shared/bounded-secure-json-file'],
-    advice: Object.fromEntries(
-      [...SECURE_WRITERS, 'hardenSecurePath'].map((name) => [name, SECURE_ADVICE])
-    )
-  },
   {
     modules: ['src/shared/secure-path-windows-acl'],
     advice: { restrictWindowsPathSync: SECURE_ADVICE }
@@ -64,13 +52,18 @@ const GATED_FAMILIES = [
   { modules: ['src/main/win32-utils'], advice: { grantDirAcl: 'use grantDirAclAsync' } }
 ]
 const ADVICE = new Map(GATED_FAMILIES.flatMap((family) => Object.entries(family.advice)))
-// Only spread-free calls with no options or a literal with absent/false `sync` are exempt.
-const SYNC_FLAG_SYMBOLS = new Set(['hardenSecurePath'])
+const GATED_MARKERS = [
+  ...ADVICE.keys(),
+  ...new Set(
+    GATED_FAMILIES.flatMap((family) => family.modules.map((module) => path.posix.basename(module)))
+  )
+]
 const FALLBACK_OPERATORS = new Set([ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken])
 const BASELINE_HEADER = [
   '# Synchronous child-process launches in production src/main and src/shared, per file: uses of',
   '# execFileSync/spawnSync/execSync, runProcessSync and the repo sync wrappers listed in',
-  '# config/scripts/check-main-sync-spawn-ratchet.mjs (secure writers run icacls on Windows).',
+  '# config/scripts/check-main-sync-spawn-ratchet.mjs (synchronous ACL rewrites and grants, which',
+  '# can block on a whole directory subtree).',
   '# Some entries run in the daemon or orcad process, or are test harnesses outside the test-path',
   '# conventions. This is a RATCHET: counts may only go DOWN.',
   '# Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune'
@@ -106,36 +99,6 @@ export function gatedSymbolsFor(file, specifier) {
   )
 }
 
-function isAsyncOnlyCall(callee) {
-  const call = callee.parent
-  if (
-    !ts.isCallExpression(call) ||
-    call.expression !== callee ||
-    call.arguments.some(ts.isSpreadElement)
-  ) {
-    return false
-  }
-  const options = unwrap(call.arguments[1])
-  return (
-    !options ||
-    (ts.isObjectLiteralExpression(options) &&
-      options.properties.every((property) => {
-        if (ts.isSpreadAssignment(property)) {
-          return false
-        }
-        const name = ts.isIdentifier(property.name)
-          ? property.name.text
-          : literalString(property.name)
-        return (
-          name !== null &&
-          (name !== 'sync' ||
-            (ts.isPropertyAssignment(property) &&
-              unwrap(property.initializer).kind === ts.SyntaxKind.FalseKeyword))
-        )
-      }))
-  )
-}
-
 function isValueReference(node) {
   const parent = node.parent
   if (
@@ -165,9 +128,16 @@ function isValueReference(node) {
  * Counted by reference only: not traced through non-const holders or the file's own wrappers.
  */
 export function collectSyncLaunchUses(file, contents) {
-  const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
+  // Escaped spellings and relative imports inside gated modules still need the full analysis.
+  const analyze =
+    contents.includes('\\') ||
+    GATED_MARKERS.some((marker) => contents.includes(marker) || file.includes(marker))
+  const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, analyze)
   if (source.parseDiagnostics.length > 0) {
     throw new Error(`Cannot parse ${file}; the sync-spawn ratchet must not skip it.`)
+  }
+  if (!analyze) {
+    return { count: 0, symbols: [] }
   }
   const used = new Set()
   let count = 0
@@ -214,10 +184,7 @@ export function collectSyncLaunchUses(file, contents) {
     }
     return null
   }
-  function recordUse(name, node) {
-    if (SYNC_FLAG_SYMBOLS.has(name) && isAsyncOnlyCall(node)) {
-      return
-    }
+  function recordUse(name) {
     used.add(name)
     count += 1
   }
@@ -326,13 +293,13 @@ export function collectSyncLaunchUses(file, contents) {
   for (const node of members) {
     const name = propertyName(node)
     if (moduleSymbols(node.expression)?.has(name)) {
-      recordUse(name, node)
+      recordUse(name)
     }
   }
   for (const node of identifiers) {
     const name = functions.get(node.text)
     if (name) {
-      recordUse(name, node)
+      recordUse(name)
     }
   }
   return { count, symbols: [...used].sort() }
@@ -384,15 +351,11 @@ export function collectSyncSpawnSources(root = ROOT) {
   )
 }
 
-function total(counts) {
-  return [...counts.values()].reduce((sum, count) => sum + count, 0)
-}
-
 export function main(root = ROOT) {
   const { counts, symbols } = countSyncSpawnUses(collectSyncSpawnSources(root))
   const { grown, shrunk } = diffCounts(
     counts,
-    parseBaseline(readFileSync(path.join(root, BASELINE_PATH), 'utf8'))
+    parseCountBaseline(readFileSync(path.join(root, BASELINE_PATH), 'utf8'))
   )
   for (const { file, now, allowed } of grown) {
     console.error(
@@ -408,24 +371,15 @@ export function main(root = ROOT) {
     return 1
   }
   console.log(
-    `Main sync-spawn ratchet OK — ${total(counts)} use(s) in ${counts.size} legacy file(s).`
+    `Main sync-spawn ratchet OK — ${totalCount(counts)} use(s) in ${counts.size} legacy file(s).`
   )
   return 0
 }
 
 export function prune(root = ROOT) {
-  const baselineFile = path.join(root, BASELINE_PATH)
-  const text = readFileSync(baselineFile, 'utf8')
   const { counts } = countSyncSpawnUses(collectSyncSpawnSources(root))
-  // Lowers entries only; growth still has to be fixed in the code.
-  const pruned = new Map(
-    [...parseBaseline(text)].map(([file, allowed]) => [
-      file,
-      Math.min(allowed, counts.get(file) ?? 0)
-    ])
-  )
-  writeFileSync(baselineFile, formatBaseline(pruned, BASELINE_HEADER, parseBaselineNotes(text)))
-  console.log(`Pruned ${BASELINE_PATH} to ${total(pruned)} use(s).`)
+  const kept = pruneCountBaseline(root, BASELINE_PATH, BASELINE_HEADER, counts)
+  console.log(`Pruned ${BASELINE_PATH} to ${kept} use(s).`)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

@@ -116,6 +116,8 @@ export function findPostBaselineNodeApiNames(binary) {
   return [...names].filter((name) => !NODE_API_EXPORTS.has(name)).sort()
 }
 
+const WINDOWS_WINPTY_FILES = ['pty.node', 'winpty.dll', 'winpty-agent.exe']
+
 /**
  * Files a slot ships, as `[slot-relative path, source path]`.
  *
@@ -127,18 +129,20 @@ export function findPostBaselineNodeApiNames(binary) {
  * lib/conpty_console_list_agent.js loads it, but only on the non-DLL kill path, which Orca
  * never takes (it always passes useConptyDll on win32). Shipped so that path fails soft
  * rather than on a missing module.
+ * `pty.node`, `winpty.dll` and `winpty-agent.exe` are upstream's winpty prebuilds, also kept by
+ * the desktop: node-pty selects winpty below Windows build 18309 (Windows 10 1809 / Server 2019),
+ * so without them orcad cannot open a terminal there (#30906).
  */
 export function slotSourceFiles({ platform, arch, buildDir, nodePtyDir }) {
   if (platform === 'win32') {
     const conptyRuntime = windowsConptyRuntimeDir(nodePtyDir, arch)
+    const upstream = join(nodePtyDir, 'prebuilds', `win32-${arch}`)
     return [
       ['conpty.node', join(buildDir, 'conpty.node')],
-      [
-        'conpty_console_list.node',
-        join(nodePtyDir, 'prebuilds', `win32-${arch}`, 'conpty_console_list.node')
-      ],
+      ['conpty_console_list.node', join(upstream, 'conpty_console_list.node')],
       ['conpty/conpty.dll', join(conptyRuntime, 'conpty.dll')],
-      ['conpty/OpenConsole.exe', join(conptyRuntime, 'OpenConsole.exe')]
+      ['conpty/OpenConsole.exe', join(conptyRuntime, 'OpenConsole.exe')],
+      ...WINDOWS_WINPTY_FILES.map((file) => [file, join(upstream, file)])
     ]
   }
   // Why spawn-helper on macOS only: node-pty posix_spawns it there, and binding.gyp builds it

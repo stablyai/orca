@@ -14,13 +14,15 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   attachHostSessionShadow,
-  contestedPartitionHosts,
   indexWorktreeHostClaims,
   normalizeWorkspaceSessionKeyToWorktreeId,
-  pickPrimaryHostForClaims,
   type HostSessionWriteMode,
   type WorktreeHostClaims
 } from './workspace-session-host-contention'
+import {
+  contestedPartitionHosts,
+  pickPrimaryHostForClaims
+} from '../../../shared/workspace-session-contested-primary-host'
 import {
   nonLocalHostSessionEntries,
   splitWorkspaceSessionByHost,
@@ -58,7 +60,6 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
 type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
-  setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
 }
 
 type DurableSessionApi = SessionApi & {

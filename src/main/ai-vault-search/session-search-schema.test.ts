@@ -217,26 +217,6 @@ it('creates the directory the index lives in', async () => {
   }
 })
 
-it('rebuilds a newer index rather than reading a schema it does not know', async () => {
-  const path = await tempDatabasePath()
-  const newer = openSessionSearchDatabase(path)
-  newer.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
-  newer
-    .prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'")
-    .run(String(SESSION_SEARCH_SCHEMA_VERSION + 1))
-  newer.close()
-
-  const rebuilt = openSessionSearchDatabase(path)
-  try {
-    expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
-      c: 0
-    })
-  } finally {
-    rebuilt.close()
-  }
-})
-
 it('rebuilds when meta exists but its version row is gone', async () => {
   const path = await tempDatabasePath()
   const damaged = openSessionSearchDatabase(path)

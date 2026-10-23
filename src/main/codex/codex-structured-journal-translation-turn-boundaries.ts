@@ -76,9 +76,6 @@ export class CodexJournalTurnBoundaries {
     if (!turnId) {
       return CODEX_JOURNAL_ADMITTED
     }
-    if (!this.deps.activeTurns.canRemember(event.threadId, turnId)) {
-      return { accepted: false, reason: 'backpressure' }
-    }
     const startedAt = this.receiptTime(event)
     const command =
       event.threadId === this.deps.primaryThreadId() ? this.deps.commands.claim(turnId) : null

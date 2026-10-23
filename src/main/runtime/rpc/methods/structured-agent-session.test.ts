@@ -175,7 +175,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(36)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(40)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -336,7 +336,7 @@ describe('capability gating', () => {
     }
   )
 
-  it.each(CLEANUP_METHODS)(
+  it.each(CLEANUP_METHODS.filter(({ method }) => method !== 'agentSession.sleepWorkspace'))(
     'does not install a host for cleanup-only method $method',
     async ({ method, params }) => {
       const ensureHost = vi.fn()
@@ -383,12 +383,13 @@ describe('method routing', () => {
     }
     const created = await call('agentSession.create', params, STRUCTURED_CLIENT)
     expect(created).toMatchObject({ ok: true, result: { ok: true } })
-    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith({
-      ...params,
-      callerKey: 'trusted-local:runtime'
-    })
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...params,
+        callerKey: 'trusted-local:runtime'
+      })
+    )
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
         accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
         options: { model: 'gpt-5.6-sol', effort: 'medium' }
@@ -420,8 +421,7 @@ describe('method routing', () => {
     })
     // Beside `options`, after the attach fingerprint: which tab shows the chat is not which
     // conversation this attaches to.
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({ surfaceTabId: 'chat-tab-1' })
     )
   })
@@ -536,10 +536,12 @@ describe('method routing', () => {
         ok: true,
         result: { ok: true }
       })
-      expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith({
-        ...params,
-        callerKey: 'trusted-local:runtime'
-      })
+      expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...params,
+          callerKey: 'trusted-local:runtime'
+        })
+      )
     }
   )
 
@@ -570,12 +572,13 @@ describe('method routing', () => {
     }
     const created = await call('agentSession.create', params, STRUCTURED_CLIENT)
     expect(created).toMatchObject({ ok: true, result: { ok: true } })
-    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith({
-      ...params,
-      callerKey: 'trusted-local:runtime'
-    })
-    expect(hostCalls.attach).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...params,
+        callerKey: 'trusted-local:runtime'
+      })
+    )
+    expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({
         accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' }
       })
@@ -644,8 +647,7 @@ describe('method routing', () => {
       })
 
       expect(await call(method, params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
-      expect(hostCalls.attach).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(hostCalls.attach.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({ location: params.location })
       )
       expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('launchDirectory')
@@ -863,8 +865,15 @@ describe('agentSession.subscribeStatus', () => {
   })
 
   it('opens the host status feed with a projected snapshot as its first reply', async () => {
-    const reply = await call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT)
-    expect(reply).toMatchObject({
+    const restoring = Promise.withResolvers<void>()
+    const restore = vi.fn(() => restoring.promise)
+    const response = call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT, {
+      restoreStructuredAgentSessionTabs: restore
+    })
+    await vi.waitFor(() => expect(restore).toHaveBeenCalledOnce())
+    expect(hostCalls.subscribeStatus).not.toHaveBeenCalled()
+    restoring.resolve()
+    expect(await response).toMatchObject({
       ok: true,
       result: {
         type: 'snapshot',

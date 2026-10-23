@@ -1,5 +1,6 @@
 import { hasInstructionalPluginContributions } from '../../shared/plugins/plugin-consent-fingerprint'
 import { hashPluginTree } from './plugin-content-hash'
+import { pluginTreeHashMatches } from './plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 
 /** Instructional bytes execute later, so every read must still match the tree
@@ -19,10 +20,7 @@ export async function verifyInstructionalPluginContent(
       `plugin ${plugin.pluginKey} instructional content is unreadable: ${actual.error}`
     )
   }
-  const matches =
-    actual.hash === plugin.consentContentHash ||
-    (plugin.consentContentHash.length === 32 && actual.hash.startsWith(plugin.consentContentHash))
-  if (!matches) {
+  if (!pluginTreeHashMatches(actual.hash, plugin.consentContentHash)) {
     throw new Error(
       `plugin ${plugin.pluginKey} instructional content changed since it was reviewed`
     )

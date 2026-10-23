@@ -2,20 +2,13 @@ import type { PairedRuntimeConnection } from './paired-runtime-connection'
 import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { sendRemoteRuntimeRequestOnSocket } from './remote-runtime-request-socket'
-import {
-  subscribeRemoteRuntimeTransport,
-  type RemoteRuntimeSubscriptionOptions,
-  type RemoteRuntimeTransportSubscriptionCallbacks
-} from './remote-runtime-subscription-transport'
+import { subscribeRemoteRuntimeTransport } from './remote-runtime-subscription-transport'
+import type {
+  RemoteRuntimeSubscriptionOptions,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from './remote-runtime-subscription-contract'
 import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RuntimeStatus } from './runtime-types'
-
-export { RemoteRuntimeClientError } from './remote-runtime-client-error'
-export type {
-  RemoteRuntimeOutboundMemoryBudget,
-  RemoteRuntimeOutboundSocketMemory,
-  RemoteRuntimeSubscriptionOptions
-} from './remote-runtime-subscription-transport'
 
 export type RemoteRuntimeSubscription = {
   requestId: string

@@ -7,6 +7,15 @@ import { readMobileWebBundleErrorCode } from './mobile-web-bundle-operations'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
 
+// Hashed before it resolves, as the native module's synchronous digest is.
+vi.mock('expo-crypto', async () => {
+  const { sha256: hash } = await import('@noble/hashes/sha256')
+  return {
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    digest: async (_algorithm: string, data: Uint8Array) => hash(data).buffer
+  }
+})
+
 const CHUNK_BYTES = 4
 
 function toHex(bytes: Uint8Array): string {

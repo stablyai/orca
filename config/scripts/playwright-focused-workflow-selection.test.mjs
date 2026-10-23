@@ -75,29 +75,36 @@ it('focused IME and golden commands discover only their requested files with the
         `const { test } = require(${testPackage}); test('selected', () => {});`
       )
     }
-    for (const args of commands) {
-      const result = await runProcess({
-        program: process.execPath,
-        cwd: directory,
-        args: [
-          join(dirname(require.resolve('playwright/package.json')), 'cli.js'),
-          'test',
-          '--config',
-          config,
-          '--list',
-          '--reporter=json',
-          ...args
-        ],
-        env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
-        timeoutMs: 20_000
+    const results = await Promise.allSettled(
+      commands.map(async (args) => {
+        const result = await runProcess({
+          program: process.execPath,
+          cwd: directory,
+          args: [
+            join(dirname(require.resolve('playwright/package.json')), 'cli.js'),
+            'test',
+            '--config',
+            config,
+            '--list',
+            '--reporter=json',
+            ...args
+          ],
+          env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' },
+          timeoutMs: 20_000
+        })
+        expect(result.code, result.stderr).toBe(0)
+        const report = JSON.parse(result.stdout)
+        const expected = args.filter((arg) => arg.endsWith('.spec.ts')).sort()
+        expect(
+          report.suites.map((suite) => suite.file.replaceAll('\\', '/')).sort(),
+          JSON.stringify(args)
+        ).toEqual(expected)
       })
-      expect(result.code, result.stderr).toBe(0)
-      const report = JSON.parse(result.stdout)
-      const expected = args.filter((arg) => arg.endsWith('.spec.ts')).sort()
-      expect(
-        report.suites.map((suite) => suite.file.replaceAll('\\', '/')).sort(),
-        JSON.stringify(args)
-      ).toEqual(expected)
+    )
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        throw result.reason
+      }
     }
   } finally {
     rmSync(directory, { recursive: true, force: true })

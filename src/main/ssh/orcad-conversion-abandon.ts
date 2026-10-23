@@ -6,7 +6,7 @@
 import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import { closeOrcadManagedTunnel } from './orcad-managed-tunnel'
+import { closeOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import {
   abortOrcadMigrationCutover,
   type OrcadMigrationAbortResult,

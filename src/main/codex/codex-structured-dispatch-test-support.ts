@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { expect, vi } from 'vitest'
 import type {
   AgentJournalMessageItem,
@@ -117,7 +118,7 @@ export async function acquiredCodexAdapter(input: {
     agent: 'codex',
     providerHandle: codexProviderHandle(CODEX_TEST_THREAD_ID)
   }
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity,
     fence: 7,
     spawnToken: 'spawn-9',

@@ -185,7 +185,7 @@ describe('AgentHookServer nested agent model fence', () => {
       server.stop()
     }
 
-    expect(pushed.length).toBeGreaterThanOrEqual(4)
+    expect(pushed).toHaveLength(2)
     expect(pushed.every((payload) => payload.agentType === 'claude')).toBe(true)
     expect(pushed.map((payload) => payload.model)).not.toContain('gpt-6-astra')
   })

@@ -81,7 +81,7 @@ vi.mock('../platform/haptics', () => ({
   triggerSelection: vi.fn()
 }))
 
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => mockTransport.forceReconnect,
   useHostClient: () => ({
     client: mockTransport.client,

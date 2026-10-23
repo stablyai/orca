@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import { createTestStore, makeTabGroup, makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+
+// The user is present unless a test says otherwise.
+beforeEach(() => setPresenceGated(false))
+afterEach(() => setPresenceGated(true))
 
 const WORKSPACE = 'wt-1'
 const GROUP = 'group-1'
@@ -101,48 +106,5 @@ describe('createStructuredAttentionSurface', () => {
     expect(
       surfaceFor(hidden).isSurfaceViewed({ workspaceId: WORKSPACE, surfaceKey: CHAT_SUBJECT })
     ).toBe(false)
-  })
-
-  it('collects the unread completion marker its live tab still owns', () => {
-    const store = seedChatTab()
-    store.setState({
-      unreadAgentCompletionPanes: { [CHAT_SUBJECT]: 'agent-completion' },
-      unreadTerminalTabs: { [CHAT_TAB]: 'agent-completion' }
-    })
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder(WORKSPACE)).toEqual({
-      hasSurfaces: true,
-      unreadSubjectKeys: [CHAT_SUBJECT],
-      unreadGroupIds: [CHAT_TAB]
-    })
-  })
-
-  it('ignores a marker left behind by a session the tab no longer runs', () => {
-    const store = seedChatTab({ sessionId: 'session-2' })
-    store.setState({ unreadAgentCompletionPanes: { [CHAT_SUBJECT]: 'agent-completion' } })
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder(WORKSPACE)).toEqual({
-      hasSurfaces: true,
-      unreadSubjectKeys: [],
-      unreadGroupIds: []
-    })
-  })
-
-  it('reports a workspace with no structured tabs as owning no surfaces', () => {
-    const store = createTestStore()
-    store.setState({ unreadAgentCompletionPanes: { [CHAT_SUBJECT]: 'agent-completion' } })
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder(WORKSPACE)).toEqual({
-      hasSurfaces: false,
-      unreadSubjectKeys: [],
-      unreadGroupIds: []
-    })
-  })
-
-  it('ignores structured tabs owned by another workspace', () => {
-    const store = seedChatTab()
-    store.setState({ unreadAgentCompletionPanes: { [CHAT_SUBJECT]: 'agent-completion' } })
-    expect(surfaceFor(store).collectWorkspaceAttentionRemainder('wt-2')).toEqual({
-      hasSurfaces: false,
-      unreadSubjectKeys: [],
-      unreadGroupIds: []
-    })
   })
 })

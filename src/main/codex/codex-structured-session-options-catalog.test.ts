@@ -335,7 +335,7 @@ describe('first-turn catalog deadline', () => {
       async (
         method: string,
         _params?: Record<string, unknown>,
-        options?: { timeoutMs?: number }
+        options?: { timeoutMs?: number | null }
       ) => {
         timeouts.push(options?.timeoutMs ?? 0)
         if (method === 'model/list') {

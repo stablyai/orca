@@ -24,7 +24,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   sshConfigHostsToTargetsMock: vi.fn()
 }))
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('./ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
@@ -125,6 +125,25 @@ describe('Store', () => {
     expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
     reloaded.updateUI({ sidebarWidth: 400 })
     expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
+  })
+
+  it('moves the legacy host scope with a written host list, so "all hosts" sticks', async () => {
+    const store = await createStore()
+    store.updateUI({ workspaceHostScope: 'ssh:box', visibleWorkspaceHostIds: ['ssh:box'] })
+
+    // A paired phone writes only the list.
+    store.updateUI({ visibleWorkspaceHostIds: null })
+    expect(store.getUI()).toMatchObject({
+      visibleWorkspaceHostIds: null,
+      workspaceHostScope: 'all'
+    })
+    store.updateUI({ visibleWorkspaceHostIds: ['ssh:box'] })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
+    // A multi-host list keeps the default host for new workspaces.
+    store.updateUI({ visibleWorkspaceHostIds: ['local', 'ssh:box'] })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
+    store.updateUI({ sidebarWidth: 300 })
+    expect(store.getUI().workspaceHostScope).toBe('ssh:box')
   })
 
   it('updateUI merges partial updates', async () => {

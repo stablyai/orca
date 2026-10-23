@@ -5,6 +5,7 @@ import type {
   SshConnectionState,
   SshProviderEpoch
 } from '../../../../shared/ssh-types'
+import { makeTab, makeWorktree } from '@/store/slices/store-test-helpers'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 
 function connectedState(
@@ -38,6 +39,46 @@ async function settle(): Promise<void> {
 
 const originalStore = useAppStore.getState()
 const cleanups: (() => void)[] = []
+
+const WORKTREE_ID = 'repo-ssh::/work/demo'
+const TAB_ID = 'tab-ssh'
+const PTY_ID = 'ssh:target-a@@pty-1'
+
+function seedSshTab(): void {
+  useAppStore.setState({
+    repos: [
+      {
+        id: 'repo-ssh',
+        path: '/work/demo',
+        displayName: 'demo',
+        badgeColor: '#000',
+        addedAt: 1,
+        connectionId: 'target-a',
+        executionHostId: 'ssh:target-a'
+      }
+    ],
+    worktreesByRepo: {
+      'repo-ssh': [
+        makeWorktree({
+          id: WORKTREE_ID,
+          repoId: 'repo-ssh',
+          path: '/work/demo',
+          hostId: 'ssh:target-a'
+        })
+      ]
+    },
+    tabsByWorktree: {
+      [WORKTREE_ID]: [makeTab({ id: TAB_ID, worktreeId: WORKTREE_ID, ptyId: PTY_ID })]
+    },
+    ptyIdsByTabId: { [TAB_ID]: [PTY_ID] }
+  })
+}
+
+function expectSshTabBound(): void {
+  const state = useAppStore.getState()
+  expect(state.tabsByWorktree[WORKTREE_ID][0].ptyId).toBe(PTY_ID)
+  expect(state.ptyIdsByTabId[TAB_ID]).toEqual([PTY_ID])
+}
 
 async function createHarness(
   initialStates: readonly SshConnectionState[] = [],
@@ -79,8 +120,6 @@ async function createHarness(
       }
     }
   })
-  const store = useAppStore.getState()
-  const clearBindings = vi.spyOn(store, 'clearDirectSshTargetPtyBindings').mockReturnValue(1)
   const unsubs: (() => void)[] = []
   const stop = registerDirectSshStateIpcBridge(unsubs)
   cleanups.push(() => {
@@ -92,7 +131,6 @@ async function createHarness(
   await settle()
   return {
     getState,
-    clearBindings,
     emit: (state: SshConnectionState) => {
       if (!stateListener) {
         throw new Error('SSH state listener was not registered')
@@ -121,8 +159,9 @@ afterEach(async () => {
 
 describe('direct SSH connected-state routing', () => {
   it.each(['reply-first', 'push-first'] as const)(
-    'clears the target bindings once per connected push when ordering is %s',
+    'keeps the target bindings on connected pushes when ordering is %s',
     async (ordering) => {
+      seedSshTab()
       const harness = await createHarness()
       const state = connectedState()
       if (ordering === 'reply-first') {
@@ -132,59 +171,38 @@ describe('direct SSH connected-state routing', () => {
       if (ordering === 'push-first') {
         harness.applyConnectReply(state)
       }
-
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
       await settle()
-
-      harness.clearBindings.mockClear()
       harness.emit({ ...state })
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
+
+      expectSshTabBound()
     }
   )
 
-  it('leaves bindings alone on initial hydration and clears on the next push', async () => {
-    const state = connectedState()
-    const harness = await createHarness([state])
-
-    expect(harness.clearBindings).not.toHaveBeenCalled()
-
-    harness.emit({ ...state })
-    expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
-
-    const next = connectedState(state.targetId, 2)
-    harness.applyConnectReply(next)
-    harness.clearBindings.mockClear()
-    harness.emit(next)
-    expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(next.targetId)
-  })
-
   it.each(['disconnected', 'error'] as const)(
-    'clears bindings on %s and again on the next connected push',
+    'keeps bindings on %s and on the next connected push',
     async (status) => {
+      seedSshTab()
       const state = connectedState()
       const harness = await createHarness([state])
       harness.emit({ ...state, status })
+      // Loss of contact is not evidence the remote PTY exited.
+      expectSshTabBound()
 
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
       harness.applyConnectReply(state)
       harness.emit(state)
-      expect(harness.clearBindings).toHaveBeenCalledTimes(2)
+      expectSshTabBound()
     }
   )
 
   it.each(['providerEpoch', 'connectionGeneration'] as const)(
-    'reconciles a partial %s on initial hydration without clearing',
+    'reconciles a partial %s on initial hydration',
     async (missingField) => {
       const state = connectedState()
       const partial: SshConnectionState = { ...state }
       delete partial[missingField]
-      const harness = await createHarness([partial], [state])
+      await createHarness([partial], [state])
 
       expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toEqual(state)
-      expect(harness.clearBindings).not.toHaveBeenCalled()
-
-      harness.emit(state)
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
     }
   )
 
@@ -204,31 +222,14 @@ describe('direct SSH connected-state routing', () => {
       const partial: SshConnectionState = { ...state }
       delete partial[missingField]
       harness.emit(partial)
+      expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toEqual(partial)
 
-      expect(harness.clearBindings).not.toHaveBeenCalled()
       resolveState(state)
       await settle()
 
-      expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(state.targetId)
       expect(useAppStore.getState().sshConnectionStates.get(state.targetId)).toMatchObject(
         authority(state)
       )
     }
   )
-
-  it('keeps disconnect cleanup separate for each target', async () => {
-    const harness = await createHarness()
-    const first = connectedState('target-a')
-    const second = connectedState('target-b')
-    for (const state of [first, second]) {
-      harness.applyConnectReply(state)
-      harness.emit(state)
-    }
-    await settle()
-    expect(harness.clearBindings.mock.calls).toEqual([[first.targetId], [second.targetId]])
-
-    harness.clearBindings.mockClear()
-    harness.emit({ ...first, status: 'disconnected' })
-    expect(harness.clearBindings).toHaveBeenCalledExactlyOnceWith(first.targetId)
-  })
 })

@@ -25,6 +25,7 @@ export function describeTerminalTabIntoPaneRefusal(reason: TerminalTabIntoPaneRe
       return translate('terminal.paneMove.reason.remote', 'Remote host tab')
     case 'move_in_flight':
       return translate('terminal.paneMove.reason.busy', 'Another move is running')
+    case 'layout_owner_build':
     case 'same_tab':
     case 'source_missing':
     case 'target_missing':

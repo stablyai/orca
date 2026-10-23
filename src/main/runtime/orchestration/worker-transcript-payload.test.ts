@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_CODEX_SUBAGENTS_PER_GROUP } from '../../codex/codex-structured-journal-limits'
 import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import {
   boundWorkerTranscriptMessages,
-  boundWorkerTranscriptTail,
-  redactWorkerTerminalLines
+  boundWorkerTranscriptTail
 } from './worker-transcript-payload'
+import { redactWorkerTerminalLines } from './worker-terminal-redaction'
 
 describe('worker transcript wire bounds', () => {
   it('clips oversized blocks and omits local image paths', () => {
@@ -87,9 +86,7 @@ describe('worker transcript wire bounds', () => {
 
     const block = result.messages[0]?.blocks[0]
     expect(block?.type).toBe('subagent-group')
-    expect(block?.type === 'subagent-group' ? block.agents : []).toHaveLength(
-      MAX_CODEX_SUBAGENTS_PER_GROUP
-    )
+    expect(block?.type === 'subagent-group' ? block.agents : []).toHaveLength(64)
     expect(JSON.stringify(result.messages)).not.toContain('dcap_')
     expect(result.limited).toBe(true)
     expect(result.warnings).toEqual(

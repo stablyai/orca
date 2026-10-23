@@ -11,8 +11,15 @@ import {
   WSL_GIT_READ_ENVIRONMENT_WAIT_MS
 } from '../wsl-git-read-environment'
 import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
+import { withWslWindowsCheckoutGitConfig } from '../wsl-windows-checkout-git-config'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
 import type { GitExecOptions } from './git-exec-options'
+
+// Why: Linux Git misreads a Windows Git checkout unless it runs with Windows Git's settings.
+// Classification reads the caller's args; only the spawned argv carries the injected config.
+function wslGitArgs(args: string[], options: GitExecOptions): string[] {
+  return withWslWindowsCheckoutGitConfig(args, options.cwd, options.wslDistro)
+}
 
 /** The WSL distro a Git command with this cwd runs in, or null when it runs on the host. */
 export function wslDistroForCommand(cwd: string | undefined, override?: string): string | null {
@@ -36,7 +43,7 @@ export function resolveGitCommand(
   if (distro) {
     const environment = peekWslGitReadEnvironment(distro)
     if (environment) {
-      return resolveCommand('git', args, options.cwd, distro, {
+      return resolveCommand('git', wslGitArgs(args, options), options.cwd, distro, {
         wslGitReadEnvironment: environment,
         env: options.env,
         terminationBarrier: options.terminationBarrier
@@ -114,9 +121,10 @@ export function resolveGitCommandWithoutProbe(
   options: GitExecOptions,
   captureLoginShellOutput = false
 ): ResolvedCommand {
-  return resolveCommand('git', args, options.cwd, options.wslDistro, {
+  return resolveCommand('git', wslGitArgs(args, options), options.cwd, options.wslDistro, {
     useWslLoginShell: Boolean(options.wslDistro),
     captureLoginShellOutput,
+    env: options.env,
     terminationBarrier: options.terminationBarrier
   })
 }

@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { parseArgs } from './orcad-entry'
+import { parseArgs } from './orcad-command-arguments'
 import { ORCAD_EXIT_CONFIGURATION } from './orcad-configuration-exit'
 import { ORCAD_EXIT_FAILED, resolveOrcadExitCode } from './orcad-exit-code'
 import { startOrcadWithLifecycle } from './orcad-lifecycle'
@@ -49,6 +49,13 @@ describe('parseArgs', () => {
         '--grant-desktop-control applies only to the default runtime pairing offer'
       )
     }
+  })
+
+  it('accepts the browser client directory orca serve hands it', () => {
+    expect(parseArgs(['--web-client-root', '/app/out/web'])).toEqual({
+      webClientRoot: '/app/out/web'
+    })
+    expect(() => parseArgs(['--web-client-root'])).toThrow('--web-client-root expects a value')
   })
 
   it('accepts --bind and leaves it unset when absent', () => {

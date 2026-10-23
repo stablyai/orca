@@ -23,7 +23,6 @@ export function WorktreeCardSecondaryRows({
     settings,
     isActive,
     newCardStyle,
-    lineageChildren,
     lineageCollapsed,
     onLineageToggle,
     remoteBranchConflict,
@@ -131,12 +130,6 @@ export function WorktreeCardSecondaryRows({
                   )}
             </TooltipContent>
           </Tooltip>
-        </div>
-      )}
-
-      {!newCardStyle && lineageChildren && (
-        <div className="-ml-[1.125rem] mt-1.5 w-[calc(100%+1.125rem)] space-y-1">
-          {lineageChildren}
         </div>
       )}
     </>

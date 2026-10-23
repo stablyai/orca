@@ -1,3 +1,4 @@
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { join } from 'node:path'
 import {
   buildManagedCommandHook,
@@ -138,7 +139,7 @@ export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMat
 }
 
 export function wrapReadablePosixHookCommand(scriptPath: string): string {
-  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  const quoted = quotePosixShell(scriptPath)
   // Why: WSL hooks are written from Windows over UNC where the exec bit is unreliable; a missing script must still own stdin.
   return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }

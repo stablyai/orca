@@ -1,13 +1,46 @@
-import type { AgentJournalItemBody, AgentJournalMessageItem } from './agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalMessageItem,
+  AgentJournalSkillRef
+} from './agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import type { z } from 'zod'
-import type { SendBody } from './rpc-contract/structured-agent-session-message-params'
+import {
+  MAX_SKILL_REFS,
+  type SendBody
+} from './rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 
-export type StructuredAgentSessionSendMutation = {
+/** What a send carries beside its message: both join the OPERATION fingerprint, never the body's. */
+export type StructuredAgentSessionSendControl = {
+  delivery?: 'queue-if-active'
+  options?: Readonly<Record<string, string>>
+  usageLimitContinuationOfTurnItemId?: string
+}
+
+export type StructuredAgentSessionSendMutation = StructuredAgentSessionSendControl & {
   envelope: AgentSessionMutationEnvelope
   body: AgentJournalMessageItem
-  delivery?: 'queue-if-active'
+}
+
+/** The control fields a send names, as the client sends them and the host digests them. */
+export function agentSessionSendControlFields(
+  send: StructuredAgentSessionSendControl
+): StructuredAgentSessionSendControl {
+  return {
+    ...(send.delivery ? { delivery: send.delivery } : {}),
+    ...(send.options ? { options: send.options } : {}),
+    ...(send.usageLimitContinuationOfTurnItemId
+      ? { usageLimitContinuationOfTurnItemId: send.usageLimitContinuationOfTurnItemId }
+      : {})
+  }
+}
+
+/** What a send's operation fingerprint covers, on the client and the host alike. */
+export function agentSessionSendFields(
+  send: StructuredAgentSessionSendControl & { body: AgentJournalMessageItem }
+): StructuredAgentSessionSendControl & { body: AgentJournalMessageItem } {
+  return { body: agentSessionMessagePayload(send.body), ...agentSessionSendControlFields(send) }
 }
 
 /** What every send fingerprint covers: the message without its sender, which never reaches the
@@ -31,15 +64,15 @@ export function agentSessionSendBodyFingerprint(
 
 /** The `agentSession.send` arguments for one message. Typed rather than wire-shaped so a host
  *  calling its own send path builds the same envelope a client would, fingerprint included. */
-export function structuredAgentSessionMessageSendMutation(message: {
-  sessionId: string
-  clientOperationId: string
-  expectedRuntimeFence: number
-  body: AgentJournalMessageItem
-  delivery?: 'queue-if-active'
-}): StructuredAgentSessionSendMutation {
-  // `delivery` joins the OPERATION fingerprint exactly as the host digests it; never the body's.
-  const delivery = message.delivery ? { delivery: message.delivery } : {}
+export function structuredAgentSessionMessageSendMutation(
+  message: {
+    sessionId: string
+    clientOperationId: string
+    expectedRuntimeFence: number
+    body: AgentJournalMessageItem
+  } & StructuredAgentSessionSendControl
+): StructuredAgentSessionSendMutation {
+  const control = agentSessionSendControlFields(message)
   return {
     envelope: {
       sessionId: message.sessionId,
@@ -48,11 +81,11 @@ export function structuredAgentSessionMessageSendMutation(message: {
       payloadFingerprint: structuredAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
         sessionId: message.sessionId,
-        fields: { body: agentSessionMessagePayload(message.body), ...delivery }
+        fields: agentSessionSendFields(message)
       })
     },
     body: message.body,
-    ...delivery
+    ...control
   }
 }
 
@@ -63,17 +96,52 @@ export type StructuredAgentSessionAttachment = {
   connectionId?: string
 }
 
-/** The journal body for a message a person sends: its text, then its images. */
+export class SkillRefLimitError extends Error {}
+
+/** The journal body for a message a person sends: its text, then its images, and the skills it
+ *  picked whose `$name` the text still carries. */
 export function structuredAgentSessionSendBody(
   text: string,
-  attachments: readonly StructuredAgentSessionAttachment[]
+  attachments: readonly StructuredAgentSessionAttachment[],
+  skills: readonly AgentJournalSkillRef[] = []
 ): z.infer<typeof SendBody> {
+  const picked = pickedSkillsInText(text, skills)
+  if (picked.length > MAX_SKILL_REFS) {
+    throw new SkillRefLimitError()
+  }
   return {
     kind: 'message',
     role: 'user',
     blocks: [
       ...(text.trim().length > 0 ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
       ...attachments.map((attachment) => ({ type: 'image-ref' as const, path: attachment.path }))
-    ]
+    ],
+    ...(picked.length > 0 ? { skills: picked } : {})
   }
+}
+
+/** The picked skills a message still names, once per file: an edit can delete a `$name`. */
+export function pickedSkillsInText(
+  text: string,
+  skills: readonly AgentJournalSkillRef[]
+): AgentJournalSkillRef[] {
+  const seen = new Set<string>()
+  return skills.filter((skill) => {
+    if (seen.has(skill.path) || !textNamesSkill(text, skill.name)) {
+      return false
+    }
+    seen.add(skill.path)
+    return true
+  })
+}
+
+function textNamesSkill(text: string, name: string): boolean {
+  const token = `$${name}`
+  for (let at = text.indexOf(token); at !== -1; at = text.indexOf(token, at + 1)) {
+    // Ends where a skill name can't continue, as Codex reads a mention: `$review,` names `review`.
+    if (!/[\w:-]/u.test(text.charAt(at + token.length))) {
+      return true
+    }
+  }
+  return false
 }

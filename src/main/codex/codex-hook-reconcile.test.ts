@@ -145,6 +145,41 @@ async function settleSpawn(): Promise<void> {
   await _internals.settledForTesting()
 }
 
+async function finishHeldLookupWait(
+  operation: () => Promise<void>,
+  launchWait = false
+): Promise<void> {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const timeout = vi.spyOn(globalThis, 'setTimeout')
+  const runsBefore = mocks.realHomeRuns
+  const derivationsBefore = mocks.deriveCodexHookHashes.mock.calls.length
+  const filesBefore = snapshot(codexHome())
+  let completed = false
+  const pending = operation().then(() => {
+    completed = true
+  })
+  try {
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mocks.deriveCodexHookHashes.mock.calls.length).toBeGreaterThan(derivationsBefore)
+    expect(timeout).toHaveBeenCalledWith(expect.any(Function), 500)
+    if (launchWait) {
+      expect(timeout).toHaveBeenCalledWith(expect.any(Function), 3_000)
+    }
+    expect(completed).toBe(false)
+    await vi.advanceTimersByTimeAsync(499)
+    expect(completed).toBe(false)
+    expect(mocks.realHomeRuns).toBe(runsBefore)
+    expect(snapshot(codexHome())).toEqual(filesBefore)
+    await vi.advanceTimersByTimeAsync(1)
+    await pending
+    expect(completed).toBe(true)
+    expect(mocks.realHomeRuns).toBe(runsBefore + 1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    timeout.mockRestore()
+  }
+}
+
 beforeEach(() => {
   // Why realpath: a symlinked temp dir (macOS /var) would give ~/.codex a second key spelling.
   root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-reconcile-')))
@@ -466,28 +501,30 @@ describe('while the lookup is still asking Codex', () => {
     const release = holdDerivation()
 
     const startedAt = Date.now()
-    await reconcileCodexHooksForLaunch()
+    await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
 
     expect(Date.now() - startedAt).toBeLessThan(3_000)
     expect(stopApproval()).toBe(computeOrcaCodexHookHashes().stop)
 
     release()
-    await vi.waitFor(() => expect(stopApproval()).toBe(CODEX_HASHES.stop))
+    await settleSpawn()
+    expect(stopApproval()).toBe(CODEX_HASHES.stop)
   })
 
   it('writes nothing while an entry is already in place', async () => {
     await start()
     const before = snapshot(codexHome())
-    // Why new bytes: a Codex update the lookup has not asked about yet.
-    writeFileSync(mocks.codexPath, 'codex 0.161.0')
+    // A different size invalidates the binary fingerprint even within one filesystem clock tick.
+    writeFileSync(mocks.codexPath, 'codex 0.161.0 updated')
     const release = holdDerivation()
 
-    await reconcileCodexHooksForLaunch()
+    await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
     expect(snapshot(codexHome())).toEqual(before)
 
     const runsBeforeAnswer = mocks.realHomeRuns
     release()
-    await vi.waitFor(() => expect(mocks.realHomeRuns).toBe(runsBeforeAnswer + 1))
+    await settleSpawn()
+    expect(mocks.realHomeRuns).toBe(runsBeforeAnswer + 1)
     await _internals.settledForTesting()
     expect(snapshot(codexHome())).toEqual(before)
   })
@@ -612,7 +649,7 @@ describe('an app start whose lookup has not answered within its wait', () => {
     })
     mocks.deriveCodexHookHashes.mockImplementation(() => new Promise(() => {}))
 
-    await start()
+    await finishHeldLookupWait(start)
 
     expect(readHookTrustEntries(tomlPath()).get(computeTrustKey(stop))?.trustedHash).toBe(
       'sha256:main-granted'

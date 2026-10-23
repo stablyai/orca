@@ -5,7 +5,7 @@ import type {
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
-import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { BrowserClientFileChannelAvailability } from './browser-client-file-channel-transport'
 import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'

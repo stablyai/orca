@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   createFakeGenerationFileSystem as createFakeFileSystem,
@@ -397,9 +396,7 @@ describe('generation store', () => {
       '/etc/passwd',
       'assets//app.js',
       'manifest.json',
-      'Manifest.JSON',
-      'manifest-next.json',
-      'MANIFEST-NEXT.JSON'
+      'Manifest.JSON'
     ]
 
     for (const path of escapes) {
@@ -573,200 +570,38 @@ describe('generation store', () => {
   })
 })
 
-/**
- * A route-grant edit on the desktop moves no asset, so the build id it is published under does not
- * move: the generation on disk is the right bytes under a manifest that is an edit behind, and that
- * stored manifest is what an unreachable host is judged by. This is the write-through, and it is
- * refused unless the fresh manifest names exactly the bytes already there.
- */
-describe('persisting a fresh manifest onto the active generation', () => {
+/** An older build rewrote the manifest through `manifest-next.json`; an interrupted rewrite can
+ *  have left that file behind, and this build never reads it. */
+describe('a pending manifest left by an older build', () => {
   const MANIFEST_PATH = `${HOST}/generations/${BUILD}/manifest.json`
-  const ROUTES = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
+  const NEXT_PATH = `${HOST}/generations/${BUILD}/manifest-next.json`
 
-  function freshManifest(
-    overrides: Partial<MobileWebBundleManifestRead> = {}
-  ): MobileWebBundleManifestRead {
-    return { ...buildResult({}).manifest, routes: ROUTES, ...overrides }
+  function seedPending(fs: FakeFileSystem): void {
+    const body = JSON.stringify({ ...buildResult({}).manifest, routes: [] })
+    fs.seed(NEXT_PATH, { kind: 'file', bytes: new TextEncoder().encode(body) })
   }
 
-  it('rewrites the manifest and leaves every asset byte where it was', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-    const before = fs.paths()
-    const entry = fs.bytes(`${HOST}/generations/${BUILD}/index.html`)
-    const fresh = freshManifest()
-
-    expect(await store.persistActiveManifest(HOST, fresh)).toBe('persisted')
-
-    expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(fresh))
-    expect(fs.bytes(`${HOST}/generations/${BUILD}/index.html`)).toEqual(entry)
-    expect(fs.paths()).toEqual(before)
-    expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-  })
-
-  it('refuses a manifest that names other bytes under the same build id', async () => {
+  it('reads the manifest beside it and leaves it inert', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     await activate(store, HOST)
     const stored = fs.text(MANIFEST_PATH)
-    const assets = buildResult({}).manifest.assets.map((asset, index) =>
-      index === 0 ? { ...asset, sha256: 'f'.repeat(64) } : asset
-    )
+    seedPending(fs)
 
-    expect(await store.persistActiveManifest(HOST, freshManifest({ assets }))).toBe(
-      'refused-asset-mismatch'
-    )
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
 
     expect(fs.text(MANIFEST_PATH)).toBe(stored)
-    expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
   })
 
-  it('refuses a manifest published under another build id', async () => {
+  it('drops the host tree for a redownload when it is the only manifest left', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     await activate(store, HOST)
-    const stored = fs.text(MANIFEST_PATH)
+    seedPending(fs)
+    await fs.delete(`${ROOT}/${MANIFEST_PATH}`)
 
-    expect(
-      await store.persistActiveManifest(HOST, freshManifest({ buildId: 'b'.repeat(64) }))
-    ).toBe('refused-build-mismatch')
+    expect(await store.readActiveGeneration(HOST)).toBeNull()
 
-    expect(fs.text(MANIFEST_PATH)).toBe(stored)
-  })
-
-  it('refuses a host with no activation to persist onto, and writes nothing', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-
-    expect(await store.persistActiveManifest(HOST, freshManifest())).toBe(
-      'refused-no-active-generation'
-    )
-
-    expect(fs.paths()).toEqual([])
-  })
-
-  /**
-   * No atomic replace exists on either platform, so the write is three steps: the fresh manifest
-   * beside the old one, the old one away, the fresh one over it. What makes that safe is not the
-   * ordering alone but that every window it leaves is one a later read settles — a failure must
-   * never cost the generation, because losing it costs a phone with no host its offline workspace.
-   */
-  describe('interrupted at each of the three steps', () => {
-    const NEXT_PATH = `${HOST}/generations/${BUILD}/manifest-next.json`
-
-    async function activated(fs: FakeFileSystem) {
-      const store = createGenerationStore({ fileSystem: fs })
-      await activate(store, HOST)
-      return store
-    }
-
-    it('keeps the old manifest when the fresh one cannot be written', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      const stored = fs.text(MANIFEST_PATH)
-      fs.failWritesAt(NEXT_PATH)
-
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow('disk-full')
-
-      fs.failWritesAt(null)
-      expect(fs.text(MANIFEST_PATH)).toBe(stored)
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
-    })
-
-    it('finishes the swap on the next read when the old manifest cannot be deleted', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      fs.failDeletesAt(MANIFEST_PATH)
-
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow(
-        'undeletable'
-      )
-
-      // Both files on disk: the fresh one is whole, so it is the activation and the read completes
-      // the swap rather than reading the manifest the edit replaced.
-      fs.failDeletesAt(null)
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-      expect(fs.text(NEXT_PATH)).toBeNull()
-    })
-
-    it('adopts the fresh manifest on the next read when the rename is interrupted', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      fs.failFileMovesTo(MANIFEST_PATH)
-
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow(
-        'interrupted rename'
-      )
-
-      // The window the adapter really leaves: the destination is gone and the rename did not land,
-      // so the only manifest on disk is the pending one, and it is complete.
-      expect(fs.text(MANIFEST_PATH)).toBeNull()
-      fs.failFileMovesTo(null)
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-      expect(fs.text(NEXT_PATH)).toBeNull()
-    })
-
-    it('keeps the host tree when the pending swap cannot be settled either', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      fs.failFileMovesTo(MANIFEST_PATH)
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow('rename')
-
-      // Still unsettleable, so there is no activation to hand out — and nothing is deleted, because
-      // the pending manifest is the generation and the next read can still adopt it.
-      expect(await store.readActiveGeneration(HOST)).toBeNull()
-      expect(fs.text(NEXT_PATH)).not.toBeNull()
-      expect(fs.bytes(`${HOST}/generations/${BUILD}/index.html`)).not.toBeNull()
-    })
-  })
-
-  /** The three shapes a read can find, once a persist may have been interrupted anywhere. */
-  describe('settling a pending swap on the next read', () => {
-    const NEXT_PATH = `${HOST}/generations/${BUILD}/manifest-next.json`
-
-    function seedPending(fs: FakeFileSystem, body: string): void {
-      fs.seed(NEXT_PATH, { kind: 'file', bytes: new TextEncoder().encode(body) })
-    }
-
-    it('finishes a swap whose rename never ran, with the old manifest still beside it', async () => {
-      const fs = createFakeFileSystem()
-      const store = createGenerationStore({ fileSystem: fs })
-      await activate(store, HOST)
-      seedPending(fs, JSON.stringify(freshManifest()))
-
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-
-      expect(fs.text(NEXT_PATH)).toBeNull()
-      expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(freshManifest()))
-    })
-
-    it('adopts a pending manifest that is the only one left', async () => {
-      const fs = createFakeFileSystem()
-      const store = createGenerationStore({ fileSystem: fs })
-      await activate(store, HOST)
-      seedPending(fs, JSON.stringify(freshManifest()))
-      await fs.delete(`${ROOT}/${MANIFEST_PATH}`)
-
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-
-      expect(fs.text(NEXT_PATH)).toBeNull()
-      expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(freshManifest()))
-    })
-
-    it('discards a pending manifest that is torn or names another build, keeping the old one', async () => {
-      for (const body of ['not json', JSON.stringify(buildResult(SECOND).manifest)]) {
-        const fs = createFakeFileSystem()
-        const store = createGenerationStore({ fileSystem: fs })
-        await activate(store, HOST)
-        const stored = fs.text(MANIFEST_PATH)
-        seedPending(fs, body)
-
-        expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
-
-        expect(fs.text(NEXT_PATH)).toBeNull()
-        expect(fs.text(MANIFEST_PATH)).toBe(stored)
-      }
-    })
+    expect(fs.paths().some((path) => path.startsWith(`${HOST}/generations`))).toBe(false)
   })
 })

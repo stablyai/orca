@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { buildImageDataUri } from '../shared/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../shared/repo-icon'
 import type { ExecutionHostFilesystemRoute } from './providers/execution-host-provider-dispatch'
+import { detectImageFileSignature } from './image-file-signature'
 import { extractIconHref } from './repo-icon-source-href'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
@@ -53,42 +54,11 @@ type DetectedImageFormat = {
   mimeType: 'image/png' | 'image/webp'
 }
 
-function isPngBuffer(buffer: Buffer): boolean {
-  return (
-    buffer.length >= 8 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47 &&
-    buffer[4] === 0x0d &&
-    buffer[5] === 0x0a &&
-    buffer[6] === 0x1a &&
-    buffer[7] === 0x0a
-  )
-}
-
-function isWebpBuffer(buffer: Buffer): boolean {
-  // Why: RIFF container with WEBP fourcc — enough to reject non-images without
-  // a full decoder; the sidebar only needs a valid data URL for <img>.
-  return (
-    buffer.length >= 12 &&
-    buffer[0] === 0x52 &&
-    buffer[1] === 0x49 &&
-    buffer[2] === 0x46 &&
-    buffer[3] === 0x46 &&
-    buffer[8] === 0x57 &&
-    buffer[9] === 0x45 &&
-    buffer[10] === 0x42 &&
-    buffer[11] === 0x50
-  )
-}
-
 function detectImageFormat(buffer: Buffer): DetectedImageFormat | null {
-  if (isPngBuffer(buffer)) {
-    return { mimeType: 'image/png' }
-  }
-  if (isWebpBuffer(buffer)) {
-    return { mimeType: 'image/webp' }
+  const signature = detectImageFileSignature(buffer)
+  // The sidebar only renders PNG and WebP repo icons.
+  if (signature?.mimeType === 'image/png' || signature?.mimeType === 'image/webp') {
+    return { mimeType: signature.mimeType }
   }
   return null
 }

@@ -40,10 +40,17 @@ export function getDaemonEntryPath(): string {
     : join(basePath, 'out', 'main', 'daemon-entry.js')
 }
 
-// macOS TCC attribution pins the daemon to a packaged app bundle; there is none on a Node host.
-export function resolvePackagedDarwinAppVersion(): string | null {
+/**
+ * The version a stale daemon is replaced against once its sessions drain, or null to keep it.
+ * Desktop: macOS only, where TCC attribution pins the daemon to the bundle that launched it.
+ * orcad opts in everywhere: another version's daemon keeps that version's code and umask (#31135).
+ */
+export function resolveStaleDaemonRecycleVersion(onEveryPlatform = false): string | null {
   const environment = getAppEnvironment()
-  return process.platform === 'darwin' && environment.isPackaged() ? environment.getVersion() : null
+  if (!environment.isPackaged()) {
+    return null
+  }
+  return onEveryPlatform || process.platform === 'darwin' ? environment.getVersion() : null
 }
 
 // Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.

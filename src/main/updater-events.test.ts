@@ -7,8 +7,10 @@ const {
   nativeUpdaterMock,
   getLinuxPackageTypeMock,
   getLinuxRootPackageTypeMock,
-  isExternallyManagedLinuxInstallMock
+  isExternallyManagedLinuxInstallMock,
+  preExtractUpdateMock
 } = vi.hoisted(() => ({
+  preExtractUpdateMock: vi.fn(async () => false),
   appMock: {
     isPackaged: true,
     getVersion: vi.fn(() => '1.0.51'),
@@ -34,6 +36,9 @@ vi.mock('./linux-update-package-type', () => ({
   isExternallyManagedLinuxInstall: isExternallyManagedLinuxInstallMock
 }))
 
+vi.mock('./cli/appimage-copy-pre-extraction', () => ({
+  preExtractDownloadedAppImageUpdate: preExtractUpdateMock
+}))
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-lifecycle-diagnostics', () => ({ recordUpdaterLifecycle: vi.fn() }))
 
@@ -148,6 +153,18 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
       getArtifact: getTrackedLinuxPackageArtifact
     }
   }
+
+  it('starts unpacking a downloaded AppImage update without holding up the ready status', async () => {
+    getLinuxPackageTypeMock.mockReturnValue('non-root')
+    getLinuxRootPackageTypeMock.mockReturnValue(null)
+    preExtractUpdateMock.mockReturnValue(new Promise(() => {}))
+    const appImagePath = '/home/tester/.cache/orca-updater/pending/Orca-1.0.61.AppImage'
+    const { context, emit } = await register()
+    emit('update-downloaded', downloadedEvent({ downloadedFile: appImagePath }))
+
+    expect(preExtractUpdateMock).toHaveBeenCalledWith(appImagePath, expect.any(Function))
+    expect(context.sendStatus).toHaveBeenCalledWith(expect.objectContaining({ version: '1.0.61' }))
+  })
 
   it('hands the whole downloaded event to artifact capture', async () => {
     const { emit, getArtifact } = await register()

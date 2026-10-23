@@ -10,14 +10,15 @@ import {
   referenceRepo,
   referenceLinearIssue
 } from './workspace-reference-fixtures.test-support'
+import { getWorkspaceReferenceRequest } from './workspace-reference-details'
 import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import { getLinearReadScope, scopedLinearCacheKey } from '@/store/slices/linear/linear-slice-scope'
 
-const cache = vi.hoisted(() => ({ entries: {} }))
+const cache = vi.hoisted(() => ({ entries: {}, hosted: {} }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
-      hostedReviewCache: {},
+      hostedReviewCache: cache.hosted,
       prCache: {},
       issueCache: {},
       linearIssueCache: cache.entries
@@ -42,6 +43,62 @@ vi.mock('./workspace-delete-quick-action', () => ({
 afterEach(cleanup)
 
 describe('single linked reference rich hover details', () => {
+  it.each([
+    {
+      data: {
+        provider: 'gitlab' as const,
+        number: 8,
+        title: 'Fix detached review',
+        state: 'open' as const,
+        status: 'success' as const,
+        updatedAt: '',
+        mergeable: 'MERGEABLE' as const,
+        url: 'https://gitlab.example.com/team/repo/-/merge_requests/8'
+      },
+      title: 'Fix detached review'
+    },
+    { data: null, title: 'MR details unavailable' }
+  ])(
+    'reads detached MR details from the same exact cache as Linked work: $title',
+    ({ data, title }) => {
+      const repo = {
+        ...referenceRepo,
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/repo',
+          remoteName: 'origin',
+          remoteUrl: 'https://gitlab.example.com/team/repo.git'
+        }
+      }
+      const item = {
+        provider: 'gitlab' as const,
+        type: 'mr' as const,
+        number: 8,
+        url: 'https://gitlab.example.com/team/repo/-/merge_requests/8'
+      }
+      const workspace = {
+        ...referenceWorkspace,
+        branch: '',
+        linkedPR: null,
+        linkedGitLabMR: 8,
+        linkedItems: [item]
+      }
+      const key = getWorkspaceReferenceRequest(item, workspace, repo).key
+      cache.hosted = { [key]: { data, fetchedAt: Date.now(), linkedReviewHintKey: 'gitlab:8' } }
+      const { result } = renderHook(() =>
+        useWorktreeCardReviewDetails({
+          worktree: workspace,
+          repo,
+          settings: null,
+          projectGroups: [],
+          cardProps: ['pr'],
+          newCardStyle: false
+        })
+      )
+      expect(result.current.hostedReviewCacheKey).toBe(key)
+      expect(result.current.prDisplay?.title).toBe(title)
+    }
+  )
+
   it('reuses source-bound Linear details when an exact workspace read is outside the legacy all-workspaces cache slot', () => {
     const source = normalizeTaskSourceContext({
       provider: 'linear',

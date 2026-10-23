@@ -41,7 +41,9 @@ vi.mock('./skill-install-progress-ipc', () => ({
   sendBundleInstallProgress: vi.fn(),
   sendSkillInstallProgress: vi.fn()
 }))
-vi.mock('./runtime-environment-transport-routing', () => ({ callRuntimeEnvironment: vi.fn() }))
+vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
+  callRuntimeEnvironment: vi.fn()
+}))
 
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 

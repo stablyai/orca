@@ -100,7 +100,12 @@ describe("a Codex child's end, or a Stop Codex took, under a person's Stop", () 
     await withdrawCodexSendsNoTurnOpenedFor(journal, 1)
 
     expect(resolveDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ clientMessageId: 'send-1', state: 'rejected' })
+      // Codex may have recorded it during turn setup: no proof it never reached Codex.
+      expect.objectContaining({
+        clientMessageId: 'send-1',
+        state: 'rejected',
+        rejection: { kind: 'cancelled' }
+      })
     )
   })
 

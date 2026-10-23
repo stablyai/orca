@@ -29,7 +29,7 @@ describe('terminal mode reset profiles', () => {
 
   it('pins the fresh-shell profile', () => {
     expect(POST_REPLAY_MODE_RESET).toBe(
-      '\x1b[0m\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l\x1b7'
+      '\x1b[0m\x1b[0 q\x1b[<99u\x1b[=0u\x1b[>4m\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l\x1b7'
     )
   })
 
@@ -53,7 +53,7 @@ describe('terminal mode reset profiles', () => {
   // Why: the one reset for a process boundary (cold-restore seed, proven crash).
   it('pins the process boundary ground', () => {
     expect(PROCESS_BOUNDARY_GROUND).toBe(
-      '\x1b[?2026l\x1b[<99u\x1b[=0u\x1b7\x1b[?1049l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1005l\x1b[?1015l\x1b[?1004l\x1b[?2004l\x1b[?1l\x1b[?66l\x1b[?25h\x1b[0 q\x1b[<99u\x1b[=0u\x1b[0m\x1b7'
+      '\x1b[?2026l\x1b[<99u\x1b[=0u\x1b7\x1b[?1049l\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1005l\x1b[?1015l\x1b[?1004l\x1b[?2004l\x1b[?1l\x1b[?66l\x1b[?25h\x1b[0 q\x1b[<99u\x1b[=0u\x1b[>4m\x1b[0m\x1b7'
     )
   })
 
@@ -76,7 +76,12 @@ describe('terminal mode reset profiles', () => {
     const enabled = privateModes.filter((mode) => /^[0-9;]*h/.test(mode))
     expect(enabled.map((mode) => mode.slice(0, mode.indexOf('h')))).toEqual(['25'])
     expect(PROCESS_BOUNDARY_GROUND).not.toContain('\x1b]133;')
-    expect(PROCESS_BOUNDARY_GROUND).not.toContain('\x1b[>')
+    // The one `CSI >` allowed is the modifyOtherKeys reset; any other would be a kitty push.
+    expect(
+      PROCESS_BOUNDARY_GROUND.split('\x1b[>')
+        .slice(1)
+        .map((seq) => seq.slice(0, 2))
+    ).toEqual(['4m'])
     expect(
       PROCESS_BOUNDARY_GROUND.split('\x1b[=')
         .slice(1)
@@ -133,7 +138,9 @@ describe('terminal mode reset profiles', () => {
       // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
       expect(profile).not.toMatch(/\x1b\[[<=>][0-9;]*u/)
     }
-    expect(CONFIRMED_SHELL_MODE_RESET).toBe(`${POST_REPLAY_REATTACH_RESET}\x1b[<99u\x1b[=0u`)
+    expect(CONFIRMED_SHELL_MODE_RESET).toBe(
+      `${POST_REPLAY_REATTACH_RESET}\x1b[<99u\x1b[=0u\x1b[>4m`
+    )
   })
 
   it('restores proven Kitty flags and only pops unproven ones', () => {

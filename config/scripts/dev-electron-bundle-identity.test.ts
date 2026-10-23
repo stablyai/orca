@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { getDevInstanceIdentity } from '../../src/main/startup/dev-instance-identity'
 import {
   DEV_BUNDLE_DISPLAY_NAME,
-  DEV_BUNDLE_ID,
-  DEV_HELPER_BUNDLE_ID,
   getDevBundlePlistPatches,
   getDevHelperPlistPatches
 } from './dev-electron-bundle-identity.mjs'
@@ -47,13 +45,6 @@ describe('dev-electron-bundle-identity', () => {
     patchesUnder('Orca: some-branch', 'some-branch')
     expect(process.env).toBe(envBefore)
     expect({ ...process.env }).toEqual(snapshot)
-  })
-
-  it('patches a stable bundle id for the app and its helper', () => {
-    expect(getDevHelperPlistPatches()).toEqual([
-      { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
-    ])
-    expect(DEV_HELPER_BUNDLE_ID.startsWith(`${DEV_BUNDLE_ID}.`)).toBe(true)
   })
 
   it('gives the dev app a legible display name so notifications are not just "Electron"', () => {

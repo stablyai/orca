@@ -242,6 +242,29 @@ describe('RateLimitService', () => {
     expect(state.claude?.error).toBe('still failing')
   })
 
+  it('labels a kept stale snapshot with only the latest failure kind', async () => {
+    const service = new RateLimitService()
+    const internal = serviceInternals(service)
+
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(okProvider('codex', 44, Date.now()))
+      .mockResolvedValueOnce({
+        ...errorProvider('codex', 'error sending request'),
+        usageMetadata: { failureKind: 'network' }
+      })
+      .mockResolvedValueOnce(errorProvider('codex', 'failed to fetch codex rate limits: 429'))
+
+    await internal.fetchAll()
+    await internal.fetchAll()
+    expect(service.getState().codex?.usageMetadata?.failureKind).toBe('network')
+
+    await internal.fetchAll()
+    const codex = service.getState().codex
+    expect(codex?.session?.usedPercent).toBe(44)
+    expect(codex?.error).toBe('failed to fetch codex rate limits: 429')
+    expect(codex?.usageMetadata?.failureKind).toBeUndefined()
+  })
+
   it('bypasses the debounce for explicit manual refreshes', async () => {
     const service = new RateLimitService()
 

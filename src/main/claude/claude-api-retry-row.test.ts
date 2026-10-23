@@ -141,6 +141,8 @@ describe('a Claude api_retry frame', () => {
     expect(rows).toEqual([
       unhandledProviderFrameJournalItem('claude', 'message:system:future_notice', unknown)?.body
     ])
-    expect(rows[0]).toMatchObject({ text: 'rate_limit', tone: 'error' })
+    // An uncatalogued kind keeps its sentence but is no failure: only a kind decides that.
+    expect(rows[0]).toMatchObject({ text: 'rate_limit' })
+    expect(rows[0]).not.toHaveProperty('tone')
   })
 })

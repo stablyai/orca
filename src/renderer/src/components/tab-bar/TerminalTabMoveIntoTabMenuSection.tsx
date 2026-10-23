@@ -28,7 +28,6 @@ function selectMoveIntoTabInputs(
     pendingStartupByTabId: state.pendingStartupByTabId,
     automaticAgentResumeClaimsByTabId: state.automaticAgentResumeClaimsByTabId,
     pendingInitialCwdByTabId: state.pendingInitialCwdByTabId,
-    pendingSetupSplitByTabId: state.pendingSetupSplitByTabId,
     pendingIssueCommandSplitByTabId: state.pendingIssueCommandSplitByTabId,
     unverifiedPtyLossTabIds: state.unverifiedPtyLossTabIds,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,

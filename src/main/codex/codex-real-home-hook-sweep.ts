@@ -6,21 +6,19 @@ import {
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
-import {
-  assertHooksJsonGeneration,
-  getRealHomeHookKeySourcePaths,
-  getRealHomeHooksJsonPath
-} from './codex-real-home-hooks-json'
+import { assertHooksJsonGeneration } from './codex-real-home-hooks-json'
 import { getCodexManagedScriptFileName } from './codex-hook-identity'
-import { getSystemCodexConfigTomlPath } from './codex-hook-definition'
+import { getRealHomeCodexHookHome, type CodexHookHome } from './codex-hook-orca-approvals'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 
 /**
- * The opt-out's removal of every Orca entry from the real ~/.codex/hooks.json,
- * moving user approvals that shift; the caller removes Orca's own approvals.
+ * The opt-out's removal of every Orca entry from the real ~/.codex/hooks.json (or another
+ * home Orca edits in place), moving user approvals that shift; the caller removes Orca's own approvals.
  */
-export function sweepRealHomeCodexHook(): 'removed' | 'unavailable' {
-  const hooksJsonPath = getRealHomeHooksJsonPath()
+export function sweepRealHomeCodexHook(
+  home: CodexHookHome = getRealHomeCodexHookHome()
+): 'removed' | 'unavailable' {
+  const { hooksJsonPath } = home
   // Why: single read — the pre-write generation guard must compare against
   // the exact bytes this sweep's parse came from.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
@@ -55,8 +53,8 @@ export function sweepRealHomeCodexHook(): 'removed' | 'unavailable' {
   if (removedAny) {
     const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
     mutateRealHomeHooksPreservingUserTrust({
-      sourcePaths: getRealHomeHookKeySourcePaths(),
-      tomlPath: getSystemCodexConfigTomlPath(),
+      sourcePaths: home.keySourcePaths,
+      tomlPath: home.tomlPath,
       beforeHooks: config.hooks,
       afterHooks: nextHooks,
       writeHooks: () => {

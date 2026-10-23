@@ -110,6 +110,15 @@ const Block = openDiscriminatedUnion(
       groupId: z.string(),
       agents: z.array(SubagentEntry)
     }),
+    // `outcomeBasis` and `background` stay open for the same reason `state` does.
+    SubagentEntry.extend({
+      type: z.literal('subagent'),
+      groupId: z.string(),
+      parentId: z.string().optional(),
+      run: z.string().optional(),
+      outcomeBasis: z.string().optional(),
+      background: z.boolean().optional()
+    }),
     // `kind` and `state` stay open strings for the same reason a child's
     // lifecycle does: a vocabulary a newer build writes must not turn the row
     // malformed. The renderer falls back on anything it cannot name.
@@ -190,6 +199,7 @@ const MessageBody = z.object({
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
   sentAs: z.string().min(1).optional(),
   command: z.object({ name: z.string().min(1) }).optional(),
+  skills: z.array(z.object({ name: z.string().min(1), path: z.string().min(1) })).optional(),
   // Open like `sentAs`: a state a newer host writes reads as completed, never malformed.
   state: z.string().min(1).optional(),
   completedAt: z.number().finite().optional()
@@ -308,6 +318,7 @@ export const AgentJournalRenderItemSchema = z.object({
   recovered: z.literal(true).optional(),
   recoveredAt: z.number().optional(),
   turnScope: AgentJournalTurnScopeSchema.optional(),
+  shortened: z.literal(true).optional(),
   ...AgentJournalProducerLinkageFields
 })
 

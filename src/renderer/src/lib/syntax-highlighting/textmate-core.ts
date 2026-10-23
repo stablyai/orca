@@ -7,6 +7,9 @@ const MAX_TOKENIZED_LINE_LENGTH = 1000
 // Why: TextMate checks this between regex scans, so a pathological line ends instead of freezing the window.
 const LINE_TIME_LIMIT_MS = 50
 const LINE_ATTEMPTS = 3
+// Why: a grammar's first line also compiles its regexes, which cannot be interrupted; on a slow core
+// that alone can outlast LINE_ATTEMPTS and leave the block plain for good.
+export const COLD_GRAMMAR_LINE_ATTEMPTS = 10
 
 export type TextMateCore = { core: HighlighterCore; textmate: typeof ShikiTextmate }
 
@@ -54,14 +57,15 @@ export async function createTextMateCore(themes: ThemeInput[]): Promise<TextMate
  */
 export function tokenizeLineWithinLimits<Result extends { stoppedEarly: boolean }>(
   line: string,
-  tokenize: (line: string, timeLimitMs: number) => Result
+  tokenize: (line: string, timeLimitMs: number) => Result,
+  attempts = LINE_ATTEMPTS
 ): Result | null {
   if (line.length > MAX_TOKENIZED_LINE_LENGTH) {
     return null
   }
   let result = tokenize(line, LINE_TIME_LIMIT_MS)
   // Why: the first lines through a grammar also compile its regexes, which happens only once.
-  for (let attempt = 1; result.stoppedEarly && attempt < LINE_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; result.stoppedEarly && attempt < attempts; attempt += 1) {
     result = tokenize(line, LINE_TIME_LIMIT_MS)
   }
   return result.stoppedEarly ? null : result

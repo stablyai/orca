@@ -4,7 +4,12 @@ import type { CodexAppServerConnection } from './codex-app-server-connection'
 // Why short: config/read is a local file read; a slow answer must not hold the listing.
 const CONFIG_READ_TIMEOUT_MS = 3_000
 
-type CodexConfiguredLaunchDefaults = { model: string | null; effort: string | null }
+type CodexConfiguredLaunchDefaults = {
+  model: string | null
+  effort: string | null
+  personality?: string
+  serviceTier?: string
+}
 
 function configuredText(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
@@ -28,7 +33,11 @@ export async function readCodexConfiguredLaunchDefaults(
     if (typeof config !== 'object' || config === null) {
       return null
     }
+    const personality = 'personality' in config ? configuredText(config.personality) : null
+    const serviceTier = 'service_tier' in config ? configuredText(config.service_tier) : null
     return {
+      ...(personality ? { personality } : {}),
+      ...(serviceTier ? { serviceTier } : {}),
       model: 'model' in config ? configuredText(config.model) : null,
       effort:
         'model_reasoning_effort' in config ? configuredText(config.model_reasoning_effort) : null

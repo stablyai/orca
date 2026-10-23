@@ -2,11 +2,14 @@ const { createHash } = require('node:crypto')
 const { lstatSync, readFileSync, readdirSync } = require('node:fs')
 const { basename, join, relative, sep } = require('node:path')
 const {
+  ORCAD_MOBILE_WEB_MANIFEST,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_SERVER_TARGET_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_TEMPLATE_TARGETS_DIR,
+  orcadMobileWebAssetFilenames,
   orcadTemplateCommonFilenames,
+  orcadTemplatePackagedRipgrep,
   orcadTemplateTargetFilenames
 } = require('../../src/shared/orcad-artifacts.ts')
 const {
@@ -95,9 +98,14 @@ function requireContent(path, expected, label) {
   }
 }
 
-function verifyTarget(templateDir, target, value) {
+function verifyTarget(resourcesDir, templateDir, target, value, schemaVersion) {
   const targetManifest = requireRecord(value, `${target} manifest`)
   const files = requireRecord(targetManifest.files, `${target} files`)
+  const packagedRipgrep = orcadTemplatePackagedRipgrep(
+    schemaVersion,
+    target,
+    targetManifest.packagedRipgrep
+  )
   const expectedFiles = orcadTemplateTargetFilenames(target)
   requireExactNames(Object.keys(files), expectedFiles, `${target} manifest inventory`)
   const hasBrowserName = Object.hasOwn(targetManifest, 'browserName')
@@ -110,7 +118,7 @@ function verifyTarget(templateDir, target, value) {
   const targetDir = join(templateDir, ORCAD_TEMPLATE_TARGETS_DIR, target)
   for (const filename of expectedFiles) {
     verifyFile(
-      join(targetDir, ...filename.split('/')),
+      join(filename === packagedRipgrep ? resourcesDir : targetDir, ...filename.split('/')),
       requireSha256(files[filename], `${target} ${filename} checksum`),
       `${target} ${filename}`
     )
@@ -122,7 +130,7 @@ function verifyTarget(templateDir, target, value) {
     `${target} runtime reference`
   )
 
-  const inventory = [...expectedFiles]
+  const inventory = expectedFiles.filter((filename) => filename !== packagedRipgrep)
   if (hasBrowserName) {
     const browserName = targetManifest.browserName
     if (
@@ -146,13 +154,21 @@ function verifyTarget(templateDir, target, value) {
 function verifyPackagedOrcadTemplate(resourcesDir, targets = ORCAD_TEMPLATE_TARGETS) {
   const templateDir = join(resourcesDir, 'orcad-template')
   const manifest = requireRecord(readManifest(templateDir), 'manifest')
-  if (manifest.schemaVersion !== TEMPLATE_SCHEMA_VERSION) {
+  if (![TEMPLATE_SCHEMA_VERSION, 4].includes(manifest.schemaVersion)) {
     throw new Error(
-      `[verify-packaged-orcad-template] manifest schemaVersion must be ${TEMPLATE_SCHEMA_VERSION}`
+      `[verify-packaged-orcad-template] manifest schemaVersion must be ${TEMPLATE_SCHEMA_VERSION} or 4`
     )
   }
   const commonSha256 = requireRecord(manifest.commonSha256, 'commonSha256')
-  const commonFilenames = orcadTemplateCommonFilenames()
+  const pageManifest = join(templateDir, ...ORCAD_MOBILE_WEB_MANIFEST.split('/'))
+  verifyFile(
+    pageManifest,
+    requireSha256(commonSha256[ORCAD_MOBILE_WEB_MANIFEST], `${ORCAD_MOBILE_WEB_MANIFEST} checksum`),
+    ORCAD_MOBILE_WEB_MANIFEST
+  )
+  const commonFilenames = orcadTemplateCommonFilenames(
+    orcadMobileWebAssetFilenames(readFileSync(pageManifest, 'utf8'))
+  )
   requireExactNames(Object.keys(commonSha256), commonFilenames, 'common manifest inventory')
   for (const filename of commonFilenames) {
     verifyFile(
@@ -175,7 +191,7 @@ function verifyPackagedOrcadTemplate(resourcesDir, targets = ORCAD_TEMPLATE_TARG
     'target directory inventory'
   )
   for (const target of expectedTargets) {
-    verifyTarget(templateDir, target, manifestTargets[target])
+    verifyTarget(resourcesDir, templateDir, target, manifestTargets[target], manifest.schemaVersion)
   }
   console.log(
     `[verify-packaged-orcad-template] OK — verified ${expectedTargets.length} Node targets`

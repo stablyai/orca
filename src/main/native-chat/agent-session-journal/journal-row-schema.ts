@@ -1,3 +1,4 @@
+import type { JournalItemEcho } from './journal-item-echo'
 // Persisted journal row shapes plus read-time upcasting.
 //
 // The journal is append-only, so migration is upcasting on read and never an
@@ -22,6 +23,7 @@
 // sent-message kind.
 
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
@@ -68,6 +70,8 @@ export type JournalEpochRow = JournalRowBase & {
   kind: 'epoch'
   reason: AgentJournalEpochReason
   providerHandle: AgentSessionJournalProviderHandle
+  /** Original adoption, restated atomically when a same-conversation replacement retires it. */
+  historyOrigin?: unknown
 }
 
 export const AGENT_JOURNAL_EPOCH_REASONS = [
@@ -80,12 +84,25 @@ export const AGENT_JOURNAL_EPOCH_REASONS = [
 ] as const
 export type AgentJournalEpochReason = (typeof AGENT_JOURNAL_EPOCH_REASONS)[number]
 
-export type JournalItemRow = JournalRowBase & {
-  kind: 'item'
-  itemId: string
-  revision: number
-  body: AgentJournalItemBody
+/** The generation whose execution produced an item: execution provenance, distinct from the
+ *  row's `fence`, which is writer authority. Rides the row like linkage, with no `v` bump: an older
+ *  host ignores it. Absent on rows from before it: the item's creating fence stands in. */
+type JournalItemProvenance = {
+  ownerFence?: number
+  /** The fence of the child process whose write this is, on a reusable child's row (a subagent, a
+   *  Claude background task) that a later run can resume. Moves with each such write; absent, the
+   *  item's `ownerFence` stands in. */
+  executionOwner?: number
 }
+
+export type JournalItemRow = JournalRowBase &
+  JournalItemProvenance &
+  JournalItemEcho & {
+    kind: 'item'
+    itemId: string
+    revision: number
+    body: AgentJournalItemBody
+  }
 
 export type JournalTombstoneRow = JournalRowBase & {
   kind: 'tombstone'
@@ -165,6 +182,9 @@ export type JournalSubmissionRow = JournalRowBase & {
   /** Who it is from: its `AgentSessionMessageSource`'s kind only (`AgentJournalSubmission`).
    *  Absent on rows from before it was recorded. Older readers keep the key and ignore it. */
   source?: { kind: string }
+  /** The choices it was accepted with, applied when the agent is handed it. A row from an older
+   *  build may carry other keys, which a read ignores. Older readers keep the key and ignore it. */
+  options?: AgentSessionExecutionOptions
 }
 
 export type JournalSubmissionOrigin = 'client' | 'host'
@@ -178,6 +198,9 @@ export type JournalDispatchRow = JournalRowBase & {
   reason: string | null
   /** On `pending`: the turn the message was handed into, which becomes its row's scope. */
   turnScope?: AgentJournalTurnScope
+  /** On `pending`: the stopped messages this send carries to the agent as history, by client
+   *  message id in the order they were sent. Host-only; older readers keep the key and ignore it. */
+  carries?: string[]
   /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
    *  dropped when read, never the row. */
   rejection?: AgentSessionFailureFact
@@ -196,13 +219,15 @@ export type JournalDispatchRow = JournalRowBase & {
  *  Inline like the row base, and for the same reason no `v` bump: an older host
  *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
-  | (AgentJournalProducerLinkage & {
-      kind: 'item'
-      itemId: string
-      revision: number
-      body: AgentJournalItemBody
-      turnScope?: AgentJournalTurnScope
-    })
+  | (AgentJournalProducerLinkage &
+      JournalItemProvenance &
+      JournalItemEcho & {
+        kind: 'item'
+        itemId: string
+        revision: number
+        body: AgentJournalItemBody
+        turnScope?: AgentJournalTurnScope
+      })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
 /** One durable append whose nested mutations share the outer ordering facts. */

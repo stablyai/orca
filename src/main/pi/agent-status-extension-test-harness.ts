@@ -79,6 +79,23 @@ const BASE_ENV = {
 // stable, distinct identities.
 export const AGENT_STATUS_EXTENSION_SELF_PID = 4242
 
+const transpiledExtensionSources = new Map<string, string>()
+
+function transpileExtensionSource(source: string): string {
+  const cached = transpiledExtensionSources.get(source)
+  if (cached !== undefined) {
+    return cached
+  }
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020
+    }
+  }).outputText
+  transpiledExtensionSources.set(source, output)
+  return output
+}
+
 export function createAgentStatusExtensionHarness(args: {
   kind: 'pi' | 'omp' | 'prime-agent'
   killImpl?: (pid: number, signal: number) => void
@@ -195,12 +212,7 @@ export function createAgentStatusExtensionHarness(args: {
   context.globalThis = context
 
   const source = getPiAgentStatusExtensionSource(args.kind)
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020
-    }
-  }).outputText
+  const output = transpileExtensionSource(source)
   createContext(context)
   // Why: a function scope per evaluation, so a Pi reload can evaluate the module again in one realm.
   const evaluateModule = (): NonNullable<typeof module.exports.default> => {

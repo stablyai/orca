@@ -23,7 +23,7 @@ vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
-vi.mock('../ssh/ssh-g-config-resolution', () => ({
+vi.mock('../ssh/config/ssh-g-config-resolution', () => ({
   resolveWithSshG: resolveWithSshGMock
 }))
 

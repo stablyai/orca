@@ -16,7 +16,12 @@ import {
   WT
 } from '../terminal-pane/terminal-tab-into-pane-fixture'
 import type { TabDragItemData } from './tab-drag-data'
-import type { LeafTargetState, LeafRect } from './tab-drag-leaf-target'
+import {
+  resolveTabDragLeafTarget,
+  type LeafTargetState,
+  type LeafRect
+} from './tab-drag-leaf-target'
+import { useAppStore } from '../../store'
 import type { TabGroupPanelGeometrySnapshot } from './tab-group-panel-split-target'
 
 export { A, B, C, SOURCE, TARGET, WT }
@@ -62,7 +67,6 @@ export function leafTargetState(
     pendingStartupByTabId: {},
     automaticAgentResumeClaimsByTabId: {},
     pendingInitialCwdByTabId: {},
-    pendingSetupSplitByTabId: {},
     pendingIssueCommandSplitByTabId: {},
     unverifiedPtyLossTabIds: {},
     sleepingAgentSessionsByPaneKey: {},
@@ -169,4 +173,19 @@ export function dragStartEventAt(
   const fields = dragEventFields(pointer, options.drag ?? sourceDrag(), null)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start handler reads only active.data.
   return fields as unknown as DragStartEvent
+}
+
+/** The join target the overlay shows with the pointer at `pointer` and the leaves laid out as `layout`. */
+export function shownLeafTargetAt(
+  pointer: { x: number; y: number },
+  layout: 'single' | 'split' = 'split'
+): ReturnType<typeof resolveTabDragLeafTarget> {
+  return resolveTabDragLeafTarget({
+    activeDrag: sourceDrag(),
+    pointer,
+    worktreeId: WT,
+    state: useAppStore.getState(),
+    geometry: geometrySnapshot(),
+    readLeafRects: () => leafRectsFor(layout)
+  })
 }

@@ -13,19 +13,15 @@ import type {
   AgentJournalSubmission,
   AgentJournalThreadGoal,
   AgentJournalTurnLifecycle,
-  AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { currentAgentSessionThreadGoalBySequence } from '../../../shared/agent-session-thread-goal'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
 import {
-  activeStructuredAgentSessionTurnIdBySequence,
-  liveStructuredAgentSessionTurnScope,
-  newestStructuredAgentSessionTurnBySequence
+  newestStructuredAgentSessionTurnBySequence,
+  runningStructuredAgentSessionTurnItemBySequence
 } from '../../../shared/structured-agent-session-live-turn'
-import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader, type JournalLoad } from './journal-open'
@@ -48,6 +44,7 @@ import type {
   JournalItemAppendOptions,
   JournalItemLinkageVisitor,
   JournalLifecycleBatchInput,
+  JournalPlannedLifecycleBatchInput,
   JournalReadSince,
   JournalSubmissionConsume,
   JournalSubmissionInput,
@@ -69,12 +66,15 @@ import type {
 import type { JournalSubmissionWriter } from './journal-submission-writer'
 import type { JournalEpochController } from './journal-epoch-controller'
 import { JournalWriteQueue } from './journal-write-queue'
+import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import type { JournalStepWriter } from './journal-step-writer'
 import type { JournalStopMarks } from './journal-stop-marks'
-import { JournalContextController } from './journal-context-controller'
+import type { JournalContextController } from './journal-context-controller'
+import type { JournalStopAcceptor } from './journal-stop-acceptance'
+import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -99,6 +99,8 @@ export class AgentSessionJournal {
   /** Draft rows queued while the agent works; never reducer input or owed work. */
   readonly queuedMessages: JournalQueuedMessages
   readonly stopMarks: JournalStopMarks
+  /** A person's Stop accepted (`journal-stop-acceptance.ts`). */
+  readonly stops: JournalStopAcceptor
   readonly context: JournalContextController
 
   constructor(options: AgentSessionJournalOptions) {
@@ -141,12 +143,9 @@ export class AgentSessionJournal {
     this.stepWriter = collaborators.stepWriter
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
+    this.stops = collaborators.stops
     this.restore = collaborators.restore
-    this.context = new JournalContextController({
-      state: () => this.state,
-      writer: this.rowWriter,
-      cards: this.queuedMessages
-    })
+    this.context = collaborators.context
   }
 
   get epoch(): string {
@@ -212,6 +211,10 @@ export class AgentSessionJournal {
   itemBody = (itemId: string): AgentJournalItemBody | null =>
     this.state.items.get(itemId)?.body ?? null
 
+  /** Host-only: the stopped messages each handed-over send carried, by its client message id. */
+  stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
+    this.state.stoppedHistoryCarried
+
   /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
   item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
 
@@ -223,22 +226,22 @@ export class AgentSessionJournal {
     }
   }
 
-  /** The turn this journal has published as running — the same read a client's snapshot gives,
-   *  without materialising one. */
-  activeTurnId = (): string | null =>
-    activeStructuredAgentSessionTurnIdBySequence(this.state.items.values())
-
-  /** Where a row written now belongs: the running turn, or the conversation. */
-  liveTurnScope = (): AgentJournalTurnScope =>
-    liveStructuredAgentSessionTurnScope(this.state.items.values())
+  /** The turn this journal records as running, with its record's item, whichever generation
+   *  opened it — the same read a client's snapshot gives, without materialising one. Whether it is
+   *  current work is the host projection's to say (`structuredAgentSessionCurrentWork`). */
+  runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
+    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
 
   /** The newest turn record whatever state it settled in, for readers that need the outcome. */
   newestTurn = (): AgentJournalTurnLifecycle | null =>
     newestStructuredAgentSessionTurnBySequence(this.state.items.values())
 
+  /** The latest goal and its row, for a provider revising accounting after restart. */
+  threadGoalSource = (): JournalThreadGoalSource =>
+    journalThreadGoalSource(this.state.items.values())
+
   /** The latest goal the whole journal records, not only a client's loaded page. */
-  threadGoal = (): AgentJournalThreadGoal | null =>
-    currentAgentSessionThreadGoalBySequence(this.state.items.values()) ?? null
+  threadGoal = (): AgentJournalThreadGoal | null => this.threadGoalSource().goal
 
   /** The newest context facts the whole journal records, not only a client's loaded page. */
   contextUsage = (): AgentSessionContextUsage =>
@@ -247,19 +250,23 @@ export class AgentSessionJournal {
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt
 
-  /** Fence of the writer that created the item, while it is in the timeline. */
-  itemFence = (itemId: string): number | undefined => this.state.itemFences.get(itemId)
+  /** Whose execution the item is now, while it is in the timeline: the run a reusable child's row
+   *  last named (`JournalItemRow.executionOwner`), else its creator (`JournalItemRow.ownerFence`). */
+  itemFence = (itemId: string): number | undefined => journalItemExecutionFence(this.state, itemId)
+
+  /** Both provenance facts as stored, for a rebuild that writes them again. */
+  itemProvenance = (itemId: string) => journalItemProvenance(this.state, itemId)
 
   /** Latest saved output at this fence, excluding client actions and recovery bookkeeping. */
-  lastProviderActivityAt = (fence: number): number | undefined =>
-    this.state.providerActivityAt.get(fence)
+  lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
 
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
+  historyOrigin = () => this.state.historyOrigin
+
   submission = (clientMessageId: string) => this.state.submissions.get(clientMessageId)
 
-  pendingSubmissions = (): AgentJournalSubmission[] =>
-    this.submissions().filter((entry) => entry.dispatchState === 'pending')
+  pendingSubmissions = () => this.submissions().filter((entry) => entry.dispatchState === 'pending')
 
   /** The durable answer to "did my send land?" — a reconnecting client asking
    *  again gets this instead of re-sending. */
@@ -335,6 +342,10 @@ export class AgentSessionJournal {
     return this.lifecycleBatchAppender.append(input)
   }
 
+  /** A lifecycle batch planned at its own turn in the queue (`JournalPlannedLifecycleBatchInput`). */
+  appendPlannedLifecycleBatch = (input: JournalPlannedLifecycleBatchInput) =>
+    this.lifecycleBatchAppender.appendPlanned(input)
+
   /** Several writes as one turn in the queue; see `JournalStepWriter`. */
   appendSteps: JournalStepWriter['append'] = (steps) => this.stepWriter.append(steps)
 
@@ -355,6 +366,9 @@ export class AgentSessionJournal {
     return this.submissionWriter.resolveDispatch(input, hook)
   }
 
+  /** A provider's late receipt (`JournalSubmissionWriter.acceptLate`). */
+  acceptLate: JournalSubmissionWriter['acceptLate'] = (i) => this.submissionWriter.acceptLate(i)
+
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
@@ -369,13 +383,11 @@ export class AgentSessionJournal {
   }
 
   /** Reject sends accepted but never handed over, optionally only those `which` names. */
-  async rejectQueuedSubmissions(
+  rejectQueuedSubmissions = (
     fence: number,
     rejection: AgentJournalDispatchRejection,
     which?: (submission: AgentJournalSubmission) => boolean
-  ): Promise<string[]> {
-    return rejectJournalQueuedSubmissions(this, fence, rejection, which)
-  }
+  ): Promise<string[]> => rejectJournalQueuedSubmissions(this, fence, rejection, which)
 
   /** The escape hatch for a forked handle and an unreadable schema. It invalidates every cursor;
    *  clients reload. */
@@ -384,11 +396,9 @@ export class AgentSessionJournal {
   }
 
   replaceEpochItems(
-    reason: AgentJournalEpochReason,
-    fence: number,
-    items: readonly JournalReplacementItem[]
+    ...args: Parameters<JournalEpochController['replace']>
   ): Promise<AgentJournalCursor> {
-    return this.epochController.replace(reason, fence, items)
+    return this.epochController.replace(...args)
   }
 
   private adoptLoadedJournal(loaded: JournalLoad): void {

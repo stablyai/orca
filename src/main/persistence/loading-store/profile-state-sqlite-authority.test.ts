@@ -25,6 +25,7 @@ import {
 } from '../profile-state/profile-state-database'
 import { profileStateJsonExportPath } from '../profile-state/legacy-json/profile-state-export-path'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', () => ({
   app: {
@@ -48,7 +49,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
@@ -656,9 +657,12 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const writeDomains = vi.spyOn(authority, 'writeSerializedDomains')
     const store = new Store({ dataFile, profileStateAuthority: authority })
     store.flushOrThrow()
-    store.setWorktreeMetaForHost('repo-local::/fixture/local', 'local', {
-      displayName: 'Updated fixture local'
-    })
+    store.setWorktreeMeta(
+      hostWorktreeTarget({ id: 'repo-local::/fixture/local', hostId: 'local' }),
+      {
+        displayName: 'Updated fixture local'
+      }
+    )
     store.flushOrThrow()
 
     expect(writeDomains).toHaveBeenCalledTimes(1)

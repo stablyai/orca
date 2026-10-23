@@ -104,6 +104,60 @@ export async function addIssueCommentForAgent(
   })
 }
 
+export async function updateIssueCommentForAgent(
+  commentId: string,
+  body: string,
+  workspaceId: string,
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
+): Promise<LinearCommentWriteRecord> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  return runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.updateComment(commentId, { body })
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to edit comment')
+      }
+      const record = await confirmLinearWrite('Comment was edited but could not be retrieved', () =>
+        readCommentWriteRecord(client, commentId)
+      )
+      if (!record) {
+        throw new LinearWriteFailure('unconfirmed', 'Comment was edited but could not be retrieved')
+      }
+      return record
+    },
+    options.beforeInvoke
+  )
+}
+
+export async function deleteIssueCommentForAgent(
+  commentId: string,
+  workspaceId: string,
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
+): Promise<void> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  await runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.deleteComment(commentId)
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to delete comment')
+      }
+    },
+    options.beforeInvoke
+  )
+}
+
 export async function createIssueAttachment(
   issueId: string,
   input: { id: string; title: string; url: string },

@@ -2,11 +2,12 @@
 // short of its own Content-Length. The listener fails open on every request error, so the only
 // way this stays diagnosable is if the truncation is classified before it is swallowed.
 import { connect } from 'node:net'
-import { ServerResponse } from 'node:http'
+import { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HookTransportInterferenceReport } from '../../shared/agent-hook-transport-interference'
 import { AgentHookServer } from './server'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/opencode-startup-prompt'
+import { HOOK_REQUEST_SLOWLORIS_MS } from '../../shared/agent-hook-listener/listener-limits'
 
 async function postTruncatedHook(
   port: number,
@@ -47,15 +48,29 @@ async function postStalledHook(
   token: string,
   pathname = '/hook/claude'
 ): Promise<void> {
-  const socket = connect({ port, host: '127.0.0.1' })
-  await new Promise<void>((resolve) => socket.on('connect', () => resolve()))
-  socket.write(
-    `POST ${pathname} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ${token}\r\nContent-Length: 100000\r\n\r\n`
-  )
-  await new Promise<void>((resolve) => {
-    socket.on('close', () => resolve())
-    socket.on('error', () => resolve())
+  const setRequestTimeout = IncomingMessage.prototype.setTimeout
+  // Keep the native timeout/destroy path while checking its full production budget.
+  const timeout = vi.spyOn(IncomingMessage.prototype, 'setTimeout').mockImplementation(function (
+    this: IncomingMessage,
+    milliseconds,
+    callback
+  ) {
+    expect(milliseconds).toBe(HOOK_REQUEST_SLOWLORIS_MS)
+    return setRequestTimeout.call(this, 25, callback)
   })
+  try {
+    const socket = connect({ port, host: '127.0.0.1' })
+    await new Promise<void>((resolve) => socket.on('connect', () => resolve()))
+    socket.write(
+      `POST ${pathname} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ${token}\r\nContent-Length: 100000\r\n\r\n`
+    )
+    await new Promise<void>((resolve) => {
+      socket.on('close', () => resolve())
+      socket.on('error', () => resolve())
+    })
+  } finally {
+    timeout.mockRestore()
+  }
   await new Promise((resolve) => setTimeout(resolve, 50))
 }
 

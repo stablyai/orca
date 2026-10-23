@@ -1,8 +1,10 @@
 import {
-  CLAUDE_MODEL_LIST_ARGS,
-  CLAUDE_MODEL_LIST_STDIN
+  buildClaudeModelListArgs,
+  CLAUDE_MODEL_LIST_STDIN,
+  parseClaudeModelList
 } from '../../shared/claude-model-list-probe'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
 import { parseClaudeModels } from '../../shared/commit-message-model-parsers'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
@@ -26,6 +28,59 @@ export type ClaudeModelCatalogProbeDeps = ClaudeEnvDeps &
     runListing?: typeof runAgentModelCatalogListing
   }
 
+/** Asks Claude one control request without a session, under the SAME binary and environment the
+ *  structured session launch resolves, pinned to the chat's account. */
+export async function runClaudeListing(
+  deps: ClaudeModelCatalogProbeDeps,
+  request: {
+    accountHomePath: string
+    stdin: string
+    site: string
+    cwd?: string
+    signal?: AbortSignal
+    isCurrent?: () => boolean
+  }
+): Promise<string> {
+  // Same pin rule as the session spawn: naming the CLI's default dir would move
+  // it off the default Keychain item and list under another identity.
+  const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
+    ...base,
+    ...claudeConfigDirEnvPatch(request.accountHomePath, { env: base })
+  }))
+  const run = (args: readonly string[]) => {
+    if (request.isCurrent && !request.isCurrent()) {
+      throw new Error('Listing context retired')
+    }
+    return (deps.runListing ?? runAgentModelCatalogListing)(
+      {
+        command,
+        args: [...args],
+        stdin: request.stdin,
+        ...(request.cwd ? { cwd: request.cwd } : {})
+      },
+      { site: request.site, inheritedEnv: env, signal: request.signal }
+    )
+  }
+  const result = await runClaudeBackgroundAttempts({
+    agentId: 'claude',
+    run: (strictMcp) =>
+      run(buildClaudeModelListArgs(strictMcp)).catch((error: unknown) => {
+        if (error instanceof AgentModelCatalogProbeError) {
+          return error
+        }
+        throw error
+      }),
+    failedExit: (outcome) =>
+      outcome instanceof AgentModelCatalogProbeError && outcome.reason === 'exit'
+        ? outcome.failedExit
+        : undefined
+  })
+  if (result instanceof AgentModelCatalogProbeError) {
+    throw result
+  }
+  return result
+}
+
 /**
  * Lists models without a live session: one `list_models` control request, under the SAME binary
  * and environment the structured session launch resolves, so a probe can never list under a
@@ -35,17 +90,12 @@ export function createClaudeModelCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
   return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
-    const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
-    // Same pin rule as the session spawn: naming the CLI's default dir would move
-    // it off the default Keychain item and list under another identity.
-    const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) => ({
-      ...base,
-      ...claudeConfigDirEnvPatch(accountHomePath, { env: base })
-    }))
-    const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
-      { command, args: [...CLAUDE_MODEL_LIST_ARGS], stdin: CLAUDE_MODEL_LIST_STDIN },
-      { site: 'claude-model-catalog-probe', inheritedEnv: env, signal: options?.signal }
-    ).catch((error: unknown) => {
+    const stdout = await runClaudeListing(deps, {
+      accountHomePath: requireLegacyAgentSessionAccountHome(accountHome).path,
+      stdin: CLAUDE_MODEL_LIST_STDIN,
+      site: 'claude-model-catalog-probe',
+      ...(options?.signal ? { signal: options.signal } : {})
+    }).catch((error: unknown) => {
       // Claude has no pre-send sign-in verdict; a missing CLI is the one this probe can find.
       if (error instanceof AgentModelCatalogProbeError && error.executableMissing) {
         throw new AgentModelCatalogUnavailableError({ reason: 'cliMissing' })
@@ -57,12 +107,16 @@ export function createClaudeModelCatalogProbe(
     if (listed.length === 0) {
       throw new Error('claude listed no models')
     }
+    // Only the catalog marks the CLI default; the commit-message parse keeps its own default.
+    const runsDefault = new Set(
+      parseClaudeModelList(stdout).flatMap((model) => (model.isDefault ? [model.id] : []))
+    )
     return {
       models: listed.map((model) => ({
         id: model.id,
         label: model.label,
         ...(model.description ? { description: model.description } : {}),
-        isDefault: model.isDefault === true,
+        isDefault: runsDefault.has(model.id),
         // No defaultEffort: the parser's thinking default is the commit-message generator's
         // choice, not the effort Claude runs; the store keeps the one a live child reported.
         efforts: (model.thinkingLevels ?? []).map((level) => ({
@@ -71,6 +125,9 @@ export function createClaudeModelCatalogProbe(
         })),
         ...(model.supportsFastMode !== undefined
           ? { supportsFastMode: model.supportsFastMode }
+          : {}),
+        ...(model.supportsAutoMode !== undefined
+          ? { supportsAutoMode: model.supportsAutoMode }
           : {})
       })),
       origin: 'probe'

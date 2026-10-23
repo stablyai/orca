@@ -1,7 +1,7 @@
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { commandExecFileAsync } from '../git/runner'
 import { parseWslPath } from '../wsl'
-import { resolveWithSshG } from '../ssh/ssh-g-config-resolution'
+import { resolveWithSshG } from '../ssh/config/ssh-g-config-resolution'
 import {
   gitHubSshConfigHostAlias,
   parseGitHubOwnerRepo,

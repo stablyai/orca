@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mermaid = vi.hoisted(() => ({
@@ -25,6 +25,42 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('MermaidBlock rendering', () => {
+  it('offers to expand a rendered diagram, but not its source or an error', async () => {
+    const pending = Promise.withResolvers<{ svg: string }>()
+    mermaid.render.mockReturnValueOnce(pending.promise)
+    const onExpand = vi.fn()
+    const { container, rerender } = render(
+      <MermaidBlock
+        content={complete}
+        isDark={false}
+        pendingContent={<pre>{complete}</pre>}
+        onExpand={onExpand}
+      />
+    )
+    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('button', { name: 'Expand diagram' })).toBeNull()
+
+    await act(async () => pending.resolve({ svg: diagram }))
+    const expand = screen.getByRole('button', { name: 'Expand diagram' })
+    fireEvent.click(container.querySelector('svg')!)
+    expect(onExpand).toHaveBeenCalledWith({ svg: diagram, background: undefined })
+    expect(document.activeElement).toBe(expand)
+
+    const selection = vi.spyOn(window, 'getSelection')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the component only reads isCollapsed.
+    selection.mockReturnValue({ isCollapsed: false } as Selection)
+    fireEvent.click(container.querySelector('svg')!)
+    expect(onExpand).toHaveBeenCalledTimes(1)
+    fireEvent.click(expand)
+    expect(onExpand).toHaveBeenCalledTimes(2)
+    selection.mockRestore()
+
+    mermaid.render.mockRejectedValueOnce(new Error('Parse error'))
+    rerender(<MermaidBlock content={partial} isDark={false} onExpand={onExpand} />)
+    await screen.findByText(/Diagram error: Parse error/)
+    expect(screen.queryByRole('button', { name: 'Expand diagram' })).toBeNull()
+  })
+
   it('keeps the displayed source in place until the SVG is ready', async () => {
     const pending = Promise.withResolvers<{ svg: string }>()
     mermaid.render.mockReturnValueOnce(pending.promise)

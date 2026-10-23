@@ -1,3 +1,4 @@
+import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { AgentLaunchPaneAlreadyLiveError } from '../../shared/agent-launch-pane-already-live'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
@@ -36,4 +37,20 @@ export function admitStablePaneAdoption(
     throw new AgentLaunchPaneAlreadyLiveError()
   }
   return Boolean(result.stablePaneOwner)
+}
+
+export function materializedStablePaneReply(
+  adoption: NonNullable<Awaited<ReturnType<NonNullable<RuntimePtyController['adoptStablePane']>>>>,
+  fallbackHandle: string
+) {
+  const { owner, result } = adoption
+  return {
+    ...result,
+    wslDistro: result.wslDistro ?? undefined,
+    stablePaneOwner: {
+      handle: owner.handle ?? fallbackHandle,
+      tabId: owner.tabId,
+      leafId: owner.leafId
+    }
+  }
 }

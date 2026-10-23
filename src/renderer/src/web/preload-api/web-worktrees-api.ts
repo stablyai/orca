@@ -1,3 +1,4 @@
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
 import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachment-legacy'
@@ -108,7 +109,9 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         ...(args.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
-        automationProvenanceRequest: args.automationProvenanceRequest
+        automationProvenanceRequest: args.automationProvenanceRequest,
+        // Switch point: the host lists this creation under the window's id only on the dark path.
+        ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? { creationId: args.creationId } : {})
       })
       return {
         ...owned.result,
@@ -211,8 +214,8 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       })
       return result.worktree.lineage ?? null
     },
-    persistSortOrder: async ({ orderedIds }) => {
-      await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
+    persistSortOrder: async ({ orderedIds, hostIds }) => {
+      await callRuntimeResult('worktree.persistSortOrder', { orderedIds, hostIds })
     },
     // Why: the capture lives in desktop main memory, unexposed over pairing; the dialog falls back to the persisted excerpt.
     getBranchRenameFailureOutput: async () => null,

@@ -145,9 +145,11 @@ export function NativeChatBackgroundTasksStatus(props: {
    *  it every live claim stands as reported. */
   childRowContext?: AgentChildRowContext
   supportsTaskStop: boolean
-  /** False when the provider exposes no honest stop at all; the fallback
-   *  control is hidden rather than offering a button that cannot act. */
-  supportsStopAll: boolean
+  /** The shared view's rule for the untargeted Stop; hidden when the provider exposes no honest
+   *  stop at all, rather than offering a button that cannot act. */
+  offersStopAll: boolean
+  /** Some running work is not listed, so the rows are not the whole roster. */
+  incomplete?: boolean
   stoppingTaskIds: ReadonlySet<string>
   stoppingAll: boolean
   /** True while the session is idle: only then may the strip speak as the
@@ -270,7 +272,10 @@ export function NativeChatBackgroundTasksStatus(props: {
               ) : (
                 <p>{say('detailsUnavailable')}</p>
               )}
-              {!props.supportsTaskStop && props.supportsStopAll ? (
+              {props.incomplete && groups.length > 0 ? (
+                <p className="mt-1.5">{say('detailsUnavailable')}</p>
+              ) : null}
+              {props.offersStopAll ? (
                 <div className={groups.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
                   <Button
                     type="button"

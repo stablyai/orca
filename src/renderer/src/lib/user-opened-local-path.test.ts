@@ -1,6 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+
+// These paths use supplied file context without resolving its editor connection.
+const boundaryMocks = vi.hoisted(() => ({
+  getConnectionIdForFile: vi.fn(() => {
+    throw new Error('These fixtures must not resolve editor connections')
+  })
+}))
+
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionIdForFile: boundaryMocks.getConnectionIdForFile
+}))
 
 const mocks = vi.hoisted(() => ({ statRuntimePath: vi.fn() }))
 
@@ -32,6 +43,14 @@ function answer(containedOk: boolean, userNamedOk: boolean, isDirectory = false)
     }
   )
 }
+
+afterEach(() => {
+  try {
+    expect(boundaryMocks.getConnectionIdForFile).not.toHaveBeenCalled()
+  } finally {
+    boundaryMocks.getConnectionIdForFile.mockClear()
+  }
+})
 
 describe('statUserOpenedPath', () => {
   beforeEach(() => {

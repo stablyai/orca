@@ -5,6 +5,7 @@ import type {
   BrowserProfileDeleteResult,
   BrowserProfileListResult
 } from '../../../../../shared/runtime-types'
+import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getBrowserProfilesForHost,
@@ -22,9 +23,11 @@ export function createBrowserProfileListActions(
   'fetchBrowserSessionProfiles' | 'createBrowserSessionProfile' | 'deleteBrowserSessionProfile'
 > {
   return {
-    fetchBrowserSessionProfiles: async () => {
-      const hostId = getBrowserSettingsHostId(get())
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+    fetchBrowserSessionProfiles: async (requestedHostId) => {
+      const hostId = requestedHostId ?? getBrowserSettingsHostId(get())
+      const parsedHostId = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId =
+        parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileListResult>(

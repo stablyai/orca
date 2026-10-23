@@ -10,9 +10,5 @@ export const sessionApi = {
   closeTerminalSurface: (args) => ipcRenderer.invoke('session:close-terminal-surface', args),
   flush: () => ipcRenderer.invoke('session:flush'),
   readTerminalScrollback: (args) =>
-    ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args),
-  /** Synchronous session save for beforeunload — blocks until flushed to disk. */
-  setSync: (args, hostId) => {
-    ipcRenderer.sendSync('session:set-sync', args, hostId)
-  }
+    ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args)
 } satisfies PreloadApi['session']

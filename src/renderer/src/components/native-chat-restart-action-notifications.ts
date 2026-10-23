@@ -75,37 +75,60 @@ function descriptionFrom(lines: readonly string[]): ReactNode {
       )
 }
 
-/** One toast per resume; Show opens the run summary. Unconfirmed chats may already be working. */
+// Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
+const INLINE_ACTION_CLASS_NAMES = {
+  content: '!basis-0',
+  // Only placement: the button keeps the toaster's own look, like every other toast action.
+  actionButton: '!m-0 !self-center'
+}
+
+// A lone title centres with the taller button; a description keeps the icon on the title's line.
+const ONE_LINE_INLINE_ACTION_CLASS_NAMES = {
+  ...INLINE_ACTION_CLASS_NAMES,
+  toast: '!items-center',
+  icon: '!mt-0'
+}
+
+/** One toast per resume, its action named for what it opens. Unconfirmed chats may already be working. */
 function announceResume(
   continued: number,
   refused: number,
   unconfirmed: number,
   show: (() => Promise<void>) | undefined
 ): void {
-  const action =
-    show === undefined
+  const settled = refused === 0 && unconfirmed === 0
+  if (settled && continued === 0) {
+    return
+  }
+  const lines = settled
+    ? []
+    : [
+        ...(refused > 0 && unconfirmed > 0 ? [otherUnconfirmedCountText(unconfirmed)] : []),
+        ...(continued > 0 ? [continuedCountText(continued)] : [])
+      ]
+  const options = {
+    ...(lines.length === 0 ? {} : { description: descriptionFrom(lines) }),
+    ...(show === undefined
       ? {}
       : {
+          classNames:
+            lines.length === 0 ? ONE_LINE_INLINE_ACTION_CLASS_NAMES : INLINE_ACTION_CLASS_NAMES,
           action: {
-            label: translate('auto.components.NativeChatResumeOnRestartModal.show', 'Show'),
+            label: settled
+              ? translate('auto.components.NativeChatResumeOnRestartModal.viewChats', 'View chats')
+              : translate('auto.components.NativeChatResumeOnRestartModal.review', 'Review'),
             onClick: () => void show()
           }
-        }
-  if (refused === 0 && unconfirmed === 0) {
-    if (continued > 0) {
-      toast(continuedCountText(continued), action)
-    }
+        })
+  }
+  if (settled) {
+    toast.success(continuedCountText(continued), options)
     return
   }
   const title = refused > 0 ? refusedCountText(refused) : unconfirmedCountText(unconfirmed)
-  const lines = [
-    ...(refused > 0 && unconfirmed > 0 ? [otherUnconfirmedCountText(unconfirmed)] : []),
-    ...(continued > 0 ? [continuedCountText(continued)] : [])
-  ]
-  toast(title, {
-    ...(lines.length === 0 ? {} : { description: descriptionFrom(lines) }),
-    ...action
-  })
+  // An unconfirmed chat may be working, so only a refusal reads as an error.
+  const notify = refused > 0 ? toast.error : toast.warning
+  notify(title, options)
 }
 
 /** Which of the requested chats the host did not carry on: refused, unconfirmed, or — since

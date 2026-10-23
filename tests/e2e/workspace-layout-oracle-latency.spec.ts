@@ -1,9 +1,12 @@
 /**
- * Measures command → drawn update for layout commands, idle and with three panes flooding output
- * (`yes`), one of them in a hidden worktree, and time to first drawn after relaunching a large
+ * Measures command → drawn update for layout commands, idle, with three panes flooding output
+ * (`yes`), one of them in a hidden worktree, and with the same three panes flooding terminal titles
+ * instead (a new title per line, the worst case for live pane titles), and time to first drawn
+ * after relaunching a large
  * profile. Measuring only: it records each number in the oracle report and never fails on one,
- * so a later budget can gate on it. Runs with no layout subscriber, so main is measured as users
- * run it. The committed main baseline is workspace-layout-oracle-latency-baseline.json.
+ * so a later budget can gate on it. The plain run has no layout subscriber, so main is measured as
+ * users run it; the subscribed run holds one `layout.subscribe` stream open in the window, as the
+ * layout client will. The committed main baseline is workspace-layout-oracle-latency-baseline.json.
  *
  * Each command is timed twice. The in-app clock (helpers/layout-latency-probe.ts) stops in the
  * window at React's commit and at the next frame. The outer clock stops when the test sees the
@@ -12,7 +15,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import type { Page, TestInfo } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { createRestartSession } from './helpers/orca-restart'
 import { bootstrapFirstLaunch, seededRepoPathOrSkip } from './helpers/terminal-restart-persistence'
@@ -51,12 +54,63 @@ import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-se
 const SAMPLES = Number(process.env.ORCA_LAYOUT_ORACLE_LATENCY_SAMPLES ?? 10)
 const STARTUP_SAMPLES = Number(process.env.ORCA_LAYOUT_ORACLE_STARTUP_SAMPLES ?? 10)
 const FLOOD_COMMAND = 'yes orca-latency-flood'
+// About 50 titles a second, each different, so none is folded away as a spinner frame: a busy
+// agent's title burst. The echo proves the loop runs.
+const TITLE_FLOOD_COMMAND =
+  'i=0; while :; do i=$((i+1)); printf "\\033]0;orca-title-flood %d\\007" $i; [ $((i % 50)) = 0 ] && echo orca-latency-flood; sleep 0.02; done'
 const CLOSE_CONFIRM = 'Stop and Close'
 const LARGE_PROFILE = { hiddenWorktrees: 12, tabsPerWorktree: 3, activePanes: 4 }
 
-type Condition = 'idle' | 'flood'
+type Condition = 'idle' | 'flood' | 'titles'
 type Sample = { outerMs: number; inApp: InAppSample }
 type Samples = Record<string, Sample[]>
+/** Main's memory at a phase's start and end, in MB; no GC is forced, so read it as a trend. */
+type MainMemory = { heapUsedMb: [number, number]; rssMb: [number, number] }
+/** What the window's layout stream received during a phase. */
+type StreamTraffic = { frames: number; kb: number; seconds: number }
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    __layoutStreamTraffic?: { frames: number; bytes: number; errors: number }
+  }
+}
+
+async function readMainMemory(
+  app: ElectronApplication
+): Promise<{ heapUsed: number; rss: number }> {
+  return app.evaluate(() => {
+    const { heapUsed, rss } = process.memoryUsage()
+    return { heapUsed, rss }
+  })
+}
+
+/** Holds one `layout.subscribe` stream open in the window for the rest of the run. */
+async function attachLayoutSubscriber(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const traffic = { frames: 0, bytes: 0, errors: 0 }
+    window.__layoutStreamTraffic = traffic
+    await window.api.runtime.subscribe({ method: 'layout.subscribe', params: {} }, (response) => {
+      if (!response.ok) {
+        traffic.errors += 1
+        return
+      }
+      traffic.frames += 1
+      traffic.bytes += JSON.stringify(response.result).length
+    })
+  })
+  await expect
+    .poll(() => page.evaluate(() => window.__layoutStreamTraffic?.frames ?? 0))
+    .toBeGreaterThan(0)
+}
+
+async function readStreamTraffic(page: Page): Promise<{ frames: number; bytes: number }> {
+  const traffic = await page.evaluate(() => window.__layoutStreamTraffic ?? null)
+  if (traffic && traffic.errors > 0) {
+    throw new Error(`layout stream reported ${traffic.errors} error frame(s)`)
+  }
+  return { frames: traffic?.frames ?? 0, bytes: traffic?.bytes ?? 0 }
+}
 
 /** Reads can briefly fail while the window re-publishes its terminals; only reads are retried. */
 async function read<T>(client: RuntimeClient, method: string, params: unknown): Promise<T> {
@@ -243,9 +297,11 @@ type Stats = ReturnType<typeof stats>
 type StartupSample = { firstDrawnMs: number; eventLoopDelayMax: number }
 type LatencyReport =
   | {
-      scenario: 'latency'
+      scenario: 'latency' | 'latency-subscribed'
       summary: Record<string, { n: number; inAppCommit: Stats; inAppDrawn: Stats; outer: Stats }>
       eventLoopDelay: Record<string, EventLoopDelaySummary>
+      mainMemory: Record<Condition, MainMemory>
+      streamTraffic?: Record<Condition, StreamTraffic>
       closeConfirms: Record<Condition, number>
       samples: Samples
     }
@@ -271,9 +327,7 @@ function writeLatencyReport(testInfo: TestInfo, { samples, ...summary }: Latency
   )
 }
 
-// oxlint-disable-next-line no-empty-pattern -- The measurement owns its launch.
-test('layout oracle: command to drawn latency', async ({}, testInfo) => {
-  test.setTimeout(90 * 60_000)
+async function measureLatency(testInfo: TestInfo, subscribed: boolean): Promise<void> {
   const repoPath = seededRepoPathOrSkip()
   const session = createRestartSession(testInfo)
   const { app, page } = await session.launch()
@@ -284,30 +338,49 @@ test('layout oracle: command to drawn latency', async ({}, testInfo) => {
     const worktree = `id:${worktreeId}`
     const client = new RuntimeClient(session.userDataDir, 30_000)
     await waitForBoundPanes(page, 1)
-    const phases: Record<Condition, { from: number; to: number; confirms: number }> = {
-      idle: { from: Date.now(), to: 0, confirms: 0 },
-      flood: { from: 0, to: 0, confirms: 0 }
+    if (subscribed) {
+      await attachLayoutSubscriber(page)
     }
-    phases.idle.confirms = await measureCondition(page, client, worktreeId, 'idle', samples)
-    phases.idle.to = Date.now()
+    type Mark = { at: number; heapUsed: number; rss: number; frames: number; bytes: number }
+    const mark = async (): Promise<Mark> => ({
+      at: Date.now(),
+      ...(await readMainMemory(app)),
+      ...(await readStreamTraffic(page))
+    })
+    type Phase = { from: Mark; to: Mark; confirms: number }
+    const measurePhase = async (condition: Condition): Promise<Phase> => {
+      const from = await mark()
+      const confirms = await measureCondition(page, client, worktreeId, condition, samples)
+      return { from, to: await mark(), confirms }
+    }
+    const idle = await measurePhase('idle')
 
     // Two flooding tabs beside the measured one and one in a worktree that is never shown.
     const list = await read<RuntimeTerminalListResult>(client, 'terminal.list', { worktree })
     const measured = list.terminals[0]!
     const hidden = await createHiddenWorktree(client, worktreeId, 'latency-flood')
     cleanups.push(hidden.remove)
-    for (const target of [worktree, worktree, `id:${hidden.id}`]) {
-      const flood = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-        worktree: target,
-        command: FLOOD_COMMAND
-      })
-      await expectFlooding(client, flood.result.terminal.handle)
+    const startFloods = async (command: string): Promise<string[]> => {
+      const handles: string[] = []
+      for (const target of [worktree, worktree, `id:${hidden.id}`]) {
+        const flood = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
+          worktree: target,
+          command
+        })
+        await expectFlooding(client, flood.result.terminal.handle)
+        handles.push(flood.result.terminal.handle)
+      }
+      await client.call('terminal.focus', { terminal: measured.handle, navigation: 'host' })
+      await waitForActiveTerminalManager(page)
+      return handles
     }
-    await client.call('terminal.focus', { terminal: measured.handle, navigation: 'host' })
-    await waitForActiveTerminalManager(page)
-    phases.flood.from = Date.now()
-    phases.flood.confirms = await measureCondition(page, client, worktreeId, 'flood', samples)
-    phases.flood.to = Date.now()
+    const floods = await startFloods(FLOOD_COMMAND)
+    const flood = await measurePhase('flood')
+    for (const handle of floods) {
+      await client.call('terminal.close', { terminal: handle })
+    }
+    await startFloods(TITLE_FLOOD_COMMAND)
+    const titles = await measurePhase('titles')
 
     const summary = Object.fromEntries(
       Object.entries(samples).map(([action, values]) => [
@@ -320,18 +393,32 @@ test('layout oracle: command to drawn latency', async ({}, testInfo) => {
         }
       ])
     )
-    const eventLoopDelay = Object.fromEntries(
-      Object.entries(phases).map(([condition, phase]) => [
-        condition,
-        summarizeEventLoopDelay(session.userDataDir, 'main', phase.from, phase.to)
-      ])
-    )
-    const closeConfirms = { idle: phases.idle.confirms, flood: phases.flood.confirms }
+    const perCondition = <T>(read: (phase: Phase) => T): Record<Condition, T> => ({
+      idle: read(idle),
+      flood: read(flood),
+      titles: read(titles)
+    })
+    const mb = (bytes: number): number => Math.round(bytes / 1024 / 102.4) / 10
     writeLatencyReport(testInfo, {
-      scenario: 'latency',
+      scenario: subscribed ? 'latency-subscribed' : 'latency',
       summary,
-      eventLoopDelay,
-      closeConfirms,
+      eventLoopDelay: perCondition(({ from, to }) =>
+        summarizeEventLoopDelay(session.userDataDir, 'main', from.at, to.at)
+      ),
+      mainMemory: perCondition(({ from, to }) => ({
+        heapUsedMb: [mb(from.heapUsed), mb(to.heapUsed)],
+        rssMb: [mb(from.rss), mb(to.rss)]
+      })),
+      ...(subscribed
+        ? {
+            streamTraffic: perCondition(({ from, to }) => ({
+              frames: to.frames - from.frames,
+              kb: Math.round((to.bytes - from.bytes) / 1024),
+              seconds: Math.round((to.at - from.at) / 1000)
+            }))
+          }
+        : {}),
+      closeConfirms: perCondition(({ confirms }) => confirms),
       samples
     })
   } finally {
@@ -341,6 +428,18 @@ test('layout oracle: command to drawn latency', async ({}, testInfo) => {
     await session.close(app)
     await session.dispose()
   }
+}
+
+// oxlint-disable-next-line no-empty-pattern -- The measurement owns its launch.
+test('layout oracle: command to drawn latency', async ({}, testInfo) => {
+  test.setTimeout(90 * 60_000)
+  await measureLatency(testInfo, false)
+})
+
+// oxlint-disable-next-line no-empty-pattern -- The measurement owns its launch.
+test('layout oracle: command to drawn latency with a layout subscriber', async ({}, testInfo) => {
+  test.setTimeout(90 * 60_000)
+  await measureLatency(testInfo, true)
 })
 
 // oxlint-disable-next-line no-empty-pattern -- The measurement owns its launches.

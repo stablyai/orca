@@ -91,6 +91,11 @@ export function codexThreadStoppedRunning(payload: unknown): boolean {
   return type === 'idle' || type === 'systemError'
 }
 
+/** Only an explicit active status establishes execution ownership. */
+export function codexThreadIsActive(payload: unknown): boolean {
+  return record(record(payload)?.status)?.type === 'active'
+}
+
 /** An `active` thread flags each request it has open on the user (an approval, a question). */
 export function codexThreadWaitsOnUser(payload: unknown): boolean {
   const status = record(record(payload)?.status)

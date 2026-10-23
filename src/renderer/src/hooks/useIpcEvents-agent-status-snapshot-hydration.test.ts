@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createTestStore,
   makeTab,
+  makeUnifiedTab,
   makeWorktree,
   TEST_REPO
 } from '../store/slices/store-test-helpers'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 import type { AppState } from '../store/types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
@@ -361,6 +364,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const snapshot: AgentStatusSetData[] = []
     const worktrees: AppState['worktreesByRepo'][string] = []
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
+    // Tab-bar entries, so a layout-owner build sends the titles to main.
+    const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
     const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
     for (let index = 0; index < paneCount; index += 1) {
       const worktreeId = `wt-snapshot-${index}`
@@ -371,6 +376,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree[worktreeId] = [
         makeTab({ id: tabId, worktreeId, title: 'Pi', ptyId: `pty-${index}` })
       ]
+      unifiedTabsByWorktree[worktreeId] = [makeUnifiedTab({ id: tabId, worktreeId, groupId: 'g' })]
       terminalLayoutsByTabId[tabId] = {
         root: { type: 'leaf', leafId },
         activeLeafId: leafId,
@@ -407,6 +413,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         terminalFontSize: 13
       }
     } as Partial<AppState>)
+    store.setState({ unifiedTabsByWorktree })
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -417,11 +424,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     }))
     stubAuxiliaryModules()
+    const main = layoutApplyTestDouble()
     vi.stubGlobal(
       'window',
       buildWindowApi({
         getSnapshot,
-        onSet: () => () => {}
+        onSet: () => () => {},
+        runtime: { call: main.call }
       })
     )
 
@@ -439,16 +448,28 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
     resolveSnapshot?.(snapshot)
 
+    const renamed = () =>
+      main.commands.map((command) => (command.type === 'renameTabs' ? command.renames.length : 0))
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
         'Pi - action required'
       )
-      expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      // A layout-owner build sends main the snapshot's titles as one rename; main's frame (not
+      // modelled here) draws them, so the window writes them in neither case twice.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        expect(renamed()).toEqual([paneCount])
+      } else {
+        expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+      }
     })
+    for (let turn = 0; turn < 10; turn += 1) {
+      await Promise.resolve()
+    }
 
-    expect(relevantPublications).toBe(3)
+    expect(relevantPublications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 3)
     unsubscribe()
+    expect(renamed()).toEqual(ORCA_LAYOUT_OWNER_IS_MAIN ? [paneCount] : [])
   })
 
   it('indexes one 100-pane tab and its split tree once per snapshot', async () => {

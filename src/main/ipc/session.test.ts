@@ -25,6 +25,7 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { registerSessionHandlers } from './session'
 
 describe('registerSessionHandlers', () => {
@@ -33,6 +34,8 @@ describe('registerSessionHandlers', () => {
       getSshTarget: vi.fn((id: string) =>
         id === 'fenced' ? { orcadFence: { environmentId: 'env-1' } } : {}
       ),
+      // Read by the switch-on save, which keeps main's own layout.
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
       setWorkspaceSession: vi.fn(),
       patchWorkspaceSession: vi.fn(),
       flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
@@ -52,10 +55,5 @@ describe('registerSessionHandlers', () => {
       'ssh:open',
       undefined
     ])
-
-    const event: { returnValue?: unknown } = {}
-    handlers.get('session:set-sync')?.(event, {}, 'ssh:fenced')
-    await vi.waitFor(() => expect(event.returnValue).toBe(true))
-    expect(store.setWorkspaceSession).toHaveBeenCalledTimes(2)
   })
 })

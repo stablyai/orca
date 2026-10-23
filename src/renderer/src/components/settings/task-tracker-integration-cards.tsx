@@ -76,9 +76,13 @@ export function LinearIntegrationCard(): React.JSX.Element {
       description={
         connected
           ? translate(
-              'auto.components.settings.task.tracker.integration.cards.e1f5e6424c',
-              '{{value0}} workspace{{value1}} connected',
-              { value0: workspaces.length, value1: workspaces.length === 1 ? '' : 's' }
+              workspaces.length === 1
+                ? 'auto.components.settings.task.tracker.integration.cards.connectedWorkspaceSingular'
+                : 'auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural',
+              workspaces.length === 1
+                ? '{{count}} workspace connected'
+                : '{{count}} workspaces connected',
+              { count: workspaces.length }
             )
           : checking
             ? translate(

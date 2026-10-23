@@ -58,8 +58,8 @@ export function useMobileNativeChatTurnStatus({
     enabled && scopedTiming.scopeKey === scopeKey
       ? scopedTiming.timingByTurn
       : EMPTY_TURN_TIMING_BY_TURN
-  // An accepted send renders as `pending-N` until the transcript echo lands under
-  // its real id. That is one turn under two keys, so the clock must survive the swap.
+  // A running turn can move to a new key (unanchored until its row is drawn), so the
+  // clock must survive the swap.
   const previousActiveTurn = useRef<{ scopeKey: string; turnKey: string } | null>(null)
 
   useEffect(() => {

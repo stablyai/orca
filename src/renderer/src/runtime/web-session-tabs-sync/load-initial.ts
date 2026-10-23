@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
-import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
+import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
 import {
   isSessionTabsListAllResult,
   recordReceivedWebSessionTabsSnapshot,
@@ -88,7 +88,7 @@ export function loadInitialWebSessionTabs({
       )
       const recovered = await Promise.all(
         result.snapshots.map((snapshot) =>
-          recoverWebSessionTerminalOrphansBeforeApply(
+          recoverMirroredTerminalOrphansBeforeApply(
             useAppStore.getState(),
             snapshot,
             environmentId,

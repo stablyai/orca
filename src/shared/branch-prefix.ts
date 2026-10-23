@@ -12,9 +12,9 @@ export type BranchPrefixSettings = {
  * the renderer's live settings feedback agree on which field each strategy uses.
  */
 export function selectBranchPrefixInput(
-  settings: BranchPrefixSettings,
+  settings: Omit<BranchPrefixSettings, 'branchPrefix'> & { branchPrefix: string },
   gitUsername: string | null
-): string | null {
+): string | null | void {
   switch (settings.branchPrefix) {
     case 'git-username':
       return gitUsername

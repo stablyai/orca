@@ -12,6 +12,7 @@ import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import { CodexAccountIdentity, type ResolvedCodexIdentity } from './codex-account-identity'
@@ -29,6 +30,8 @@ import type {
   CodexResetCreditConsumeResult
 } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
+import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
 export type {
   CodexAccountAddTarget,
   CodexAccountReauthenticateOptions,
@@ -83,6 +86,7 @@ export class CodexAccountService {
   private cancelPendingCodexLogin: (() => boolean) | null = null
   private pendingLoginUrl: string | null = null
   private readonly pendingLoginUrlListeners = new Set<(url: string | null) => void>()
+  private openWslLoginUrl: ((url: string) => void) | null = null
   private readonly identity: CodexAccountIdentity
   private readonly configMirror: CodexConfigMirror
   private readonly managedHomePaths: CodexManagedHomePath
@@ -101,7 +105,7 @@ export class CodexAccountService {
       execFileSync(
         'wsl.exe',
         ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)],
-        { windowsHide: true, encoding: 'utf-8', timeout: 5000 }
+        { windowsHide: true, encoding: 'utf-8', timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
       )
     )
     this.managedHomes = new CodexManagedHomeLifecycle(this.managedHomePaths)
@@ -168,6 +172,18 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.registration.add(target))
   }
 
+  /** A new host account signed in from another device through codex's device code. */
+  async addAccountWithDeviceCode(
+    channel: HostAccountSignInChannel
+  ): Promise<CodexRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(() =>
+      this.registration.add({ runtime: 'host' }, (managedHomePath) =>
+        this.runCodexLogin(managedHomePath, channel)
+      )
+    )
+  }
+
   /** Abandons the login waiting on a browser, if any. True when one was stopped. */
   cancelPendingLogin(): boolean {
     return this.cancelPendingCodexLogin?.() ?? false
@@ -181,6 +197,11 @@ export class CodexAccountService {
   /** Registration lasts the process's lifetime; there is no teardown to hand back. */
   onPendingLoginUrlChanged(listener: (url: string | null) => void): void {
     this.pendingLoginUrlListeners.add(listener)
+  }
+
+  /** Lets the desktop open a WSL login's link; orcad never sets one. */
+  setWslLoginUrlOpener(opener: ((url: string) => void) | null): void {
+    this.openWslLoginUrl = opener
   }
 
   private setPendingLoginUrl(url: string | null): void {
@@ -277,7 +298,20 @@ export class CodexAccountService {
     this.managedHomes.safeRemove(candidatePath, expectedAccountId)
   }
 
-  private async runCodexLogin(managedHomePath: string): Promise<void> {
+  private async runCodexLogin(
+    managedHomePath: string,
+    deviceChannel?: HostAccountSignInChannel
+  ): Promise<void> {
+    // Why before spawning: a flow cancelled while queued behind another account action runs nothing.
+    if (deviceChannel?.signal.aborted) {
+      throw new Error(CODEX_LOGIN_CANCELLED_MESSAGE)
+    }
+    // Why its own handle: the shared field may name a later login by the time the flow is cancelled.
+    let cancelThisLogin: (() => boolean) | null = null
+    const cancelForChannel = (): void => {
+      cancelThisLogin?.()
+    }
+    deviceChannel?.signal.addEventListener('abort', cancelForChannel, { once: true })
     try {
       await runCodexLoginSession(managedHomePath, {
         wslCommand: 'wsl.exe',
@@ -291,10 +325,21 @@ export class CodexAccountService {
         killProcessTree: killLoginProcessTree,
         setCancel: (cancel) => {
           this.cancelPendingCodexLogin = cancel
+          cancelThisLogin = cancel
         },
-        onAuthUrl: (url) => this.setPendingLoginUrl(url)
+        onAuthUrl: (url) => this.setPendingLoginUrl(url),
+        openWslAuthUrl: this.openWslLoginUrl,
+        ...(deviceChannel
+          ? {
+              deviceAuth: {
+                onPrompt: ({ url, userCode }) =>
+                  deviceChannel.onPrompt({ url, userCode, needsCode: false })
+              }
+            }
+          : {})
       })
     } finally {
+      deviceChannel?.signal.removeEventListener('abort', cancelForChannel)
       // Why: both die with the login server — no surface may keep offering a
       // link nothing is listening on, or a cancel with nothing to cancel.
       this.cancelPendingCodexLogin = null

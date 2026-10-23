@@ -149,6 +149,49 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
+    // C1b guard (layout-owner build): nobody acks a cold restore on a host with no client, and
+    // the restored history still reaches each later start through the daemon, not the ack.
+    it('keeps restored history across two restarts of the host with no client acking it', async () => {
+      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
+      adapterClass.CHECKPOINT_INTERVAL_MS = 25
+      try {
+        const sessionId = 'cold-restore-no-ack'
+        const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+        mkdirSync(sessionDir, { recursive: true })
+        writeFileSync(
+          join(sessionDir, 'meta.json'),
+          JSON.stringify({
+            cwd: '/projects/myapp',
+            cols: 80,
+            rows: 24,
+            startedAt: '2026-04-15T10:00:00Z',
+            endedAt: null,
+            exitCode: null
+          })
+        )
+        writeFileSync(join(sessionDir, 'scrollback.bin'), 'pre-restart history\r\n')
+
+        // First restart: main starts the pane from its stored id; no view paints, nothing acks.
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const first = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+        expect(first.coldRestore?.scrollback).toContain('pre-restart history')
+        const checkpoint = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
+        lastSubprocess._simulateData('after first restart\r\n')
+        await waitFor(() => checkpoint.mock.calls.length === 1)
+        historyAdapter.dispose()
+
+        // Second restart: a new host process starts the same pane again, still with no client.
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+        const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+        const shown = second.snapshot ?? second.coldRestore?.scrollback ?? ''
+        expect(shown).toContain('pre-restart history')
+        expect(shown).toContain('after first restart')
+      } finally {
+        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
+      }
+    })
+
     it('clears a stale snapshot cooldown when the cold-restore re-anchor is flagged', async () => {
       // Simulate a previous daemon crash with recoverable history on disk.
       const sessionId = 'cold-restore-stale-cooldown'
@@ -421,7 +464,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(
         join(sessionDir, 'meta.json'),
         JSON.stringify({
-          cwd: '/projects/probeless',
+          cwd: historyDir,
           cols: 132,
           rows: 43,
           startedAt: '2026-04-15T10:00:00Z',
@@ -452,7 +495,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore!.scrollback).toContain('probeless output')
       expect(lastSpawnOpts).toMatchObject({
         sessionId,
-        cwd: '/projects/probeless',
+        cwd: historyDir,
         cols: 132,
         rows: 43
       })

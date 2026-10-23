@@ -10,6 +10,10 @@ publish = false
 name = "orca"
 path = "src/main.rs"
 
+[[bin]]
+name = "orca-administrator-restart"
+path = "src/administrator_launcher.rs"
+
 [build-dependencies]
 winresource = "0.1"
 

@@ -19,6 +19,7 @@ import {
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
+  formatAutomationRunsPage,
   formatAutomationShow,
   printResult,
   type AutomationShowPayload
@@ -29,6 +30,12 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { resolveAutomationDestination } from '../automation-destination'
+import {
+  AUTOMATION_RUNS_PAGE_SIZE,
+  automationRunsRpc,
+  readAllAutomationRuns,
+  readAutomationRunsPage
+} from '../automation-runs-paging'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import {
@@ -141,10 +148,7 @@ async function resolveExpectedOwner(
   client: Parameters<CommandHandler>[0]['client'],
   id: string
 ): Promise<AutomationOwnerPrecondition | undefined> {
-  const result = await client.call<{ automation: Automation; owner?: AutomationOwnerPrecondition }>(
-    'automation.show',
-    { id }
-  )
+  const result = await client.call<AutomationShowPayload>('automation.show', { id })
   return result.result.owner
 }
 
@@ -278,12 +282,37 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       id,
       ...(expectedOwner ? { expectedOwner } : {})
     })
-    printResult(result, json, formatAutomationRun)
+    const environment = getOptionalStringFlag(flags, 'environment') ?? process.env.ORCA_ENVIRONMENT
+    const preserveConnectionSettings = Boolean(
+      (client.isRemote && !environment) || process.env.ORCA_USER_DATA_PATH
+    )
+    printResult(
+      { ...result, result: { ...result.result, runId: result.result.run.id } },
+      json,
+      (value) => formatAutomationRun(value, { environment, preserveConnectionSettings })
+    )
   },
   'automations runs': async ({ flags, client, json }) => {
-    const result = await client.call<{ runs: AutomationRun[] }>('automation.runs', {
-      automationId: getOptionalStringFlag(flags, 'id')
+    const automationId = getOptionalStringFlag(flags, 'id')
+    const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
+    const cursor = getOptionalStringFlag(flags, 'cursor')
+    if (limit === undefined && cursor === undefined) {
+      printResult(
+        await readAllAutomationRuns(automationRunsRpc(client), automationId),
+        json,
+        formatAutomationRuns
+      )
+      return
+    }
+    const page = await readAutomationRunsPage(automationRunsRpc(client), {
+      automationId,
+      limit: limit ?? AUTOMATION_RUNS_PAGE_SIZE,
+      cursor
     })
-    printResult(result, json, formatAutomationRuns)
+    printResult(
+      { ...page, result: { runs: page.result.runs, nextCursor: page.result.nextCursor ?? null } },
+      json,
+      formatAutomationRunsPage
+    )
   }
 }

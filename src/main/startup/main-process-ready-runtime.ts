@@ -20,6 +20,7 @@ import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-
 import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
 import { initializeMainProcessObservers } from './main-process-observers'
+import { installFirstWorkRenameHookSubscription } from './branch-rename-hook'
 import { initializeMainProcessAccountServices } from './main-process-account-services'
 import {
   initializeMainProcessRuntime,
@@ -33,6 +34,8 @@ import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
 
 // Headless serve never opens a window, so the sweep still has to run off a timer there.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -49,6 +52,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
   configureRuntimeServices(runtime)
+  installFirstWorkRenameHookSubscription()
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
@@ -141,5 +145,9 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       void handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
     }
   })
+  // Switch point: awaited, as it queues behind in-flight writes and every later phase must read its tree.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    await repairDuplicatePtyPanesOnStart(store, runtime)
+  }
   logStartupMilestone('services-initialized')
 }

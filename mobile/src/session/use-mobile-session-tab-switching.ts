@@ -1,6 +1,10 @@
 import { useCallback } from 'react'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../src/shared/startup-cwd-fallback'
 import { triggerSelection } from '../platform/haptics'
+import type { RpcResponse } from '../transport/types'
+import { isCachedActiveDocumentRetap } from './mobile-session-active-document-retap'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import { activatedAtWorkspaceRoot } from './session-write-reply-schema'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
@@ -12,7 +16,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     setActiveSessionTabId,
+    activeSessionTabId,
     markdownDocs,
+    fileDocs,
     terminalUnsubsRef,
     terminalDiagnosticsRef,
     activeHandleRef,
@@ -22,8 +28,17 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     unsubscribeTerminal,
     subscribeToTerminal,
     readMarkdownTab,
-    readFileTab
+    readFileTab,
+    showToast
   } = scope
+  const reportActivation = useCallback(
+    (response: RpcResponse) => {
+      if (response.ok && activatedAtWorkspaceRoot(response.result)) {
+        showToast(STARTUP_CWD_FALLBACK_SENTENCE, 1800)
+      }
+    },
+    [showToast]
+  )
   // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one.
   const switchTab = useCallback(
     (handle: string) => {
@@ -56,13 +71,16 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
             notifyClients: false,
             navigation: 'caller',
             intent: 'user'
-          }).catch(() => {})
+          })
+            .then(reportActivation)
+            .catch(() => {})
         }
       }
     },
     [
       client,
       defaultTerminalHandlesToLiveInput,
+      reportActivation,
       sessionTabs,
       subscribeToTerminal,
       unsubscribeTerminal,
@@ -72,6 +90,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
 
   const switchSessionTab = useCallback(
     (tab: MobileSessionTab) => {
+      if (isCachedActiveDocumentRetap(tab, activeSessionTabId, { markdownDocs, fileDocs })) {
+        return
+      }
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)
@@ -95,7 +116,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
             notifyClients: false,
             navigation: 'caller',
             intent: 'user'
-          }).catch(() => {})
+          })
+            .then(reportActivation)
+            .catch(() => {})
         }
         return
       }
@@ -118,7 +141,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
           notifyClients: false,
           navigation: 'caller',
           intent: 'user'
-        }).catch(() => {})
+        })
+          .then(reportActivation)
+          .catch(() => {})
       }
       if (tab.type === 'browser') {
         return
@@ -137,7 +162,18 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       // Why: tab list lacks a reliable version for desktop clean saves; re-read on revisit unless the phone has a draft.
       void readMarkdownTab(tab)
     },
-    [client, markdownDocs, readFileTab, readMarkdownTab, switchTab, unsubscribeTerminal, worktreeId]
+    [
+      activeSessionTabId,
+      client,
+      fileDocs,
+      markdownDocs,
+      readFileTab,
+      readMarkdownTab,
+      reportActivation,
+      switchTab,
+      unsubscribeTerminal,
+      worktreeId
+    ]
   )
   // Ref to latest switchSessionTab so fetchSessionTabs can activate a synced browser tab without a dependency cycle.
   switchSessionTabRef.current = switchSessionTab

@@ -21,6 +21,7 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { resetStructuredAgentSessionClosesBeforeCreateForTests } from './structured-agent-session-close-before-create'
 
 export const SESSION = 'session-alpha'
 export const FINGERPRINT = 'f'.repeat(64)
@@ -101,12 +102,14 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
       [
         STATUS_SESSION,
         {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks, snapshot(), itemFence() and runningTurn() of a journal with no sends.
           journal: {
             cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
             stopMarks: { latest: () => null, revision: () => 0 },
-            snapshot: () => ({ items: STATUS_ITEMS, submissions: [] })
+            snapshot: () => ({ items: STATUS_ITEMS, submissions: [] }),
+            itemFence: () => undefined,
+            runningTurn: () => null
           } as unknown as AgentSessionJournal,
           params: {
             location: {
@@ -143,11 +146,7 @@ export function hostStub(): StructuredAgentSessionHost {
           items: [],
           removedItemIds: [],
           submissions: [],
-          window: {
-            oldest: null,
-            newest: null,
-            nextCursor: { epoch: 'epoch-a', sequence: 0 }
-          },
+          window: { oldest: null, newest: null, nextCursor: { epoch: 'epoch-a', sequence: 0 } },
           liveCursor: { epoch: 'epoch-a', sequence: 0 },
           hasOlder: false,
           hasNewer: false
@@ -178,6 +177,7 @@ export function hostStub(): StructuredAgentSessionHost {
     waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [SESSION] })),
     revealSession: vi.fn(async () => ({
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -211,9 +211,9 @@ export function hostStub(): StructuredAgentSessionHost {
     subscribeTurnCompletions: vi.fn(() => () => undefined),
     unsubscribe: vi.fn()
   })
+  const store = { getOperationRow: vi.fn(() => null), getRecord: vi.fn(() => null) }
   // Not a call: the logger the host hands a runtime caller that reports for it.
-  const logger = recordingStructuredAgentSessionLogger().logger
-  Reflect.set(hostCalls, 'deps', { logger, store: { getOperationRow: vi.fn(() => null) } })
+  Reflect.set(hostCalls, 'deps', { logger: recordingStructuredAgentSessionLogger().logger, store })
   return hostCalls as unknown as StructuredAgentSessionHost
 }
 
@@ -250,6 +250,8 @@ export function dispatcher(
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalNativeChat: true }),
+    // The host reads saved settings privately; follow the client settings each test chose.
+    requireStore: () => ({ getSettings: () => runtime.getClientSettings() }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
@@ -270,7 +272,7 @@ export async function call(
   client?: {
     clientId?: string
     clientKind?: 'mobile' | 'runtime'
-    clientCapabilities?: string[]
+    clientCapabilities?: readonly string[]
     signal?: AbortSignal
   },
   runtimeOverrides: Record<string, unknown> = {},
@@ -321,9 +323,9 @@ export const STRUCTURED_MOBILE_CLIENT = {
 
 /** Every suite wants the same lifecycle: a fresh stub per test, no host left installed. */
 export function installStructuredHostStub(): void {
+  // A switch-on close remembers the session, refusing its later create; each test starts clean.
+  resetStructuredAgentSessionClosesBeforeCreateForTests()
   setStructuredAgentSessionHost(hostStub())
 }
 
-export function clearStructuredHostStub(): void {
-  setStructuredAgentSessionHost(null)
-}
+export const clearStructuredHostStub = (): void => setStructuredAgentSessionHost(null)

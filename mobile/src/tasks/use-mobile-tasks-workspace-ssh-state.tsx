@@ -1,4 +1,5 @@
 import type { WorkspaceSparseActionsModel } from './use-mobile-tasks-workspace-sparse-actions'
+import { taskRepoClient } from './task-repo-host-routing'
 import {
   normalizeSetupHookTrust,
   pickWorkspaceAgent,
@@ -114,14 +115,15 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     }
     let stale = false
     setWorkspaceDetectedAgentIds(null)
+    const repoClient = taskRepoClient(client, workspaceCreateTargetRepo)
     const detection = workspaceCreateTargetRepo.connectionId
       ? {
           operation: remoteAgentDetectionRead,
-          reply: remoteAgentDetectionRead.request(client, {
+          reply: remoteAgentDetectionRead.request(repoClient, {
             connectionId: workspaceCreateTargetRepo.connectionId
           })
         }
-      : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(client) }
+      : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(repoClient) }
     void detection.reply
       .then((reply) => {
         if (stale) {

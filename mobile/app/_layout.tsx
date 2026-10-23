@@ -25,6 +25,7 @@ import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
+import { SideSafeArea } from '../src/layout/side-safe-area'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -45,15 +46,19 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   const router = useRouter()
   const pathname = usePathname()
-  const { hostId, worktreeId } = useGlobalSearchParams<{ hostId?: string; worktreeId?: string }>()
+  const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
+    hostId?: string
+    worktreeId?: string
+    executionHost?: string
+  }>()
   useEffect(() => {
     setNotificationViewingWorkspace(
       pathname.includes('/session/') && typeof hostId === 'string' && typeof worktreeId === 'string'
-        ? { hostId, worktreeId }
+        ? { hostId, worktreeId, ...(typeof executionHost === 'string' ? { executionHost } : {}) }
         : null
     )
     return () => setNotificationViewingWorkspace(null)
-  }, [pathname, hostId, worktreeId])
+  }, [pathname, hostId, worktreeId, executionHost])
   const openNotificationRoute = useOpenNotificationRoute()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 
@@ -196,45 +201,47 @@ export default function RootLayout() {
     <RpcClientProvider>
       <View style={styles.root} onLayout={onNavigatorLayout}>
         <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: colors.bgPanel },
-            headerTintColor: colors.textPrimary,
-            headerTitleStyle: { fontSize: 16, fontWeight: '600' },
-            contentStyle: { backgroundColor: colors.bgBase },
-            headerShadowVisible: false
-            // Why: deliberately no `orientation` screenOption. react-native-screens
-            // has no value that respects the device rotation lock — even 'default'
-            // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
-            // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
-            // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
-          }}
-        >
-          <Stack.Screen
-            name="index"
-            options={{
-              headerShown: false,
-              headerTitle: () => <OrcaLogo size={22} />
+        <SideSafeArea>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.bgPanel },
+              headerTintColor: colors.textPrimary,
+              headerTitleStyle: { fontSize: 16, fontWeight: '600' },
+              contentStyle: { backgroundColor: colors.bgBase },
+              headerShadowVisible: false
+              // Why: deliberately no `orientation` screenOption. react-native-screens
+              // has no value that respects the device rotation lock — even 'default'
+              // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
+              // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
+              // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
             }}
-          />
-          <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
-          <Stack.Screen name="pair" options={{ headerShown: false }} />
-          <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="mobile-onboarding"
-            options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
-          />
-          <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
-          <Stack.Screen name="notifications" options={{ headerShown: false }} />
-          <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
-          <Stack.Screen name="connection-log" options={{ headerShown: false }} />
-          <Stack.Screen name="about" options={{ headerShown: false }} />
-          <Stack.Screen name="h" options={{ headerShown: false }} />
-        </Stack>
+          >
+            <Stack.Screen
+              name="index"
+              options={{
+                headerShown: false,
+                headerTitle: () => <OrcaLogo size={22} />
+              }}
+            />
+            <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
+            <Stack.Screen name="pair" options={{ headerShown: false }} />
+            <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="mobile-onboarding"
+              options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
+            />
+            <Stack.Screen name="settings" options={{ headerShown: false }} />
+            <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="notifications" options={{ headerShown: false }} />
+            <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+            <Stack.Screen name="connection-log" options={{ headerShown: false }} />
+            <Stack.Screen name="about" options={{ headerShown: false }} />
+            <Stack.Screen name="h" options={{ headerShown: false }} />
+          </Stack>
+        </SideSafeArea>
       </View>
     </RpcClientProvider>
   )

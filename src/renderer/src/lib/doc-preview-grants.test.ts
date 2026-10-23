@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   connectionId: null as string | null | undefined,
   environmentId: null as string | null,
+  ambiguous: false,
   mintGrant: vi.fn(),
   revokeGrant: vi.fn()
 }))
@@ -11,7 +12,8 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionId
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () =>
+    mocks.ambiguous ? null : mocks.environmentId
 }))
 
 import {
@@ -26,6 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.connectionId = null
   mocks.environmentId = null
+  mocks.ambiguous = false
   mocks.mintGrant.mockResolvedValue({ grantId: 'grant-1', url: 'orca-preview://grant-1/a.html' })
   vi.stubGlobal('window', {
     api: { docPreview: { mintGrant: mocks.mintGrant, revokeGrant: mocks.revokeGrant } }
@@ -33,6 +36,11 @@ beforeEach(() => {
 })
 
 describe('buildDocPreviewGrantRequest', () => {
+  it('mints no grant for a twin, which names no server to mint against', () => {
+    mocks.ambiguous = true
+    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/a.html')).toBeNull()
+  })
+
   // A document outside every workspace resolves and authorizes from its own directory.
   it('roots an SSH grant outside the workspace at the document directory', () => {
     mocks.connectionId = 'ssh-1'
@@ -103,6 +111,38 @@ describe('doc preview grant lifetime', () => {
     expect(mocks.mintGrant).toHaveBeenCalledOnce()
     expect(first).toBe(second)
     expect(mocks.revokeGrant).not.toHaveBeenCalled()
+  })
+
+  // Why: Share reads and keys from the handle's location, so a later host change must not move it.
+  it('keeps the minted location on the handle until the grant is released', async () => {
+    const minted = {
+      owner: {
+        kind: 'runtime' as const,
+        environmentId: 'server-1',
+        worktreeSelector: 'id:wt-1',
+        worktreeRoot: '/srv/repo'
+      },
+      requestBase: '/srv/repo',
+      root: '/srv/repo/docs',
+      entryRelativePath: 'docs/a.html'
+    }
+    const movedHost = { ...minted, owner: { ...minted.owner, environmentId: 'server-2' } }
+
+    await expect(ensureDocPreviewGrant('preview-5', minted)).resolves.toMatchObject({
+      location: minted
+    })
+    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
+      location: minted
+    })
+    expect(mocks.mintGrant).toHaveBeenCalledExactlyOnceWith({
+      ...minted,
+      browserPageId: 'preview-5'
+    })
+
+    releaseDocPreviewGrant('preview-5')
+    await expect(ensureDocPreviewGrant('preview-5', movedHost)).resolves.toMatchObject({
+      location: movedHost
+    })
   })
 
   it('revokes on release and mints fresh afterwards', async () => {

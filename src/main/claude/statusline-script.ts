@@ -7,9 +7,20 @@ import {
   CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS,
   CLAUDE_STATUSLINE_PATHNAME
 } from '../../shared/claude-statusline-rate-limits'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { getManagedCommand } from './hook-settings'
 
 const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'
 const STATUSLINE_PROBE_LABEL = 'orca_statusline_probe'
+
+// Why: PowerShell (no Git Bash) cannot parse the runtime-home form, so a cmd-safe path is registered bare;
+// an unsafe one keeps that form, as the encoded PowerShell fallback would spawn per statusline tick.
+export function getManagedStatusLineCommand(scriptPath: string): string {
+  return (
+    (process.platform === 'win32' ? wrapWindowsDirectCmdHookCommand(scriptPath) : null) ??
+    getManagedCommand(scriptPath)
+  )
+}
 
 // Why: Claude Code pipes `rate_limits` to the statusLine command on every turn; forwarding
 // it gives Orca live usage without spending the OAuth usage endpoint's tight budget.

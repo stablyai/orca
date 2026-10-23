@@ -1,18 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import {
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
-  mergeLandedImagePreviewEchoes,
+  mergeSentImagePreviews,
   migrateImagePreviewMessageIds,
   normalizeReconcileText
 } from './mobile-native-chat-draft-reconcile'
@@ -63,8 +55,6 @@ export function useMobileNativeChatDrafts(args: {
    *  is an empty conversation, not a read that failed or never ran. Only then
    *  does a send's captured tail describe a real boundary. */
   transcriptSettled: boolean
-  /** The active pane's host-held queued-draft cards (structured lane only). */
-  queuedCards?: readonly { messageId: string; text: string }[]
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
@@ -76,7 +66,7 @@ export function useMobileNativeChatDrafts(args: {
   /** Phone-local previews rebound to the transcript message that replaced the
    *  optimistic echo, keyed by authoritative message id. */
   imagePreviewsByMessageId: Record<string, string[]>
-  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  captureSendOrigin: (text: string, sentAt?: number) => MobileNativeChatSendOrigin | null
   /** Launch-context text still believed to be parked on the agent's TUI input
    *  line, or null once it has been declined or retired. Send paths size their
    *  pre-clear from it, since one Ctrl+U clears only one logical line. */
@@ -103,8 +93,7 @@ export function useMobileNativeChatDrafts(args: {
     launchDraftCreatedAt,
     chatActive = true,
     transcriptLoading,
-    transcriptSettled,
-    queuedCards
+    transcriptSettled
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
@@ -123,11 +112,6 @@ export function useMobileNativeChatDrafts(args: {
   const getComposerEditGeneration = useCallback(() => composerEditGenerationRef.current, [])
   const messagesRef = useRef(messages)
   messagesRef.current = messages
-  const queuedCardsRef = useRef(queuedCards)
-  // Read only by captureSendOrigin, which runs from a send after this commit.
-  useLayoutEffect(() => {
-    queuedCardsRef.current = queuedCards
-  }, [queuedCards])
 
   const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
     draftKey,
@@ -165,7 +149,8 @@ export function useMobileNativeChatDrafts(args: {
   )
 
   const captureSendOrigin = useCallback(
-    (text: string) => {
+    // When Send was pressed, as desktop times its pending sends, not when the host took it.
+    (text: string, sentAt = Date.now()) => {
       if (!draftKey) {
         return null
       }
@@ -181,9 +166,7 @@ export function useMobileNativeChatDrafts(args: {
         // or a read that failed — hands back an empty list that reads as "the
         // conversation was empty", which lets any row claim this send later.
         baselineResolved: transcriptSettled,
-        ...(queuedCardsRef.current?.length
-          ? { baselineQueuedMessageIds: queuedCardsRef.current.map((card) => card.messageId) }
-          : {})
+        sentAt
       }
     },
     [draftKey, pendingKey, transcriptSettled]
@@ -227,8 +210,7 @@ export function useMobileNativeChatDrafts(args: {
   const { holdUnconfirmedSend } = useMobileNativeChatUnconfirmedSends({
     draftKey,
     pendingKey,
-    messages,
-    ...(queuedCards ? { queuedCards } : {})
+    messages
   })
 
   const waitingForSession = draftKey
@@ -272,7 +254,7 @@ export function useMobileNativeChatDrafts(args: {
     const landedImagePendingIds = new Set(landedImagePreviews.map((preview) => preview.pendingId))
     if (landedImagePreviews.length > 0) {
       setImagePreviewsBySession((previous) =>
-        mergeLandedImagePreviewEchoes(previous, pendingKey, landedImagePreviews)
+        mergeSentImagePreviews(previous, pendingKey, landedImagePreviews)
       )
     }
     setPendingBySession((previous) => {

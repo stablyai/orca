@@ -1,6 +1,6 @@
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, ChartColumn } from 'lucide-react'
+import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
@@ -47,6 +47,7 @@ export default function EditorFileTab({
   onCloseOthers,
   onCloseToRight,
   onCloseToLeft,
+  onCloseSplitPane,
   onCloseAll,
   onMakePermanent,
   onTogglePin,
@@ -66,6 +67,7 @@ export default function EditorFileTab({
   onCloseOthers: () => void
   onCloseToRight: () => void
   onCloseToLeft: () => void
+  onCloseSplitPane?: () => void
   onCloseAll: () => void
   onMakePermanent?: () => void
   onTogglePin: () => void
@@ -89,19 +91,16 @@ export default function EditorFileTab({
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
-  const isChatVisual = file.mode === 'chat-visual'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const HoverIcon = isConflictReview
     ? ShieldAlert
     : isCheckDetails
       ? ListChecks
-      : isChatVisual
-        ? ChartColumn
-        : isDiff
-          ? GitCompareArrows
-          : isMarkdownPreviewTab
-            ? Eye
-            : FileIcon
+      : isDiff
+        ? GitCompareArrows
+        : isMarkdownPreviewTab
+          ? Eye
+          : FileIcon
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
@@ -435,6 +434,7 @@ export default function EditorFileTab({
         onCloseAll={onCloseAll}
         onCloseToRight={onCloseToRight}
         onCloseToLeft={onCloseToLeft}
+        onCloseSplitPane={onCloseSplitPane}
         onOpenMarkdownPreview={openMarkdownPreview}
       />
     </>

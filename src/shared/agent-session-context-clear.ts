@@ -1,4 +1,5 @@
 import type {
+  AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -46,6 +47,30 @@ export function latestAgentSessionContextClearSequence(
     }
   }
   return sequence
+}
+
+/** What a transcript shows: rows from the `/clear` divider at `floor` on, so a cleared chat reads
+ *  as cleared. The journal keeps the earlier rows for worker reads and archives. */
+export function agentSessionTranscriptRows<
+  T extends Pick<AgentJournalRenderItem, 'sequence' | 'body'>
+>(items: readonly T[], floor = latestAgentSessionContextClearSequence(items)): readonly T[] {
+  return floor > 0 ? items.filter((item) => item.sequence >= floor) : items
+}
+
+/** The host's latest `/clear` sequence, when it speaks for this journal epoch; 0 otherwise. */
+export function agentSessionContextFloorSequence(
+  floor: AgentJournalCursor | undefined,
+  epoch: string | null
+): number {
+  return floor && floor.epoch === epoch ? floor.sequence : 0
+}
+
+/** A loaded `/clear` divider is where a transcript's history starts, so nothing older is paged. */
+export function agentSessionHasOlderTranscript(
+  items: readonly Pick<AgentJournalRenderItem, 'body'>[],
+  hasOlder: boolean
+): boolean {
+  return hasOlder && !items.some((item) => isAgentSessionContextClear(item.body))
 }
 
 export function agentSessionCurrentContextRows(

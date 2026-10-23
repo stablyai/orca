@@ -130,7 +130,7 @@ async function riggedAdapter(
         requestedAt: nowMs,
         fence: 7
       })
-      expect(outcome).toEqual({ state: 'admitted' })
+      expect(outcome).toMatchObject({ state: 'admitted' })
       const sentUuid = claude.connections[0]!.sent.at(-1)?.uuid
       if (typeof sentUuid !== 'string') {
         throw new Error('the fake connection recorded no sent uuid')

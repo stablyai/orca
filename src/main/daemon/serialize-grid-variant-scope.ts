@@ -29,10 +29,13 @@ export function variantOverlong(
   const alt = source.buffer.active.type === 'alternate'
   const altOverlong =
     alt && hasOverlongLine(source.buffer.alternate, 0, source.buffer.alternate.length, cols)
+  const normalStart = serializedNormalStart(source, scrollback)
+  const allNormalOverlong = altOverlong || hasOverlongLine(normal, 0, normal.length, cols)
   return [
-    altOverlong ||
-      hasOverlongLine(normal, serializedNormalStart(source, scrollback), normal.length, cols),
-    altOverlong || hasOverlongLine(normal, 0, normal.length, cols),
+    normalStart === 0
+      ? allNormalOverlong
+      : altOverlong || hasOverlongLine(normal, normalStart, normal.length, cols),
+    allNormalOverlong,
     hasOverlongLine(normal, rangeRow, Math.min(rangeRow + 2, normal.length - 1) + 1, cols)
   ]
 }
@@ -81,15 +84,14 @@ export function variantTrailingBackgroundRows(
   const altTrailing =
     source.buffer.active.type === 'alternate' &&
     hasTrailingBackgroundRow(source.buffer.alternate, 0, source.buffer.alternate.length, source)
+  const normalStart = serializedNormalStart(source, scrollback)
+  const allNormalTrailing =
+    altTrailing || hasTrailingBackgroundRow(normal, 0, normal.length, source)
   return [
-    altTrailing ||
-      hasTrailingBackgroundRow(
-        normal,
-        serializedNormalStart(source, scrollback),
-        normal.length,
-        source
-      ),
-    altTrailing || hasTrailingBackgroundRow(normal, 0, normal.length, source),
+    normalStart === 0
+      ? allNormalTrailing
+      : altTrailing || hasTrailingBackgroundRow(normal, normalStart, normal.length, source),
+    allNormalTrailing,
     hasTrailingBackgroundRow(
       normal,
       rangeRow,

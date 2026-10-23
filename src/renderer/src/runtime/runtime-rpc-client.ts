@@ -38,6 +38,7 @@ export async function callRuntimeRpc<TResult>(
     signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
     expectedEnvironmentRuntimeId?: string
+    beforeSend?: () => void
   } = {}
 ): Promise<TResult> {
   if (options.signal?.aborted) {
@@ -69,6 +70,7 @@ export async function callRuntimeRpc<TResult>(
   const nextParams = options.suppressFeatureInteraction
     ? withBrowserPaneUiRuntimeRpcSource(params)
     : params
+  options.beforeSend?.()
   const response =
     target.kind === 'local'
       ? await window.api.runtime.call({ method, params: nextParams })
@@ -268,6 +270,16 @@ export async function getRuntimeEnvironmentStatus(
     throw new Error('Runtime status probe resolved without a status.')
   }
   return entry.status
+}
+
+/** The capability as last probed, without waiting (for synchronous terminal replies); null before
+ *  the environment's first status probe. */
+export function readCachedRuntimeEnvironmentCapability(
+  environmentId: string,
+  capability: RuntimeCapability
+): boolean | null {
+  const status = runtimeCompatibilityChecks.get(environmentId.trim())?.status
+  return status ? status.capabilities?.includes(capability) === true : null
 }
 
 export async function runtimeEnvironmentSupportsCapability(

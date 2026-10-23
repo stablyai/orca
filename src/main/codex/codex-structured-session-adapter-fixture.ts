@@ -1,4 +1,9 @@
 import type {
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionOptionsReportedEvent
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
@@ -15,6 +20,45 @@ import {
 } from './codex-structured-session-adapter'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+
+const startLinks = new WeakMap<
+  CodexStructuredSessionAdapter,
+  Map<string, NonNullable<StructuredAgentSessionProviderOpenResult['link']>>
+>()
+const startReports = new WeakMap<
+  CodexStructuredSessionAdapter,
+  Map<string, StructuredAgentSessionProviderOpenResult | StructuredAgentSessionOptionsReportedEvent>
+>()
+
+export function codexStartReport(adapter: CodexStructuredSessionAdapter, sessionId = 'session-1') {
+  const report = startReports.get(adapter)?.get(sessionId)
+  if (!report) {
+    throw new Error(`Codex has not started ${sessionId}`)
+  }
+  return report
+}
+
+export function codexStartedLink(adapter: CodexStructuredSessionAdapter, sessionId = 'session-1') {
+  return startLinks.get(adapter)?.get(sessionId)
+}
+
+export async function acquireReadyCodexForTest(
+  adapter: CodexStructuredSessionAdapter,
+  input: StructuredAgentSessionAcquireInput
+) {
+  const acquired = await adapter.acquire(input)
+  const result = await adapter.open({
+    sessionId: input.identity.sessionId,
+    fence: input.fence,
+    acquisitionGeneration: acquired.acquisitionGeneration,
+    signal: new AbortController().signal
+  })
+  startReports.get(adapter)?.set(input.identity.sessionId, result)
+  if (result.link) {
+    startLinks.get(adapter)?.set(input.identity.sessionId, result.link)
+  }
+  return acquired
+}
 
 export const THREAD_ID = 'thread-abc'
 
@@ -81,6 +125,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       }
     }
     connections.push(connection)
+    await handlers.onSpawned?.(connection.pid ?? 0)
     return connection
   }
   routes['thread/start'] ??= () => ({
@@ -117,7 +162,12 @@ export function adapterFor(
   deps: Partial<CodexStructuredSessionAdapterDeps> = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
-  return new CodexStructuredSessionAdapter({
+  const links = new Map<string, NonNullable<StructuredAgentSessionProviderOpenResult['link']>>()
+  const reports = new Map<
+    string,
+    StructuredAgentSessionProviderOpenResult | StructuredAgentSessionOptionsReportedEvent
+  >()
+  const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
       args: ['app-server'],
@@ -126,13 +176,23 @@ export function adapterFor(
       resumeThreadId: null,
       ...launch
     }),
-    onEvent: (event) => events.push(event),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
     mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
-    ...deps
+    ...deps,
+    onEvent: (event) => {
+      if (event.type === 'options-reported') {
+        reports.set(event.sessionId, event)
+      } else {
+        events.push(event)
+      }
+      deps.onEvent?.(event)
+    }
   })
+  startReports.set(adapter, reports)
+  startLinks.set(adapter, links)
+  return adapter
 }
 
 export async function acquired(
@@ -141,6 +201,10 @@ export async function acquired(
   events: CodexStructuredSessionEvent[] = []
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = adapterFor(codex, launch, events)
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
   return adapter
 }

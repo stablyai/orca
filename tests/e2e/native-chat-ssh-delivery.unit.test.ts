@@ -13,7 +13,7 @@ import {
   resetNativeChatPtySendQueuesForTests
 } from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
 import { buildAskAnswerKeys } from '../../src/shared/native-chat-ask'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
+import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
 import { sendAgentDraftPasteContentNow } from '../../src/renderer/src/lib/agent-draft-paste-content'

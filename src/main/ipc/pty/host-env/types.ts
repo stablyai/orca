@@ -29,6 +29,7 @@ export type BuildPtyHostEnvOptions = {
   /** Distro for WSL spawns (null = Windows default distro); drives the WSL hook relay + endpoint repoint. Only read when isWsl. */
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
+  terminalInlineImages?: boolean
   /** Per-agent opt-out; disabled agents must not receive managed extensions. */
   disabledTuiAgents?: Iterable<unknown> | null
   networkProxySettings?: NetworkProxySettings

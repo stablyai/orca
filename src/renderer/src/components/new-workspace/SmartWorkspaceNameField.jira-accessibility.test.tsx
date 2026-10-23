@@ -44,6 +44,8 @@ const jiraConnectionMock = vi.hoisted(() => ({
 }))
 const originalWindowApi = window.api
 
+vi.mock('../jira-project-picker', () => ({ JiraProjectPicker: () => null }))
+
 vi.mock('./use-jira-url-source', () => ({
   useJiraUrlSource: () => ({
     ...jiraMock.state,

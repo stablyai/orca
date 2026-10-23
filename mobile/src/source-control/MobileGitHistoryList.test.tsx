@@ -31,7 +31,7 @@ const transport = vi.hoisted(
     forceReconnect: () => Promise.resolve()
   })
 )
-vi.mock('../transport/client-context', () => ({
+vi.mock('../transport/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect
 }))
 

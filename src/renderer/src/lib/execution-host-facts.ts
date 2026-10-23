@@ -14,7 +14,7 @@ import { getLocalProjectExecutionRuntimeContext } from './local-preflight-contex
 import { CLIENT_PLATFORM } from './new-workspace'
 import {
   getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
 } from './worktree-runtime-owner'
 
 /**
@@ -115,18 +115,22 @@ function resolveHostPlatform(
   return { kind: 'known', platform, hostKind: 'runtime' }
 }
 
-/** Platform of the host that runs agents for a repo that has no workspace yet. */
+/**
+ * Platform of the host that runs agents for a repo's workspaces, read from the repo row's owner.
+ * `workspacePath` names a workspace on that host (e.g. a WSL worktree); it defaults to the repo.
+ */
 export function resolveRepoExecutionHostPlatform(
   state: HostFactsState,
   repo: { connectionId?: string | null; executionHostId?: string | null; path: string },
-  projectRuntime: () => ProjectExecutionRuntimeResolution | undefined
+  projectRuntime: () => ProjectExecutionRuntimeResolution | undefined,
+  workspacePath: string | null | undefined = repo.path
 ): ExecutionHostPlatformFact {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   return resolveHostPlatform(state, {
     host,
     nestedSshTargetId: host?.kind === 'runtime' ? repo.connectionId?.trim() || null : null,
     sshOwnerEnvironmentId: null,
-    workspacePath: repo.path,
+    workspacePath,
     projectRuntime
   })
 }
@@ -144,10 +148,56 @@ export function resolveWorktreeExecutionHostPlatform(
     nestedSshTargetId:
       host?.kind === 'runtime' ? (getConnectionIdFromState(state, worktreeId) ?? null) : null,
     sshOwnerEnvironmentId:
-      host?.kind === 'ssh' ? getRuntimeEnvironmentIdForWorktree(state, worktreeId) : null,
+      host?.kind === 'ssh'
+        ? runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+        : null,
     workspacePath,
     projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktreeId)
   })
+}
+
+export type KnownExecutionHostPlatform = Extract<ExecutionHostPlatformFact, { kind: 'known' }>
+
+/** A caller's platform only refines a local launch (e.g. WSL); a remote host's own OS wins. */
+export function refineLocalLaunchPlatform(
+  fact: KnownExecutionHostPlatform,
+  callerPlatform: NodeJS.Platform | undefined
+): KnownExecutionHostPlatform {
+  return fact.hostKind === 'local' && callerPlatform ? { ...fact, platform: callerPlatform } : fact
+}
+
+/**
+ * Preflight platform for a worktree's agent launch: the worktree's own host when its row names
+ * one, else its repo's owner. `undefined` when withheld: the launch itself resolves the host and
+ * tells the user why it stopped.
+ */
+export function resolveRepoWorktreeLaunchPlatform(
+  state: WorktreeHostFactsState,
+  repo: { connectionId?: string | null; executionHostId?: string | null; path: string },
+  worktree: {
+    id: string
+    path?: string | null
+    hostId?: string | null
+    runtimeOwnerEnvironmentId?: string | null
+  }
+): NodeJS.Platform | undefined {
+  const repoHost = parseExecutionHostId(getRepoExecutionHostId(repo))
+  const ownHost = parseExecutionHostId(worktree.hostId)
+  // Why: a per-worktree host (e.g. a local checkout of a server project) outranks the repo's.
+  const host = ownHost && ownHost.id !== repoHost?.id ? ownHost : repoHost
+  const serverOwner =
+    worktree.runtimeOwnerEnvironmentId?.trim() ||
+    (repoHost?.kind === 'runtime' ? repoHost.environmentId : null)
+  const fact = resolveHostPlatform(state, {
+    host,
+    nestedSshTargetId:
+      host?.kind === 'runtime' && host === repoHost ? repo.connectionId?.trim() || null : null,
+    // Why: a server-projected SSH worktree is reached through that server's own connection.
+    sshOwnerEnvironmentId: host?.kind === 'ssh' ? serverOwner : null,
+    workspacePath: worktree.path ?? repo.path,
+    projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktree.id)
+  })
+  return fact.kind === 'known' ? fact.platform : undefined
 }
 
 export function requireExecutionHostPlatform(fact: ExecutionHostPlatformFact): NodeJS.Platform {

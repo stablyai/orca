@@ -20,6 +20,7 @@ import {
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 let rig: RestTestRig
 beforeEach(async () => {
@@ -47,7 +48,7 @@ async function adoptedParams(history = 'adopted history', threadId = THREAD) {
     ].join('\n')
   )
   return createTestParams(undefined, {
-    adopt: { providerHandle: { kind: 'codex', threadId }, transcriptPath }
+    adopt: { providerHandle: codexProviderHandle(threadId), transcriptPath }
   })
 }
 
@@ -88,7 +89,7 @@ it('imports adoption at rest and resumes its original provider identity after it
     await rig.host.create(CALLER, {
       ...params,
       accountHome: { variable: 'CODEX_HOME', path: '/drifted/account' },
-      adopt: { providerHandle: { kind: 'codex', threadId: THREAD } }
+      adopt: { providerHandle: codexProviderHandle(THREAD) }
     })
   ).toMatchObject({ ok: true, replayed: true })
   expect(await rig.host.send(CALLER, restTestSend('new work'))).toMatchObject({ ok: true })
@@ -116,7 +117,14 @@ it('refuses concurrent adoption of a provider conversation by another session', 
   expect(results.filter((result) => result.ok)).toHaveLength(1)
   expect(results.filter((result) => !result.ok)).toMatchObject([
     {
-      refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+      refusal: {
+        code: 'agent_session_conflict',
+        details: {
+          reason: 'conversationHeldElsewhere',
+          owner: { sessionId: expect.any(String), workspaceId: params.location.workspaceId }
+        },
+        createAttemptRefusedBeforeCommit: true
+      }
     }
   ])
   expect(rig.store.listRecords()).toHaveLength(1)
@@ -138,16 +146,25 @@ it('refuses concurrent founding under a tab another chat already owns', async ()
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
 })
 
-it('validates adoption history before founding anything', async () => {
-  const params = await adoptedParams()
-  await writeFile(join(rig.root, 'rollout.jsonl'), 'not a transcript\n')
-  expect(await rig.host.create(CALLER, params)).toMatchObject({
-    ok: false,
-    refusal: { code: 'agent_session_identity_required' }
-  })
-  expect(rig.store.listRecords()).toEqual([])
-  expect(rig.store.listOperationRows()).toEqual([])
-})
+it.each(['missing', 'empty', 'malformed'] as const)(
+  'refuses %s history before founding anything',
+  async (source) => {
+    const params = await adoptedParams()
+    await (source === 'missing'
+      ? rm(join(rig.root, 'rollout.jsonl'))
+      : writeFile(join(rig.root, 'rollout.jsonl'), source === 'empty' ? '' : '{broken json}\n'))
+    expect(await rig.host.create(CALLER, params)).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_identity_required',
+        details: { reason: source === 'empty' ? 'transcriptNotFound' : 'transcriptUnreadable' },
+        createAttemptRefusedBeforeCommit: true
+      }
+    })
+    expect(rig.store.listRecords()).toEqual([])
+    expect(rig.store.listOperationRows()).toEqual([])
+  }
+)
 
 it('does not found a record whose account namespace its agent cannot drive', async () => {
   const params = createTestParams(undefined, {

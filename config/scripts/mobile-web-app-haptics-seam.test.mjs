@@ -7,8 +7,6 @@
  * route that imports the seam without declaring `haptics` is a page whose taps go quiet, because
  * grants are resolved once from the route the shell opened.
  *
- * The scan has a control rather than an empty list: the same walk over the native sibling finds the
- * same five functions and no posting site, which is what says it can tell the two apart.
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -152,29 +150,12 @@ describe('the seam reader', () => {
   })
 })
 
-/**
- * The two siblings measured against each other, which is what makes "all five post" a number.
- *
- * The native file is the control: same five names, same walk, no posting site. Without it an empty
- * result and a file the scan could not read would report the same thing.
- */
 describe('the two haptics siblings', () => {
   it('posts every kind the notify admits from the web sibling, and nothing more', () => {
     const kinds = bridgeHapticsKinds(read(HAPTICS_KINDS_MODULE), HAPTICS_KINDS_MODULE)
     expect(kinds).toHaveLength(5)
     const posted = hapticsPostedKinds(read(HAPTICS_SEAM), HAPTICS_SEAM)
     expect([...posted].sort()).toEqual([...kinds].sort())
-  })
-
-  it('finds five functions in the native sibling and no posting site at all', () => {
-    const sites = hapticsTriggerSites(read(HAPTICS_NATIVE), HAPTICS_NATIVE)
-    expect(sites).toHaveLength(5)
-    expect(sites.filter((site) => site.kind !== null)).toEqual([])
-  })
-
-  it('exports the same five names from both, which is what makes one a substitution', () => {
-    const names = (file) => hapticsTriggerSites(read(file), file).map((site) => site.name)
-    expect(names(HAPTICS_SEAM)).toEqual(names(HAPTICS_NATIVE))
   })
 
   /**

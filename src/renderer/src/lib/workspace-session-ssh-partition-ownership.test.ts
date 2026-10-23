@@ -90,8 +90,7 @@ describe('ssh folder workspace partition ownership', () => {
         get: async () => getDefaultWorkspaceSession(),
         patch: async (patch, hostId) => {
           patches.push({ hostId, patch })
-        },
-        setSync: () => {}
+        }
       },
       { tabsByWorktree: { [FOLDER_KEY]: [tab('tab-desktop', FOLDER_KEY)] } },
       state
@@ -303,8 +302,7 @@ describe('a bare workspace id two partitions both hold', () => {
         get: async () => getDefaultWorkspaceSession(),
         patch: async (patch, hostId) => {
           patches.push({ hostId, patch })
-        },
-        setSync: () => {}
+        }
       },
       { tabsByWorktree: read.session.tabsByWorktree },
       {

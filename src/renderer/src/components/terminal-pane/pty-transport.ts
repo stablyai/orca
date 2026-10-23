@@ -53,9 +53,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
-    onAgentBecameIdle: (title) => {
+    onAgentBecameIdle: (title, meta) => {
       if (!suppressAttentionEvents) {
-        onAgentBecameIdle?.(title)
+        onAgentBecameIdle?.(title, meta)
       }
     },
     onAgentBecameWorking,

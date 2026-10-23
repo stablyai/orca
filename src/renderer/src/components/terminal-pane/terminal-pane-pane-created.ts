@@ -40,7 +40,7 @@ export function createTerminalPaneCreatedHandler(
 ): (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void {
   // Split spawn hints let the renderer pane appear before a slow inherited-cwd lookup finishes.
   return (pane, spawnHints) => {
-    const { deps, refs, ptyDeps, startupWithSetupSplitWait, startup, osc7UncHost } = context
+    const { deps, refs, ptyDeps, startup, osc7UncHost } = context
     const manager = deps.managerRef.current
     if (!manager) {
       return
@@ -170,7 +170,7 @@ export function createTerminalPaneCreatedHandler(
     context.applyAppearance(manager)
     const onQueuedStartupSpawned = createQueuedStartupConsumer(
       ptyDeps.startup,
-      startupWithSetupSplitWait,
+      startup,
       () => useAppStore.getState().consumeTabStartupCommand(deps.tabId),
       () => useAppStore.getState().pendingStartupByTabId[deps.tabId] === startup
     )

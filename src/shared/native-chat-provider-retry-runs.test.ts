@@ -49,7 +49,7 @@ function texts(messages: readonly NativeChatMessage[]): string[] {
 }
 
 function drawn(items: AgentJournalRenderItem[]): string[] {
-  return texts(projectStructuredAgentSessionMessages(items, [], [], { rejectedInPlace: true }))
+  return texts(projectStructuredAgentSessionMessages(items, [], []))
 }
 
 describe('a run of provider retry rows', () => {
@@ -101,8 +101,7 @@ describe('a run of provider retry rows', () => {
           retry(2, 'subagent-1')
         ],
         [],
-        [],
-        { rejectedInPlace: true }
+        []
       )
     )
     expect(texts(conversation)).toEqual([
@@ -137,8 +136,7 @@ describe('a run of provider retry rows', () => {
           resolvedAt: null,
           handoverRecorded: true
         }
-      ],
-      { rejectedInPlace: true }
+      ]
     )
     expect(messages.map((message) => [message.id, message.queued ?? false])).toEqual([
       [expect.stringMatching(/^item-/), false],

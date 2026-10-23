@@ -10,7 +10,7 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-jou
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { createNativeChatVisualsDelivery } from '../native-chat/native-chat-visuals-delivery'
-import { nativeChatVisualsFolderFor } from '../native-chat/native-chat-visuals-folder'
+import { nativeChatScratchFolderFor } from '../native-chat/native-chat-scratch-folder'
 import { NATIVE_CHAT_VISUALS_SKILL_NAME } from '../native-chat/native-chat-visuals-skill-location'
 import { createClaudeCliFlagSupport } from './claude-cli-flag-support'
 import { readClaudeInit } from './claude-structured-init-proof'
@@ -75,7 +75,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
       try {
         await mkdir(cwd, { recursive: true })
         const launch = await resolveLaunch({ identity })
-        const folder = nativeChatVisualsFolderFor(stateDirectory, SESSION_ID)
+        const folder = nativeChatScratchFolderFor(stateDirectory, SESSION_ID)
         expect(launch.options.additionalDirectories).toEqual([folder])
         expect(launch.options.plugins).toHaveLength(1)
         await adapter.acquire({

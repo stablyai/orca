@@ -134,6 +134,46 @@ test('no general cells means no headroom', async () => {
   assert.equal(result.sufficient, false)
 })
 
+const reserveRefusal = () => Response.json({ error: 'cell_in_reserve_mode' }, { status: 404 })
+
+test('a reserve cell that is not being rolled offers no slots and is named', async () => {
+  const base = harness({ controls: 160 })
+  const result = await run(async (url, options) =>
+    JSON.parse(options.body).cellId === 'production-gce-c29'
+      ? reserveRefusal()
+      : await base(url, options))
+  assert.equal(result.freeSlots, 200)
+  assert.equal(result.sufficient, true)
+  assert.deepEqual(result.cells.find((entry) => entry.cellId === 'production-gce-c29'), {
+    cellId: 'production-gce-c29',
+    region: null,
+    freeSlots: 0,
+    reserve: true
+  })
+})
+
+test('refuses to roll a reserve cell, naming the flip back to db', async () => {
+  const base = harness()
+  await assert.rejects(
+    run(async (url, options) =>
+      JSON.parse(options.body ?? '{}').cellId === config.cellId
+        ? reserveRefusal()
+        : await base(url, options)),
+    /production-gce-c28 is in reserve mode .*flip it to admitMode=db/
+  )
+})
+
+test('any other 404 from cell-status still fails', async () => {
+  const base = harness()
+  await assert.rejects(
+    run(async (url, options) =>
+      JSON.parse(options.body).cellId === 'production-gce-c29'
+        ? Response.json({ error: 'cell_not_found' }, { status: 404 })
+        : await base(url, options)),
+    /cell-status returned 404/
+  )
+})
+
 test('rejects a runtime or director answer for another cell', async () => {
   const base = harness()
   await assert.rejects(

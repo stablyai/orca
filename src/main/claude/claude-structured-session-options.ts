@@ -1,6 +1,7 @@
 import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
 import {
   currentModelId,
+  currentModelIsDefaulted,
   listedModels,
   matchListedModel,
   record,
@@ -86,6 +87,7 @@ export function observeClaudeFastModeFacts(session: ClaudeSession, value: unknow
   const facts = readClaudeFastModeFacts(value)
   if (facts.state) {
     session.fastModeState = facts.state
+    session.fastModeReportedMutation = session.optionMutationSequence
   }
   if (facts.disabledReason) {
     session.fastModeDisabledReason = facts.disabledReason
@@ -191,22 +193,6 @@ function decodedFastMode(session: ClaudeSession): boolean | undefined {
   return typeof decoded === 'boolean' ? decoded : undefined
 }
 
-/**
- * Whether the catalog admits the model, matched by alias or resolved id so a pick
- * stored as either one is found. The permissive case lives here rather than at the
- * call site: every caller must treat an unidentified catalog the same way, and one
- * that forgot would refuse every model on a CLI that cannot answer.
- */
-export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId: string): boolean {
-  // An empty list identifies no model, so it is not evidence against one — a live
-  // CLI predating `list_models` would otherwise have every model refused under it.
-  // Do not turn this into a refusal.
-  return (
-    models.length === 0 ||
-    models.some((model) => model.id === modelId || model.resolvedModel === modelId)
-  )
-}
-
 /** The built-in models a running child lists when the CLI gives it none; a chat at rest with no
  *  catalog lists the same. */
 export function claudeFallbackModelOptions(): WireClaudeModel[] {
@@ -218,14 +204,10 @@ export async function readClaudeStructuredSessionOptions(
   timeoutMs: number | undefined
 ): Promise<StructuredAgentSessionLiveOptions> {
   const readMutationSequence = session.optionMutationSequence
-  // Before startup both requests would wait on initialize; answer from the saved options.
-  const [catalog, settings] =
-    session.startup.state === 'proven'
-      ? await Promise.all([
-          session.connection.supportedModels({ timeoutMs }).catch(() => null),
-          session.connection.getSettings({ timeoutMs }).catch(() => null)
-        ])
-      : [null, null]
+  const [catalog, settings] = await Promise.all([
+    session.connection.supportedModels({ timeoutMs }).catch(() => null),
+    session.connection.getSettings({ timeoutMs }).catch(() => null)
+  ])
   observeClaudeSettingsReadback(session, settings, readMutationSequence)
   return claudeStructuredSessionOptionsFrom(session, catalog, readMutationSequence)
 }
@@ -245,6 +227,9 @@ function observeClaudeSettingsReadback(
     }
     if (fastMode !== null) {
       session.reportedOptions.fastMode = fastMode
+      if (!fastMode) {
+        delete session.fastModeReportedMutation
+      }
       if (decodedFastMode(session) !== undefined) {
         session.options.set('fastMode', String(fastMode))
       }
@@ -270,10 +255,8 @@ export function claudeResolvedCatalogListing(
   return listing ? { catalogListing: listing } : {}
 }
 
-/** The options as main already holds them, over `catalog`; asks the CLI nothing. Startup's
- *  settings readback is applied by the time a start proves, and the SDK answers `list_models`
- *  from its initialize result, so a started session's snapshot passes that result here rather
- *  than paying two round trips for what it already read. */
+/** The options already held in memory, over `catalog`; asks the CLI nothing. The SDK answers
+ *  `list_models` from initialize, so open passes that result without another round trip. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
   catalog: unknown[] | null,
@@ -329,7 +312,8 @@ export function claudeStructuredSessionOptionsFrom(
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
-      ...(confirmed.length > 0 ? { confirmed } : {})
+      ...(confirmed.length > 0 ? { confirmed } : {}),
+      ...(currentModelIsDefaulted(current.id) ? { defaulted: ['model'] as const } : {})
     },
     ...(catalogListing ? { catalogListing } : {})
   }

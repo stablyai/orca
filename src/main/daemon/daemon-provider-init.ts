@@ -16,7 +16,7 @@ import {
 import {
   getDaemonHistoryDir as getHistoryDir,
   getDaemonRuntimeDir as getRuntimeDir,
-  resolvePackagedDarwinAppVersion
+  resolveStaleDaemonRecycleVersion
 } from './daemon-launch-paths'
 import {
   attributeNextDaemonReplacement,
@@ -65,7 +65,10 @@ export async function initDaemonPtyProvider(
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
-    launcher: createOutOfProcessLauncher(runtimeDir, options)
+    launcher: createOutOfProcessLauncher(runtimeDir, options),
+    staleDaemonRecycleVersion: resolveStaleDaemonRecycleVersion(
+      options.recycleStaleDaemonOnEveryPlatform === true
+    )
   })
 
   // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.
@@ -95,7 +98,7 @@ export async function initDaemonPtyProvider(
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
     runtimeDir,
-    packagedAppVersion: resolvePackagedDarwinAppVersion(),
+    packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {

@@ -11,7 +11,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type * as StructuredWorkerSessionModule from '../../orchestration-structured-worker-session'
 import { structuredWorkerIdentities } from '../../../../structured-worker-identity'
-import { WorkerStartParams } from './worker-start-schema'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 
 const discard = vi.hoisted(() => vi.fn(async (_sessionId: string) => {}))
 const surfaced = vi.hoisted((): { sessionId: string | null } => ({ sessionId: null }))

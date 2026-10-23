@@ -10,7 +10,7 @@ import {
   botOverridesRead,
   newTabSettingsRead,
   terminalCopyTrimsGutterRead,
-  showPinnedWorktreesInGroupsRead
+  hostListSettingsRead
 } from './settings-read-operations'
 import type { RpcResponse } from './types'
 
@@ -111,28 +111,36 @@ describe('settings historical acceptance', () => {
     expect(terminalCopyTrimsGutterRead.interpret(refused)).toEqual({ accepted: false })
   })
 
-  it('reads pinned placement, treating an absent or malformed key as the desktop default', async () => {
-    const showFor = async (settings: unknown) =>
-      showPinnedWorktreesInGroupsRead.interpret(
-        await showPinnedWorktreesInGroupsRead.request(replyWith(success(settings)))
+  it('reads the list settings, treating an absent or malformed key as the desktop default (off)', async () => {
+    const readFor = async (settings: unknown) =>
+      hostListSettingsRead.interpret(
+        await hostListSettingsRead.request(replyWith(success(settings)))
       )
-    expect(await showFor({ settings: { showPinnedWorktreesInGroups: true } })).toEqual({
+    const off = {
+      showPinnedWorktreesInGroups: false,
+      compactWorktreeCards: false,
+      newCardStyle: false
+    }
+    expect(
+      await readFor({
+        settings: {
+          showPinnedWorktreesInGroups: true,
+          compactWorktreeCards: true,
+          experimentalNewWorktreeCardStyle: true
+        }
+      })
+    ).toEqual({
       accepted: true,
-      value: true
+      value: { showPinnedWorktreesInGroups: true, compactWorktreeCards: true, newCardStyle: true }
     })
-    expect(await showFor({ settings: { showPinnedWorktreesInGroups: false } })).toEqual({
-      accepted: true,
-      value: false
-    })
-    // A host predating the setting sends no key; the desktop default is off.
-    expect(await showFor({ settings: {} })).toEqual({ accepted: true, value: false })
-    expect(await showFor({ settings: { showPinnedWorktreesInGroups: 'true' } })).toEqual({
-      accepted: true,
-      value: false
-    })
-    expect(await showFor(null)).toEqual({ accepted: true, value: false })
-    const refused = await showPinnedWorktreesInGroupsRead.request(replyWith(refusal()))
-    expect(showPinnedWorktreesInGroupsRead.interpret(refused)).toEqual({ accepted: false })
+    // A host predating the settings sends no keys.
+    expect(await readFor({ settings: {} })).toEqual({ accepted: true, value: off })
+    expect(
+      await readFor({ settings: { showPinnedWorktreesInGroups: 'true', compactWorktreeCards: 1 } })
+    ).toEqual({ accepted: true, value: off })
+    expect(await readFor(null)).toEqual({ accepted: true, value: off })
+    const refused = await hostListSettingsRead.request(replyWith(refusal()))
+    expect(hostListSettingsRead.interpret(refused)).toEqual({ accepted: false })
   })
 
   it('does not read a stale payload until its caller permits interpretation', async () => {

@@ -22,7 +22,6 @@ export type WorkspaceSessionApi = {
     }) => Promise<void>
     flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
-    setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
   cache: {
     getGitHub: () => Promise<{

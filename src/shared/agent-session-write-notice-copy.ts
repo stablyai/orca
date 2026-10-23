@@ -30,13 +30,16 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneOption: "The setting wasn't changed.",
   notDoneCommand: "The command didn't run.",
   notDoneGoal: "The goal wasn't changed.",
+  notDoneQueuedEdit: "Your edit wasn't saved.",
   restartFailed: "The agent couldn't restart.",
   capacity:
     'Orca on the computer running this chat has hit a request limit. Update Orca there, then try again.',
   outcomeUnknown: "Orca couldn't confirm what happened. Check the chat.",
   sendOutcomeLost:
     "Orca couldn't confirm your message reached the agent. Check the chat, then send it again if needed.",
+  continuationSuperseded: 'This chat has moved on. Check the latest messages before continuing.',
   questionChanged: 'This question was already answered or has changed.',
+  cancelNotSaved: "Couldn't cancel this question or approval.",
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   historyUnusable: 'Unable to load this chat.',
   historyUnavailable: "Orca couldn't open this chat's history right now.",

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { sortProjectEntries } from './section-order'
-import { appendProjectGroupSections } from './project-group-sections'
-import type { SectionAppendContext } from './group-sections'
-import { PROJECT_GROUP_META } from './group-keys'
-import type { OrderedGroupEntry } from './project-grouping'
+import { sortProjectEntries } from '../../../../../../shared/project-section-order'
+import { appendProjectGroupSections } from '../../../../../../shared/sidebar-list/project-group-sections'
+import type { SectionAppendContext } from '../../../../../../shared/sidebar-list/group-sections'
+import type { OrderedGroupEntry } from '../../../../../../shared/sidebar-list/worktree-group-entry'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 
 function entry(
@@ -80,10 +79,7 @@ describe('recent project rank scan budget', () => {
       pendingByRepo: new Map(),
       mixedWorktreeHostContextLabels: undefined,
       noticeHostContextLabelByRepoId: undefined,
-      lineageById: {},
-      worktreeMap: new Map(),
-      nestLineage: false,
-      cyclicLineageIds: new Set()
+      occurrencePlan: { bySection: new Map(), preferredByIdentity: new Map() }
     }
     appendProjectGroupSections(ctx, {
       orderedGroups: grouped,
@@ -116,8 +112,7 @@ describe('recent project rank scan budget', () => {
         key,
         label: group.label,
         count: 32,
-        tone: PROJECT_GROUP_META.tone,
-        icon: PROJECT_GROUP_META.icon,
+        icon: { kind: 'project' },
         repo: group.repo,
         projectGroupDepth: 1
       }))
@@ -125,7 +120,7 @@ describe('recent project rank scan budget', () => {
     expect(readCount()).toBe(128 * 33)
   })
 
-  it('preserves identity collisions, manual ties, stable ties and missing activity fallbacks', () => {
+  it('preserves identity collisions, manual ties, key-ordered label ties and missing activity fallbacks', () => {
     const hottest = entry('collision', 'hottest', [10, 300, 20])
     const hot = entry('collision', 'hot', [200])
     const tieA = entry('a', 'same', [100], 0, ['tie'])
@@ -164,9 +159,10 @@ describe('recent project rank scan budget', () => {
       hottest,
       hot,
       tieRank,
+      // Equal labels fall to the section key, so input order cannot decide them.
+      tieA,
       tieA,
       tieB,
-      tieA,
       emptyNew,
       invalid,
       missing,

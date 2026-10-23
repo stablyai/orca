@@ -30,7 +30,10 @@ import { clearSessionSearchInService } from '../ai-vault/session-scanner-service
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'
 import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
-import { searchWithStructuredOwners } from '../ai-vault/structured-session-ownership'
+import {
+  OPENS_EVERY_STRUCTURED_CHAT,
+  searchWithStructuredOwners
+} from '../ai-vault/structured-session-ownership'
 
 export type RuntimeSessionSearchCall = (
   environmentId: string,
@@ -148,10 +151,10 @@ async function searchByExecutionHostScope(
 }
 
 async function searchLocalSessions(request: AiVaultSearchRequest): Promise<AiVaultSearchResponse> {
-  return searchWithStructuredOwners(
-    searchSessionService(request, 'ipc'),
-    handlerOptions.ensureStructuredSessionOwnership
-  )
+  return searchWithStructuredOwners(searchSessionService(request, 'ipc'), {
+    ensureHost: handlerOptions.ensureStructuredSessionOwnership,
+    opensChat: OPENS_EVERY_STRUCTURED_CHAT
+  })
 }
 
 /**

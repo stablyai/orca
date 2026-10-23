@@ -12,6 +12,12 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
   ptySpawnMock: vi.fn()
 }))
 
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 // The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
 vi.mock('@orca/process-host', async (importOriginal) => ({

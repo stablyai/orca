@@ -2,12 +2,12 @@ import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-l
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import { NATIVE_CHAT_VISUALS_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
+import { NATIVE_CHAT_SCRATCH_DIR_ENV } from '../native-chat/native-chat-visuals-delivery'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 
 const SKILL = { pluginDir: '/app/plugin', skillsRoot: '/app/plugin/skills' }
-const FOLDER = '/state/native-chat-visuals/0123'
+const FOLDER = '/state/chat-scratch/0123'
 const identity = {
   sessionId: 'session-alpha-1',
   workspaceId: 'workspace-1',
@@ -69,20 +69,20 @@ describe('ACP launch visuals', () => {
   it("gives Grok the plugin folder and the chat's visuals folder", async () => {
     const launch = await resolve('grok').launch
     expect(launch.args).toEqual(['agent', '--plugin-dir', SKILL.pluginDir, 'stdio'])
-    expect(launch.env[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(FOLDER)
-    expect(launch.envToDelete).not.toContain(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
+    expect(launch.envToDelete).not.toContain(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 
   it('starts a Grok too old for --plugin-dir without visuals, never naming an inherited folder', async () => {
     const { launch, logger } = resolve('grok', {
       version: '1.0.10',
-      inheritedEnv: { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/another/chat' }
+      inheritedEnv: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/another/chat' }
     })
     const resolved = await launch
     expect(resolved.args).toEqual(['agent', 'stdio'])
     expect(
-      resolveProviderChildEnv(resolved, { [NATIVE_CHAT_VISUALS_DIR_ENV]: '/another/chat' })[
-        NATIVE_CHAT_VISUALS_DIR_ENV
+      resolveProviderChildEnv(resolved, { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/another/chat' })[
+        NATIVE_CHAT_SCRATCH_DIR_ENV
       ]
     ).toBeUndefined()
     expect(logger.warn).toHaveBeenCalledWith(
@@ -107,7 +107,7 @@ describe('ACP launch visuals', () => {
       autoupdate: false,
       skills: { paths: [SKILL.skillsRoot] }
     })
-    expect(launch.env[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(FOLDER)
+    expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
   })
 
   // OMP's settings layers (global, profile, project, overlays) replace lists, so any config of
@@ -119,7 +119,7 @@ describe('ACP launch visuals', () => {
     }).launch
     expect(launch.args).toEqual(['acp', '--plugin-dir', SKILL.pluginDir])
     expect(launch.env.PI_CONFIG_FILES).toBe('/user/overlay.yml')
-    expect(launch.env[NATIVE_CHAT_VISUALS_DIR_ENV]).toBe(FOLDER)
+    expect(launch.env[NATIVE_CHAT_SCRATCH_DIR_ENV]).toBe(FOLDER)
   })
 
   it('still starts the chat when the skill cannot be prepared', async () => {
@@ -133,7 +133,7 @@ describe('ACP launch visuals', () => {
     })
     const resolved = await launch
     expect(resolved.args).toEqual(['acp'])
-    expect(resolved.envToDelete).toContain(NATIVE_CHAT_VISUALS_DIR_ENV)
+    expect(resolved.envToDelete).toContain(NATIVE_CHAT_SCRATCH_DIR_ENV)
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('could not be prepared'),
       expect.anything()

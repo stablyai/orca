@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
-import { RpcClientRequestTracker } from './rpc-client-request-tracker'
-import { RpcClientStreamRegistry } from './rpc-client-stream-registry'
+import {
+  DIRECT_WIRE_DEVICE_TOKEN,
+  directWire,
+  directWireRegistry,
+  directWireTracker
+} from './direct-rpc-wire-test-harness'
 import {
   RPC_TRANSPORT_FIELDS,
   buildDirectRpcWireRequest,
@@ -10,40 +14,7 @@ import {
 } from './rpc-envelope-fields'
 import type { RpcResponse } from './types'
 
-const DEVICE_TOKEN = 'device-token'
 const ENVELOPE = { executionHost: 'runtime:a' }
-
-/** What the direct client writes to its socket, through the same builder it uses. */
-function directWire() {
-  const sent: string[] = []
-  let counter = 0
-  return {
-    sent,
-    frames: () => sent.map((json) => JSON.parse(json)),
-    nextId: () => `rpc-${++counter}`,
-    sendFrame: (frame: RpcRequestFrame) => {
-      sent.push(JSON.stringify(buildDirectRpcWireRequest(frame, DEVICE_TOKEN)))
-      return true
-    }
-  }
-}
-
-function tracker(socket: ReturnType<typeof directWire>) {
-  return new RpcClientRequestTracker({
-    nextId: socket.nextId,
-    getState: () => 'connected',
-    waitForConnected: async () => undefined,
-    sendFrame: socket.sendFrame
-  })
-}
-
-function registry(socket: ReturnType<typeof directWire>) {
-  return new RpcClientStreamRegistry({
-    nextId: socket.nextId,
-    getState: () => 'connected',
-    sendFrame: socket.sendFrame
-  })
-}
 
 function relayStreams() {
   const frames: RpcRequestFrame[] = []
@@ -68,7 +39,12 @@ function streaming(id: string, result: unknown): RpcResponse {
 }
 
 describe('withRpcEnvelopeFields', () => {
-  const request = { id: 'rpc-1', deviceToken: DEVICE_TOKEN, method: 'm', params: { a: 1 } }
+  const request = {
+    id: 'rpc-1',
+    deviceToken: DIRECT_WIRE_DEVICE_TOKEN,
+    method: 'm',
+    params: { a: 1 }
+  }
 
   it('hands back the request itself when there is nothing to merge', () => {
     expect(withRpcEnvelopeFields(request, undefined)).toBe(request)
@@ -99,7 +75,7 @@ describe('withRpcEnvelopeFields', () => {
 describe('direct transport envelope', () => {
   it('sends a request with no envelope byte for byte as before', async () => {
     const socket = directWire()
-    const requests = tracker(socket)
+    const requests = directWireTracker(socket)
     const answer = requests.sendRequest('status.get', { a: 1 }, { timeoutMs: 1000 })
     await Promise.resolve()
     expect(socket.sent).toEqual([
@@ -111,14 +87,16 @@ describe('direct transport envelope', () => {
 
   it('writes a frame without params, like the liveness probe, as before', () => {
     expect(
-      JSON.stringify(buildDirectRpcWireRequest({ id: 'p-1', method: 'status.get' }, DEVICE_TOKEN))
+      JSON.stringify(
+        buildDirectRpcWireRequest({ id: 'p-1', method: 'status.get' }, DIRECT_WIRE_DEVICE_TOKEN)
+      )
     ).toBe('{"id":"p-1","deviceToken":"device-token","method":"status.get"}')
   })
 
   it('merges a request envelope under every transport field', async () => {
     const socket = directWire()
     const forged = Object.fromEntries(RPC_TRANSPORT_FIELDS.map((field) => [field, 'forged']))
-    const requests = tracker(socket)
+    const requests = directWireTracker(socket)
     const answer = requests.sendRequest(
       'status.get',
       { a: 1 },
@@ -128,7 +106,7 @@ describe('direct transport envelope', () => {
     expect(socket.frames()).toEqual([
       {
         id: 'rpc-1',
-        deviceToken: DEVICE_TOKEN,
+        deviceToken: DIRECT_WIRE_DEVICE_TOKEN,
         method: 'status.get',
         params: { a: 1 },
         ...ENVELOPE
@@ -140,7 +118,7 @@ describe('direct transport envelope', () => {
 
   it('sends a subscribe with no envelope byte for byte as before', () => {
     const socket = directWire()
-    registry(socket).subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined)
+    directWireRegistry(socket).subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined)
     expect(socket.sent).toEqual([
       '{"id":"rpc-1","deviceToken":"device-token","method":"terminal.subscribe","params":{"terminal":"t1"}}'
     ])
@@ -148,7 +126,7 @@ describe('direct transport envelope', () => {
 
   it('keeps a stream envelope on its subscribe, its replay and its unsubscribe', () => {
     const socket = directWire()
-    const streams = registry(socket)
+    const streams = directWireRegistry(socket)
     const dispose = streams.subscribe('terminal.subscribe', { terminal: 't1' }, () => undefined, {
       envelope: { ...ENVELOPE, id: 'forged' }
     })
@@ -164,7 +142,7 @@ describe('direct transport envelope', () => {
 
   it('keeps it on the unsubscribe a ready id sends after the stream was disposed', () => {
     const socket = directWire()
-    const streams = registry(socket)
+    const streams = directWireRegistry(socket)
     const dispose = streams.subscribe('runtime.clientEvents.subscribe', {}, () => undefined, {
       envelope: ENVELOPE
     })
@@ -178,7 +156,7 @@ describe('direct transport envelope', () => {
 
   it('keeps it on the unsubscribe for a browser ready that no longer owns the screencast', () => {
     const socket = directWire()
-    const streams = registry(socket)
+    const streams = directWireRegistry(socket)
     streams.subscribe('browser.screencast', { page: 'p' }, () => undefined, { envelope: ENVELOPE })
     streams.markForReplay()
     streams.handleResponse(streaming('rpc-1', { type: 'ready', subscriptionId: 'stale' }))

@@ -6,7 +6,6 @@ import {
   getSharedManagedScriptPath,
   readHooksJson,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -16,6 +15,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT } from './windows-hook-json-post'
 import {
   restoreManagedScript,
@@ -27,7 +27,7 @@ import {
   ANTIGRAVITY_PRE_TOOL_USE_DECISION,
   type AntigravityEvent
 } from './hook-events'
-import { quotePosixShellString } from '../agent-hooks/posix-hook-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 import {
   buildInstalledConfig,
@@ -64,12 +64,12 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
     event.eventName === 'PreToolUse' ? { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION } : {}
   )
   // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
-  return `/bin/sh -c ${quotePosixShellString(command)}`
+  return `/bin/sh -c ${quotePosixShell(command)}`
 }
 
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
   if (process.platform === 'win32') {
-    return wrapWindowsCmdHookCommand(getWindowsWrapperScriptPath(event))
+    return wrapWindowsBatchHookCommand(getWindowsWrapperScriptPath(event))
   }
   return getPosixManagedCommand(scriptPath, event)
 }

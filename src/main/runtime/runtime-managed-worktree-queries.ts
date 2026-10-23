@@ -1,5 +1,10 @@
 import type { DetectedWorktreeListResult, Worktree } from '../../shared/worktree/types'
 import {
+  runtimeHiddenHostIds,
+  runtimeHiddenRepos,
+  withoutHiddenHosts
+} from './runtime-visible-catalog'
+import {
   getLocalWorktreeCatalogVersion,
   localWorktreeCatalogVersionAt
 } from '../local-worktree-scan-generation'
@@ -17,13 +22,13 @@ import {
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree/ownership'
-import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
+import { projectWorktreeLineageWithHostPeers } from '../worktree-lineage-host-peers'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../shared/worktree/visibility-sources'
-import { mergeWorktree } from '../ipc/worktree-logic'
+import { mergeWorktree } from '../ipc/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import type { Store } from '../persistence'
@@ -76,13 +81,19 @@ export class RuntimeManagedWorktreeQueries {
         )
       ])
     )
+    const hiddenRepos = runtimeHiddenRepos(this.deps.getStore())
     const worktrees = resolved.filter(
       (worktree) =>
+        !hiddenRepos.hasWorktree(worktree) &&
         (!scopedRepo || worktree.repoId === scopedRepo.id) &&
         this.isVisible(worktree, matchers.get(worktree.repoId), sourceDefaultsSupported)
     )
     // See `listingKnownHostIds`: a scoped listing must still name the host it was asked about.
-    const knownHostIds = listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds())
+    // A selector may still name a hidden repo; its host must stay out of the scope either way.
+    const knownHostIds = withoutHiddenHosts(
+      listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds()),
+      runtimeHiddenHostIds(this.deps.getStore())
+    )
     const page = buildWorktreeListingPage(worktrees, limit, knownHostIds)
     return {
       ...page,
@@ -142,7 +153,7 @@ export class RuntimeManagedWorktreeQueries {
         authoritative: true,
         source: 'git',
         catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
-        worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
+        worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
       }
     }
     const scan = await scanRuntimeWorktreesUntilNotOvertaken(store, repo, (target) =>
@@ -200,7 +211,7 @@ export class RuntimeManagedWorktreeQueries {
       source: scan.ok ? 'git' : 'metadata-fallback',
       // Why the scan's generation: the rows describe the catalog as of when the scan began.
       catalogVersion: localWorktreeCatalogVersionAt(scan.scanGeneration),
-      worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
+      worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)
     }
   }
 

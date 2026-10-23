@@ -173,13 +173,23 @@ function projectLeaf(
   }
 }
 
-export function projectRuntimeLeafRecords(
-  input: RuntimeLeafProjectionInput
-): RuntimeLeafProjection {
+/** A pane of a terminal tab in the holder's model, before any PTY fact is joined. */
+export type RuntimeSurfacePane = {
+  tab: LayoutTerminalTab
+  worktreeId: string
+  leafId: string
+  ptyId: string | null
+  liveTitle: string
+}
+
+/** The holder's terminal tabs and panes in tab and pane order; the layout half of the projection. */
+export function projectRuntimeSurfaces(
+  partitions: RuntimeLeafProjectionInput['partitions'],
+  generatedTitlesEnabled: boolean
+): { tabs: Map<string, Readonly<RuntimeSyncedTab>>; panes: RuntimeSurfacePane[] } {
   const tabs = new Map<string, Readonly<RuntimeSyncedTab>>()
-  const leaves = new Map<string, Readonly<RuntimeLeafRecord>>()
-  const leavesByPtyId = new Map<string, Readonly<RuntimeLeafRecord>[]>()
-  for (const { layout, desktopView, facts } of input.partitions) {
+  const panes: RuntimeSurfacePane[] = []
+  for (const { layout, desktopView, facts } of partitions) {
     for (const [key, workspace] of Object.entries(layout.workspaces)) {
       const selection = resolveWorkspaceSelection(desktopView, key, workspace)
       for (const tab of tabsInOrder(workspace)) {
@@ -192,7 +202,7 @@ export function projectRuntimeLeafRecords(
           worktreeId: workspace.worktreeId,
           title: resolveTerminalTabTitle(
             { ...tab, title: liveTitle },
-            input.generatedTitlesEnabled,
+            generatedTitlesEnabled,
             liveTitle
           ),
           activeLeafId: selection.panes[tab.entityId]?.activeLeafId ?? null,
@@ -200,17 +210,25 @@ export function projectRuntimeLeafRecords(
         })
         for (const leafId of collectLayoutLeafIdsInOrder(tab.panes.root)) {
           const ptyId = workspace.leaves?.[leafId]?.ptyId ?? null
-          const leaf = projectLeaf(
-            tab,
-            { worktreeId: workspace.worktreeId, leafId, ptyId, liveTitle },
-            input
-          )
-          leaves.set(runtimeLeafKey(tab.entityId, leafId), leaf)
-          if (ptyId !== null) {
-            leavesByPtyId.set(ptyId, [...(leavesByPtyId.get(ptyId) ?? []), leaf])
-          }
+          panes.push({ tab, worktreeId: workspace.worktreeId, leafId, ptyId, liveTitle })
         }
       }
+    }
+  }
+  return { tabs, panes }
+}
+
+export function projectRuntimeLeafRecords(
+  input: RuntimeLeafProjectionInput
+): RuntimeLeafProjection {
+  const { tabs, panes } = projectRuntimeSurfaces(input.partitions, input.generatedTitlesEnabled)
+  const leaves = new Map<string, Readonly<RuntimeLeafRecord>>()
+  const leavesByPtyId = new Map<string, Readonly<RuntimeLeafRecord>[]>()
+  for (const { tab, ...base } of panes) {
+    const leaf = projectLeaf(tab, base, input)
+    leaves.set(runtimeLeafKey(tab.entityId, base.leafId), leaf)
+    if (base.ptyId !== null) {
+      leavesByPtyId.set(base.ptyId, [...(leavesByPtyId.get(base.ptyId) ?? []), leaf])
     }
   }
   return { tabs, leaves, leavesByPtyId }

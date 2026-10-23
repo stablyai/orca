@@ -1,4 +1,4 @@
-import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationCatalogPayload } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { Store } from '../../persistence'
@@ -34,7 +34,7 @@ export function collectOrcadMigrationSourceCatalog(
   return { repositories, projectGroups, folderWorkspaces }
 }
 
-function collectProjectGroups(
+export function collectProjectGroups(
   groups: ProjectGroup[],
   initialIds: ReadonlySet<string>
 ): ProjectGroup[] {

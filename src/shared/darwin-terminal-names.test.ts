@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { nameDarwinTerminals } from './darwin-terminal-names'
 import { PS_ARGS } from './process-table-snapshot'
 
@@ -166,16 +166,37 @@ describe('nameDarwinTerminals', () => {
       delayMs: 10
     }))
     const controller = new AbortController()
+    vi.useFakeTimers()
     const named = nameDarwinTerminals(darwinRow('16/9'), directory, controller.signal)
+    let settled = false
+    void named.then(
+      () => (settled = true),
+      () => (settled = true)
+    )
     const rejection = expect(named).rejects.toThrow()
-    await new Promise((resolve) => setTimeout(resolve, 2))
-    expect(directory.readPaths).toHaveLength(2)
-    controller.abort()
-    await rejection
+    // Cleanup awaits this too if an earlier assertion fails.
+    void rejection.catch(() => {})
+    try {
+      await vi.advanceTimersByTimeAsync(2)
+      expect(directory.readPaths).toHaveLength(2)
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(8)
+      expect(directory.readPaths).toHaveLength(2)
+      await rejection
 
-    expect(directory.readPaths).toHaveLength(2)
-    expect(directory.closedDirectories).toBe(1)
-    expect(directory.peakReads).toBe(1)
+      expect(directory.closedDirectories).toBe(1)
+      expect(directory.peakReads).toBe(1)
+    } finally {
+      controller.abort()
+      try {
+        await vi.runAllTimersAsync()
+        await rejection.catch(() => {})
+      } finally {
+        vi.useRealTimers()
+      }
+    }
   })
 
   it('bounds large inventories and closes the directory without admitting device reads', async () => {
@@ -425,6 +446,7 @@ describe('nameDarwinTerminals', () => {
     }))
     const capture = ['16/1', '16/2', '16/3'].map((device) => darwinRow(device)).join('')
     const controller = new AbortController()
+    vi.useFakeTimers()
     const named = nameDarwinTerminals(capture, directory, controller.signal)
     let settled = false
     void named.then(
@@ -432,15 +454,29 @@ describe('nameDarwinTerminals', () => {
       () => (settled = true)
     )
     const rejection = expect(named).rejects.toThrow()
-    await new Promise((resolve) => setTimeout(resolve, 2))
-    controller.abort()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(settled).toBe(false)
-    await rejection
+    // Cleanup awaits this too if an earlier assertion fails.
+    void rejection.catch(() => {})
+    try {
+      await vi.advanceTimersByTimeAsync(2)
+      expect(directory.readPaths).toEqual([join('/dev', 'ttys001')])
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(8)
+      expect(directory.readPaths).toEqual([join('/dev', 'ttys001')])
+      await rejection
 
-    expect(directory.readPaths).toEqual([join('/dev', 'ttys001')])
-    expect(directory.openedPaths).toEqual([])
-    expect(directory.peakReads).toBe(1)
+      expect(directory.openedPaths).toEqual([])
+      expect(directory.peakReads).toBe(1)
+    } finally {
+      controller.abort()
+      try {
+        await vi.runAllTimersAsync()
+        await rejection.catch(() => {})
+      } finally {
+        vi.useRealTimers()
+      }
+    }
   })
 
   it('admits one device read at a time across candidate and scan phases', async () => {

@@ -19,7 +19,6 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
     path: '/home/me/orca',
     liveTerminalCount: 0,
     hasAttachedPty: false,
-    preview: '',
     unread: false,
     isPinned: false,
     linkedPR: null,

@@ -23,8 +23,13 @@ jobs:
     if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: cloud/infra/terraform/environments/production.tfvars
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Measure Date-header skew for every relay cell
-        working-directory: .
         run: |
           set -u
           # Date headers carry whole seconds; compare floored seconds on both
@@ -36,10 +41,18 @@ jobs:
           failures=0
           reachable=0
           unserved=0
-          # Keep this upper bound at or above the highest provisioned cell in
-          # environments/production.tfvars; unlisted cells are silently unmonitored.
-          for n in $(seq 1 22); do
-            cell="c${n}"
+          # Every relay_gce_cells hostname (the block relayOpsCellsFromTerraform reads), fenced
+          # cells included, so a newly declared cell is probed from its first run.
+          cells="$(awk '
+            /^relay_gce_cells[ \t]*=[ \t]*\{/ { inside = 1; next }
+            inside && /^\}/ { exit }
+            inside && /^[ \t]*hostname[ \t]*=/ { split($0, quoted, "\""); print quoted[2] }
+          ' infra/terraform/environments/production.tfvars || true)"
+          if [ -z "${cells}" ]; then
+            echo "::error::read no relay cells from production.tfvars; monitor blind"
+            exit 1
+          fi
+          for cell in ${cells}; do
             url="https://${cell}.relay.onorca.dev/health"
             # Why: *.relay.onorca.dev is a wildcard, so the load balancer answers with its own
             # accurate Date for a fenced, dead, or never-provisioned cell. Timing that reads as

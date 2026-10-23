@@ -2,9 +2,11 @@
 
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionFailureFact } from './agent-session-failure'
+import type { AgentJournalSubmission } from './agent-session-journal-types'
 import { agentSessionWriteNoticeEnglish } from './agent-session-refusal-notice'
 import { DISPATCH_REJECTED_QUEUE_FULL } from './structured-agent-session-dispatch-rejection'
 import {
+  structuredAgentSessionRecordedRejectionParts,
   structuredAgentSessionRejectionNotice,
   structuredAgentSessionRejectionParts
 } from './structured-agent-session-rejection-words'
@@ -77,5 +79,45 @@ describe('what a rejection with a typed fact shows the reader', () => {
     expect(notice('Compaction failed.', { kind: 'compactionFailed' })).toBe(
       'Your message was not sent.'
     )
+  })
+})
+
+// The line under a message the host recorded and then rejected, on the desktop and the phone.
+describe('the line under a recorded rejection', () => {
+  const signedOut: AgentSessionFailureFact = { kind: 'notSignedIn' }
+  const recorded = (reason: string | null, rejection?: AgentSessionFailureFact) =>
+    structuredAgentSessionRecordedRejectionParts(
+      {
+        clientMessageId: 'sent',
+        fence: 1,
+        payloadFingerprint: 'sent',
+        dispatchState: 'rejected',
+        providerItemId: null,
+        reason,
+        submittedAt: 1,
+        resolvedAt: 2,
+        ...(rejection ? { rejection } : {})
+      } satisfies AgentJournalSubmission,
+      { agentName: 'Claude' },
+      [signedOut]
+    )
+  const line = (...args: Parameters<typeof recorded>) =>
+    agentSessionWriteNoticeEnglish(recorded(...args))
+
+  it('says only that it was not sent when a loaded row already states the reason', () => {
+    expect(line('Written by the host.', signedOut)).toBe('Your message was not sent.')
+  })
+
+  it('words a fact no row states from the fact itself', () => {
+    expect(line('Written by the host.', { kind: 'writeFailed' })).toBe(
+      "Orca couldn't reach the agent. Your message was not sent."
+    )
+  })
+
+  it("shows an older host's reason sentence, and never a legacy marker", () => {
+    expect(line('Claude messages support at most 20 images')).toBe(
+      'Claude messages support at most 20 images'
+    )
+    expect(line('not_delivered')).toBe('Your message was not sent.')
   })
 })

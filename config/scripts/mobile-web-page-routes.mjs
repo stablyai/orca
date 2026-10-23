@@ -1,14 +1,14 @@
 /**
  * The screens this desktop asks a phone's shell to render from the app bundle instead of natively.
  *
- * One entry per route proved on the web, and the list is deliberately short: a route that is not
- * here renders the native screen, which is the state every phone is already in. Adding one is a
- * product decision with a device proof behind it, not a consequence of the bundle happening to
- * contain the module.
+ * One entry per route proved on the web. A route that is not here is not served: older phone builds
+ * render their native screen, and current ones show the update screen. Adding one is a product
+ * decision with a device proof behind it, not a consequence of the bundle happening to contain the
+ * module; dropping one walls current phones on that screen.
  *
  * `grants` names what the screen needs the shell to do for it. A shell that implements fewer than
- * an entry names renders the native screen for that route, so writing a grant here before the app
- * that implements it ships costs nothing and breaks nothing.
+ * an entry names does not serve that route (older builds go native, current ones ask for an app
+ * update), so write a grant here only once the app that implements it ships.
  *
  * Declared here rather than in src/shared because the builder is the only thing that reads it: the
  * shape it must satisfy is MobileWebBundleRouteSchema, which the manifest write is checked against.
@@ -19,7 +19,7 @@
  * on a route that imports the seam and declares nothing.
  *
  * `optionalGrants` names what a screen is better with and complete without (ruling 37). A shell that
- * implements fewer than an entry's `grants` renders the native screen; a shell that implements fewer
+ * implements fewer than an entry's `grants` does not serve the route; a shell that implements fewer
  * than its `optionalGrants` renders the page and the page hides that one affordance. So the two
  * lanes are a product decision about the screen: a capability the screen cannot be shown without
  * goes above, and one an author can point at a complete screen without goes below.
@@ -52,6 +52,13 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     pathname: '/h/[hostId]/tasks',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
+  // The host's agent accounts. `navigate` for the Back that pops the native stack; `storage` for
+  // the layout above every page route; `externalLink` for that layout's wall; `haptics` because
+  // the closure reaches the seam, which the haptics census holds every route to.
+  {
+    pathname: '/h/[hostId]/accounts',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+  },
   // The file explorer. `navigate` because its Back pops the native stack. `storage` for the shared
   // components the host layout renders above it.
   //
@@ -65,21 +72,19 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // not what makes it correct: a target this list did not cover would be handed to the shell and
   // reopened under its own grants instead. The census beside it reads that relation off this list.
   //
-  // The sidebar `HostScreen` the layout renders on a wide layout pushes to `/h/<id>/tasks` from
-  // every page route, and no other route declares the `native.clipboard.write` that one asks for.
-  // The handoff gives that hop to the shell rather than keeping it here, which is why this list
-  // does not grow a grant it has no screen for.
+  // `native.clipboard.write` covers source Copy in a preview opened inside this document.
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
-  // The file preview. Same three. `externalLink` has a consumer inside the domain as well as the
+  // The file preview. Same five. `externalLink` has a consumer inside the domain as well as the
   // shared wall every `/h` route carries: a Markdown preview renders links and `MobileMarkdown`
   // opens them through the platform seam. That second site is what the census finds here and not in
   // the explorer, which declares the same list for the wall and for the hop into this route.
+  // `native.clipboard.write` lets source Copy write loaded Markdown to the device clipboard.
   {
     pathname: '/h/[hostId]/files/preview/[worktreeId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics']
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write']
   },
   // The source-control hub. `navigate` because its Back pops the native stack and its changed-file
   // rows push review; `storage` for the shared components the host layout renders above it;
@@ -88,7 +93,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   //
   // `pr` and `history` are not listed and never will be. Both are `Redirect`s into this route, so
   // listing one would put a redirect inside a page whose session stays bound to the pathname it
-  // left; left native they replace into this route and its switch opens the page once. The hop
+  // left; left native they replace into this route and it opens the page once. The hop
   // census sees them as call sites naming `source-control`, never as targets of their own.
   {
     pathname: '/h/[hostId]/source-control/[worktreeId]',
@@ -140,7 +145,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // is why the fourth verb this list carried is gone). Ruling 4's degradation is retired with them:
   // the page no longer falls back to the vendored module's denied microphone.
   //
-  // `externalNavigation` is the one optional grant in this list, and it is C8.1's. The HTML preview
+  // `externalNavigation` is the first optional grant in this list, and it is C8.1's. The HTML preview
   // renders an agent's artifact in a sealed frame, and a tap on a link inside it becomes a top-frame
   // navigation only the shell can cancel and open. Without the grant the preview renders the
   // artifact with its links as text: the document paints, the Preview/Source toggle works, and
@@ -165,6 +170,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    optionalGrants: ['externalNavigation']
+    // `native.media.name` gives a file the composer attaches its real name; an older shell lacks it
+    // and the page names the file from its type, so the attach still works.
+    optionalGrants: ['externalNavigation', 'native.media.name']
   }
 ]

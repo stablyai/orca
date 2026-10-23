@@ -23,6 +23,15 @@ vi.mock('../session/mobile-image-source-picker', () => ({
   }
 }))
 
+vi.mock('../session/mobile-file-source-picker', () => ({
+  pickMobileFiles: () => {
+    calls.push('pickMobileFiles')
+    return (async function* () {
+      yield { name: 'spec.pdf', mime: 'application/pdf', byteLength: 2, base64: 'AAA=' }
+    })()
+  }
+}))
+
 import { useMediaPicker } from './media-picker'
 
 beforeEach(() => {
@@ -45,6 +54,15 @@ describe('picking media on a phone', () => {
     }
     expect(taken).toEqual(['CCC='])
     expect(calls).toEqual(['pickMobileImages files'])
+  })
+
+  it('opens the document picker for files of any type', async () => {
+    const names: string[] = []
+    for await (const file of useMediaPicker().pickFiles()) {
+      names.push(file.name)
+    }
+    expect(names).toEqual(['spec.pdf'])
+    expect(calls).toEqual(['pickMobileFiles'])
   })
 
   it('answers one object across renders, so a caller may hold it in a dependency list', () => {

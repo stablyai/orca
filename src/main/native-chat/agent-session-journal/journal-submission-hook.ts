@@ -5,11 +5,13 @@ import type { JournalRowTransactionHook } from './journal-row-writer'
 import type { JournalSubmissionConsume, JournalSubmissionInput } from './journal-store-contracts'
 
 /** Claims the stored chat attachments a message written to this journal names, in the write's own
- *  transaction; `required` refuses the whole write when one is no longer stored. */
+ *  transaction; `required` refuses the whole write when one is no longer stored, except one the
+ *  `previous` body it replaces already named. */
 export type JournalAttachmentClaim = (
   db: Database.Database,
   body: AgentJournalMessageItem,
-  required: boolean
+  required: boolean,
+  previous?: AgentJournalMessageItem
 ) => void
 
 /** The submission append's hook, inside its transaction: converts the draft it hands off, if any,

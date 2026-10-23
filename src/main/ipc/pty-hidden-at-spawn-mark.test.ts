@@ -115,6 +115,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: 'daemon-session',
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop',
           markerSeq: 42
         })
@@ -164,6 +165,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
           id: spawnResult.id,
+          hiddenDropEpisode: expect.any(Number),
           reason: 'hidden-drop'
         })
       } finally {

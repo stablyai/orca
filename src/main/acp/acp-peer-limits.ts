@@ -40,3 +40,16 @@ export function requestTimeout(value: number | null | undefined): number | null 
   }
   return value
 }
+
+/** Each start step's own bound; turns are unbounded and option writes carry their caller's. */
+const ACP_START_STEP_TIMEOUT_MS: Readonly<Partial<Record<string, number>>> = {
+  initialize: 60_000,
+  'session/new': 300_000,
+  'session/load': 300_000,
+  'session/resume': 300_000,
+  'session/fork': 300_000
+}
+
+export function acpStepBound(method: string): { timeoutMs: number | null } {
+  return { timeoutMs: ACP_START_STEP_TIMEOUT_MS[method] ?? null }
+}

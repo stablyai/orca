@@ -22,6 +22,7 @@ import {
   type GitStatusRefreshReason,
   type GitStatusRefreshScheduler
 } from './git-status-refresh-scheduler'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const STATUS_SAFETY_INTERVAL_MS = 60_000
 const STATUS_ACTIVITY_DEBOUNCE_MS = 125
@@ -293,6 +294,14 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     statusSchedulerRef.current?.signal()
   }, [])
 
+  const getRepoWorktreePathsForSignal = useCallback(
+    (repoId: string) =>
+      (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).map(
+        (worktree) => worktree.path
+      ),
+    []
+  )
+
   useGitStatusFileWatchRefresh({
     activeConnectionId,
     activeRepoSupportsGit,
@@ -311,8 +320,10 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   useGitStatusPushSignalRefresh({
     activeRepoId,
     activeWorktreeId,
+    activeWorktreePath: worktreePath,
     enabled: canFetchActiveWorktreeGitStatus,
-    fetchStatus: fetchStatusOnChangeSignal
+    fetchStatus: fetchStatusOnChangeSignal,
+    getRepoWorktreePaths: getRepoWorktreePathsForSignal
   })
 
   useStaleConflictOperationPolling({

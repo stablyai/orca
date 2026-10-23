@@ -8,7 +8,7 @@
 //     { steps: Step[], controlResponses?: { [subtype]: <response> },
 //       controlResponseLeadingFrames?: { [subtype]: <frame>[] } } where a Step is
 //     { emit: <frame> } | { awaitUserMessage: true } | { stderr: <text> } |
-//     { awaitControlResponse: <request_id> } | { awaitFile: { path, timeoutMs } } |
+//     { awaitControlRequest: <subtype> } | { awaitControlResponse: <request_id> } | { awaitFile: { path, timeoutMs } } |
 //     { delayMs: <n> } | { exit: <code> }
 //   ORCA_SDK_CONTRACT_REPORT_PATH — where argv/env observations are written
 //   ORCA_SDK_CONTRACT_IGNORE_SIGTERM — trap SIGTERM/SIGINT and outlive stdin close
@@ -87,6 +87,12 @@ const waitFor = (kind, requestId) => {
     return Promise.resolve()
   }
   if (
+    kind === 'control_request' &&
+    report.controlRequests.some((frame) => frame.request?.subtype === requestId)
+  ) {
+    return Promise.resolve()
+  }
+  if (
     kind === 'control_response' &&
     report.controlResponses.some((frame) => frame.response?.request_id === requestId)
   ) {
@@ -104,6 +110,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   }
   if (frame.type === 'control_request') {
     report.controlRequests.push(frame)
+    settle('control_request', frame.request?.subtype)
     writeReport()
     if (process.env.ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS) {
       return
@@ -139,7 +146,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 
 // Never outlive a wedged test: the readline subscription would otherwise hold
 // this process open forever if the SDK side stops driving the scenario.
-setTimeout(() => process.exit(3), 20_000).unref()
+setTimeout(
+  () => process.exit(3),
+  Number(process.env.ORCA_SDK_CONTRACT_TIMEOUT_MS ?? 20_000)
+).unref()
 
 for (const step of scenario.steps) {
   if (step.emit) {
@@ -148,6 +158,8 @@ for (const step of scenario.steps) {
     process.stderr.write(step.stderr)
   } else if (step.awaitUserMessage) {
     await waitFor('user')
+  } else if (step.awaitControlRequest !== undefined) {
+    await waitFor('control_request', step.awaitControlRequest)
   } else if (step.awaitControlResponse !== undefined) {
     await waitFor('control_response', step.awaitControlResponse)
   } else if (step.awaitFile) {

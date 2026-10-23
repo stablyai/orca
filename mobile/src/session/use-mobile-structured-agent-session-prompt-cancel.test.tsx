@@ -17,7 +17,7 @@ vi.mock('./use-mobile-structured-agent-state', () => ({
   useMobileStructuredAgentState: () => ({
     state,
     stateRef,
-    loadingOlder: false,
+    olderPages: 'idle',
     loadEarlier: vi.fn()
   })
 }))
@@ -124,7 +124,12 @@ function Harness({
       queuedMessages: false,
       queuedCommands: false,
       statusFeed: false,
-      quietRepeatedStop: false
+      quietRepeatedStop: false,
+      sendOptions: false,
+      conversationStop: false,
+      permissionModes: false,
+      itemDetail: false,
+      phoneAttachments: false
     },
     onSendError: vi.fn()
   })
@@ -264,6 +269,22 @@ describe('mobile structured prompt cancellation', () => {
       renderer = create(createElement(Harness, { promptCancelSupported: true }))
     })
     expect(hook.turnId).toBeNull()
+  })
+
+  it("reads Working from the host's answer, and from its rows only when an older host gives none", () => {
+    // A turn row an agent that has since ended left running: the host says it is not working.
+    state = { ...state, items: [runningTurn()], working: false }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(false)
+    act(() => renderer?.unmount())
+    const { working: _answered, ...olderHost } = state
+    state = olderHost
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(true)
   })
 
   it('uses the rendered prompt identity when the journal changes before tap', async () => {

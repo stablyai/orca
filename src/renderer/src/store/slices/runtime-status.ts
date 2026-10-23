@@ -1,6 +1,8 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../types'
-import type { RuntimeStatusSlice } from './runtime-status-types'
+import type {
+  RuntimeStatusSlice,
+  RuntimeStatusStoreSetState,
+  RuntimeStatusStoreState
+} from './runtime-status-types'
 export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -15,11 +17,15 @@ import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast
 } from './runtime-environment-disconnect-toast'
-import { reconcileCatalogRows } from './repo-identity-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
+import {
+  pairedTerminalTabCloseIntentStoreOf,
+  reconcileWebSessionCloseReplaysWithCatalog
+} from '@/runtime/web-session-close-replay'
 import {
   ensureBrowserClientHostOnRuntimeContact,
   ensureBrowserClientHostsForRestoredPages
@@ -40,10 +46,11 @@ export {
   setRuntimeEnvironmentConnectionGenerationForTests
 } from './runtime-status-connection-generation'
 
-export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeStatusSlice> = (
-  set,
-  get
-) => ({
+export const createRuntimeStatusSlice: (
+  set: RuntimeStatusStoreSetState,
+  get: () => RuntimeStatusStoreState,
+  store?: unknown
+) => RuntimeStatusSlice = (set, get) => ({
   runtimeEnvironments: [],
   runtimeEnvironmentCatalogHydrated: false,
   runtimeEnvironmentCatalogSettled: false,
@@ -155,6 +162,10 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
       retiredEnvironmentIds.forEach(dismissRuntimeDisconnectedToast)
     }
+    reconcileWebSessionCloseReplaysWithCatalog(pairedTerminalTabCloseIntentStoreOf(get), {
+      listed: nextIds,
+      ...peerReplacement
+    })
   },
 
   applyRuntimeHostStatusSnapshot: (snapshot) => {

@@ -8,14 +8,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { createServer, type Server } from 'node:http'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type * as osModule from 'node:os'
+import type * as NativeHookExecutableModule from './windows-native-hook-executable'
 
-const { homedirMock } = vi.hoisted(() => ({
-  homedirMock: vi.fn<() => string>()
+const { homedirMock, bundledHook } = vi.hoisted(() => {
+  const bundledHook: { path: string | null } = { path: null }
+  return { homedirMock: vi.fn<() => string>(), bundledHook }
+})
+
+// Why: no packaged resources here; the exe case points install at the real built binary.
+vi.mock('./windows-native-hook-executable', async (importOriginal) => ({
+  ...(await importOriginal<typeof NativeHookExecutableModule>()),
+  resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
 }))
 
 vi.mock('electron', () => ({
@@ -34,15 +42,24 @@ vi.mock('os', async (importOriginal) => {
 
 import { ClaudeHookService } from '../claude/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
+import { CopilotHookService } from '../copilot/hook-service'
 import { DroidHookService } from '../droid/hook-service'
+import { DevinHookService } from '../devin/hook-service'
 import { DshHookService } from '../dsh/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
+import { GrokHookService } from '../grok/hook-service'
+import { KimiHookService } from '../kimi/hook-service'
 import { KiroHookService } from '../kiro/hook-service'
 import { MuseHookService } from '../muse/hook-service'
 import { getMuseManagedHooksPath } from '../muse/hook-settings'
+import { zcodeHookService } from '../zcode/hook-service'
 import { readHooksJson, WINDOWS_CMD_SAFE_PATH, wrapWindowsHookCommand } from './installer-utils'
 import { getConfigPath, getWindowsManagedLifecycleHook } from '../claude/hook-settings'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
+import {
+  buildWindowsNativeHookExecutable,
+  WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
+} from './windows-native-hook-exe.test-fixture'
 
 const PANE_KEY = 'tab-1:leaf-1'
 const HOOK_TOKEN = 'payload-delivery-token'
@@ -56,7 +73,12 @@ const PAYLOAD = JSON.stringify({
   transcript: 'y'.repeat(4096)
 })
 
-type HookPost = { payload: string | null; paneKey: string | null; token: string | null }
+type HookPost = {
+  payload: string | null
+  paneKey: string | null
+  token: string | null
+  hookEventName: string | null
+}
 
 async function startHookListener(): Promise<{
   server: Server
@@ -76,7 +98,8 @@ async function startHookListener(): Promise<{
       posts.push({
         payload: form.get('payload'),
         paneKey: form.get('paneKey'),
-        token: typeof token === 'string' ? token : null
+        token: typeof token === 'string' ? token : null,
+        hookEventName: form.get('hookEventName')
       })
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end('{}')
@@ -147,21 +170,61 @@ const POWERSHELL_PLAIN: Runner = {
   program: () => POWERSHELL,
   args: (command) => ['-NoProfile', '-Command', command]
 }
+function findPwsh(): string | undefined {
+  const candidates = [
+    join(process.env.ProgramFiles ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
+    join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WindowsApps', 'pwsh.exe')
+  ]
+  // lstat: the Store install is an app-execution alias that existsSync cannot follow.
+  return candidates.find((candidate) => lstatSync(candidate, { throwIfNoEntry: false }))
+}
+// Copilot's `<pwsh|powershell> -nop -nol -c <command>`; pwsh only where it is installed.
+const COPILOT_RUNNERS: Runner[] = [POWERSHELL, findPwsh()].flatMap((program) =>
+  program
+    ? [
+        {
+          name: `${basename(program)} (Copilot)`,
+          program: () => program,
+          args: (c: string) => ['-nop', '-nol', '-c', c]
+        }
+      ]
+    : []
+)
+// CPython's shell=True: `{ComSpec} /c "{command}"`, without `/d`.
+const CMD_PYTHON_SHELL: Runner = {
+  name: 'cmd.exe (Python shell=True)',
+  program: () => CMD,
+  args: (command) => ['/c', `"${command}"`],
+  verbatim: true
+}
 
-type Entry = { command?: string; hooks?: { command?: string }[] }
+// Orca's TOML basic strings use only escapes that a JSON string decodes identically.
+function readTomlEventCommands(path: string, event: string): string[] {
+  const block = new RegExp(`^event = "${event}"\\r?\\ncommand = ("(?:[^"\\\\]|\\\\.)*")$`, 'gm')
+  return [...readFileSync(path, 'utf8').matchAll(block)].map((match) =>
+    String(JSON.parse(match[1]))
+  )
+}
+
+type Entry = { command?: string; powershell?: string; hooks?: { command?: string }[] }
 const commandsOf = (entries: Entry[] | undefined): (string | undefined)[] =>
   (entries ?? []).flatMap((entry) =>
-    entry.hooks ? entry.hooks.map((h) => h.command) : entry.command
+    entry.hooks ? entry.hooks.map((h) => h.command) : (entry.command ?? entry.powershell)
   )
 
 function readEvent(path: string, event: string): (string | undefined)[] {
   return commandsOf(JSON.parse(readFileSync(path, 'utf8')).hooks?.[event])
 }
 
+// The pre-forward-slash bare path: Git Bash strips its backslashes and exits 127.
+const legacyBackslashEntry = (home: string, script: string): Entry => ({
+  hooks: [{ command: join(home, '.orca', 'agent-hooks', script) }]
+})
+
 function writeHooks(
   path: string,
   hooks: Record<string, Entry[]>,
-  extra: { name?: string } = {}
+  extra: { name?: string; version?: number } = {}
 ): void {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, JSON.stringify({ ...extra, hooks }))
@@ -177,6 +240,8 @@ type Provider = {
   /** Seeds the pre-#27717 encoded registration so install must replace it, not add to it. */
   seedStale?: (home: string, stale: string) => void
   runners?: Runner[]
+  /** Event name the hook posts alongside the payload, when it posts one. */
+  hookEventName?: string
 }
 
 const PROVIDERS: Provider[] = [
@@ -186,6 +251,18 @@ const PROVIDERS: Provider[] = [
     stdout: '{}',
     install: () => new ClaudeHookService().install(),
     commands: () => commandsOf(readHooksJson(getConfigPath())?.hooks?.PreToolUse)
+  },
+  {
+    // A spaced home cannot carry the bare exe path, so that profile falls back to the `.cmd` hook.
+    name: 'Claude (orca-agent-hook.exe)',
+    script: 'orca-agent-hook.exe',
+    stdout: '{}',
+    install: () => {
+      bundledHook.path = buildWindowsNativeHookExecutable()
+      return new ClaudeHookService().install()
+    },
+    commands: () => commandsOf(readHooksJson(getConfigPath())?.hooks?.PreToolUse),
+    runners: [CMD_PLAIN, GIT_BASH, POWERSHELL_PLAIN]
   },
   {
     name: 'Muse',
@@ -254,6 +331,76 @@ const PROVIDERS: Provider[] = [
         { name: 'mine' }
       ),
     runners: [POWERSHELL_PLAIN, CMD_NODE_SHELL]
+  },
+  {
+    // Kimi's own tests cover replacing the old `.sh` registration in its TOML.
+    name: 'Kimi',
+    script: 'kimi-hook.cmd',
+    stdout: '',
+    install: () => new KimiHookService().install(),
+    commands: (home) =>
+      readTomlEventCommands(join(home, '.kimi-code', 'config.toml'), 'UserPromptSubmit'),
+    runners: [CMD_PYTHON_SHELL]
+  },
+  {
+    // One event stands in for all: each registration differs only in the event argument.
+    name: 'Copilot',
+    script: 'copilot-hook.cmd',
+    stdout: '{}',
+    install: () => new CopilotHookService().install(),
+    commands: (home) => readEvent(join(home, '.copilot', 'hooks', 'orca.json'), 'Stop'),
+    seedStale: (home, stale) =>
+      writeHooks(
+        join(home, '.copilot', 'hooks', 'orca.json'),
+        { Stop: [{ powershell: stale }] },
+        { version: 1 }
+      ),
+    runners: COPILOT_RUNNERS,
+    hookEventName: 'Stop'
+  },
+  {
+    // Grok spawns a one-token command directly, wraps a spaced one in PowerShell, or uses Git Bash.
+    name: 'Grok',
+    script: 'grok-hook.cmd',
+    stdout: '',
+    install: () => new GrokHookService().install(),
+    commands: (home) => readEvent(join(home, '.grok', 'hooks', 'orca-status.json'), 'Stop'),
+    seedStale: (home, stale) =>
+      writeHooks(join(home, '.grok', 'hooks', 'orca-status.json'), {
+        Stop: [{ hooks: [{ command: stale }] }, legacyBackslashEntry(home, 'grok-hook.cmd')]
+      }),
+    runners: [CMD_PLAIN, GIT_BASH, POWERSHELL_PLAIN]
+  },
+  {
+    name: 'Devin',
+    script: 'devin-hook.cmd',
+    stdout: '',
+    install: () => new DevinHookService().install(),
+    commands: (home) => readEvent(join(home, 'AppData', 'Roaming', 'devin', 'config.json'), 'Stop'),
+    seedStale: (home, stale) =>
+      writeHooks(join(home, 'AppData', 'Roaming', 'devin', 'config.json'), {
+        Stop: [{ hooks: [{ command: stale }] }, legacyBackslashEntry(home, 'devin-hook.cmd')]
+      }),
+    runners: [CMD_PLAIN, GIT_BASH, POWERSHELL_PLAIN]
+  },
+  {
+    // ZCode nests events one level deeper (`hooks.events`) and runs hooks through its own shell resolver.
+    name: 'ZCode',
+    script: 'zcode-hook.cmd',
+    stdout: '',
+    install: () => zcodeHookService.install(),
+    commands: (home) =>
+      commandsOf(
+        JSON.parse(readFileSync(join(home, '.zcode', 'cli', 'config.json'), 'utf8')).hooks?.events
+          ?.Stop
+      ),
+    seedStale: (home, stale) => {
+      const path = join(home, '.zcode', 'cli', 'config.json')
+      mkdirSync(dirname(path), { recursive: true })
+      const Stop = [{ hooks: [{ command: stale }] }, legacyBackslashEntry(home, 'zcode-hook.cmd')]
+      writeFileSync(path, JSON.stringify({ hooks: { enabled: true, events: { Stop } } }))
+    },
+    runners: [CMD_PLAIN, GIT_BASH, POWERSHELL_PLAIN]
   }
 ]
 
@@ -298,6 +445,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
 
   afterEach(() => {
     vi.unstubAllEnvs()
+    bundledHook.path = null
     server?.close()
     server = null
     homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
@@ -317,7 +465,15 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
       for (const name of ['USERPROFILE', 'HOME']) {
         vi.stubEnv(name, home)
       }
-      for (const name of ['XDG_CONFIG_HOME', 'KIRO_HOME', 'DSH_HOME']) {
+      vi.stubEnv('APPDATA', join(home, 'AppData', 'Roaming'))
+      for (const name of [
+        'XDG_CONFIG_HOME',
+        'KIRO_HOME',
+        'DSH_HOME',
+        'KIMI_CODE_HOME',
+        'COPILOT_HOME',
+        'GROK_HOME'
+      ]) {
         vi.stubEnv(name, undefined)
       }
       seedCmdAutoRunTarget(home)
@@ -337,6 +493,9 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
       // front of it, or #18875's per-event PowerShell start-up has quietly come back.
       if (WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
         expect(registeredCommand).not.toMatch(/powershell|-EncodedCommand/i)
+        if (provider.script.endsWith('.exe')) {
+          expect(registeredCommand).toBe(`${scriptPath.replaceAll('\\', '/')} claude`)
+        }
       } else {
         expect(registeredCommand).toMatch(/-EncodedCommand/)
       }
@@ -371,7 +530,12 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
         // Byte-exact, not "non-empty" — a pseudoconsole host delivers nothing, and a
         // code-page-translating launcher delivers a corrupted body that still looks posted.
         expect(listener.posts.slice(before), `${runner.name} posts`).toEqual([
-          { payload: PAYLOAD, paneKey: PANE_KEY, token: HOOK_TOKEN }
+          {
+            payload: PAYLOAD,
+            paneKey: PANE_KEY,
+            token: HOOK_TOKEN,
+            hookEventName: provider.hookEventName ?? null
+          }
         ])
         expect(result.stderr, `${runner.name} stderr`).toBe('')
         // Why: compat consumers gate the tool call on parseable stdout (#14818).
@@ -383,8 +547,53 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
         expect(outsideOrca.code, `${runner.name} outside Orca exit code`).toBe(0)
         expect(listener.posts).toHaveLength(before + 1)
       }
-      // Why: several shell launches plus a real install can overrun the default under load.
+      // Why: several shell launches, a real install and a cold exe build can overrun the default.
     },
-    60_000
+    WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
   )
+
+  // Copilot parses stdout on PreToolUse and PermissionRequest, so a printing AutoRun must not
+  // reach it. Only bites where HKCU AutoRun targets %USERPROFILE%\.cmd_aliases.cmd (the control
+  // below proves it did); elsewhere cmd.exe runs no AutoRun at all.
+  it('Copilot answers exactly {} when the cmd AutoRun prints', async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-hook-autorun-'))
+    const home = join(root, 'user')
+    mkdirSync(home)
+    homedirMock.mockReturnValue(home)
+    for (const name of ['USERPROFILE', 'HOME']) {
+      vi.stubEnv(name, home)
+    }
+    vi.stubEnv('COPILOT_HOME', undefined)
+    writeFileSync(join(home, '.cmd_aliases.cmd'), '@echo autorun-noise\r\n', 'utf8')
+    expect(new CopilotHookService().install().state).toBe('installed')
+    const [command] = readEvent(join(home, '.copilot', 'hooks', 'orca.json'), 'PreToolUse')
+    if (!command) {
+      throw new Error('Missing managed Copilot PreToolUse command')
+    }
+    const env = hookEnvironment({ USERPROFILE: home, HOME: home })
+
+    const autoRun = await runProcess({ program: CMD, args: ['/c', 'rem'], env, timeoutMs: 15_000 })
+    for (const runner of COPILOT_RUNNERS) {
+      const result = await runProcess({
+        program: runner.program(),
+        args: runner.args(command),
+        env,
+        input: PAYLOAD,
+        timeoutMs: 15_000
+      })
+      expect(result.code, `${runner.name} exit code`).toBe(0)
+      expect(result.stdout, `${runner.name} stdout`).toBe('{}\r\n')
+    }
+    if (autoRun.stdout.includes('autorun-noise')) {
+      const bare = command.replace(/^\S+\/cmd\.exe \/d \/c /, '')
+      const control = await runProcess({
+        program: POWERSHELL,
+        args: ['-nop', '-nol', '-c', bare],
+        env,
+        input: PAYLOAD,
+        timeoutMs: 15_000
+      })
+      expect(control.stdout, 'without /d the AutoRun prints first').toContain('autorun-noise')
+    }
+  }, 60_000)
 })

@@ -10,13 +10,18 @@ import {
 } from '../provider-process/provider-process-supervisor'
 import type { CodexAppServerSpawn } from './codex-app-server-process-tree-kill'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
+import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const BACKFILL_RECOVERY_KILL_SITE = 'codex-state-db-backfill-recovery'
 // Codex drains on its stdin end, as the Codex connection's root-only close asks; one value
 // for the spawn spec (a gone Orca) and the stop (Orca stopping it), so they cannot drift.
 const BACKFILL_RECOVERY_CLOSE_REQUEST: ProviderCloseRequest = 'stdin-end'
 
-export type CodexBackfillRecoveryProcess = { child: ChildProcessHandle; supervised: boolean }
+export type CodexBackfillRecoveryProcess = {
+  child: ChildProcessHandle
+  supervised: boolean
+}
 
 /** Starts the read-only app-server whose presence lets Codex finish its own backfill. */
 export function spawnCodexBackfillRecoveryProcess(
@@ -36,7 +41,8 @@ export function spawnCodexBackfillRecoveryProcess(
       {
         stdio: ['pipe', 'ignore', 'ignore'],
         windowsHide: true,
-        env: process.env
+        env: process.env,
+        cwd: resolveWslInteropSpawnCwd()
       }
     )
     return { child, supervised: false }
@@ -45,16 +51,23 @@ export function spawnCodexBackfillRecoveryProcess(
   // Kept alive up to an hour; on POSIX the supervisor stops it with Orca, however Orca exits.
   const spawnSpec = createProviderSpawnSpec(
     { command, args: [...CODEX_READ_ONLY_APP_SERVER_ARGS], cwd: codexHomePath },
-    withCliRuntimeOnPath(command, { ...process.env, CODEX_HOME: codexHomePath }),
+    withCliRuntimeOnPath(command, {
+      ...process.env,
+      CODEX_HOME: codexHomePath
+    }),
     process.platform,
     { lifetime: 'session', closeRequest: BACKFILL_RECOVERY_CLOSE_REQUEST }
   )
   const child = spawnProcess(spawnSpec.program, spawnSpec.args, {
     cwd: codexHomePath,
-    stdio: ['pipe', 'ignore', 'ignore'],
+    stdio: ['pipe', 'ignore', 'ignore', ...spawnSpec.groupReportStdio],
     windowsHide: true,
     env: spawnSpec.env,
     ...(spawnSpec.supervised ? { detached: true } : {})
+  })
+  guardSupervisedProviderGroup(child, {
+    site: BACKFILL_RECOVERY_KILL_SITE,
+    supervised: spawnSpec.supervised
   })
   return { child, supervised: spawnSpec.supervised }
 }

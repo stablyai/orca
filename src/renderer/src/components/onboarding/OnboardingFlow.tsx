@@ -15,6 +15,7 @@ import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 const stepCopy = {
   agent: {
@@ -177,8 +178,8 @@ export default function OnboardingFlow({
       event.preventDefault()
       void flowNext('keyboard')
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [flowNext])
 
   useEffect(() => {
@@ -189,8 +190,8 @@ export default function OnboardingFlow({
       event.preventDefault()
       requestSkipConfirmation('keyboard')
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
   }, [requestSkipConfirmation, skipConfirmOpen])
 
   return (

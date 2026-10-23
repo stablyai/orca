@@ -33,6 +33,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const nativeChatUpgradeTipVariant = useAppStore((s) => s.nativeChatUpgradeTipVariant)
@@ -137,9 +138,25 @@ export default function FeatureTipsModal(): JSX.Element | null {
       return
     }
 
-    markFeatureTipsSeen([currentTip.id])
+    if (currentTip.action !== 'learn-native-chat-upgrade') {
+      markFeatureTipsSeen([currentTip.id])
+    }
     switch (currentTip.action) {
       case 'learn-native-chat-upgrade': {
+        if (settings?.experimentalNativeChat !== true) {
+          setPrimaryBusy(true)
+          try {
+            await updateSettingsOrThrow({ experimentalNativeChat: true })
+          } catch {
+            toast.error(
+              translate('featureTips.nativeChatUpgrade.enableError', 'Could not enable chat mode.')
+            )
+            return
+          } finally {
+            setPrimaryBusy(false)
+          }
+        }
+        markFeatureTipsSeen([currentTip.id])
         closeModal()
         break
       }
@@ -301,11 +318,9 @@ export default function FeatureTipsModal(): JSX.Element | null {
         open={isOpen}
         tip={currentTip}
         primaryBusy={primaryBusy}
-        variant={nativeChatUpgradeTipVariant ?? 'none'}
         chatModeOn={settings?.experimentalNativeChat === true}
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
-        onChatModeChange={(on) => void updateSettings({ experimentalNativeChat: on })}
         onSettingsClick={openNativeChatSettings}
       />
     )

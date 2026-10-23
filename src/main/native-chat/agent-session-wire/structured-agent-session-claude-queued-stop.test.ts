@@ -14,8 +14,7 @@ import { projectStructuredAgentSessionStatus } from '../../../shared/structured-
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
   fakeClaude,
-  PROVIDER_SESSION_ID,
-  claudeStartupSettled
+  PROVIDER_SESSION_ID
 } from '../../claude/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -103,7 +102,7 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await claudeStartupSettled(adapter, SESSION)
+  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
   await Promise.all(lifecycle)
 })
 
@@ -233,8 +232,10 @@ it('withdraws a follow-up Claude queued behind the running turn when that turn i
   await eventually(async () => expect(await status()).toBe('idle'))
 }, 15_000)
 
-// The phone names the turn from its own copy of the journal, which can trail the host's.
-it('withdraws a follow-up Claude holds when the turn the Stop names ended before it landed', async () => {
+// The phone names the turn from its own copy of the journal, which can trail the host's. The turn it
+// names is over, so the Stop is late: an accepted no-op that interrupts nothing, even while the next
+// message is being handed over.
+it('leaves a follow-up Claude holds to run when the turn the Stop names ended before it landed', async () => {
   const connection = claude.connections[0]!
   const turnId = await openFirstTurn(connection)
   const followUp = await send('And then this.')
@@ -243,20 +244,12 @@ it('withdraws a follow-up Claude holds when the turn the Stop names ended before
   await eventually(async () => expect((await dispatch(followUp)).state).toBe('pending'))
   await endFirstTurn(connection)
 
-  expect(await stop(turnId)).toMatchObject({ ok: true, value: { cancelled: true } })
-  expect(connection.calls.find((call) => call.subtype === 'interrupt')?.params).toEqual({
-    cancelQueued: true
-  })
-  await eventually(async () =>
-    expect(await dispatch(followUp)).toEqual({
-      state: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
-    })
-  )
-  await eventually(async () => expect(await status()).toBe('idle'))
+  expect(await stop(turnId)).toMatchObject({ ok: true, value: { cancelled: false } })
+  expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  expect((await dispatch(followUp)).state).toBe('pending')
 }, 15_000)
 
-it('withdraws a follow-up still queued on the host when the turn the Stop names already ended', async () => {
+it('leaves a follow-up still queued on the host alone when the turn the Stop names already ended', async () => {
   const connection = claude.connections[0]!
   const turnId = await openFirstTurn(connection)
   await endFirstTurn(connection)
@@ -269,25 +262,21 @@ it('withdraws a follow-up still queued on the host when the turn the Stop names 
   )
   expect(submission && isQueuedAgentJournalSubmission(submission)).toBe(true)
 
-  // Nothing reached Claude, so the host's withdrawal is the whole Stop, as with no turn named.
   const stopped = stop(turnId)
   release()
-  expect(await stopped).toMatchObject({ ok: true, value: { cancelled: true } })
-  await eventually(async () =>
-    expect(await dispatch(followUp)).toEqual({
-      state: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
-    })
-  )
-  expect(connection.sent).toHaveLength(1)
-  await eventually(async () => expect(await status()).toBe('idle'))
+  expect(await stopped).toMatchObject({ ok: true, value: { cancelled: false } })
+  // Handed over as sent: the late Stop withdrew nothing.
+  await eventually(() => expect(connection.sent).toHaveLength(2))
+  expect((await dispatch(followUp)).state).not.toBe('rejected')
   const rows = (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
     item.body.kind === 'status' ? [item.body.text] : []
   )
   expect(rows).not.toContain('The provider had already finished this turn.')
 }, 15_000)
 
-it('withdraws a host-queued follow-up but leaves a newer turn running when the Stop names an older one', async () => {
+// A late Stop is an accepted no-op: it holds nothing and interrupts nothing, so the follow-up sent
+// after the turn it names runs as sent.
+it('leaves a host-queued follow-up and a newer turn running when the Stop names an older one', async () => {
   const connection = claude.connections[0]!
   const olderTurnId = await openFirstTurn(connection)
   await endFirstTurn(connection)
@@ -308,12 +297,7 @@ it('withdraws a host-queued follow-up but leaves a newer turn running when the S
   const stopped = stop(olderTurnId)
   release()
   expect(await stopped).toMatchObject({ ok: true, value: { cancelled: false } })
-  await eventually(async () =>
-    expect(await dispatch(followUp)).toEqual({
-      state: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
-    })
-  )
+  await eventually(async () => expect((await dispatch(followUp)).state).not.toBe('rejected'))
   expect(connection.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
   expect(await liveTurnId()).toBe(newerTurnId)
   const rows = (await host.journalSnapshot(SESSION)).items.flatMap((item) =>

@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
-import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 type StoreState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
+  layoutByWorktree: Record<string, TabGroupLayoutNode>
   activeGroupIdByWorktree: Record<string, string>
   nativeChatLaunchDraftByTabId: Record<string, { text: string; adopted?: boolean }>
 }
@@ -35,6 +36,14 @@ function emptyStoreState(): StoreState {
   return {
     unifiedTabsByWorktree: {},
     groupsByWorktree: { 'wt-new-chat': [group('group-left'), group('group-right')] },
+    layoutByWorktree: {
+      'wt-new-chat': {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'group-left' },
+        second: { type: 'leaf', groupId: 'group-right' }
+      }
+    },
     activeGroupIdByWorktree: { 'wt-new-chat': 'group-left' },
     nativeChatLaunchDraftByTabId: {}
   }

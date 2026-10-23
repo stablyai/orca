@@ -3,11 +3,13 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
+  dictationModelRowAction,
   deleteDictationModel,
   downloadDictationModel,
   fetchDictationSetup,
   isDictationReady,
   isDictationSetupRequiredError,
+  isSpeechlessServerError,
   isModelInFlight,
   setDictationConfig,
   type MobileSpeechModel,
@@ -169,6 +171,26 @@ describe('rpc wrappers', () => {
     )
   })
 
+  it('maps a headless server with no speech to update guidance (#31174)', async () => {
+    const client = clientWith([
+      malformedFailure({
+        code: 'runtime_error',
+        message: 'speech_unavailable: this host has no speech services'
+      })
+    ])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow(
+      'Update Orca on this server to use voice dictation.'
+    )
+  })
+
+  it('recognizes an old server refusing a dictation start', () => {
+    expect(isSpeechlessServerError('speech_unavailable: this host has no speech services')).toBe(
+      true
+    )
+    expect(isSpeechlessServerError('voice_dictation_disabled')).toBe(false)
+  })
+
   it('keeps unrelated speech model failures specific', async () => {
     const client = clientWith([
       malformedFailure({
@@ -186,6 +208,31 @@ describe('rpc wrappers', () => {
     const client = clientWith([malformedFailure({ code: 'internal_error' })])
 
     await expect(fetchDictationSetup(client)).rejects.toThrow('Failed to load dictation models')
+  })
+})
+
+describe('dictationModelRowAction', () => {
+  // #31174: a cloud-only host (Windows or a managed SSH server) lists only OpenAI rows.
+  it('lets a ready cloud model be picked like a downloaded one', () => {
+    const cloud = model({
+      id: 'openai-gpt-4o-mini-transcribe',
+      provider: 'openai',
+      status: 'ready'
+    })
+    expect(dictationModelRowAction(cloud, '')).toBe('use')
+    expect(dictationModelRowAction(cloud, cloud.id)).toBe('in-use')
+  })
+
+  it('asks for a key on the host when a cloud model is not ready', () => {
+    const cloud = model({ provider: 'openai', status: 'not-downloaded' })
+    expect(dictationModelRowAction(cloud, '')).toBe('needs-api-key')
+  })
+
+  it('keeps on-device rows downloadable until they are ready', () => {
+    expect(dictationModelRowAction(model({ status: 'not-downloaded' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'error' }), '')).toBe('download')
+    expect(dictationModelRowAction(model({ status: 'downloading' }), '')).toBe('downloading')
+    expect(dictationModelRowAction(model({ status: 'ready' }), 'm1')).toBe('in-use')
   })
 })
 

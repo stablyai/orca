@@ -159,15 +159,6 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
-  it('allows an explicit chat toggle even when Chat UI is off', () => {
-    expect(
-      canToggleNativeChat({
-        contentType: 'terminal',
-        launchAgent: 'claude'
-      })
-    ).toBe(true)
-  })
-
   it('rejects a plain shell terminal with no agent', () => {
     expect(
       canToggleNativeChat({

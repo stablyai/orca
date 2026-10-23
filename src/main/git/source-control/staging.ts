@@ -10,6 +10,9 @@ import {
   type GitStageWorktreeScopeReceipt
 } from '../../../shared/git-stage-worktree-scope'
 import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
+import { redoWriteForDriveCheckoutSuspects } from './drive-checkout-suspect-writes'
+
+const STAGE_WRITE = ['add', '--update'] as const
 
 /**
  * Stage a file.
@@ -22,9 +25,10 @@ export async function stageFile(
   invalidateGitReadCaches()
   try {
     await gitExecFileAsync(
-      ['add', '--', literalPathspec(filePath, options)],
+      ['add', '--', literalPathspec(filePath, worktreePath, options)],
       gitOptionsForWorktree(worktreePath, options)
     )
+    await redoWriteForDriveCheckoutSuspects(worktreePath, [filePath], STAGE_WRITE, options)
   } finally {
     invalidateGitReadCaches()
   }
@@ -41,9 +45,12 @@ export async function unstageFile(
   invalidateGitReadCaches()
   try {
     // Reset treats an unborn HEAD as an empty tree, preserving the working file.
-    await gitExecFileAsync(['reset', '--quiet', '--', literalPathspec(filePath, options)], {
-      ...gitOptionsForWorktree(worktreePath, options)
-    })
+    await gitExecFileAsync(
+      ['reset', '--quiet', '--', literalPathspec(filePath, worktreePath, options)],
+      {
+        ...gitOptionsForWorktree(worktreePath, options)
+      }
+    )
   } finally {
     invalidateGitReadCaches()
   }
@@ -64,8 +71,11 @@ export async function bulkStageFiles(
   try {
     await gitExecFileAsync(['add', '--pathspec-from-file=-', '--pathspec-file-nul'], {
       ...gitOptionsForWorktree(worktreePath, options),
-      stdin: encodeGitPathspecs(filePaths.map((filePath) => literalPathspec(filePath, options)))
+      stdin: encodeGitPathspecs(
+        filePaths.map((filePath) => literalPathspec(filePath, worktreePath, options))
+      )
     })
+    await redoWriteForDriveCheckoutSuspects(worktreePath, filePaths, STAGE_WRITE, options)
   } finally {
     invalidateGitReadCaches()
   }
@@ -90,12 +100,14 @@ export async function stageWorktreeChanges(
             wslDistro: options.wslDistro
           })
         : []
-    return await stageGitWorktreeScope(
+    const receipt = await stageGitWorktreeScope(
       scope,
       (args, stdin) =>
         gitExecFileAsync(args, stdin === undefined ? gitOptions : { ...gitOptions, stdin }),
       { excludedUntrackedPaths }
     )
+    await redoWriteForDriveCheckoutSuspects(worktreePath, ['.'], STAGE_WRITE, options)
+    return receipt
   } finally {
     invalidateGitReadCaches()
   }
@@ -116,7 +128,9 @@ export async function bulkUnstageFiles(
   try {
     await gitExecFileAsync(['reset', '--quiet', '--pathspec-from-file=-', '--pathspec-file-nul'], {
       ...gitOptionsForWorktree(worktreePath, options),
-      stdin: encodeGitPathspecs(filePaths.map((filePath) => literalPathspec(filePath, options)))
+      stdin: encodeGitPathspecs(
+        filePaths.map((filePath) => literalPathspec(filePath, worktreePath, options))
+      )
     })
   } finally {
     invalidateGitReadCaches()

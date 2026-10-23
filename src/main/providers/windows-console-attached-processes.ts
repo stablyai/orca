@@ -1,11 +1,22 @@
-import { fork, type ChildProcess } from 'node:child_process'
+import { forkProcess } from '@orca/process-host/fork-process'
+import type { SpawnedProcess } from '@orca/process-host/process-spec'
 
 const CONPTY_PROCESS_LIST_TIMEOUT_MS = 3_000
 
 type ProcessListMessage = { consoleProcessList?: unknown }
 
+type ForkConsoleListAgent = (
+  modulePath: string,
+  args: string[],
+  options: { silent: true }
+) => SpawnedProcess
+
+// Through the process-host chokepoint, which pins `windowsHide` on every fork.
+const forkConsoleListAgent: ForkConsoleListAgent = (modulePath, args) =>
+  forkProcess({ modulePath, args, stdio: ['pipe', 'pipe', 'pipe', 'ipc'] })
+
 type WindowsConsoleAttachedProcessDeps = {
-  forkProcess?: typeof fork
+  forkProcess?: ForkConsoleListAgent
   resolveAgentPath?: () => string
   timeoutMs?: number
 }
@@ -22,14 +33,14 @@ function resolveNodePtyConsoleListAgent(): string {
  * one console at a time -- which is why node-pty answers it from a separate
  * process, and why this still forks.
  *
- * Only the candidate FILTER may use this. That filter exists to drop a
- * descendant which detached from the console (`Start-Process`, a GUI child), and
- * the job object deliberately still contains those, so the job cannot answer it
- * -- see docs/windows-wsl-root-cause-plan.html, "Use B".
+ * Only one-off decisions may use this: the agent candidate FILTER, and the
+ * adoption shell-alone read setting aside detached daemons. Both
+ * drop a member which detached from the console (`Start-Process`, a GUI child,
+ * a setsid'd `ssh-agent`), and the job object deliberately still contains
+ * those, so the job cannot answer it -- see docs/windows-wsl-root-cause-plan.html, "Use B".
  *
- * This is not the fork storm in #10857: it runs only when a recognized agent
- * candidate already exists, not on every foreground poll. Bounding it to one
- * pooled, supervised helper is the remaining half of that fix.
+ * This is not the fork storm in #10857: it never runs on a foreground poll.
+ * Bounding it to one pooled, supervised helper is the remaining half of that fix.
  */
 export function readWindowsConsoleAttachedProcessIds(
   rootPid: number,
@@ -38,9 +49,9 @@ export function readWindowsConsoleAttachedProcessIds(
   if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
     return Promise.resolve(null)
   }
-  let child: ChildProcess
+  let child: SpawnedProcess
   try {
-    child = (deps.forkProcess ?? fork)(
+    child = (deps.forkProcess ?? forkConsoleListAgent)(
       (deps.resolveAgentPath ?? resolveNodePtyConsoleListAgent)(),
       [String(rootPid)],
       { silent: true }

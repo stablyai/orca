@@ -42,6 +42,9 @@ vi.mock('@/store', () => ({
   }
 }))
 
+// Why: the background mount's sleeping-agent scan reads store state these launches never seed.
+vi.mock('@/lib/sleeping-agent-wake-requests', () => ({ requestSleepingAgentWakeOnMount: vi.fn() }))
+
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
@@ -318,6 +321,43 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         })
       })
     )
+  })
+
+  it('aborts the remote exit wait and closes the stream when run observers are released', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    const streamSend = vi.fn()
+    const waitUnsubscribe = vi.fn()
+    mockRuntimeEnvironmentSubscribe.mockImplementation(async (request, callbacks) => {
+      if (request.method === 'terminal.multiplex') {
+        queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+        return { unsubscribe: vi.fn(), sendBinary: streamSend }
+      }
+      if (request.method === 'terminal.wait') {
+        return { unsubscribe: waitUnsubscribe, sendBinary: vi.fn() }
+      }
+      throw new Error(`Unexpected runtime subscription: ${request.method}`)
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const result = await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    await vi.waitFor(() =>
+      expect(mockRuntimeEnvironmentSubscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.wait' }),
+        expect.any(Object)
+      )
+    )
+    const sendsBeforeRelease = streamSend.mock.calls.length
+
+    result?.releaseRuntimeObservers()
+    result?.releaseRuntimeObservers()
+
+    await vi.waitFor(() => expect(waitUnsubscribe).toHaveBeenCalledOnce())
+    // One unsubscribe frame for the terminal's data stream.
+    expect(streamSend.mock.calls.length).toBe(sendsBeforeRelease + 1)
   })
 
   it('preserves the legacy background spawn on an old remote host', async () => {

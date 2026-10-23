@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import {
   formatNativeChatQuote,
-  readNativeChatQuotableSelection
+  readNativeChatQuotableSelection,
+  readNativeChatTranscriptSelection
 } from './native-chat-quote-selection'
 
 // Why: shown at once, a double-click's action would sit under the pointer and take the third click.
@@ -19,7 +21,10 @@ type QuoteRequest = {
   anchor: { getBoundingClientRect: () => DOMRect; contextElement?: Element }
 }
 
-/** Offers "Add to chat" beside a selection made in an agent's reply. */
+/**
+ * Offers "Add to chat" beside a selection made in an agent's reply, and copies a finished
+ * transcript selection when Copy on Select is on.
+ */
 export function NativeChatSelectionQuote({
   rootRef,
   composerRef,
@@ -58,6 +63,13 @@ export function NativeChatSelectionQuote({
         return
       }
       selectionChanged = false
+      if (useAppStore.getState().settings?.terminalClipboardOnSelect) {
+        const text = readNativeChatTranscriptSelection(root)
+        if (text) {
+          // Swallowed like the terminal's copy on select: a failed copy leaves the selection to retry.
+          void window.api.ui.writeClipboardText(text).catch(() => {})
+        }
+      }
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {
         // Only offered where the text would land.

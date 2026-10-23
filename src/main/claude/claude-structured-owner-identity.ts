@@ -9,6 +9,8 @@ export function claudeProviderHandleLink(input: {
   leafUuid: string | null
   resumed: boolean
   origin?: 'adopted'
+  /** Set when this session is a rewind's fork of the head it replaces. */
+  forkedFromKey?: string
   fence: number
   linkId?: string
   observedAt: number
@@ -18,9 +20,11 @@ export function claudeProviderHandleLink(input: {
       input.linkId ??
       `claude-${input.fence}-${input.sessionId}-${input.leafUuid ?? 'empty'}`.slice(0, 128),
     handle: claudeProviderHandle(input.sessionId, input.leafUuid),
-    origin: input.origin ?? (input.resumed ? 'resumed' : 'created'),
+    origin:
+      input.origin ?? (input.forkedFromKey ? 'forked' : input.resumed ? 'resumed' : 'created'),
     mintedAtFence: input.fence,
-    observedAt: input.observedAt
+    observedAt: input.observedAt,
+    ...(input.forkedFromKey ? { forkedFromKey: input.forkedFromKey } : {})
   }
 }
 

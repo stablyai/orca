@@ -10,10 +10,6 @@ import type {
   RemoteWindowsTerminalCapabilities
 } from '../preflight/agent-detection'
 
-// Why this file is thin: everything above the handler layer moved to
-// ../preflight/agent-detection so the runtime can call it without ipcMain.
-// Re-exported here so existing importers of `ipc/preflight` keep working.
-export * from '../preflight/agent-detection'
 import { readZCodeInteractiveCapability } from '../zcode/interactive-capability'
 
 export function registerPreflightHandlers(): void {

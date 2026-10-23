@@ -9,31 +9,33 @@
  */
 import type {
   OrcadMigrationCatalogAbortResult,
+  OrcadMigrationCatalogReferenceAbortResult,
   OrcadMigrationCatalogState,
   OrcadMigrationManifest
-} from '../../shared/orcad-migration-manifest'
+} from '../../shared/orcad-migration/orcad-migration-manifest'
 import type {
   OrcadMigrationSnapshotChunkRequest,
   OrcadMigrationSnapshotChunkResult
-} from '../../shared/orcad-migration-scrollback'
+} from '../../shared/orcad-migration/orcad-migration-scrollback'
 import type {
   OrcadMigrationSourceCutover,
   OrcadMigrationSourceCutoverPhase
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { resolveDurableOrcadCatalogMutation } from './orcad-catalog-durable-mutation'
 import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from './orcad-migration-catalog-client'
+import { orcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
 } from './orcad-migration-cutover-journal'
-import { releaseOrcadMigrationFence } from './orcad-migration-source-fence'
+import type { OrcadMigrationSourceCutoverPort } from './orcad-migration-source'
 import {
   transferOrcadMigrationSnapshots,
   type OrcadMigrationSnapshotSource
 } from './orcad-migration-snapshot-coordinator'
-import { assertOrcadMigrationSourceUnchanged } from './orcad-migration-source-assertions'
-import type { OrcadMigrationPreflightStore } from './ssh-target-orcad-preflight'
-import type { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
+import type { OrcadMigrationPreflightStore } from './targets/ssh-target-orcad-preflight'
+import { sshRelayMigrationCutoverPort } from './orcad-migration-ssh-relay-source'
+import type { SshTargetOrcadClaims } from './targets/ssh-target-orcad-claims'
 
 /** The destination's catalog operations, served by the T6-9 orcad.migration.* client. */
 export type OrcadMigrationDestinationCatalog = {
@@ -41,6 +43,10 @@ export type OrcadMigrationDestinationCatalog = {
   stage: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogState>
   commit: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogState>
   abort: (manifest: OrcadMigrationManifest) => Promise<OrcadMigrationCatalogAbortResult>
+  /** Sends only the manifest's identity; for a journal whose manifest no request can carry. */
+  abortByReference: (
+    manifest: OrcadMigrationManifest
+  ) => Promise<OrcadMigrationCatalogReferenceAbortResult>
   stageChunk: (
     request: OrcadMigrationSnapshotChunkRequest
   ) => Promise<OrcadMigrationSnapshotChunkResult>
@@ -53,7 +59,13 @@ export type OrcadMigrationCutoverContext = {
   destination: OrcadMigrationDestinationCatalog
   /** Rebuilt for every check when `store` is a copy that would never see a later edit. */
   freshSource?: () => OrcadMigrationPreflightStore
+  /** The fenced source; defaults to the relay-era SSH target the journal names. */
+  source?: OrcadMigrationSourceCutoverPort
   now?: () => Date
+}
+
+function cutoverSource(context: OrcadMigrationCutoverContext): OrcadMigrationSourceCutoverPort {
+  return context.source ?? sshRelayMigrationCutoverPort(context)
 }
 
 export async function stageOrcadMigrationDestination(
@@ -121,13 +133,22 @@ export async function abortOrcadMigrationCutover(
   context: OrcadMigrationCutoverContext,
   migrationId: string,
   release: (cutover: OrcadMigrationSourceCutover) => Promise<void> = (cutover) =>
-    releaseOrcadMigrationFence(context, cutover)
+    cutoverSource(context).releaseFence(cutover)
 ): Promise<OrcadMigrationAbortResult> {
   const cutover = requireCutover(context.userDataPath, migrationId)
   if (cutover.phase === 'destination-committed' || cutover.phase === 'source-retired') {
     return committedRefusal()
   }
   const { destination } = context
+  // A journal from before #30836 may hold a manifest no request can carry; only abort could not.
+  if (!orcadMigrationRequestFits({ manifest: cutover.manifest })) {
+    const aborted = await destination.abortByReference(cutover.manifest)
+    if (aborted.state === 'committed') {
+      return committedRefusal()
+    }
+    await release(cutover)
+    return { outcome: 'released', evidence: 'catalog-absent' }
+  }
   let state: OrcadMigrationCatalogState
   try {
     state = await destination.readState(cutover.manifest)
@@ -172,8 +193,7 @@ function assertSourceUnchanged(
   context: OrcadMigrationCutoverContext,
   cutover: OrcadMigrationSourceCutover
 ): void {
-  const store = context.freshSource?.() ?? context.store
-  assertOrcadMigrationSourceUnchanged({ userDataPath: context.userDataPath, store }, cutover)
+  cutoverSource(context).verifyFence(cutover)
 }
 
 /** Moves the journal to what the destination reported; durable before it returns. */
@@ -253,7 +273,7 @@ function committedRefusal(): OrcadMigrationAbortResult {
   return {
     outcome: 'refused',
     code: 'orcad_migration_committed_source_cannot_be_released',
-    reason: 'The managed server already holds this migration; it can only move forward.'
+    reason: 'This host’s Orca server already holds this migration; it can only move forward.'
   }
 }
 

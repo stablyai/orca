@@ -306,6 +306,40 @@ describe('orchestration skill agent coverage', () => {
     ).toBe(true)
   })
 
+  it('marks OpenCode 2 from ~/.config/opencode/skills like OpenCode', () => {
+    const skills = [
+      skill({
+        providers: ['agent-skills'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.config/opencode/skills',
+        directoryPath: '/Users/test/.config/opencode/skills/orchestration'
+      })
+    ]
+
+    expect(
+      agentHasOrchestrationSkill('opencode2', skills, [
+        source('/Users/test/.config/opencode/skills', 'opencode')
+      ])
+    ).toBe(true)
+  })
+
+  it('marks OpenCode 2 from ~/.claude/skills, which OpenCode also reads', () => {
+    const skills = [
+      skill({
+        providers: ['claude'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.claude/skills',
+        directoryPath: '/Users/test/.claude/skills/orchestration'
+      })
+    ]
+
+    expect(
+      agentHasOrchestrationSkill('opencode2', skills, [
+        source('/Users/test/.claude/skills', 'claude')
+      ])
+    ).toBe(true)
+  })
+
   it('marks Claude Agent Teams from ~/.claude/skills like Claude Code', () => {
     const skills = [
       skill({

@@ -9,6 +9,7 @@ import {
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type CompleteGitRepoAddOptions = {
   closeModal: () => void
@@ -40,7 +41,7 @@ export function useCompleteGitRepoAdd({
       source: AddRepoExistingWorkspaceSource,
       executionHostId?: ExecutionHostId
     ): Promise<void> => {
-      const worktrees = (useAppStore.getState().worktreesByRepo[repoId] ?? []).filter(
+      const worktrees = (selectWorktreesByRepo(useAppStore.getState())[repoId] ?? []).filter(
         (worktree) =>
           executionHostId === undefined ||
           worktree.hostId === executionHostId ||

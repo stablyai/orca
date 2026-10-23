@@ -41,7 +41,8 @@ function wireClaudeModel(entry: ListedModel): WireClaudeModel {
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
-    ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
+    ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {}),
+    ...(entry.supportsAutoMode !== undefined ? { supportsAutoMode: entry.supportsAutoMode } : {})
   }
 }
 

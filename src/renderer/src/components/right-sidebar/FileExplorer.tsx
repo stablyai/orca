@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
@@ -39,6 +39,7 @@ import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRow
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
+import { useWslHostUnavailableReason } from '../terminal-pane/use-wsl-host-unavailable-reason'
 import { translate } from '@/i18n/i18n'
 import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 
@@ -50,8 +51,9 @@ function FileExplorerFiles(): React.JSX.Element {
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(s, activeWorktreeId)
   )
+  const wslHostUnavailable = useWslHostUnavailableReason(activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   // Why: a folder workspace has no repo row, so only the catalog owner names its SSH host.
@@ -263,6 +265,7 @@ function FileExplorerFiles(): React.JSX.Element {
           repoName={repoName}
           worktreePath={worktreePath}
           {...getRouteForLocalPathOpenOwner(openInOwner)}
+          workspaceId={activeWorktreeId}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
@@ -354,6 +357,7 @@ function FileExplorerFiles(): React.JSX.Element {
             visibleRowCount={visibleRowCount}
             handleExplorerBackgroundContextMenuCapture={handleExplorerBackgroundContextMenuCapture}
             handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
+            wslHostUnavailable={wslHostUnavailable}
           />
           <div
             className={cn(

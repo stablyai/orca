@@ -7,11 +7,13 @@ import {
 const {
   handleMock,
   setMainUiLanguageMock,
+  rebuildSystemTrayMenuMock,
   applyElectronProxySettingsMock,
   applyAgentStatusHooksEnabledMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   setMainUiLanguageMock: vi.fn(),
+  rebuildSystemTrayMenuMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn()
 }))
@@ -26,7 +28,7 @@ vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../ssh/ssh-config-parser', () => ({
+vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -52,6 +54,7 @@ vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('../menu/register-app-menu', () => ({ rebuildAppMenu: vi.fn() }))
+vi.mock('../tray/system-tray', () => ({ rebuildSystemTrayMenu: rebuildSystemTrayMenuMock }))
 vi.mock('../i18n/main-i18n', () => ({ setMainUiLanguage: setMainUiLanguageMock }))
 
 import { registerSettingsHandlers } from './settings'
@@ -59,6 +62,7 @@ import { registerSettingsHandlers } from './settings'
 beforeEach(() => {
   handleMock.mockClear()
   setMainUiLanguageMock.mockReset().mockResolvedValue('en')
+  rebuildSystemTrayMenuMock.mockClear()
   applyElectronProxySettingsMock.mockReset().mockResolvedValue({ source: 'settings' })
   applyAgentStatusHooksEnabledMock.mockReset().mockResolvedValue([])
 })
@@ -89,9 +93,11 @@ it('returns current settings when a language change finishes after a newer theme
 
   const first = write(event, { theme: 'dark', uiLanguage: 'ko' })
   await started.promise
+  expect(rebuildSystemTrayMenuMock).not.toHaveBeenCalled()
   await write(event, { theme: 'light' })
   release.resolve()
   const reply = await first
+  expect(rebuildSystemTrayMenuMock).toHaveBeenCalledOnce()
   await store.flushPendingOrThrowAsync()
 
   expect(store.getSettings().theme).toBe('light')

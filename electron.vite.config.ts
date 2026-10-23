@@ -1,18 +1,16 @@
 import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
-import { isBuiltin } from 'node:module'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
-import {
-  CLI_MAIN_ENTRY_NAMES,
-  createPlainNodeEntryGuardPlugin
-} from './config/build-plugins/plain-node-entry-guard'
-import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from './src/shared/orcad-local-serve-selection'
-import packageJson from './package.json' with { type: 'json' }
+import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
+import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
+import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
@@ -22,23 +20,11 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/addon-serialize',
   'tldts',
   'smol-toml',
+  'fflate',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
 ])
-const EXTERNAL_MAIN_DEPENDENCIES = Object.keys(packageJson.dependencies).filter(
-  (dependency) => !BUNDLED_MAIN_DEPENDENCIES.has(dependency)
-)
-
-function isExternalMainModule(source: string): boolean {
-  if (isBuiltin(source) || source === 'electron' || source.startsWith('electron/')) {
-    return true
-  }
-  return EXTERNAL_MAIN_DEPENDENCIES.some(
-    (dependency) => source === dependency || source.startsWith(`${dependency}/`)
-  )
-}
-
 // Why: the telemetry transport is gated by two compile-time constants that
 // only the official CI release workflow sets. Contributor / `pnpm dev` /
 // third-party rebuilds must substitute literal `null` at these sites so
@@ -69,6 +55,24 @@ const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
     ? JSON.stringify(orcaDiagnosticsTokenUrl)
     : 'null'
 
+const darkBuildSwitches: {
+  darkBuildDefines: () => Record<string, string>
+  darkBuildMarkers: () => { fileName: string; text: string }[]
+} = createRequire(import.meta.url)('./config/dark-build-switches.cjs')
+const DARK_BUILD_DEFINES = darkBuildSwitches.darkBuildDefines()
+
+/** Marks a dark switched-on main build so packaging refuses it. */
+function createDarkBuildMarkerPlugin(): Plugin {
+  return {
+    name: 'orca-dark-build-marker',
+    generateBundle() {
+      for (const marker of darkBuildSwitches.darkBuildMarkers()) {
+        this.emitFile({ type: 'asset', fileName: marker.fileName, source: marker.text })
+      }
+    }
+  }
+}
+
 // Why: official skill installs pin to the commit the build came from, so they match the
 // bundled skills on every channel. Main runs the installer; the renderer prints the command.
 const ORCA_BUILD_COMMIT_LITERAL = JSON.stringify(resolveBuildSourceCommit())
@@ -88,10 +92,8 @@ function createStartupDiagnosticsBanner(chunkName: string): string {
       return '"<unserializable>"'
     }
   }
-  let closeSync
   let diagnosticFileDescriptor
-  let openSync
-  let writeSync
+  let closeSync, openSync, writeSync
   try {
     const fs = require('node:fs')
     closeSync = fs.closeSync
@@ -195,6 +197,9 @@ function createMainBootstrapPlugin() {
       if (!mainChunk || mainChunk.type !== 'chunk') {
         return
       }
+      if (!mainChunk.moduleIds.some((id) => resolve(id) === MAIN_BUILD_ENTRY_POINTS.index)) {
+        throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
+      }
 
       // Why: source guards and diagnostics run after Rollup's generated require
       // prelude, too late to handle a missing bootstrap dependency.
@@ -224,6 +229,12 @@ export const electronViteConfig: UserConfig = {
       // bundle never references maps that packaging strips out. Release CI
       // uploads them so minified crash traces stay decodable.
       sourcemap: 'hidden',
+      // PR fixtures discard maps; official releases must always retain them.
+      ...(process.env.ORCA_CI_MAIN_SOURCEMAPS === '0' &&
+      orcaBuildIdentity !== 'stable' &&
+      orcaBuildIdentity !== 'rc'
+        ? { sourcemap: false }
+        : {}),
       // Why: daemon-entry.js is asar-unpacked so child_process.fork() can
       // execute it from disk. Node's module resolution from the unpacked
       // directory cannot reach into app.asar; startup-critical pure JS must
@@ -232,63 +243,9 @@ export const electronViteConfig: UserConfig = {
         exclude: [...BUNDLED_MAIN_DEPENDENCIES]
       },
       rollupOptions: {
-        // Why: native dependencies must resolve from packaged node_modules,
-        // while the unpacked daemon needs its pure-JS xterm graph bundled.
-        external: isExternalMainModule,
-        input: {
-          index: resolve('src/main/index.ts'),
-          // Why: sandboxed webview preloads cannot load Rollup helper chunks.
-          'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
-          'doc-preview-link-preload': resolve('src/preload/doc-preview-link.ts'),
-          'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
-          'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
-          'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
-          'stt-worker': resolve('src/main/speech/stt-worker.ts'),
-          'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
-          'foreign-sqlite-reader-entry': resolve(
-            'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
-          ),
-          'session-scanner-service-entry': resolve(
-            'src/main/ai-vault/session-scanner-service-entry.ts'
-          ),
-          'wsl-transcript-fs-process-entry': resolve(
-            'src/main/native-chat/wsl-transcript-fs-process-entry.ts'
-          ),
-          // Why: libuv spawns processes inline on the calling loop, so the port
-          // scan's probe commands run on a worker thread instead of the UI one.
-          'port-scan-command-worker-entry': resolve(
-            'src/main/ports/port-scan-command-worker-entry.ts'
-          ),
-          // Why: the Claude/Codex/OpenCode usage scans walk whole history
-          // corpora and read SQLite synchronously; a worker thread keeps that
-          // off the main-process event loop.
-          'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
-          // Why: a first account setup can merge a large history tree with sync fs calls.
-          'claude-profile-setup-worker-entry': resolve(
-            'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'
-          ),
-          'profile-state-backup-worker-entry': resolve(
-            'src/main/persistence/profile-state/profile-state-backup-worker-entry.ts'
-          ),
-          'profile-state-writer-worker-entry': resolve(
-            'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts'
-          ),
-          // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
-          // can't take down the main process (issue #7547).
-          'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
-          // Why: `orca serve` runs it under ELECTRON_RUN_AS_NODE so the CLI never bundles orcad prep.
-          [ORCAD_LOCAL_SERVE_SELECTION_ENTRY]: resolve(
-            'src/main/orcad/orcad-local-serve-selection-entry.ts'
-          ),
-          // Why: a worker thread survives the macOS 26 AppKit main-thread deadlock
-          // without paying for another Electron process.
-          'main-thread-hang-watchdog-entry': resolve(
-            'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
-          ),
-          ...Object.fromEntries(
-            CLI_MAIN_ENTRY_NAMES.map((module) => [module, resolve(`src/main/${module}.ts`)])
-          )
-        },
+        input: MAIN_BUILD_ENTRY_POINTS,
+        // CLI builds replace exported entries; keep their internals separate without moving startup paths.
+        preserveEntrySignatures: 'exports-only',
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.
         output: {
@@ -299,7 +256,8 @@ export const electronViteConfig: UserConfig = {
         plugins: [
           createMainBootstrapPlugin(),
           createPlainNodeEntryGuardPlugin(),
-          createProcessHostDevRebuildPlugin()
+          createProcessHostDevRebuildPlugin(),
+          createDarkBuildMarkerPlugin()
         ]
       }
     },
@@ -309,7 +267,8 @@ export const electronViteConfig: UserConfig = {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
-      ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL
+      ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
+      ...DARK_BUILD_DEFINES
     },
     // Why: @xterm/headless declares "exports": null in package.json, which
     // prevents Vite's default resolver from finding the CJS entry. Point
@@ -331,8 +290,11 @@ export const electronViteConfig: UserConfig = {
     }
   },
   renderer: {
+    // Shared node_modules installs must not share dependency optimization state across worktrees.
+    cacheDir: resolve('.cache/vite/renderer'),
     define: {
-      ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL
+      ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
+      ...DARK_BUILD_DEFINES
     },
     resolve: {
       alias: {
@@ -341,12 +303,18 @@ export const electronViteConfig: UserConfig = {
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss(), createPdfjsViewerAssetsPlugin()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      createPdfjsViewerAssetsPlugin(),
+      createViteCacheRetentionPlugin()
+    ],
     worker: {
       format: 'es'
     },
     build: {
       manifest: true,
+      reportCompressedSize: false,
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',
@@ -362,6 +330,7 @@ export const electronViteConfig: UserConfig = {
         input: {
           index: resolve('src/renderer/index.html'),
           popout: resolve('src/renderer/popout.html'),
+          space: resolve('src/renderer/space.html'),
           web: resolve('src/renderer/web-index.html')
         }
       }
@@ -369,4 +338,23 @@ export const electronViteConfig: UserConfig = {
   }
 }
 
-export default defineConfig(electronViteConfig)
+export default defineConfig(({ command }) => {
+  if (command !== 'serve') {
+    return electronViteConfig
+  }
+  // Electron Vite also uses Vite's build command for the development main process.
+  return {
+    ...electronViteConfig,
+    main: {
+      ...electronViteConfig.main,
+      build: {
+        ...electronViteConfig.main?.build,
+        minify: false,
+        sourcemap:
+          process.env.ORCA_DEV_MAIN_SOURCEMAPS === '0'
+            ? false
+            : electronViteConfig.main?.build?.sourcemap
+      }
+    }
+  }
+})

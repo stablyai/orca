@@ -18,6 +18,16 @@ function lines(): string[] {
 }
 
 describe('the bridge diagnostic log', () => {
+  it('hands the connection log the same once-per-key diagnostics as the console', () => {
+    const reported: string[] = []
+    const report = createBridgeDiagnosticReporter((diagnostic) => reported.push(diagnostic.kind))
+    report({ kind: 'frame-after-close' })
+    report({ kind: 'frame-after-close' })
+    report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
+    expect(reported).toEqual(['frame-after-close', 'notify-refused'])
+    expect(lines()).toHaveLength(2)
+  })
+
   it('names the notification it refused and why, for each refusal', () => {
     const report = createBridgeDiagnosticReporter()
     report({ kind: 'notify-refused', name: 'fault', why: 'before-ready' })

@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
+// The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../cache/worktree-cache', () => ({
   getCachedWorktrees: () => null,
   setCachedWorktrees: () => {}
@@ -11,7 +13,7 @@ vi.mock('../cache/repo-cache', () => ({ setCachedRepos: () => {} }))
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import type { Worktree } from '../worktree/workspace-list-types'
-import { useHostDisplayWorktrees } from './use-host-display-worktrees'
+import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenState } from './use-host-screen-state'
 
@@ -30,7 +32,6 @@ function row(worktreeId: string, repoId: string): Worktree {
     path: `/home/me/${worktreeId}`,
     liveTerminalCount: 0,
     hasAttachedPty: false,
-    preview: '',
     unread: false,
     isPinned: false,
     linkedPR: null
@@ -68,7 +69,11 @@ async function displayedRows(args: {
     state.clientRef.current = client
     setWorktrees = state.setWorktrees
     seen.refresh = useHostRepoMetadata({ client, connState: 'connected', hostId: 'host-1', state })
-    seen.rows = useHostDisplayWorktrees('connected', state)
+    seen.rows = useHostDisplayWorktrees(
+      'connected',
+      state,
+      useResolvedHostPlatform(state, 'host-1')
+    )
     return null
   }
   await act(async () => {

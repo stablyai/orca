@@ -58,7 +58,6 @@ export function intoPaneState(
     pendingStartupByTabId: {},
     automaticAgentResumeClaimsByTabId: {},
     pendingInitialCwdByTabId: {},
-    pendingSetupSplitByTabId: {},
     pendingIssueCommandSplitByTabId: {},
     unverifiedPtyLossTabIds: {},
     sleepingAgentSessionsByPaneKey: {},

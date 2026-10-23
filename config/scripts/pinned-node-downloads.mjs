@@ -1,6 +1,6 @@
 // Hash-verified downloads of the pinned Node's build inputs (headers, node.lib) and executable.
 import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import {
   NODE_RUNTIME_PIN,
   isWindowsServerTarget,
@@ -16,6 +16,26 @@ const ROOT = resolve(import.meta.dirname, '..', '..')
 
 export function pinnedNodeCacheDir(env = process.env) {
   return env.ORCA_NODE_RUNTIME_CACHE_DIR || join(ROOT, 'out', 'node-runtime-cache')
+}
+
+export async function copyPinnedNodeExecutable(source, destination, sha256) {
+  try {
+    if ((await sha256File(source)) !== sha256) {
+      return false
+    }
+  } catch {
+    return false
+  }
+  mkdirSync(dirname(destination), { recursive: true })
+  copyFileSync(source, destination)
+  if ((await sha256File(destination)) !== sha256) {
+    rmSync(destination, { force: true })
+    throw new Error(`Node executable changed while copying ${source}`)
+  }
+  if (process.platform !== 'win32') {
+    chmodSync(destination, 0o755)
+  }
+  return true
 }
 
 /** Reuses a cached file only when it still hashes to the pin; anything else is re-fetched. */
@@ -75,6 +95,10 @@ export async function ensurePinnedNodeExecutable({ target, cacheDir = pinnedNode
   const member = nodeRuntimeExecutablePath(target, asset.archive)
   const executable = join(cacheDir, member)
   if (existsSync(executable) && (await sha256File(executable)) === asset.executableSha256) {
+    return executable
+  }
+  // setup-node often already supplies these exact bytes; version equality alone is insufficient.
+  if (await copyPinnedNodeExecutable(process.execPath, executable, asset.executableSha256)) {
     return executable
   }
   const archive = await fetchPinnedFile({

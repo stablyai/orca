@@ -3,16 +3,85 @@
 # package graph. Without this file `pnpm -r` auto-discovers mobile/ and its
 # nested package, and the root's patchedDependencies fail as ERR_PNPM_UNUSED_PATCH.
 #
-# native/windows-registry is listed explicitly rather than reached by a glob: as a `file:`
+# native/windows-registry and native/windows-security are listed explicitly rather than reached by a glob: as a `file:`
 # dependency pnpm re-linked it on every install (including --frozen-lockfile), and that
 # virtual-store churn raced node-gyp reading the same tree, which lost @vscode/windows-process-tree's
 # binding.gyp mid-rebuild on Windows CI. A workspace link is resolved once instead.
 packages:
   - native/windows-registry
+  - native/windows-security
   - src/packages/*
 
 minimumReleaseAge: 4320
+# Latest requested releases are still within the three-day delay; exempt only these versions.
+minimumReleaseAgeExclude:
+  - '@oxc-project/types@0.154.0'
+  - '@rolldown/binding-android-arm-eabi@1.2.14'
+  - '@rolldown/binding-android-arm64@1.2.14'
+  - '@rolldown/binding-darwin-arm64@1.2.14'
+  - '@rolldown/binding-darwin-x64@1.2.14'
+  - '@rolldown/binding-freebsd-x64@1.2.14'
+  - '@rolldown/binding-linux-arm-gnueabihf@1.2.14'
+  - '@rolldown/binding-linux-arm64-gnu@1.2.14'
+  - '@rolldown/binding-linux-arm64-musl@1.2.14'
+  - '@rolldown/binding-linux-ppc64-gnu@1.2.14'
+  - '@rolldown/binding-linux-s390x-gnu@1.2.14'
+  - '@rolldown/binding-linux-x64-gnu@1.2.14'
+  - '@rolldown/binding-linux-x64-musl@1.2.14'
+  - '@rolldown/binding-openharmony-arm64@1.2.14'
+  - '@rolldown/binding-win32-arm64-msvc@1.2.14'
+  - '@rolldown/binding-win32-x64-msvc@1.2.14'
+  - '@vitest/mocker@5.0.5'
+  - '@vitest/spy@5.0.5'
+  - 'electron-vite@6.0.0'
+  - 'rolldown@1.2.14'
+  - 'vitest@5.0.5'
+  - '@oxfmt/binding-android-arm-eabi@0.73.0'
+  - '@oxfmt/binding-android-arm64@0.73.0'
+  - '@oxfmt/binding-darwin-arm64@0.73.0'
+  - '@oxfmt/binding-darwin-x64@0.73.0'
+  - '@oxfmt/binding-freebsd-x64@0.73.0'
+  - '@oxfmt/binding-linux-arm-gnueabihf@0.73.0'
+  - '@oxfmt/binding-linux-arm-musleabihf@0.73.0'
+  - '@oxfmt/binding-linux-arm64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-arm64-musl@0.73.0'
+  - '@oxfmt/binding-linux-ppc64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-riscv64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-riscv64-musl@0.73.0'
+  - '@oxfmt/binding-linux-s390x-gnu@0.73.0'
+  - '@oxfmt/binding-linux-x64-gnu@0.73.0'
+  - '@oxfmt/binding-linux-x64-musl@0.73.0'
+  - '@oxfmt/binding-openharmony-arm64@0.73.0'
+  - '@oxfmt/binding-win32-arm64-msvc@0.73.0'
+  - '@oxfmt/binding-win32-ia32-msvc@0.73.0'
+  - '@oxfmt/binding-win32-x64-msvc@0.73.0'
+  - '@oxlint/binding-android-arm-eabi@1.88.0'
+  - '@oxlint/binding-android-arm64@1.88.0'
+  - '@oxlint/binding-darwin-arm64@1.88.0'
+  - '@oxlint/binding-darwin-x64@1.88.0'
+  - '@oxlint/binding-freebsd-x64@1.88.0'
+  - '@oxlint/binding-linux-arm-gnueabihf@1.88.0'
+  - '@oxlint/binding-linux-arm-musleabihf@1.88.0'
+  - '@oxlint/binding-linux-arm64-gnu@1.88.0'
+  - '@oxlint/binding-linux-arm64-musl@1.88.0'
+  - '@oxlint/binding-linux-ppc64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-musl@1.88.0'
+  - '@oxlint/binding-linux-s390x-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-musl@1.88.0'
+  - '@oxlint/binding-openharmony-arm64@1.88.0'
+  - '@oxlint/binding-win32-arm64-msvc@1.88.0'
+  - '@oxlint/binding-win32-ia32-msvc@1.88.0'
+  - '@oxlint/binding-win32-x64-msvc@1.88.0'
+  - '@oxlint/plugins@1.88.0'
+  - oxfmt@0.73.0
+  - oxlint@1.88.0
 shamefullyHoist: true
+
+# Enables pnpm's global virtual store outside CI; under config/ because the repo root only admits
+# allowlisted entries.
+pnpmfile: config/pnpmfile.cjs
 
 # Orca always launches the user's own resolved Claude CLI via
 # pathToClaudeCodeExecutable, so the SDK's bundled ~95 MB-per-platform CLI
@@ -41,28 +110,76 @@ allowBuilds:
   '@swc/core': false
   '@vscode/windows-process-tree': false
   agent-browser: false
+  bun: true
   cpu-features: true
   electron-winstaller: false
   esbuild: true
   msw: false
   node-pty: true
-  sherpa-onnx: true
   ssh2: false
   '@orca/windows-registry': false
+  '@orca/windows-security': false
+
+# Links the project's @types/<peer> next to every package that peer-depends on <peer> (e.g.
+# @types/react beside lucide-react), so peer types resolve under the global virtual store.
+addMissingPeerTypes: true
+
+# These packages' published .d.ts import modules they never declare. Hoisting hides that,
+# but under the global virtual store each package sees only its declared deps, so the types
+# silently became `any` or (jest-dom) the vitest matcher augmentation vanished.
+packageExtensions:
+  '@testing-library/jest-dom':
+    dependencies:
+      '@types/aria-query': ^5.0.1
+    peerDependencies:
+      vitest: '*'
+    peerDependenciesMeta:
+      vitest:
+        optional: true
+  '@tiptap/extension-list':
+    dependencies:
+      prosemirror-model: ^1.0.0
+  # electron-vite reads electron/package.json and the binary path at build and dev time.
+  electron-vite:
+    peerDependencies:
+      electron: '*'
+  electron-updater:
+    peerDependencies:
+      electron: '*'
+    peerDependenciesMeta:
+      electron:
+        optional: true
+  mermaid:
+    dependencies:
+      '@iconify/types': ^2.0.0
+      '@types/d3-selection': ^3.0.0
+      type-fest: ^5.0.0
+  playwright-core:
+    peerDependencies:
+      electron: '*'
+    peerDependenciesMeta:
+      electron:
+        optional: true
+  remark-parse:
+    dependencies:
+      vfile: ^6.0.0
 
 overrides:
   monaco-editor>dompurify: 3.4.16
+  # Upstream markdown/math packages still require the vulnerable 0.16 line.
+  katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
-  '@xterm/addon-image@0.10.0-beta.300': config/patches/@xterm__addon-image@0.10.0-beta.300.patch
+  '@xterm/addon-image@0.10.0-beta.301': config/patches/@xterm__addon-image@0.10.0-beta.301.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
-  '@xterm/addon-ligatures@0.11.0-beta.300': config/patches/@xterm__addon-ligatures@0.11.0-beta.300.patch
-  '@xterm/addon-webgl@0.20.0-beta.299': config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch
-  '@xterm/addon-search@0.17.0-beta.300': config/patches/@xterm__addon-search@0.17.0-beta.300.patch
-  '@xterm/addon-serialize@0.15.0-beta.300': config/patches/@xterm__addon-serialize@0.15.0-beta.300.patch
-  '@xterm/xterm@6.1.0-beta.303': config/patches/@xterm__xterm@6.1.0-beta.303.patch
+  '@xterm/addon-ligatures@0.11.0-beta.301': config/patches/@xterm__addon-ligatures@0.11.0-beta.301.patch
+  '@xterm/addon-webgl@0.20.0-beta.300': config/patches/@xterm__addon-webgl@0.20.0-beta.300.patch
+  '@xterm/addon-search@0.17.0-beta.301': config/patches/@xterm__addon-search@0.17.0-beta.301.patch
+  '@xterm/addon-serialize@0.15.0-beta.301': config/patches/@xterm__addon-serialize@0.15.0-beta.301.patch
+  '@xterm/xterm@6.1.0-beta.304': config/patches/@xterm__xterm@6.1.0-beta.304.patch
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
   '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch
   i18next-cli@1.74.2: config/patches/i18next-cli@1.74.2.patch
   ws@8.22.0: config/patches/ws@8.22.0.patch
   oxlint-plugin-anti-slop@0.1.2: config/patches/oxlint-plugin-anti-slop@0.1.2.patch
+  monaco-editor@0.55.1: config/patches/monaco-editor@0.55.1.patch

@@ -51,6 +51,9 @@ export const commandReceiptResultSchema = z.discriminatedUnion('kind', [
       resolvedAt: z.number().nullable()
     })
   }),
+  /** A Stop accepted with no row of its own: a background-task stop, a prompt card's own interrupt,
+   *  or a Stop joining a close or repeating the one in force. Its replay reads nothing more. */
+  z.strictObject({ kind: z.literal('stop') }),
   z.strictObject({
     kind: z.literal('no-op'),
     outcome: z.discriminatedUnion('kind', [

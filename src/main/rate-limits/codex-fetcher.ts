@@ -13,7 +13,7 @@ import {
 } from '../codex-cli/codex-home-process-lock'
 import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
-import { spawnProcess } from '@orca/process-host'
+import { spawnProcessOnWorkerThread } from '../worker-thread-child-process/worker-thread-child-process'
 import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { getMainHttpClient } from '../network/http-client'
 import { probeCodexAuthPresence } from './codex-auth-presence'
@@ -28,15 +28,13 @@ import {
   consumeCodexRateLimitResetCreditFromBackend,
   supplementCodexRateLimitResetCredits
 } from './codex-reset-credit-client'
-import {
-  readCodexRateLimitsViaRpc,
-  type CodexRpcRateLimitChild
-} from './codex-rpc-rate-limit-probe'
+import { readCodexRateLimitsViaRpc } from './codex-rpc-rate-limit-probe'
 import {
   getHiddenRateLimitWslCwdSetupCommands,
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
-import { quoteHiddenRateLimitShellValue } from './hidden-rate-limit-shell'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -55,9 +53,9 @@ function buildWslCodexCommand(
   }
   const setupCommands = [
     ...getHiddenRateLimitWslCwdSetupCommands(),
-    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`
+    `export CODEX_HOME=${quotePosixShell(wslInfo.linuxPath)}`
   ].join(' && ')
-  const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')} <&3 >&4 3<&- 4>&-`
+  const execSuffix = `${args.map(quotePosixShell).join(' ')} <&3 >&4 3<&- 4>&-`
   const loginShellCommand = buildWslLoginShellCommand(
     [setupCommands, `exec codex ${execSuffix}`].join(' && ')
   )
@@ -95,11 +93,12 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   // Why the bare CLI: spawnProcess resolves an npm `codex.cmd` shim past cmd.exe itself.
-  const child = spawnProcess({
+  // Why a worker thread (#27362): a cold codex.exe can block process creation for seconds.
+  const child = spawnProcessOnWorkerThread({
     program: wslCodex ? wslCodex.command : codexCommand,
     args: wslCodex ? wslCodex.args : codexArgs,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: resolveHiddenRateLimitPtyCwd(),
+    // Why: WSL holds wsl.exe's cwd busy ~60s, so never hand it a folder inside the profile (#29845).
+    cwd: wslCodex ? resolveWslInteropSpawnCwd() : resolveHiddenRateLimitPtyCwd(),
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
       // WSL probes keep the guest's own proxy env; a Windows proxy address may not resolve there.
@@ -108,7 +107,7 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     })
   })
   return readCodexRateLimitsViaRpc({
-    child: child as CodexRpcRateLimitChild,
+    child,
     codexCommand,
     initTimeoutMs: wslCodex ? WSL_RPC_INIT_TIMEOUT_MS : RPC_INIT_TIMEOUT_MS,
     rpcTimeoutMs: wslCodex ? WSL_RPC_TIMEOUT_MS : RPC_TIMEOUT_MS,

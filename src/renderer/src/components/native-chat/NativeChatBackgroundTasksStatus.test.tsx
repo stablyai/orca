@@ -37,7 +37,7 @@ const TASKS: AgentSessionBackgroundTask[] = [
   { id: 'codex-command:exec-1', kind: 'command', description: 'sleep 90' }
 ]
 
-function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolean }): {
+function renderStrip(props: { supportsTaskStop: boolean; offersStopAll: boolean }): {
   onStop: ReturnType<typeof vi.fn>
 } {
   const onStop = vi.fn()
@@ -48,7 +48,7 @@ function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolea
       settledTasks={[]}
       indicatorActive
       supportsTaskStop={props.supportsTaskStop}
-      supportsStopAll={props.supportsStopAll}
+      offersStopAll={props.offersStopAll}
       stoppingTaskIds={new Set()}
       stoppingAll={false}
       onStop={onStop}
@@ -60,13 +60,13 @@ function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolea
 
 describe('NativeChatBackgroundTasksStatus stop affordances', () => {
   it('offers a per-task stop on a host that accepts targeted stops', () => {
-    renderStrip({ supportsTaskStop: true, supportsStopAll: true })
+    renderStrip({ supportsTaskStop: true, offersStopAll: false })
     expect(screen.getByLabelText('Stop count_a')).toBeInTheDocument()
     expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
   })
 
   it('falls back to a stop-all on a host that only accepts an untargeted stop', () => {
-    renderStrip({ supportsTaskStop: false, supportsStopAll: true })
+    renderStrip({ supportsTaskStop: false, offersStopAll: true })
     expect(screen.getByLabelText('Stop background tasks')).toBeInTheDocument()
   })
 
@@ -84,7 +84,7 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={vi.fn()}
@@ -131,7 +131,7 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
         ]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={onStop}
@@ -173,7 +173,7 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
         ]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={onStop}
@@ -189,7 +189,7 @@ describe('NativeChatBackgroundTasksStatus stop affordances', () => {
 
   it('offers no stop at all when the provider exposes none', () => {
     // An older Codex: a Stop button here would be a control that cannot act.
-    renderStrip({ supportsTaskStop: false, supportsStopAll: false })
+    renderStrip({ supportsTaskStop: false, offersStopAll: false })
     expect(screen.queryByLabelText('Stop background tasks')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Stop count_a')).not.toBeInTheDocument()
     expect(screen.getByText('count_a')).toBeInTheDocument()
@@ -206,7 +206,7 @@ describe('background-tasks strip header', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -253,7 +253,7 @@ describe('background-tasks strip header', () => {
         settledTasks={[]}
         indicatorActive={false}
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -360,7 +360,7 @@ describe('settled rows beside their live siblings', () => {
         ]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -387,7 +387,7 @@ describe('background-task row reasons', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -429,7 +429,7 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
         settledTasks={[]}
         indicatorActive
         supportsTaskStop={false}
-        supportsStopAll={false}
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}
@@ -481,7 +481,7 @@ it('lets the 1 Hz tick sleep while every row has settled, with each run frozen',
         childViews={[finished('a', 400_000, 520_000), finished('b', 700_000, 760_000)]}
         indicatorActive
         supportsTaskStop
-        supportsStopAll
+        offersStopAll={false}
         stoppingTaskIds={new Set()}
         stoppingAll={false}
         onStop={() => {}}

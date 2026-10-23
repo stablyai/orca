@@ -58,12 +58,15 @@ describe('stopMissingWorktreeTerminals', () => {
     )
   })
 
-  it('never sweeps an SSH repo through the local provider', async () => {
+  it.each([
+    ['legacy connectionId', { connectionId: 'ssh-1' }],
+    ['unified executionHostId', { executionHostId: 'ssh:ssh-1' as const }]
+  ])('never sweeps an SSH repo (%s) through the local provider', async (_, host) => {
     const deletedId = 'repo-1::/workspace/deleted'
     const localProvider = createProvider([`${deletedId}@@local-session`])
     const runtime = createRuntime()
 
-    await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, [deletedId], [], {
+    await stopMissingWorktreeTerminals({ ...localRepo, ...host }, [deletedId], [], {
       runtime,
       getLocalProvider: () => localProvider
     })

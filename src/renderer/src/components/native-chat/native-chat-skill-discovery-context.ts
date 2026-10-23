@@ -2,21 +2,26 @@ import type { AppState } from '../../store/types'
 import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getExecutionHostIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveNativeChatTabDirectory,
   resolveNativeChatTabDirectoryResolution,
   type NativeChatTabDirectoryState
 } from './native-chat-tab-directory'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
 export type NativeChatSkillStateInputs = Pick<
   AppState,
   | 'activeRepoId'
+  | 'activeWorkspaceExecutionHostId'
   | 'activeWorktreeId'
+  | 'detectedWorktreesByRepo'
   | 'floatingWorkspacePath'
   | 'folderWorkspaces'
   | 'projectGroups'
@@ -47,9 +52,12 @@ export type NativeChatSkillDiscoveryContext = {
 export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSkillStateInputs {
   return {
     activeRepoId: state.activeRepoId,
+    // Why: the owner resolver needs the picked host and detected rows to tell twins apart.
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     activeWorktreeId: state.activeWorktreeId,
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
     floatingWorkspacePath: state.floatingWorkspacePath,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups,
     projects: state.projects,
     repos: state.repos,
@@ -58,7 +66,7 @@ export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSki
     structuredSessionLaunchDirectoryByTabId: state.structuredSessionLaunchDirectoryByTabId,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-    worktreesByRepo: state.worktreesByRepo
+    worktreesByRepo: selectWorktreesByRepo(state)
   }
 }
 
@@ -119,7 +127,12 @@ export function resolveNativeChatSkillDiscoveryContext(
     }
   }
 
-  const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+  // Why: listing one twin's skills under the other's chat would offer skills that host lacks.
+  if (owner.kind === 'ambiguous') {
+    return null
+  }
+  const runtimeEnvironmentId = owner.environmentId
   // Why: a selected global runtime is not proof that it owns this pane. Modern
   // panes carry an owner stamp; ambiguous legacy panes stay not-ready.
   if (parsedHost?.kind === 'runtime' && !runtimeEnvironmentId) {

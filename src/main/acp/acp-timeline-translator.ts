@@ -9,7 +9,7 @@ import { acpTurnEnd, AcpPromptTurns } from './acp-prompt-turns'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
 import { translateAcpRequest } from './acp-timeline-requests'
 import { ACP_SUBSTANTIVE_UPDATES, acpSessionUpdate } from './acp-session-update'
-import { AcpSubagentTimeline } from './acp-subagent-timeline'
+import { AcpSubagents } from './acp-subagents'
 import { AcpToolTimeline } from './acp-tool-timeline'
 import {
   AcpTurnFailures,
@@ -39,7 +39,8 @@ export class AcpTimelineTranslator {
   private readonly prompts: AcpPromptTurns
   private readonly tools = new AcpToolTimeline()
   private readonly backgroundTasks: AcpBackgroundTaskTimeline
-  private readonly subagents = new AcpSubagentTimeline()
+  /** Its evidence is drained by the lane, in the journal's order. */
+  readonly subagents = new AcpSubagents()
   private readonly messages = new AcpTurnMessages()
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
   private readonly failures: AcpTurnFailures

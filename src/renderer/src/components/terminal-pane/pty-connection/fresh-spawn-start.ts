@@ -1,6 +1,8 @@
+import { armPaneOwnerRetry, isPaneOwnerRefusal } from './pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../shared/host-spawn-admission'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
+import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../../shared/terminal-mode-reset-profiles'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -37,7 +39,11 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       }
     }
 
-    if (useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]?.isDeleting) {
+    if (
+      hasWorktreeTeardownStarted(
+        useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]
+      )
+    ) {
       // Why: the worktree is being deleted; its PTYs were just killed for the
       // filesystem teardown. A fresh shell must not spawn into a directory the
       // removal is about to delete (main fences it anyway), and the pane is
@@ -86,8 +92,12 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.pendingSpawnDeferral = null
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
     const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
+    let ownerRefused = false
     const outputCallbacks = session.captureTransportOutputCallbacks(
-      session.reportError,
+      (message: string) => {
+        ownerRefused ||= isPaneOwnerRefusal(message)
+        session.reportError(message)
+      },
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup)
     )
     const spawnedRaw = session.transport.connect({
@@ -250,7 +260,11 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         session.finishReattachLiveDataDeferral(Boolean(resolvedPtyId), outputCallbacks.generation)
         return resolvedPtyId
       })
-      .catch(async () => {
+      .catch(async (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        if (!ownerRefused && isPaneOwnerRefusal(message)) {
+          outputCallbacks.callbacks.onError(message)
+        }
         releaseDeferredCwdFence()
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
         if (
@@ -283,9 +297,17 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       queueMicrotask(() => {
         if (
           session.disposed ||
+          outputCallbacks.generation !== session.transportStreamGeneration ||
           session.transport.getPtyId() ||
           pendingSpawnByPaneKey.has(session.pendingSpawnKey)
         ) {
+          return
+        }
+        if (ownerRefused) {
+          armPaneOwnerRetry(session, outputCallbacks.generation, () =>
+            session.startFreshSpawn(startupOverride, options)
+          )
+          session.settlePaneAttachAttempt?.('failed')
           return
         }
         if (session.deferredSpawn) {

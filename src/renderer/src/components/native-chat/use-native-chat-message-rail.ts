@@ -5,8 +5,10 @@
 // is itself moving — and settling on it is what makes the highlight feel like a
 // position report instead of a flicker.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { findActiveNativeChatRailItem } from './native-chat-active-rail-item'
+import { ALIGN_ARRIVED_PX } from './use-native-chat-viewport-align'
 import {
   buildNativeChatRailItems,
   mergeNativeChatRailOutline,
@@ -85,15 +87,34 @@ export function useNativeChatMessageRail({
   virtualItemsRef.current = virtualItems
   const slotsRef = useRef(slots)
   slotsRef.current = slots
+  // A clicked tick stays lit while its row stays on screen where the jump settled it:
+  // a jump clamped short of the top leaves another row at the fold, or the last at the
+  // bottom. `offset` is the row's distance below the viewport top, once settled.
+  const clickedRef = useRef<{ id: string; offset: number | null } | null>(null)
 
   const readActiveId = useCallback(() => {
     const element = scrollRef.current
     if (!element) {
       return
     }
+    const clicked = clickedRef.current
+    if (clicked !== null) {
+      const top = element.scrollTop
+      const slotIndex = previousItemsRef.current.find((item) => item.id === clicked.id)?.slotIndex
+      const row = virtualItemsRef.current.find((item) => item.index === slotIndex)
+      if (row && row.end > top && row.start < top + element.clientHeight) {
+        clicked.offset ??= row.start - top
+        if (Math.abs(row.start - top - clicked.offset) <= ALIGN_ARRIVED_PX) {
+          return
+        }
+      }
+      clickedRef.current = null
+    }
     setActiveId((previous) =>
       findActiveNativeChatRailItem({
         slots: slotsRef.current,
+        // The committed items: a read only ever follows a commit.
+        ticks: previousItemsRef.current,
         virtualItems: virtualItemsRef.current,
         scrollTop: element.scrollTop,
         clientHeight: element.clientHeight,
@@ -103,49 +124,56 @@ export function useNativeChatMessageRail({
     )
   }, [scrollRef])
 
+  const idleTimerRef = useRef<number | null>(null)
+  const scheduleRead = useCallback(() => {
+    if (idleTimerRef.current !== null) {
+      window.clearTimeout(idleTimerRef.current)
+    }
+    idleTimerRef.current = window.setTimeout(() => {
+      idleTimerRef.current = null
+      readActiveId()
+    }, NATIVE_CHAT_RAIL_IDLE_MS)
+  }, [readActiveId])
+
   useEffect(() => {
     const element = scrollRef.current
     if (!element) {
       return
     }
-    let idleTimer: number | null = null
-    const scheduleRead = (): void => {
-      if (idleTimer !== null) {
-        window.clearTimeout(idleTimer)
-      }
-      idleTimer = window.setTimeout(() => {
-        idleTimer = null
-        readActiveId()
-      }, NATIVE_CHAT_RAIL_IDLE_MS)
-    }
     scheduleRead()
     element.addEventListener('scroll', scheduleRead, { passive: true })
     return () => {
       element.removeEventListener('scroll', scheduleRead)
-      if (idleTimer !== null) {
-        window.clearTimeout(idleTimer)
+      if (idleTimerRef.current !== null) {
+        window.clearTimeout(idleTimerRef.current)
+        idleTimerRef.current = null
       }
     }
     // Subscribed once. Depending on anything that changes per render would tear
     // the listener down and cancel the pending idle timer on every frame of a
     // streaming turn, so the highlight would never settle.
-  }, [readActiveId, scrollRef])
+  }, [scheduleRead, scrollRef])
 
   // Re-read when the set of prompts actually changes, so a transcript that grew
-  // updates without waiting for the next scroll.
+  // updates without waiting for the next scroll. A click still landing is read once it settles.
   useEffect(() => {
-    readActiveId()
+    if (clickedRef.current?.offset !== null) {
+      readActiveId()
+    }
   }, [items, readActiveId])
 
-  useEffect(() => {
+  // Measured before first paint: the transcript's padding follows wideEnough, so a late read shifts the text.
+  useLayoutEffect(() => {
     const element = scrollRef.current
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(() => {
+    const measure = (): void => {
       setWideEnough(element.clientWidth >= NATIVE_CHAT_RAIL_MIN_WIDTH_PX)
       setMaxTicks(nativeChatRailTickCapacity(element.clientHeight))
-    })
+    }
+    measure()
+    const observer = new ResizeObserver(() => flushSync(measure))
     observer.observe(element)
     return () => observer.disconnect()
   }, [scrollRef])
@@ -156,6 +184,15 @@ export function useNativeChatMessageRail({
     () => selectNativeChatRailTicks({ items, keepIds: [activeId, focusId, previewId], maxTicks }),
     [items, activeId, focusId, previewId, maxTicks]
   )
+  // A jump that does not move the view fires no scroll, so its landing is read from here.
+  const onActivate = useCallback(
+    (id: string) => {
+      clickedRef.current = { id, offset: null }
+      setActiveId(id)
+      scheduleRead()
+    },
+    [scheduleRead]
+  )
   const previewReply =
     previewId === null ? '' : nativeChatRailReplyPreview(turnRows, items, previewId)
 
@@ -164,7 +201,7 @@ export function useNativeChatMessageRail({
       ticks,
       items,
       activeId,
-      onActivate: setActiveId,
+      onActivate,
       visible: wideEnough && items.length > 0,
       previewId,
       previewReply,
@@ -172,6 +209,6 @@ export function useNativeChatMessageRail({
       focusId,
       onFocusItem: setFocusId
     }),
-    [ticks, items, activeId, wideEnough, previewId, previewReply, focusId]
+    [ticks, items, activeId, onActivate, wideEnough, previewId, previewReply, focusId]
   )
 }

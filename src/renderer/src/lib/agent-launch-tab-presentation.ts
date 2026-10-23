@@ -1,9 +1,7 @@
 import type { AgentLaunchTabViewerRule } from '../../../shared/agent-launch-tab-publication'
-import {
-  activateTerminalInitiatedWorktree,
-  focusTerminalInitiatedTab
-} from '../hooks/ipc-events/terminal-command-state'
+import { focusTerminalInitiatedTab } from '../hooks/ipc-events/terminal-command-state'
 import { useAppStore } from '../store'
+import { revealWorkspaceSurface } from './workspace-surface-reveal'
 
 /** Early publication and host reveal move the same viewer, under the same policy. */
 export function presentAgentLaunchTab(
@@ -13,7 +11,7 @@ export function presentAgentLaunchTab(
   leafId?: string
 ): void {
   if (viewer === 'focus-window') {
-    activateTerminalInitiatedWorktree(useAppStore.getState(), worktreeId, [tabId])
+    revealWorkspaceSurface(useAppStore.getState(), worktreeId, [tabId])
   }
   const current = useAppStore.getState()
   const windowShowsTab =
@@ -24,7 +22,8 @@ export function presentAgentLaunchTab(
     current.setActiveTab(tabId)
   }
   if (windowShowsTab || viewer === 'reveal-owner') {
-    if (viewer !== 'focus-in-workspace') {
+    // focus-window revealed its owner above; focus-in-workspace stays where the user is.
+    if (viewer === 'reveal-owner') {
       current.revealWorktreeInSidebar(worktreeId)
     }
     focusTerminalInitiatedTab(tabId, leafId, worktreeId)

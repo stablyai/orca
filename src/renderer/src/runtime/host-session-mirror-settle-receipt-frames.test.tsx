@@ -56,7 +56,7 @@ import {
   WT
 } from './host-session-mirror-frame-fixtures'
 import {
-  expectReplayedResume,
+  expectHostOwnedRecordNotResumed,
   findSubscription,
   installFrameOrderingHarness,
   publish,
@@ -114,7 +114,7 @@ describe('a global singular frame whose patch never lands', () => {
     })
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-patch-throw')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-patch-throw')
   })
 
   it('settles nothing when the patch itself throws mid-apply', async () => {
@@ -147,7 +147,7 @@ describe('a global singular frame whose patch never lands', () => {
     })
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-apply-throw')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-apply-throw')
   })
 })
 
@@ -177,7 +177,7 @@ describe('a stale frame against a newer accepted view', () => {
     })
 
     expect(hasHostSessionMirrorHydrated(ENV, WT)).toBe(true)
-    expectReplayedResume(paneKey, WT, 'codex-session-stale-settle')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-stale-settle')
   })
 })
 
@@ -223,10 +223,9 @@ describe('a deferred visibility-resume repair patch', () => {
       authoritative: true
     })
 
-    // The tombstone repair DID reach the store: the background mirror retracted,
-    // which is the host answering — the parked resume is finally justified.
+    // The repair settles hydration; a visibility retraction does not authorize a resume.
     expect(tabIds(BG_WT)).not.toContain(BG_MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, BG_WT, 'codex-session-tombstone')
+    expectHostOwnedRecordNotResumed(paneKey, BG_WT, 'codex-session-tombstone')
   })
 })
 
@@ -252,10 +251,9 @@ describe('the eager post-create list answers for its worktree', () => {
       await settle()
     })
 
-    // The list retracted the mirror tab and its patch landed, so this worktree
-    // has its verdict: the parked resume must drain, not wait for a stream.
+    // The list settled hydration, but the retracted tab must stay absent.
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-eager-refresh')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-eager-refresh')
   })
 
   it('does not resurrect a worktree the stream retracted while the list was in flight', async () => {
@@ -476,7 +474,7 @@ describe('a host frame for a workspace the mirror never writes', () => {
     })
 
     expect(hasHostSessionMirrorHydrated(ENV, BG_WT)).toBe(true)
-    expectReplayedResume(paneKey, BG_WT, 'codex-session-floating-member')
+    expectHostOwnedRecordNotResumed(paneKey, BG_WT, 'codex-session-floating-member')
   })
 })
 
@@ -523,7 +521,7 @@ describe('a store subscriber that throws after the commit', () => {
     )
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
-    expectReplayedResume(paneKey, WT, 'codex-session-subscriber-throw')
+    expectHostOwnedRecordNotResumed(paneKey, WT, 'codex-session-subscriber-throw')
     warn.mockRestore()
   })
 })

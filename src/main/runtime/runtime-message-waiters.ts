@@ -92,19 +92,6 @@ export class RuntimeMessageWaiters {
     }
   }
 
-  typeHasLiveWaiter(handle: string, messageType: string): boolean {
-    const waiters = this.waitersByHandle.get(handle)
-    if (!waiters) {
-      return false
-    }
-    for (const waiter of waiters) {
-      if (!waiter.typeFilter || waiter.typeFilter.includes(messageType)) {
-        return true
-      }
-    }
-    return false
-  }
-
   /** Internal mailbox routing needs a read-only view of active waiters. */
   get(handle: string): ReadonlySet<RuntimeMessageWaiter> | undefined {
     return this.waitersByHandle.get(handle)

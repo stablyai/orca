@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import {
   conversationCommandBlocked,
   type ConversationCommandAdmissionContext
@@ -16,6 +17,11 @@ const UNTARGETED: AgentSessionBackgroundTaskStops = {
 }
 const NO_STOP: AgentSessionBackgroundTaskStops = { supportsTaskStop: false, supportsStopAll: false }
 
+/** The host's open work when every running child also has a record. */
+function reading(views: readonly AgentChildWorkView[] | undefined) {
+  return { views, open: agentChildWorkLiveness(views) !== null }
+}
+
 function contextWith(
   stops: AgentSessionBackgroundTaskStops | undefined
 ): ConversationCommandAdmissionContext {
@@ -27,7 +33,16 @@ function contextWith(
   return {
     sessionId: 'session-1',
     fence: 1,
-    journal: { snapshot: () => ({ items: [] }), submissions: () => [] },
+    journal: {
+      snapshot: () => ({ items: [] }),
+      cursor: () => ({ epoch: 'e', sequence: 0 }),
+      item: () => null,
+      submissions: () => [],
+      runningTurn: () => null,
+      itemFence: () => undefined,
+      visitItems: () => undefined,
+      wroteBeforeOpen: () => false
+    },
     adapter
   }
 }
@@ -59,29 +74,41 @@ const SETTLED = child({
   settledAt: 300
 })
 const RECORD = { lease: {} } as unknown as AgentSessionRecord
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only the running turn's id and item id.
+const RUNNING_TURN = { turnId: 'turn-1', item: { itemId: 'turn-1' } } as never
 const STOP = 'Stop background tasks before using this command.'
 const WAIT = 'Wait for background tasks to finish before using this command.'
 
 describe('conversationCommandBlocked background work', () => {
   it('admits the command when the strip lists nothing, whatever the provider tracker holds', () => {
-    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, [])).toBeNull()
+    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, reading([]))).toBeNull()
     // The parent row has not landed, so the strip has no records to show either.
-    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, undefined)).toBeNull()
+    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, reading(undefined))).toBeNull()
   })
 
   it('admits the command when the strip lists only finished children', () => {
-    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, [SETTLED])).toBeNull()
+    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, reading([SETTLED]))).toBeNull()
+  })
+
+  it('waits on running work the store has no record of', () => {
+    const unrecorded = { views: [SETTLED], open: true }
+    expect(conversationCommandBlocked(contextWith(TARGETED), RECORD, unrecorded)?.message).toBe(
+      WAIT
+    )
   })
 
   it('asks for a stop when the strip offers one on a live row', () => {
     expect(
-      conversationCommandBlocked(contextWith(TARGETED), RECORD, [SETTLED, child()])?.message
+      conversationCommandBlocked(contextWith(TARGETED), RECORD, reading([SETTLED, child()]))
+        ?.message
     ).toBe(STOP)
   })
 
   it('asks for a stop when the strip offers its single untargeted stop', () => {
     const live = child({ stoppable: false })
-    expect(conversationCommandBlocked(contextWith(UNTARGETED), RECORD, [live])?.message).toBe(STOP)
+    expect(
+      conversationCommandBlocked(contextWith(UNTARGETED), RECORD, reading([live]))?.message
+    ).toBe(STOP)
   })
 
   it('asks the user to wait when no live row on the strip has a stop', () => {
@@ -89,18 +116,23 @@ describe('conversationCommandBlocked background work', () => {
     const unstoppable = child({ stoppable: false })
     const unaddressable = child({ id: 'child-2', providerId: undefined })
     expect(
-      conversationCommandBlocked(contextWith(TARGETED), RECORD, [unstoppable, unaddressable])
-        ?.message
+      conversationCommandBlocked(
+        contextWith(TARGETED),
+        RECORD,
+        reading([unstoppable, unaddressable])
+      )?.message
     ).toBe(WAIT)
   })
 
   it('asks the user to wait when the provider exposes no stop at all', () => {
     // Codex: an instruction to stop would name a control that does not exist.
-    expect(conversationCommandBlocked(contextWith(NO_STOP), RECORD, [child()])?.message).toBe(WAIT)
+    expect(
+      conversationCommandBlocked(contextWith(NO_STOP), RECORD, reading([child()]))?.message
+    ).toBe(WAIT)
     // No live provider session answers for it either.
-    expect(conversationCommandBlocked(contextWith(undefined), RECORD, [child()])?.message).toBe(
-      WAIT
-    )
+    expect(
+      conversationCommandBlocked(contextWith(undefined), RECORD, reading([child()]))?.message
+    ).toBe(WAIT)
   })
 
   it('still refuses on the open turn, not on the work the strip now shows', () => {
@@ -120,7 +152,8 @@ describe('conversationCommandBlocked background work', () => {
           }
         ]
       }) as unknown as ReturnType<typeof ctx.journal.snapshot>
-    expect(conversationCommandBlocked(ctx, RECORD, [child()])?.message).toBe(
+    ctx.journal.runningTurn = () => RUNNING_TURN
+    expect(conversationCommandBlocked(ctx, RECORD, reading([child()]))?.message).toBe(
       'Wait for the current turn to finish before using this command.'
     )
   })
@@ -135,8 +168,9 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
     const ctx = contextWith(undefined)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only each item's body.
     ctx.journal.snapshot = () => staleTurn as never
-    expect(conversationCommandBlocked(ctx, RECORD, [], 'at-rest')).toBeNull()
-    expect(conversationCommandBlocked(ctx, RECORD, [])).toMatchObject({
+    ctx.journal.runningTurn = () => RUNNING_TURN
+    expect(conversationCommandBlocked(ctx, RECORD, reading([]), 'at-rest')).toBeNull()
+    expect(conversationCommandBlocked(ctx, RECORD, reading([]))).toMatchObject({
       details: { reason: 'turnActive' },
       message: 'Wait for the current turn to finish before using this command.'
     })
@@ -148,7 +182,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
       lease: {},
       conversationCommand: { command: 'compact', phase: 'prepared', state: 'unknown' }
     } as unknown as AgentSessionRecord
-    expect(conversationCommandBlocked(contextWith(undefined), record, [])).toBeNull()
+    expect(conversationCommandBlocked(contextWith(undefined), record, reading([]))).toBeNull()
   })
 
   // A clear's commit is its only durable write, so a record short of it never changed the chat.
@@ -163,7 +197,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
         replacementSessionId: 'clear-replacement'
       }
     } as unknown as AgentSessionRecord
-    expect(conversationCommandBlocked(contextWith(undefined), record, [])).toBeNull()
+    expect(conversationCommandBlocked(contextWith(undefined), record, reading([]))).toBeNull()
   })
 
   it('does not permanently refuse an old-build clear source', () => {
@@ -177,7 +211,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
         replacementSessionId: 'clear-replacement'
       }
     } as unknown as AgentSessionRecord
-    expect(conversationCommandBlocked(contextWith(undefined), record, [])).toBeNull()
+    expect(conversationCommandBlocked(contextWith(undefined), record, reading([]))).toBeNull()
   })
 
   it('at handover, lets the command itself and messages queued behind it wait', () => {
@@ -188,7 +222,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
       { clientMessageId: 'behind', dispatchState: 'pending', handoverRecorded: true }
     ] as never
     ctx.journal.submissions = () => queued
-    expect(conversationCommandBlocked(ctx, RECORD, [], 'handover')).toBeNull()
+    expect(conversationCommandBlocked(ctx, RECORD, reading([]), 'handover')).toBeNull()
   })
 })
 
@@ -226,7 +260,7 @@ describe('conversationCommandBlocked on unsettled messages', () => {
       }
     ]
     ctx.journal.submissions = () => submissions
-    const refusal = conversationCommandBlocked(ctx, RECORD, [], admission)
+    const refusal = conversationCommandBlocked(ctx, RECORD, reading([]), admission)
     return {
       blocked: refusal?.details && 'reason' in refusal.details ? refusal.details.reason : null,
       working: hasUnansweredStructuredAgentSessionDispatch(submissions, ctx.fence)

@@ -164,6 +164,7 @@ export async function installTranscriptWatcher(
     if (replacementSnapshot && onReplace) {
       state.offset = replacementSnapshot.consumedTo
       state.pendingStart = state.offset
+      state.latestTimestamp = replacementSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
@@ -186,6 +187,7 @@ export async function installTranscriptWatcher(
       if (initialSnapshot) {
         state.offset = initialSnapshot.consumedTo
         state.pendingStart = state.offset
+        state.latestTimestamp = initialSnapshot.latestTimestamp ?? Number.NEGATIVE_INFINITY
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,

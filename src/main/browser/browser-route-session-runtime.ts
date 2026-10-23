@@ -1,3 +1,5 @@
+import { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
+import { installBrowserRoutePartitionPolicies } from './browser-session-route-policies'
 import { session, webContents } from 'electron'
 import { setBrowserClientRouteWebContentsProbe } from './browser-client-download-routing'
 import type { BrowserRoutePartitionBindingStore } from './browser-route-partition-binding-store'
@@ -28,22 +30,41 @@ const currentBindingStore = (): BrowserRoutePartitionBindingStore =>
 
 const bindingStore = {
   get: (partition: string): string | null => currentBindingStore().get(partition),
-  set: (partition: string, fingerprint: string, storageScope: string): readonly string[] =>
-    currentBindingStore().set(partition, fingerprint, storageScope),
+  set: (
+    partition: string,
+    fingerprint: string,
+    storageScope: string,
+    alias?: string
+  ): readonly string[] => currentBindingStore().set(partition, fingerprint, storageScope, alias),
   touch: (partition: string): void => currentBindingStore().touch(partition),
   findPartitionByFingerprint: (fingerprint: string): string | null =>
     currentBindingStore().findPartitionByFingerprint(fingerprint),
-  rebind: (partition: string, fingerprint: string, storageScope: string): void =>
-    currentBindingStore().rebind(partition, fingerprint, storageScope)
+  rebind: (partition: string, fingerprint: string, storageScope: string, alias?: string): void =>
+    currentBindingStore().rebind(partition, fingerprint, storageScope, alias)
 }
 
 export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
-  validateProfile: (browserProfileId) => {
-    browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
+  validateProfile: (browserProfileId, metadata) => {
+    if (metadata) {
+      if (BrowserClientProfileMetadata.parse(metadata).id !== browserProfileId) {
+        throw new Error('browser_route_partition_profile_unavailable')
+      }
+    } else {
+      browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
+    }
   },
   getSession: (partition) => session.fromPartition(partition),
-  setupPolicies: ({ partition, browserProfileId }) =>
-    browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId),
+  setupPolicies: ({ partition, browserProfileId, profileMetadata }) => {
+    // Why: the server omits metadata for its default profile, so a missing one still means its page.
+    const profile = profileMetadata
+      ? { ...BrowserClientProfileMetadata.parse(profileMetadata), partition, source: null }
+      : browserSessionRegistry.getProfile(browserProfileId)
+    if (!profile) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    // Why: its profile ids collide with this computer's, and settings here cannot list them.
+    return installBrowserRoutePartitionPolicies(profile, partition, { sitePermissions: 'session' })
+  },
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
   },

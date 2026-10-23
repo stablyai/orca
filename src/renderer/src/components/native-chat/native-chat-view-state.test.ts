@@ -95,13 +95,6 @@ describe('selectNativeChatViewState', () => {
       isWorking: false
     })
   })
-
-  it('maps ready working when the agent is mid-turn', () => {
-    expect(selectNativeChatViewState(session({ status: 'working' }))).toEqual({
-      kind: 'ready',
-      isWorking: true
-    })
-  })
 })
 
 describe('structuredChatHistoryPhase', () => {

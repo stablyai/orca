@@ -23,6 +23,22 @@ export async function listConfirmedRunningWslDistros(): Promise<string[]> {
   return listRunningWslDistrosAsync({ requireConfirmed: true }).catch(() => [])
 }
 
+export type WslRunningDistrosRead =
+  | { status: 'confirmed'; distros: string[] }
+  | { status: 'unavailable' }
+
+/** Like the confirmed list, but a failed probe says so: liveness must not read it as "stopped". */
+export async function readConfirmedRunningWslDistros(): Promise<WslRunningDistrosRead> {
+  try {
+    return {
+      status: 'confirmed',
+      distros: await listRunningWslDistrosAsync({ requireConfirmed: true })
+    }
+  } catch {
+    return { status: 'unavailable' }
+  }
+}
+
 export async function isWslDistroRunning(distro: string): Promise<boolean> {
   const wanted = distroKey(distro)
   const running = await listConfirmedRunningWslDistros()

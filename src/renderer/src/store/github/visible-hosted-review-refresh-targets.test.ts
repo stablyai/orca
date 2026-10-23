@@ -16,6 +16,7 @@ import {
   getVisibleHostedReviewRefreshTargets,
   visibleHostedReviewRefreshInputsChanged
 } from './visible-hosted-review-refresh-targets'
+import { getWorkspaceReferenceRequest } from '@/components/sidebar/workspace-reference-details'
 import { createVisibleHostedReviewRefreshScheduler } from './visible-hosted-review-refresh-scheduler'
 
 const repo: Repo = { id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
@@ -102,6 +103,47 @@ describe('visible hosted review refresh targets', () => {
       })
     )
   })
+
+  it.each([review, null])(
+    'resolves a detached linked MR to a title or a settled miss: %j',
+    async (result) => {
+      const owner: Repo = {
+        ...repo,
+        gitRemoteIdentity: {
+          canonicalKey: 'gitlab.example.com/team/repo',
+          remoteName: 'origin',
+          remoteUrl: 'https://gitlab.example.com/team/repo.git'
+        }
+      }
+      const item = {
+        provider: 'gitlab' as const,
+        type: 'mr' as const,
+        number: 8,
+        url: 'https://gitlab.example.com/team/repo/-/merge_requests/8'
+      }
+      const detached = { ...worktree, branch: '', linkedGitLabMR: 8, linkedItems: [item] }
+      const store = setup(owner)
+      store.setState({ worktreesByRepo: { [repo.id]: [detached] }, activeWorktreeId: detached.id })
+      mockApi.hostedReview.forBranch.mockResolvedValue(result)
+      const exactKey = getWorkspaceReferenceRequest(item, detached, owner).key
+      const rows = getVisibleHostedReviewRefreshTargets(store.getState(), store.getState, {
+        selectedOnly: true
+      })
+      expect(rows).toHaveLength(1)
+      expect(rows[0].key).toBe(exactKey)
+      expect(await rows[0].refresh()).toBe(true)
+      expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch: '',
+          linkedGitLabMR: 8,
+          repoOwnerExecutionHostId: 'local',
+          currentHeadOid: null
+        })
+      )
+      expect(store.getState().hostedReviewCache[exactKey]?.data).toEqual(result)
+      expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
+    }
+  )
 
   it('uses the repo runtime owner rather than the focused server and fills both caches', async () => {
     const owner: Repo = { ...repo, executionHostId: 'runtime:owner-server' }

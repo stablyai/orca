@@ -7,6 +7,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test as base, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
+import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 import {
   clearTerminalPtyWriteLog,
   installTerminalPtyWriteSpy,
@@ -131,16 +132,13 @@ function createSourceRepo(): string {
   return repoPath
 }
 
-async function readWorktreeTerminals(
-  client: RuntimeClient,
-  worktreeId: string
-): Promise<RuntimeTerminalSummary[]> {
-  const listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
-    worktree: `id:${worktreeId}`,
-    limit: 20,
-    requireFreshPtyLiveness: true
-  })
-  return listed.result.terminals
+// Undefined while first-mount adoption has the host refusing to answer; every caller polls past it.
+async function readWorktreeTerminals(client: RuntimeClient, worktreeId: string) {
+  const params = { worktree: `id:${worktreeId}`, limit: 20, requireFreshPtyLiveness: true }
+  const listed = await readFreshTerminalInventory(
+    async () => (await client.call<RuntimeTerminalListResult>('terminal.list', params)).result
+  )
+  return listed?.terminals
     .filter((terminal) => terminal.worktreeId === worktreeId)
     .sort((a, b) => a.handle.localeCompare(b.handle))
 }
@@ -327,9 +325,12 @@ async function assertLiveInventory(
   originals: RuntimeTerminalSummary[]
 ): Promise<void> {
   await expect
-    .poll(async () => (await readWorktreeTerminals(client, worktreeId)).map(liveTerminalIdentity), {
-      timeout: 15_000
-    })
+    .poll(
+      async () => (await readWorktreeTerminals(client, worktreeId))?.map(liveTerminalIdentity),
+      {
+        timeout: 15_000
+      }
+    )
     .toEqual(originals.map(liveTerminalIdentity))
 }
 
@@ -556,7 +557,6 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
             agentCmdOverrides: { codex: command },
             terminalWindowsShell: windowsShell,
             disabledTuiAgents: [],
-            setupScriptLaunchMode: 'new-tab',
             terminalHiddenViewParking: false
           })
           return true
@@ -585,7 +585,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   let originals: RuntimeTerminalSummary[] = []
   await expect
     .poll(async () => {
-      originals = await readWorktreeTerminals(client, worktreeId)
+      originals = (await readWorktreeTerminals(client, worktreeId)) ?? []
       return originals.map(({ connected, writable }) => ({ connected, writable }))
     })
     .toEqual([
@@ -645,7 +645,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     .poll(
       async () => ({
         mountedPtyId: mountedAgentPtyId,
-        liveInventory: (await readWorktreeTerminals(client, worktreeId)).map(liveTerminalIdentity),
+        liveInventory: (await readWorktreeTerminals(client, worktreeId))?.map(liveTerminalIdentity),
         visibleOriginalReady: (
           await terminalAccessibility(orcaPage, agent!.tabId).innerText()
         ).includes(`LIVE_AGENT_READY:${agentPid}`),

@@ -6,7 +6,7 @@ import {
   createSessionDeviceSigningKey,
   getOrCreatePendingWebDeviceKey,
   webDeviceSigningKey,
-  type WebDeviceKeySupport,
+  type KeyedWebDeviceKeySupport,
   type WebDeviceSigningKey
 } from './web-device-key'
 import { webDeviceKeyId, type WebDeviceKeyStore } from './web-device-key-store'
@@ -62,7 +62,7 @@ export type WebRuntimeCredentialEnvironment = {
 
 export function createWebRuntimeCredentialSource(args: {
   environment: WebRuntimeCredentialEnvironment
-  support: WebDeviceKeySupport
+  support: KeyedWebDeviceKeySupport
   store: WebDeviceKeyStore
   subtle: SubtleCrypto | null
   /** Durably replace the stored token with a placeholder once the key is active. */

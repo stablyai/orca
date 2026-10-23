@@ -1,7 +1,7 @@
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import {
-  aiVaultSessionDepthCovers,
+  aiVaultCachedDepthServes,
   truncateAiVaultListResult,
   type AiVaultSessionDepth
 } from '../../shared/ai-vault-session-depth'
@@ -71,7 +71,7 @@ export async function scanHostLegWithCache(args: {
     !args.force &&
     cached &&
     cached.expiresAt > now &&
-    aiVaultSessionDepthCovers(cached.depth, args.depth) &&
+    aiVaultCachedDepthServes(cached.depth, args.depth, args.scopePaths) &&
     (!cached.result.unchanged ||
       (cached.depth === args.depth && cached.result.fingerprint === args.afterFingerprint))
   ) {
@@ -96,7 +96,7 @@ export async function scanHostLegWithCache(args: {
     !args.force &&
     current &&
     current.expiresAt > Date.now() &&
-    aiVaultSessionDepthCovers(current.depth, args.depth) &&
+    aiVaultCachedDepthServes(current.depth, args.depth, args.scopePaths) &&
     (!current.result.unchanged ||
       (current.depth === args.depth && current.result.fingerprint === args.afterFingerprint))
   ) {

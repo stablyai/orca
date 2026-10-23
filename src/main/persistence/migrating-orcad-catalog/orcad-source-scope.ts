@@ -1,8 +1,9 @@
+import { requireOrcadMigrationSshSource } from '../../../shared/orcad-migration/orcad-migration-source-kind'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
-} from '../../../shared/orcad-migration-manifest'
+} from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
@@ -43,10 +44,11 @@ export function createOrcadMigrationSourceScope(args: {
   repos: readonly Repo[]
 }): OrcadMigrationSourceScope {
   const repoIds = new Set(args.catalog.repositories.map((repo) => repo.id))
+  const source = requireOrcadMigrationSshSource(args.source)
   return {
-    targetId: args.source.sshTargetId,
-    targetGeneration: args.source.sshTargetGeneration,
-    hostId: toSshExecutionHostId(args.source.sshTargetId),
+    targetId: source.sshTargetId,
+    targetGeneration: source.sshTargetGeneration,
+    hostId: toSshExecutionHostId(source.sshTargetId),
     repoIds,
     folderWorkspaceKeys: new Set(
       args.catalog.folderWorkspaces.map((workspace) => `folder:${workspace.id}`)
@@ -54,7 +56,7 @@ export function createOrcadMigrationSourceScope(args: {
     sharedRepoIds: new Set(
       args.repos
         .filter(
-          (repo) => repoIds.has(repo.id) && !repoBelongsToOrcadSource(repo, args.source.sshTargetId)
+          (repo) => repoIds.has(repo.id) && !repoBelongsToOrcadSource(repo, source.sshTargetId)
         )
         .map((repo) => repo.id)
     )

@@ -15,7 +15,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, type Page } from '@stablyai/playwright-test'
-import { quotePosixShell } from '../../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
 
 export type RuntimeRpcCall = <TResult>(method: string, params: unknown) => Promise<TResult>
 
@@ -64,12 +64,16 @@ export function createRetentionFixtureDirectory(): string {
 
 /** Long-lived stand-in for the agent a CLI dispatch spawns: it never exits, so
  *  a pruned tab is never explained away by a dead PTY. */
-export function writeRetentionFixture(directory: string): string {
+export function writeRetentionFixture(
+  directory: string,
+  options: { processTitle?: string } = {}
+): string {
   const fixturePath = path.join(directory, 'host-created-agent-terminal.mjs')
   writeFileSync(
     fixturePath,
     [
       "import { appendFileSync } from 'node:fs'",
+      ...(options.processTitle ? [`process.title = ${JSON.stringify(options.processTitle)}`] : []),
       'const sink = process.argv[2]',
       'const record = (line) => appendFileSync(sink, `${line}\\n`)',
       'record(`READY:${process.pid}`)',

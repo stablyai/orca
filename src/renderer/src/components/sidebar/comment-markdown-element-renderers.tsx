@@ -1,4 +1,5 @@
 import React from 'react'
+import { jiraImageReference } from '../../../../shared/jira-attachment-image'
 import type { Components } from 'react-markdown'
 import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat-href-routing'
 import {
@@ -20,9 +21,13 @@ export type CommentMarkdownLinkClickHandler = (
   href: string | undefined
 ) => void
 
+/** Rendered as a component, so it may hold state. */
 export type DocumentCodeBlockRenderer = (props: {
   children?: React.ReactNode
   language?: string
+  /** The line the fence starts on in the whole document. Streaming fixes only escape characters
+   *  within a line or append at the end, so it holds while the text grows and when it finishes. */
+  sourceLine?: number
 }) => React.JSX.Element
 
 export function isTrustedCompactImageSrc(src: string | undefined): src is string {
@@ -31,7 +36,9 @@ export function isTrustedCompactImageSrc(src: string | undefined): src is string
   }
   const normalized = src.trim().toLowerCase()
   return (
-    normalized.startsWith('blob:') || /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
+    jiraImageReference(src) !== null ||
+    normalized.startsWith('blob:') ||
+    /^data:image\/(?:png|jpe?g|gif|webp);base64,/.test(normalized)
   )
 }
 
@@ -267,8 +274,11 @@ export function createDocumentCommentMarkdownComponents(
         </a>
       ),
     code: CommentMarkdownDocumentCode,
-    pre: ({ children }) => (
-      <CommentMarkdownDocumentPre renderCodeBlock={renderCodeBlock}>
+    pre: ({ node, children }) => (
+      <CommentMarkdownDocumentPre
+        renderCodeBlock={renderCodeBlock}
+        blockLine={node?.position?.start.line}
+      >
         {children}
       </CommentMarkdownDocumentPre>
     ),

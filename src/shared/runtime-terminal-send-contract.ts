@@ -14,7 +14,7 @@ export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
 export type RuntimeTerminalPromptDelivery = {
   requestId: string
   stages: RuntimeTerminalPromptStage[]
-  provider: 'claude' | 'codex' | 'unsupported' | 'old-host'
+  provider: 'antigravity' | 'claude' | 'codex' | 'unsupported' | 'old-host'
   observation: 'supported' | 'unsupported' | 'incarnation_replaced' | 'permission'
   processIncarnation: string
   generation: number

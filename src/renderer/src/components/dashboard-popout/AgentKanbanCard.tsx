@@ -7,8 +7,8 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft
 } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
@@ -239,7 +239,7 @@ export const AgentKanbanCard = memo(
           <div className="flex w-full items-center gap-1.5">
             {/* Why: a bare <svg> flex item shrinks with the row. */}
             <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+              <AgentTypeIcon agentType={card.agentType} size={14} />
             </span>
             <span
               className={cn(

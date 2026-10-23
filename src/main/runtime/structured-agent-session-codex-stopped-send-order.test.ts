@@ -14,6 +14,7 @@ import type {
 } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
+import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
 import { CODEX_TURN_OPEN_WAIT_MS } from '../codex/codex-structured-turn-open-wait'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -40,6 +41,38 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
+
+const openWaits = vi.hoisted(() => {
+  const state: {
+    turnIds: string[]
+    ended: string[]
+    began: (() => void) | null
+    releaseAll: (() => void) | null
+  } = { turnIds: [], ended: [], began: null, releaseAll: null }
+  return state
+})
+vi.mock('../codex/codex-structured-turn-open-wait', async (importOriginal) => {
+  const actual = await importOriginal<typeof CodexTurnOpenWait>()
+  return {
+    ...actual,
+    createCodexTurnOpenWaits: () => {
+      const waits = actual.createCodexTurnOpenWaits()
+      openWaits.releaseAll = waits.releaseAll
+      return {
+        ...waits,
+        wait: (turnId: string, withinMs: number) => {
+          openWaits.turnIds.push(turnId)
+          const pending = waits.wait(turnId, withinMs)
+          openWaits.began?.()
+          return pending.then(() => {
+            openWaits.ended.push(turnId)
+          })
+        }
+      }
+    }
+  }
+})
 
 const CALLER = { callerKey: 'codex-stopped-send-resume-test' }
 const MODEL = {
@@ -113,7 +146,7 @@ async function drawn(): Promise<string[]> {
   const { items, submissions } = await host.journalSnapshot(SESSION)
   const journal = { items, submissions }
   const { conversation } = projectNativeChatTranscript(
-    projectStructuredAgentSessionMessages(items, [], submissions, { rejectedInPlace: true }),
+    projectStructuredAgentSessionMessages(items, [], submissions),
     undefined,
     journal
   )
@@ -177,8 +210,7 @@ async function startHost(): Promise<void> {
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveCodexCommand: () => 'codex',
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-    openCodexConnection: openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000
+    ...scriptedCodexTransport(openConnection)
   })
 }
 
@@ -199,6 +231,10 @@ async function attach(expected: number | null): Promise<void> {
 }
 
 beforeEach(async () => {
+  openWaits.turnIds = []
+  openWaits.ended = []
+  openWaits.began = null
+  openWaits.releaseAll = null
   root = await mkdtemp(join(tmpdir(), 'orca-codex-stopped-send-resume-'))
   answers = 0
   resumes = 0
@@ -213,6 +249,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
+  openWaits.began = null
+  openWaits.releaseAll?.()
   await stopStructuredAgentSessionRuntime()
   await rm(root, { recursive: true, force: true })
 })
@@ -340,18 +379,41 @@ describe('a send a Stop took back before Codex echoed it', () => {
     const release = turns.holdNextAnswer()
     const sent = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(2))
-    const stopping = stop()
-    release()
-    // The Stop waits out the turn-open wait for a turn that never opens, then ends there.
-    expect(await settledWithin(stopping, CODEX_TURN_OPEN_WAIT_MS + 2_000)).not.toBe('held')
+    await host.flushStreamedEvents(SESSION)
+    const began = Promise.withResolvers<void>()
+    const registeredBeforeStop = openWaits.turnIds.length
+    const endedBeforeStop = openWaits.ended.length
+    openWaits.began = began.resolve
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    let stopSettled = false
+    const stopping = stop().finally(() => {
+      stopSettled = true
+    })
+    try {
+      release()
+      await began.promise
+      expect(openWaits.turnIds.slice(registeredBeforeStop)).toEqual(['turn-2'])
+      await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
+      expect(openWaits.ended.slice(endedBeforeStop)).toEqual([])
+      expect(stopSettled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(openWaits.ended.slice(endedBeforeStop)).toEqual(['turn-2'])
+      vi.useRealTimers()
+      // The Stop waits out the turn-open wait for a turn that never opens, then ends there.
+      expect(await settledWithin(stopping, 2_000)).not.toBe('held')
+    } finally {
+      vi.useRealTimers()
+      openWaits.began = null
+      release()
+      openWaits.releaseAll?.()
+      await stopping
+    }
     expect(verdictOf(await submissions(), sent)).toBe('withdrawn')
 
     // Every client draws the send where it was sent, then the one row saying it never started.
     await host.flushStreamedEvents(SESSION)
     const { items, submissions: settled } = await host.journalSnapshot(SESSION)
-    const messages = projectStructuredAgentSessionMessages(items, [], settled, {
-      rejectedInPlace: true
-    })
+    const messages = projectStructuredAgentSessionMessages(items, [], settled)
     expect(messages.slice(-2).map((message) => [message.role, message.blocks])).toEqual([
       ['user', [{ type: 'text', text: 'look around' }]],
       ['system', [expect.objectContaining({ text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT })]]

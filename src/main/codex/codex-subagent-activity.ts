@@ -96,17 +96,9 @@ export function codexSubagentLabel(activity: CodexSubagentActivity): string | nu
 export type CodexSubagentAnnouncement = {
   agentThreadId: string
   label: string | null
-  /** The item's turn is the one the child was spawned or messaged from. */
-  namesParentTurn: boolean
   /** The item is the spawn itself, so the thread that carried it spawned the child. */
   spawned: boolean
 }
-
-/** Collab calls that hand a helper work from the caller's turn, as an `interacted` activity does. */
-const CODEX_COLLAB_TOOLS_THAT_TASK_A_HELPER: ReadonlySet<string> = new Set([
-  'spawnAgent',
-  'sendInput'
-])
 
 /** The children an item announces: a `subAgentActivity`'s, or every helper a collab call names,
  *  keyed by thread id so repeats announce one child. Neither the tree root nor the session's own
@@ -130,7 +122,6 @@ function readAnnouncements(item: CodexThreadItem): CodexSubagentAnnouncement[] {
           {
             agentThreadId: activity.agentThreadId,
             label: codexSubagentLabel(activity),
-            namesParentTurn: activity.kind === 'started' || activity.kind === 'interacted',
             spawned: activity.kind === 'started'
           }
         ]
@@ -143,13 +134,7 @@ function readAnnouncements(item: CodexThreadItem): CodexSubagentAnnouncement[] {
   // Only a spawn's prompt describes its helper; another call's prompt is a later message to it,
   // so a helper no spawn named reads as any unnamed subagent does.
   const label = spawned ? codexCollabHelperLabel(call.prompt) : null
-  const namesParentTurn = CODEX_COLLAB_TOOLS_THAT_TASK_A_HELPER.has(call.tool)
-  return call.helperThreadIds.map((agentThreadId) => ({
-    agentThreadId,
-    label,
-    namesParentTurn,
-    spawned
-  }))
+  return call.helperThreadIds.map((agentThreadId) => ({ agentThreadId, label, spawned }))
 }
 
 export type CodexThreadTokenTotal = { threadId: string; totalTokens: number }

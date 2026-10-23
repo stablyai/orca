@@ -64,6 +64,7 @@ function terraformCells(environment: 'production' | 'staging'): Array<{
   machineType: string
   capacityRequests: number
   databasePoolMax: number
+  connectionHardCap: number | null
 }> {
   const tfvars = readFileSync(
     fileURLToPath(new URL(`../../../infra/terraform/environments/${environment}.tfvars`, import.meta.url)),
@@ -77,7 +78,10 @@ function terraformCells(environment: 'production' | 'staging'): Array<{
       zone: /zone\s*=\s*"([^"]+)"/.exec(match[2] ?? '')?.[1] ?? '',
       machineType: /machine_type\s*=\s*"([^"]+)"/.exec(match[2] ?? '')?.[1] ?? '',
       capacityRequests: Number(/capacity_requests\s*=\s*(\d+)/.exec(match[2] ?? '')?.[1]),
-      databasePoolMax: Number(/database_pool_max\s*=\s*(\d+)/.exec(match[2] ?? '')?.[1] ?? 10)
+      databasePoolMax: Number(/database_pool_max\s*=\s*(\d+)/.exec(match[2] ?? '')?.[1] ?? 10),
+      connectionHardCap: ((raw) => (raw === undefined ? null : Number(raw)))(
+        /connection_hard_cap\s*=\s*(\d+)/.exec(match[2] ?? '')?.[1]
+      )
     }))
     .sort((left, right) => cellOrdinal(left.cellId) - cellOrdinal(right.cellId))
 }
@@ -97,7 +101,8 @@ describe('relay operations environment config', () => {
           zone: cell.zone,
           machineType: cell.machineType,
           capacityRequests: cell.capacityRequests,
-          databasePoolMax: cell.databasePoolMax
+          databasePoolMax: cell.databasePoolMax,
+          connectionHardCap: cell.connectionHardCap
         }))
       ).toEqual(expected)
     }
@@ -122,17 +127,20 @@ describe('relay operations environment config', () => {
       {
         cellId: 'production-gce-c27', hostname: 'c27', origin: 'https://c27.relay.onorca.dev',
         region: 'asia-east2', zone: 'asia-east2-a', machineType: 'e2-standard-4',
-        capacityRequests: 6000, databasePoolMax: 10, configuredAdmission: false
+        capacityRequests: 6000, databasePoolMax: 10, connectionHardCap: null,
+        configuredAdmission: false
       },
       {
         cellId: 'production-gce-c28', hostname: 'c28', origin: 'https://c28.relay.onorca.dev',
         region: 'asia-east2', zone: 'asia-east2-b', machineType: 'e2-standard-4',
-        capacityRequests: 6000, databasePoolMax: 10, configuredAdmission: false
+        capacityRequests: 6000, databasePoolMax: 10, connectionHardCap: null,
+        configuredAdmission: false
       },
       {
         cellId: 'production-gce-c29', hostname: 'c29', origin: 'https://c29.relay.onorca.dev',
         region: 'asia-east2', zone: 'asia-east2-c', machineType: 'e2-standard-4',
-        capacityRequests: 6000, databasePoolMax: 10, configuredAdmission: false
+        capacityRequests: 6000, databasePoolMax: 10, connectionHardCap: null,
+        configuredAdmission: false
       }
     ])
 

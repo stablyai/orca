@@ -2,14 +2,19 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import {
+  UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
+  type RuntimeMobileSessionTabsResult
+} from '../../../shared/runtime-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
+import type * as RuntimeRpcClientModule from './runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn(),
+  ownerEnvironmentIdForWorkspace: vi.fn(),
+  hostAnswersEmptyWorktree: vi.fn(async () => true),
   recoverSnapshot: vi.fn(),
   runtimeSessionMirrorEnvironmentKey: vi.fn(),
   runtimeSessionMirrorEnvironmentKeys: vi.fn(() => ({
@@ -23,12 +28,14 @@ vi.mock('./use-runtime-session-mirror-environment-key', () => ({
   useRuntimeSessionMirrorEnvironmentKeys: mocks.runtimeSessionMirrorEnvironmentKeys
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
-  return {
-    ...actual,
-    getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
-  }
+vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
+  mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
+    workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
+}))
+
+vi.mock('./runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return { ...actual, runtimeEnvironmentSupportsCapability: mocks.hostAnswersEmptyWorktree }
 })
 
 vi.mock('./web-session-terminal-orphan-recovery', () => ({
@@ -48,6 +55,8 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-runtime-initial-terminal-bootstrap'
+import { resetWebRuntimeWakeTerminalRespawnForTests } from './web-runtime-wake-terminal-respawn'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 const ENV = 'env-a'
 const WORKTREE = 'repo-a::worktree-a'
@@ -122,6 +131,51 @@ async function publish(subscription: RuntimeSubscription, result: unknown): Prom
   })
 }
 
+function makeWorktree(): Worktree {
+  return {
+    id: WORKTREE,
+    repoId: 'repo-a',
+    path: 'worktree-a',
+    head: 'abc123',
+    branch: 'refs/heads/feature',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'worktree-a',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    hostId: 'local',
+    runtimeOwnerEnvironmentId: ENV
+  }
+}
+
+function hostTerminalSnapshot(snapshotVersion: number): RuntimeMobileSessionTabsResult {
+  return {
+    ...emptyActiveSnapshot(snapshotVersion),
+    activeGroupId: 'host-tab-1',
+    activeTabId: 'host-tab-1::leaf-1',
+    activeTabType: 'terminal',
+    tabs: [
+      {
+        type: 'terminal',
+        id: 'host-tab-1::leaf-1',
+        parentTabId: 'host-tab-1',
+        leafId: 'leaf-1',
+        title: 'Terminal 1',
+        terminal: 'term_host',
+        status: 'ready',
+        isActive: true
+      }
+    ]
+  }
+}
+
 function runtimeStatusMap(connectionGeneration: number): AppState['runtimeStatusByEnvironmentId'] {
   return new Map([
     [ENV, { status: { runtimeId: 'runtime-a' }, connectionGeneration }]
@@ -152,7 +206,7 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     runtimeSubscribe.mockClear()
     mocks.createTerminal.mockReset()
     mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV)
     mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY)
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -308,6 +362,134 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     await act(settle)
     await publish(findActiveSubscription(1), { type: 'snapshot', ...emptyActiveSnapshot(3) })
     expect(mocks.createTerminal).toHaveBeenCalledTimes(2)
+    hook.unmount()
+  })
+})
+
+describe('activating a host-owned workspace before the host has answered', () => {
+  beforeEach(() => {
+    subscriptions.length = 0
+    runtimeCall.mockClear()
+    runtimeSubscribe.mockClear()
+    mocks.createTerminal.mockReset().mockResolvedValue({ status: 'created' })
+    mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV)
+    mocks.hostAnswersEmptyWorktree.mockReset().mockResolvedValue(true)
+    mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
+    })
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetWebRuntimeInitialTerminalBootstrapForTests()
+    resetWebRuntimeWakeTerminalRespawnForTests()
+    seedRemoteMirrorState(1)
+    useAppStore.setState({ worktreesByRepo: { 'repo-a': [makeWorktree()] } })
+  })
+
+  afterEach(() => {
+    cleanup()
+    useAppStore.setState(initialState, true)
+    replaceRuntimeEnvironmentRevisions([])
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetWebRuntimeInitialTerminalBootstrapForTests()
+    resetWebRuntimeWakeTerminalRespawnForTests()
+    clearRuntimeEnvironmentConnectionGenerationsForTests()
+    resetStaleDocumentVisibilityForTesting()
+  })
+
+  it('does not add a terminal to a workspace whose host terminals have not arrived yet', async () => {
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
+    await act(settle)
+    await publish(findActiveSubscription(0), { type: 'snapshot', ...hostTerminalSnapshot(1) })
+
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
+    hook.unmount()
+  })
+
+  it('opens exactly one terminal once the host answers that the workspace is empty', async () => {
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
+    await act(settle)
+    await publish(findActiveSubscription(0), { type: 'snapshot', ...emptyActiveSnapshot(1) })
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    hook.unmount()
+  })
+
+  it('opens one terminal when the host first says "ask me later" and then answers empty', async () => {
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
+    await act(settle)
+    const subscription = findActiveSubscription(0)
+    await publish(subscription, {
+      type: 'snapshot',
+      ...emptyActiveSnapshot(0),
+      publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+    })
+    await publish(subscription, {
+      type: 'updated',
+      ...emptyActiveSnapshot(0),
+      publicationEpoch: 'empty:1'
+    })
+
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    hook.unmount()
+  })
+
+  it('does not count an "ask me later" frame as zero terminals', async () => {
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    const subscription = findActiveSubscription(0)
+    await publish(subscription, {
+      type: 'snapshot',
+      ...emptyActiveSnapshot(0),
+      publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
+    await act(settle)
+    await publish(subscription, { type: 'updated', ...hostTerminalSnapshot(1) })
+
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
+    hook.unmount()
+  })
+  it('opens one terminal on an older host whose "ask me later" is never followed by an answer', async () => {
+    mocks.hostAnswersEmptyWorktree.mockResolvedValue(false)
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    await publish(findActiveSubscription(0), {
+      type: 'snapshot',
+      ...emptyActiveSnapshot(0),
+      publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, { runtimeEnvironmentId: ENV })
+    await act(settle)
+
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    hook.unmount()
+  })
+
+  it('opens the first terminal of a workspace this client just created without waiting', async () => {
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(WORKTREE, {
+      runtimeEnvironmentId: ENV,
+      activate: false,
+      unknownHostCountIsEmpty: true
+    })
+    await act(settle)
+
+    expect(mocks.hostAnswersEmptyWorktree).not.toHaveBeenCalled()
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
     hook.unmount()
   })
 })

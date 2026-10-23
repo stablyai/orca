@@ -7,9 +7,9 @@ import {
   noteLiveAgentStatusCount
 } from './agent-status-capacity-eviction'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
-import { recoveryRecordMatches } from './agent-status-recovery-equivalence'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { liveResumeRecordChange } from '../../../../shared/agent-resume-record-from-status'
 
 export type AgentStatusLiveUpdateReduction = {
   patch: Partial<AppState>
@@ -73,16 +73,15 @@ export function reduceAgentStatusLiveUpdate(
     nextLaunchConfigs = { ...state.agentLaunchConfigByPaneKey }
     delete nextLaunchConfigs[paneKey]
   }
-  if (liveRecoveryRecord) {
-    if (!recoveryRecordMatches(existingSleepingRecord, liveRecoveryRecord)) {
-      nextSleepingAgentSessions = {
-        ...state.sleepingAgentSessionsByPaneKey,
-        [paneKey]: liveRecoveryRecord
-      }
-    }
-  } else if (existingSleepingRecord) {
+  const recordChange = liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
+  if (recordChange === 'clear') {
     nextSleepingAgentSessions = { ...state.sleepingAgentSessionsByPaneKey }
     delete nextSleepingAgentSessions[paneKey]
+  } else if (recordChange) {
+    nextSleepingAgentSessions = {
+      ...state.sleepingAgentSessionsByPaneKey,
+      [paneKey]: recordChange.set
+    }
   }
   const previousLive = state.agentStatusByPaneKey
   const nextLive = { ...previousLive, [paneKey]: entry }

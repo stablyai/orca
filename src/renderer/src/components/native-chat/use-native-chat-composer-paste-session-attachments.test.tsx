@@ -87,6 +87,8 @@ async function renderPaste(args: {
       setCaret: () => {},
       resolveAttachmentOwner: () => sessionOwner,
       attachResolvedPaths: args.attachResolvedPaths ?? (() => {}),
+      attachCopiedFiles: () => {},
+      captureCopiedFiles: () => async () => {},
       beginPendingImageAttachment: () => {
         counter += 1
         chips.push({
@@ -274,6 +276,8 @@ describe('pasting into a structured chat on a paired server', () => {
         setCaret: () => {},
         resolveAttachmentOwner: () => sessionOwner,
         attachResolvedPaths: () => {},
+        attachCopiedFiles: () => {},
+        captureCopiedFiles: () => async () => {},
         beginPendingImageAttachment: () => 'chip-1',
         // The composer's chips file a result that lands after it unmounted into its scope cache.
         resolvePendingImageAttachment: (id, path) => resolved.push(`${id} ${path}`),

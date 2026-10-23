@@ -17,7 +17,7 @@ import {
  * check-ref-format rejects.
  */
 export function getConfiguredBranchPrefix(
-  settings: BranchPrefixSettings,
+  settings: Parameters<typeof selectBranchPrefixInput>[0],
   gitUsername: string | null
 ): string | null {
   const raw = selectBranchPrefixInput(settings, gitUsername)
@@ -29,7 +29,7 @@ export function getConfiguredBranchPrefix(
  */
 export function computeBranchName(
   sanitizedName: string,
-  settings: BranchPrefixSettings,
+  settings: Parameters<typeof selectBranchPrefixInput>[0],
   gitUsername: string | null
 ): string {
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)

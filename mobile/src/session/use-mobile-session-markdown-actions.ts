@@ -60,6 +60,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
       const next = new Map(prev)
       next.set(tabId, {
         ...current,
+        localRevision: (current.localRevision ?? 0) + 1,
         localContent: content,
         isDirty: content !== current.content,
         saveError: undefined
@@ -177,7 +178,12 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         if (existing?.status !== 'ready') {
           return prev
         }
-        return new Map(prev).set(tab.id, { ...existing, saving: true, saveError: undefined })
+        return new Map(prev).set(tab.id, {
+          ...existing,
+          localRevision: (existing.localRevision ?? 0) + 1,
+          saving: true,
+          saveError: undefined
+        })
       })
       try {
         const response = await markdownTabSave.request(client, {
@@ -190,8 +196,12 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }
-        setMarkdownDocs((prev) =>
-          new Map(prev).set(tab.id, {
+        setMarkdownDocs((prev) => {
+          const existing = prev.get(tab.id)
+          const revision =
+            existing?.status === 'ready' ? existing.localRevision : current.localRevision
+          return new Map(prev).set(tab.id, {
+            localRevision: (revision ?? 0) + 1,
             status: 'ready',
             content: result.content,
             localContent: result.content,
@@ -199,7 +209,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
             isDirty: false,
             editable: true
           })
-        )
+        })
         markdownSaveSeqRef.current.delete(tab.id)
         triggerSuccess()
         showToast('Saved')
@@ -216,6 +226,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
           }
           return new Map(prev).set(tab.id, {
             ...existing,
+            localRevision: (existing.localRevision ?? 0) + 1,
             saving: false,
             saveError: message || 'Save failed'
           })

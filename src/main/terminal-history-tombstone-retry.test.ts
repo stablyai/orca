@@ -141,6 +141,7 @@ describe('tombstoned history removal retries', () => {
 
     for (let pass = 0; removeHostTreeMock.mock.calls.length < 1_000; pass++) {
       expect(pass).toBeLessThan(200)
+      await vi.waitFor(() => expect(releases.length).toBeGreaterThan(0))
       releases.splice(0).forEach((release) => release())
       await vi.advanceTimersByTimeAsync(0)
       await settleTombstoneDirectoryReads()

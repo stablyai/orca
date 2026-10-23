@@ -32,6 +32,7 @@ import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-ver
 import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
   BRIDGE_PROTOCOL_VERSION,
+  BRIDGE_RPC_ENVELOPE_GRANT,
   type BridgeClientMessage,
   type BridgeConnectionSnapshot,
   type BridgeInitRoute
@@ -437,6 +438,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // zero is as true as any other. The page still answers a number, because the member it stands in
     // for is one the native screens read without asking whether it exists.
     getGeneration: () => snapshot().generation ?? 0,
+    carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
     // Not gated on the session: it registers a listener and reads nothing, so it cannot answer
     // wrongly, and a provider that subscribes before `init` is how a screen hears the first change.
     onStateChange: (listener) => cache.onStateChange(listener),

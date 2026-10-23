@@ -1,7 +1,10 @@
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
-import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
+import {
+  nodePtyNativeBuildEntryDir,
+  usesNodePtySpawnHelper
+} from '../../shared/node-pty-spawn-helper'
 import { TERMINAL_SPAWN_ISSUE_REQUEST } from '../../shared/terminal-spawn-error-copy'
 import {
   hostReportsChildExitStatus,
@@ -34,6 +37,7 @@ export function getNodePtySpawnHelperCandidates(): string[] {
       : unixTerminalPath
 
   return [
+    join(packageRoot, nodePtyNativeBuildEntryDir(process.platform, process.arch), 'spawn-helper'),
     join(packageRoot, 'build', 'Release', 'spawn-helper'),
     join(packageRoot, 'build', 'Debug', 'spawn-helper'),
     join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')

@@ -19,6 +19,7 @@ type FileLinkHitTestDeps = {
   terminalHandle?: string | null
   pathExistsCache?: Map<string, boolean>
   openWithSystemDefault?: boolean
+  sourceTabId?: string | null
 }
 
 export function openFilePathLinkAtBufferPosition(

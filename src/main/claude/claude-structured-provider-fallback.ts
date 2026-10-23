@@ -1,11 +1,11 @@
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalStatusItem,
+  AgentJournalTurnScope
+} from '../../shared/agent-session-journal-types'
+import type { AgentSessionFailureRowWords } from '../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { PROVIDER_FRAME_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
-import { classifyProviderFrame } from '../native-chat/agent-session-wire/provider-frame-disposition'
 import {
   type UnhandledProviderFrameJournalItemOptions,
   readableProviderFrameText,
@@ -43,14 +43,9 @@ const PROGRESS_FRAME_KINDS: ReadonlySet<string> = new Set([
   'message:stream_event:ping'
 ])
 
-/** A frame that writes no row, so nothing streamed has to be journaled ahead of it. A failure it
- *  reports still surfaces as a row, so it is not one. */
+/** A frame that writes no row, so nothing streamed has to be journaled ahead of it. */
 export function isClaudeProgressFrame(message: Record<string, unknown>): boolean {
-  const kind = claudeProviderFrameKind(message)
-  return (
-    PROGRESS_FRAME_KINDS.has(kind) &&
-    classifyProviderFrame('claude', kind, message) !== 'error-surface'
-  )
+  return PROGRESS_FRAME_KINDS.has(claudeProviderFrameKind(message))
 }
 
 const SETTLED_RESULT_KINDS: ReadonlySet<string> = new Set(
@@ -138,11 +133,12 @@ export function createClaudeProviderFrameFallback(
   /** The frame's turn — the open one once `beforeAppend` ran — or the conversation. */
   turnScope: () => AgentJournalTurnScope
 ): {
-  /** `displayText` leads the row when Claude knows the sentence the frame itself does not name. */
+  /** `display` leads the row when Claude knows the sentence the frame itself does not name; a
+   *  status body in its place also sets the row's tone and fact. */
   append: (
     kind: string,
     payload: unknown,
-    displayText?: string | null,
+    display?: string | null | (AgentSessionFailureRowWords & { tone: string }),
     /** Runs only when a row is actually going to be written, so a frame that
      *  translates to nothing never opens a turn. */
     beforeAppend?: () => void,
@@ -155,7 +151,7 @@ export function createClaudeProviderFrameFallback(
   let sequence = 0
   const retryRun = createClaudeApiRetryRuns()
   return {
-    append: (kind, payload, displayText, beforeAppend, options, stamp) => {
+    append: (kind, payload, display, beforeAppend, options, stamp) => {
       sequence += 1
       const retrying = kind === CLAUDE_API_RETRY_FRAME_KIND ? claudeRecord(payload) : null
       if (retrying) {
@@ -189,21 +185,23 @@ export function createClaudeProviderFrameFallback(
         'claude',
         kind,
         payload,
-        DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+        PROVIDER_FRAME_PAYLOAD_LIMITS,
         options
       )
       if (!translated) {
         return false
       }
       beforeAppend?.()
-      const bounded = displayText
-        ? boundInlineText(displayText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-        : null
       const identity = {
         provider: 'orca',
         clientMessageId: `provider-frame:claude:${acquisitionId}:${sequence}`
       } as const
-      const body = bounded ? { ...translated.body, text: bounded } : translated.body
+      const body: AgentJournalStatusItem =
+        display && typeof display === 'object'
+          ? { ...translated.body, ...display }
+          : typeof display === 'string' && display
+            ? { ...translated.body, text: display }
+            : translated.body
       sink.appendItem(identity, body, stamp?.(identity, body) ?? { turnScope: turnScope() })
       sink.publish()
       return true

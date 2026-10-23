@@ -1,5 +1,5 @@
 import * as codexRewind from './codex-structured-rewind'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
@@ -9,6 +9,7 @@ import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionSetOptionInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
 import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
@@ -19,6 +20,7 @@ import {
   prepareLiveCodexSessionOptions,
   readLiveCodexSessionOptions
 } from './codex-structured-session-options'
+import { resolvedCodexMessageOptions } from './codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -60,6 +62,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   private readonly teardown: CodexStructuredSessionTeardown
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
+    this.atRestCommands = deps.atRestCommands
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
       translate: (sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt) =>
@@ -84,6 +87,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   supportsLocation = supportsCodexStructuredLocation
 
+  readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
+    this.sessions.get(sessionId)?.skillReport?.read()
+
+  readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
+
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
       input,
@@ -99,6 +107,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
         this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
     })
+
+  open = (input: StructuredAgentSessionProviderOpenInput) => {
+    const attempt = this.acquisitions.get(input.sessionId)
+    if (!attempt?.open) {
+      return Promise.reject(new Error(`no spawned codex child for session ${input.sessionId}`))
+    }
+    return attempt.open(input)
+  }
 
   /** Buffers pre-publication events and drops events from superseded children. */
   private deliver(
@@ -124,11 +140,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     session: CodexSession,
     event: CodexStructuredSessionEvent
   ): CodexJournalTranslationAdmission {
-    if (event.type === 'notification' && !session.backgroundTasks.canObserve(event)) {
-      return { accepted: false, reason: 'failed' }
-    }
     if (event.type === 'notification') {
       noteCodexTurnOpened(session, event.method, event.params)
+      if (event.method === 'skills/changed') {
+        session.skillReport?.refresh(true)
+      }
     }
     const admission = session.translator?.handle(event) ?? { accepted: true }
     if (!admission.accepted) {
@@ -174,9 +190,16 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
 
+  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
+    this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
+
   // `ended` is set in the same turn as the connection's own exit report.
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
     const session = this.sessions.get(sessionId)
+    const starting = this.acquisitions.get(sessionId)
+    if (starting?.acquisitionGeneration === acquisitionGeneration) {
+      return !starting.exitProven && starting.window.connection?.pid !== undefined
+    }
     return (
       session?.acquisitionGeneration === acquisitionGeneration &&
       session.connection.pid !== undefined &&
@@ -209,19 +232,21 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         turnId
       )
 
-  async dispatch(input: {
-    sessionId: string
-    clientMessageId: string
-    body: AgentJournalMessageItem
-    fence: number
-    requestedAt?: number
-    beforeDispatch?: () => Promise<void>
-  }): Promise<AgentSessionDispatchOutcome> {
+  async dispatch(
+    input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
+  ): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
       await input.beforeDispatch?.()
-      return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
+      input.signal?.throwIfAborted()
+      input.onInputPreparation?.()
+      const turnOptions = await waitForPromiseWithSignal(
+        resolvedCodexMessageOptions(session, input.executionOptions),
+        input.signal
+      )
+      input.signal?.throwIfAborted()
+      return await dispatchCodexTurn(session, { ...input, turnOptions }, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false
     }
@@ -276,7 +301,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       this.session(input.sessionId),
       input.change,
       input.replacesGoal,
-      this.deps.requestTimeoutMs
+      this.deps.requestTimeoutMs,
+      input.signal
     )
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
@@ -298,39 +324,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   prepareReadOptions = (input: { sessionId: string; fence: number }) =>
     prepareLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
-  readAcquisitionOptions = (input: {
-    sessionId: string
-    fence: number
-    priorOptions?: Readonly<Record<string, string>>
-  }) => {
-    const session = this.session(input.sessionId)
-    const options = {
-      ...Object.fromEntries(
-        Object.entries(input.priorOptions ?? {}).filter(([key]) => !isCodexTurnOptionKey(key))
-      ),
-      ...Object.fromEntries(session.options)
-    }
-    const reported = session.reportedOptions
-    // The thread's effort belongs to the thread's model, not to a different saved one.
-    if (
-      options.effort === undefined &&
-      reported.effort &&
-      (options.model === undefined || options.model === reported.model)
-    ) {
-      options.effort = reported.effort
-    }
-    if (options.model === undefined && reported.model) {
-      options.model = reported.model
-    }
-    return Object.keys(options).length > 0 ? options : undefined
-  }
-
-  closeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
+  closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (sessionId) =>
+    this.teardown.close(sessionId)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
   disposeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)
+  hasOwnedAcquisition = (sessionId: string): boolean =>
+    this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
   private session(sessionId: string): CodexSession {
     return requireLiveCodexSession(this.sessions, sessionId)

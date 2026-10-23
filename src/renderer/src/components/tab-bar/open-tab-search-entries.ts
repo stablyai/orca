@@ -14,6 +14,7 @@ import {
   type SearchableWorkspaceTab
 } from '@/lib/workspace-tab-palette-search'
 import type { AppState } from '@/store/types'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
@@ -101,7 +102,7 @@ export function selectOpenTabSearchEntryState(
     browserPagesByWorkspace: state.browserPagesByWorkspace,
     browserTabsByWorktree: state.browserTabsByWorktree,
     executionHostId,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     groupsByWorktree: state.groupsByWorktree,
     openFiles: state.openFiles,
@@ -109,7 +110,7 @@ export function selectOpenTabSearchEntryState(
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
     worktree,
-    worktreesByRepo: state.worktreesByRepo
+    worktreesByRepo: selectWorktreesByRepo(state)
   }
 }
 

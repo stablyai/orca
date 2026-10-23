@@ -27,6 +27,8 @@ export type CodexJournalTranslatorDeps = {
   acquisitionId?: string
   /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
   sessionId?: string
+  /** Catch-up imports use turn-qualified identities without changing live/resume keys. */
+  historyImport?: true
   now?: () => number
   bindPromptItemId?: (
     journalItemId: string,
@@ -39,9 +41,6 @@ export type CodexJournalTranslatorDeps = {
    *  identity the journal row carries so a replay computes the same key. */
   onUserMessageEcho?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   primaryThreadId?: () => string | null
-  /** Codex reported the primary thread is not running while no turn is open here.
-   *  A send whose dispatch was never answered is owed nothing after this. */
-  onPrimaryThreadStoppedRunning?: () => void
   /** Submission origin for one exact client message still awaiting its echo. */
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   subagentExecutions?: CodexSubagentExecutions

@@ -1,7 +1,11 @@
 /**
- * The marked-text range a live input's change event reports, as the host's text system means it.
- * Native passes the event's own through: iOS reports its range, React Native Android reports none.
+ * The event is the DOM's, so its `isComposing` passes through except in an Android
+ * WebView, which reports none, as native Android does.
  */
 export function reportedLiveInputComposing(isComposing: boolean | undefined): boolean | undefined {
+  // Why: Android keyboards compose every Latin word, so the DOM's range would hold each one unsent.
+  if (globalThis.navigator?.userAgent?.includes('Android')) {
+    return undefined
+  }
   return isComposing
 }

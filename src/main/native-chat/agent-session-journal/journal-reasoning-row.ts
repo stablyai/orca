@@ -2,7 +2,6 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
-import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 
 export type JournalReasoningLifecycle = Pick<AgentJournalMessageItem, 'state' | 'completedAt'>
 
@@ -15,9 +14,7 @@ export function journalReasoningBody(
     ? {
         kind: 'message',
         role: 'reasoning',
-        blocks: [
-          { type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
-        ],
+        blocks: [{ type: 'text', text }],
         ...lifecycle
       }
     : null

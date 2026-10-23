@@ -42,10 +42,12 @@ const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
-const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
-  process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
-  '.pi'
-)
+export function piSessionHistorySessionsDir(): string {
+  return normalizeAgentSessionsDir(
+    process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
+    '.pi'
+  )
+}
 // Why: Prime Agent brands Pi's env contract with its own prefix and adds a
 // dedicated sessions-root override, so resolution differs from Pi/OMP in shape
 // as well as in variable name.
@@ -248,7 +250,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   pi: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.piSessionsDir ?? PI_SESSIONS_DIR, wslHomeDirs, [
+      sessionRootDirs(options.piSessionsDir ?? piSessionHistorySessionsDir(), wslHomeDirs, [
         '.pi',
         'agent',
         'sessions'

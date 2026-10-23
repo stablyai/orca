@@ -4,6 +4,7 @@ import type { GitLabProjectRef, GitLabWorkItem } from '../../../shared/gitlab-ty
 import type { JiraIssue } from '../../../shared/jira-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   normalizeTaskSourceContext,
@@ -58,13 +59,16 @@ export function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
 }
 export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
   return (
-    getLinkedWorkItemWorkspaceName({
-      type: 'issue',
-      provider: 'jira',
-      number: 0,
-      title: `${issue.key} ${issue.title}`,
-      jiraIdentifier: issue.key
-    })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+    getLinkedWorkItemWorkspaceName(
+      {
+        type: 'issue',
+        provider: 'jira',
+        number: 0,
+        title: `${issue.key} ${issue.title}`,
+        jiraIdentifier: issue.key
+      },
+      getJiraIssueKeyCasingSeedOptions()
+    )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
 export function getTaskPageRepoSourceContext(
@@ -158,6 +162,7 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
   id: string
   path: string
   executionHostId?: string | null
+  connectionId?: string | null
   sourceCacheScope?: string | null
 } {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
@@ -165,6 +170,7 @@ export function getTaskPageRepoCacheInput(repo: Repo): {
     id: repo.id,
     path: repo.path,
     executionHostId: repo.executionHostId,
+    connectionId: repo.connectionId,
     sourceCacheScope:
       sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
   }

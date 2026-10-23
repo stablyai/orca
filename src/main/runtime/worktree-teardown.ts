@@ -20,7 +20,8 @@ import {
   listStructuredSessionsForWorktree,
   retireStructuredSessionTabsForWorktree,
   unclosedStructuredSessions,
-  type StructuredSessionInWorkspace
+  type StructuredSessionInWorkspace,
+  type StructuredWorktreeSweepRuntime
 } from './structured-session-worktree-teardown'
 import {
   createWorktreeSweepTracker,
@@ -34,8 +35,11 @@ import {
   resolveUnstoppedPtyVerdict
 } from './unstopped-pty-verification'
 
+export type WorktreeTeardownRuntime = StructuredWorktreeSweepRuntime &
+  Pick<OrcaRuntimeService, 'stopTerminalsForWorktree' | 'getPtyLivenessVerdict'>
+
 export type WorktreeTeardownDeps = {
-  runtime?: OrcaRuntimeService
+  runtime?: WorktreeTeardownRuntime
   /** Authoritative id for callers whose selector no longer resolves (orphaned workspace). */
   resolvedWorktreeId?: string
   /** SSH connection owning `resolvedWorktreeId`; prevents same-id cross-host graph matches. */
@@ -70,8 +74,6 @@ export type WorktreeTeardownResult = {
 }
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
-
-export { WORKTREE_TEARDOWN_RPC_MARGIN_MS, teardownRpcDeadline } from './worktree-teardown-deadline'
 
 /**
  * Kills every PTY we can prove belongs to `worktreeId`, across all three

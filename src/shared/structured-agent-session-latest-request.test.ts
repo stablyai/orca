@@ -191,11 +191,15 @@ const ROWS: Row[] = [
     items: [
       userEntry('m1', 1),
       turn('t1', 2, { state: 'completed', outcome: 'success', completedAt: 50 }),
-      userEntry('steer', 3, 't1')
+      userEntry('steer', 3)
     ],
     submissions: [
       sent('m1', { dispatchState: 'accepted' }),
-      rejected('steer', 'no active turn to steer', 30)
+      sent('steer', {
+        dispatchState: 'rejected',
+        reason: 'no active turn to steer',
+        answeredInTurn: { turnItemId: 'codex:turn:t1', via: 'steer' }
+      })
     ],
     outcome: 'success',
     listed: true

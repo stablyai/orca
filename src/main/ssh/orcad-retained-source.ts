@@ -9,16 +9,18 @@
  */
 import { createHash } from 'node:crypto'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
-import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration-manifest'
+import type { ProjectHostSetup } from '../../shared/project-types'
+import type { OrcadMigrationCatalogPayload } from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   isRetainedOrcadMigrationSourceCutover,
   type OrcadMigrationSourceCutover
-} from '../../shared/orcad-migration-source-cutover'
+} from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { Repo } from '../../shared/repo-types'
 import { listEnvironments } from '../../shared/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../shared/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
@@ -28,6 +30,10 @@ import {
   repoBelongsToOrcadSource
 } from '../persistence/migrating-orcad-catalog/orcad-source-ownership'
 import { findOrcadMigrationSourceCutoverForTarget } from './orcad-migration-cutover-journal'
+import {
+  withoutWslMovedFolderWorkspaces,
+  withoutWslMovedRepos
+} from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 const appUserDataPath = (): string => getAppEnvironment().getPath('userData')
 
@@ -89,13 +95,19 @@ export function visibleRepos(
   store: CatalogStore & Pick<Store, 'getSshTargets'>,
   getUserDataPath = appUserDataPath
 ): Repo[] {
-  const hidden = hiddenRetainedSourceTargetIds(getUserDataPath, store.getSshTargets())
-  const repos = store.getRepos()
-  if (hidden.length === 0) {
+  return reposShownWith(
+    store.getRepos(),
+    hiddenRetainedSourceTargetIds(getUserDataPath, store.getSshTargets())
+  )
+}
+
+function reposShownWith(allRepos: Repo[], hiddenTargets: readonly string[]): Repo[] {
+  const repos = withoutWslMovedRepos(allRepos)
+  if (hiddenTargets.length === 0) {
     return repos
   }
   return repos.filter(
-    (repo) => !hidden.some((targetId) => repoBelongsToOrcadSource(repo, targetId))
+    (repo) => !hiddenTargets.some((targetId) => repoBelongsToOrcadSource(repo, targetId))
   )
 }
 
@@ -119,7 +131,7 @@ export function visibleFolderWorkspaces(
   getUserDataPath = appUserDataPath
 ): FolderWorkspace[] {
   const hidden = hiddenRetainedSourceTargetIds(getUserDataPath, store.getSshTargets())
-  const folderWorkspaces = store.getFolderWorkspaces()
+  const folderWorkspaces = withoutWslMovedFolderWorkspaces(store.getFolderWorkspaces())
   if (hidden.length === 0) {
     return folderWorkspaces
   }
@@ -132,6 +144,41 @@ export function visibleFolderWorkspaces(
     hidden.flatMap((targetId) => [...orcadSourceFolderWorkspaceIds(state, targetId)])
   )
   return folderWorkspaces.filter((workspace) => !hiddenIds.has(workspace.id))
+}
+
+/**
+ * A setup is listed only while its repo row is: the server that took a hidden row lists its own
+ * setup under the same id, so leaking ours shows every moved project's host twice (#30859).
+ */
+export function visibleProjectHostSetups(
+  store: CatalogStore & Pick<Store, 'getProjectHostSetups' | 'getSshTargets'>,
+  getUserDataPath = appUserDataPath
+): ProjectHostSetup[] {
+  const setups = store.getProjectHostSetups()
+  if (setups.length === 0) {
+    return setups
+  }
+  const hiddenTargets = hiddenRetainedSourceTargetIds(getUserDataPath, store.getSshTargets())
+  const allRepos = store.getRepos()
+  const shownRepos = reposShownWith(allRepos, hiddenTargets)
+  if (hiddenTargets.length === 0 && shownRepos.length === allRepos.length) {
+    return setups
+  }
+  const rowKey = (hostId: string, repoId: string): string => `${hostId}\0${repoId}`
+  const shownKeys = new Set(shownRepos.map((repo) => rowKey(getRepoExecutionHostId(repo), repo.id)))
+  const hiddenKeys = new Set(
+    allRepos
+      .map((repo) => rowKey(getRepoExecutionHostId(repo), repo.id))
+      .filter((key) => !shownKeys.has(key))
+  )
+  return setups.filter((setup) => {
+    if (setup.repoId && hiddenKeys.has(rowKey(setup.hostId, setup.repoId))) {
+      return false
+    }
+    // Repo-less placeholders have no row to follow, so the hidden host decides for them.
+    const host = parseExecutionHostId(setup.hostId)
+    return !(host?.kind === 'ssh' && hiddenTargets.includes(host.targetId))
+  })
 }
 
 /**
@@ -195,14 +242,10 @@ export function reconcileManagedOrcadSshTargets(
 function restoreFencesFromManagedServers(userDataPath: string, store: TargetStore): void {
   const targets = new Map(store.getSshTargets().map((target) => [target.id, target]))
   for (const environment of listEnvironments(userDataPath)) {
-    const targetId = environment.orcadDeployment?.sshTargetId
-    const target = targetId ? targets.get(targetId) : undefined
+    const deployment = getOrcadSshDeployment(environment)
+    const target = deployment ? targets.get(deployment.sshTargetId) : undefined
     // Why generation-bound: a host re-created under the same id is a different registration.
-    if (
-      target &&
-      !target.orcadFence &&
-      target.generation === environment.orcadDeployment?.sshTargetGeneration
-    ) {
+    if (target && !target.orcadFence && target.generation === deployment?.sshTargetGeneration) {
       store.updateSshTarget(target.id, { orcadFence: { environmentId: environment.id } })
     }
   }

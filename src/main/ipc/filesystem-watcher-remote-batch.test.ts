@@ -22,7 +22,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   }
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 type WatchCallback = (events: FsChangeEvent[]) => void
@@ -80,7 +81,8 @@ describe('remote filesystem watcher batching', () => {
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: WORKTREE_PATH,
-      events: [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }]
+      events: [{ kind: 'update', absolutePath: `${WORKTREE_PATH}/a.ts` }],
+      connectionId: 'conn-1'
     })
     await closeAllWatchers()
     vi.useRealTimers()
@@ -102,7 +104,8 @@ describe('remote filesystem watcher batching', () => {
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: WORKTREE_PATH,
-      events: [{ kind: 'delete', absolutePath: `${WORKTREE_PATH}/dist/app.js` }]
+      events: [{ kind: 'delete', absolutePath: `${WORKTREE_PATH}/dist/app.js` }],
+      connectionId: 'conn-1'
     })
     await closeAllWatchers()
     vi.useRealTimers()
@@ -124,7 +127,8 @@ describe('remote filesystem watcher batching', () => {
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
       worktreePath: WORKTREE_PATH,
-      events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
+      events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }],
+      connectionId: 'conn-1'
     })
     await closeAllWatchers()
     vi.useRealTimers()

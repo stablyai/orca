@@ -12,6 +12,7 @@ export {
   type ZcodePlanCredential
 } from './zcode-usage-credentials'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 
 const API_TIMEOUT_MS = 15_000
@@ -169,9 +170,6 @@ async function fetchUsage(
 ): Promise<ProviderRateLimits> {
   let response: Response
   try {
-    const signal = callerSignal
-      ? AbortSignal.any([callerSignal, AbortSignal.timeout(API_TIMEOUT_MS)])
-      : AbortSignal.timeout(API_TIMEOUT_MS)
     response = await fetch(credentials.quotaUrl, {
       method: 'GET',
       redirect: 'error',
@@ -180,7 +178,7 @@ async function fetchUsage(
         'Accept-Language': 'en-US,en',
         'Content-Type': 'application/json'
       },
-      signal
+      signal: abortSignalWithTimeout(callerSignal, API_TIMEOUT_MS)
     })
   } catch (error) {
     return failed(

@@ -14,8 +14,11 @@ import {
 import { WindowSession, withoutLeaf } from './terminal-topology-window-session-fixture'
 import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
+// rollback build (switch-off) — delete with the switch-off code post-flip
+vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))

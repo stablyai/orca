@@ -48,7 +48,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: activate
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const { mount, button, offerIds, toasts, fakeHost, runStatus, calls } = createResumeModalFixture(
   rpc,

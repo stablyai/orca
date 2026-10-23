@@ -6,7 +6,6 @@ import {
   query,
   type CanUseTool,
   type Options,
-  type PermissionMode,
   type SDKUserMessage,
   type SpawnedProcess as SdkSpawnedProcess,
   type SpawnOptions as SdkSpawnOptions
@@ -14,6 +13,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'
 
@@ -131,7 +131,7 @@ function recordingSpawner(spawns: SpawnSeen[]) {
   }
 }
 
-function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = []) {
+function resolvedLaunch(permissionMode: AgentChatPermissionMode, launchArgs: string[] = []) {
   const record = {
     sessionId: 'contract-pin-session',
     provider: 'claude',
@@ -150,9 +150,17 @@ function resolvedLaunch(permissionMode: PermissionMode, launchArgs: string[] = [
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/repos/workspace-1',
     resolveCommand: () => FAKE_CLI,
-    resolveAuthPolicy: () => ({ account: 'managed' }),
-    resolvePermissionMode: () => permissionMode
-  })({ identity: { sessionId: record.sessionId } as never })
+    resolveAuthPolicy: () => ({ account: 'managed' })
+  })({
+    identity: {
+      sessionId: record.sessionId,
+      workspaceId: 'workspace-1',
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      agent: 'claude',
+      providerHandle: null
+    },
+    permissionMode
+  })
 }
 
 function singleUserTurn(): AsyncIterable<SDKUserMessage> {
@@ -330,7 +338,7 @@ describe('Claude Agent SDK contract pins', () => {
     const spawns: SpawnSeen[] = []
     // Driven by the real resolver, so the argv walk covers its option set and merge order,
     // not a hand-written options literal.
-    const launch = await resolvedLaunch('bypassPermissions', [
+    const launch = await resolvedLaunch('full-access', [
       '--model',
       'claude-sonnet-4-5',
       '--dangerously-skip-permissions',

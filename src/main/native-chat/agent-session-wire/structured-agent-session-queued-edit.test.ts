@@ -2,6 +2,8 @@
 // identity, an edit lease stops automatic delivery at the card (and so at everything behind it),
 // and no lease outlives its deadline, its card, or its conversation.
 
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -22,6 +24,8 @@ import {
 import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
 import { QUEUED_MESSAGES_PUBLISHED_MAX_BYTES } from './structured-agent-session-queued-published-bytes'
 import { QUEUED_MESSAGE_EDIT_LEASE_MS } from '../agent-session-journal/queued-message-edit-leases'
+import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
+import type { QueuedMessageImageBlock } from '../../../shared/queued-message-edit'
 
 let rig: QueuedMessageTestRig
 beforeEach(async () => {
@@ -50,15 +54,28 @@ function fingerprint(id: string) {
   }
   return card.fingerprint
 }
-function update(messageId: string, expected: string, text: string, operationId?: string) {
-  const fields = { messageId, expectedBodyFingerprint: expected, text }
+function update(
+  messageId: string,
+  expected: string,
+  text: string,
+  operationId?: string,
+  images?: QueuedMessageImageBlock[],
+  queuedImageCards?: boolean
+) {
+  const fields = {
+    messageId,
+    expectedBodyFingerprint: expected,
+    text,
+    ...(images ? { images } : {})
+  }
   return rig.host.queuedMessageUpdate(QUEUED_RIG_CALLER, {
     envelope: rig.envelope(
       fields,
       'agentSession.queuedMessageUpdate',
       operationId ?? hostTestOperationId()
     ),
-    ...fields
+    ...fields,
+    ...(queuedImageCards === undefined ? {} : { queuedImageCards })
   })
 }
 function hold(
@@ -75,8 +92,12 @@ function hold(
       : { ...common, action }
   )
 }
+function gate() {
+  const host = { store: rig.store, sessions: rig.host.collaboratorsForTests().sessions }
+  return structuredQueueSendGate(host, HOST_TEST_SESSION)
+}
 function publication() {
-  return readQueuePublication(journal(), structuredQueueSendGate(rig.store, HOST_TEST_SESSION))
+  return readQueuePublication(journal(), gate())
 }
 function published(id: string) {
   return publication().queuedMessages.find((message) => message.messageId === id)
@@ -180,6 +201,72 @@ describe('saving a queued card in place', () => {
   })
 })
 
+describe("saving a queued card's images", () => {
+  const A = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0a'
+  const B = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0b'
+  const GONE = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c0c'
+  const upload = (uploadId: string) => join(agentSessionAttachmentStoreRoot(rig.root), uploadId)
+  const image = (uploadId: string): QueuedMessageImageBlock => ({
+    type: 'image-ref',
+    path: join(upload(uploadId), 'shot.png')
+  })
+  async function store(uploadId: string) {
+    await mkdir(upload(uploadId), { recursive: true })
+    await writeFile(join(upload(uploadId), 'shot.png'), 'bytes')
+  }
+
+  it('replaces the set by compare-and-set; only a newly named upload must still be stored', async () => {
+    await rig.workingSend()
+    await store(A)
+    await store(B)
+    const id = await queue('caption')
+    const base = fingerprint(id)
+    const operation = hostTestOperationId()
+    const both = [image(A), image(B)]
+    const caption = 'caption [Image #1] [Image #2]'
+    expect(await update(id, base, `${caption} `, operation, both)).toMatchObject({
+      value: { status: 'updated' }
+    })
+    const blocks = journal().queuedMessages.get(id)?.body.blocks
+    expect(blocks).toEqual([{ type: 'text', text: caption }, ...both])
+    expect(await update(id, base, `${caption} `, operation, both)).toMatchObject({
+      value: { status: 'unchanged' }
+    })
+    expect(await update(id, base, 'caption', undefined, [image(B)])).toMatchObject({
+      value: { status: 'changed' }
+    })
+    // A kept image whose upload was swept never blocks a text-only fix, which keeps the images.
+    await rm(upload(A), { recursive: true })
+    expect(await update(id, fingerprint(id), 'fixed')).toMatchObject({
+      value: { status: 'updated' }
+    })
+    expect(journal().queuedMessages.get(id)?.body.blocks).toEqual([
+      { type: 'text', text: 'fixed' },
+      ...both
+    ])
+    const before = journal().queuedMessages.get(id)
+    expect(
+      await update(id, fingerprint(id), 'fixed', undefined, [image(B), image(GONE)])
+    ).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid', details: { reason: 'attachmentExpired' } }
+    })
+    expect(journal().queuedMessages.get(id)).toEqual(before)
+  })
+
+  it('a caller shown no image cards may not add one', async () => {
+    await rig.workingSend()
+    await store(A)
+    const id = await queue('text only')
+    expect(
+      await update(id, fingerprint(id), 'text only', undefined, [image(A)], false)
+    ).toMatchObject({ value: { status: 'not-editable' } })
+    expect(journal().queuedMessages.get(id)?.body.blocks).toEqual([
+      { type: 'text', text: 'text only' }
+    ])
+  })
+})
+
 describe('edit leases and automatic delivery', () => {
   it('earlier cards deliver; the edited card and those behind it wait; a new send still queues', async () => {
     const work = await rig.workingSend()
@@ -198,7 +285,7 @@ describe('edit leases and automatic delivery', () => {
     expect(
       shouldQueueStructuredAgentSessionSend({
         journal: journal(),
-        ...structuredQueueSendGate(rig.store, HOST_TEST_SESSION)()
+        ...gate()(journal())
       })
     ).toBe(true)
     // An explicit Send still overrides, and spends the lease with the card.

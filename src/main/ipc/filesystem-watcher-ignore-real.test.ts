@@ -5,6 +5,8 @@ import { subscribe, type AsyncSubscription, type Event } from '@parcel/watcher'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 
+const DELIVERY_TIMEOUT_MS = 8_000
+
 describe('filesystem watcher native ignores', () => {
   let root: string | null = null
   let subscription: AsyncSubscription | null = null
@@ -41,6 +43,21 @@ describe('filesystem watcher native ignores', () => {
       },
       buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
     )
+    const seen = (file: string): boolean => events.some((event) => event.path === file)
+    // Why: under CI load a single write can miss delivery, so rewrite until each file is seen.
+    const writeUntilSeen = async (files: string[]): Promise<void> => {
+      await vi.waitFor(
+        async () => {
+          const missing = files.filter((file) => !seen(file))
+          await Promise.all(missing.map((file) => writeFile(file, 'source')))
+          expect(missing).toEqual([])
+        },
+        { timeout: DELIVERY_TIMEOUT_MS, interval: 200 }
+      )
+    }
+
+    // Proves both watched levels are live before the storm, so the ignore check can't pass vacuously.
+    await writeUntilSeen([join(root, 'ready.ts'), join(nestedSource, 'ready.ts')])
 
     const generatedNames = Array.from({ length: 20 }, (_, index) => `generated-${index}.js`)
     // Windows forbids control characters in filenames.
@@ -55,18 +72,11 @@ describe('filesystem watcher native ignores', () => {
     if (process.platform !== 'win32') {
       sourceFiles.push(join(root, 'source\nnewline.ts'), join(nestedSource, 'source\nnewline.ts'))
     }
-    await Promise.all(sourceFiles.map((file) => writeFile(file, 'source')))
+    await writeUntilSeen(sourceFiles)
+    // Why: events arrive in order, so once a file written after the storm is seen at both levels, any
+    // unignored generated event is already recorded. Replaces a fixed debounce sleep.
+    await writeUntilSeen([join(root, 'sentinel.ts'), join(nestedSource, 'sentinel.ts')])
 
-    await vi.waitFor(
-      () => {
-        for (const sourceFile of sourceFiles) {
-          expect(events.some((event) => event.path === sourceFile)).toBe(true)
-        }
-      },
-      { timeout: 8_000 }
-    )
-    // Why: ignored callbacks must stay absent after the native debounce has drained.
-    await new Promise((resolve) => setTimeout(resolve, 300))
     expect(errors).toEqual([])
     const generatedPaths = new Set(generatedFiles)
     expect(events.filter((event) => generatedPaths.has(event.path))).toEqual([])

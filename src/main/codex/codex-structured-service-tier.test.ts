@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import {
+  acquireReadyCodexForTest,
+  codexStartReport,
   THREAD_ID,
   USER_MESSAGE,
   adapterFor,
@@ -15,7 +17,6 @@ import {
 import { agentModelCatalogSessionAccess } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import type { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
-import { nativeSessionOptionsFromReport } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 
 function listing(tier = 'priority') {
   return {
@@ -31,7 +32,7 @@ function listing(tier = 'priority') {
 }
 
 async function acquire(adapter: CodexStructuredSessionAdapter, sessionId = 'session-1') {
-  return adapter.acquire({
+  return acquireReadyCodexForTest(adapter, {
     identity: identityFor(sessionId),
     fence: 7,
     spawnToken: `spawn-${sessionId}`,
@@ -61,7 +62,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     const adapter = adapterFor(codex)
 
     await acquire(adapter)
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
+    expect(codexStartReport(adapter).reportedOptions).toMatchObject({
       serviceTier: 'priority'
     })
     await send(adapter, 'first')
@@ -190,7 +191,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     const codex = fakeCodex()
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-tier')
     const adapter = adapterFor(codex, { codexHome: '/codex/home', resumeThreadId: THREAD_ID })
-    await adapter.acquire({
+    await acquireReadyCodexForTest(adapter, {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-resume',
@@ -198,7 +199,7 @@ describe('Codex structured service tier without send-path catalog waits', () => 
     })
 
     expect(codex.connections[0].calls.some((call) => call.method === 'thread/resume')).toBe(true)
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
+    expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-next',
       serviceTier: 'ultrafast'
     })
@@ -237,7 +238,11 @@ describe('Codex service tier across clients and rest', () => {
       'discovery'
     )
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], { modelCatalog })
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
 
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'fastMode', value: 'true', fence: 7 })
@@ -254,19 +259,5 @@ describe('Codex service tier across clients and rest', () => {
   it('takes a tier at rest but not an older client Fast toggle', () => {
     expect(CODEX_STRUCTURED_AGENT.restingOptions?.acceptsKey('serviceTier')).toBe(true)
     expect(CODEX_STRUCTURED_AGENT.restingOptions?.acceptsKey('fastMode')).toBe(false)
-  })
-
-  it('keeps only the reported tier, not the Fast it implies, on the record', () => {
-    expect(
-      nativeSessionOptionsFromReport({
-        reported: { model: 'gpt-live', serviceTier: 'priority', fastMode: true },
-        restoreSkipped: [],
-        priorOptions: { fastMode: 'true', serviceTier: 'ultrafast' }
-      })
-    ).toEqual({ model: 'gpt-live', serviceTier: 'priority' })
-    // An agent that reports Fast with no tier still keeps it.
-    expect(
-      nativeSessionOptionsFromReport({ reported: { fastMode: true }, restoreSkipped: [] })
-    ).toEqual({ fastMode: 'true' })
   })
 })

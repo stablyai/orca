@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import {
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
@@ -7,6 +7,8 @@ import {
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { toast } from 'sonner'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { reselectWorkspaceKeepingHost } from './active-workspace-host'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
@@ -37,7 +39,9 @@ type StoreAccessor = () => {
       | 'localhostWorktreeLabelsEnabled'
     >
   > | null
-  setActiveWorktree: (worktreeId: string) => void
+  setActiveWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => void
+  activeWorktreeId?: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
   repos?: readonly LocalhostLinkRepo[]
   projects?: readonly LocalhostLinkProject[]
@@ -177,10 +181,10 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for
     // file-link jumps that genuinely switch worktrees.
-    if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+    if (!isFloatingWorkspaceId(worktreeId)) {
       // Why: the floating workspace uses a synthetic worktree id. Promoting it
       // to the global activeWorktreeId deselects the real repo workspace.
-      state.setActiveWorktree(worktreeId)
+      reselectWorkspaceKeepingHost(state, worktreeId)
     }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {

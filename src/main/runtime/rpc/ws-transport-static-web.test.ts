@@ -64,6 +64,21 @@ describe('WebSocketTransport static web client', () => {
     await expect(assetResponse.text()).resolves.toBe('console.log("prefixed")')
   })
 
+  // #30100: with no request listener Node never answered plain HTTP, so curl hung forever.
+  it('answers plain HTTP with 404 when it has no web client to serve', async () => {
+    const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    transports.push(transport)
+
+    await transport.start()
+
+    for (const path of ['/', '/web-index.html', '/does-not-exist']) {
+      const response = await fetch(`http://127.0.0.1:${transport.resolvedPort}${path}`, {
+        signal: AbortSignal.timeout(5_000)
+      })
+      expect(response.status).toBe(404)
+    }
+  })
+
   it('does not expose arbitrary files from the static root', async () => {
     const staticRoot = mkdtempSync(join(tmpdir(), 'ws-transport-static-'))
     writeFileSync(join(staticRoot, 'package.json'), '{}')

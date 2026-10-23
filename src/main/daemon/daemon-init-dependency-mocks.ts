@@ -64,10 +64,16 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly resetRespawnWindow: Mock
     readonly shutdown: Mock
     readonly getHandle: Mock
+    readonly staleDaemonRecycleVersion: string | null
     private socketCounter: number
     private handle: MockSpawnerHandle | null
-    constructor(opts: { runtimeDir: string; launcher: unknown }) {
+    constructor(opts: {
+      runtimeDir: string
+      launcher: unknown
+      staleDaemonRecycleVersion?: string | null
+    }) {
       this.launcher = opts.launcher
+      this.staleDaemonRecycleVersion = opts.staleDaemonRecycleVersion ?? null
       this.socketCounter = 0
       this.handle = null
       // Why: each ensureRunning bumps a counter into socketPath so tests can tell the replacement adapter used the second call, not the first.
@@ -123,6 +129,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly shutdown: Mock
     readonly dispose: Mock
     readonly disconnectOnly: Mock
+    readonly hasRetiredForIdle: Mock
     readonly onData: Mock
     readonly onExit: Mock
     readonly callOrder: string[]
@@ -152,6 +159,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
           throw disconnectOnlyError
         }
       })
+      this.hasRetiredForIdle = vi.fn(() => false)
       this.onData = vi.fn(() => {
         if (routerSubscriptionError.current) {
           const error = routerSubscriptionError.current

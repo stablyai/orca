@@ -114,8 +114,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
             if (details) {
               checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
             }
-          } catch (error) {
-            console.warn('[ChecksPanel] failed to load check details for AI fix prompt', error)
+          } catch {
+            console.warn('[ChecksPanel] failed to load check details for AI fix prompt')
           }
         })
       )

@@ -22,6 +22,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     customSoundPath: null,
     customSoundVolume: 1,
     mutedNotificationSourceIds: [],
+    notifyHiddenWorkspaces: true,
     ...overrides
   }
 }
@@ -274,4 +275,21 @@ it('reports a muted host before a disabled source', () => {
       makeRequest({ notificationSourceId: 'runtime:qa' })
     )
   ).toEqual({ delivered: false, reason: 'host-muted' })
+})
+
+it("tells the phone which server runs the workspace, through the gateway's push", async () => {
+  for (const executionHost of [undefined, 'runtime:qa'] as const) {
+    const push = createPushHarness({
+      devices: [{ deviceId: 'phone', pushRegistration: registration() }]
+    })
+    const harness = makeHarness(makeSettings())
+    harness.deps.dispatchMobileNotification = (event) =>
+      push.dispatcher.enqueue({ ...event, notificationSeq: 1, notificationEpoch: 'epoch' })
+    createNotificationDeliveryService(harness.deps).dispatch(
+      makeRequest({ agentState: 'done', ...(executionHost ? { executionHost } : {}) })
+    )
+    await flush()
+    expect(push.sends[0]?.notification.worktreeId).toBe('wt-1')
+    expect(push.sends[0]?.notification.executionHost).toBe(executionHost)
+  }
 })

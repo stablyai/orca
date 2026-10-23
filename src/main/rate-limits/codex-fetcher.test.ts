@@ -19,6 +19,12 @@ const {
   startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null))
 }))
 
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
 }))
@@ -38,6 +44,9 @@ vi.mock('../codex-cli/command', () => ({
   resolveCodexCommand: resolveCodexCommandMock
 }))
 
+vi.mock('../wsl-interop-spawn-directory', () => ({
+  resolveWslInteropSpawnCwd: () => 'C:\\Windows'
+}))
 vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
@@ -672,7 +681,7 @@ describe('fetchCodexRateLimits', () => {
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
-          cwd: expect.stringContaining('rate-limit-pty-cwd'),
+          cwd: 'C:\\Windows',
           env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
         })
       )

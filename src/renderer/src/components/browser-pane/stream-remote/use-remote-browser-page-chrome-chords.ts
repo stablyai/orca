@@ -10,6 +10,7 @@ import {
   REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID,
   type RemoteBrowserPaneNotice
 } from './remote-browser-page-input-model'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 const FIND_UNAVAILABLE_NOTICE_MS = 4000
 
@@ -121,9 +122,9 @@ export function useRemoteBrowserPageChromeChords({
       // chords land on it rather than one of them silently doing nothing.
       void runRemoteNavigation('browser.reload')
     }
-    window.addEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, true)
+      removeAppKeyListener('keydown', handleKeyDown)
       if (findNoticeTimerRef.current !== null) {
         clearTimeout(findNoticeTimerRef.current)
         findNoticeTimerRef.current = null

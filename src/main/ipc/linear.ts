@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { connect, disconnect, getStatus, selectWorkspace, testConnection } from '../linear/client'
-import { _resetPreflightCache } from './preflight'
+import { _resetPreflightCache } from '../preflight/agent-detection'
 import { normalizeWorkspaceId, normalizeWorkspaceSelection } from './linear-ipc-args'
 import { registerLinearIssueHandlers } from './linear-issue-handlers'
 import { registerLinearProjectHandlers } from './linear-project-handlers'

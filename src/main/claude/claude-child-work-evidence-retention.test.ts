@@ -4,17 +4,12 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
-import { deriveToolInputPreview } from '../../shared/agent-hook-listener/tool-input-preview'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { claudeChildOperation, drainClaudeChildWork } from './claude-child-work-evidence'
 import { ClaudePromptRegistry } from './claude-prompt-registry'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import {
-  claudeToolResults,
-  claudeToolUses,
-  readClaudeMessageEnvelope
-} from './claude-structured-item-translation'
+import { claudeToolResults, readClaudeMessageEnvelope } from './claude-structured-item-translation'
 
 function frame(content: unknown, parentToolUseId: string | null): Record<string, unknown> {
   return {
@@ -24,36 +19,6 @@ function frame(content: unknown, parentToolUseId: string | null): Record<string,
     parent_tool_use_id: parentToolUseId,
     message: { role: 'user', content }
   }
-}
-
-function previousChildOperation(
-  message: Record<string, unknown>,
-  activityOf: Parameters<typeof claudeChildOperation>[1],
-  observedAt: number
-): ReturnType<typeof claudeChildOperation> {
-  const envelope = activityOf ? readClaudeMessageEnvelope(message) : null
-  const parentRef = envelope?.parentToolUseId
-  if (!envelope || !parentRef || !activityOf) {
-    return []
-  }
-  const toolTraffic =
-    claudeToolUses(envelope).length > 0 ||
-    claudeToolResults(envelope).some((result) => result.toolUseId !== parentRef)
-  if (!toolTraffic) {
-    return []
-  }
-  const { agentId, openTool } = activityOf(parentRef)
-  const input = openTool ? deriveToolInputPreview(openTool.name, openTool.input) : undefined
-  return [
-    {
-      type: 'operation',
-      observedAt,
-      childId: agentId,
-      operation: openTool
-        ? { toolName: openTool.name, ...(input ? { input } : {}), basis: 'open', observedAt }
-        : null
-    }
-  ]
 }
 
 afterEach(() => vi.restoreAllMocks())
@@ -113,17 +78,36 @@ describe('Claude child operation output retention', () => {
       if (result?.kind !== 'tool-call') {
         throw new Error('Result did not produce a journal tool-call body')
       }
-      expect(result.output).toEqual({
-        head: 'a'.repeat(16 * 1024),
-        byteLength: first.length + second.length + 1,
-        digest: createHash('sha256').update(first).update('\n').update(second).digest('hex'),
-        truncated: true
-      })
+      expect(result.output?.truncated).toBe(false)
+      expect(result.output?.byteLength).toBe(first.length + second.length + 1)
+      expect(result.output?.digest).toBe(
+        createHash('sha256').update(first).update('\n').update(second).digest('hex')
+      )
+      expect(result.output?.head.length).toBe(first.length + second.length + 1)
+      expect(result.output?.head.startsWith(first)).toBe(true)
+      expect(result.output?.head.charAt(first.length)).toBe('\n')
+      expect(result.output?.head.endsWith(second)).toBe(true)
       expect(joinedOutputUnits).toBe(0)
     } finally {
       vi.restoreAllMocks()
       translator.dispose()
     }
+  })
+
+  it('does not read child activity for a missing or invalid message envelope', () => {
+    const activityOf = vi.fn(() => ({ agentId: 'child', openTool: null }))
+    const message = frame([{ type: 'tool_result', tool_use_id: 'child' }], 'parent')
+
+    expect(claudeChildOperation({}, activityOf, 1_000)).toEqual([])
+    expect(claudeChildOperation({ ...message, type: 'system' }, activityOf, 1_000)).toEqual([])
+    expect(claudeChildOperation({ ...message, uuid: '' }, activityOf, 1_000)).toEqual([])
+    expect(activityOf).not.toHaveBeenCalled()
+  })
+
+  it('emits no child operation without an activity reader', () => {
+    const message = frame([{ type: 'tool_result', tool_use_id: 'child' }], 'parent')
+
+    expect(claudeChildOperation(message, undefined, 1_000)).toEqual([])
   })
 
   it('keeps canonical result admission and metadata ownership on explicit expected IDs', () => {
@@ -155,65 +139,6 @@ describe('Claude child operation output retention', () => {
           ? []
           : [{ type: 'operation', observedAt: 1_000, childId: 'child', operation: null }]
       )
-    }
-  })
-
-  it('preserves operation ownership and traffic decisions for mixed provider envelopes', () => {
-    const parts: unknown[] = [
-      null,
-      false,
-      [],
-      {},
-      { type: 'tool_result' },
-      { type: 'tool_result', tool_use_id: '' },
-      { type: 'tool_result', tool_use_id: 4 },
-      { type: 'tool_result', tool_use_id: 'parent' },
-      { type: 'tool_result', tool_use_id: 'child' },
-      { type: 'tool_result', tool_use_id: ' ' },
-      { type: 'text', tool_use_id: 'child', text: 'message' },
-      { type: 'tool_use', id: 'open', name: 'Bash', input: { command: 'pwd' } }
-    ]
-    const outputs = [undefined, null, '', 'text', 7, {}, ['a', 'b'], [{ type: 'text', text: '😀' }]]
-    const activities: Parameters<typeof claudeChildOperation>[1][] = [
-      undefined,
-      () => ({ agentId: 'agent', openTool: null }),
-      () => ({
-        agentId: 'agent',
-        openTool: { id: 'open', name: 'Bash', input: { command: 'pwd' } }
-      })
-    ]
-    for (const part of parts) {
-      for (const output of outputs) {
-        const result =
-          typeof part === 'object' && part !== null && !Array.isArray(part)
-            ? { ...part, content: output }
-            : part
-        for (const parent of ['parent', 'child', '', ' ', null]) {
-          for (const activity of activities) {
-            const message = frame([result], parent)
-            expect(claudeChildOperation(message, activity, 1_000)).toEqual(
-              previousChildOperation(message, activity, 1_000)
-            )
-          }
-        }
-      }
-    }
-    const parentResult = { type: 'tool_result', tool_use_id: 'parent', content: 'spawned' }
-    const childResult = { type: 'tool_result', tool_use_id: 'child', content: ['first', 'second'] }
-    for (const content of [
-      null,
-      'text',
-      [],
-      parts,
-      [parentResult, childResult],
-      [childResult, parentResult],
-      [{ type: 'tool_result', tool_use_id: '' }, parentResult, childResult]
-    ]) {
-      const message = frame(content, 'parent')
-      expect(claudeChildOperation(message, activities[2], 1_000)).toEqual(
-        previousChildOperation(message, activities[2], 1_000)
-      )
-      expect(claudeChildOperation({ ...message, type: 'system' }, activities[2], 1_000)).toEqual([])
     }
   })
 })

@@ -3,7 +3,7 @@
  * state a newer Orca's orcad may already have migrated.
  */
 import { compareAppVersions } from '../../shared/app-version'
-import type { OrcadActivationRecord } from './orcad-activation-record'
+import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 
 export type OrcadHostVersionRefusal = 'host-newer'
 

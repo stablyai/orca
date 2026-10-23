@@ -30,12 +30,14 @@ import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
   replyChunk,
+  waitFor,
   type FakeAcpChild
 } from './acp-structured-adapter.test-support'
 import {
   ACP_HANDLE_TRANSPORT,
   acpStructuredAgentDefinition
 } from './acp-structured-agent-definitions'
+import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
@@ -56,9 +58,9 @@ export const attachParams = (fence: number | null = null) =>
   })
 
 /** A launch that resumes the provider session once the chat has one. */
-export function launch(resume: () => boolean): () => Promise<AcpStructuredLaunch> {
+export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStructuredLaunch> {
   return async () => ({
-    spec: GROK,
+    spec,
     command: '/fake/grok',
     args: [],
     cwd: '/workspace',
@@ -70,7 +72,7 @@ export function launch(resume: () => boolean): () => Promise<AcpStructuredLaunch
           sessionId: PROVIDER_SESSION,
           key: agentSessionProviderHandleKey({
             transport: ACP_HANDLE_TRANSPORT,
-            agent: 'grok',
+            agent: spec.agent,
             nativeId: PROVIDER_SESSION
           }),
           mayBeUnsaved: () => false,
@@ -82,6 +84,7 @@ export function launch(resume: () => boolean): () => Promise<AcpStructuredLaunch
 
 export async function openHostRig(
   options: {
+    spec?: AcpLaunchSpec
     script?: (agent: AcpScriptedAgent) => void
     initialize?: Record<string, unknown>
     deps?: Partial<AcpStructuredSessionAdapterDeps>
@@ -101,7 +104,12 @@ export async function openHostRig(
       onEvent: (event) => void hosted.host?.handleAdapterEvent(event),
       onChildWorkEvidence: (sessionId, evidence) =>
         hosted.host?.publishChildWorkEvidence(sessionId, evidence),
-      onDispatchSettledLate: (settlement) => void hosted.host?.settleLateDispatch(settlement),
+      onDispatchSettledLate: (settlement) =>
+        void hosted.host
+          ?.settleLateDispatch(settlement)
+          .catch((error: unknown) =>
+            state.log.logger.warn('late settlement failed', { scope: 'late-settlement', error })
+          ),
       now: () => HOST_TEST_NOW,
       readProcessStartTime: async () => 1_700_000_000_000 + ++generation,
       mintGeneration: () => `generation-${generation}`,
@@ -110,7 +118,7 @@ export async function openHostRig(
   })
   const host = new StructuredAgentSessionHost({
     agents: new StructuredAgentRegistry([
-      { definition: acpStructuredAgentDefinition(GROK), adapter: rig.adapter }
+      { definition: acpStructuredAgentDefinition(options.spec ?? GROK), adapter: rig.adapter }
     ]),
     logger: state.log.logger,
     store,
@@ -126,12 +134,17 @@ export async function openHostRig(
   hosted.host = host
   replaceHostTestState({ store, host })
   const fence = () => store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+  const ready = () =>
+    waitFor(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+    )
   const messages = async () =>
     (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
       .filter((row) => row.body.kind === 'message')
       .map((row) => messageText(row.body))
   /** Orca's send of `hello` as `m1`, and Grok's reply `text`, ended or left running. */
   const exchange = async (text: string, end: boolean) => {
+    await ready()
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     await journal.appendItem({ provider: 'orca', clientMessageId: 'm1' }, hello, {
       fence: fence(),
@@ -151,7 +164,7 @@ export async function openHostRig(
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
   }
-  return { rig, host, store, journalDatabase, fence, messages, exchange }
+  return { rig, host, store, journalDatabase, fence, messages, exchange, ready }
 }
 
 /** Grok's capabilities: it loads and resumes sessions; Orca reopens with `session/load`. */
@@ -187,24 +200,30 @@ export const framesOf = (child: FakeAcpChild, method: string) =>
 
 /** A new Grok chat the host attached; Grok loads its session on a later start, counting each. */
 export async function openAttachedHostRig(
-  deps: Partial<AcpStructuredSessionAdapterDeps> = {},
+  deps: Partial<AcpStructuredSessionAdapterDeps> & {
+    script?: (agent: AcpScriptedAgent) => void
+  } = {},
   statusSink?: StructuredAgentSessionStatusSink,
   modelCatalog?: AgentModelCatalogService
 ) {
+  const { script, ...adapterDeps } = deps
   const count = { loads: 0 }
   let resumed = false
   const rig = await openHostRig({
     statusSink,
     ...(modelCatalog ? { modelCatalog } : {}),
     initialize: RESUMES,
-    script: (agent) =>
+    script: (agent) => {
       agent.on('session/load', (frame) => {
         count.loads += 1
         agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
-      }),
-    deps: { resolveLaunch: launch(() => resumed), ...deps }
+      })
+      script?.(agent)
+    },
+    deps: { resolveLaunch: launch(() => resumed), ...adapterDeps }
   })
   expect(await rig.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+  await rig.ready()
   resumed = true
   const rows = async () => {
     await rig.host.flushStreamedEvents(SESSION)

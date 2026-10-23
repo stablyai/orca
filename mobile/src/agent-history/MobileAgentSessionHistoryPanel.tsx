@@ -2,10 +2,10 @@ import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouteHandoff } from '../navigation/route-handoff'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { useHostClient } from '../transport/client-context'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
@@ -49,8 +49,8 @@ export function MobileAgentSessionHistoryPanel({
 }: MobileAgentSessionHistoryPanelProps) {
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
   // screen, and the session it resumes into is a native route the shell has to push.
-  const router = useRouteHandoff()
-  const { client, state: connState } = useHostClient(hostId)
+  const router = useWorkspaceRouteHandoff()
+  const { client, state: connState } = useWorkspaceClient(hostId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
     hostId,
     worktreeId,

@@ -8,7 +8,7 @@
  */
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RouteDependencies = {
   routes: { pathname: string; params?: Record<string, string> }[]
@@ -50,9 +50,16 @@ vi.mock('./MobileWebShellScreen', () => ({
 }))
 
 import { BRIDGE_MAX_ROUTE_PARAMS, BRIDGE_ROUTE_PATHNAME_PATTERN } from './bridge/bridge-caps'
-import { grantsForRoute, pageRendersRoute, routeViewOf } from './page-route-policy'
+import { grantsForRoute, matchesRoutePattern, routeViewOf } from './page-route-policy'
 import { shellScreenRouteKey } from './shell-screen-route'
 import MobileWebPageCatchAllScreen from './catch-all-page-route'
+
+/** Whether a narrow session on `pathname` would be served the page under `routes`. */
+function servesRoute(routes: Parameters<typeof routeViewOf>[0], pathname: string): boolean {
+  return routeViewOf(routes, pathname).pageRoutes.some((pattern) =>
+    matchesRoutePattern(pathname, pattern)
+  )
+}
 
 async function render(): Promise<void> {
   await act(async () => {
@@ -64,11 +71,6 @@ beforeEach(() => {
   dependencies.routes.length = 0
   dependencies.refusals.length = 0
   dependencies.params = { hostId: 'host-1', page: ['settings'] }
-  vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', 'ota')
-})
-
-afterEach(() => {
-  vi.unstubAllEnvs()
 })
 
 describe('the catch-all switch', () => {
@@ -99,18 +101,11 @@ describe('the catch-all switch', () => {
     expect(dependencies.routes[0]?.pathname).toBe('/h/host-a/settings')
   })
 
-  it('refuses rather than falling back to a native screen it does not have', async () => {
+  it('refuses a pathname with no segment past the host', async () => {
     dependencies.params = { hostId: 'host-1', page: [] }
     await render()
     expect(dependencies.routes).toEqual([])
     expect([...new Set(dependencies.refusals)]).toEqual(['host-1'])
-  })
-
-  it('refuses in a build without the shell', async () => {
-    vi.stubEnv('EXPO_PUBLIC_MOBILE_SHELL', undefined)
-    await render()
-    expect(dependencies.routes).toEqual([])
-    expect(dependencies.refusals.length).toBeGreaterThan(0)
   })
 
   it("carries the deep link's query through to the route it mounts the shell on", async () => {
@@ -209,8 +204,8 @@ const FUTURE_MANIFEST = [
 
 describe('the gate a catch-all pathname meets', () => {
   it('renders a manifest route this app has no route file for', () => {
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/insights')).toBe(true)
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/insights/W1')).toBe(true)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/insights')).toBe(true)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/insights/W1')).toBe(true)
     expect(grantsForRoute(FUTURE_MANIFEST, '/h/H1/insights/W1')).toEqual([
       'navigate',
       'storage',
@@ -220,12 +215,12 @@ describe('the gate a catch-all pathname meets', () => {
   })
 
   it('refuses a pathname the manifest does not list', () => {
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/settings')).toBe(false)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/settings')).toBe(false)
     expect(grantsForRoute(FUTURE_MANIFEST, '/h/H1/settings')).toEqual([])
   })
 
   it('refuses a listed route needing a grant this app does not implement', () => {
-    expect(pageRendersRoute(FUTURE_MANIFEST, '/h/H1/future')).toBe(false)
+    expect(servesRoute(FUTURE_MANIFEST, '/h/H1/future')).toBe(false)
     expect(routeViewOf(FUTURE_MANIFEST, '/h/H1/future').pageRoutes).toEqual([
       '/h/[hostId]/insights',
       '/h/[hostId]/insights/[worktreeId]'

@@ -79,6 +79,7 @@ export function recordRendererMemorySample(reason: string): void {
     'renderer_memory',
     compactBreadcrumbData({
       reason,
+      rendererSurface,
       usedHeapMB: toMegabytes(memory.usedJSHeapSize),
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),

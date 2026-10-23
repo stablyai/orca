@@ -89,14 +89,14 @@ export function useProjectGroupDialogs(args: {
       if (repo.projectGroupId === groupId) {
         return
       }
-      void moveProjectToGroup(repo.id, groupId, undefined, getRepoExecutionHostId(repo))
+      void moveProjectToGroup(repo, groupId)
     },
     [moveProjectToGroup]
   )
 
   const handleRemoveProjectFromGroup = useCallback(
     (repo: Repo) => {
-      void moveProjectToGroup(repo.id, null, undefined, getRepoExecutionHostId(repo))
+      void moveProjectToGroup(repo, null)
     },
     [moveProjectToGroup]
   )
@@ -114,10 +114,9 @@ export function useProjectGroupDialogs(args: {
         return
       }
       if (nameDialog.type === 'create-from-repo') {
-        const hostId = getRepoExecutionHostId(nameDialog.repo)
-        const group = await createProjectGroup(name, hostId)
+        const group = await createProjectGroup(name, getRepoExecutionHostId(nameDialog.repo))
         if (group) {
-          await moveProjectToGroup(nameDialog.repo.id, group.id, undefined, hostId)
+          await moveProjectToGroup(nameDialog.repo, group.id)
         }
         return
       }

@@ -109,7 +109,7 @@ function makeRepo(fields: Record<string, unknown>) {
 function useRepo(repo: ReturnType<typeof makeRepo>): void {
   store.getRepos.mockReturnValue([repo])
   store.getRepo.mockReturnValue(repo)
-  store.setWorktreeMeta.mockImplementation((_worktreeId: string, meta: unknown) => meta)
+  store.setWorktreeMeta.mockImplementation((_target: unknown, meta: unknown) => meta)
 }
 
 describe('registerWorktreeHandlers', () => {

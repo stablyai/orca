@@ -330,6 +330,19 @@ describe('a reserve-mode cell admits from memory with its database wedged', () =
     expect(cell.book(identity, 9)).toEqual([{ outcome: 'ok' }])
   })
 
+  it('leaves a drained seat to its drain grace instead of the shorter demotion close', async () => {
+    const cell = await startCell({ admitMode: 'reserve' })
+    const identity = await cell.host()
+    cell.book(identity, 9)
+    await cell.connect(identity, 9)
+    const page = cell.relay.sessions.seatFeed(null)
+    const joinedAt = 'full' in page ? page.full[0]!.joinedAt : -1
+    cell.relay.sessions.drain(120_000)
+    const seat = { v: 1 as const, userId: 'user-1', relayHostId: identity.hostId, epoch: 9, joinedAt }
+    expect(cell.relay.sessions.demote(seat)).toBe('draining')
+    expect(cell.relay.sessions.demote(seat)).toBe('draining')
+  })
+
   it('gives every booking unit back when the cell starts to drain', async () => {
     const cell = await startCell({ admitMode: 'reserve' })
     const identity = await cell.host()

@@ -1,3 +1,4 @@
+import { defaultJiraListColumnIds, visibleJiraListColumns } from './jira-list-columns'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -174,6 +175,7 @@ describe('Jira issue status grouping', () => {
         TooltipProvider,
         null,
         React.createElement(TaskPageJiraIssueList, {
+          columns: visibleJiraListColumns(defaultJiraListColumnIds()),
           formatUpdatedAt: () => 'today',
           getStatusTone: () => 'border-border',
           issues: [

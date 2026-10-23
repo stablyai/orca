@@ -55,7 +55,6 @@ export type BrowserPageGrabAnnotationsOptions = {
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   browserAnnotationsLength: number
-  setBrowserAnnotationTrayOpen: Dispatch<SetStateAction<boolean>>
 }
 
 export type BrowserPageRecoveryNavigationValidation = {

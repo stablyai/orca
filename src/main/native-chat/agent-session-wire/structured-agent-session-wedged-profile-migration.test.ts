@@ -38,7 +38,8 @@ import {
 } from '../../runtime/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { JournalLifecycleBatchAppender } from '../agent-session-journal/journal-lifecycle-batch-appender'
 import * as recoveryResolution from './structured-agent-session-recovery-resolution'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -111,7 +112,6 @@ function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
       leaseDeadlineAt: NOW - 9_000,
       lastRenewedAt: NOW - 10_000,
       handoffOperationId: overrides.handoffOperationId ?? null,
-      journalCheckpoint: null,
       claimKeyId: 'key-1',
       claimStatus: overrides.claimStatus,
       unreconciled: false,
@@ -132,14 +132,17 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire,
-      releaseAcquisition: vi.fn(async () => undefined),
+      releaseAcquisition: vi.fn(async () => false),
       dispatch: vi.fn(),
       cancelTurn: vi.fn(),
       answerPrompt: vi.fn(),
       setOption: vi.fn(),
       supportsCreate: () => true
-    } as unknown as StructuredAgentSessionAdapter,
+    },
     journalDatabase: openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-new',
@@ -151,13 +154,17 @@ function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void
 
 /** The host starting the agent with no message to deliver, as an operation that needs it does. */
 function startAgent(): Promise<unknown> {
-  return host['serialize'](SESSION, () => host['mutationContext']().ensureAgent(SESSION))
+  const context = host['mutationContext']()
+  return context
+    .serialize(SESSION, async () => context.claimAgent(SESSION))
+    .then((claim) => claim.outcome)
 }
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wedged-profile-'))
   resetHostTestOperationIds()
   acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,
@@ -464,7 +471,7 @@ describe('already-wedged profiles become usable on load', () => {
       })
       // The read restore's settlement fails, and nothing retries it.
       const failing = vi
-        .spyOn(AgentSessionJournal.prototype, 'appendLifecycleBatch')
+        .spyOn(JournalLifecycleBatchAppender.prototype, 'appendPlanned')
         .mockRejectedValue(new Error('journal unavailable'))
       await host.restoreReadableSessions()
       failing.mockRestore()
@@ -695,6 +702,7 @@ describe('already-wedged profiles become usable on load', () => {
     acquire.mockImplementation(async ({ fence }) => {
       order.push('acquire')
       return {
+        acquisitionGeneration: globalThis.crypto.randomUUID(),
         process: { hostId: 'local', pid: 4242, processStartTimeMs: 1, spawnToken: 'spawn-new' },
         link: {
           linkId: `link-${fence}`,

@@ -68,6 +68,8 @@ export type NativeChatTextBlock = {
   failure?: AgentSessionFailureFact
   /** On the line about a reply Orca's own stop cut off: why, and the turn it cut. */
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
+  /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
+  usageLimitTurnItemId?: string
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
@@ -112,6 +114,8 @@ export type NativeChatToolResultBlock = {
   callId?: string
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
+  /** The journal item to fetch when `output` is only a head of what the tool returned. */
+  fullOutputItemId?: string
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field
@@ -162,6 +166,24 @@ export type NativeChatSubagentGroupBlock = {
   agents: NativeChatSubagentEntry[]
 }
 
+/** One subagent's own row: written where it was spawned and revised in place for every later
+ *  change and run. Siblings sharing `groupId` and `parentId` draw as one group, which readers
+ *  derive; no row lists them together. */
+export type NativeChatSubagentBlock = NativeChatSubagentEntry & {
+  type: 'subagent'
+  /** The turn that spawned it: siblings with the same key draw together. */
+  groupId: string
+  /** The subagent that spawned it. Absent ⇒ the session's own agent did. */
+  parentId?: string
+  /** The provider's id for the run `state` describes. Absent when the provider names none. */
+  run?: string
+  /** `stop-acknowledged`: stopped because the agent accepted a Stop, not because the child
+   *  reported its own end; that run's own ending may still replace it. */
+  outcomeBasis?: 'stop-acknowledged'
+  /** Told to outlive the turn that spawned it. */
+  background?: true
+}
+
 /** One provider background task — a shell command, workflow or monitor run
  *  beside the turn — as its own durable row, revised in place from the
  *  provider's lifecycle frames. Sibling of the roster block rather than a
@@ -203,6 +225,7 @@ export type NativeChatBlock =
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
   | NativeChatSubagentGroupBlock
+  | NativeChatSubagentBlock
   | NativeChatBackgroundTaskBlock
 
 /** A transcript row. Structured rows carry the journal row's producer linkage, so
@@ -235,6 +258,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** Its text was shortened to fit the copy sent to this client; the host keeps it whole. */
+  shortened?: true
   /** The journal row's own lifecycle; absent means unknown, never live. */
   state?: AgentJournalMessageState
   /** Host clock when the row's message was seen to end; absent when no end was seen live. */
@@ -360,6 +385,10 @@ export function isSubagentGroupBlock(
   block: NativeChatBlock
 ): block is NativeChatSubagentGroupBlock {
   return block.type === 'subagent-group'
+}
+
+export function isSubagentBlock(block: NativeChatBlock): block is NativeChatSubagentBlock {
+  return block.type === 'subagent'
 }
 
 export function isBackgroundTaskBlock(

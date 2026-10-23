@@ -6,6 +6,7 @@ import {
   type AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import { journalRenderItem } from './journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import type { JournalReducerState } from './journal-reducer'
@@ -16,6 +17,7 @@ export function applyJournalSubmission(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'submission' }>
 ): void {
+  const options = readAgentSessionExecutionOptions(row.options)
   state.submissions.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     fence: row.fence,
@@ -34,7 +36,9 @@ export function applyJournalSubmission(
     ...(row.origin === 'client' || row.origin === 'host' ? { origin: row.origin } : {}),
     // Kept as written, a newer build's kind too; an undecodable one as an empty kind, so neither
     // reads as a row without one.
-    ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {})
+    ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
+    // A stored value this build cannot read only loses the choices it carried, never the row.
+    ...(options ? { options } : {})
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   // A message handed over later belongs to no turn until its handover names one.
@@ -46,7 +50,8 @@ export function applyJournalSubmission(
     itemId,
     0,
     journalRenderItem(itemId, 0, row.body, row, turnScope),
-    row.fence
+    // A person's message is no generation's work: its provenance is the fence that accepted it.
+    { fence: row.fence }
   )
 }
 

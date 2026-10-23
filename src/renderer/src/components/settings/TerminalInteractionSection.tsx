@@ -242,14 +242,16 @@ export function TerminalInteractionSection({
         <SearchableSetting
           title={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
           description={translate(
-            'auto.components.settings.TerminalPane.4729c645fc',
-            'Automatically copy terminal selections to the clipboard.'
+            'components.settings.TerminalInteraction.copyOnSelectDescription',
+            'Automatically copy text you select in a terminal or chat to the clipboard.'
           )}
           keywords={[
             'clipboard',
             'copy',
             'select',
             'selection',
+            'highlight',
+            'chat',
             'auto',
             'automatic',
             'x11',
@@ -261,8 +263,8 @@ export function TerminalInteractionSection({
           <SettingsSwitchRow
             label={translate('auto.components.settings.TerminalPane.902f5dee1f', 'Copy on Select')}
             description={translate(
-              'auto.components.settings.TerminalPane.4729c645fc',
-              'Automatically copy terminal selections to the clipboard.'
+              'components.settings.TerminalInteraction.copyOnSelectDescription',
+              'Automatically copy text you select in a terminal or chat to the clipboard.'
             )}
             checked={settings.terminalClipboardOnSelect}
             onChange={() =>

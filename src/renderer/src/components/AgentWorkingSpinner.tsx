@@ -41,7 +41,7 @@ export function AgentWorkingSpinner({ className }: { className?: string }): Reac
         // Why: under reduced motion the animation is disabled, so fill the top
         // border too — a frozen transparent-top ring reads as a broken
         // spinner; a complete ring reads as an intentional static marker (#9515).
-        'agent-working-spinner block rounded-full border-2 border-yellow-500 border-t-transparent motion-reduce:border-t-yellow-500',
+        'agent-working-spinner block rounded-full border-2 border-agent-working border-t-transparent motion-reduce:border-t-agent-working',
         className
       )}
     />

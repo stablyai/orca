@@ -31,7 +31,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root

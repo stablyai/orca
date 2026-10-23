@@ -130,9 +130,25 @@ it('continues when reading the restart offer hangs', async () => {
   const turnItemId = await cutTurn(host)
   vi.spyOn(host.deps.recoveryCapsule!, 'list').mockReturnValue(new Promise(() => {}))
 
-  await host.restartResume.continueInterrupted(SESSION, turnItemId)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const continuation = host.restartResume.continueInterrupted(SESSION, turnItemId)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await continuation
 
-  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
+    await vi.waitFor(async () =>
+      expect(JSON.stringify(await statusNotes(host))).toContain(
+        AGENT_SESSION_RESTART_CONTINUATION_NOTE
+      )
+    )
+  } finally {
+    try {
+      await host.flushAllStreamedEvents()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
 }, 10_000)
 
 it('continues when the restart offer cannot be read', async () => {

@@ -1,6 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTabIntoPaneState } from './terminal-tab-into-pane-eligibility'
-import { resolveTerminalTabIntoPaneEligibility } from './terminal-tab-into-pane-eligibility'
+import {
+  isSourceWideRefusal,
+  resolveTerminalTabIntoPaneEligibility
+} from './terminal-tab-into-pane-eligibility'
 import {
   holdTerminalMoveKeys,
   terminalLeafMoveKey,
@@ -19,6 +22,17 @@ import {
   terminalTab,
   WT
 } from './terminal-tab-into-pane-fixture'
+
+// Pinned off so the window-applied rules run in a layout-owner test run too; one block turns it on.
+const layoutOwner = vi.hoisted(() => ({ isMain: false }))
+vi.mock('../../../../shared/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layoutOwner.isMain
+  }
+}))
+beforeEach(() => {
+  layoutOwner.isMain = false
+})
 
 const args = { sourceTabId: SOURCE, targetTabId: TARGET, isWebClient: false }
 
@@ -189,10 +203,6 @@ describe('resolveTerminalTabIntoPaneEligibility (spec 4.3)', () => {
     ],
     ['pendingInitialCwdByTabId', { pendingInitialCwdByTabId: { [SOURCE]: '/tmp' } }],
     [
-      'pendingSetupSplitByTabId',
-      { pendingSetupSplitByTabId: { [SOURCE]: { command: 'x', direction: 'vertical' } } }
-    ],
-    [
       'pendingIssueCommandSplitByTabId',
       { pendingIssueCommandSplitByTabId: { [SOURCE]: { command: 'x' } } }
     ]
@@ -253,5 +263,19 @@ describe('resolveTerminalTabIntoPaneEligibility (spec 4.3)', () => {
 
   it('does not refuse for unknown liveness: a PTY with no exit evidence stays eligible', () => {
     expect(refusal(intoPaneState({ pendingPtyShutdownIds: { [C]: 1 } }))).toBe('eligible')
+  })
+})
+
+describe('in a layout-owner build', () => {
+  it('refuses every join first, whatever else would also refuse', () => {
+    layoutOwner.isMain = true
+
+    expect(refusal(intoPaneState())).toBe('layout_owner_build')
+    expect(refusal(intoPaneState(), { targetTabId: SOURCE })).toBe('layout_owner_build')
+    expect(refusal(intoPaneState({ tabsByWorktree: {} }))).toBe('layout_owner_build')
+  })
+
+  it('is a source-wide refusal, so the menu shows one reason for every target', () => {
+    expect(isSourceWideRefusal('layout_owner_build')).toBe(true)
   })
 })

@@ -7,7 +7,7 @@ import { restoreManagedDataAccountEnvironment } from '../../shared/managed-data-
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import { acpLaunchSpecFor } from './acp-launch-specs'
+import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 
 const PROFILE = '123e4567-e89b-42d3-a456-426614174000'
@@ -60,9 +60,10 @@ function resolver(
     inheritedEnv?: NodeJS.ProcessEnv
     base?: Record<string, string>
     probeVersion?: Parameters<typeof createAcpStructuredLaunchResolver>[1]['probeVersion']
+    spec?: AcpLaunchSpec
   } = {}
 ) {
-  return createAcpStructuredLaunchResolver(OPENCODE, {
+  return createAcpStructuredLaunchResolver(options.spec ?? OPENCODE, {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     readJournal: () => null,
     resolveWorkspacePath: async () => '/repo/worktree',
@@ -251,4 +252,37 @@ describe('OpenCode ACP launch resolution', () => {
     })({ identity })
     expect(asked).toEqual([{ program: launch.command, cwd: launch.cwd, env: launch.env }])
   })
+})
+
+// Since OpenCode 2.0.0 `opencode2` is an alias the 2.x installer writes beside `opencode`.
+describe('OpenCode 2 ACP launch resolution', () => {
+  const OPENCODE2 = {
+    ...acpLaunchSpecFor('opencode2')!,
+    account: openCodeAcpAccountBinding(() => managedAccounts)
+  }
+  const launchOn = (version: string) =>
+    resolver(
+      { ...openCodeRecord(UNMANAGED), provider: 'opencode2' },
+      { spec: OPENCODE2, probeVersion: async (_input, supports) => supports(version) }
+    )({ identity: { ...identity, agent: 'opencode2' } })
+
+  it('runs `opencode2 acp` as an ACP client, and names its own sign-in command', async () => {
+    const launch = await launchOn('2.0.28')
+    expect(launch).toMatchObject({ command: '/resolved/opencode2', args: ['acp'] })
+    expect(launch.env).toMatchObject({ OPENCODE_CLIENT: 'acp' })
+    expect(OPENCODE2.loginCommand).toEqual(['opencode2', 'auth', 'login'])
+  })
+
+  // 1.x, below the 2.x floor, and a pre-release: none is the OpenCode 2 this row runs.
+  it.each(['1.18.35', '2.0.13', '2.1.0-beta.1'])(
+    'refuses %s before spawning it',
+    async (version) => {
+      await expect(launchOn(version)).rejects.toMatchObject({
+        refusal: {
+          code: 'structured_agent_session_unsupported',
+          details: { reason: 'hostUnsupported' }
+        }
+      })
+    }
+  )
 })

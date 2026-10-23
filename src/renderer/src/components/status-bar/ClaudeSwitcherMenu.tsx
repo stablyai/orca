@@ -9,7 +9,7 @@ import { useAppStore } from '../../store'
 import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useActiveWorkspaceOwnerTarget } from '@/runtime/use-worktree-runtime-target'
+import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
   fetchProviderAccountsSnapshot,
@@ -32,9 +32,11 @@ import {
 } from './status-bar-runtime-targets'
 import {
   buildClaudeStatusSwitchGroups,
+  getClaudeStatusActiveId,
   normalizeClaudeStatusRuntimeTarget,
   resolveClaudeStatusAccountState
 } from './status-bar-claude-accounts'
+import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -83,7 +85,7 @@ export function ClaudeSwitcherMenu({
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   // Why: no host picker; the focused workspace's owner, else the default scope host.
-  const runtimeTarget = useActiveWorkspaceOwnerTarget(defaultScopeHost(settings))
+  const { target: runtimeTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
@@ -168,6 +170,7 @@ export function ClaudeSwitcherMenu({
     if (isSwitching) {
       return
     }
+    const previousActiveAccountId = getClaudeStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
       const next = await selectClaudeProviderAccount(runtimeTarget, {
@@ -185,6 +188,15 @@ export function ClaudeSwitcherMenu({
       }
       if (mountedRef.current) {
         setAccountsExpanded(false)
+      }
+      const nextActiveAccountId = getClaudeStatusActiveId(next, target)
+      if (previousActiveAccountId !== nextActiveAccountId) {
+        void handleRunningClaudeSessionsAfterSwitch({
+          owner: runtimeTarget,
+          target,
+          before: { state: accountState, accountId: previousActiveAccountId },
+          after: { state: next, accountId: nextActiveAccountId }
+        })
       }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
@@ -239,16 +251,18 @@ export function ClaudeSwitcherMenu({
   const selectedRuntimeKey = getCodexStatusRuntimeKey(
     normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
   )
-  const fallbackWslDistro = getStatusBarPreferredWslDistro(
-    settings,
-    windowsTerminalCapabilities.wslDistros
-  )
+  // A focused WSL host's accounts are this desktop's for its distro, so that group always shows.
+  const fallbackWslDistro =
+    wslHostDistro ??
+    getStatusBarPreferredWslDistro(settings, windowsTerminalCapabilities.wslDistros)
   const switchGroups = buildClaudeStatusSwitchGroups(
     accountState,
     toCodexStatusRuntimeTarget(claudeTarget),
     {
       fallbackWslDistro,
-      includeFallbackWsl: !hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings),
+      includeFallbackWsl:
+        wslHostDistro !== null ||
+        (!hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings)),
       hostLabel: providerAccountHostLabel
     }
   )
@@ -371,12 +385,6 @@ export function ClaudeSwitcherMenu({
                 </DropdownMenuItem>
               )
             })}
-          </div>
-          <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-            {translate(
-              'accounts.claude.profileSwitching',
-              'Switching applies to the next Claude you start in any tab. Running sessions keep their account.'
-            )}
           </div>
         </div>
       ) : null}

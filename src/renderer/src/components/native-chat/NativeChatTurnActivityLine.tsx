@@ -45,10 +45,10 @@ export function NativeChatTurnActivityLine({
   const label = resolved.source === 'activity' ? resolved.text : statusLabel(resolved.key)
   const { reasoning } = line
   // The finished row reads this key too, so a block opened here lands open once it ends.
-  const disclosure = useNativeChatDisclosure(
-    reasoning ? nativeChatReasoningDisclosureKey(reasoning.message.id) : undefined,
-    false
-  )
+  const disclosureKey = reasoning
+    ? nativeChatReasoningDisclosureKey(reasoning.message.id)
+    : undefined
+  const disclosure = useNativeChatDisclosure(disclosureKey, false)
   const open = reasoning !== null && disclosure.open
   const labelId = useId()
 
@@ -83,6 +83,7 @@ export function NativeChatTurnActivityLine({
       {reasoning ? (
         <CollapsibleContent>
           <NativeChatReasoningBody
+            rowKey={disclosureKey}
             markdown={reasoning.markdown}
             onLinkClick={onLinkClick}
             allowFileUriLinks={allowFileUriLinks}

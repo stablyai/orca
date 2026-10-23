@@ -1,13 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -31,8 +22,6 @@ export function useBrowserPageAnnotationSend({
 }): {
   browserAnnotations: BrowserPageAnnotation[]
   browserAnnotationsPrompt: string
-  browserAnnotationTrayOpen: boolean
-  setBrowserAnnotationTrayOpen: Dispatch<SetStateAction<boolean>>
   browserAnnotationsCopied: boolean
   annotationBannerSendOpen: boolean
   annotationTraySendOpen: boolean
@@ -55,7 +44,6 @@ export function useBrowserPageAnnotationSend({
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const browserAnnotationsRef = useRef(browserAnnotations)
-  const [browserAnnotationTrayOpen, setBrowserAnnotationTrayOpen] = useState(true)
   const [browserAnnotationsCopied, setBrowserAnnotationsCopied] = useState(false)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const copyPrompt = useMemo(
@@ -191,17 +179,11 @@ export function useBrowserPageAnnotationSend({
       if (browserAnnotationsRef.current.length === 1) {
         clearTimeout(annotationCopyTimerRef.current)
         setBrowserAnnotationsCopied(false)
-        setBrowserAnnotationTrayOpen(true)
       }
       deleteBrowserPageAnnotation(browserTabId, annotationId)
       recordFeatureInteraction('browser-annotations')
     },
-    [
-      browserTabId,
-      deleteBrowserPageAnnotation,
-      recordFeatureInteraction,
-      setBrowserAnnotationTrayOpen
-    ]
+    [browserTabId, deleteBrowserPageAnnotation, recordFeatureInteraction]
   )
 
   const handleUpdateBrowserAnnotation = useCallback(
@@ -215,8 +197,6 @@ export function useBrowserPageAnnotationSend({
   return {
     browserAnnotations,
     browserAnnotationsPrompt,
-    browserAnnotationTrayOpen,
-    setBrowserAnnotationTrayOpen,
     browserAnnotationsCopied,
     annotationBannerSendOpen,
     annotationTraySendOpen,

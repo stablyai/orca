@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => {
   const groupsByWorktree: Record<string, { id: string }[]> = {}
   return {
     openFile: vi.fn(),
-    setActiveTabType: vi.fn(),
     stat: vi.fn(),
     prepare: vi.fn(),
     toastError: vi.fn(),
@@ -56,7 +55,6 @@ vi.mock('@/store', () => ({
       activeWorktreeId: 'wt-active',
       groupsByWorktree: mocks.groupsByWorktree,
       getKnownWorktreeById: (id: string) => ({ id, path: `/repos/${id}` }),
-      setActiveTabType: mocks.setActiveTabType,
       openFile: mocks.openFile
     })
   }
@@ -149,7 +147,6 @@ describe('editor group OS file drops', () => {
         }),
         { targetGroupId: 'group-b' }
       )
-      expect(mocks.setActiveTabType).toHaveBeenCalledWith('editor', 'wt-b')
     }
   )
 
@@ -262,7 +259,6 @@ describe('editor group OS file drops', () => {
       }
       await act(async () => finish({ isDirectory: false, escapesWorktree: false }))
       expect(mocks.openFile).not.toHaveBeenCalled()
-      expect(mocks.setActiveTabType).not.toHaveBeenCalled()
       expect(mocks.toastError).toHaveBeenCalledTimes(1)
     }
   )

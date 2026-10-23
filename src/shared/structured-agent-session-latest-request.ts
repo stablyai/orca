@@ -82,7 +82,12 @@ export function latestStructuredAgentSessionRequest(
       }
     }
     const submission = rejected.get(item.itemId)
-    if (submission && classifyDispatchRejection(submission).verdict === 'failure') {
+    // Rejection relocates a refused steer to the thread, but its turn remains the request.
+    if (
+      submission &&
+      submission.answeredInTurn?.via !== 'steer' &&
+      classifyDispatchRejection(submission).verdict === 'failure'
+    ) {
       return {
         kind: 'refused-send',
         id: item.itemId,

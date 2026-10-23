@@ -6,8 +6,8 @@ import { PassThrough } from 'node:stream'
 import type { SFTPWrapper } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { uploadBuffer, uploadFile, writeStringViaSftp } from './sftp-upload'
-import { writeRelayFile } from './ssh-relay-install-transfers'
-import type { SshConnection } from './ssh-connection'
+import { writeRelayFile } from '../managed-server/install/remote-install-transfers'
+import type { SshConnection } from './connection/ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 /** The exact error ssh2 builds from a STATUS reply of SSH_FX_NO_SUCH_FILE. */

@@ -79,3 +79,10 @@ describe('buildManagedWorktreeCreateArgs', () => {
     expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
   })
 })
+
+describe('worktree setup choice', () => {
+  it.each([false, true])('preserves the submitted choice across RPC (%s)', (setupOnly) => {
+    const params = WorktreeCreate.parse({ repo: 'repo-1', name: 'choice', setupOnly })
+    expect(buildManagedWorktreeCreateArgs(params, {})).toMatchObject({ setupOnly })
+  })
+})

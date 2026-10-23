@@ -197,7 +197,7 @@ function stripMarkup(supportsTaskStop: boolean): string {
             tasks={TASKS}
             settledTasks={SETTLED_TASKS}
             supportsTaskStop={supportsTaskStop}
-            supportsStopAll
+            offersStopAll={!supportsTaskStop}
             stoppingTaskIds={new Set(['agent-working'])}
             stoppingAll={false}
             indicatorActive

@@ -3,7 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
+import {
+  getNativeChatAgentProfile,
+  readsSkillSource
+} from '../../../../shared/native-chat-agent-profiles'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { emitNativeChatSkillDiscovery } from '@/lib/native-chat-telemetry'
 import {
@@ -81,7 +84,7 @@ export function isNativeChatSkillForAgent(
   const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
   return rootPaths.some((rootPath) => {
     const source = result.sources.find((entry) => entry.path === rootPath)
-    return source?.owner === null || source?.owner === profile.skillSourceOwner
+    return source !== undefined && readsSkillSource(profile, source)
   })
 }
 

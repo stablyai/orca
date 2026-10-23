@@ -77,8 +77,6 @@ export function hostTestDrawnRowIds(
     queuedAt: HOST_TEST_NOW
   }))
   return projectNativeChatTranscriptMessages(
-    projectStructuredAgentSessionMessages(snapshot.items, optimistic, snapshot.submissions, {
-      rejectedInPlace: true
-    })
+    projectStructuredAgentSessionMessages(snapshot.items, optimistic, snapshot.submissions)
   ).map(({ id }) => id)
 }

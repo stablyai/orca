@@ -8,6 +8,7 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+      - converted_to_draft
 
 concurrency:
   group: pr-checks-${{ github.event.pull_request.number }}
@@ -24,9 +25,10 @@ jobs:
   # Per-job outputs also skip git-compat/xterm/packaging/shell when those
   # inputs are unchanged; empty diffs fail closed and run everything.
   code_paths:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     name: detect changes and check repository guards
-    # Reuse one lightweight checkout for detection and the always-required guards.
-    runs-on: ubuntu-slim
+    # Start routing without waiting behind the GitHub-hosted test queue.
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     permissions:
       contents: read
@@ -51,10 +53,12 @@ jobs:
       package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
       package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       layout_oracle: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.layout_oracle }}
+      dependency_isolation: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.dependency_isolation }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
       e2e_run_changed: ${{ steps.e2e_filter.outputs.e2e_run_changed }}
       e2e_needs_build: ${{ steps.e2e_filter.outputs.e2e_needs_build }}
+      e2e_ssh_shards: ${{ steps.e2e_filter.outputs.e2e_ssh_shards }}
       native_ime_source_changed: ${{ steps.e2e_filter.outputs.native_ime_source_changed }}
       wsl_source_changed: ${{ steps.e2e_filter.outputs.wsl_source_changed }}
     steps:
@@ -74,8 +78,13 @@ jobs:
             /README.md
             /docs/readme/
             /.github/scripts/check-root-directory-entries.mjs
+            /.github/scripts/check-required-pr-context.mjs
+            /.github/workflows/
+            /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
+            /.oxfmtrc.json
+            /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
             /config/scripts/pr-e2e-source-routing.mjs
             /config/scripts/ci-e2e-job-selection.mjs
@@ -93,6 +102,14 @@ jobs:
       # The full Git index retains link targets outside the sparse working tree.
       - name: Check README local links
         run: node config/scripts/check-readme-local-links.mjs
+
+      - name: Set up Bun for required workflow validation
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+
+      - name: Check required PR context ownership
+        run: bun .github/scripts/check-required-pr-context.mjs
 
       # Readiness changes eligibility for advisory tests, not the already-tested source.
       - name: Find identical successful required checks
@@ -163,13 +180,11 @@ jobs:
     name: static analysis and typecheck
     needs: [code_paths]
     if: needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true'
-    # Why ARM: measured 128s against 172s on ubuntu-latest, with every compute step faster --
-    # type-aware 24s->15s, anti-slop 28->19s, localization extraction 67->46s, the orcad smoke
-    # 39->14s. Both lint engines ship linux-arm64 and the Bun target follows process.arch, so
-    # the whole toolchain resolves. Free for public repositories.
-    runs-on: ubuntu-24.04-arm
+    # Leave headroom for typechecking and overlapping checks.
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     outputs:
       shards: ${{ steps.unit-plan.outputs.shards }}
+      managed_hook_node18: ${{ steps.managed_hook_node18.outcome }}
 
     steps:
       - name: Checkout
@@ -182,6 +197,22 @@ jobs:
           # blobless against ~11s without it.
           fetch-depth: 50
           persist-credentials: false
+
+      # The dependency action below restores Node 24 before installing or building packages.
+      - name: Prepare Node 18 smoke runtime
+        id: node18_runtime
+        if: needs.code_paths.outputs.managed_hook_node18 == 'true'
+        continue-on-error: true
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+          package-manager-cache: false
+
+      - name: Capture Node 18 executable
+        id: node18_executable
+        if: needs.code_paths.outputs.managed_hook_node18 == 'true' && steps.node18_runtime.outcome == 'success'
+        continue-on-error: true
+        run: node -p '"executable=" + process.execPath' >> "$GITHUB_OUTPUT"
 
       # Why two guarded installs: the mixed root+mobile store entry is 537 MB against
       # 321 MB for root alone, and restoring it costs 8.6s against 4.6s. Most PRs skip the
@@ -206,8 +237,9 @@ jobs:
       - name: Set up Bun for preflight checks
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version-file: config/.bun-version
 
+      # Run gate scripts directly to avoid repeated package-manager startup.
       - name: Check process-host imports
         if: '!cancelled()'
         id: process-host-imports
@@ -217,7 +249,7 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          bun --bun run check:process-host-imports
+          bun config/scripts/check-import-boundaries.mjs
 
       - name: Check main-process sync launches
         if: '!cancelled()'
@@ -228,7 +260,7 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          bun --bun run check:main-sync-spawn-ratchet
+          bun config/scripts/check-main-sync-spawn-ratchet.mjs
 
       # Keep each check in its own log while sharing this runner.
       - name: Lint
@@ -240,7 +272,12 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          pnpm exec oxlint --format github
+          node node_modules/oxlint/bin/oxlint --format github
+
+      # Why the full tree: it takes ~2s, and the pre-commit hook is skippable.
+      - name: Check formatting
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node node_modules/oxfmt/bin/oxfmt --check .
 
       - name: Reject low-evidence patterns
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -259,11 +296,11 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          pnpm run audit:code-quality:native
+          node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings
 
       - name: Enforce type-aware code-quality baseline
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run audit:code-quality:type-aware
+        run: node node_modules/oxlint/bin/oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings
 
       # Mobile installation changes import resolution for the native cycle check.
       - wait: native-code-quality
@@ -283,11 +320,17 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
+          node config/scripts/check-changed-code-quality.mjs "${{ github.event.pull_request.base.sha }}"
+
+      - name: Verify locked audit tools
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: node config/scripts/verify-locked-audit-tools.mjs
 
       - name: Enforce React Doctor on changed lines
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
+        run: node config/scripts/check-react-doctor-changed.mjs "${{ github.event.pull_request.base.sha }}"
 
       - wait: changed-code-quality
 
@@ -305,15 +348,15 @@ jobs:
 
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:zustand-selector-fanout
+        run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
 
       - name: Check reliability gate manifest
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:reliability-gates
+        run: node config/scripts/check-reliability-gates.mjs
 
       - name: Enforce dead design-system classes
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:dead-classes
+        run: node node_modules/oxlint/bin/oxlint --config config/oxlint-dead-classes.json src/renderer
 
       - name: Check VM runtime rollback compatibility
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -337,33 +380,18 @@ jobs:
           node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
 
-      - name: Enforce max-lines ratchet
+      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
+      - name: Enforce ratchets
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:max-lines-ratchet
-
-      - name: Enforce ts-nocheck ratchet
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:ts-nocheck-ratchet
-
-      - name: Enforce runtime Electron-import ratchet
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:runtime-electron-ratchet
-
-      - name: Enforce focus-read ratchet
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:focus-read-ratchet
-
-      - name: Enforce layout-writer ratchets
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:layout-writer-ratchets
-
-      - name: Check compatibility-folder imports
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: bun config/scripts/check-compat-boundary-imports.mjs
+        run: node config/scripts/run-ratchets.mjs
 
       - name: Check Node runtime pin
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run check:node-runtime-pin
+        run: node config/scripts/check-node-runtime-pin.mjs
+
+      - name: Check root and mobile lock the same shared dependencies
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/check-mobile-shared-dependency-versions.mjs
 
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
@@ -387,39 +415,50 @@ jobs:
             bun config/scripts/verify-localization-extraction.mjs
           fi
 
-      # Why both: the ratchet proves nothing reachable from the runtime imports electron,
-      # which is a property of the import graph. This proves the Node artifact it enables
-      # actually boots, pairs, creates a worktree and round-trips a real PTY.
-      - name: Boot orcad and round-trip a terminal
+      - name: Decide whether the orcad terminal smoke runs
+        id: orcad-smoke-scope
         if: needs.code_paths.outputs.static_analysis == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           # Detection failures run the smoke; renames retain the removed input path.
           DIFF_BASE="$(node config/scripts/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --name-only --no-renames -z "$DIFF_BASE" HEAD > "$RUNNER_TEMP/orcad-smoke-changes" &&
             scope="$(node config/scripts/orcad-terminal-smoke-change-scope.mjs "$RUNNER_TEMP/orcad-smoke-changes")" && [ "$scope" = false ]; then
             echo "Orcad terminal smoke inputs are unchanged."
+            echo 'run=false' >> "$GITHUB_OUTPUT"
           else
-            pnpm run smoke:orcad-terminal
+            echo 'run=true' >> "$GITHUB_OUTPUT"
           fi
+
+      # orcad refuses to build without the page phones load.
+      - uses: ./.github/actions/build-mobile-web-bundle
+        if: steps.orcad-smoke-scope.outputs.run == 'true'
+
+      # Why both: the ratchet proves nothing reachable from the runtime imports electron,
+      # which is a property of the import graph. This proves the Node artifact it enables
+      # actually boots, pairs, creates a worktree and round-trips a real PTY.
+      - name: Boot orcad and round-trip a terminal
+        if: steps.orcad-smoke-scope.outputs.run == 'true'
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: pnpm run smoke:orcad-terminal
 
       - name: Verify the generated RPC params catalog
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run verify:rpc-params-catalog
+        run: node config/scripts/generate-rpc-params-catalog.mjs --check
 
       - name: Verify the generated ACP protocol schema
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run verify:acp-protocol
+        run: node config/scripts/acp/generate-protocol.mjs --check
 
       - name: Verify bundled skill guides
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run verify:bundled-skill-guides
+        run: node config/scripts/generate-bundled-skill-guides.mjs --check
 
       - name: Verify skill freshness manifest
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run verify:skill-bundle-manifest
+        run: node config/scripts/generate-skill-bundle-manifest.mjs
 
       - name: Verify localization catalogs
         if: '!cancelled()'
@@ -430,11 +469,11 @@ jobs:
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
         run: |
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
-          pnpm run verify:localization-catalogs
+          bun config/scripts/verify-localization-catalogs.mjs
 
       - name: Verify localization coverage
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm run verify:localization-coverage
+        run: bun config/scripts/audit-localization-coverage.mjs --check
 
       - wait: [localization-catalogs, localization-extraction]
 
@@ -458,11 +497,11 @@ jobs:
 
       - name: Check feature wall asset budget
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm check:feature-wall-assets
+        run: node config/scripts/check-feature-wall-assets.mjs
 
       - name: Verify macOS entitlements
         if: needs.code_paths.outputs.static_analysis == 'true'
-        run: pnpm verify:macos-entitlements
+        run: node config/scripts/verify-macos-entitlements.mjs
 
       # Planning shares setup and stays off the compiler's critical path.
       - name: Plan unit selection
@@ -473,6 +512,7 @@ jobs:
           PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.typecheck == 'true' }}
           PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
           ORCA_UNIT_SELECTION_MODE: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+          ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
           # Five shards use fewer runner minutes; the repository variable can still request ten.
           ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
         run: |
@@ -494,12 +534,6 @@ jobs:
           path: ci-shards/unit-selection.json
           retention-days: 14
 
-      - name: Set up Bun for Mobile CI tool tests
-        if: needs.code_paths.outputs.mobile_ci_tools == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: config/.bun-version
-
       - name: Test Mobile CI tools and runtime routing
         if: needs.code_paths.outputs.mobile_ci_tools == 'true'
         env:
@@ -515,6 +549,18 @@ jobs:
           config/scripts/win32-test-lane-registration.test.mjs
           config/scripts/vitest-node-runtime-boundary.test.ts
           config/scripts/vitest-sqlite-runtime-boundary.test.ts
+
+      # Report failure through the separate required check without blocking unrelated consumers.
+      - name: Smoke process-host package on Node 18
+        id: managed_hook_node18
+        if: success() && needs.code_paths.outputs.managed_hook_node18 == 'true'
+        continue-on-error: true
+        env:
+          NODE18_EXECUTABLE: ${{ steps.node18_executable.outputs.executable }}
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: |
+          test -n "$NODE18_EXECUTABLE"
+          "$NODE18_EXECUTABLE" config/scripts/smoke-process-host-node18.mjs
 
   git_compatibility:
     name: Git compatibility
@@ -864,7 +910,8 @@ jobs:
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["24"]'
-      runner: ubuntu-24.04-arm
+      runner: blacksmith-4vcpu-ubuntu-2404
+      phase_diagnostics: true
       shards: ${{ needs.preflight.outputs.shards }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
@@ -907,7 +954,7 @@ jobs:
       - name: Install WebKit for the drawer check
         id: webkit
         background: true
-        run: pnpm exec playwright install --with-deps webkit
+        run: pnpm exec playwright-core install --with-deps webkit
 
       # The entry lives in mobile/ so one React resolves; without this every RN import is nothing.
       - uses: ./.github/actions/install-mobile-dependencies
@@ -1011,25 +1058,19 @@ jobs:
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.managed_hook_node18 == 'true' &&
       needs.preflight.result == 'success'
-    # Why ARM: Node 18 publishes linux-arm64; the per-platform runtime files are read as data.
-    runs-on: ubuntu-24.04-arm
+    # Retain the required check while sharing preflight's checkout and built packages.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/install-node-dependencies
-
-      - name: Setup Node 18 runtime
-        uses: actions/setup-node@v6
-        with:
-          node-version: '18'
-
-      # The process-host package declares engines >=18; load its staged public output on Node 18.
-      - name: Smoke process-host package
-        run: node config/scripts/smoke-process-host-node18.mjs
+      - name: Require process-host package smoke on Node 18
+        env:
+          MANAGED_HOOK_NODE18: ${{ needs.preflight.outputs.managed_hook_node18 }}
+        run: |
+          if [ "$MANAGED_HOOK_NODE18" != success ]; then
+            echo "::error::Node 18 process-host smoke: expected success, got $MANAGED_HOOK_NODE18"
+            exit 1
+          fi
 
   package:
     name: package
@@ -1053,11 +1094,20 @@ jobs:
           restore-keys: |
             electron-builder-linux-
 
+      # Restore in the foreground: background steps may only be single run steps (ci-background-steps.test.mjs).
       - uses: ./.github/actions/prepare-linux-package-fixture
-        id: daemon-fixture-cache
-        background: true
+        id: daemon-fixture-cache-restore
         with:
           fixture: daemon-shutdown-descendants
+          load: 'false'
+
+      - name: Load daemon shutdown fixture image
+        id: daemon-fixture-cache
+        background: true
+        env:
+          FIXTURE: daemon-shutdown-descendants
+          CACHE_HIT: ${{ steps.daemon-fixture-cache-restore.outputs.cache-hit }}
+        run: bash .github/actions/prepare-linux-package-fixture/load-fixture.sh
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -1083,6 +1133,8 @@ jobs:
       # probe carries its own in-process deadline. Four at once on a 4-vCPU runner starve each other
       # past those deadlines; serial, every probe owns the runner.
       - name: Test Linux Electron lifecycle boundary
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
@@ -1092,19 +1144,55 @@ jobs:
           src/main/browser/browser-route-h3-egress.electron.test.ts
           src/main/browser/browser-route-dns-prefetch.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
+          src/main/browser/popup-origin-chrome.electron.test.ts
+          src/main/browser/browser-link-materialization.electron.test.ts
+          src/main/browser/browser-popup-compatibility.electron.test.ts
+          src/main/browser/browser-popup-adapter-compatibility.electron.test.ts
+          src/main/browser/browser-popup-native-compatibility.electron.test.ts
+          src/main/browser/browser-popup-background-compatibility.electron.test.ts
 
-      # Restore independent fixtures during builds; keep native lifecycle probes serial.
-      - uses: ./.github/actions/prepare-linux-package-fixture
-        id: shutdown-fixture-cache
+      - name: Restore native components
+        id: linux-native-restore
+        uses: ./.github/actions/prepare-wayland-clipboard
+        with:
+          build: 'false'
+
+      # The isolated glibc-floor build writes only the Wayland helper, so JavaScript can overlap.
+      - name: Build native components
+        id: linux-native
         background: true
+        env:
+          CACHE_HIT: ${{ steps.linux-native-restore.outputs.cache-hit }}
+        run: bash .github/actions/prepare-wayland-clipboard/build-or-validate.sh
+
+      # Load independent fixtures during builds; keep native lifecycle probes serial.
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: shutdown-fixture-cache-restore
         with:
           fixture: headless-serve-shutdown
+          load: 'false'
+
+      - name: Load headless serve shutdown fixture image
+        id: shutdown-fixture-cache
+        background: true
+        env:
+          FIXTURE: headless-serve-shutdown
+          CACHE_HIT: ${{ steps.shutdown-fixture-cache-restore.outputs.cache-hit }}
+        run: bash .github/actions/prepare-linux-package-fixture/load-fixture.sh
 
       - uses: ./.github/actions/prepare-linux-package-fixture
-        id: cli-fixture-cache
-        background: true
+        id: cli-fixture-cache-restore
         with:
           fixture: cli-launch-contract
+          load: 'false'
+
+      - name: Load CLI launch contract fixture image
+        id: cli-fixture-cache
+        background: true
+        env:
+          FIXTURE: cli-launch-contract
+          CACHE_HIT: ${{ steps.cli-fixture-cache-restore.outputs.cache-hit }}
+        run: bash .github/actions/prepare-linux-package-fixture/load-fixture.sh
 
       - name: Install Linux package tooling
         id: linux-package-tools
@@ -1120,6 +1208,8 @@ jobs:
           timeout 300 sudo apt-get install -y cpio rpm
 
       - name: Build package inputs
+        env:
+          ORCA_CI_MAIN_SOURCEMAPS: '0'
         run: |
           status=0
           pnpm run build:cli || status=1
@@ -1147,10 +1237,7 @@ jobs:
       - name: Build mobile web bundle
         run: pnpm run build:mobile-web
 
-      - name: Build native components
-        run: pnpm run build:native
-
-      - wait: [linux-package-tools, web-client]
+      - wait: [linux-native, linux-package-tools, web-client]
 
       - name: Package unpacked app
         env:
@@ -1173,6 +1260,27 @@ jobs:
           rpm_marker="$(rpm2cpio "$rpm" | cpio --quiet --extract --to-stdout ./opt/Orca/resources/package-type)"
           [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
+          # Only the AppImage carries the pinned Node (config/scripts/appimage-node-runtime.cjs).
+          if dpkg-deb --fsys-tarfile "$deb" | tar -t | grep '/resources/node-runtime' >/dev/null; then
+            echo "The deb must not carry the AppImage's Node"; exit 1
+          fi
+          if rpm2cpio "$rpm" | cpio --quiet -t | grep '/resources/node-runtime' >/dev/null; then
+            echo "The rpm must not carry the AppImage's Node"; exit 1
+          fi
+          appimage_root="$(mktemp -d)"
+          (cd "$appimage_root" && "$GITHUB_WORKSPACE/dist/orca-linux.AppImage" --appimage-extract 'resources/node-runtime/bin/node' >/dev/null)
+          test -x "$appimage_root/squashfs-root/resources/node-runtime/bin/node"
+          "$appimage_root/squashfs-root/resources/node-runtime/bin/node" --version
+          rm -rf "$appimage_root"
+          ls -l dist/orca-linux.AppImage "$deb" "$rpm"
+
+      # Kept briefly so a reviewer can run this exact AppImage on a real Linux desktop.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orca-linux-appimage-${{ github.event.pull_request.head.sha }}
+          path: dist/orca-linux.AppImage
+          retention-days: 3
+          compression-level: 0
 
       - wait: shutdown-fixture-cache
 
@@ -1246,83 +1354,13 @@ jobs:
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
       - name: Test Windows installer process probe
-        # Keep cold CIM startup out of the concurrent Electron/native process workload.
+        # Serialize the two suites so their cold PowerShell/CIM starts cannot contend.
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
+          --no-file-parallelism
           config/scripts/nsis-process-check.test.mjs
           config/scripts/idle-cpu-process-sampling.test.mjs
 
-      - name: Test Windows-specific boundaries
-        run: >-
-          pnpm exec vitest run --config config/vitest.config.ts
-          src/main/zcode/zcode-plan-api-key-store-native-windows.test.ts
-          config/scripts/rebuild-native-deps.test.mjs
-          config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
-          config/scripts/rebuild-native-deps-node-pty.test.mjs
-          config/scripts/ensure-native-runtime-job-ownership.test.mjs
-          config/scripts/verify-packaged-node-pty-job-ownership.test.mjs
-          config/scripts/windows-pe-machine.test.mjs
-          config/scripts/build-windows-cli-launcher.test.mjs
-          config/scripts/script-module-dependencies.test.mjs
-          src/main/windows-registry-addon.test.ts
-          config/scripts/windows-process-tree-gyp-path.test.mjs
-          config/scripts/windows-process-tree-gyp-rebuild.test.mjs
-          config/scripts/package-electron-runtime-contract.test.mjs
-          config/scripts/electron-builder-runtime-resources.test.mjs
-          src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/browser/browser-route-tcp-egress.electron.test.ts
-          src/main/browser/browser-route-webrtc-egress.electron.test.ts
-          src/main/browser/browser-route-h3-egress.electron.test.ts
-          src/main/browser/browser-route-dns-prefetch.electron.test.ts
-          src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
-          src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
-          src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
-          src/shared/__tests__/process-host/windows-command-line.win32.test.ts
-          src/shared/__tests__/process-host/windows-cmd-shim-resolution.test.ts
-          src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts
-          src/main/agent-hooks/windows-hook-payload-delivery.test.ts
-          src/main/jcode/hook-gate-script.test.ts
-          src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
-          src/main/agent-hooks/windows-cmd-hook-command-unicode.test.ts
-          src/main/agent-hooks/windows-batch-hook-launcher.test.ts
-          src/main/agent-hooks/windows-powershell-hook-launcher.test.ts
-          src/main/codex/windows-hook-command.test.ts
-          src/main/codex/windows-hook-upgrade.test.ts
-          src/main/codex/hook-service-managed-install.test.ts
-          src/main/windows/windows-pty-job.win32.test.ts
-          src/main/windows/windows-msys-job.win32.test.ts
-          src/main/providers/agent-foreground-process-git-bash.win32.test.ts
-          src/main/windows/windows-host-job.win32.test.ts
-          src/main/windows/windows-process-tree-command-line-patch.test.ts
-          src/main/windows/windows-process-table-native-addon.win32.test.ts
-          src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts
-          src/main/windows-live-tree-kill.win32.test.ts
-          src/main/wsl/wsl-runner.test.ts
-          src/main/wsl/wsl-guest-environment.test.ts
-          src/main/wsl/wsl-executable-path.win32.test.ts
-          src/main/claude-accounts/claude-profile-history-windows.test.ts
-          src/main/wsl/wsl-w1-w3-contract.test.ts
-          src/shared/source-scan/source-tree-scan.test.ts
-          src/main/cli/wsl-cli-powershell-boundary.test.ts
-          src/main/computer/desktop-script-runtime-host.win32.test.ts
-          src/main/cursor/hook-service.test.ts
-          src/main/orca-profiles/profile-index-store.test.ts
-          src/main/startup/windows-install-dir-acl-repair.win32.test.ts
-          src/main/startup/windows-app-data-path.test.ts
-          src/main/runtime/repo-worktree-admin-fingerprint.test.ts
-          src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
-          src/shared/secure-file-fsync-flags.test.ts
-          src/shared/secure-path-windows-acl.win32.test.ts
-          src/main/runtime/unreadable-secret-store-preservation.win32.test.ts
-          src/main/ipc/pty-codex-account-attribution.test.ts
-          src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
-          src/main/ipc/preflight-provider-command-selection.test.ts
-          src/main/ipc/preflight-runnable-local-cli.test.ts
-          src/main/ssh/remote-node-runtime-store-windows.test.ts
-
-      # Why the :parallel variant: identical to build:release except the three
-      # electron-vite targets overlap instead of running back to back. The Linux package
-      # job already packages and smoke-tests an AppImage built that way.
       - name: Cache Windows CLI launcher
         uses: actions/cache@v5
         with:
@@ -1332,8 +1370,10 @@ jobs:
           path: |
             native/windows-cli-launcher/.build
             native/windows-cli-launcher/target
+            native/windows-agent-hook/.build
+            native/windows-agent-hook/target
             ~/.cargo/registry
-          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs', 'resources/build/icon.ico', 'package.json') }}
+          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'native/windows-agent-hook/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/build-windows-agent-hook.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'resources/build/icon.ico', 'package.json') }}
 
       # Why an explicit step rather than trusting the runner image: the packaged
       # CLI launcher is a native Rust binary, and a host without cargo fails deep
@@ -1347,7 +1387,39 @@ jobs:
           }
           cargo --version
 
+      # Why before the tests: the orca-agent-hook.exe suites then share one prebuilt binary rather
+      # than each starting its own build mid-run.
+      - name: Build the Windows agent hook
+        run: node config/scripts/build-windows-agent-hook.mjs
+
+      - name: Build the Windows CLI launcher
+        run: node config/scripts/build-windows-cli-launcher.mjs
+
+      # Files come from WINDOWS_BOUNDARY_TESTS, the same list that decides whether this job runs.
+      - name: Test Windows-specific boundaries
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_REAL_WINDOWS_SKILL_TEST: '1'
+        run: |
+          $files = node config/scripts/pr-package-test-paths.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec vitest run --config config/vitest.config.ts $files
+
+      # Why its own step: the CPU burners that make taskkill slow would starve
+      # every other test file sharing the runner.
+      - name: Test Windows tree kill under CPU load
+        env:
+          ORCA_WINDOWS_TREE_KILL_LOAD: '1'
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
+
+      # Why the :parallel variant: identical to build:release except the three
+      # electron-vite targets overlap instead of running back to back. The Linux package
+      # job already packages and smoke-tests an AppImage built that way.
       - name: Build package inputs
+        env:
+          ORCA_CI_MAIN_SOURCEMAPS: '0'
         run: pnpm run build:release:parallel
 
       - name: Prepare Electron native runtime
@@ -1393,6 +1465,7 @@ jobs:
       test_files: ${{ needs.code_paths.outputs.test_files }}
       run_changed_e2e: ${{ needs.code_paths.outputs.e2e_run_changed != 'false' }}
       needs_build: ${{ needs.code_paths.outputs.e2e_needs_build != 'false' }}
+      managed_ssh_shards: ${{ needs.code_paths.outputs.e2e_ssh_shards || '["1/2","2/2"]' }}
 
   # Why its own required job, apart from `e2e`: the rest of the suite is red on main, but the
   # layout oracle is green there, and its known-on-main list absorbs today's findings. Only the two
@@ -1442,8 +1515,70 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.head.sha }}
 
+  # Why: pnpm's global virtual store links each package to only its declared dependencies, which
+  # is how developers install. Hoisting hides an undeclared one everywhere else, so install that way
+  # here with HOME and the store in an empty temp dir, where no stray node_modules can mask it.
+  dependency_isolation:
+    name: dependency isolation under the global virtual store
+    needs: [code_paths]
+    if: >-
+      !cancelled() &&
+      needs.code_paths.result == 'success' &&
+      needs.code_paths.outputs.dependency_isolation == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    env:
+      ORCA_PNPM_FORCE_GLOBAL_VIRTUAL_STORE_IN_CI: '1'
+
+    steps:
+      # Job-wide (via GITHUB_ENV, since job env cannot read runner.temp) so every pnpm command,
+      # including pnpm run's own install check, keeps this layout.
+      - name: Point HOME and the pnpm store at empty temp dirs
+        run: |
+          mkdir -p "$RUNNER_TEMP/empty-home"
+          {
+            echo "HOME=$RUNNER_TEMP/empty-home"
+            echo "pnpm_config_store_dir=$RUNNER_TEMP/isolated-store"
+          } >> "$GITHUB_ENV"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Install with every package isolated in its own store slot
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-scripts
+          if [ -d node_modules/bun ]; then
+            pnpm rebuild bun
+          fi
+
+      - name: Typecheck and check undeclared dependency resolution
+        run: |
+          set -euo pipefail
+          pnpm tc
+          pnpm exec vitest run --config config/vitest.config.ts config/scripts/undeclared-dependency-resolution.test.ts
+          # Pointless if any pnpm command above fell back to the hoisted layout or another store.
+          case "$(realpath node_modules/zod)" in
+            "$(realpath "$pnpm_config_store_dir")"/*) ;;
+            *) echo "node_modules/zod is not in the isolated store"; exit 1 ;;
+          esac
+
   verify:
-    if: ${{ !cancelled() }}
+    name: PR checks passed
+    # Publish an explicit result after every required dependency settles.
+    if: ${{ !cancelled() && github.event.pull_request.draft != true }}
     needs:
       - code_paths
       - preflight
@@ -1458,8 +1593,9 @@ jobs:
       - package
       - package_windows
       - layout_oracle
-    # Evaluating job results only needs the lightweight container runner.
-    runs-on: ubuntu-slim
+      - dependency_isolation
+    # Report settled results without competing with the GitHub-hosted test queue.
+    runs-on: blacksmith-2vcpu-ubuntu-2204
     timeout-minutes: 5
 
     steps:
@@ -1476,6 +1612,8 @@ jobs:
           CODE_PATHS: ${{ needs.code_paths.result }}
           SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           PREFLIGHT: ${{ needs.preflight.result }}
+          STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
+          TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
           PREFLIGHT_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true' }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
           GIT_COMPATIBILITY_SHOULD_RUN: ${{ needs.code_paths.outputs.git_compatibility }}
@@ -1499,10 +1637,16 @@ jobs:
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
           LAYOUT_ORACLE: ${{ needs.layout_oracle.result }}
           LAYOUT_ORACLE_SHOULD_RUN: ${{ needs.code_paths.outputs.layout_oracle }}
+          DEPENDENCY_ISOLATION: ${{ needs.dependency_isolation.result }}
+          DEPENDENCY_ISOLATION_SHOULD_RUN: ${{ needs.code_paths.outputs.dependency_isolation }}
         run: |
           if [ "$CODE_PATHS" != "success" ]; then
             exit 1
           fi
+          case "$STATIC_ANALYSIS_SHOULD_RUN:$TYPECHECK_SHOULD_RUN" in
+            true:true|true:false|false:true|false:false) ;;
+            *) echo "preflight: missing or invalid selection"; exit 1 ;;
+          esac
           if [ "$SHOULD_RUN" != "true" ]; then
             echo "Docs-only change; expensive PR checks skipped."
           fi
@@ -1514,11 +1658,14 @@ jobs:
                 echo "$name: expected success, got $result"
                 failed=1
               fi
-            else
+            elif [ "$should" = "false" ]; then
               if [ "$result" != "skipped" ]; then
                 echo "$name: expected skipped, got $result"
                 failed=1
               fi
+            else
+              echo "$name: missing or invalid selection"
+              failed=1
             fi
           }
           # Require success when the PR has code-relevant changes
@@ -1534,4 +1681,5 @@ jobs:
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
           check_job layout_oracle "$LAYOUT_ORACLE" "$LAYOUT_ORACLE_SHOULD_RUN"
+          check_job dependency_isolation "$DEPENDENCY_ISOLATION" "$DEPENDENCY_ISOLATION_SHOULD_RUN"
           exit "$failed"

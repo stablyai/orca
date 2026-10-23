@@ -13,7 +13,9 @@ import {
   mediaReadParamsSchema,
   mediaReadResultSchema,
   mediaReleaseParamsSchema,
-  mediaReleaseResultSchema
+  mediaReleaseResultSchema,
+  mediaNameParamsSchema,
+  mediaNameResultSchema
 } from './bridge-media-verbs'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 
@@ -41,6 +43,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.media.pick',
   'native.media.read',
   'native.media.release',
+  'native.media.name',
   'native.audio.start',
   'native.audio.read',
   'native.audio.stop',
@@ -118,6 +121,11 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.media.release': {
     params: mediaReleaseParamsSchema,
     result: mediaReleaseResultSchema
+  },
+  // Optional beside the trio: a page without it names a picked file from its mime.
+  'native.media.name': {
+    params: mediaNameParamsSchema,
+    result: mediaNameResultSchema
   },
   // Dictation's capture. Their shapes live in `bridge-audio-verbs.ts` for the media trio's reason:
   // the pull, its ring and the tail the stop carries back are one contract.

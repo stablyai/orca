@@ -94,7 +94,7 @@ it.each([1, 100, 200])('serializes each of %i unchanged forward page items once'
         limit: count,
         cursor
       },
-      snapshot
+      { snapshot }
     )
     expect(result.ok).toBe(true)
     expect(result.page.items).toHaveLength(count)

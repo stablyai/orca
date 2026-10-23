@@ -14,6 +14,7 @@ import type { StructuredAgentSessionProviderChild } from './structured-agent-ses
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import { releaseStoredStructuredAgentSessionOwnerAfterExit } from './structured-agent-session-lease-release'
 import { isSurfaceReleasableAgentSessionRecord } from '../../runtime/agent-session-surface-release-transition'
+import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 
 /** What a caller learned about the child's exit: proven, or not. A root still there after the
  *  close's kill reads `unverifiable`, never `exited`. */
@@ -26,17 +27,27 @@ export async function joinStructuredAgentSessionChildClose(
   child: StructuredAgentSessionProviderChild
 ): Promise<StructuredAgentSessionChildCloseVerdict> {
   // Read before the close: once the child is gone the provider can no longer say.
-  const unanswered = context.deps.adapter.startAnswered?.(sessionId) === false
+  const unanswered = child.phase === 'starting'
   if (!(await closeProviderRoot(context, sessionId))) {
     return 'unverifiable'
   }
+  await endClosedStructuredAgentSessionChild(context, sessionId, child, unanswered)
+  return 'exited'
+}
+
+async function endClosedStructuredAgentSessionChild(
+  context: StructuredAgentSessionLifetimeContext,
+  sessionId: string,
+  child: StructuredAgentSessionProviderChild,
+  unanswered: boolean
+): Promise<void> {
   await context.endExitedChild(sessionId, child, {
     expected: true,
     reason: 'closed by Orca',
+    ...(child.close?.failure ? { failure: child.close.failure } : {}),
     ...(unanswered ? { startupUnanswered: true } : {})
   })
   context.restartWitness?.stopped(sessionId)
-  return 'exited'
 }
 
 /** The refusal of an operation that met a child whose close is still unproven. */
@@ -50,16 +61,28 @@ export function previousExitUnverifiableRefusal(): AgentSessionWireRefusal {
 
 /** For an operation that reaches the provider: a child a stop began closing takes no input and
  *  none may start beside it, so the operation joins that close and is refused while it is still
- *  unproven. */
+ *  unproven. A start passes its own lock: the close is awaited outside the session's serialize and
+ *  the record ends in a commit, only if the child is still the one closed. */
 export async function joinClosingStructuredAgentSessionChild(
   context: StructuredAgentSessionLifetimeContext,
-  sessionId: string
+  sessionId: string,
+  lock?: StructuredAgentSessionAttachLock
 ): Promise<{ ok: true } | { ok: false; refusal: AgentSessionWireRefusal }> {
   const child = context.sessions.get(sessionId)?.child
   if (!child?.close) {
     return { ok: true }
   }
-  if ((await joinStructuredAgentSessionChildClose(context, sessionId, child)) === 'exited') {
+  const unanswered = child.phase === 'starting'
+  const closing = closeProviderRoot(context, sessionId)
+  if (await (lock ? lock.wait(closing) : closing)) {
+    const end = () => endClosedStructuredAgentSessionChild(context, sessionId, child, unanswered)
+    await (lock
+      ? lock.commit(async () => {
+          if (context.sessions.get(sessionId)?.child === child) {
+            await end()
+          }
+        })
+      : end())
     return { ok: true }
   }
   // A stop reports this through its own failure; here the refusal is the only trace.

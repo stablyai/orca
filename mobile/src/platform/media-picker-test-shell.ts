@@ -8,6 +8,7 @@
  */
 import {
   BRIDGE_MEDIA_READ_MAX_BYTES,
+  mediaNameParamsSchema,
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
@@ -21,6 +22,8 @@ export type StagedTestMedia = {
   readonly mime?: string
   readonly width?: number
   readonly height?: number
+  /** What `native.media.name` answers for this item. */
+  readonly name?: string
 }
 
 export type MediaTestShell = {
@@ -115,6 +118,11 @@ export function createMediaTestShell(options: {
           base64: encodeTestBase64(record.bytes.subarray(offset, end)),
           eof: end >= last
         })
+      }
+      if (verb === 'native.media.name') {
+        const { handle } = mediaNameParamsSchema.parse(params)
+        calls.push(`name ${handle}`)
+        return Promise.resolve({ name: hold(handle).name ?? null })
       }
       const { handle } = mediaReleaseParamsSchema.parse(params)
       calls.push(`release ${handle}`)

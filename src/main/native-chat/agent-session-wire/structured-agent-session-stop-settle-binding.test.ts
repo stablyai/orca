@@ -66,7 +66,7 @@ function openedTurn() {
 
 function nothingRuns(): boolean {
   return !isStructuredAgentSessionMainAgentWorking(
-    journal().activeTurnId(),
+    journal().runningTurn()?.turnId ?? null,
     journal().submissions()
   )
 }
@@ -169,11 +169,13 @@ describe("a person's close pressed before its send's turn showed", () => {
     await rig.host['lifetime'].stopAgent(HOST_TEST_SESSION, { cause: 'user-close' })
     expect(journal().stopMarks.latest()?.event).toMatchObject({ reason: 'user-close' })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
+    // The next child's turn, at the fence the stopped one's end moved to.
+    const fence = rig.store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
 
     await journal().appendItem(
       LATER,
       { kind: 'turn', turnId: 'turn-later', state: 'running', startedAt: Date.now() },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal().appendItem(
       LATER,
@@ -184,7 +186,7 @@ describe("a person's close pressed before its send's turn showed", () => {
         startedAt: Date.now(),
         completedAt: Date.now() + 5
       },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     const later = journal()

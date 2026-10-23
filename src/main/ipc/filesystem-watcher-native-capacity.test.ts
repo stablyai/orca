@@ -21,7 +21,8 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   onSshFilesystemProviderRegistered: () => () => {}
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { closeAllWatchers } from './filesystem-watcher-shutdown'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import {
   MAX_PHYSICAL_WATCHER_CHILDREN,
   reserveWatcherChild,
@@ -80,6 +81,14 @@ describe('native filesystem watcher capacity recovery', () => {
 
     releases.pop()?.()
     await vi.waitFor(() => expect(subscribeViaWatcherProcessMock).toHaveBeenCalledTimes(2))
+    // Why: the IPC call returned before this install, so a write in between needs a resync.
+    await vi.waitFor(() =>
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: '/tmp/native-capacity-root',
+        events: [{ kind: 'overflow', absolutePath: '/tmp/native-capacity-root' }],
+        resync: true
+      })
+    )
 
     releases.forEach((release) => release())
   })

@@ -1,7 +1,7 @@
 import type { Tab } from '../../../shared/tab-types'
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export const CLOSE_DIALOG_DEBOUNCE_MS = 200
@@ -56,7 +56,7 @@ export function isPinnedVisibleTab(
 }
 
 export function getActiveWorktreeRuntimeEnvironmentId(worktreeId: string | null): string | null {
-  return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+  return runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(useAppStore.getState(), worktreeId)
 }
 
 export function isPinnedActiveEditorTab(

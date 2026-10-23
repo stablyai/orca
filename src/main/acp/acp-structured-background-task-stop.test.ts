@@ -246,12 +246,13 @@ describe('Grok background commands in the background-tasks strip', () => {
     })
   })
 
-  // Grok's own refusal means it killed nothing; a reply about another task proves nothing.
+  // Grok's own refusal means it killed nothing; a reply about another task proves nothing. The Stop
+  // is accepted either way, and its note says which.
   it.each([
-    ['rpc-error', { ok: false, refusal: { code: 'agent_session_operation_invalid' } }],
-    ['envelope-error', { ok: false, refusal: { code: 'agent_session_operation_invalid' } }],
-    ['mismatched-id', { ok: false, refusal: { code: 'agent_session_operation_unknown' } }]
-  ] as const)('keeps the row after a %s', async (failure, answer) => {
+    ['rpc-error', "The background task wasn't stopped."],
+    ['envelope-error', "The background task wasn't stopped."],
+    ['mismatched-id', 'Cancellation was not confirmed.']
+  ] as const)('keeps the row after a %s', async (failure, note) => {
     const f = await fixture()
     await f.background()
     f.agent.on('_x.ai/task/kill', (frame) => {
@@ -263,7 +264,12 @@ describe('Grok background commands in the background-tasks strip', () => {
         f.agent.reply(frame, { result: { taskId: 'other', outcome: 'killed' } })
       }
     })
-    expect(await f.targetedStop(CHILD)).toMatchObject(answer)
+    expect(await f.targetedStop(CHILD)).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(
+      (await f.rows()).flatMap((row) =>
+        row.body.kind === 'status' && row.body.failure ? [row.body.text] : []
+      )
+    ).toEqual([note])
     expect((await f.strip())?.tasks).toMatchObject([{ id: CHILD, stoppable: true }])
     expect(f.rig.child().closed).toBe(false)
   })

@@ -17,6 +17,9 @@ import {
   WT
 } from './terminal-tab-into-pane-fixture'
 
+// The window-applied join under test exists only while the layout-owner switch is off.
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn() } }))
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),

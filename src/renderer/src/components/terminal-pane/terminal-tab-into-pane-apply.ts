@@ -56,6 +56,11 @@ export function applyTerminalTabJoin(
   ptyId: string
 ): boolean {
   const { worktreeId, sourceTabId, targetTabId, leafId, targetLeafId, placement } = request
+  // Only the mounted pane can collapse itself, and the split needs the others visible. Collapsing
+  // saves the mounted tree, which has no moved leaf yet, so it must finish before the graft is saved.
+  if (deps.getStore().expandedPaneByTabId[targetTabId]) {
+    deps.dispatchToggleExpand(targetTabId)
+  }
   const grafted = graftIntoTarget(deps, request, ptyId)
   if (!grafted) {
     return false
@@ -70,10 +75,6 @@ export function applyTerminalTabJoin(
     sourceTabId,
     targetTabId
   })
-  // Only the mounted pane can collapse itself, and the split needs the others visible.
-  if (deps.getStore().expandedPaneByTabId[targetTabId]) {
-    deps.dispatchToggleExpand(targetTabId)
-  }
   const mounted = deps.mountedLeafIds(targetTabId)
   if (mounted) {
     const sourceLeafId = mounted.includes(targetLeafId)
@@ -93,6 +94,13 @@ export function applyTerminalTabJoin(
     // The dispatch is fire-and-forget and its handler drops requests silently.
     if (!deps.mountedLeafIds(targetTabId)?.includes(leafId)) {
       deps.getStore().remountTerminalTabForRecovery(targetTabId)
+    } else {
+      // The split carries no title and pane creation does not show one; the layout copy alone
+      // would appear only after a remount.
+      const title = grafted.titlesByLeafId?.[leafId]
+      if (title) {
+        deps.dispatchPaneTitle({ tabId: targetTabId, leafId, title })
+      }
     }
   }
   deps.getStore().closeTab(sourceTabId, {

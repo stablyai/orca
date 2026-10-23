@@ -1,23 +1,14 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
-import { useHostClient } from '../transport/client-context'
-import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
+import { useHostClient } from '../transport/host-client-hooks'
+import { useHostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
+import { HostStatusGatesContext } from './host-protocol-gates-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 type Props = {
   hostId: string | undefined
   children: ReactNode
-}
-
-const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
-
-export function useHostProtocolGates(): HostStatusGates {
-  const gates = useContext(HostStatusGatesContext)
-  if (!gates) {
-    throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
-  }
-  return gates
 }
 
 // Why: single choke point above every /h/[hostId] route so a blocked verdict replaces the

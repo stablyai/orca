@@ -11,6 +11,7 @@ import {
 import { i18n } from '@/i18n/i18n'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   renderTabBarItems,
   type TabBarItemSurfaceProps,
@@ -22,6 +23,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 type TabProps = {
   tab?: { id: string; title: string }
+  agent?: string | null
+  nativeChat?: { sessionId: string; agent: string | undefined }
   isActive: boolean
   isPinned: boolean
   onActivate: (id: string) => void
@@ -53,7 +56,17 @@ vi.mock('./EditorFileTab', () => ({
 }))
 
 /** Rebuilt on every call, like the strip's projections: equal content, never the same objects. */
-function buildItems({ terminalPinned = false, browserTitle = 'Example' } = {}): TabBarItem[] {
+function buildItems({
+  terminalPinned = false,
+  browserTitle = 'Example',
+  sessionLabel = 'Session',
+  sessionAgent
+}: {
+  terminalPinned?: boolean
+  browserTitle?: string
+  sessionLabel?: string
+  sessionAgent?: AgentType
+} = {}): TabBarItem[] {
   return [
     {
       type: 'terminal',
@@ -117,7 +130,8 @@ function buildItems({ terminalPinned = false, browserTitle = 'Example' } = {}): 
         groupId: 'group-1',
         worktreeId: 'wt-1',
         contentType: 'agent-session',
-        label: 'Session',
+        ...(sessionAgent ? { agentSessionAgent: sessionAgent } : {}),
+        label: sessionLabel,
         customLabel: null,
         color: null,
         sortOrder: 3,
@@ -133,6 +147,8 @@ type StripInputs = {
   managedBrowserCreationEnabled?: boolean
   terminalPinned?: boolean
   browserTitle?: string
+  sessionLabel?: string
+  sessionAgent?: AgentType
   activeTabType?: WorkspaceVisibleTabType
   activeClientHostedBrowserRowId?: string | null
   statusByRelativePath?: TabBarItemSurfaceRuntime['statusByRelativePath']
@@ -144,6 +160,8 @@ function Strip({
   managedBrowserCreationEnabled = false,
   terminalPinned,
   browserTitle,
+  sessionLabel,
+  sessionAgent,
   activeTabType = 'terminal',
   activeClientHostedBrowserRowId = null,
   statusByRelativePath = STATUS_BY_RELATIVE_PATH
@@ -169,6 +187,7 @@ function Strip({
   }
   const actions = useTabBarItemActions({
     props: {
+      worktreeId: 'wt-1',
       onActivate,
       onActivateFile: onActivate,
       onActivateBrowserTab: onActivate,
@@ -187,7 +206,7 @@ function Strip({
   return (
     <>
       {renderTabBarItems({
-        items: buildItems({ terminalPinned, browserTitle }),
+        items: buildItems({ terminalPinned, browserTitle, sessionLabel, sessionAgent }),
         props,
         runtime,
         actions,
@@ -336,6 +355,25 @@ describe('tab strip rows', () => {
     renderStrip({ statusByRelativePath: new Map([['notes.md', 'modified']]) })
     expect(lastRender('file-1').gitStatus).toBe('modified')
     expect(tabRenders).toHaveLength(TAB_IDS.length + 1)
+  })
+
+  it.each([
+    'Hermes automation deprecation',
+    'Claude Code review',
+    'Review Grok usage',
+    'OpenCode launch-flow design'
+  ])('shows a native chat with its own provider when its name is "%s"', (sessionLabel) => {
+    renderStrip({ sessionLabel, sessionAgent: 'codex' })
+
+    expect(lastRender('session-1').tab?.title).toBe(sessionLabel)
+    expect(lastRender('session-1').agent).toBe('codex')
+    expect(lastRender('session-1').nativeChat).toEqual({ sessionId: 'session-1', agent: 'codex' })
+  })
+
+  it('shows no agent for a native chat whose provider is not recorded', () => {
+    renderStrip({ sessionLabel: 'Hermes automation deprecation' })
+
+    expect(lastRender('session-1').agent).toBeNull()
   })
 
   it.each(TAB_IDS)('retires a client-hosted row selection when %s is activated', (tabId) => {

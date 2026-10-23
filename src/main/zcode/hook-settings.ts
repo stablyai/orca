@@ -8,9 +8,9 @@ import {
   isPlainObject,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 const ZCODE_SCRIPT_BASE = 'zcode-hook'
 
@@ -72,9 +72,7 @@ export function getZCodeManagedScriptPath(): string {
 
 export function getZCodeManagedCommand(scriptPath: string): string {
   if (process.platform === 'win32') {
-    // Why: ZCode spawns a `type: "command"` hook through its own shell resolver, so keep the
-    // bare directly-spawnable .cmd on the safe path and fall back to the encoded form otherwise.
-    return wrapWindowsCmdHookCommand(scriptPath)
+    return wrapWindowsBatchHookCommand(scriptPath)
   }
   return wrapPosixHookCommand(scriptPath)
 }

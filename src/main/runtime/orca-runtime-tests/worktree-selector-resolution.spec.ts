@@ -4,8 +4,6 @@ import {
   FLOATING_TERMINAL_WORKTREE_ID,
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
-  RpcDispatcher,
-  TERMINAL_METHODS,
   addSparseWorktree,
   addWorktree,
   computeWorktreePathMock,
@@ -17,6 +15,7 @@ import {
   tmpdir,
   writeFile
 } from '../orca-runtime-test-mocks.spec'
+import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_FOLDER_WORKSPACE_KEY,
@@ -31,6 +30,7 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const LOCAL_CHILD_REPO = {
   id: 'child-repo',
@@ -192,7 +192,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: () => remoteRepo,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       }

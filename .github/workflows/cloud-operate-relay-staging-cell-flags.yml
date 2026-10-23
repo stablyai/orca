@@ -33,7 +33,8 @@ on:
           Switches to change, e.g. readinessLocal=true,admitMode=reserve (key=default removes a
           key). Every other switch keeps its current value. Known: readinessLocal, ticketCheck,
           admitMode, intakePerSec, reserveDryRun, rejectionFence, readTimeoutMarginMs,
-          reregisterInFlight
+          reregisterInFlight, phonePath (memory only takes effect in reserve; a reserve flip
+          must name phonePath)
         required: true
         type: string
       expected-generation:
@@ -94,6 +95,8 @@ jobs:
           id_token_include_email: true
 
       - uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - name: Write or preview the cell's switch object
         env:

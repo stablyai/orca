@@ -1,9 +1,7 @@
-// @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
-import { isCursorAgentTitle } from '../../shared/agent-detection'
+import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
 import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
 import type {
   RuntimeTerminalDriverState,
@@ -16,7 +14,7 @@ import type { RuntimeGitCommandSurface } from './runtime-git-command-surface'
 import type { RuntimeRepositoryCommandSurface } from './runtime-repository-command-surface'
 import type { RuntimeReviewCommandSurface } from './runtime-review-command-surface'
 import type { RuntimeServiceCommandSurface } from './runtime-service-command-surface'
-import type { RuntimeSkillCommandSurface } from './runtime-skill-command-surface'
+import type { RuntimeSkillCommandSurface } from './runtime-skill-command-contract'
 
 export type PtyIncarnationHandleRecord = {
   handle: string
@@ -49,13 +47,6 @@ export type RuntimeWorktreeScanRefresh = {
 export type ResolvedTerminalWorkspaceLaunchTarget = {
   scope: TerminalWorkspaceLaunchScope
   managedWorktree: ResolvedWorktree | null
-}
-
-export function isCursorAgentOrchestrationTarget(
-  leaf: RuntimeLeafRecord,
-  tabTitle: string | null | undefined
-): boolean {
-  return [leaf.lastOscTitle, leaf.paneTitle, tabTitle].some(isCursorAgentTitle)
 }
 
 // Why: long enough for a phone to reconnect and retry a create whose response
@@ -95,7 +86,11 @@ export const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
 
 export const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 
-export type RuntimeTerminalProjection = { lines: string[]; draft?: string }
+export type RuntimeTerminalProjection = {
+  lines: string[]
+  draft?: string
+  tailRows?: RuntimeTerminalRowMetadata[]
+}
 
 export function assertAgentPromptRequestActive(signal?: AbortSignal): void {
   if (signal?.aborted) {

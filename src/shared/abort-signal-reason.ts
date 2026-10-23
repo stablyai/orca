@@ -1,3 +1,5 @@
+import { sharedPromiseSettlementWaiters } from './promise-settlement-waiters'
+
 export function abortSignalReason(signal: AbortSignal): Error {
   if (signal.reason instanceof Error) {
     return signal.reason
@@ -15,17 +17,9 @@ export function waitForPromiseWithSignal<T>(promise: Promise<T>, signal?: AbortS
   if (!signal) {
     return promise
   }
-  if (signal.aborted) {
-    // Observe abandoned work so its later rejection stays handled.
-    void promise.catch(() => undefined)
-    return Promise.reject(abortSignalReason(signal))
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
-      signal.removeEventListener('abort', onAbort)
-      reject(abortSignalReason(signal))
-    }
-    signal.addEventListener('abort', onAbort, { once: true })
-    void promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  return sharedPromiseSettlementWaiters(promise).wait({
+    signal,
+    deferSettled: true,
+    createAbortError: () => abortSignalReason(signal)
   })
 }

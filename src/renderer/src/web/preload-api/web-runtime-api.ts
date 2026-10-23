@@ -39,6 +39,8 @@ export function createWebRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime'
     onNativeChatLaunchDraftResolved: () => noopUnsubscribe,
     onBrowserDriverChanged: () => noopUnsubscribe,
     onBrowserRemoteViewersChanged: () => noopUnsubscribe,
-    onClientHostedBrowserRowsChanged: () => noopUnsubscribe
+    onClientHostedBrowserRowsChanged: () => noopUnsubscribe,
+    // A web client builds its own view and never reads the host's sidebar feed.
+    onSidebarInputsChanged: () => noopUnsubscribe
   }
 }

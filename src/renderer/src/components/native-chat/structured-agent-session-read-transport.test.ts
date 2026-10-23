@@ -4,14 +4,16 @@ import {
   reduceStructuredAgentSession
 } from '../../../../shared/structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import type { AgentSessionCurrentRequestsMarker } from '../../../../shared/agent-session-current-requests-wire'
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session-wire'
 
-const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), watchHostContact: vi.fn() }))
+const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn(), watchHostContact: vi.fn() }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mocks.call,
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
@@ -19,6 +21,7 @@ vi.mock('@/runtime/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: mocks.watchHostContact
 }))
 
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
@@ -32,7 +35,10 @@ type SubscribeAttempt = {
 
 const target = { kind: 'local' } as const
 
-function snapshot(sequence: number): AgentSessionSubscribeEvent {
+function snapshot(
+  sequence: number,
+  currentRequests?: AgentSessionCurrentRequestsMarker
+): AgentSessionSubscribeEvent {
   const cursor: AgentJournalCursor = { epoch: 'epoch-a', sequence }
   const page: AgentSessionHistoryPage = {
     sessionId: 'session-a',
@@ -46,7 +52,13 @@ function snapshot(sequence: number): AgentSessionSubscribeEvent {
     hasOlder: false,
     hasNewer: false
   }
-  return { type: 'snapshot', sessionId: 'session-a', page, fence: sequence }
+  return {
+    type: 'snapshot',
+    sessionId: 'session-a',
+    page,
+    fence: sequence,
+    ...(currentRequests ? { currentRequests } : {})
+  }
 }
 
 async function flushPromises(): Promise<void> {
@@ -81,6 +93,7 @@ describe('structured agent-session read transport generations', () => {
       applyEvent,
       applyError,
       getCursor: () => null,
+      onContactLost: vi.fn(),
       onHistoryReadInvalidated: () => undefined,
       hydrate: async () => undefined,
       sessionId: 'session-a',
@@ -98,6 +111,7 @@ describe('structured agent-session read transport generations', () => {
         },
         applyError: vi.fn(),
         getCursor: () => state.cursor,
+        onContactLost: vi.fn(),
         onHistoryReadInvalidated: () => undefined,
         sessionId: 'session-a',
         target
@@ -231,6 +245,39 @@ describe('structured agent-session read transport generations', () => {
       vi.useRealTimers()
     }
   })
+
+  it('reopens once for a current-request version whose read keeps failing', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.call.mockRejectedValue(new Error('Invalid current requests'))
+      const currentRequests = {
+        contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+        sessionId: 'session-a',
+        epoch: 'epoch-a',
+        publisher: 'publisher-a',
+        revision: 1,
+        owner: 'owner-a',
+        version: 'version-a'
+      }
+      const transport = start(vi.fn())
+      await flushPromises()
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      attempts[0].onEvent(snapshot(1, currentRequests))
+      await vi.advanceTimersByTimeAsync(750)
+      expect(attempts).toHaveLength(2)
+
+      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+      await flushPromises()
+      attempts[1].onEvent(snapshot(1, currentRequests))
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(mocks.call).toHaveBeenCalledTimes(2)
+      expect(attempts).toHaveLength(2)
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 // The refusal a host raises for a session it holds no object for — after a chat close, or before
@@ -267,6 +314,7 @@ describe('structured agent-session read transport unattached refusals', () => {
       applyEvent,
       applyError,
       getCursor: () => null,
+      onContactLost: vi.fn(),
       onHistoryReadInvalidated: () => undefined,
       hydrate,
       sessionId: 'session-a',
@@ -616,6 +664,7 @@ describe('structured agent-session read transport unattached refusals', () => {
         applyEvent: vi.fn(),
         applyError: vi.fn(),
         getCursor: () => null,
+        onContactLost: vi.fn(),
         onHistoryReadInvalidated: () => undefined,
         hydrate: async () => undefined,
         sessionId: 'session-a',

@@ -22,7 +22,7 @@ function harness(
     ...options.created
   }
   const runtime = {
-    getClientSettings: () => CHAT_DEFAULT_ON,
+    requireStore: () => ({ getSettings: () => CHAT_DEFAULT_ON }),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({
       supported: true
     })),

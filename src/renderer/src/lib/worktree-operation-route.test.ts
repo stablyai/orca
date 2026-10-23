@@ -119,7 +119,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
     })
   })
 
-  it('uses the focused runtime only for legacy publications with no owner evidence', () => {
+  it('routes an unstamped row local, never to the focused runtime', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
@@ -131,10 +131,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
       )
     ).toEqual({
       kind: 'resolved',
-      route: {
-        executionHostId: 'runtime:legacy-hub',
-        runtimeEnvironmentId: 'legacy-hub'
-      }
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
     })
   })
 
@@ -239,7 +236,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
     ).toEqual({ kind: 'ambiguous' })
   })
 
-  it('routes a focused runtime only when it is the single saved runtime', () => {
+  it('never routes an unstamped row to the single saved, focused runtime', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
@@ -250,10 +247,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
         },
         WORKTREE_ID
       )
-    ).toEqual({
-      kind: 'resolved',
-      route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
-    })
+    ).toEqual({ kind: 'missing' })
   })
 
   it('ignores unrelated removed-runtime tombstones for positive local identity', () => {
@@ -298,7 +292,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
     ).toEqual({ kind: 'missing' })
   })
 
-  it('does not treat runtime focus as ownership while the saved-runtime catalog is loading', () => {
+  it('keeps an unstamped row local while the saved-runtime catalog is loading, focus or not', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
@@ -310,7 +304,10 @@ describe('resolveWorktreeOperationRouteResult', () => {
         },
         WORKTREE_ID
       )
-    ).toEqual({ kind: 'missing' })
+    ).toEqual({
+      kind: 'resolved',
+      route: { executionHostId: 'local', runtimeEnvironmentId: null }
+    })
   })
 
   it('preserves ownerless local compatibility after an empty catalog hydrates', () => {
@@ -539,7 +536,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
       ).toEqual({ kind: 'missing' })
     })
 
-    it('fails closed when the active runtime is ambiguous', () => {
+    it('keeps an unstamped row local whichever of several runtimes is focused', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
@@ -551,10 +548,13 @@ describe('resolveWorktreeOperationRouteResult', () => {
           },
           WORKTREE_ID
         )
-      ).toEqual({ kind: 'missing' })
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      })
     })
 
-    it('keeps an unambiguous active runtime authoritative over the local fallback', () => {
+    it('keeps an unstamped row local when the single saved runtime is focused', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
@@ -568,7 +568,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
         )
       ).toEqual({
         kind: 'resolved',
-        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
       })
     })
 
@@ -589,13 +589,34 @@ describe('resolveWorktreeOperationRouteResult', () => {
       })
     })
 
-    it('reports contradictory repo rows as ambiguous rather than defaulting to local', () => {
+    it('routes an unstamped row of a project shared with a paired server here (#25467)', () => {
+      // Listings stamp every paired-server row, so the unstamped row was listed on this machine.
       expect(
         resolveWorktreeOperationRouteResult(
           {
             repos: [
-              { id: 'repo-1', executionHostId: 'local' } as never,
-              { id: 'repo-1', executionHostId: 'runtime:hub-a' } as never
+              { id: 'repo-1', executionHostId: 'local' },
+              { id: 'repo-1', executionHostId: 'runtime:hub-a' }
+            ],
+            runtimeEnvironments: [{ id: 'some-hub' }],
+            runtimeEnvironmentCatalogHydrated: true,
+            worktreesByRepo: { 'repo-1': [worktree(undefined)] }
+          },
+          WORKTREE_ID
+        )
+      ).toEqual({
+        kind: 'resolved',
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
+      })
+    })
+
+    it('reports contradictory paired-server repo rows as ambiguous rather than defaulting to local', () => {
+      expect(
+        resolveWorktreeOperationRouteResult(
+          {
+            repos: [
+              { id: 'repo-1', executionHostId: 'runtime:hub-b' },
+              { id: 'repo-1', executionHostId: 'runtime:hub-a' }
             ],
             runtimeEnvironments: [{ id: 'some-hub' }],
             runtimeEnvironmentCatalogHydrated: true,
@@ -665,7 +686,8 @@ describe('resolveWorktreeOperationRouteResult', () => {
       })
     })
 
-    it('drops the HUB transport when two HUBs project the active SSH worktree', () => {
+    // A transport-less route would go over this app's own SSH connection (review-5 #2).
+    it('refuses when two HUBs project the active SSH worktree', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
@@ -680,10 +702,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
           },
           WORKTREE_ID
         )
-      ).toEqual({
-        kind: 'resolved',
-        route: { executionHostId: 'ssh:same-private-target', runtimeEnvironmentId: null }
-      })
+      ).toEqual({ kind: 'ambiguous' })
     })
 
     it('keeps an unknown active worktree on its selected host', () => {
@@ -754,7 +773,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
       })
     })
 
-    it('scopes an ownerless folder workspace to the single focused runtime', () => {
+    it('keeps an ownerless folder workspace local when the single saved runtime is focused', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
@@ -766,7 +785,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
         )
       ).toEqual({
         kind: 'resolved',
-        route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
+        route: { executionHostId: 'local', runtimeEnvironmentId: null }
       })
     })
 

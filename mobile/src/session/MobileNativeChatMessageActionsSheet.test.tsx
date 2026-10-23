@@ -9,6 +9,7 @@ vi.mock('react-native', () => ({
   Alert: { alert },
   ActivityIndicator: 'ActivityIndicator',
   Modal: 'Modal',
+  Platform: { OS: 'android' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   Text: 'Text',
@@ -97,6 +98,30 @@ describe('message selection actions', () => {
     render()
     pressAction(0)
     expect(writeText).toHaveBeenCalledWith('First words')
+    expect(onClose).not.toHaveBeenCalled()
+    finishClosing()
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(nodes('Modal')).toHaveLength(0)
+  })
+
+  it.each([
+    [
+      'user',
+      'Please repair:\n::orca-visual{file="usage.html"}\nKeep this.',
+      'Please repair:\n::orca-visual{file="usage.html"}\nKeep this.'
+    ],
+    ['user', '::orca-visual{file="usage.html"}', '::orca-visual{file="usage.html"}'],
+    ['assistant', 'Chart:\n::orca-visual{file="usage.html"}\nDone.', 'Chart:\nDone.'],
+    [
+      'assistant',
+      '```text\n::orca-visual{file="example.html"}\n```',
+      '```text\n::orca-visual{file="example.html"}\n```'
+    ]
+  ] as const)('copies the %s source %j through Android message actions', (role, text, expected) => {
+    render({ ...message, role, blocks: [{ type: 'text', text }] })
+    expect(nodes('Pressable').map((node) => node.props.disabled)).toEqual([undefined, undefined])
+    pressAction(0)
+    expect(writeText.mock.calls).toEqual([[expected]])
     expect(onClose).not.toHaveBeenCalled()
     finishClosing()
     expect(onClose).toHaveBeenCalledOnce()

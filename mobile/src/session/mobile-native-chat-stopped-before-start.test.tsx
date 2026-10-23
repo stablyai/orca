@@ -43,21 +43,28 @@ vi.mock('react-native', async () => {
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Bot: 'Bot',
+  Brain: 'Brain',
+  Check: 'Check',
   ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
   Copy: 'Copy',
+  Eye: 'Eye',
+  FileMinus2: 'FileMinus2',
+  FilePen: 'FilePen',
+  FilePlus2: 'FilePlus2',
+  Folder: 'Folder',
+  Globe: 'Globe',
+  ListChecks: 'ListChecks',
+  MessageSquareMore: 'MessageSquareMore',
+  Pencil: 'Pencil',
+  Plug: 'Plug',
+  Search: 'Search',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
-  Wrench: 'Wrench',
-  ChevronRight: 'ChevronRight'
+  Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: () => null }))
-vi.mock('../components/MobileSelectableText', async () => {
-  const React = await import('react')
-  return {
-    MobileSelectableText: ({ children }: { children?: React.ReactNode }) =>
-      React.createElement('Text', null, children)
-  }
-})
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: () => null
 }))
@@ -150,9 +157,7 @@ describe('a send a Stop took back before the agent started it, on the phone', ()
   })
 
   it('stays where it was sent, with the stop row after it and no turn status of its own', () => {
-    const messages = projectStructuredAgentSessionMessages(items, [], submissions, {
-      rejectedInPlace: false
-    })
+    const messages = projectStructuredAgentSessionMessages(items, [], submissions)
     expect(messages.map((message) => message.id)).toEqual([
       agentJournalSubmissionKey('warm-up'),
       't1-answer',
@@ -173,8 +178,9 @@ describe('a send a Stop took back before the agent started it, on the phone', ()
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message: messages[3]! }))
     })
-    expect(renderer!.root.findAllByType(MobileMarkdown).map((node) => node.props.content)).toEqual([
-      'Stopped manually'
-    ])
+    expect(renderer!.root.findAllByType(MobileMarkdown)).toEqual([])
+    expect(
+      renderer!.root.findAll((node) => String(node.type) === 'Text').map((node) => node.children)
+    ).toEqual([['Stopped manually']])
   })
 })

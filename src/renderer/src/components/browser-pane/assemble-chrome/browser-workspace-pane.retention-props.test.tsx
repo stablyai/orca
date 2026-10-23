@@ -32,7 +32,9 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+}))
 
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}

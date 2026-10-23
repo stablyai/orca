@@ -24,7 +24,8 @@ describe('armed input modes arm the unclean-death trigger', () => {
     ['mouse protocol and SGR encoding', '\x1b[?1003h\x1b[?1006h'],
     ['focus reporting', '\x1b[?1004h'],
     ['a kitty keyboard push', '\x1b[>1u'],
-    ['application keypad', '\x1b[?66h']
+    ['application keypad', '\x1b[?66h'],
+    ["pi's modifyOtherKeys fallback", '\x1b[>4;2m']
   ])('triggers when a normal-buffer program dies with %s armed', (_label, arm) => {
     const scanner = new TerminalShellLifecycleScanner()
     const chunk = `${COMMAND_START}${arm}PROGRAM${COMMAND_DONE}$ `
@@ -32,6 +33,14 @@ describe('armed input modes arm the unclean-death trigger', () => {
     const events = scanner.scan(chunk)
 
     expect(events.uncleanDeathTriggerEnd).toBe(chunk.length - '$ '.length)
+  })
+
+  it('does not trigger once modifyOtherKeys is disarmed, and the ground disarms it', () => {
+    const scanner = new TerminalShellLifecycleScanner()
+    expect(triggers(scanner, `${COMMAND_START}\x1b[>4;2mpi\x1b[>4;0m${COMMAND_DONE}`)).toBe(false)
+    expect(triggers(scanner, `${COMMAND_START}\x1b[>4;2m${COMMAND_DONE}`)).toBe(true)
+    scanner.groundProcessBoundary()
+    expect(triggers(scanner, `${COMMAND_START}ls${COMMAND_DONE}`)).toBe(false)
   })
 
   it('never triggers for modes a shell prompt arms itself', () => {

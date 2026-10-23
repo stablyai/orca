@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AppState } from '@/store/types'
 
 const mocks = vi.hoisted(() => {
   const state: {
     activeWorktreeId: string | null
+    activeWorkspaceExecutionHostId?: string | null
     setActiveWorktree: ReturnType<typeof vi.fn>
     shutdownWorktreeBrowsers: ReturnType<typeof vi.fn>
     shutdownWorktreeTerminals: ReturnType<typeof vi.fn>
@@ -10,23 +12,31 @@ const mocks = vi.hoisted(() => {
     consumeSuppressedPtyExit: ReturnType<typeof vi.fn>
     tabsByWorktree: Record<string, { id: string }[]>
     ptyIdsByTabId: Record<string, string[]>
+    worktreesByRepo: Record<string, { id: string; repoId: string; hostId?: string }[]>
+    detectedWorktreesByRepo: Record<string, never>
   } = {
     activeWorktreeId: null,
     setActiveWorktree: vi.fn((worktreeId: string | null) => {
       state.activeWorktreeId = worktreeId
     }),
-    shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+    shutdownWorktreeBrowsers: vi.fn(),
     shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
     suppressPtyExit: vi.fn(),
     consumeSuppressedPtyExit: vi.fn(),
-    tabsByWorktree: {} as Record<string, { id: string }[]>,
-    ptyIdsByTabId: {} as Record<string, string[]>
+    tabsByWorktree: {},
+    ptyIdsByTabId: {},
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {}
   }
   const suspendWorkspace = vi.fn().mockResolvedValue(null)
   const toastError = vi.fn()
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
+  const callChat = vi.fn()
+  const hostMarksSleep = vi.fn()
   return {
+    callChat,
+    hostMarksSleep,
     clearWorktreeSleepIntent,
     markWorktreeSleepIntent,
     state,
@@ -45,10 +55,23 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/lib/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
   markWorktreeSleepIntent: mocks.markWorktreeSleepIntent,
+  hasWorktreeSleepIntent: () => true,
   withWorktreeSleepTeardown: (_worktreeId: string, teardown: () => Promise<unknown>) => teardown()
 }))
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mocks.callChat
+}))
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readCachedRuntimeEnvironmentCapability: mocks.hostMarksSleep
+}))
 
-import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import {
+  runSleepWorktree,
+  runSleepWorktrees,
+  sleepWorktreesReportingFailures
+} from './sleep-worktree-flow'
 
 describe('runSleepWorktree', () => {
   beforeEach(() => {
@@ -62,8 +85,14 @@ describe('runSleepWorktree', () => {
       requestAnimationFrame: vi.fn()
     })
     mocks.state.setActiveWorktree.mockClear()
-    mocks.state.shutdownWorktreeBrowsers.mockClear().mockResolvedValue(undefined)
-    mocks.state.shutdownWorktreeTerminals.mockClear().mockResolvedValue(undefined)
+    mocks.state.shutdownWorktreeBrowsers.mockReset()
+    mocks.state.shutdownWorktreeTerminals
+      .mockReset()
+      .mockImplementation(
+        async (_id: string, opts: Parameters<AppState['shutdownWorktreeTerminals']>[1]) => {
+          opts?.onAdmitted?.()
+        }
+      )
     mocks.state.suppressPtyExit.mockClear()
     mocks.state.consumeSuppressedPtyExit.mockClear()
     mocks.suspendWorkspace.mockClear().mockResolvedValue(null)
@@ -73,6 +102,9 @@ describe('runSleepWorktree', () => {
     mocks.state.activeWorktreeId = null
     mocks.state.tabsByWorktree = {}
     mocks.state.ptyIdsByTabId = {}
+    mocks.state.worktreesByRepo = {}
+    mocks.callChat.mockReset().mockResolvedValue({ stoppedSessionIds: [] })
+    mocks.hostMarksSleep.mockReset().mockReturnValue(true)
   })
 
   it('tears down browsers before terminals on the sleep path', async () => {
@@ -86,7 +118,8 @@ describe('runSleepWorktree', () => {
     // browserTabsByWorktree delete, browsers would no-op and leak webviews.
     expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledWith('wt-1')
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-1', {
-      keepIdentifiers: true
+      keepIdentifiers: true,
+      onAdmitted: expect.any(Function)
     })
     expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-1' })
     const browsersCallOrder = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
@@ -202,50 +235,11 @@ describe('runSleepWorktree', () => {
     expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
   })
 
-  it('leaves a worktree the user activated mid-batch awake', async () => {
-    let releaseFirst: () => void = () => {}
-    mocks.state.shutdownWorktreeBrowsers.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          releaseFirst = resolve
-        })
-    )
-
-    const run = runSleepWorktrees(['wt-1', 'wt-2'])
-    await Promise.resolve()
-    // Why: the user clicked wt-2 while wt-1 was tearing down; sleeping it anyway
-    // must not leave the active workspace marked with no clear pending.
-    mocks.state.activeWorktreeId = 'wt-2'
-    releaseFirst()
-    await run
-
-    expect(mocks.clearWorktreeSleepIntent).toHaveBeenLastCalledWith('wt-2')
-  })
-
-  it('marks each worktree only when its own teardown starts', async () => {
-    let releaseFirst: () => void = () => {}
-    mocks.state.shutdownWorktreeBrowsers.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          releaseFirst = resolve
-        })
-    )
-
-    const run = runSleepWorktrees(['wt-1', 'wt-2'])
-    await Promise.resolve()
-
-    // Why: wt-2 is still awake while wt-1 tears down; marking it early would
-    // hold its panes cold and swallow its activity.
-    expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
-    expect(mocks.markWorktreeSleepIntent).not.toHaveBeenCalledWith('wt-2')
-    releaseFirst()
-    await run
-    expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-2')
-  })
-
   it('surfaces a toast and skips terminals when browsers throws', async () => {
     mocks.state.activeWorktreeId = 'wt-1'
-    mocks.state.shutdownWorktreeBrowsers.mockRejectedValueOnce(new Error('boom'))
+    mocks.state.shutdownWorktreeBrowsers.mockImplementationOnce(() => {
+      throw new Error('boom')
+    })
     mocks.state.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
     mocks.state.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
 
@@ -283,22 +277,53 @@ describe('runSleepWorktree', () => {
     )
   })
 
+  it('restores the active twin on the host it was selected on', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.activeWorkspaceExecutionHostId = 'ssh:box'
+    mocks.state.shutdownWorktreeTerminals.mockRejectedValueOnce(
+      new Error('terminal_worktree_sleep_still_live')
+    )
+
+    try {
+      await runSleepWorktree('wt-1')
+    } finally {
+      mocks.state.activeWorkspaceExecutionHostId = null
+    }
+
+    expect(mocks.state.setActiveWorktree).toHaveBeenLastCalledWith('wt-1', 'ssh:box')
+  })
+
+  it('leaves a workspace the user picked during a failed sleep selected', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.shutdownWorktreeTerminals.mockImplementationOnce(async () => {
+      mocks.state.activeWorktreeId = 'wt-picked'
+      throw new Error('terminal_worktree_sleep_still_live')
+    })
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.state.setActiveWorktree.mock.calls).toEqual([[null]])
+    expect(mocks.state.activeWorktreeId).toBe('wt-picked')
+  })
+
   it('continues sleeping later worktrees when one selected worktree fails', async () => {
     mocks.state.shutdownWorktreeBrowsers.mockImplementation((worktreeId: string) => {
       if (worktreeId === 'wt-1') {
-        return Promise.reject(new Error('first failed'))
+        throw new Error('first failed')
       }
-      return Promise.resolve()
+      return undefined
     })
 
     await runSleepWorktrees(['wt-1', 'wt-2'])
 
     expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalledWith('wt-1', {
-      keepIdentifiers: true
+      keepIdentifiers: true,
+      onAdmitted: expect.any(Function)
     })
     expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledWith('wt-2')
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-2', {
-      keepIdentifiers: true
+      keepIdentifiers: true,
+      onAdmitted: expect.any(Function)
     })
     expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-2' })
     expect(mocks.toastError).toHaveBeenCalledWith(
@@ -310,6 +335,24 @@ describe('runSleepWorktree', () => {
     )
   })
 
+  it('reports failed worktrees to a caller that answers for them, without a toast', async () => {
+    mocks.state.shutdownWorktreeBrowsers.mockImplementation((worktreeId: string) => {
+      if (worktreeId === 'wt-1') {
+        throw new Error('first failed')
+      }
+    })
+
+    const outcome = await sleepWorktreesReportingFailures(['wt-1', 'wt-2'])
+
+    expect(outcome.failedWorktreeIds).toEqual(['wt-1'])
+    expect(outcome.errors).toHaveLength(1)
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    // A project move pauses through this core; only the user's Sleep asks hosts to mark chats.
+    expect(mocks.callChat.mock.calls.map(([, , params]) => params)).toEqual([
+      { workspaceId: 'wt-2' }
+    ])
+  })
+
   it('sleeps multiple worktrees and clears active only once when included', async () => {
     mocks.state.activeWorktreeId = 'wt-2'
 
@@ -319,13 +362,90 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.setActiveWorktree).toHaveBeenCalledWith(null)
     expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenNthCalledWith(1, 'wt-1')
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenNthCalledWith(1, 'wt-1', {
-      keepIdentifiers: true
+      keepIdentifiers: true,
+      onAdmitted: expect.any(Function)
     })
     expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenNthCalledWith(2, 'wt-2')
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenNthCalledWith(2, 'wt-2', {
-      keepIdentifiers: true
+      keepIdentifiers: true,
+      onAdmitted: expect.any(Function)
     })
     expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(1, { workspaceId: 'wt-1' })
     expect(mocks.suspendWorkspace).toHaveBeenNthCalledWith(2, { workspaceId: 'wt-2' })
+  })
+
+  const twinId = 'repo-1::/wt'
+  const twinRows = {
+    'repo-1': [
+      { id: twinId, repoId: 'repo-1', hostId: 'local' },
+      { id: twinId, repoId: 'repo-1', hostId: 'runtime:env-a' }
+    ]
+  }
+
+  it("stops a workspace's chats on every host that publishes a copy", async () => {
+    mocks.state.worktreesByRepo = twinRows
+    mocks.state.tabsByWorktree = { [twinId]: [{ id: 'tab-1' }] }
+    mocks.state.ptyIdsByTabId = { 'tab-1': [toRemoteRuntimePtyId('pty-1', 'env-a')] }
+    mocks.callChat.mockImplementation(async (target: { kind: string }) => ({
+      stoppedSessionIds: [`chat-${target.kind}`]
+    }))
+    mocks.hostMarksSleep.mockReturnValue(null)
+
+    const results = await runSleepWorktrees([twinId])
+
+    // Only a host known to keep the mark is asked to; an older one would refuse the whole stop.
+    expect(mocks.callChat.mock.calls.map(([target, , params]) => [target.kind, params])).toEqual([
+      ['local', { workspaceId: twinId, markAsleep: true }],
+      ['environment', { workspaceId: twinId }]
+    ])
+    expect(mocks.hostMarksSleep).toHaveBeenCalledWith(
+      'env-a',
+      'agent-session.workspace-sleep-mark.v1'
+    )
+
+    expect(results).toEqual([
+      expect.objectContaining({ executionHostId: 'local', stoppedSessionIds: ['chat-local'] }),
+      expect.objectContaining({
+        executionHostId: 'runtime:env-a',
+        stoppedSessionIds: ['chat-environment'],
+        completed: true
+      })
+    ])
+  })
+
+  it('stops no chat when it cannot tell which copy runs the terminals', async () => {
+    mocks.state.worktreesByRepo = twinRows
+    mocks.state.shutdownWorktreeTerminals.mockRejectedValueOnce(
+      new Error('ambiguous_terminal_owner')
+    )
+
+    await runSleepWorktree(twinId)
+
+    expect(mocks.callChat).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledOnce()
+  })
+
+  it('reports an unconfirmed chat stop in one toast and keeps stopped terminals asleep', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.callChat.mockRejectedValue(new Error('host offline'))
+
+    const results = await runSleepWorktree('wt-1')
+
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalled()
+    expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
+    expect(mocks.state.setActiveWorktree.mock.calls).toEqual([[null]])
+    expect(results).toEqual([])
+    expect(mocks.toastError).toHaveBeenCalledOnce()
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to sleep workspace', {
+      description:
+        'The host could not confirm the chat stopped. Other panels may have closed; check the connection and try again.'
+    })
+  })
+
+  it('sleeps a workspace named by both copies of a twin once', async () => {
+    await runSleepWorktrees(['wt-1', 'wt-1'])
+
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledTimes(1)
+    expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledTimes(1)
   })
 })

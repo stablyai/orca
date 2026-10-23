@@ -29,12 +29,6 @@ export const ProjectGroupSelectorArgs = z.object({
   groupId: z.string().min(1)
 })
 
-export const ProjectGroupMoveProjectArgs = z.object({
-  projectId: z.string().min(1),
-  groupId: z.string().nullable(),
-  order: z.number().finite().optional()
-})
-
 export const ProjectHostSetupExistingFolderIpcArgs = z.object({
   projectId: z.string().min(1),
   projectProviderIdentity: z
@@ -65,19 +59,29 @@ export const ProjectUpdateIpcArgs = z.object({
   })
 })
 
+const IpcExecutionHostId = z
+  .string()
+  .min(1)
+  .transform((value, ctx) => {
+    const hostId = normalizeExecutionHostId(value)
+    if (!hostId) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+      return z.NEVER
+    }
+    return hostId
+  })
+
+// Why optional: the row's host; without it the first row with the id moves, as before.
+export const ProjectGroupMoveProjectArgs = z.object({
+  projectId: z.string().min(1),
+  groupId: z.string().nullable(),
+  order: z.number().finite().optional(),
+  hostId: IpcExecutionHostId.optional()
+})
+
 export const ProjectHostSetupCreateIpcArgs = z.object({
   projectId: z.string().min(1),
-  hostId: z
-    .string()
-    .min(1)
-    .transform((value, ctx) => {
-      const hostId = normalizeExecutionHostId(value)
-      if (!hostId) {
-        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-        return z.NEVER
-      }
-      return hostId
-    }),
+  hostId: IpcExecutionHostId,
   setupId: z.string().min(1).optional(),
   path: z.string().optional(),
   kind: z.enum(['git', 'folder']).optional(),
@@ -90,6 +94,7 @@ export const ProjectHostSetupCreateIpcArgs = z.object({
 
 export const ProjectHostSetupUpdateIpcArgs = z.object({
   setupId: z.string().min(1),
+  hostId: IpcExecutionHostId.optional(),
   updates: z.object({
     displayName: z.string().optional(),
     path: z.string().optional(),
@@ -104,7 +109,8 @@ export const ProjectHostSetupUpdateIpcArgs = z.object({
 })
 
 export const ProjectHostSetupDeleteIpcArgs = z.object({
-  setupId: z.string().min(1)
+  setupId: z.string().min(1),
+  hostId: IpcExecutionHostId.optional()
 })
 
 const FolderWorkspaceLinkedTaskArgs = WorkspaceLinkedItemSchema.nullable()

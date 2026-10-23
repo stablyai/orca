@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { isDedicatedE2eSpec } from './ci-e2e-job-selection.mjs'
 import {
   balanceFiles,
   compareIds,
@@ -44,7 +45,14 @@ export function discoverE2eFiles(report) {
 }
 
 export function planE2e(report, count, baseline) {
-  const testsByFile = discoverE2eFiles(report)
+  const testsByFile = Object.fromEntries(
+    Object.entries(discoverE2eFiles(report)).filter(
+      ([file]) => !isDedicatedE2eSpec(`tests/e2e/${file}`)
+    )
+  )
+  if (!Object.keys(testsByFile).length) {
+    throw new Error('Playwright discovered no general E2E tests')
+  }
   const timings = Object.fromEntries(
     Object.entries(baseline.timings).map(([file, duration]) => [
       file.replace(/^tests\/e2e\//, ''),

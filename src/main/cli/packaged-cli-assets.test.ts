@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { globSync } from 'node:fs'
 import {
   copyFile,
   cp,
@@ -68,7 +69,7 @@ describe('packaged CLI assets', () => {
         args: [
           join(projectDir, 'node_modules', 'typescript', 'bin', 'tsc'),
           '-p',
-          join(projectDir, 'config', 'tsconfig.cli.json'),
+          join(projectDir, 'config', 'tsconfig.build.cli.json'),
           '--outDir',
           join(source, 'out'),
           '--composite',
@@ -82,6 +83,9 @@ describe('packaged CLI assets', () => {
         timeoutMs: 60_000
       })
       expect(compile.code, compile.stdout + compile.stderr).toBe(0)
+      expect(globSync('**/*.{test,spec}.{js,jsx,cjs,mjs}', { cwd: join(source, 'out') })).toEqual(
+        []
+      )
       await mkdir(dirname(archive), { recursive: true })
       await writeFile(join(source, 'out', 'package.json'), JSON.stringify({ type: 'commonjs' }))
       for (const name of ['zod', 'tweetnacl']) {

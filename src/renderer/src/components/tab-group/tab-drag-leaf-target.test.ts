@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { holdTerminalMoveKeys, terminalTabMoveKey } from '../terminal-pane/terminal-leaf-move-guard'
 import { resolveTabDragLeafTarget, type LeafTargetState } from './tab-drag-leaf-target'
 import {
@@ -19,6 +19,9 @@ import {
   TARGET_UNIFIED,
   WT
 } from './tab-drag-leaf-target-fixture'
+
+// These cover the window-applied join, which exists only while the layout-owner switch is off.
+vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 
 // Panel 1000x600, body 568 tall at y=32. Level 1 band: x<200 or x>800, y<145.6 or y>486.4.
 // Interior: x 200..800, y 145.6..486.4. A single leaf's central box: x 350..650, y 230.8..401.2.

@@ -1,7 +1,7 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { dedupeTabOrder } from '../../../shared/workspace-layout/tab-order'
 import type { Tab } from '../../../shared/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
@@ -60,7 +60,7 @@ export function activateTabNumberShortcut(index: number): boolean {
   }
 
   const worktreeId = target.worktreeId
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+  const runtimeEnvironmentId = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)
   store.activateTab(target.id)
 

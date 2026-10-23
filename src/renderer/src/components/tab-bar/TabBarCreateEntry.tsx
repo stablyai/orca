@@ -16,7 +16,7 @@ import {
   resultOptionDomId
 } from './TabBarCreateEntryRow'
 import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
-import { insertHistoryRowsBelowFileMatches } from './tab-create-entry-history-placement'
+import { placeHistoryRowsInEntryOptions } from './tab-create-entry-history-placement'
 import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
 import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
@@ -47,6 +47,7 @@ function TabBarCreateEntrySession({
   menuOptions = EMPTY_MENU_OPTIONS,
   onDidOpenEntry,
   onLaunchAgent,
+  onLaunchAgentOption,
   onOpenDefaultTerminal,
   onOpenEntry,
   onQueryChange,
@@ -167,7 +168,7 @@ function TabBarCreateEntrySession({
       kind: 'agent' as const,
       option
     })),
-    ...insertHistoryRowsBelowFileMatches(options, historyRows)
+    ...placeHistoryRowsInEntryOptions(options, historyRows)
   ]
   const { activeSelectedIndex, selectedActiveOption } = useNetworkSafeTabEntrySelection({
     activeOptions,
@@ -211,6 +212,9 @@ function TabBarCreateEntrySession({
     }
     if (selectedOption.kind === 'tab') {
       const outcome = activateOpenTabSearchResult(selectedOption.option)
+      if (outcome.status === 'blocked') {
+        return
+      }
       if (outcome.status === 'failed') {
         setSwitchError(outcome.message)
         return
@@ -227,7 +231,14 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      onLaunchAgent?.(selectedOption.option.agent)
+      if (selectedOption.option.disabled) {
+        return
+      }
+      if (onLaunchAgentOption) {
+        onLaunchAgentOption(selectedOption.option)
+      } else {
+        onLaunchAgent?.(selectedOption.option.agent)
+      }
       onDidOpenEntry?.()
       return
     }
@@ -375,7 +386,11 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
-                disabled={disabled || pending}
+                disabled={
+                  disabled ||
+                  pending ||
+                  (option.kind === 'agent' && option.option.disabled === true)
+                }
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)

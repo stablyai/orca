@@ -1,4 +1,4 @@
-import React, { useContext } from 'react'
+import React, { createContext, useContext } from 'react'
 import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 import type { DocumentCodeBlockRenderer } from './comment-markdown-element-renderers'
 
@@ -9,6 +9,9 @@ import {
 
 const diagramClassName =
   'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
+
+/** The line the rendered top-level block starts on in the whole document; its nodes' lines are local. */
+export const CommentMarkdownBlockLineContext = createContext(1)
 
 export function CommentMarkdownDocumentCode({
   className,
@@ -31,13 +34,17 @@ export function CommentMarkdownDocumentCode({
 
 export function CommentMarkdownDocumentPre({
   children,
-  renderCodeBlock
+  renderCodeBlock,
+  blockLine
 }: {
   children?: React.ReactNode
   renderCodeBlock?: DocumentCodeBlockRenderer
+  /** The line the fence starts on in its top-level block's source, from 1. */
+  blockLine?: number
 }): React.JSX.Element {
   const renderMermaid = useContext(CommentMarkdownMermaidContext)
   const keepSource = useContext(CommentMarkdownMermaidSourceContext)
+  const blockStartLine = useContext(CommentMarkdownBlockLineContext)
   if (renderMermaid && !keepSource && isMermaidPre(children)) {
     return <>{children}</>
   }
@@ -45,8 +52,15 @@ export function CommentMarkdownDocumentPre({
   const language = React.isValidElement<{ className?: string; children?: React.ReactNode }>(child)
     ? child.props.className?.match(/(?:^|\s)language-([^\s]+)/)?.[1]
     : undefined
-  const code = renderCodeBlock ? (
-    renderCodeBlock({ children, language })
+  // An element, not a call, so the renderer's hooks stay out of this early-returning component.
+  const CodeBlock = renderCodeBlock
+  const code = CodeBlock ? (
+    <CodeBlock
+      language={language}
+      sourceLine={blockLine === undefined ? undefined : blockStartLine + blockLine - 1}
+    >
+      {children}
+    </CodeBlock>
   ) : (
     <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
       {children}

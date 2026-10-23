@@ -9,7 +9,6 @@ import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path
 import {
   assertHooksJsonGeneration,
   backupRealHomeHooksJsonOnce,
-  getRealHomeHookKeySourcePaths,
   HooksJsonChangedError,
   isAddableHooksFile
 } from './codex-real-home-hooks-json'
@@ -18,16 +17,16 @@ import { removeSystemManagedHookTrustEntries } from './codex-hook-trust-cleanup'
 import {
   CODEX_EVENT_LABEL,
   type CodexManagedHookInstallMaterial,
-  getCodexManagedHookInstallMaterial,
-  getSystemCodexConfigTomlPath
+  getCodexManagedHookInstallMaterial
 } from './codex-hook-definition'
 import {
+  type CodexHookHome,
   findStopgapOrcaHashes,
   getRealHomeCodexHookHome,
   isKnownOrcaHash,
   readKnownOrcaHashes
 } from './codex-hook-orca-approvals'
-import { getOrcaUserDataPath, getSystemCodexHomePath } from './codex-home-paths'
+import { getOrcaUserDataPath } from './codex-home-paths'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-moves'
 import { sweepRealHomeCodexHook } from './codex-real-home-hook-sweep'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
@@ -70,14 +69,26 @@ const MAX_PASSES = 4
  * entry write fails. Never throws.
  */
 export async function reconcileRealHomeCodexHookEntries(args: ReconcileArgs): Promise<void> {
+  await reconcileCodexHookEntriesInHome(getRealHomeCodexHookHome(), args, { pristineBackup: true })
+}
+
+/**
+ * The same for another home Orca edits in place, such as a managed account's on a WSL host:
+ * only Orca's entry and its approvals change.
+ */
+export async function reconcileCodexHookEntriesInHome(
+  home: CodexHookHome,
+  args: ReconcileArgs,
+  options: { pristineBackup: boolean } = { pristineBackup: false }
+): Promise<void> {
   try {
-    await runExclusivelyForCodexTrustConfig(getSystemCodexConfigTomlPath(), async () => {
+    await runExclusivelyForCodexTrustConfig(home.tomlPath, async () => {
       for (let pass = 0; pass < MAX_PASSES; pass += 1) {
         if (!args.isEnabled()) {
           return
         }
         try {
-          if (reconcilePass(args) === 'settled') {
+          if (reconcilePass(home, args, options.pristineBackup) === 'settled') {
             return
           }
         } catch (error) {
@@ -87,16 +98,22 @@ export async function reconcileRealHomeCodexHookEntries(args: ReconcileArgs): Pr
           }
         }
       }
-      throw new Error('Orca entries in ~/.codex did not settle')
+      throw new Error(`Orca entries in ${home.homePath} did not settle`)
     })
   } catch (error) {
-    console.warn('[codex-real-home-hooks] could not reconcile Orca entries in ~/.codex:', error)
+    console.warn(
+      `[codex-real-home-hooks] could not reconcile Orca entries in ${home.homePath}:`,
+      error
+    )
   }
 }
 
 /** 'pruned' when another pass must settle what this one left; else 'settled', even when ~/.codex cannot take the entry. */
-function reconcilePass(args: ReconcileArgs): 'settled' | 'pruned' {
-  const home = getRealHomeCodexHookHome()
+function reconcilePass(
+  home: CodexHookHome,
+  args: ReconcileArgs,
+  pristineBackup: boolean
+): 'settled' | 'pruned' {
   const { hooksJsonPath, tomlPath, keySourcePaths: sourcePaths } = home
   const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
   // Why: the pre-write guard compares against these bytes; a separate later
@@ -120,7 +137,9 @@ function reconcilePass(args: ReconcileArgs): 'settled' | 'pruned' {
     convertOlderForms: args.convertOlderForms
   })
   const writeHooks = (nextHooks: Record<string, HookDefinition[]>): void => {
-    backupRealHomeHooksJsonOnce(getOrcaUserDataPath(), previousRaw)
+    if (pristineBackup) {
+      backupRealHomeHooksJsonOnce(getOrcaUserDataPath(), previousRaw)
+    }
     assertHooksJsonGeneration(hooksJsonPath, hooksWritePath, previousRaw)
     // Why: unknown fields inside the file belong to the user; preserve them verbatim.
     writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
@@ -231,19 +250,21 @@ function findStaleOrcaApprovals(
  * Never throws.
  */
 export async function removeRealHomeCodexHookForOptOut(
-  codexHashes: readonly CodexHookHashes[]
+  codexHashes: readonly CodexHookHashes[],
+  home: CodexHookHome = getRealHomeCodexHookHome()
 ): Promise<'removed' | 'unavailable'> {
   try {
-    return await runExclusivelyForCodexTrustConfig(getSystemCodexConfigTomlPath(), async () => {
-      const lane = sweepRealHomeCodexHook()
+    return await runExclusivelyForCodexTrustConfig(home.tomlPath, async () => {
+      const lane = sweepRealHomeCodexHook(home)
       // Why 'removed' only: an unread or malformed file may still hold the entry,
       // so its approvals and the ledger that proves ownership wait for a later pass.
       if (lane === 'removed') {
         // Why: Codex's own hashes prove Orca's approvals, including ones a sweep with no entry left to remove skips.
         removeSystemManagedHookTrustEntries(
-          getSystemCodexHomePath(),
-          getRealHomeHookKeySourcePaths(),
-          codexHashes
+          home.homePath,
+          home.keySourcePaths,
+          codexHashes,
+          home.tomlPath
         )
       }
       return lane

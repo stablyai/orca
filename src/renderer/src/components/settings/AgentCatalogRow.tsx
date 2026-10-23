@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -8,7 +8,13 @@ import { Button } from '../ui/button'
 import { SettingsBadge, SettingsSegmentedControl } from './SettingsFormControls'
 import type { AgentSessionSourceHomeControl } from './codex-session-source-home-control'
 import { AgentSessionSourceHomeInput } from './codex-session-source-home-control'
+import { resolveTuiAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import {
+  AgentPermissionExceptionBadge,
+  AgentRowPermissionControl,
+  type AgentRowPermission
+} from './AgentRowPermissions'
 import {
   AgentCommandOverrideInput,
   AgentDefaultArgsInput,
@@ -75,6 +81,8 @@ export type AgentCatalogRowProps = {
   onSaveEnv: (value: Record<string, string>) => void
   sessionSourceHome?: AgentSessionSourceHomeControl
   environmentNames?: readonly string[]
+  /** Absent for agents without a configurable permission mode on this host. */
+  permission?: AgentRowPermission
   environmentEditor?: React.ReactNode
 }
 
@@ -98,13 +106,33 @@ export function AgentCatalogRow({
   onSaveEnv,
   sessionSourceHome,
   environmentNames,
-  environmentEditor
+  environmentEditor,
+  permission
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
+    Boolean(cmdOverride) ||
+      (argsOverride !== defaultArgs &&
+        resolveTuiAgentPermissionMode({
+          agent: agentId,
+          agentArgs: argsOverride,
+          agentEnv: envOverride
+        }) === 'mixed') ||
+      envSummary !== defaultEnvSummary
   )
+  const permissionRef = useRef<HTMLDivElement>(null)
+  const openPermission = (): void => {
+    setCmdOpen(true)
+    requestAnimationFrame(() => {
+      const control = permissionRef.current
+      ;(
+        control?.querySelector<HTMLElement>('[aria-checked="true"]') ??
+        control?.querySelector<HTMLElement>('button')
+      )?.focus()
+    })
+  }
+  const expandable = isDetected || permission !== undefined
 
   return (
     <div className={cn('py-3', !isDetected && 'opacity-70')}>
@@ -112,8 +140,8 @@ export function AgentCatalogRow({
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
           <AgentIcon agent={agentId} size={16} />
         </div>
-        <div className="min-w-0 flex-1 sm:min-w-[12rem]">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 max-sm:min-w-0 sm:min-w-48">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium leading-none">{label}</span>
             {!isEnabled && (
               <SettingsBadge tone="muted">
@@ -135,118 +163,141 @@ export function AgentCatalogRow({
           </div>
         </div>
 
-        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
-          <AgentAvailabilityControl
-            label={label}
-            isEnabled={isEnabled}
-            onSetEnabled={onSetEnabled}
-          />
-          <div className="flex justify-start">
-            {isDetected && isEnabled && (
-              <Button
-                type="button"
-                variant={isDefault ? 'secondary' : 'ghost'}
-                size="xs"
-                onClick={onSetDefault}
-                title={
-                  isDefault
-                    ? translate('auto.components.settings.AgentsPane.d7625cf8b2', 'Default agent')
-                    : translate('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')
-                }
-                className="h-7 w-full justify-center gap-1 text-xs"
-              >
-                {isDefault && <Check className="size-3" />}
-                {isDefault
-                  ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
-                  : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
-              </Button>
-            )}
-          </div>
-          <a
-            href={homepageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={
-              isDetected
-                ? translate('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
-                : translate('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')
-            }
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-          >
-            <ExternalLink className="size-3.5" />
-          </a>
-          <div className="flex size-7 items-center justify-center">
-            {isDetected && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setCmdOpen((previous) => !previous)}
-                aria-label={
-                  cmdOpen
-                    ? translate(
-                        'auto.components.settings.AgentsPane.cea7d97be1',
-                        'Collapse command override'
-                      )
-                    : translate(
-                        'auto.components.settings.AgentsPane.dc4a2ffdc0',
-                        'Expand command override'
-                      )
-                }
-                className="size-7 text-muted-foreground hover:text-foreground"
-              >
-                <ChevronDown
-                  className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
-                />
-              </Button>
-            )}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {permission && permission.mode !== permission.expectedMode && (
+            // Right-aligned against the controls so badges line up without reserving width on every row.
+            <div className="mr-3 flex h-7 items-center">
+              <AgentPermissionExceptionBadge
+                label={label}
+                permission={permission}
+                onSelect={openPermission}
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-[max-content_6.5rem_1.75rem_1.75rem] items-center gap-1.5">
+            <AgentAvailabilityControl
+              label={label}
+              isEnabled={isEnabled}
+              onSetEnabled={onSetEnabled}
+            />
+            <div className="flex justify-start">
+              {isDetected && isEnabled && (
+                <Button
+                  type="button"
+                  variant={isDefault ? 'secondary' : 'ghost'}
+                  size="xs"
+                  onClick={onSetDefault}
+                  title={
+                    isDefault
+                      ? translate('settings.agents.clearDefault', 'Clear default agent')
+                      : translate(
+                          'auto.components.settings.AgentsPane.5f986a9b92',
+                          'Set as default'
+                        )
+                  }
+                  className="h-7 w-full justify-center gap-1 text-xs"
+                >
+                  {isDefault && <Check className="size-3" />}
+                  {isDefault
+                    ? translate('auto.components.settings.AgentsPane.24e032fa34', 'Default')
+                    : translate('auto.components.settings.AgentsPane.959b67385b', 'Set default')}
+                </Button>
+              )}
+            </div>
+            <a
+              href={homepageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={
+                isDetected
+                  ? translate('auto.components.settings.AgentsPane.fe4d630c94', 'Docs')
+                  : translate('auto.components.settings.AgentsPane.f95b5c79b8', 'Install')
+              }
+              className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+            <div className="flex size-7 items-center justify-center">
+              {expandable && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setCmdOpen((previous) => !previous)}
+                  aria-label={
+                    cmdOpen
+                      ? translate(
+                          'settings.agents.collapseAgentSettings',
+                          'Collapse agent settings'
+                        )
+                      : translate('settings.agents.expandAgentSettings', 'Expand agent settings')
+                  }
+                  className="size-7 text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronDown
+                    className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
+                  />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {isDetected && cmdOpen && (
-        <div className="mt-3 pl-10">
-          <AgentCommandOverrideInput
-            key={cmdOverride ?? defaultCmd}
-            defaultCmd={defaultCmd}
-            cmdOverride={cmdOverride}
-            onSaveOverride={onSaveOverride}
-          />
-          <div className="mt-2">
-            <AgentDefaultArgsInput
-              key={`${agentId}:${argsOverride}`}
-              defaultArgs={defaultArgs}
-              argsOverride={argsOverride}
-              onSaveArgs={onSaveArgs}
+      {expandable && cmdOpen && (
+        <div className="mt-3 space-y-3 pl-10">
+          {permission && (
+            <AgentRowPermissionControl
+              label={label}
+              permission={permission}
+              controlRef={permissionRef}
             />
-          </div>
-          {environmentEditor ??
-            ((defaultEnvSummary || envSummary) && (
+          )}
+          {isDetected && (
+            <div>
+              <AgentCommandOverrideInput
+                key={cmdOverride ?? defaultCmd}
+                defaultCmd={defaultCmd}
+                cmdOverride={cmdOverride}
+                onSaveOverride={onSaveOverride}
+              />
               <div className="mt-2">
-                <AgentDefaultEnvInput
-                  key={`${agentId}:${envSummary}`}
-                  defaultEnv={defaultEnv}
-                  envOverride={envOverride}
-                  onSaveEnv={onSaveEnv}
+                <AgentDefaultArgsInput
+                  key={`${agentId}:${argsOverride}`}
+                  defaultArgs={defaultArgs}
+                  argsOverride={argsOverride}
+                  onSaveArgs={onSaveArgs}
                 />
               </div>
-            ))}
-          {sessionSourceHome && (
-            <div className="mt-2">
-              <AgentSessionSourceHomeInput
-                key={`${agentId}:${sessionSourceHome.runtimeLabel}:${sessionSourceHome.value}`}
-                runtimeLabel={sessionSourceHome.runtimeLabel}
-                value={sessionSourceHome.value}
-                onSave={sessionSourceHome.onSave}
-              />
+              {environmentEditor ??
+                ((defaultEnvSummary || envSummary) && (
+                  <div className="mt-2">
+                    <AgentDefaultEnvInput
+                      key={`${agentId}:${envSummary}`}
+                      defaultEnv={defaultEnv}
+                      envOverride={envOverride}
+                      onSaveEnv={onSaveEnv}
+                    />
+                  </div>
+                ))}
+              {sessionSourceHome && (
+                <div className="mt-2">
+                  <AgentSessionSourceHomeInput
+                    key={`${agentId}:${sessionSourceHome.runtimeLabel}:${sessionSourceHome.value}`}
+                    runtimeLabel={sessionSourceHome.runtimeLabel}
+                    value={sessionSourceHome.value}
+                    onSave={sessionSourceHome.onSave}
+                  />
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {translate(
+                  'auto.components.settings.AgentsPane.f9f127d664',
+                  'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
+                )}
+              </p>
             </div>
           )}
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            {translate(
-              'auto.components.settings.AgentsPane.f9f127d664',
-              'Override the binary path or name, and edit the default launch arguments or environment for this agent.'
-            )}
-          </p>
         </div>
       )}
     </div>

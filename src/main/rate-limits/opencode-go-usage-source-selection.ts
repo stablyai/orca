@@ -84,7 +84,7 @@ function apiFailureResult(
   return emptyResult(outcome.message, 'error', {
     source: 'web',
     credentialSource,
-    failureKind: 'server'
+    failureKind: outcome.failureKind ?? 'server'
   })
 }
 

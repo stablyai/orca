@@ -194,6 +194,10 @@ describe('mobile terminal records', () => {
 
     expect(mobileSessionTabsEqual([base], [{ ...base }])).toBe(true)
     expect(mobileSessionTabsEqual([base], [{ ...base, sessionId: 'session-2' }])).toBe(false)
+    // A status-only frame must still reach the tab strip's dot.
+    expect(
+      mobileSessionTabsEqual([base], [{ ...base, chatStatus: { state: 'working', updatedAt: 1 } }])
+    ).toBe(false)
   })
 
   const record = (over: Partial<TerminalRecord> & { handle: string }): TerminalRecord => ({

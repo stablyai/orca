@@ -100,7 +100,14 @@ describe('createMainWindow', () => {
       isLoadingMainFrame: vi.fn(() => false),
       mainFrame: {},
       on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
+        // Chain like an EventEmitter: several lifecycle modules listen to the same event.
+        const previous = windowHandlers[event]
+        windowHandlers[event] = previous
+          ? (...args: unknown[]) => {
+              previous(...args)
+              handler(...args)
+            }
+          : handler
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
@@ -245,7 +252,11 @@ describe('createMainWindow', () => {
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
     windowHandlers['render-process-gone']?.({} as never, details)
 
-    expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
+    expect(onRendererProcessGone).toHaveBeenCalledWith(
+      details,
+      142,
+      expect.objectContaining({ rendererDocumentLoaded: false })
+    )
   })
 
   it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
@@ -293,7 +304,11 @@ describe('createMainWindow', () => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
 
-      expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
+      expect(onRendererProcessGone).toHaveBeenCalledWith(
+        details,
+        424,
+        expect.objectContaining({ rendererDocumentLoaded: false })
+      )
       expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
     } finally {
       consoleError.mockRestore()
@@ -344,7 +359,8 @@ describe('createMainWindow', () => {
 
     expect(onRendererProcessGone).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'killed', exitCode: 15 }),
-      expect.any(Number)
+      expect.any(Number),
+      expect.any(Object)
     )
 
     consoleError.mockRestore()

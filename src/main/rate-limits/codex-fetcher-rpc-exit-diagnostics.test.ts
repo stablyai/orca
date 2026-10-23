@@ -12,6 +12,12 @@ const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => (
 }))
 
 // Runs the node stub in place of the resolved CLI, through the real chokepoint.
+// The probe's child runs in-process here; the worker transport has its own suite.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof RunProcess>()
   return {

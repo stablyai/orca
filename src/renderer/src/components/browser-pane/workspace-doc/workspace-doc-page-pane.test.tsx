@@ -22,7 +22,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(mocks.storeState)
 }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => null
+}))
 vi.mock('./HtmlDocPreview', () => ({
   HtmlDocPreview: ({ holdsGuestFocus }: { holdsGuestFocus?: boolean }) => {
     mocks.handedFocus.push(holdsGuestFocus)

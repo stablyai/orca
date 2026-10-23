@@ -16,7 +16,10 @@ export type CodexPendingRequest = {
   method: string
   resolve: (result: unknown) => void
   reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
+  timer: ReturnType<typeof setTimeout> | undefined
+  /** Called as the reply is read, or as the request times out, before anything awaits it: in
+   *  stdout order with every notification read around it. */
+  onReply?: () => void
 }
 
 export function createCodexAppServerRecordDispatcher(input: {
@@ -40,6 +43,7 @@ export function createCodexAppServerRecordDispatcher(input: {
       return
     }
     pending.delete(id)
+    waiter.onReply?.()
     timedOutMethods.set(id, waiter.method)
     const oldest = timedOutMethods.keys().next()
     if (timedOutMethods.size > MAX_REMEMBERED_TIMEOUTS && !oldest.done) {
@@ -103,6 +107,7 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     pending.delete(message.id)
     clearTimeout(waiter.timer)
+    waiter.onReply?.()
     const error = message.error
     if (isProviderRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'

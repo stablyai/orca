@@ -41,6 +41,8 @@ const fsAllowances: Record<string, readonly string[]> = {
   'claude-accounts/claude-profile-router.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
   // Removing an account deletes its folder, links first.
   'claude-accounts/claude-account-folder.ts': ['rmSync', 'rmdirSync', 'unlinkSync'],
+  // Not a file: a pasted sign-in code goes to the login process's stdin.
+  'claude-accounts/claude-command-process.ts': ['write'],
   'claude-accounts/claude-profile-prompt-history.ts': [
     'appendFileSync',
     'linkSync',

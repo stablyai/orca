@@ -13,6 +13,8 @@ import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-clos
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { recordBrowserTabClose } from './browser-layout-owner-commands'
 
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
@@ -188,10 +190,23 @@ export function createBrowserCloseActions(
         const workspaceItem = tabs.find(
           (entry) => entry.contentType === 'browser' && entry.entityId === tabId
         )
+        // Switch point: main records the close while the tab-bar entry still names the tab.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN && workspaceItem) {
+          recordBrowserTabClose(
+            get(),
+            workspaceItem.worktreeId,
+            tabId,
+            isCleanup ? 'cleanup' : 'user'
+          )
+        }
         if (workspaceItem) {
           get().closeUnifiedTab(
             workspaceItem.id,
-            isCleanup ? { preserveWorktreeSelection: true, recordInteraction: false } : undefined
+            isCleanup
+              ? { preserveWorktreeSelection: true, recordInteraction: false }
+              : options?.preserveWorktreeSelection
+                ? { preserveWorktreeSelection: true }
+                : undefined
           )
         }
       }
@@ -226,13 +241,13 @@ export function createBrowserCloseActions(
       }
     },
 
-    shutdownWorktreeBrowsers: async (worktreeId) => {
+    shutdownWorktreeBrowsers: (worktreeId, options) => {
       const workspaces = get().browserTabsByWorktree[worktreeId] ?? []
       // Why: snapshot before the loop — closeBrowserTab empties the array, so set() below couldn't recompute hadBrowserTabs.
       const hadBrowserTabs = workspaces.length > 0
       for (const workspace of workspaces) {
         const browserPagesByWorkspace = get().browserPagesByWorkspace
-        get().closeBrowserTab(workspace.id)
+        get().closeBrowserTab(workspace.id, options)
         destroyWorkspaceWebviews(browserPagesByWorkspace, workspace.id)
       }
       set((s) => {

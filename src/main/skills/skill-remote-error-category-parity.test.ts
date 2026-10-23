@@ -7,7 +7,7 @@ import type { SkillInstallRequest } from '../../shared/skill-install-contract'
 
 const mocks = vi.hoisted(() => ({ callRuntimeEnvironment: vi.fn() }))
 
-vi.mock('../ipc/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 

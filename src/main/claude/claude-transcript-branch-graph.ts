@@ -21,7 +21,7 @@ type TranscriptNode = {
 
 export type ClaudeTranscriptBranchProof = {
   leafUuid: string
-  relation: 'initial' | 'same' | 'descendant' | 'intentional-rewind'
+  relation: 'initial' | 'same' | 'descendant'
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -98,7 +98,6 @@ const TRANSCRIPT_TAIL_TYPES: ReadonlySet<unknown> = new Set([
 type BranchProofInput = {
   providerSessionId: string
   previousLeafUuid: string | null
-  intentionalRewindUuid?: string
   /**
    * Which row is the branch tip. `file-tail` proves from the file's last
    * main-chain row: Claude writes its `last-prompt` marker only sporadically, so
@@ -201,21 +200,6 @@ function createBranchProof(input: BranchProofInput) {
       throw transcriptError('marker precedes its leaf record')
     }
     const previousLeafUuid = input.previousLeafUuid
-    if (input.intentionalRewindUuid !== undefined) {
-      if (leafUuid !== input.intentionalRewindUuid || !input.previousLeafUuid) {
-        throw transcriptError('rewind target does not match the observed leaf')
-      }
-      proveMainLineAncestry(nodes, input.previousLeafUuid, input.providerSessionId)
-      proveAppendOrder(nodes)
-      let ancestor = nodes.get(input.previousLeafUuid)?.parentUuid ?? null
-      for (let depth = 0; ancestor !== null && depth < MAX_CLAUDE_TRANSCRIPT_ANCESTRY; depth += 1) {
-        if (ancestor === leafUuid) {
-          return { leafUuid, relation: 'intentional-rewind' }
-        }
-        ancestor = nodes.get(ancestor)?.parentUuid ?? null
-      }
-      throw transcriptError('rewind target is not an ancestor of the previous cursor')
-    }
     if (!previousLeafUuid) {
       proveMainLineAncestry(nodes, leafUuid, input.providerSessionId)
       // A branch proof is based on an append-only snapshot. A child that appears

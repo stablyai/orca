@@ -1,4 +1,6 @@
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
+import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/at-rest-command-context'
+import { captureHostShellEnvironment } from '../runtime/structured-agent-shell-environment'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
@@ -16,7 +18,10 @@ import {
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
 } from '../local-project-runtime-resolution'
-import type { PreflightRuntimeContext } from '../ipc/preflight-runtime-target'
+import {
+  getPreflightWslTarget,
+  type PreflightRuntimeContext
+} from '../ipc/preflight-runtime-target'
 import { resolveWorktreeHostRouting } from '../runtime/worktree-launch-host-repo'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
@@ -137,9 +142,26 @@ export async function detectAgentsOnHost(host: AgentDetectionHost): Promise<stri
   return detectInstalledAgentsWithShellPathHydration(host.context)
 }
 
+const agentRefreshListeners = new Set<() => void>()
+
+/** Runs after each explicit agent refresh on this host, which can find a CLI installed since. */
+export function onAgentsRefreshedOnHost(listener: () => void): () => void {
+  agentRefreshListeners.add(listener)
+  return () => agentRefreshListeners.delete(listener)
+}
+
 export async function refreshAgentsOnHost(host: AgentDetectionHost): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return refreshShellPathAndDetectAgents(host.context)
+  const wsl = getPreflightWslTarget(host.context)
+  const refresh = async (): Promise<RefreshAgentsResult> => {
+    const result = await refreshShellPathAndDetectAgents(host.context)
+    if (!wsl) {
+      await captureHostShellEnvironment()
+    }
+    agentRefreshListeners.forEach((listener) => listener())
+    return result
+  }
+  return wsl ? refresh() : refreshAtRestCommandContext(refresh)
 }

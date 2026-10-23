@@ -19,13 +19,13 @@ export async function purgeOrphanedRuntimeSshProjects(
   const destroyedHostIds = new Set<ExecutionHostId>(
     purgeableSshTargetIds.map((id) => toSshExecutionHostId(id))
   )
-  const orphanedSetupIds = get()
+  const orphanedSetups = get()
     .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
-    .map((setup) => setup.id)
+    .map((setup) => ({ setupId: setup.id, hostId: setup.hostId }))
   const purgedRepoIds = new Set<string>()
-  for (const setupId of orphanedSetupIds) {
+  for (const target of orphanedSetups) {
     try {
-      const result = await get().deleteProjectHostSetup({ setupId })
+      const result = await get().deleteProjectHostSetup(target)
       if (result?.repo) {
         purgedRepoIds.add(result.repo.id)
       }
@@ -39,7 +39,10 @@ export async function purgeOrphanedRuntimeSshProjects(
   )
   for (const repo of orphanedRepos) {
     try {
-      await get().removeProject(repo.id, { hostId: getRepoExecutionHostId(repo) })
+      await get().removeProject(repo.id, {
+        hostId: getRepoExecutionHostId(repo),
+        automaticCleanup: true
+      })
     } catch (error) {
       console.error('Failed to purge orphaned per-workspace-env repo:', error)
     }

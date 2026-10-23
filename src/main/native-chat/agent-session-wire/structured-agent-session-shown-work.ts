@@ -15,6 +15,7 @@ import {
   type StructuredAgentSessionAgentStatus
 } from '../../../shared/structured-agent-session-agent-status'
 import { projectStructuredAgentSessionStatus } from '../../../shared/structured-agent-session-projection'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 
 /** The full row the sidebar's fold would show, for callers that need the lead's own state beside
  *  the working answer — the teardown snapshot records both from this one computation. */
@@ -25,9 +26,17 @@ export function structuredAgentSessionShownStatus(
   },
   childWork: readonly AgentChildWorkView[] | undefined,
   /** The session's lease fence, as the status feed passes it: a send from an older one is not work. */
-  fence: number | undefined
+  fence: number | undefined,
+  /** The host's projection of current work (`structuredAgentSessionCurrentWork`), as the status
+   *  feed passes it: an ended generation's turn is not work. */
+  scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionAgentStatus {
-  const status = projectStructuredAgentSessionStatus(journal.items, journal.submissions, fence)
+  const status = projectStructuredAgentSessionStatus(
+    journal.items,
+    journal.submissions,
+    fence,
+    scope
+  )
   return structuredAgentSessionAgentStatus({
     status,
     ...(childWork ? { childWork } : {})

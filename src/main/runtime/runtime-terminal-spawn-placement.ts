@@ -1,19 +1,29 @@
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 import type { TerminalPaneSplitDirection } from '../../shared/terminal-tab-types'
+import type { RuntimeTerminalPresentation } from '../../shared/runtime-terminal-contracts'
 
-/** A main-side create always opens its own tab. */
-export function runtimeNewTabPlacement(viewMode?: 'terminal' | 'chat'): TerminalPanePlacement {
-  return viewMode ? { kind: 'new-tab', row: { viewMode } } : { kind: 'new-tab' }
-}
-
-/** A runtime-started tab opens in the group asked for, else the first group (as the live view). */
-export function newTabIn(opts: { viewMode?: 'terminal' | 'chat'; targetGroupId?: string }): {
+/**
+ * A runtime-started tab opens in the group asked for, else the first group (as the live view). Its
+ * title is the caller's name for it when the window would show it too: a revealed tab keeps the
+ * name, a background tab (a worker the window never revealed) keeps its live title.
+ */
+export function newTabIn(opts: {
+  viewMode?: 'terminal' | 'chat'
+  targetGroupId?: string
+  title?: string
+  presentation?: RuntimeTerminalPresentation
+}): {
   placement: TerminalPanePlacement
   groupId?: string
 } {
-  const { targetGroupId } = opts
+  const { viewMode, targetGroupId } = opts
+  const title = opts.presentation === 'background' ? undefined : opts.title
+  const row = {
+    ...(viewMode ? { viewMode } : {}),
+    ...(title ? { customTitle: title } : {})
+  }
   return {
-    placement: runtimeNewTabPlacement(opts.viewMode),
+    placement: viewMode || title ? { kind: 'new-tab', row } : { kind: 'new-tab' },
     ...(targetGroupId ? { groupId: targetGroupId } : {})
   }
 }

@@ -4,6 +4,7 @@ import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { buildWorktreePaletteDocuments } from '@/lib/worktree-palette-document'
 import {
   getPaletteWorktreeIdentity,
+  getPaletteWorktreeExecutionHostId,
   resolvePaletteRepoForWorktree
 } from '@/lib/palette-repo-resolution'
 import type { PaletteDocument } from '@/lib/palette-match/palette-document'
@@ -12,6 +13,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 export function buildWorktreeJumpPaletteDocumentIndex({
   worktrees,
@@ -37,7 +39,11 @@ export function buildWorktreeJumpPaletteDocumentIndex({
   const hostLabelByWorktreeId = new Map<string, string>()
   for (const worktree of worktrees) {
     const repo = resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity)
-    const badge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
+    const badge = getPaletteHostBadge(
+      getPaletteWorktreeExecutionHostId(worktree) ?? (repo && getRepoExecutionHostId(repo)),
+      hostOptions,
+      hostFilterActive
+    )
     if (badge) {
       hostLabelByWorktreeId.set(getPaletteWorktreeIdentity(worktree), badge.label)
     }

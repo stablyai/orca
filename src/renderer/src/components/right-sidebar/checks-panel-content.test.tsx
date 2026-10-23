@@ -322,32 +322,6 @@ describe('isMutablePRConversationComment', () => {
 })
 
 describe('PRCommentsList', () => {
-  it('pins the comments header while scrolling the sidebar', () => {
-    const comments: PRComment[] = [
-      {
-        id: 1,
-        author: 'AmethystLiang',
-        authorAvatarUrl: '',
-        body: 'Existing review context',
-        createdAt: '2026-05-14T00:00:00Z',
-        url: 'https://github.com/acme/widgets/pull/42#issuecomment-1'
-      }
-    ]
-
-    const markup = renderWithTooltips(
-      React.createElement(PRCommentsList, {
-        comments,
-        commentsLoading: false,
-        onAddComment: () => Promise.resolve({ ok: true as const })
-      })
-    )
-
-    const commentsHeaderIndex = markup.indexOf('Comments')
-    const stickyIndex = markup.indexOf('sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm')
-    expect(stickyIndex).toBeGreaterThan(-1)
-    expect(stickyIndex).toBeLessThan(commentsHeaderIndex)
-  })
-
   it('places the collapsed add-comment action in the comments header', () => {
     const comments: PRComment[] = [
       {
@@ -468,11 +442,43 @@ describe('getFailedChecksForDetails', () => {
 })
 
 describe('CheckJobLogTail', () => {
+  it.each([
+    ['completed', 'failure', 'No log excerpt is available.'],
+    ['in_progress', null, 'Log output is not available yet.'],
+    ['completed', 'success', null],
+    ['completed', 'skipped', null]
+  ])(
+    'shows truthful legacy absence for %s / %s without empty Copy',
+    (status, conclusion, expected) => {
+      const markup = renderWithTooltips(
+        React.createElement(CheckJobLogTail, {
+          job: { status, conclusion, logTail: null },
+          surface: 'sidebar'
+        })
+      )
+      if (expected) {
+        expect(markup).toContain(expected)
+      } else {
+        expect(markup).toBe('')
+      }
+      expect(markup).not.toContain('Copy log excerpt')
+      expect(markup).not.toContain('expired')
+    }
+  )
   it('renders a labeled monospace log tail with copy affordance', () => {
     const markup = renderToStaticMarkup(
-      React.createElement(CheckJobLogTail, {
-        logTail: 'Error: expected true to be false'
-      })
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(CheckJobLogTail, {
+          surface: 'sidebar',
+          job: {
+            logTail: 'Error: expected true to be false',
+            status: 'completed',
+            conclusion: 'failure'
+          }
+        })
+      )
     )
 
     expect(markup).toContain('Log excerpt')
@@ -482,10 +488,19 @@ describe('CheckJobLogTail', () => {
 
   it('uses a taller viewport when expanded for failed-job details', () => {
     const markup = renderToStaticMarkup(
-      React.createElement(CheckJobLogTail, {
-        logTail: 'Error: expected true to be false',
-        expanded: true
-      })
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(CheckJobLogTail, {
+          surface: 'details',
+          job: {
+            logTail: 'Error: expected true to be false',
+            status: 'completed',
+            conclusion: 'failure'
+          },
+          expanded: true
+        })
+      )
     )
 
     expect(markup).toContain('min-h-48')

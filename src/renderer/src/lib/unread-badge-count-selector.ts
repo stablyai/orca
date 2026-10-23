@@ -1,12 +1,14 @@
 import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/visible-worktree-host-scope'
-import { getPairedDeviceIdsByEnvironment } from '@/components/sidebar/workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../../shared/workspace-creator-visibility'
 import { getRepoMapFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 import { sameBucketRecords } from './bucket-record-equality'
-import { getUnreadBadgeCount, hasUnreadFolderTab } from './unread-badge-count'
+import { getUnreadBadgeCount } from './unread-badge-count'
+import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type UnreadBadgeCountState = Pick<
   AppState,
@@ -53,12 +55,12 @@ function sameFolderAttention(
   ) {
     return true
   }
-  for (const folder of next.folderWorkspaces) {
+  for (const folder of selectFolderWorkspaces(next)) {
     if (!folder.isUnread) {
       continue
     }
     const key = folderWorkspaceKey(folder.id)
-    if (hasUnreadFolderTab(previous, key) !== hasUnreadFolderTab(next, key)) {
+    if (hasLiveTabMarker(previous, key) !== hasLiveTabMarker(next, key)) {
       return false
     }
   }
@@ -67,7 +69,7 @@ function sameFolderAttention(
 
 function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCountState): boolean {
   return (
-    previous.folderWorkspaces === next.folderWorkspaces &&
+    selectFolderWorkspaces(previous) === selectFolderWorkspaces(next) &&
     previous.projectGroups === next.projectGroups &&
     previous.repos === next.repos &&
     previous.workspaceHostScope === next.workspaceHostScope &&
@@ -78,7 +80,11 @@ function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCount
     (!next.hideWorkspacesFromOtherDevices ||
       (previous.runtimeEnvironments === next.runtimeEnvironments &&
         previous.runtimeStatusByEnvironmentId === next.runtimeStatusByEnvironmentId)) &&
-    sameBucketRecords(previous.worktreesByRepo, next.worktreesByRepo, sameBadgeWorktree) &&
+    sameBucketRecords(
+      selectWorktreesByRepo(previous),
+      selectWorktreesByRepo(next),
+      sameBadgeWorktree
+    ) &&
     sameFolderAttention(previous, next)
   )
 }
@@ -99,8 +105,8 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
   return (state) => {
     if (!previousState || !sameCountInputs(previousState, state)) {
       unreadCount = getUnreadBadgeCount({
-        worktreesByRepo: state.worktreesByRepo,
-        folderWorkspaces: state.folderWorkspaces,
+        worktreesByRepo: selectWorktreesByRepo(state),
+        folderWorkspaces: selectFolderWorkspaces(state),
         tabsByWorktree: state.tabsByWorktree,
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,
         unreadTerminalTabs: state.unreadTerminalTabs,

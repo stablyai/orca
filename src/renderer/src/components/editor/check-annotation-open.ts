@@ -6,6 +6,7 @@ import {
   getOpenableAnnotationLine,
   resolveAnnotationPathInsideWorktree
 } from './check-annotation-path'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 export { getOpenableAnnotationLine }
 
@@ -18,7 +19,7 @@ export function openAnnotationLocation(params: {
 }): void {
   const { worktreeId, path, line, revealRafRef, revealInnerRafRef } = params
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(store.worktreesByRepo, worktreeId)
+  const worktree = findWorktreeById(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
     return
   }

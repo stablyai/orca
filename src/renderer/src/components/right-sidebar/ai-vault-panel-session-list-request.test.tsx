@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
@@ -77,7 +77,11 @@ it('builds the exact request the Session History panel sends for the active work
   render(<AiVaultPanel />)
 
   const request = resolveAiVaultPanelSessionListRequest(useAppStore.getState(), WORKTREE_ID)
-  expect(request.scopePaths.length).toBeGreaterThan(1)
+  expect(request.scopePaths).toEqual(['/repo/wt'])
   expect(request.sessionLimit).toBe(500)
+  expect(panelRequests.at(-1)).toEqual(request)
+  fireEvent.click(screen.getByRole('radio', { name: /^All$/ }))
+  expect(panelRequests.at(-1)?.scopePaths).toEqual(['/repo/wt', '/repo/sibling', '/repos/repo-1'])
+  fireEvent.click(screen.getByRole('radio', { name: /^Workspace$/ }))
   expect(panelRequests.at(-1)).toEqual(request)
 })

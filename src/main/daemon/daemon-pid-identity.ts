@@ -1,16 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { getDaemonPidPath } from './daemon-spawner'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
-import {
-  getPsProcessIdentityAsync,
-  queryWindowsProcessIdentity
-} from './daemon-process-identity-query'
+import { getPsProcessIdentityAsync, type ProcessIdentity } from './daemon-process-identity-query'
+import { queryWindowsProcess } from './daemon-process-inspection'
 import {
   START_TIME_TOLERANCE_MS,
   startTimeMatches,
   startTimesWithinTolerance
 } from './daemon-process-start-time'
 import { PROTOCOL_VERSION } from './types'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 
 // Why: on Windows the pid file's startedAtMs is the daemon's self-reported
 // Node start time, while verification reads the OS process creation time —
@@ -37,11 +36,32 @@ export function isNoSuchProcessError(error: unknown): boolean {
 
 /**
  * 'unknown' is load-bearing: a failed inspection is not evidence that the recorded PID is
- * someone else's. `ps` runs under a 2s budget and PowerShell CIM under 3s, and a loaded
- * machine blows both — reading that as "not our daemon" is what authorized reclaiming a live
- * daemon's ownership in the first place.
+ * someone else's. `ps` runs under a 2s budget and the Windows process table under 3s, and a
+ * loaded machine blows both — reading that as "not our daemon" is what authorized reclaiming a
+ * live daemon's ownership in the first place.
  */
 export type DaemonProcessIdentity = 'match' | 'mismatch' | 'unknown'
+
+// Timed under ORCA_STARTUP_DIAGNOSTICS so the cold-start benchmark can attribute startup cost.
+async function queryWindowsProcessIdentity(pid: number): Promise<ProcessIdentity | null> {
+  const startedAt = performance.now()
+  try {
+    const evidence = await queryWindowsProcess(pid)
+    // Why: a row missing after kill(pid, 0) succeeded, or a denied command line, is a failed
+    // inspection, not proof the PID belongs to someone else.
+    return evidence.status === 'present' && evidence.commandLine
+      ? { commandLine: evidence.commandLine, startedAtMs: evidence.startedAtMs }
+      : null
+  } finally {
+    if (isStartupDiagnosticsEnabled()) {
+      logStartupDiagnostic('daemon-pid-check', {
+        t: Math.round(performance.now()),
+        pid,
+        ms: Math.round(performance.now() - startedAt)
+      })
+    }
+  }
+}
 
 export async function inspectDaemonProcessIdentity(
   pid: number,

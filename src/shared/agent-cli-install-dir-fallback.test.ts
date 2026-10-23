@@ -235,6 +235,19 @@ describe('agent CLI install-dir fallback', () => {
     }
   )
 
+  // Real host (WSL 2.7.10): the guest's ambient PATH reached a /mnt/c npm shim after the
+  // filtered walk had already rejected it, reporting a Windows codex as installed.
+  it.skipIf(process.platform === 'win32')(
+    'searches the PATH detection searched, not the ambient one',
+    () => {
+      const shimDir = '/mnt/c/Users/u/AppData/Roaming/npm'
+      stage(join(shimDir, 'codex'))
+      vi.stubEnv('PATH', [GUI_LAUNCH_PATH, shimDir].join(delimiter))
+      expect(detectCommandsInInstallDirs(['codex'])).toEqual(new Set(['codex']))
+      expect(detectCommandsInInstallDirs(['codex'], GUI_LAUNCH_PATH)).toEqual(new Set())
+    }
+  )
+
   it('carries the system install dirs into the POSIX guest fallback prelude', () => {
     const prelude = buildPosixFallbackPathPrelude()
     const systemDirs = [

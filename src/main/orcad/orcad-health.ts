@@ -12,7 +12,7 @@ import { hashOrcadLauncher } from '../../shared/orcad-build-identity'
 import {
   confirmPtyProcessCeiling,
   type PtyProcessCeilingState
-} from '../daemon/pty-process-ceiling-state'
+} from '../../shared/pty-process-ceiling-state'
 import process from 'node:process'
 import { checkDaemonHealthWithCoverage, type DaemonHealth } from '../daemon/daemon-health'
 import { ptySpawnHealthPlatformCoverage } from '../daemon/daemon-health-identity'

@@ -41,6 +41,19 @@ function captureErrors() {
 }
 
 describe('main sync-spawn ratchet', () => {
+  it('retains escaped imports and API names', () => {
+    expect(
+      uses(String.raw`import { \u0065xecSync as run } from 'node:child_\u0070rocess'; run('git')`)
+    ).toEqual({ count: 1, symbols: ['execSync'] })
+  })
+
+  it('retains exports whose module name is inherited from the containing directory', () => {
+    expect(uses("export * from '.'", 'src/main/wsl/consumer.ts')).toEqual({
+      count: 4,
+      symbols: ['getWslHome', 'isWslAvailable', 'listWslDistros', 'wslUncDirectoryExists']
+    })
+  })
+
   it.each([
     ["import { execFileSync } from 'node:child_process'\nexecFileSync('git')", 1, ['execFileSync']],
     [
@@ -73,14 +86,14 @@ describe('main sync-spawn ratchet', () => {
       ['runProcessSync']
     ],
     [
-      "import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../shared/secure-file.ts'\nconst write = durable ? writeDurableSecureJsonFile : writeSecureJsonFile\nwrite(p, v)",
+      "import { getWslHome, listWslDistros } from './wsl.ts'\nconst read = sync ? getWslHome : listWslDistros\nread()",
       3,
-      ['writeDurableSecureJsonFile', 'writeSecureJsonFile']
+      ['getWslHome', 'listWslDistros']
     ],
     [
-      "import * as store from '..\\\\shared\\\\bounded-secure-json-file'\nstore.writeSecureJsonFileWithinLimit(p, v, 1)",
+      "import * as acl from '..\\\\shared\\\\secure-path-windows-acl'\nacl.restrictWindowsPathSync(p, true)",
       1,
-      ['writeSecureJsonFileWithinLimit']
+      ['restrictWindowsPathSync']
     ],
     [
       "const { execSync } = require('child_process')\nconst run = execSync\nrun('a')",
@@ -152,35 +165,6 @@ describe('main sync-spawn ratchet', () => {
     expect(uses(source)).toEqual({ count: 1, symbols: [symbol] })
   })
 
-  it('counts hardenSecurePath unless the call is visibly async', () => {
-    const imported = "import { hardenSecurePath } from '../shared/secure-file'\n"
-    const count = (call) => uses(`${imported}${call}`).count
-    expect(count('hardenSecurePath(p, { isDirectory: true, sync: true })')).toBe(1)
-    expect(count("hardenSecurePath(p, { isDirectory: true, 'sync': true })")).toBe(1)
-    expect(count('hardenSecurePath(p, options)')).toBe(1)
-    expect(count('hardenSecurePath(p, { ...base, isDirectory: true })')).toBe(1)
-    expect(count('hardenSecurePath(p, { isDirectory: true, sync })')).toBe(1)
-    expect(count('hardenSecurePath(p, { sync: true } as const)')).toBe(1)
-    expect(count('tasks.map(hardenSecurePath)')).toBe(1)
-    expect(count('hardenSecurePath(p, { isDirectory: true })')).toBe(0)
-    expect(count('hardenSecurePath(p, { isDirectory: true, sync: false })')).toBe(0)
-    expect(count('hardenSecurePath(p)')).toBe(0)
-    expect(
-      uses("import * as sf from '../shared/secure-file'\nsf.hardenSecurePath(p, { sync: true })")
-    ).toEqual({ count: 1, symbols: ['hardenSecurePath'] })
-  })
-
-  it.each([
-    'const args = [p, { isDirectory: false, platform: "win32", sync: true }] as const\nhardenSecurePath(...args)',
-    'const options = [{ isDirectory: false, platform: "win32", sync: true }] as const\nhardenSecurePath(p, ...options)',
-    'hardenSecurePath(...paths, { isDirectory: true, sync: false })'
-  ])('counts hardenSecurePath with spread call arguments: %s', (source) => {
-    expect(uses(`import { hardenSecurePath } from '../shared/secure-file'\n${source}`)).toEqual({
-      count: 1,
-      symbols: ['hardenSecurePath']
-    })
-  })
-
   it('counts re-exports in the re-exporting module and internal calls in the defining one', () => {
     expect(
       uses(
@@ -196,15 +180,15 @@ describe('main sync-spawn ratchet', () => {
     ).toEqual({ count: 1, symbols: ['listWslDistros'] })
   })
 
-  it('resolves writer imports by the module they point at, not by name', () => {
+  it('resolves imports by the module they point at, not by name', () => {
     expect(
       uses(
-        "import { writeSecureFile } from './secure-file'\nwriteSecureFile(p, v)",
+        "import { restrictWindowsPathSync } from './secure-path-windows-acl'\nrestrictWindowsPathSync(p, true)",
         'src/shared/store.ts'
       )
     ).toEqual({
       count: 1,
-      symbols: ['writeSecureFile']
+      symbols: ['restrictWindowsPathSync']
     })
   })
 
@@ -212,9 +196,12 @@ describe('main sync-spawn ratchet', () => {
     expect([...(gatedSymbolsFor('src\\main\\foo\\x.ts', '..\\wsl') ?? [])]).toContain('getWslHome')
   })
 
-  it('fails closed on source it cannot parse', () => {
-    expect(() => uses('import {')).toThrow('Cannot parse src/main/consumer.ts')
-  })
+  it.each(['import {', 'const broken = ;'])(
+    'fails closed on source it cannot parse: %s',
+    (source) => {
+      expect(() => uses(source)).toThrow('Cannot parse src/main/consumer.ts')
+    }
+  )
 
   it('counts only production main and shared source', () => {
     const sync = "import { execSync } from 'node:child_process'\nexecSync('a')\nexecSync('b')"
@@ -243,10 +230,9 @@ describe('main sync-spawn ratchet', () => {
     expect(adviceFor(['execFileSync', 'runProcessSync'])).toBe(
       'execFileSync, runProcessSync: use runProcess or spawnProcess from @orca/process-host.'
     )
-    expect(adviceFor(['writeSecureFile'])).toContain(
-      "no async secure writer exists yet; keep the synchronous one and raise this file's count in config/main-sync-spawn-baseline.txt"
+    expect(adviceFor(['restrictWindowsPathSync'])).toContain(
+      "use restrictWindowsDirectory for a directory, or raise this file's count in config/main-sync-spawn-baseline.txt"
     )
-    expect(adviceFor(['restrictWindowsPathSync'])).toContain('never a plain write')
     expect(adviceFor(['gitExecFileSync', 'grantDirAcl'])).toBe(
       'gitExecFileSync: use gitExecFileAsync. grantDirAcl: use grantDirAclAsync.'
     )
@@ -274,12 +260,13 @@ describe('main sync-spawn ratchet', () => {
   })
 
   it('fails a lowered or stale count until it is pruned, and prune never raises', () => {
-    const write = "import { writeSecureFile } from '../shared/secure-file'\nwriteSecureFile(a, b)\n"
+    const write =
+      "import { restrictWindowsPathSync } from '../shared/secure-path-windows-acl'\nrestrictWindowsPathSync(a, b)\n"
     const root = tree({
       'src/main/store.ts': write,
       'src/main/clean.ts': 'export const done = true\n',
       'src/main/new.ts': write,
-      'src/main/grown.ts': `${write}writeSecureFile(c, d)\n`,
+      'src/main/grown.ts': `${write}restrictWindowsPathSync(c, d)\n`,
       [BASELINE]:
         '# old header\n3 src/main/store.ts # tracked in #26754\n1 src/main/clean.ts\n1 src/main/grown.ts\n'
     })
@@ -288,7 +275,7 @@ describe('main sync-spawn ratchet', () => {
     const lines = error.mock.calls.map(([line]) => line)
     expect(lines[0]).toContain('src/main/grown.ts::2 synchronous launch use(s), baseline allows 1.')
     expect(lines[1]).toContain('src/main/new.ts::1 synchronous launch use(s), baseline allows 0.')
-    expect(lines[1]).toContain('writeSecureFile: no async secure writer exists yet')
+    expect(lines[1]).toContain('restrictWindowsPathSync: rewrites a DACL on the calling thread')
     expect(lines.slice(2)).toEqual([
       '::error file=src/main/clean.ts::0 synchronous launch use(s), baseline still allows 1. Run: pnpm check:main-sync-spawn-ratchet --prune',
       '::error file=src/main/store.ts::1 synchronous launch use(s), baseline still allows 3. Run: pnpm check:main-sync-spawn-ratchet --prune'

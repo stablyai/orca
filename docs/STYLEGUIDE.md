@@ -113,7 +113,7 @@ The chat root (`.native-chat-appearance`) redefines these steps as ratios of the
 - **Secondary text on the chat canvas** (transcript rows, notices, labels between messages) uses `text-chat-foreground-faint`. `text-muted-foreground` is for text on a lifted surface inside the chat: cards, menus, popovers and the docks above the composer.
 - **Row hover** in the transcript is `hover:bg-accent/20`. Buttons, menu items and card controls use `hover:bg-accent`.
 - **Focus rings:** full-width transcript rows use the inset ring (`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`) so it isn't clipped by the scroll container; standalone controls use `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`. Inside the chat `--ring` is `--chat-focus-ring`, which clears 3:1 on the canvas; don't lower its opacity.
-- **State colours in the chat:** warnings use `text-chat-warning`; diff lines use `text-chat-diff-added` / `text-chat-diff-removed`. They are mixed toward the foreground so they pass text contrast in light and dark. Don't use raw palette colours (`text-yellow-500`) or the git decoration tokens for text on a tinted row.
+- **State colours in the chat:** warnings use `text-chat-warning`; diff lines use `text-chat-diff-added` / `text-chat-diff-removed`; what the reader has not seen yet uses `text-chat-unread`. They are mixed toward the foreground so they pass text contrast in light and dark. Don't use raw palette colours (`text-yellow-500`) or the git decoration tokens for text on a tinted row.
 
 ## Radius
 
@@ -155,6 +155,8 @@ Sizes: `default` (36px), `sm` (32px), `xs` (24px), `lg` (40px), plus `icon`, `ic
 ### Other primitives in this repo
 
 Browse `src/renderer/src/components/ui/` for the full list. Most wrap a Radix UI primitive — exceptions are `command` (wraps `cmdk`), `sonner` (wraps `sonner`), and the visual-only wrappers (`badge`, `button-group`, `card`, `input`) which apply tokens and Tailwind utilities directly. Never reimplement headless behavior; extend the existing wrapper.
+
+Use `DialogContent surface="security"` for every dialog that asks the user to trust, approve, run or remove code, including plugin provenance and approval, so plugin themes cannot change the trust surface's tokens. Use its `scrollable` prop when the whole dialog scrolls. Wrap a trust decision outside a dialog, such as an agent approval card or a certificate override, in `SecuritySurface`.
 
 ### Picking the right primitive
 

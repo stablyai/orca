@@ -15,6 +15,7 @@ import type { SessionSearchScanRoots } from '../ai-vault-search/session-search-s
 import type { ReadAiVaultFirstUserPromptArgs } from './session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import type { AiVaultScanOptions } from './session-scanner-types'
+import type { AiVaultScanWork } from '../../shared/ai-vault-scan-progress'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
 
@@ -105,11 +106,23 @@ export type AiVaultServiceParentMessage =
   | { type: 'invalidate'; generation: number; paths: string[] }
   // Fire-and-forget: the child closes the live pair and constructs from this.
   | { type: 'sessionSearch'; init: AiVaultSessionSearchInit }
-  | { type: 'sessionSearchRoots'; id: number; roots: SessionSearchScanRoots | null }
+  | {
+      type: 'sessionSearchRoots'
+      id: number
+      roots: SessionSearchScanRoots | null
+    }
   | { type: 'shutdown' }
 
 export type AiVaultServiceResultValue =
-  | { operation: 'scan'; value: { result: AiVaultListResult; durationMs: number } }
+  | {
+      operation: 'scan'
+      // `work` is the scan's final tally, which the throttled progress reports may have skipped.
+      value: {
+        result: AiVaultListResult
+        durationMs: number
+        work: AiVaultScanWork | null
+      }
+    }
   | { operation: 'titles'; value: AiVaultSessionTitlesResult }
   | { operation: 'subagents'; value: AiVaultSubagentListResult }
   | { operation: 'firstPrompt'; value: { prompt: string | null } }
@@ -128,6 +141,7 @@ export type AiVaultServiceChildMessage =
   | ({ type: 'result'; id: number } & AiVaultServiceResultValue)
   | { type: 'error'; id: number; message: string; retryable: boolean }
   | { type: 'invalidated'; generation: number }
+  | { type: 'progress'; id: number; work: AiVaultScanWork }
 
 /** Everything but the two bulk reads is interactive: a search must not queue behind a scan. */
 export function aiVaultServiceLane(operation: AiVaultServiceOperation): AiVaultServiceLane {
@@ -162,6 +176,11 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
   }
   if (message.type === 'invalidated') {
     return Number.isSafeInteger(message.generation)
+  }
+  if (message.type === 'progress') {
+    return (
+      Number.isSafeInteger(message.id) && typeof message.work === 'object' && message.work !== null
+    )
   }
   return (message.type === 'result' || message.type === 'error') && Number.isSafeInteger(message.id)
 }

@@ -11,6 +11,7 @@ import {
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
+import { checkDaemonAsyncIo } from '../daemon-async-io-probe'
 
 export const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 
@@ -169,6 +170,11 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
 export async function runPtySpawnHealthProbe(
   timeoutMs = PTY_SPAWN_HEALTH_TIMEOUT_MS
 ): Promise<void> {
+  if ((await checkDaemonAsyncIo()).state === 'stalled') {
+    throw new DaemonProtocolError(
+      'Terminal daemon asynchronous I/O is stalled; restart the terminal daemon.'
+    )
+  }
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()

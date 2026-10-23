@@ -181,8 +181,8 @@ const WINDOWS_HOOK_ENVIRONMENT_VARS = [
 // may abandon stdin rather than close it — a read-to-EOF then blocks forever and strands a
 // visible window per hook event. The Windows rule: a hook must check the Orca env before it
 // owns stdin, and exit without reading when the env is missing — the payload is discarded on
-// that path anyway. This applies to .cmd, the copilot .ps1, and the Git Bash kimi .sh alike,
-// and to the launchers that own stdin themselves when the managed script is missing.
+// that path anyway. This applies to .cmd and Git Bash hooks alike, and to the
+// PowerShell launchers that own stdin themselves when the managed script is missing.
 // POSIX hooks keep capture-first: their callers close stdin, and exiting mid-write there
 // surfaces as EPIPE the agent can see (#8110).
 export function buildWindowsHookEnvironmentGuardLines(): string[] {

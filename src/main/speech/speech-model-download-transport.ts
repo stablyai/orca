@@ -148,7 +148,7 @@ export abstract class SpeechModelDownloadTransport extends SpeechModelHttpDownlo
         cleanup()
         reject(error)
       }
-      const onData = (chunk: Buffer): void => {
+      const onData = (chunk: string | Buffer): void => {
         hash.update(chunk)
       }
       const onError = (error: Error): void => {

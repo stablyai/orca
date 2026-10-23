@@ -12,6 +12,7 @@ import {
 } from '../../terminal-scrollback-snapshot-async-migration'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
+import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import {
   normalizeWorkspaceSessionPaneIdentities,
@@ -28,6 +29,7 @@ import {
   type SessionSnapshotOperations
 } from './session-snapshot-operations'
 import { scheduleSave } from './write-scheduling'
+import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 
 export function setLocalWorkspaceSession(
   owner: SessionSnapshotOperations,
@@ -36,6 +38,7 @@ export function setLocalWorkspaceSession(
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
+  session = keepWslMoveFrozenSessionsForStore(session, prior)
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
@@ -109,6 +112,8 @@ export function setLocalWorkspaceSession(
       retainedScrollbackRefs(context.runtime)
     )
   }
+  // Why last: the steps above rebase rows on the stored ones; the groups set the order.
+  session = orderTerminalRowsByTabGroups(session)
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
@@ -119,11 +124,12 @@ export function setLocalWorkspaceSession(
     remappedManualUnread.changed
   ) {
     // UI remaps include protected fields, so keep the complete serializer boundary.
-    scheduleSave(context.scheduling)
+    scheduleSave(context.scheduling, undefined, LOCAL_EXECUTION_HOST_ID)
   } else {
     scheduleSave(
       context.scheduling,
-      remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession']
+      remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession'],
+      LOCAL_EXECUTION_HOST_ID
     )
   }
 }

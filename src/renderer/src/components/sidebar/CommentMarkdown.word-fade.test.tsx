@@ -3,9 +3,20 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import CommentMarkdown from './CommentMarkdown'
 
+// These fixtures exercise prose, links and images without rendering diagrams.
+const mocks = vi.hoisted(() => ({
+  mermaid: vi.fn(() => {
+    throw new Error('These fixtures must not render Mermaid diagrams')
+  })
+}))
+
+vi.mock('./CommentMermaidBlock', () => ({ default: mocks.mermaid }))
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  expect(mocks.mermaid).not.toHaveBeenCalled()
+  mocks.mermaid.mockClear()
 })
 
 it('removes settled word spans while keeping new words animated', () => {

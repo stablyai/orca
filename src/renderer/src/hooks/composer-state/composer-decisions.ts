@@ -10,8 +10,10 @@ import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 
 export type ComposerDecisions = {
   canResolveFolderSmartGitHubSubmit: (input: { hasFolderSourceRepos: boolean }) => boolean
@@ -20,6 +22,7 @@ export type ComposerDecisions = {
     draftLinkedWorkItem?: LinkedWorkItemSummary | null
     initialName: string
     initialLinkedWorkItem?: LinkedWorkItemSummary | null
+    jiraIssueKeyCasing?: JiraIssueKeyCasing
   }) => string
   getInitialGitHubPrStartPointSelection: (input: {
     item: GitHubWorkItem | null | undefined
@@ -35,15 +38,7 @@ export type ComposerDecisions = {
     lastAutoName: string
     lookupTextIsQuery?: boolean
   }) => boolean
-  resolveInitialWorkspaceRunSeed: (input: {
-    draftProjectId?: string | null
-    draftHostId?: string | null
-    draftProjectHostSetupId?: string | null
-    initialTaskSourceContext?: Pick<
-      TaskSourceContext,
-      'projectId' | 'hostId' | 'projectHostSetupId'
-    > | null
-  }) => {
+  resolveInitialWorkspaceRunSeed: (input: InitialWorkspaceRunSeedInput) => {
     projectId: string | null
     hostId: ExecutionHostId | null
     projectHostSetupId: string | null
@@ -101,27 +96,38 @@ export function resolveSmartGitHubCreateNames({
   return { workspaceName: smartWorkspaceName, displayName: smartDisplayName }
 }
 
-function getLinkedWorkItemSeedName(item: LinkedWorkItemSummary | null | undefined): string {
+function getLinkedWorkItemSeedName(
+  item: LinkedWorkItemSummary | null | undefined,
+  jiraIssueKeyCasing: JiraIssueKeyCasing | undefined
+): string {
   if (!item) {
     return ''
   }
-  return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  return (
+    getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing })?.seedName ??
+    getLinkedWorkItemSuggestedName(item)
+  )
 }
 
 export function getInitialAutoManagedWorkspaceName({
   draftName,
   draftLinkedWorkItem,
   initialName,
-  initialLinkedWorkItem
+  initialLinkedWorkItem,
+  jiraIssueKeyCasing
 }: {
   draftName?: string | null
   draftLinkedWorkItem?: LinkedWorkItemSummary | null
   initialName: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
+  jiraIssueKeyCasing?: JiraIssueKeyCasing
 }): string {
   // Why: a prefilled name counts as user input unless it exactly matches the linked-item seed Orca generated.
   const candidateName = draftName ?? initialName
-  const seedName = getLinkedWorkItemSeedName(draftLinkedWorkItem ?? initialLinkedWorkItem)
+  const seedName = getLinkedWorkItemSeedName(
+    draftLinkedWorkItem ?? initialLinkedWorkItem,
+    jiraIssueKeyCasing
+  )
   return candidateName && seedName && candidateName === seedName ? candidateName : ''
 }
 
@@ -129,6 +135,7 @@ export type InitialWorkspaceRunSeedInput = {
   draftProjectId?: string | null
   draftHostId?: string | null
   draftProjectHostSetupId?: string | null
+  initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialTaskSourceContext?: Pick<
     TaskSourceContext,
     'projectId' | 'hostId' | 'projectHostSetupId'
@@ -139,17 +146,19 @@ export function resolveInitialWorkspaceRunSeed({
   draftProjectId,
   draftHostId,
   draftProjectHostSetupId,
+  initialWorkspaceTarget,
   initialTaskSourceContext
 }: InitialWorkspaceRunSeedInput): {
   projectId: string | null
   hostId: ExecutionHostId | null
   projectHostSetupId: string | null
 } {
+  // Why: the linked provider account can belong to a different project or host than creation.
+  const initialRunTarget = initialWorkspaceTarget ?? initialTaskSourceContext
   return {
-    projectId: draftProjectId ?? initialTaskSourceContext?.projectId ?? null,
-    hostId: normalizeExecutionHostId(draftHostId ?? initialTaskSourceContext?.hostId),
-    projectHostSetupId:
-      draftProjectHostSetupId ?? initialTaskSourceContext?.projectHostSetupId ?? null
+    projectId: draftProjectId ?? initialRunTarget?.projectId ?? null,
+    hostId: normalizeExecutionHostId(draftHostId ?? initialRunTarget?.hostId),
+    projectHostSetupId: draftProjectHostSetupId ?? initialRunTarget?.projectHostSetupId ?? null
   }
 }
 

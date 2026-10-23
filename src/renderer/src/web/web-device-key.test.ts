@@ -65,7 +65,7 @@ describe('browser device keys', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the probe only checks that IndexedDB exists.
     const indexedDB = {} as IDBFactory
     expect(await detectWebDeviceKeySupport({ isSecureContext: false, crypto, indexedDB })).toBe(
-      'session-insecure-origin'
+      'token-insecure-origin'
     )
     expect(await detectWebDeviceKeySupport({ isSecureContext: true, crypto, indexedDB })).toBe(
       'persistent'

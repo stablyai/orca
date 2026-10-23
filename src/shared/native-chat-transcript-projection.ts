@@ -12,6 +12,7 @@ import { compareAgentJournalPositions } from './agent-session-journal-position'
 import { agentJournalItemSubagentId } from './agent-session-journal-producer'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages } from './native-chat-tool-fold'
+import { foldSubagentItems } from './native-chat-subagent-items'
 import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
 
 /** Timestamp, then id. A null timestamp sorts first so a source that cannot supply
@@ -85,7 +86,7 @@ export type NativeChatTranscriptProjection = {
 const NO_SUBAGENT_ROWS: ReadonlyMap<string, readonly NativeChatSubagentRow[]> = new Map()
 
 function projectRows(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
-  return stripNoiseMessages(foldToolMessages(messages))
+  return stripNoiseMessages(foldToolMessages(foldSubagentItems(messages)))
 }
 
 function sortedCopy(

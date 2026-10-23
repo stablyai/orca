@@ -356,6 +356,22 @@ export function buildDurableDaemonScopeCommand(
 }
 
 /**
+ * The daemon's scope unit when the launcher created it for this daemon and the daemon is still in
+ * it. Migrated legacy scopes may also hold the GUI, so a matching name alone never qualifies.
+ */
+export function ownFreshDaemonScope(
+  freshScope: boolean,
+  launchNonce: string | undefined,
+  detectScope: () => string | null = detectOwnCgroupScopeUnit
+): string | null {
+  if (!freshScope || !launchNonce) {
+    return null
+  }
+  const unit = daemonScopeUnitName(launchNonce)
+  return detectScope() === unit ? unit : null
+}
+
+/**
  * The daemon's own cgroup membership, read from /proc rather than trusted from the launcher's
  * intent, so a daemon that fell back (or was adopted from before this fix) cannot misreport
  * isolation it does not have. The owning unit name when isolated; null when it sits in the

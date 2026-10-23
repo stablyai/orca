@@ -68,7 +68,7 @@ describe('SSH target cleanup tab map', () => {
       tabsByWorktree,
       ptyIdsByTabId: Object.freeze({ split: [removedPtyId] }),
       lastKnownRelayPtyIdByTabId: Object.freeze({ last: removedPtyId }),
-      pendingCodexPaneRestartIds: Object.freeze({ [removedPtyId]: true as const }),
+      pendingPaneAccountRestarts: Object.freeze({ [removedPtyId]: 'codex' as const }),
       codexRestartNoticeByPtyId: Object.freeze({
         [removedPtyId]: { previousAccountLabel: 'old', nextAccountLabel: 'new' }
       })
@@ -79,7 +79,7 @@ describe('SSH target cleanup tab map', () => {
     expect(patch.tabsByWorktree!['folder:empty']).toBe(tabsByWorktree['folder:empty'])
     expect(patch.ptyIdsByTabId).toEqual({ split: [], last: [] })
     expect(patch.lastKnownRelayPtyIdByTabId).toEqual({})
-    expect(patch.pendingCodexPaneRestartIds).toEqual({})
+    expect(patch.pendingPaneAccountRestarts).toEqual({})
     expect(patch.codexRestartNoticeByPtyId).toEqual({})
   })
 

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 export type CodexWslRuntimeHookTarget = {
   runtime?: 'host' | 'wsl'
@@ -118,7 +119,12 @@ function scheduleWslLinuxPathCanonicalization(
   execFile(
     'wsl.exe',
     args,
-    { encoding: 'utf-8', timeout: WSL_CANONICALIZE_TIMEOUT_MS, windowsHide: true },
+    {
+      encoding: 'utf-8',
+      timeout: WSL_CANONICALIZE_TIMEOUT_MS,
+      windowsHide: true,
+      cwd: resolveWslInteropSpawnCwd()
+    },
     (error, stdout) => {
       const canonicalPath = stdout.trim()
       const resolvedPath = !error && canonicalPath.startsWith('/') ? canonicalPath : null

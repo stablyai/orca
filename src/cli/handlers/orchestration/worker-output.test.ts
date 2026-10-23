@@ -7,7 +7,7 @@ import type {
   NativeChatSubagentEntry
 } from '../../../shared/native-chat-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
-import { formatWorkerRead, formatWorkerStart } from './worker-output'
+import { formatWorkerRead, formatWorkerRelease, formatWorkerStart } from './worker-output'
 
 function fleetProjection(verdict: 'live' | 'unverifiable' | 'exited'): OrchestrationFleetWorker {
   return {
@@ -496,5 +496,82 @@ describe('formatWorkerRead', () => {
     )
 
     expect(output).toContain('[assistant] before\n[unsupported block]\nafter')
+  })
+})
+
+describe('worker output compatibility and release receipts', () => {
+  it('renders terminal tails without changing line boundaries', () => {
+    expect(
+      formatWorkerRead({
+        dispatchId: 'dispatch_1',
+        terminal: {
+          handle: 'term_worker',
+          status: 'running',
+          tail: ['first', '', 'third'],
+          truncated: false,
+          nextCursor: null
+        }
+      })
+    ).toBe('first\n\nthird')
+  })
+
+  it('renders transcript blocks and survives unserializable tool input', () => {
+    const circular: { self?: unknown } = {}
+    circular.self = circular
+
+    expect(
+      formatWorkerRead({
+        dispatchId: 'dispatch_1',
+        source: 'transcript',
+        sourceIdentity: 'pane:1',
+        provider: 'codex',
+        status: { worker: 'ready', terminal: 'running' },
+        transcript: {
+          messages: [
+            {
+              id: 'message_1',
+              role: 'assistant',
+              blocks: [
+                { type: 'text', text: 'working' },
+                { type: 'tool-call', name: 'inspect', input: circular },
+                { type: 'tool-result', output: 'failed', isError: true },
+                { type: 'image-ref', url: 'https://example.test/proof.png' }
+              ],
+              timestamp: null,
+              source: 'transcript'
+            }
+          ],
+          nextCursor: 'owr1_next',
+          limited: false,
+          returnedMessageCount: 1
+        },
+        cursor: 'owr1_next',
+        fallbackReason: null,
+        warnings: []
+      })
+    ).toBe(
+      'Source: transcript (provider=codex)\n' +
+        'Worker: ready\n' +
+        'Archived: false\n' +
+        'Continuation cursor (opaque; pass unchanged to --cursor): owr1_next\n\n' +
+        '[assistant] working\n[tool inspect] [unserializable input]\n[tool result error] failed\n[image] https://example.test/proof.png'
+    )
+  })
+
+  it('renders release evidence in receipt order', () => {
+    expect(
+      formatWorkerRelease({
+        dispatchId: 'dispatch_1',
+        state: 'release_unknown',
+        reason: 'host_unreachable',
+        processAction: 'unverifiable',
+        archive: { source: 'transcript', status: 'saved' },
+        lastError: 'transport closed',
+        recovery: 'Reconnect and retry.'
+      })
+    ).toBe(
+      'Worker dispatch_1 terminal [release_unknown] reason=host_unreachable process=unverifiable\n' +
+        'archive transcript [saved]\ntransport closed\nReconnect and retry.'
+    )
   })
 })

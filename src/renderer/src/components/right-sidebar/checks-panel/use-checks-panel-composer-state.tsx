@@ -33,6 +33,7 @@ type ChecksPanelComposerStateInput = Pick<
   > &
   Pick<
     ChecksPanelControllerState,
+    | 'activeWorktree'
     | 'activeWorktreeId'
     | 'activeWorktreePath'
     | 'agentComposerState'
@@ -64,6 +65,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     activePullRequestGenerationRecord,
     activePullRequestGenerationSeedRestoreKey,
     activeWorktreeId,
+    activeWorktree,
     activeWorktreePath,
     agentComposerState,
     asyncResultKeyRef,
@@ -102,6 +104,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
+    fieldRevisions: prFieldRevisions,
     fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     stackedCreationSupported: prStackedCreationSupported,
     repoDefaultBaseRef: prRepoDefaultBaseRef,
@@ -125,6 +128,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     worktreeId: activeWorktreeId,
     worktreePath: activeWorktreePath ?? '',
     branch,
+    workspace: activeWorktree,
     eligibility: hostedReviewCreation,
     repo,
     settings: ownerSettings,
@@ -138,8 +142,14 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
       seedRestoreKey: activePullRequestGenerationSeedRestoreKey,
-      seed: activePullRequestGenerationRecord?.seed ?? null,
-      seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
+      seed:
+        activePullRequestGenerationRecord?.editedFields?.fields ??
+        activePullRequestGenerationRecord?.seed ??
+        null,
+      seedFieldRevisions:
+        activePullRequestGenerationRecord?.editedFields?.revisions ??
+        activePullRequestGenerationRecord?.seedFieldRevisions ??
+        null,
       onSeedRestored: handlePullRequestGenerationSeedRestored,
       onGenerate: handleGeneratePullRequestFieldsForActive,
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
@@ -263,6 +273,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setPrBody,
     prDraft,
     setPrDraft,
+    prFieldRevisions,
     prFieldsAreSeedPlaceholders,
     prStackedCreationSupported,
     prRepoDefaultBaseRef,

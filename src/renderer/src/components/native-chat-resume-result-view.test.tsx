@@ -30,7 +30,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     return { unsubscribe: () => {} }
   }
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 const { mount, button, fakeHost } = createResumeModalFixture(rpc, statusStream)
 const dialog = () => document.querySelector('[role="dialog"]')
@@ -211,9 +213,9 @@ it('says a launch resumed on its own and links to the setting', async () => {
   await act(async () => button('Change in Settings').click())
   expect(openSettingsPage).toHaveBeenCalledOnce()
   expect(openSettingsTarget).toHaveBeenCalledWith({
-    pane: 'experimental',
+    pane: 'chat',
     repoId: null,
-    sectionId: 'native-chat-resume-on-restart'
+    sectionId: 'chat-resume-on-restart'
   })
   // The dialog gets out of the way of the page it opened.
   expect(dialog()).toBeNull()

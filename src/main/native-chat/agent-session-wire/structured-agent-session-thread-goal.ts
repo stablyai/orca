@@ -1,24 +1,46 @@
 // `agentSession.threadGoal`: change the provider thread's goal through the same
 // admission, ledger and journal path every other session mutation takes.
 
-import { refuse, type AgentSessionRefusalReason } from '../../../shared/agent-session-wire-refusals'
+import {
+  refuse,
+  type AgentSessionRefusalReason,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire-refusals'
 import type {
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import type {
-  AgentSessionMutationEnvelope,
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session-thread-goal-wire'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 function refused(
   reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
   message: string
-): TurnOutcome<AgentSessionThreadGoalResult> {
+): { ok: false; refusal: AgentSessionWireRefusal } {
   return { ok: false, refusal: refuse('agent_session_operation_invalid', { reason }, message) }
+}
+
+const goalsUnsupported = () =>
+  refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
+
+/** The refusal for an agent with no goals; null when it has them. Needs no running agent. */
+export function refuseThreadGoalUnsupported(
+  adapter: Pick<StructuredAgentSessionAdapter, 'changeThreadGoal'>,
+  agents: Pick<StructuredAgentRegistry, 'capabilities'>,
+  agent: string | undefined
+): { ok: false; refusal: AgentSessionWireRefusal } | null {
+  return adapter.changeThreadGoal && agent && agents.capabilities(agent)?.threadGoal
+    ? null
+    : goalsUnsupported()
 }
 
 /** Keyed by the operation, so a replayed set upserts its one objective row. */
@@ -45,10 +67,13 @@ export function journalRecordsThreadGoalChange(
 
 export async function performThreadGoalChange(
   ctx: AgentSessionTurnContext,
-  input: { clientOperationId: string; change: AgentSessionThreadGoalChange }
+  input: { clientOperationId: string; change: AgentSessionThreadGoalChange; signal?: AbortSignal }
 ): Promise<TurnOutcome<AgentSessionThreadGoalResult>> {
-  if (!ctx.adapter.changeThreadGoal || !ctx.agents.capabilities(ctx.agent)?.threadGoal) {
-    return refused('goalsUnsupported', 'Goals are unavailable for this chat session.')
+  if (
+    !ctx.adapter.changeThreadGoal ||
+    refuseThreadGoalUnsupported(ctx.adapter, ctx.agents, ctx.agent)
+  ) {
+    return goalsUnsupported()
   }
   const { change } = input
   const identity = objectiveIdentity(input.clientOperationId)
@@ -60,6 +85,7 @@ export async function performThreadGoalChange(
   }
   // Journal first: an active goal starts provider work at once, and the objective
   // must land ahead of that work in the transcript.
+  throwIfSignalAborted(input.signal)
   if (change.kind === 'set') {
     await ctx.journal.appendItem(
       identity,
@@ -70,7 +96,7 @@ export async function performThreadGoalChange(
         sentAs: 'goal'
       },
       // Accepting a goal is delivering it, so it joins whatever turn runs now.
-      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
+      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
     )
   }
   const withdrawObjective = async (): Promise<void> => {
@@ -81,11 +107,13 @@ export async function performThreadGoalChange(
   }
   let result: Awaited<ReturnType<typeof ctx.adapter.changeThreadGoal>>
   try {
+    throwIfSignalAborted(input.signal)
     result = await ctx.adapter.changeThreadGoal({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
       change,
-      replacesGoal
+      replacesGoal,
+      signal: input.signal
     })
   } catch (error) {
     await withdrawObjective()
@@ -101,6 +129,7 @@ export async function performThreadGoalChange(
 export function threadGoalPlan(params: {
   envelope: AgentSessionMutationEnvelope
   change: AgentSessionThreadGoalChange
+  signal?: AbortSignal
 }): MutationPlan<AgentSessionThreadGoalResult> {
   const value: AgentSessionThreadGoalResult = { change: params.change.kind }
   return {
@@ -109,7 +138,8 @@ export function threadGoalPlan(params: {
     run: (ctx) =>
       performThreadGoalChange(ctx, {
         clientOperationId: params.envelope.clientOperationId,
-        change: params.change
+        change: params.change,
+        signal: params.signal
       }),
     // A lost response is answered from the journal, which the provider keeps
     // current; otherwise the change runs again, which is safe for every kind.

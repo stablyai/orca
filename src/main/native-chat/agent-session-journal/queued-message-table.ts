@@ -17,6 +17,7 @@ import type {
 import type { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session-queued-message-wire'
 import { rejectedDraftSettlement } from './journal-dispatch-settlement'
 import { readStoredQueuedMessageRow } from './queued-message-stored-row'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 
 export type QueuedMessageState = 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
 
@@ -61,10 +62,12 @@ export type QueuedMessageRow = {
   /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
    *  it. Null on rows from builds before it was recorded, which read as queued before any Stop. */
   queuedAt: AgentJournalCursor | null
+  /** The choices its send carried, applied to the turn it starts when it goes out. */
+  options?: AgentSessionExecutionOptions
 }
 
 const COLUMNS =
-  'session_id, message_id, position, body_json, fingerprint, created_at, host_instance, state, hold_reason, returned_reason, returned_rejection, settled_at, settled_by_op, consumed_as, carried_from, queued_epoch, queued_sequence'
+  'session_id, message_id, position, body_json, fingerprint, created_at, host_instance, state, hold_reason, returned_reason, returned_rejection, settled_at, settled_by_op, consumed_as, carried_from, queued_epoch, queued_sequence, options_json'
 
 export function insertQueuedMessage(
   db: Database.Database,
@@ -79,6 +82,7 @@ export function insertQueuedMessage(
     /** Absent: after every other card. */
     position?: number
     holdReason?: QueuedMessageHoldReason
+    options?: AgentSessionExecutionOptions
   }
 ): QueuedMessageRow {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the statement selects exactly one aliased numeric column; better-sqlite3 types rows as unknown.
@@ -88,7 +92,7 @@ export function insertQueuedMessage(
   const position = input.position ?? Number(highest?.p ?? 0) + 1
   db.prepare(
     `INSERT INTO queued_messages (${COLUMNS})
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`
   ).run(
     input.sessionId,
     input.messageId,
@@ -100,7 +104,8 @@ export function insertQueuedMessage(
     input.holdReason ?? null,
     null,
     input.queuedAt.epoch,
-    input.queuedAt.sequence
+    input.queuedAt.sequence,
+    input.options ? JSON.stringify(input.options) : null
   )
   return {
     sessionId: input.sessionId,
@@ -118,7 +123,8 @@ export function insertQueuedMessage(
     settledByOp: null,
     consumedAs: null,
     carriedFrom: null,
-    queuedAt: input.queuedAt
+    queuedAt: input.queuedAt,
+    ...(input.options ? { options: input.options } : {})
   }
 }
 

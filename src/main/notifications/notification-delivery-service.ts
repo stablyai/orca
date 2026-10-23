@@ -14,7 +14,7 @@ import type {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import { translateMain } from '../i18n/main-i18n'
-import { reserveNotificationCooldown } from '../ipc/notification-burst-cooldown'
+import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 
 export type NotificationDeliveryDependencies = {
   readNotificationSettings: () => NotificationSettings
@@ -120,6 +120,7 @@ export function createNotificationDeliveryService(
             title: notificationOptions.title,
             body: notificationOptions.body,
             worktreeId: request.worktreeId,
+            ...(request.executionHost ? { executionHost: request.executionHost } : {}),
             ...(request.notificationId ? { notificationId: request.notificationId } : {}),
             // Why: background push needs the agent's real state to pick "needs input"
             // vs "finished" — and to stay silent while the agent is still working.

@@ -10,9 +10,10 @@ import type { AppState } from '@/store/types'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from './workspace-creator-visibility'
+} from '../../../../shared/workspace-creator-visibility'
 import { getStructuredChatWorktreeIds } from './visible-worktree-activity-inputs'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -27,7 +28,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   allWorktrees,
   repoMap
 }: UseVisibleWorkspaceKanbanWorktreeIdsParams): ReadonlySet<string> {
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
@@ -53,7 +54,11 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
-    getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
+    getStructuredChatWorktreeIds(
+      showSleepingWorkspaces,
+      s.unifiedTabsByWorktree,
+      s.structuredChatSleptAtByPaneKey
+    )
   )
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a

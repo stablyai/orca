@@ -1,12 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { runProcess } from '@orca/process-host'
 import {
   sanitizeCrashReportString,
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
-import { getIcaclsExePath } from '../win32-utils'
+import {
+  installDirPackageGrants,
+  RESTRICTED_APP_PACKAGES_SID,
+  type InstallDirPackageGrants
+} from './windows-install-dir-package-acl-grant'
 
 /**
  * Self-repair for the install-directory package ACL that
@@ -21,13 +24,11 @@ import { getIcaclsExePath } from '../win32-utils'
  *
  * Two additive grants clear it. Both are required:
  * - the root grant is inheritable so files written later (an update) inherit it;
- * - the /T pass must use the FLAGLESS `(RX)`. `icacls <file> /grant
- *   "*S-1-15-2-2:(OI)(CI)(RX)"` exits 0 and reports "Failed processing 0 files"
- *   while writing no ACE at all — a silent no-op. A directory grant alone does
- *   not fix a shipped module that carries its own explicit DACL, so a /T pass
- *   that silently no-ops leaves the app just as dead as before.
+ * - every existing entry gets a FLAGLESS grant, because a directory grant alone
+ *   does not fix a shipped module that carries its own explicit DACL.
  *
- * Never `/grant:r`: the install tree's SYSTEM/Administrators/user ACEs must
+ * Both are applied in-process (windows-install-dir-package-acl-grant.ts). Never
+ * a replacing grant: the install tree's SYSTEM/Administrators/user ACEs must
  * survive, and so must the orphan (removing an ACE is not ours to do).
  */
 
@@ -35,23 +36,13 @@ export const WINDOWS_INSTALL_DIR_ACL_REPAIR_BREADCRUMB = 'windows_install_dir_ac
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_MARKER_FILE = 'windows-install-dir-acl-repair.json'
 export const WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION = 1
 
-/** `*`-prefixed so icacls reads it as a SID on every locale. */
-const RESTRICTED_APP_PACKAGES_SID = '*S-1-15-2-2'
-/** Root only: inheritable, so files added by a later update inherit the grant. */
-export const INSTALL_DIR_ROOT_GRANT = `${RESTRICTED_APP_PACKAGES_SID}:(OI)(CI)(RX)`
-/** Existing entries: flagless, the only form icacls actually writes onto a file. */
-export const INSTALL_DIR_TREE_GRANT = `${RESTRICTED_APP_PACKAGES_SID}:(RX)`
-
-const ROOT_GRANT_TIMEOUT_MS = 15_000
-// A packaged Orca install tree is ~3.2k entries (a bare Electron dist is ~80, which
-// is NOT the shape that ships: app.asar.unpacked and node_modules dominate). At the
-// ~2.2ms/entry this repo measured for a /T walk in windows-user-data-acl.ts, that is
-// ~5-7s of per-file DACL writes, each intercepted by Defender's filter driver. The
-// cap covers a slow or contended volume on top of that, not a tree this size alone.
-const TREE_GRANT_TIMEOUT_MS = 120_000
-
-/** icacls localizes this; an unparsed summary reports the count as unknown. */
-const FAILED_PROCESSING = /Failed processing (\d+) files?/i
+/**
+ * The same two grants spelled for a user to run by hand when the repair cannot write the ACL:
+ * `*`-prefixed so icacls reads a SID on every locale, and flagless on the /T pass because
+ * icacls writes nothing for `(OI)(CI)` on a file while reporting success.
+ */
+export const INSTALL_DIR_ROOT_GRANT = `*${RESTRICTED_APP_PACKAGES_SID}:(OI)(CI)(RX)`
+export const INSTALL_DIR_TREE_GRANT = `*${RESTRICTED_APP_PACKAGES_SID}:(RX)`
 
 export type WindowsInstallDirAclRepairResult =
   /** `alreadyRepaired`: the marker records a completed repair, not an exhausted retry budget. */
@@ -66,13 +57,13 @@ export type WindowsInstallDirAclRepairOptions = {
   /**
    * A DACL reading found this tree poisoned and nothing has read it clean since — this
    * launch's probe, or a persisted poison marker from an earlier one. A marker claiming a
-   * completed repair therefore describes a tree that has since been re-poisoned, or an
-   * icacls run that silently no-opped: it stops outranking the reading. The attempt
+   * completed repair therefore describes a tree that has since been re-poisoned, or a
+   * repair that silently no-opped: it stops outranking the reading. The attempt
    * budget still bounds retries.
    */
   poisonEvidenceOutstanding?: boolean
   /** Test seams. */
-  runProcessFn?: typeof runProcess
+  grants?: InstallDirPackageGrants
   recordBreadcrumb?: typeof recordDurableCrashBreadcrumb
   onDone?: (result: WindowsInstallDirAclRepairResult) => void
 }
@@ -98,7 +89,7 @@ type RepairMarker = {
 // A Defender-locked file, a timeout or a contended volume fails one launch and
 // succeeds the next, and pinning on the first failure leaves the machine blank
 // forever for that version. Three is enough to stop a standard-user Program Files
-// install — which can never win — from re-spawning icacls on every launch.
+// install — which can never win — from re-walking the tree on every launch.
 const MAX_REPAIR_ATTEMPTS = 3
 
 /**
@@ -110,7 +101,7 @@ export function isInstallDirAclPoisonVerdict(data: CrashReportBreadcrumbData): b
   return data.matchesPoisonSignature === true
 }
 
-/** The commands to hand a user whose account cannot write the install ACL. */
+/** Text only, never run: the commands to hand a user whose account cannot write the install ACL. */
 export function buildInstallDirAclRepairCommands(installDir: string): string[] {
   return [
     `icacls "${installDir}" /grant "${INSTALL_DIR_ROOT_GRANT}"`,
@@ -152,7 +143,7 @@ function markerHitFor(args: WindowsInstallDirAclRepairArgs): { alreadyRepaired: 
   return (marker.attempts ?? 0) >= MAX_REPAIR_ATTEMPTS ? { alreadyRepaired: false } : null
 }
 
-// Why write it on failure too: re-spawning icacls on every launch forever buys
+// Why write it on failure too: re-walking the tree on every launch forever buys
 // nothing, so failures spend the retry budget. Reinstall or update changes the key.
 function writeMarker(args: WindowsInstallDirAclRepairArgs, outcome: string): void {
   const marker: RepairMarker = {
@@ -169,46 +160,6 @@ function writeMarker(args: WindowsInstallDirAclRepairArgs, outcome: string): voi
   writeFileSync(markerPath(args.userDataPath), JSON.stringify(marker))
 }
 
-type GrantOutcome = {
-  ok: boolean
-  failedFileCount: number | null
-  reason?: string
-}
-
-async function runGrant(
-  runner: typeof runProcess,
-  installDir: string,
-  grant: string,
-  extraArgs: readonly string[],
-  timeoutMs: number
-): Promise<GrantOutcome> {
-  try {
-    const result = await runner({
-      program: getIcaclsExePath(),
-      args: [installDir, '/grant', grant, ...extraArgs],
-      timeoutMs
-    })
-    const summary = FAILED_PROCESSING.exec(`${result.stdout}\n${result.stderr}`)
-    const failedFileCount = summary ? Number(summary[1]) : null
-    if (result.timedOut) {
-      return { ok: false, failedFileCount, reason: 'timeout' }
-    }
-    if (result.code !== 0) {
-      return { ok: false, failedFileCount, reason: `exit ${result.code}` }
-    }
-    if (failedFileCount !== null && failedFileCount > 0) {
-      return { ok: false, failedFileCount, reason: 'failed-files' }
-    }
-    return { ok: true, failedFileCount }
-  } catch (error) {
-    return {
-      ok: false,
-      failedFileCount: null,
-      reason: sanitizeCrashReportString(String(error), 200)
-    }
-  }
-}
-
 async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
   const record = args.recordBreadcrumb ?? recordDurableCrashBreadcrumb
   const installDir = args.installDir ?? dirname(process.execPath)
@@ -221,27 +172,15 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
       result = { mode: 'marker-hit', alreadyRepaired: markerHit.alreadyRepaired }
       data = { status: 'skipped', reason: 'marker-hit', alreadyRepaired: markerHit.alreadyRepaired }
     } else {
-      const runner = args.runProcessFn ?? runProcess
-      const root = await runGrant(
-        runner,
-        installDir,
-        INSTALL_DIR_ROOT_GRANT,
-        [],
-        ROOT_GRANT_TIMEOUT_MS
-      )
+      const grants = args.grants ?? installDirPackageGrants
+      const root = await grants.root(installDir)
       // Unconditional: the root grant failing does not make the per-file pass —
       // the one that actually unblocks the shipped modules — any less worth trying.
-      const tree = await runGrant(
-        runner,
-        installDir,
-        INSTALL_DIR_TREE_GRANT,
-        ['/T', '/C'],
-        TREE_GRANT_TIMEOUT_MS
-      )
-      const failedFileCount = tree.failedFileCount ?? root.failedFileCount
+      const tree = await grants.tree(installDir)
+      const failedFileCount = root.failedFileCount + tree.failedFileCount
       if (root.ok && tree.ok) {
         result = { mode: 'repaired' }
-        data = { status: 'ok', failedFileCount: failedFileCount ?? -1 }
+        data = { status: 'ok', failedFileCount }
       } else {
         const reason = [
           root.reason && `root: ${root.reason}`,
@@ -253,8 +192,7 @@ async function runRepair(args: WindowsInstallDirAclRepairArgs): Promise<void> {
         data = {
           status: 'failed',
           reason: sanitizeCrashReportString(reason, 200),
-          // -1 means icacls printed no parsable summary (a localized Windows).
-          failedFileCount: failedFileCount ?? -1
+          failedFileCount
         }
       }
       try {
@@ -286,7 +224,7 @@ export function resetWindowsInstallDirAclRepairForTest(): void {
 }
 
 /**
- * Fire-and-forget; returns before any spawn. Call only when the probe reported
+ * Fire-and-forget; returns before any ACL write. Call only when the probe reported
  * `matchesPoisonSignature`. win32 only, exempt in serve mode, and it must never
  * throw into window creation.
  *

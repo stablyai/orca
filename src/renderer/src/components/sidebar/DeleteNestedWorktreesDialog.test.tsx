@@ -8,8 +8,7 @@ import { toast } from 'sonner'
 const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
   remove: vi.fn(),
-  refresh: vi.fn(),
-  commitFocus: vi.fn()
+  refresh: vi.fn()
 }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -23,9 +22,6 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/store/selectors', () => ({ getWorktreeOnHostFromState: () => null }))
-vi.mock('./active-worktree-focus-after-delete', () => ({
-  prepareActiveWorktreeFocusAfterDelete: () => mocks.commitFocus
-}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const target = { id: 'repo::/workspaces/parent', executionHostId: 'local' as const }

@@ -1,8 +1,5 @@
-import {
-  getSharedManagedScriptPath,
-  wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand
-} from '../agent-hooks/installer-utils'
+import { getSharedManagedScriptPath, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -22,10 +19,9 @@ export function getGrokManagedScriptPath(): string {
 }
 
 export function getGrokManagedCommand(scriptPath: string): string {
-  // A cmd-safe bare path avoids two extra Windows interpreters; POSIX can gate before spawning the
-  // managed script because Orca injects ORCA_PANE_KEY only into panes it owns.
+  // POSIX can gate before spawning because Orca injects ORCA_PANE_KEY only into panes it owns.
   return process.platform === 'win32'
-    ? wrapWindowsCmdHookCommand(scriptPath)
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath, {}, { requiredEnvVar: 'ORCA_PANE_KEY' })
 }
 

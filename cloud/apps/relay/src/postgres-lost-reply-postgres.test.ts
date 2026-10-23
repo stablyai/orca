@@ -22,6 +22,7 @@ const PROBE_TABLE = 'relay_lost_reply_probe'
 async function blackholeProxy(target: URL, trigger: string, delayMs?: number) {
   const sockets = new Set<Socket>()
   const afterTrigger: Buffer[] = []
+  let forwardingResumed = false
   const server: Server = createServer((client) => {
     const upstream = connect(Number(target.port || 5432), target.hostname)
     sockets.add(client)
@@ -33,7 +34,7 @@ async function blackholeProxy(target: URL, trigger: string, delayMs?: number) {
       upstream.write(chunk)
     })
     upstream.on('data', (chunk: Buffer) => {
-      if (!swallowing) client.write(chunk)
+      if (!swallowing || forwardingResumed) client.write(chunk)
       else if (delayMs !== undefined) setTimeout(() => client.write(chunk), delayMs)
     })
     for (const socket of [client, upstream]) {
@@ -52,6 +53,9 @@ async function blackholeProxy(target: URL, trigger: string, delayMs?: number) {
   url.port = String(address.port)
   return {
     url: url.toString(),
+    resumeForwarding: () => {
+      forwardingResumed = true
+    },
     sentAfterTrigger: () => Buffer.concat(afterTrigger).toString('latin1'),
     close: async () => {
       for (const socket of sockets) socket.destroy()
@@ -174,6 +178,7 @@ describePostgres('a lost PostgreSQL reply against a real server', () => {
       { probe: 'stalled_reply_probe' }
     ])
     expect(performance.now() - startedAt).toBeGreaterThan(6_000)
+    proxy.resumeForwarding()
     // Not destroyed: the one pooled connection is still the same backend.
     expect(await pid()).toBe(before)
   }, 30_000)

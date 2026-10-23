@@ -40,7 +40,7 @@ vi.mock('./headless-serve-ssh-registration', () => ({
   })
 }))
 vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
-vi.mock('../ipc/runtime-environment-mobile-relay-hosts', () => ({
+vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', () => ({
   createRuntimeEnvironmentMobileRelayHosts: vi.fn()
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
@@ -102,6 +102,14 @@ vi.mock('../window/foreground-activation-policy', () => ({
   isWindowlessLaunch: () => false,
   showWindowWithoutStealingFocus
 }))
+vi.mock('../tray/system-tray', () => ({
+  createSystemTray: vi.fn(),
+  setMacMenuBarIconVisible: vi.fn()
+}))
+vi.mock('../window/attach-main-window-services', () => ({ ensureAutoUpdaterConfigured: vi.fn() }))
+vi.mock('../window/dashboard-popout-window', () => ({ getDashboardPopoutWindow: () => null }))
+vi.mock('../window/createMainWindow', () => ({ loadMainWindow: vi.fn() }))
+vi.mock('../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
 
 vi.mock('./main-process-ready-foundation', () => ({
   initializeReadyFoundation: vi.fn(async () => {})

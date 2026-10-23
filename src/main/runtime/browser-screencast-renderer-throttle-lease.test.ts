@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserScreencastOptions } from '../browser/browser-screencast-stream-types'
 import { createScreencastHarness } from './browser-screencast-subscriber-test-harness'
-import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { RuntimeBrowserCommands } from './browser/browser-commands'
 import { createSinglePageBrowserCommandsHost } from './single-page-browser-commands-host-test-double'
 
 const { webContentsFromId, startBrowserScreencast } = vi.hoisted(() => ({

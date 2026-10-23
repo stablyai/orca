@@ -1,3 +1,4 @@
+import { claudeBackgroundArgs } from './claude-background-run-isolation'
 import type { TuiAgent } from './tui-agent'
 import type {
   CommitMessageAgentSpec,
@@ -35,7 +36,7 @@ export function buildPrimaryCommitMessageAgentSpecs({
       // Why: diffs can be large and `claude -p` reads from stdin natively when no
       // positional prompt is provided.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, userArgs }) => [
         '-p',
         '--output-format',
         'text',
@@ -43,8 +44,10 @@ export function buildPrimaryCommitMessageAgentSpecs({
         model,
         '--permission-mode',
         'plan',
-        ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
+        ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
+        ...claudeBackgroundArgs(strictMcp, userArgs)
       ],
+      singletonOptions: [['--model']],
       modelSource: 'dynamic',
       // Why: the Claude CLI has no listing subcommand; one list_models control
       // request over --print stream-json returns the /model picker catalog.

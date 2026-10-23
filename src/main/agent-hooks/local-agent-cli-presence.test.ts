@@ -50,6 +50,23 @@ describe('detectLocalManagedAgentCliPresence', () => {
     ])
   })
 
+  it('skips Windows drive dirs on a WSL guest, so a /mnt/c npm shim is not the Linux CLI', async () => {
+    const probe = vi.fn(async (filePath: string) => filePath.startsWith('/mnt/c/'))
+    const result = await detectLocalManagedAgentCliPresence(
+      [codexTarget],
+      { agentCmdOverrides: {} },
+      {
+        pathEnv: '/home/u/.local/bin:/mnt/c/Users/u/AppData/Roaming/npm',
+        pathDelimiter: ':',
+        fileProbe: { isExecutableFile: probe },
+        platform: 'linux',
+        guestWindowsDriveMounts: ['/mnt/c']
+      }
+    )
+    expect(result.codex).toEqual({ state: 'missing' })
+    expect(probe.mock.calls.map(([filePath]) => filePath)).toEqual(['/home/u/.local/bin/codex'])
+  })
+
   it('uses executable override paths as positive evidence', async () => {
     const probe = vi.fn(async (filePath: string) => filePath === '/custom/bin/codex')
     const result = await detectLocalManagedAgentCliPresence(

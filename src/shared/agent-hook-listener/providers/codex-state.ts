@@ -51,16 +51,24 @@ export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: s
 export function setCodexMainAgentTurnState(
   state: HookListenerState,
   paneKey: string,
-  next: Omit<CodexLeadTurnState, 'stateStartedAt'> & { stateStartedAt?: number },
+  next: Omit<CodexLeadTurnState, 'stateStartedAt' | 'turnId'> & {
+    stateStartedAt?: number
+    /** Omitted keeps the current turn; null starts a turn Codex sent no id for. */
+    turnId?: string | null
+  },
   now = Date.now()
 ): CodexLeadTurnState {
   const previous = state.codexLeadStateByPaneKey.get(paneKey)
   const continued = continueMainAgentStatus(previous, next, now)
+  const turnId = next.turnId === null ? undefined : (next.turnId ?? previous?.turnId)
+  const sessionId = next.sessionId ?? previous?.sessionId
   const record: CodexLeadTurnState = {
     state: next.state,
     ...(continued.outcome ? { outcome: continued.outcome } : {}),
     stateStartedAt: continued.stateStartedAt,
-    model: next.model
+    model: next.model,
+    ...(sessionId ? { sessionId } : {}),
+    ...(turnId ? { turnId } : {})
   }
   state.codexLeadStateByPaneKey.set(paneKey, record)
   return record
@@ -221,6 +229,10 @@ export function reconcileRemoteCodexState(
   }
 
   if (!eventName && !agentId && payload.mainAgent && payload.mainAgent.state !== 'blocked') {
+    if (payload.mainAgent.state === 'done' && !payload.subagents) {
+      // Why: an unlabelled host turn end (failed or cancelled) reporting no children has none left.
+      roster.clear()
+    }
     setCodexMainAgentTurnState(state, paneKey, {
       ...payload.mainAgent,
       state: payload.mainAgent.state,

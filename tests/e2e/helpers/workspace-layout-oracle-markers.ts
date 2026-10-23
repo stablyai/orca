@@ -35,12 +35,18 @@ export async function checkPaneMarkers(
       continue
     }
     const marker = `ORACLE_MARK_${Date.now().toString(36)}_${index}`
-    await client.call('terminal.send', {
-      terminal: terminal.handle,
-      text: `echo ${marker}`,
-      enter: true
-    })
     checked += 1
+    try {
+      await client.call('terminal.send', {
+        terminal: terminal.handle,
+        text: `echo ${marker}`,
+        enter: true
+      })
+    } catch (error) {
+      // A pane whose process is gone is a finding, not a harness fault.
+      failures.push(`pane ${terminal.tabId}:${terminal.leafId} refused ${marker}: ${String(error)}`)
+      continue
+    }
     const deadline = Date.now() + 10_000
     let shown = false
     while (!shown && Date.now() < deadline) {

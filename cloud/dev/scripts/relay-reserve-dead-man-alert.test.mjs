@@ -12,6 +12,8 @@ const deadMan = read('../../apps/relay/src/cell-reserve-dead-man.ts')
 const registry = read('../../apps/relay/src/host-session-registry.ts')
 const server = read('../../apps/relay/src/relay-server.ts')
 const poller = read('../../apps/relay/src/shadow-seat-directory.ts')
+const watch = read('./watch-relay-reserve-cell.mjs')
+const githubActions = read('../../infra/terraform/relay-github-actions.tf')
 
 const block = (kind, name) => {
   const body = new RegExp(`resource "${kind}" "${name}" \\{([\\s\\S]*?)\\n\\}`).exec(terraform)?.[1]
@@ -83,4 +85,25 @@ test('the withheld dead-cell verdict alert counts every director withheld line, 
   assert.ok(alert.includes('group_by_fields      = ["metric.label.\\"withheld\\""]'))
   assert.match(read('../../infra/terraform/variables.tf'), /variable "relay_dead_cell_verdict_alert" \{[\s\S]*?default     = false/)
   assert.match(read('../../infra/terraform/environments/staging.tfvars'), /relay_dead_cell_verdict_alert\s+= true/)
+})
+
+test('the reserve watch alarm pages on any line the watch runner writes, per cell', () => {
+  // The runner writes a global-resource entry under its own log name.
+  assert.match(watch, /export const ALARM_EVENT = 'orca_relay_reserve_watch_alarm'/)
+  assert.match(watch, /export const ALARM_LOG_NAME = 'orca-relay-reserve-watch'/)
+  assert.match(watch, /JSON\.stringify\(\{ event: ALARM_EVENT, cellId, kind, reason \}\)/)
+  const metric = block('google_logging_metric', 'relay_reserve_watch_alarm')
+  assert.ok(
+    metric.includes(
+      'resource.type=\\"global\\" AND logName=\\"projects/${var.project_id}/logs/orca-relay-reserve-watch\\" AND jsonPayload.event=\\"orca_relay_reserve_watch_alarm\\"'
+    )
+  )
+  assert.ok(metric.includes('cell_id = "EXTRACT(jsonPayload.cellId)"'))
+  notifyingOnAnyLine('relay_reserve_watch_alarm', 'orca_relay_reserve_watch_alarm', 'global', 'cell_id')
+  // The deploy identity the workflow runs as can write that line, and only in production.
+  const grant = /resource "google_project_iam_member" "github_log_writer" \{([\s\S]*?)\n\}/.exec(githubActions)?.[1]
+  assert.ok(grant, 'github_log_writer grant not found')
+  assert.match(grant, /count = local\.relay_create_production_ops_identity \? 1 : 0/)
+  assert.match(grant, /role    = "roles\/logging\.logWriter"/)
+  assert.match(grant, /member  = google_service_account\.github_deploy\[0\]\.member/)
 })

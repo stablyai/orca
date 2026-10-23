@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, type MockInstance } from 'vitest'
+import { readFile } from 'node:fs/promises'
 import { _settlePendingWorktreeRemovalsForTests } from '../../worktree-background-removal'
 
 import {
@@ -29,6 +30,7 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 // Why: these fixtures register an SSH provider, which models a connected relay session — and a
 // connected session has always read the host's `$HOME`. The removal guards refuse without it.
@@ -225,7 +227,9 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
@@ -251,7 +255,9 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
@@ -312,7 +318,9 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
@@ -322,13 +330,13 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('prompts then force-removes an Orca-created runtime unregistered leftover directory with no git marker', async () => {
+  it('refuses an Orca-created runtime unregistered directory with no git marker, even forced, until the user removes it', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-leftover-'))
     const repoPath = join(parentDir, 'repo')
     const leftoverPath = join(parentDir, 'leftover')
     const worktreeId = `${TEST_REPO_ID}::${leftoverPath}`
     await mkdir(leftoverPath, { recursive: true })
-    await writeFile(join(leftoverPath, 'leftover.txt'), 'kept until force\n')
+    await writeFile(join(leftoverPath, 'notes.txt'), 'mine\n')
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId, {
       orcaCreatedAt: Date.now(),
       orcaCreationSource: 'runtime'
@@ -368,26 +376,29 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId)).rejects.toThrow(
-        'Worktree is no longer registered with Git but its directory remains.'
-      )
-      await expect(lstat(leftoverPath)).resolves.toBeTruthy()
+      for (const force of [false, true]) {
+        await expect(runtime.removeManagedWorktree(worktreeId, { force })).rejects.toThrow(
+          `Refusing to delete unregistered worktree path: ${leftoverPath}`
+        )
+      }
+      await expect(readFile(join(leftoverPath, 'notes.txt'), 'utf8')).resolves.toBe('mine\n')
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
 
-      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).resolves.toEqual({})
+      await rm(leftoverPath, { recursive: true, force: true })
+      await expect(runtime.removeManagedWorktree(worktreeId)).resolves.toEqual({})
 
-      await expect(lstat(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
       expect(runHook).not.toHaveBeenCalled()
       expect(removeWorktree).not.toHaveBeenCalled()
       // The repo resolved to the local host, so the metadata purge names it —
       // an unqualified purge would evict a same-id row owned by another host.
-      expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(removeWorktreeMeta).toHaveBeenCalledWith(
+        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
+      )
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
-      expect(gitSpy).toHaveBeenCalledWith(['status', '--short'], { cwd: leftoverPath })
     } finally {
       gitSpy.mockRestore()
       await rm(parentDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })

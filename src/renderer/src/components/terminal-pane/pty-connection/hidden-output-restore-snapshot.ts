@@ -50,6 +50,26 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
       foreground: true,
       beforeWrite: session.beforeTerminalOutputWrite
     })
+    const ptyId = session.transport.getPtyId()
+    const episode = session.hiddenOutputRestoreLatestDropEpisode
+    if (ptyId !== null && episode !== null) {
+      // Repeat markers for the drop episode this banner disclosed are ignored.
+      session.hiddenOutputRestoreDisclosedGap = { ptyId, episode }
+    }
+    session.requestRemoteProgramRedraw('restore-unavailable')
+  }
+
+  // Why an ack instead of retiring on the serve: the pane can dispose across the serialize +
+  // IPC round trip, and a snapshot nobody painted heals nothing. Only PTYs whose bytes transit
+  // local main have a drop latch, so remote-runtime streams send nothing.
+  session.ackHiddenOutputRestoreApplied = function (
+    ptyId: string,
+    hiddenDropEpisode: number | null
+  ): void {
+    if (!session.canUseMainBufferSnapshot(ptyId)) {
+      return
+    }
+    window.api.pty.ackHiddenOutputRestoreApplied?.(ptyId, hiddenDropEpisode ?? undefined)
   }
 
   session.applyMainBufferSnapshot = async function (snapshot: {
@@ -146,6 +166,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
             // live-path constant, not the replay baseline — nothing repaints here,
             // so the pane is handed back to whatever is still running.
             session.writeReplayData(RESET_AFTER_BYTE_GAP)
+            session.requestRemoteProgramRedraw('restore-imageless')
           } else {
             for (const replayChunk of buildMainModelSnapshotReplayWrites(snapshot, {
               skipAltFrame: skippedAltFrame,

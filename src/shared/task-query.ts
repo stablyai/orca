@@ -54,6 +54,12 @@ export function tokenizeSearchQuery(rawQuery: string): string[] {
   return tokenizeSearchQueryWithRaw(rawQuery).map((token) => token.value)
 }
 
+export function hasExplicitTaskScope(rawQuery: string): boolean {
+  return tokenizeSearchQueryWithRaw(rawQuery).some(
+    ({ value, raw }) => /^is:/i.test(raw) && /^is:(?:issue|pr|pull-request)$/i.test(value)
+  )
+}
+
 export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   const query: ParsedTaskQuery = {
     scope: 'all',
@@ -71,6 +77,10 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   let sawIssueScope = false
   let sawPRScope = false
   for (const { value: token, raw } of tokenizeSearchQueryWithRaw(rawQuery.trim())) {
+    if (raw.startsWith('"') || raw.startsWith("'")) {
+      freeTextTokens.push(raw)
+      continue
+    }
     const normalized = token.toLowerCase()
     if (normalized === 'is:issue') {
       sawIssueScope = true

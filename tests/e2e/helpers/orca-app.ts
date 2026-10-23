@@ -24,7 +24,8 @@ import {
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { closeElectronAppForE2E } from './electron-process-shutdown'
+import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
@@ -91,9 +92,11 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
 })()
 
 async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void> {
+  const started = performance.now()
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+      recordElectronShutdownTiming('profile-removal', started)
       return
     } catch (error) {
       if (attempt === 4) {
@@ -251,16 +254,14 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       )
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     } catch (error) {
-      await closeElectronAppForE2E(app)
-      await cleanupE2EDaemons(userDataDir)
+      await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
       await removeUserDataDirAfterShutdown(userDataDir)
       throw error
     }
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.
-    await closeElectronAppForE2E(app)
-    await cleanupE2EDaemons(userDataDir)
+    await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
     await removeUserDataDirAfterShutdown(userDataDir)
   },
 

@@ -2,6 +2,7 @@ name: Release JavaScript comparison
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths: ['.github/workflows/release-javascript-benchmark.yml']
   workflow_dispatch:
 
@@ -20,6 +21,7 @@ env:
 
 jobs:
   bundle:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     uses: ./.github/workflows/release-javascript.yml
     with:
       ref: ${{ github.sha }}

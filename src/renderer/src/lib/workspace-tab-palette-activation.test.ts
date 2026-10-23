@@ -60,10 +60,10 @@ const mocks = vi.hoisted(() => {
   }
   return {
     store,
-    activateAndRevealWorktree: vi.fn(),
+    activateAndRevealWorkspace: vi.fn(),
     activateWebRuntimeSessionTab: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
-    getRuntimeEnvironmentIdForWorktree: vi.fn(),
+    runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: vi.fn(),
     isWebRuntimeSessionActive: vi.fn()
   }
 })
@@ -79,7 +79,8 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
+  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin:
+    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
 }))
 
 vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
@@ -90,7 +91,7 @@ vi.mock('@/runtime/web-runtime-session-environment', () => ({
 }))
 
 vi.mock('./worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
 import { activateWorkspaceTabPaletteResult } from './workspace-tab-palette-activation'
@@ -171,15 +172,15 @@ describe('activateWorkspaceTabPaletteResult', () => {
         .flat()
         .find((worktree) => worktree.id === worktreeId)
     )
-    mocks.activateAndRevealWorktree.mockReturnValue(true)
-    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('runtime-1')
+    mocks.activateAndRevealWorkspace.mockReturnValue(true)
+    mocks.runtimeEnvironmentIdWithLegacyFallbackUnlessTwin.mockReturnValue('runtime-1')
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
   })
 
   it('activates terminal tabs and focuses the terminal surface', () => {
     expect(activateWorkspaceTabPaletteResult(makeResult())).toEqual({ status: 'activated' })
 
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1')
     expect(mocks.store.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.store.activateTab).toHaveBeenCalledWith('unified-terminal-1', {
       worktreeId: 'wt-1'
@@ -187,6 +188,15 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('reports blocked activation without changing the tab or focus', () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue(false)
+
+    expect(activateWorkspaceTabPaletteResult(makeResult())).toEqual({ status: 'blocked' })
+    expect(mocks.store.activateTab).not.toHaveBeenCalled()
+    expect(mocks.store.focusGroup).not.toHaveBeenCalled()
+    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
   })
 
   it('scopes activation to the host carried by the search result', () => {
@@ -204,7 +214,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
     })
 
     expect(mocks.store.getKnownWorktreeById).toHaveBeenCalledWith('wt-1', executionHostId)
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { executionHostId })
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', { executionHostId })
   })
 
   it('rejects colliding child ids before mutating either host', () => {
@@ -228,7 +238,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
       status: 'failed',
       reason: 'missing-tab'
     })
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
     expect(mocks.store.activateTab).not.toHaveBeenCalled()
   })
 
@@ -237,7 +247,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
     mocks.store.getKnownWorktreeById.mockReturnValue({ id: 'wt-1', repoId: 'repo-1' })
 
     expect(activateWorkspaceTabPaletteResult(makeResult())).toEqual({ status: 'activated' })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1')
   })
 
   it('uses the web-runtime terminal activation path when active', () => {
@@ -356,7 +366,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
       status: 'failed',
       reason: 'missing-group'
     })
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
     expect(mocks.store.focusGroup).not.toHaveBeenCalled()
 
     resetStore()
@@ -377,7 +387,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
       status: 'failed',
       reason: 'missing-file'
     })
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
   })
 
   it('treats missing editor backing files and worktrees as stale', () => {

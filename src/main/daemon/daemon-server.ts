@@ -35,7 +35,7 @@ export class DaemonServer {
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
 
   private readonly log: DaemonFileLog
-  private readonly automaticWork: DaemonAutomaticWorkGuard
+  readonly automaticWork: DaemonAutomaticWorkGuard
   private readonly host: TerminalHost
   private readonly transientFactRelay: BackgroundTransientFactRelay
   private readonly streamDataBatcher: DaemonStreamDataBatcher
@@ -48,7 +48,6 @@ export class DaemonServer {
   private readonly admission: DaemonTerminalAdmission
   private readonly requestRouter: DaemonRequestRouter
   private stopStreamBacklogProbe: () => void = () => {}
-  readonly recordOrderlyExit = (): void => this.automaticWork.recordOrderlyExit()
 
   constructor(options: DaemonServerOptions) {
     this.log = options.log ?? createNoopDaemonFileLog()
@@ -199,7 +198,8 @@ export class DaemonServer {
       isIdle: () => this.isIdle(),
       disposeResources: () => this.disposeResources(),
       onIdleShutdown: options.onIdleShutdown ?? (() => {}),
-      onRpcShutdown: options.onRpcShutdown ?? (() => {})
+      onRpcShutdown: options.onRpcShutdown ?? (() => {}),
+      onShutdownRequested: options.onShutdownRequested ?? (() => {})
     })
     this.admission = new DaemonTerminalAdmission({
       host: this.host,
