@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { getSystemLanguageDetection } from './system-language'
 import i18next, {
   type BackendModule,
   type i18n as I18nInstance,
@@ -14,6 +14,7 @@ import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin
 export const mainI18n: I18nInstance = i18next.createInstance()
 
 let initialized = false
+let languageGeneration = 0
 let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
 const registeredPluginLanguages = new Set<string>()
 
@@ -51,11 +52,7 @@ const lazyLocaleBackend: BackendModule = {
 }
 
 export function getMainSystemLocale(): string {
-  try {
-    return app.getLocale()
-  } catch {
-    return DEFAULT_UI_LOCALE
-  }
+  return getSystemLanguageDetection()?.locale ?? DEFAULT_UI_LOCALE
 }
 
 export async function ensureMainI18n(): Promise<I18nInstance> {
@@ -83,6 +80,7 @@ export async function ensureMainI18n(): Promise<I18nInstance> {
 }
 
 export async function setMainUiLanguage(language: UiLanguage): Promise<string> {
+  const request = ++languageGeneration
   await ensureMainI18n()
   const selectedLocale = resolveUiLocale(
     language,
@@ -92,9 +90,10 @@ export async function setMainUiLanguage(language: UiLanguage): Promise<string> {
     pluginLanguagePacks.find((pack) => pack.id === selectedLocale)?.resourceLanguage ??
     (selectedLocale.startsWith('plugin:') ? DEFAULT_UI_LOCALE : selectedLocale)
   if (mainI18n.language !== locale) {
-    // changeLanguage triggers the lazy backend load for non-English locales and
-    // resolves once the catalog is in memory, so callers that await this have
-    // the translations ready before they render menus/dialogs.
+    await mainI18n.loadLanguages(locale)
+    if (request !== languageGeneration) {
+      return mainI18n.language
+    }
     await mainI18n.changeLanguage(locale)
   }
   return locale

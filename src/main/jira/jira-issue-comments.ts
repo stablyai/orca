@@ -4,7 +4,7 @@ import {
   JIRA_IMAGE_MAX_BYTES,
   JIRA_IMAGE_MAX_REFERENCES,
   type JiraMediaFormat
-} from '../../shared/jira-attachment-image'
+} from '../../shared/jira/jira-attachment-image'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -17,7 +17,7 @@ import {
 import {
   extractAttachmentContentIdsFromHtml,
   selectPreferredAttachmentIds
-} from './attachment-discovery'
+} from './attachments/discovery'
 import { mapUser } from './jira-issue-mapping'
 import {
   flushMediaResolutionWarn,

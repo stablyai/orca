@@ -9,6 +9,12 @@ import {
 } from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
 import { mergeSkippedTranscriptRecords } from './session-transcript-record-budget'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+
+type TranscriptSessionEnrichment = {
+  /** Complete consumer metadata before committing; the returned fold stays unmodified. */
+  sessionForConsumers?: (session: AiVaultSession | null) => Promise<AiVaultSession | null>
+}
 
 const NEWLINE_BYTE = 0x0a
 
@@ -56,14 +62,16 @@ export function requestWholeTranscriptRead(path: string): void {
  * grew and the recorded offset still sits on a line boundary. Anything else
  * (a rewrite, a truncation, a platform change) re-reads the whole file.
  */
-export async function readResumableTranscript(args: {
-  candidate: SessionFileCandidate
-  platform: NodeJS.Platform
-  resume: SessionParseResumePoint | null
-  stateFactory: (messages: TranscriptMessageChannel) => ResumableSessionParseState
-  stats?: TranscriptReadStats
-  signal?: AbortSignal
-}): Promise<ResumableTranscriptRead> {
+export async function readResumableTranscript(
+  args: TranscriptSessionEnrichment & {
+    candidate: SessionFileCandidate
+    platform: NodeJS.Platform
+    resume: SessionParseResumePoint | null
+    stateFactory: (messages: TranscriptMessageChannel) => ResumableSessionParseState
+    stats?: TranscriptReadStats
+    signal?: AbortSignal
+  }
+): Promise<ResumableTranscriptRead> {
   const { file } = args.candidate
   const resume = args.resume
   const canResume =
@@ -131,7 +139,15 @@ export async function readResumableTranscript(args: {
     }
 
     const session = await displayState.finalize(args.platform)
-    channel.finishRead({ session, byteOffset: readResult.consumedThrough, incomplete: false })
+    const consumerSession = args.sessionForConsumers
+      ? await args.sessionForConsumers(session)
+      : session
+    throwIfAiVaultScanCancelled(args.signal)
+    channel.finishRead({
+      session: consumerSession,
+      byteOffset: readResult.consumedThrough,
+      incomplete: false
+    })
     return {
       session,
       resume: {
@@ -164,12 +180,14 @@ export async function readResumableTranscript(args: {
  * (whole-JSON documents, Kimi's state doc, OpenCode). There is no cursor to
  * keep, so every read is a whole-file `replace`.
  */
-export async function readWholeTranscript(args: {
-  candidate: SessionFileCandidate
-  platform: NodeJS.Platform
-  stats?: TranscriptReadStats
-  signal?: AbortSignal
-}): Promise<AiVaultSession | null> {
+export async function readWholeTranscript(
+  args: TranscriptSessionEnrichment & {
+    candidate: SessionFileCandidate
+    platform: NodeJS.Platform
+    stats?: TranscriptReadStats
+    signal?: AbortSignal
+  }
+): Promise<AiVaultSession | null> {
   const { file } = args.candidate
   if (args.stats) {
     args.stats.fullParses++
@@ -179,7 +197,15 @@ export async function readWholeTranscript(args: {
   channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
   try {
     const session = await parseAgentSessionFile(args.candidate, args.platform, channel, args.signal)
-    channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: false })
+    const consumerSession = args.sessionForConsumers
+      ? await args.sessionForConsumers(session)
+      : session
+    throwIfAiVaultScanCancelled(args.signal)
+    channel.finishRead({
+      session: consumerSession,
+      byteOffset: file.sizeBytes ?? 0,
+      incomplete: false
+    })
     return session
   } catch (error) {
     channel.finishRead({

@@ -29,7 +29,7 @@ export function buildImageDataUri(
 
 /** Preserves non-raster data URIs and rejects unsafe known-raster data URIs. */
 export function validateRasterImageDataUri(dataUri: string): string | null {
-  const match = /^data:([^;,]+)((?:;[^,]*)*),([\s\S]*)$/i.exec(dataUri)
+  const match = /^data:([^;,]+)((?:;[^,]*)?),([\s\S]*)$/i.exec(dataUri)
   if (!match || !isKnownRasterImageMimeType(match[1])) {
     return dataUri
   }

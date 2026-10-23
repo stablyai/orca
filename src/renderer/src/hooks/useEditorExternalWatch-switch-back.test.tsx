@@ -89,7 +89,6 @@ describe('switching back to a workspace that was not watched', () => {
   let previousApi: unknown
   let detachScan: () => void
   let settleWatch: () => void
-  let emitIpc: (payload: unknown) => void
   let pathExists: Mock<(args: { filePath: string }) => Promise<boolean>>
   let reloads: string[]
   let fileChangeEvents: number
@@ -126,6 +125,8 @@ describe('switching back to a workspace that was not watched', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     store = createTestStore()
     harness.holder.store = store
+    // Why before the edits: a tab dirtied in this session is not a restored draft.
+    detachScan = attachRestoredTabConflictScan(store)
     openTab(CLEAN)
     openTab(DIRTY)
     store.getState().setEditorDraft(DIRTY, 'unsaved edit')
@@ -141,10 +142,7 @@ describe('switching back to a workspace that was not watched', () => {
             })
         ),
         unwatchWorktree: vi.fn().mockResolvedValue(undefined),
-        onFsChanged: vi.fn((listener: (payload: unknown) => void) => {
-          emitIpc = listener
-          return vi.fn()
-        }),
+        onFsChanged: vi.fn(() => vi.fn()),
         pathExists,
         pathsExist: vi.fn(async ({ filePaths }: { filePaths: string[] }) =>
           Promise.all(
@@ -157,7 +155,6 @@ describe('switching back to a workspace that was not watched', () => {
     fileChangeEvents = 0
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, onReload)
     window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, onFileChange)
-    detachScan = attachRestoredTabConflictScan(store)
     container = document.body.appendChild(document.createElement('div'))
     root = createRoot(container)
   })
@@ -180,53 +177,15 @@ describe('switching back to a workspace that was not watched', () => {
     await act(async () => vi.advanceTimersByTimeAsync(200))
   }
 
-  it('reloads clean tabs, banners a dirty tab changed on disk, and refreshes git status/Files once', async () => {
+  it('reloads clean tabs, flags a changed dirty tab without pausing it, and refreshes git status/Files once', async () => {
     harness.readRuntimeFileContent.mockResolvedValue({ content: 'v2 agent write', isBinary: false })
     await switchBack()
 
     expect(reloads).toEqual(['clean.ts'])
-    expect(file(DIRTY).externalMutation).toBe('changed')
-    expect(file(DIRTY).isDirty).toBe(true)
+    expect(harness.readRuntimeFileContent).toHaveBeenCalledTimes(1)
+    expect(file(DIRTY)).toMatchObject({ isDirty: true, externalMutation: 'changed' })
     expect(file(CLEAN).externalMutation).toBeFalsy()
     expect(fileChangeEvents).toBe(1)
-  })
-
-  it('checks dirty tabs only once the watch is back, so a write in between still gets the banner', async () => {
-    harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })
-    await render([active], [background])
-    await render([active, background], [])
-    await act(async () => vi.advanceTimersByTimeAsync(200))
-    expect(harness.readRuntimeFileContent).not.toHaveBeenCalled()
-
-    // An agent writes after the switch but before the watch is installed.
-    harness.readRuntimeFileContent.mockResolvedValue({ content: 'v2 late write', isBinary: false })
-    await act(async () => settleWatch())
-    await act(async () => vi.advanceTimersByTimeAsync(200))
-
-    expect(file(DIRTY).externalMutation).toBe('changed')
-  })
-
-  it('checks dirty tabs again when a late install (capacity, SSH retry) lands', async () => {
-    harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })
-    // The request returns while the watcher waits for capacity; the catch-up finds nothing yet.
-    await switchBack()
-    expect(file(DIRTY).externalMutation).toBeFalsy()
-
-    harness.readRuntimeFileContent.mockResolvedValue({
-      content: 'v2 before install',
-      isBinary: false
-    })
-    // Main announces the late install with the same overflow it sends after a reconnect.
-    await act(async () =>
-      emitIpc({
-        worktreePath: '/background',
-        events: [{ kind: 'overflow', absolutePath: '/background' }],
-        resync: true
-      })
-    )
-    await act(async () => vi.advanceTimersByTimeAsync(200))
-
-    expect(file(DIRTY).externalMutation).toBe('changed')
   })
 
   it('marks a clean tab deleted and keeps it when its file was deleted while unwatched', async () => {
@@ -283,8 +242,9 @@ describe('switching back to a workspace that was not watched', () => {
     harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })
     await switchBack()
 
+    expect(harness.readRuntimeFileContent).toHaveBeenCalledTimes(1)
     expect(file(DIRTY).externalMutation).toBeFalsy()
-    expect(file(DIRTY).pendingDiskBaselineVerification).toBeFalsy()
+    expect(isAutosaveSuspendedForFile(file(DIRTY))).toBe(false)
   })
 
   it('does not re-read tabs of a workspace that was never dropped', async () => {
@@ -295,7 +255,6 @@ describe('switching back to a workspace that was not watched', () => {
 
     expect(reloads).toEqual([])
     expect(harness.readRuntimeFileContent).not.toHaveBeenCalled()
-    expect(file(DIRTY).pendingDiskBaselineVerification).toBeFalsy()
   })
 
   it('never holds autosave on a tab edited before the watch is back', async () => {
@@ -306,7 +265,6 @@ describe('switching back to a workspace that was not watched', () => {
     store.getState().markFileDirty(CLEAN, true)
     await act(async () => {})
 
-    expect(file(CLEAN).pendingDiskBaselineVerification).toBeFalsy()
     expect(isAutosaveSuspendedForFile(file(CLEAN))).toBe(false)
   })
 })

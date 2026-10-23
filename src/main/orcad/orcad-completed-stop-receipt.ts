@@ -18,7 +18,7 @@ import {
 
 const RECEIPT_MAX_BYTES = 64 * 1024
 
-export type ReceiptKind = 'completed' | 'retirement' | 'decision'
+type ReceiptKind = 'completed' | 'retirement' | 'decision'
 
 export function orcadStopReceiptPath(request: OrcadManagedStopRequest, kind: ReceiptKind): string {
   const { transactionId, instance } = OrcadManagedStopRequestSchema.parse(request)

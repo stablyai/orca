@@ -6,17 +6,19 @@ import { resolveTerminalPasteRuntime } from '@/components/terminal-pane/terminal
 import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/terminal-paste-limits'
 import { pasteTerminalText } from '@/components/terminal-pane/terminal-bracketed-paste'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import { terminalPreviewApiFor } from './terminal-preview-api'
 
 export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
 
 /**
- * Clipboard paste for the preview terminal, on the pane's coordinator: large
+ * Clipboard paste for a standalone terminal, on the pane's coordinator: large
  * pastes stream as bounded IPC payloads, and the plan re-checks that the same
  * terminal still owns focus between chunks.
  */
 export function createPreviewClipboardPaster(deps: {
+  /** Names the session for paste planning; a remote-runtime pty id routes as remote. */
   ptyId: string
+  /** Where pasted bytes go when they bypass xterm, e.g. a bracketed paste's closing marker. */
+  writeInput: (data: string) => boolean | Promise<boolean>
   container: HTMLElement
   getTerminal: () => Terminal | null
   getTerminalInput: () => DashboardCardTerminalInput | null
@@ -61,7 +63,7 @@ export function createPreviewClipboardPaster(deps: {
     await executeTerminalPastePlan(plan, {
       // Why: stream large pastes so the renderer never emits one huge IPC payload.
       pasteText: (text, options) => pasteTerminalText(pasteTerminal, text, options),
-      writePty: (data) => terminalPreviewApiFor(deps.ptyId).input(deps.ptyId, data),
+      writePty: (data) => deps.writeInput(data),
       isTargetCurrent: targetIsCurrent,
       // Why: if focus changes mid-bracketed paste, the closing marker must still reach the live PTY.
       canContinue: () => true

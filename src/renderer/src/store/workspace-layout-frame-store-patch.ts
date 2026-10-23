@@ -2,6 +2,7 @@
 // equal to the store's keeps the store's object, so an unchanged frame re-renders nothing; a
 // record the store already holds keeps what only this window knows about it (a terminal row's
 // in-flight spawn and recovery state, an open file's editor state, a browser tab's page state).
+// Building also notes a staged browser tab the frames take over (L284): every built patch is applied.
 
 import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../shared/workspace-layout/workspace-layout-beside'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
@@ -14,6 +15,7 @@ import {
   withHeldTabsAsDrawn,
   type HeldDrawnTabs
 } from './workspace-layout-frame-held-tabs'
+import { noteFramesTakingOverStagedBrowserTabs } from './workspace-layout-frame-browser-handover'
 
 /** Row fields this window owns: what its mounted panes are doing, and which terminal each row
  *  binds (main publishes the saved binding; the live one stays the window's until main owns it). */
@@ -258,6 +260,7 @@ export function buildLayoutFrameStorePatch(
     .flatMap((key) => state.browserTabsByWorktree[key] ?? [])
     .map((tab) => tab.id)
     .filter((id) => !builtBrowserTabIds.has(id))
+  noteFramesTakingOverStagedBrowserTabs(state, built, closedBrowserTabIds, builtBrowserTabIds)
   const closedPageIds = new Set(
     closedBrowserTabIds.flatMap((id) =>
       (state.browserPagesByWorkspace[id] ?? []).map((page) => page.id)

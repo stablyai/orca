@@ -7,7 +7,8 @@ import { errorMessage } from '../../shared/error-message'
 import type { WslHostAddResult } from '../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../orcad/orcad-host-unavailable'
 import type { WslHostConnector } from './wsl-host-service'
-import { WslOrcadLaunchDeferredError, type WslOrcadConnection } from './wsl-orcad-connection'
+import { WslOrcadLaunchDeferredError } from './wsl-orcad-connection-errors'
+import type { WslOrcadConnection } from './wsl-orcad-connection'
 
 type WslHostAddRefusal = Extract<WslHostAddResult, { ok: false }>
 type AddConnector = Pick<WslHostConnector, 'connect' | 'disconnect' | 'releaseHolder'>

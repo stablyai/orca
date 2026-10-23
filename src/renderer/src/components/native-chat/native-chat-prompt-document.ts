@@ -3,7 +3,7 @@ import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
-import { IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
+import { FILE_REFERENCE_NODE, IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
@@ -34,7 +34,7 @@ export const NativeChatSkill = Node.create({
 
 /** A file attached by path. `token` is the reference the agent reads; the pill shows the filename. */
 export const NativeChatFileReference = Node.create({
-  name: 'nativeChatFileReference',
+  name: FILE_REFERENCE_NODE,
   group: 'inline',
   inline: true,
   atom: true,

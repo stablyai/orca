@@ -1,12 +1,13 @@
 import { useCallback, useMemo } from 'react'
-import { openWorkspaceFile } from '@/lib/workspace-file-open'
+import { detectLanguage } from '@/lib/language-detect'
+import { openUncommittedEntry } from './open-uncommitted-entry'
 import { useAppStore } from '@/store'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
 } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { getActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
+import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
 import type { FlatEntry } from './use-selection'
 import {
   isSourceControlSplitOpenModifier,
@@ -30,6 +31,11 @@ export function useSourceControlRowOpening({
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
   const createEmptySplitGroup = useAppStore((s) => s.createEmptySplitGroup)
+  const trackConflictPath = useAppStore((s) => s.trackConflictPath)
+  const openConflictFile = useAppStore((s) => s.openConflictFile)
+  const openDiff = useAppStore((s) => s.openDiff)
+  const openFile = useAppStore((s) => s.openFile)
+  const openBranchDiff = useAppStore((s) => s.openBranchDiff)
 
   // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
   const resolveSplitTargetGroupId = useCallback(
@@ -47,9 +53,22 @@ export function useSourceControlRowOpening({
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
-  const activeOpenFileSignature = useAppStore((s) =>
-    getActiveOpenFileSignature(s, activeWorktreeId, worktreePath)
-  )
+  // Why: a stable string signature keeps this selector referentially stable so the panel re-renders only when the active editor file changes; null when the tab isn't an editor.
+  const activeOpenFileSignature = useAppStore((s) => {
+    if (!activeWorktreeId || s.activeTabTypeByWorktree?.[activeWorktreeId] !== 'editor') {
+      return null
+    }
+    const activeFileId = s.activeFileIdByWorktree?.[activeWorktreeId]
+    if (!activeFileId) {
+      return null
+    }
+    const activeFile = s.openFiles?.find(
+      (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
+    )
+    return activeFile
+      ? buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
+      : null
+  })
   const activeOpenAvailableRowKeys = useMemo(() => {
     const keys = new Set<string>()
     for (const entry of visibleSelectionEntries) {
@@ -62,27 +81,33 @@ export function useSourceControlRowOpening({
     [activeOpenAvailableRowKeys, activeOpenFileSignature]
   )
 
-  const openUncommittedFile = useCallback(
+  const handleOpenDiff = useCallback(
     (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
-      openWorkspaceFile({
-        kind: 'uncommitted',
-        worktreeId: activeWorktreeId,
+      const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
+      openUncommittedEntry(
+        { trackConflictPath, openConflictFile, openFile, openDiff },
+        activeWorktreeId,
         worktreePath,
         entry,
-        options: {
-          targetGroupId,
-          preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId)
-        }
-      })
+        { targetGroupId, preview: openAsPreview }
+      )
     },
-    [activeWorktreeId, worktreePath, resolveSplitTargetGroupId]
+    [
+      activeWorktreeId,
+      worktreePath,
+      resolveSplitTargetGroupId,
+      trackConflictPath,
+      openConflictFile,
+      openDiff,
+      openFile
+    ]
   )
 
-  const openBranchFile = useCallback(
+  const openCommittedDiff = useCallback(
     (entry: GitBranchChangeEntry, event?: SourceControlRowOpenEvent) => {
       if (
         !activeWorktreeId ||
@@ -93,20 +118,17 @@ export function useSourceControlRowOpening({
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
-      openWorkspaceFile({
-        kind: 'branch',
-        worktreeId: activeWorktreeId,
+      openBranchDiff(
+        activeWorktreeId,
         worktreePath,
         entry,
-        compare: branchSummary,
-        options: {
-          targetGroupId,
-          preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId)
-        }
-      })
+        branchSummary,
+        detectLanguage(entry.path),
+        { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
+      )
     },
-    [activeWorktreeId, branchSummary, resolveSplitTargetGroupId, worktreePath]
+    [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
   )
 
-  return { resolveSplitTargetGroupId, activeOpenRowKeys, openUncommittedFile, openBranchFile }
+  return { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff }
 }

@@ -4,12 +4,12 @@
   "family": "tasks.workspace-ssh-local",
   "namedDeltas": [],
   "values": {
-    "11405363c62d": {
-      "name": "workspaceAgent",
-      "ordinal": 1,
-      "value": "claude"
+    "057cfe2200b5": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"repoId\":\"repo-1\"}}"
     },
-    "1feb12bfbf62": {
+    "110ef4b3eb5b": {
       "name": "preflight.detectAgents#1",
       "ordinal": 4,
       "args": [
@@ -20,7 +20,237 @@
         {
           "name": "params",
           "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
             "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "11405363c62d": {
+      "name": "workspaceAgent",
+      "ordinal": 1,
+      "value": "claude"
+    },
+    "12f65d55aa1a": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "34cbfeeb5c49": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "43111f57966a": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "5786215332fb": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "630e2f27face": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": []
+    },
+    "63751bc69233": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "71225024ccf5": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "7400f4eebe66": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": ["codex", "claude"],
+      "setup": "unresolved",
+      "ssh": {
+        "$rpc": "null"
+      }
+    },
+    "8172e74bc69e": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repoId": "repo-1"
           }
         },
         {
@@ -44,7 +274,7 @@
         }
       }
     },
-    "24a0184fc2f5": {
+    "8f4b7427ef27": {
       "name": "preflight.detectAgents#1",
       "ordinal": 4,
       "args": [
@@ -55,7 +285,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "repoId": "repo-1"
           }
         },
         {
@@ -81,35 +311,14 @@
         }
       }
     },
-    "5da628eecd2f": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
-    },
-    "630e2f27face": {
+    "9637248df9cb": {
       "name": "workspaceDetectedAgentIds",
-      "ordinal": 6,
-      "value": []
-    },
-    "71225024ccf5": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": [],
-      "setup": "unresolved",
-      "ssh": {
+      "ordinal": 3,
+      "value": {
         "$rpc": "null"
       }
     },
-    "7400f4eebe66": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": ["codex", "claude"],
-      "setup": "unresolved",
-      "ssh": {
-        "$rpc": "null"
-      }
-    },
-    "78870501ce99": {
+    "a3447a38f180": {
       "name": "preflight.detectAgents#1",
       "ordinal": 4,
       "args": [
@@ -120,7 +329,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "repoId": "repo-1"
           }
         },
         {
@@ -144,7 +353,12 @@
         }
       }
     },
-    "90ac803be31a": {
+    "a9ec92743b9e": {
+      "name": "workspaceAgentOverridden",
+      "ordinal": 2,
+      "value": false
+    },
+    "c988ed31a0bf": {
       "name": "preflight.detectAgents#1",
       "ordinal": 4,
       "args": [
@@ -155,78 +369,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "9637248df9cb": {
-      "name": "workspaceDetectedAgentIds",
-      "ordinal": 3,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "9a93035b19e1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "9bee832e6c84": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
+            "repoId": "repo-1"
           }
         },
         {
@@ -241,16 +384,25 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
           "id": "frame-1",
-          "ok": false
+          "ok": true
         }
       }
     },
-    "9fdd4a87eb0b": {
+    "d68cba3b57e1": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": ["codex", "claude"]
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebcf6c6d8d86": {
       "name": "preflight.detectAgents#1",
       "ordinal": 4,
       "args": [
@@ -261,7 +413,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "repoId": "repo-1"
           }
         },
         {
@@ -281,158 +433,6 @@
           "result": ["codex", "claude"]
         }
       }
-    },
-    "a2765967bb49": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "a9ec92743b9e": {
-      "name": "workspaceAgentOverridden",
-      "ordinal": 2,
-      "value": false
-    },
-    "c1f59c7b2afa": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "c8028d1dd40a": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "d68cba3b57e1": {
-      "name": "workspaceDetectedAgentIds",
-      "ordinal": 6,
-      "value": ["codex", "claude"]
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f8eb8a4a9917": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 4,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
     }
   },
   "recording": {
@@ -441,8 +441,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.normal:local-agents-detected",
         "observation": {
-          "sender": ["9fdd4a87eb0b"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["ebcf6c6d8d86"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -453,8 +453,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.result-absent:local-agents-detected",
         "observation": {
-          "sender": ["f8eb8a4a9917"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["c988ed31a0bf"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -465,8 +465,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.result-null:local-agents-detected",
         "observation": {
-          "sender": ["c1f59c7b2afa"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["5786215332fb"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -477,8 +477,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.inner-ok-missing:local-agents-detected",
         "observation": {
-          "sender": ["a2765967bb49"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["43111f57966a"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -489,8 +489,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.inner-false-string-error:local-agents-detected",
         "observation": {
-          "sender": ["78870501ce99"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["a3447a38f180"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -501,8 +501,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.inner-false-object-error:local-agents-detected",
         "observation": {
-          "sender": ["24a0184fc2f5"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["8f4b7427ef27"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -513,8 +513,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.outer-refused:local-agents-detected",
         "observation": {
-          "sender": ["c8028d1dd40a"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["12f65d55aa1a"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -525,8 +525,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.outer-refused-no-message:local-agents-detected",
         "observation": {
-          "sender": ["9bee832e6c84"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["63751bc69233"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -537,8 +537,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.method-not-found:local-agents-detected",
         "observation": {
-          "sender": ["1feb12bfbf62"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["8172e74bc69e"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -549,8 +549,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.transport-rejection:local-agents-detected",
         "observation": {
-          "sender": ["90ac803be31a"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["110ef4b3eb5b"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -561,8 +561,8 @@
       {
         "id": "tw-workspace-ssh-local-agents.transport-rejection-no-message:local-agents-detected",
         "observation": {
-          "sender": ["9a93035b19e1"],
-          "payloads": ["5da628eecd2f"],
+          "sender": ["34cbfeeb5c49"],
+          "payloads": ["057cfe2200b5"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

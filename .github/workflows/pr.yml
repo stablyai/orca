@@ -47,6 +47,7 @@ jobs:
       xterm_patch_sync: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.xterm_patch_sync }}
       shell_contracts: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.shell_contracts }}
       test: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.test }}
+      relay_integration: ${{ steps.filter.outputs.relay_integration }}
       orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
       cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
       managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
@@ -371,9 +372,11 @@ jobs:
             src/shared/ephemeral-vm-runtimes.ts \
             src/shared/ephemeral-vm-recipes.ts \
             src/shared/orca-yaml-hook-types.ts \
-            src/main/ephemeral-vm-runtime-service.ts \
-            src/main/ephemeral-vm-runtime-provisioning-persistence.ts \
-            src/main/ephemeral-vm-failed-start-cleanup.ts; then
+            config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
+            config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts \
+            src/main/ephemeral-vm/runtime-service.ts \
+            src/main/ephemeral-vm/runtime-provisioning-persistence.ts \
+            src/main/ephemeral-vm/failed-start-cleanup.ts; then
             echo "VM runtime persistence is unchanged."
             exit 0
           fi
@@ -755,6 +758,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
 
       # Rebuild both pristine and patched bundles; reuse only the pinned toolchain.
@@ -773,12 +777,9 @@ jobs:
       needs.code_paths.result == 'success' &&
       needs.code_paths.outputs.shell_contracts == 'true' &&
       needs.preflight.result == 'success'
-    # Why ARM: fish 4.x is published for noble/arm64 and zsh is in the arm64 archive.
+    # Exercise Linux ARM with the standalone aarch64 release and Ubuntu's zsh.
     runs-on: ubuntu-24.04-arm
-    # Why: this job's cost is almost entirely package download, and a stalled mirror has
-    # no wall-clock bound of its own. A successful run finishes in ~4.5 minutes, so this
-    # is generous; it exists so a wedge fails the job instead of holding the whole run
-    # open for the 6h GitHub default — which also blocks `gh run rerun --failed`.
+    # Bound stalled prerequisite downloads instead of waiting for GitHub's 6-hour default.
     timeout-minutes: 15
     env:
       # Why: the suites below gate their live fish tests on the binary, which is
@@ -795,62 +796,45 @@ jobs:
         with:
           persist-credentials: false
 
-      # Why fish: shell-ready.test.ts gates its live fish test on the binary being
-      # present, so without this the fish barrier is only covered by config-shape
-      # assertions and never actually exercised.
-      # Why release-4: DECSET 2031 arming lives in the fish 4.0 Rust tty_handoff, and
-      # fish-color-scheme-child-stdin.node-pty.test.ts (#9993) needs it. Noble ships
-      # 3.7, so the PPA is what makes that lane real.
+      # fish 4+ provides DECSET 2031 arming required by live shell contracts (#9993).
       - name: Install zsh and fish
         id: shells
         background: true
         run: |
-          # Why the update/PPA/fish steps are tolerant: a repo the runner image already
-          # ships can lack a Release file for this suite, and a failed add-apt-repository
-          # still leaves its list entry behind — either makes `apt-get update` exit
-          # non-zero and would red this required check over something unrelated to the
-          # PR. Every fish outcome is judged by the version gate below instead, so only
-          # the zsh install (which has no such gate) stays fatal here.
-          # Why retry only here: adding the PPA is the network-flaky step, and the
-          # version gate below is fatal, so a transient Launchpad blip would
-          # otherwise red a required check on PRs unrelated to shells.
-          # Why -n: add-apt-repository refreshes every configured repo on its own. With
-          # an update on each side of it this step refreshed them three times over, and
-          # the Azure archive mirror alone costs ~15-30s a pass. The PPA index is the
-          # only thing the repo list gains here, and the single update below fetches it.
-          # Why bound acquisition: measured on a *passing* run, this step spent 40s
-          # fetching 11.4 MB of index and then 2m17s fetching 8.9 MB of packages at
-          # 65 kB/s — it is dominated by download throughput, not by work. apt applies
-          # no wall-clock bound to a stalled mirror, so a slow Launchpad or archive
-          # host wedges the step for tens of minutes. This job is a required check, so
-          # a wedge holds the entire run open and blocks `gh run rerun --failed`.
-          # Bounded timeouts plus retries turn an unbounded hang into a fast, legible
-          # failure. Set in apt.conf.d rather than on each command line so the two
-          # invocations below stay exactly as pr-workflow-parallelism.test.mjs parses
-          # them. Retries are 1, not 3: a first attempt at these bounds already multiplied
-          # 30s x 3 retries across every index file into a ~15 minute stall on a dead
-          # mirror, which is worse than failing once and moving on.
+          # Per-connection limits complement the whole-command apt deadlines below.
           sudo tee /etc/apt/apt.conf.d/99-orca-shell-contracts >/dev/null <<'APTCONF'
           Acquire::http::Timeout "15";
           Acquire::https::Timeout "15";
           Acquire::Retries "1";
           APTCONF
-          for attempt in 1 2 3; do
-            sudo add-apt-repository -y -n ppa:fish-shell/release-4 && break
-            echo "add-apt-repository attempt ${attempt} failed; retrying" >&2
-            sudo add-apt-repository -y -n -r ppa:fish-shell/release-4 || true
-            sleep 5
-          done
-          # Why a wall-clock bound on each command: apt's Acquire timeouts are per-connection,
-          # so a dead mirror costs timeout x retries x every index file. Measured: the archive
-          # mirror stalled with zero bytes and the step burned 14m26s before the job bound
-          # killed it. `timeout` is the only thing that bounds the command as a whole.
-          # The update is already tolerant by design (see above), so bounding it just caps
-          # what a dead mirror can cost before the install runs against whatever index exists.
+          # Unrelated runner repositories may fail refresh; installing zsh must still succeed.
           timeout 120 sudo apt-get update || true
-          # Why both shells on one line: pr-workflow-parallelism.test.mjs parses only the
-          # first install command in this step to prove the lane really installs them.
-          timeout 300 sudo apt-get install -y zsh fish
+          timeout 300 sudo apt-get install -y zsh
+          # A fixed 4.x release meets the contract without tracking package-repository updates.
+          case "$(uname -m)" in
+            aarch64) arch=aarch64 sha=57349f0111728c64b703a84e611aa97ff4d1fa8466385d64e67bd5bc3ffa49fc ;;
+            *) arch=x86_64 sha=8f643d10ad1abb0ef7072764c01ceb5cf61b2d373fda400cf60f0bad69b7e095 ;;
+          esac
+          curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 -o "$RUNNER_TEMP/fish.tar.xz" \
+            "https://github.com/fish-shell/fish-shell/releases/download/4.9.3/fish-4.9.3-linux-${arch}.tar.xz"
+          echo "${sha}  $RUNNER_TEMP/fish.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/fish.tar.xz" -C "$RUNNER_TEMP" fish
+          sudo install -m 0755 "$RUNNER_TEMP/fish" /usr/local/bin/fish
+          for package in fish fish-common; do
+            if ! dpkg-query -W -f='${binary:Package}: ${Status}\n' "$package" 2>/dev/null; then
+              echo "$package: absent"
+            fi
+          done
+          # Exclude runner preload while keeping the tests' own XDG vendor snippets reachable.
+          quarantine="$(mktemp -d "$RUNNER_TEMP/fish-runner-resources.XXXXXX")"
+          for path in /usr/share/fish /etc/fish; do
+            if [ -e "$path" ] || [ -L "$path" ]; then
+              sudo mv -- "$path" "$quarantine/${path//\//_}"
+              echo "$path: quarantined in $quarantine"
+            fi
+            if [ -e "$path" ]; then echo "$path: present"; else echo "$path: absent"; fi
+          done
+          printf 'fish selected: %s\n' "$(command -v fish)"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -869,7 +853,7 @@ jobs:
           case "$major" in '' | *[!0-9]*) major=0 ;; esac
           echo "${version:-<fish not installed>}"
           if [ "$major" -lt 4 ]; then
-            echo "::error::shell contracts needs fish 4+ (DECSET 2031 arming, #9993) but got '${version:-none}'. Fix the ppa:fish-shell/release-4 install rather than letting the fish lane skip." >&2
+            echo "::error::shell contracts needs fish 4+ (DECSET 2031 arming, #9993) but got '${version:-none}'. Fix the direct GitHub release install rather than letting the fish lane skip." >&2
             exit 1
           fi
 
@@ -914,6 +898,7 @@ jobs:
       phase_diagnostics: true
       shards: ${{ needs.preflight.outputs.shards }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
+      run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
       browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
 
   # Why a sibling and not part of the test workflow: it is advisory, so it must not delay the
@@ -1403,7 +1388,7 @@ jobs:
         run: |
           $files = node config/scripts/pr-package-test-paths.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm exec vitest run --config config/vitest.config.ts $files
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts @files
 
       # Why its own step: the CPU burners that make taskkill slow would starve
       # every other test file sharing the runner.
@@ -1549,12 +1534,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
 
       - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
+        uses: ./.github/actions/setup-pnpm
 
       - name: Install with every package isolated in its own store slot
         run: |

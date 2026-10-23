@@ -44,6 +44,7 @@ export function BrowserPageToolbar({
   convertedFrom,
   convertedTo,
   loading,
+  loadFailed,
   webviewRef,
   reloadMenuOpen,
   setReloadMenuOpen,
@@ -84,6 +85,7 @@ export function BrowserPageToolbar({
   /** Set on a page Back returned to; Forward re-crosses it once guest history runs out. */
   convertedTo?: BrowserPageConversionOrigin | null
   loading: boolean
+  loadFailed: boolean
   webviewRef: RefObject<Electron.WebviewTag | null>
   reloadMenuOpen: boolean
   setReloadMenuOpen: Dispatch<SetStateAction<boolean>>
@@ -138,7 +140,6 @@ export function BrowserPageToolbar({
       controls={{
         canGoBack: canGoBack || Boolean(convertedFrom),
         canGoForward: canGoForward || Boolean(convertedTo),
-        loading,
         // Why the fallbacks: guest history cannot survive a conversion (the guest was replaced),
         // so once it runs out Back returns across the conversion — and Forward re-crosses it —
         // instead of going dead.
@@ -165,6 +166,7 @@ export function BrowserPageToolbar({
       }}
       addressSlot={
         <BrowserAddressBar
+          pageId={browserPageId}
           value={addressBarValue}
           onChange={setAddressBarValue}
           onSubmit={submitAddressBar}
@@ -175,6 +177,8 @@ export function BrowserPageToolbar({
           inputRef={addressBarInputRef}
           dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
           leadingIcon={<SshEgressIndicator worktreeId={worktreeId} />}
+          loading={loading}
+          loadFailed={loadFailed}
         />
       }
       reloadControl={
@@ -182,7 +186,7 @@ export function BrowserPageToolbar({
           menuOpen={reloadMenuOpen}
           onMenuOpenChange={setReloadMenuOpen}
           label={reloadButtonLabel}
-          loading={loading}
+          showStop={reloadButtonLabelKind === 'stop'}
           showShortcutHint={reloadButtonLabelKind === 'reload'}
           reloadShortcut={reloadShortcut}
           hardReloadShortcut={hardReloadShortcut}
@@ -220,24 +224,13 @@ export function BrowserPageToolbar({
             }
           : undefined
       }
-      viewSource={
-        openSourceFile
-          ? {
-              onSelect: openSourceFile,
-              label: translate(
-                'auto.components.editor.HtmlDocPreview.openSourceControl',
-                'Open source file'
-              ),
-              alreadyInOverflowMenu: true
-            }
-          : {
-              onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
-              label: translate(
-                'auto.components.browser.pane.BrowserPane.ec75d0c412',
-                'Open browser devtools'
-              )
-            }
-      }
+      viewSource={{
+        onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
+        label: translate(
+          'auto.components.browser.pane.BrowserPane.ec75d0c412',
+          'Open browser devtools'
+        )
+      }}
       openExternal={{
         onSelect: () => {
           if (!externalUrl) {

@@ -19,7 +19,7 @@ type Owner = {
   client?: LegacyRelayClient
 }
 
-export type LegacyRelayOwnerRow = {
+type LegacyRelayOwnerRow = {
   endpoint: string
   incarnationId?: string | undefined
   client?: LegacyRelayClient

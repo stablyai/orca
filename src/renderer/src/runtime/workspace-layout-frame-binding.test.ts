@@ -165,6 +165,32 @@ describe('a frame that changes only panes’ terminal bindings', () => {
     expect(shown.terminalLayoutsByTabId['tab-shell']!.ptyIdsByLeafId?.[leafId]).toBe(ptyId)
   })
 
+  it('shows a resume outcome alone without touching any pane tree or binding', async () => {
+    const { store, sync, first, send } = await boot()
+    const layouts = store.getState().terminalLayoutsByTabId
+    const ptyId = layouts['tab-shell']!.ptyIdsByLeafId?.[leaf(1)]
+    expect(ptyId).toBeDefined()
+    const next = structuredClone(first)
+    const pane = next.tabs
+      .find((tab) => tab.entityId === 'tab-shell')!
+      .terminal!.panes.find((candidate) => candidate.leafId === leaf(1))!
+    pane.resumeOutcome = 'restored'
+
+    await send(next)
+
+    // Same layouts object: no view rebinds, remounts or reattaches for an outcome.
+    expect(store.getState().terminalLayoutsByTabId).toBe(layouts)
+    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
+    expect(store.getState().terminalPaneResumeOutcomesByPaneKey).toEqual({
+      [`tab-shell:${leaf(1)}`]: {
+        ptyId,
+        ...(pane.ptyGeneration !== undefined ? { ptyGeneration: pane.ptyGeneration } : {}),
+        outcome: 'restored'
+      }
+    })
+    sync.close()
+  })
+
   it('writes nothing to the store when the store already shows those bindings', async () => {
     const { store, sync, first, send } = await boot()
     const layout = store.getState().terminalLayoutsByTabId['tab-shell']!

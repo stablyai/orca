@@ -5,7 +5,7 @@ import { hoistPreludeCheckpoints } from './prelude-checkpoints'
 import { readScenarios } from './scenario-input'
 import { bindCompletions, lifecycleSchedules } from './schedule-driver'
 
-it('omits only the inventory admission following a refusal to a fully unmounted owner', () => {
+it('omits only inventory admission following a refusal to a retired owner', () => {
   const manifest = readScenarios(
     resolve(import.meta.dirname, '../../../rpc-foundation/pilot-scenarios.json')
   )
@@ -27,12 +27,13 @@ it('omits only the inventory admission following a refusal to a fully unmounted 
   expect(derived.map((scenario) => scenario.id)).toEqual(original.map((scenario) => scenario.id))
   expect(derived).toHaveLength(12)
   for (const [index, scenario] of original.entries()) {
-    if (scenario.id !== 'inventory-lifecycle.unmount-before-1') {
+    const unmounted = scenario.id === 'inventory-lifecycle.unmount-before-1'
+    if (!unmounted && scenario.id !== 'inventory-lifecycle.reset-before-1') {
       expect(derived[index]).toEqual(scenario)
       expect(JSON.stringify(derived[index])).toBe(JSON.stringify(scenario))
       continue
     }
-    expect(scenario.steps).toHaveLength(13)
+    expect(scenario.steps).toHaveLength(unmounted ? 13 : 11)
     expect(scenario.steps.slice(7, 10)).toEqual([
       { bind: 'old-inventory', request: 'files.list#1', params: { worktree: 'id:A' } },
       { bind: 'lifecycle-old-inventory', request: 'old-inventory', params: { worktree: 'id:A' } },
@@ -51,7 +52,7 @@ it('omits only the inventory admission following a refusal to a fully unmounted 
     expect(expected.steps.filter((step) => 'checkpoint' in step)).toEqual([
       { checkpoint: 'lifecycle-boundary' },
       { checkpoint: 'settled' },
-      { checkpoint: 'remounted' }
+      ...(unmounted ? [{ checkpoint: 'remounted' }] : [])
     ])
     expect(expected.steps.filter((step) => 'bind' in step)).toEqual([
       {

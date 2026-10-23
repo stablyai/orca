@@ -176,7 +176,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
   notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
     this.invalidateWorktreeScanCacheForRepo(repoId)
     const matchingRepos = this.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
-    if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
+    if (matchingRepos.length !== 1 || getRepoRoutingConnectionId(matchingRepos[0])) {
       return
     }
     this.notifyWorktreesChangedForRemoteClients(repoId)

@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   resolveLinearIssueEmptyKind,
   shouldOfferLinearIssueFetchMore
-} from '@/components/task-page-linear-issue-empty-state'
+} from './task-page-linear-issue-empty-state'
 import { Button } from '@/components/ui/button'
 import { LinearIcon } from '@/components/task-page-localized-options'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'

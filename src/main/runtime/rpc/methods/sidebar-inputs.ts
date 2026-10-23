@@ -109,7 +109,7 @@ export const SIDEBAR_INPUT_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }) =>
-      requireSwitchedOn(runtime.workspaceCreations).snapshot()
+      requireSwitchedOn(runtime.workspaceLifecycle).creationsSnapshot()
   }),
   defineMethod({
     name: 'sidebarInputs.reportView',

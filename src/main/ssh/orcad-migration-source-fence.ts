@@ -187,7 +187,7 @@ export async function fenceOrcadMigrationSource(args: {
 type FenceReleaseArgs = { userDataPath: string; claims: SshTargetOrcadClaims; signal?: AbortSignal }
 
 /** Undoes a fence nothing remote has seen. */
-export async function releaseUnstagedFence(
+async function releaseUnstagedFence(
   args: FenceReleaseArgs,
   cutover: OrcadMigrationSourceCutover
 ): Promise<void> {

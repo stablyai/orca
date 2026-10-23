@@ -21,6 +21,7 @@ import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { PaneStartStatuses } from '../pane-start-statuses'
+import { paneOfPty, type PtyPane, type PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
 export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees extends OrcaRuntimeWithSyncWindowGraph {
   abstract get workspaceLayoutReads(): WorkspaceLayoutReads
@@ -31,11 +32,20 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     windowId: number,
     graph: RuntimeSyncWindowGraph
   ): RuntimeSyncWindowGraph {
+    return this.mainSurfaces().withMainSurfaces(windowId, graph)
+  }
+
+  // Main's index answers with or without a window's graph: each layout write is a new partition.
+  protected paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane {
+    return paneOfPty(pty, (ptyId) => this.mainSurfaces().findPaneForPty(ptyId))
+  }
+
+  private mainSurfaces(): ReturnType<typeof mainTerminalSurfaces> {
     const host = (): MainTerminalSurfacesHost => ({
       store: () => this.store,
       reads: () => this.workspaceLayoutReads,
       homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
-      registered: (ptyId) => this.ptysById.has(ptyId),
+      registered: (ptyId) => this.ptysById.get(ptyId) ?? null,
       // Certified exit only: a dropped relay leaves records disconnected but unverifiable.
       exited: (ptyId) => this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited',
       live: (ptyId) => this.ptysById.get(ptyId)?.connected === true,
@@ -51,7 +61,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       },
       fenceExited: (rows) => this.applyMobileSessionRetirementFences(rows)
     })
-    return mainTerminalSurfaces(this, host).withMainSurfaces(windowId, graph)
+    return mainTerminalSurfaces(this, host)
   }
 
   protected abstract getAuthoritativeSessionTabsInventoryEpoch(

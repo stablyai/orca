@@ -300,7 +300,7 @@ async function stopAndWaitPty(
     }
   }
   try {
-    if (!(await verifyPtyStopped(provider, ptyId, opts))) {
+    if (!(await verifyPtyStopped(provider, ptyId, opts, providerExitObserved))) {
       runtime?.markPtyLivenessLive?.(ptyId)
       return false
     }

@@ -4,7 +4,7 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
-import { runtimeEnvironmentIdWithLegacyFallbackUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -123,7 +123,7 @@ function getSidebarWatchConsumer(
   worktreeId: string
 ): WatchConsumer {
   // Why: sidebar watcher must follow the selected worktree's host owner, not the host currently focused in the UI.
-  const owner = runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, worktreeId)
+  const owner = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (owner) {
     return { owner, hostId: toRuntimeExecutionHostId(owner) }
   }

@@ -6,6 +6,7 @@ import {
   buildRetractedMirroredTabSweepPatch
 } from './agent-status-primitives'
 import { collectCollidingRetractionPaneKeys } from './retraction-pane-ownership'
+import { adoptFrameDrawnClientHostedBrowserHandles } from './frame-drawn-desktop-browser-handles'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { writableWebSessionTabsRecord } from './state-equality-core'
@@ -13,8 +14,9 @@ import { buildMirroredTerminalTabs } from './terminal-build'
 import { isMirroredTerminalSurfaceId, isTerminalSurfaceTab } from './terminal-surfaces'
 
 /**
- * A frame-drawn workspace's share of one snapshot: agent status and unread markers only. Its tabs,
- * layout, bindings and focus belong to the layout frames, so none of those slices are written.
+ * A frame-drawn workspace's share of one snapshot: agent status, unread markers, and the handles of
+ * client-hosted pages this desktop created. Its tabs, layout, bindings and focus belong to the
+ * layout frames, so none of those slices are written.
  */
 export function buildFrameDrawnWorkspaceStatusPatch(
   state: WebSessionTabsSyncState,
@@ -104,6 +106,13 @@ export function buildFrameDrawnWorkspaceStatusPatch(
   }
 
   const patch: Partial<WebSessionTabsSyncState> = {
+    ...adoptFrameDrawnClientHostedBrowserHandles(
+      state,
+      snapshot,
+      environmentId,
+      worktreeId,
+      batchContext
+    ),
     ...agentStatusPatch,
     ...retractedTabSweepPatch,
     ...remirroredClosedTabLiftPatch,

@@ -33,6 +33,7 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 vi.mock('@/lib/agent-catalog', () => ({
+  getAgentLabel: (agent: string) => (agent === 'codex' ? 'Codex' : 'Claude'),
   getAgentCatalog: () => [
     { id: 'claude', label: 'Claude' },
     { id: 'codex', label: 'Codex' }
@@ -67,6 +68,7 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMoc
 type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
 
 import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
+import { WorkspaceEmptyAgentList } from '../WorkspaceEmptyAgentList'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
@@ -75,6 +77,43 @@ import {
 } from '@/lib/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
+
+it('offers separate chat and CLI launches on the empty workspace with the same owning host', () => {
+  const model = vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValueOnce({
+    state: 'settled',
+    rows: [{ kind: 'chat', agent: 'codex', executionHostId: 'runtime:server' }],
+    detection: {
+      detectedIds: ['codex'],
+      detectionFailed: false,
+      needsServerUpdate: false,
+      isLoading: false,
+      isRefreshing: false,
+      refresh: async () => ['codex']
+    }
+  })
+  launchMock.mockReset().mockReturnValue({ surface: { kind: 'host-published' } })
+  const view = render(<WorkspaceEmptyAgentList worktreeId={WORKTREE_ID} groupId="group-1" />)
+  model.mockRestore()
+
+  fireEvent.click(view.getByRole('button', { name: 'Launch Codex in a new terminal' }))
+  fireEvent.click(view.getByRole('button', { name: 'Start a chat with Codex' }))
+
+  expect(launchMock.mock.calls.map(([args]) => args)).toEqual([
+    expect.objectContaining({
+      requestedSurface: 'terminal',
+      selectedExecutionHostId: 'runtime:server',
+      worktreeId: WORKTREE_ID,
+      groupId: 'group-1'
+    }),
+    expect.objectContaining({
+      requestedSurface: 'chat',
+      selectedExecutionHostId: 'runtime:server',
+      worktreeId: WORKTREE_ID,
+      groupId: 'group-1'
+    })
+  ])
+  view.unmount()
+})
 
 it('gives static/search no agent actions while loading, retaining settings and generic terminal', () => {
   const model = vi

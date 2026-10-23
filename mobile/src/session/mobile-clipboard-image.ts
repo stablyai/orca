@@ -1,3 +1,5 @@
+import { isWindowsAbsolutePathLike } from '../../../src/shared/cross-platform-path'
+import { formatImageDropPasteText } from '../../../src/shared/image-path-paste'
 import { formatAgentImagePath } from '../../../src/shared/agent-image-paste'
 import {
   computeMobileClipboardImageDownscale,
@@ -156,5 +158,25 @@ export function buildMobileImagePastePayload(filePath: string, agent?: string | 
   // Why: generated image paths are paste payloads, not ordinary typed input.
   // Bracket the path even when it is one line so agents receive it atomically
   // and stale terminal paste state cannot turn it into shell commands.
-  return `\x1b[200~${formatAgentImagePath(agent, filePath).split('\x1b').join('\u241b')}\x1b[201~`
+  return bracketMobileImagePaste(formatAgentImagePath(agent, filePath))
+}
+
+// Match desktop terminal paste when no agent identity is available yet.
+export function buildMobileTerminalImagePastePayload(
+  filePath: string,
+  agent?: string | null
+): string {
+  const id = agent?.trim()
+  if (!id || id === 'unknown' || id === 'codex') {
+    const pasted = formatImageDropPasteText(
+      filePath,
+      isWindowsAbsolutePathLike(filePath) ? 'windows' : 'posix'
+    )
+    return bracketMobileImagePaste(pasted ?? filePath)
+  }
+  return buildMobileImagePastePayload(filePath, id)
+}
+
+function bracketMobileImagePaste(pasted: string): string {
+  return `\x1b[200~${pasted.split('\x1b').join('\u241b')}\x1b[201~`
 }

@@ -94,6 +94,20 @@ describe('Pi turn settlement races', () => {
       expect(errors[0]?.text).toContain('`/login`')
     }
   })
+  it.each(['user', 'custom'])(
+    'accepts a steer only at its own echo after a %s message starts an idle run',
+    async (role) => {
+      const h = await setup()
+      h.turns.receive({ type: 'agent_start' })
+      await h.turns.submit('steer', 1, { type: 'prompt', message: 'steer' })
+      h.turns.receive({ type: 'message_end', message: { role, content: [] } })
+      await h.flush()
+      expect(h.accepted).not.toHaveBeenCalled()
+      h.turns.receive({ type: 'message_end', message: { role: 'user', content: [] } })
+      await h.flush()
+      expect(h.accepted).toHaveBeenCalledWith('steer')
+    }
+  )
   it('chooses steering after asynchronous dispatch admission finishes', async () => {
     const h = await setup()
     await h.turns.submit('first', 1, { type: 'prompt', message: 'first' })

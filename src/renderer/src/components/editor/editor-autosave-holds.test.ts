@@ -56,4 +56,26 @@ describe('discard hold keys on a Windows client', () => {
     expect(key).not.toBe('a')
     expect(key).toBe(editorFileHoldKey(state, tab('b', 'c:/repo/a.ts', local)))
   })
+
+  it('holds a `\\\\wsl.localhost` tab while its file is discarded via `\\\\wsl$`', () => {
+    const local = { worktreeId: 'wt-1' }
+    const tabKey = editorFileHoldKey(
+      state,
+      tab('b', '\\\\wsl.localhost\\ubuntu\\repo\\a.ts', local)
+    )
+    const discarded = pathMutationHoldKeys(state, {
+      worktreeId: 'wt-1',
+      worktreePath: '\\\\wsl$\\Ubuntu\\repo',
+      relativePath: 'a.ts'
+    })
+    expect(tabKey).not.toBe('b')
+    expect(discarded.has(tabKey)).toBe(true)
+    // The Linux path keeps its case, and a real share named `wsl` is another machine.
+    expect(
+      discarded.has(editorFileHoldKey(state, tab('c', '\\\\wsl$\\Ubuntu\\repo\\A.ts', local)))
+    ).toBe(false)
+    expect(
+      discarded.has(editorFileHoldKey(state, tab('d', '\\\\wsl\\Ubuntu\\repo\\a.ts', local)))
+    ).toBe(false)
+  })
 })

@@ -1,9 +1,8 @@
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import { boundHostList, HOST_LIST_ROW_LIMIT } from '../host-picker/bounded-host-list'
+import { boundHostList, type BoundedHostList } from '../host-picker/bounded-host-list'
 
 // Why: a generated ~/.ssh/config can import >10k hosts; a row each made one open cost GBs of DOM.
 export const SSH_STATUS_MENU_IDLE_ROW_LIMIT = 25
-export const SSH_HOST_FIND_RESULT_LIMIT = HOST_LIST_ROW_LIMIT
 
 export type SshStatusMenuTarget = { id: string; label: string; status: SshConnectionStatus }
 
@@ -45,11 +44,10 @@ export function splitSshStatusMenuRows(
 export function findSshHostMatches(
   targets: readonly SshStatusMenuTarget[],
   query: string,
-  limit = SSH_HOST_FIND_RESULT_LIMIT
-): { matches: SshStatusMenuTarget[]; moreCount: number } {
-  const { shown, hiddenCount } = boundHostList(
+  limit?: number
+): BoundedHostList<SshStatusMenuTarget> {
+  return boundHostList(
     targets.filter((target) => target.status !== 'connected'),
     { query, limit }
   )
-  return { matches: shown, moreCount: hiddenCount }
 }

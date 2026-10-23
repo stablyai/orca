@@ -1,12 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type {
+  StructuredAgentSessionEventSink,
+  StructuredAgentSessionReadingControl
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { bindClaudeJournalReadingControl } from './claude-structured-session-journal-control'
 
 function approval(promptKey: string): ClaudePendingPrompt {
   return {
@@ -173,5 +177,38 @@ describe('Claude journal prompt cancellation retry', () => {
     translator.handle(rootResult())
     expect(state.appendAttempts()).toBe(2)
     expect(state.durableApproval()).toMatchObject({ resolution: { state: 'cancelled' } })
+  })
+
+  it('closes the card on the sink drain when no later provider event comes', () => {
+    const state = transientBackpressureSink('append', true)
+    let control: StructuredAgentSessionReadingControl | undefined
+    const sink: StructuredAgentSessionEventSink = {
+      ...state.sink,
+      bindReadingControl: (next) => {
+        control = next
+        return () => {}
+      }
+    }
+    const translator = createClaudeJournalTranslator({ sink })
+    const connection = { pauseReading: vi.fn(), resumeReading: vi.fn() }
+    bindClaudeJournalReadingControl(sink, connection, translator)
+    const prompt = approval('permission-drain')
+
+    translator.handle({ type: 'prompt', sessionId: 'orca-session', prompt })
+    control?.pauseReading()
+    translator.handle({
+      type: 'prompt-cancelled',
+      sessionId: 'orca-session',
+      promptKey: prompt.promptKey
+    })
+    // Still full at this drain: the card stays owed and reading waits for the next one.
+    control?.resumeReading()
+    expect(state.durableApproval()).toMatchObject({ resolution: { state: 'pending' } })
+    expect(connection.resumeReading).not.toHaveBeenCalled()
+
+    state.release()
+    control?.resumeReading()
+    expect(state.durableApproval()).toMatchObject({ resolution: { state: 'cancelled' } })
+    expect(connection.resumeReading).toHaveBeenCalledOnce()
   })
 })

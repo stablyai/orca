@@ -27,10 +27,11 @@ import type {
   SkillShareResolvedOperation
 } from '../../shared/skill-sharing-contract'
 import type {
-  SkillFreshnessInventory,
-  SkillUpdateRun,
-  SkillUpdateStartResult
-} from '../../shared/skill-freshness'
+  BundledSkillExecuteRequest,
+  BundledSkillInstallResult,
+  BundledSkillPlan,
+  BundledSkillPlanRequest
+} from '../../shared/bundled-skill-plan'
 
 import type {
   SkillDeletePlan,
@@ -40,11 +41,9 @@ import type {
 
 export type SkillsApi = {
   discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
-  freshnessInventory: () => Promise<SkillFreshnessInventory>
-  startUpdateRun: (names: string[]) => Promise<SkillUpdateStartResult>
-  cancelUpdateRun: () => Promise<void>
-  acknowledgeUpdateRun: () => Promise<void>
-  getUpdateRun: () => Promise<SkillUpdateRun>
+  /** This machine's plan for Orca's installed skills; paired hosts plan over RPC. */
+  bundledPlan: (request?: BundledSkillPlanRequest) => Promise<BundledSkillPlan>
+  bundledExecute: (request: BundledSkillExecuteRequest) => Promise<BundledSkillInstallResult>
   prepareShare: (input: {
     skillIds: string[]
     bundleName: string
@@ -89,5 +88,4 @@ export type SkillsApi = {
   listWslDistros: (environmentId?: string) => Promise<string[]>
   onInstallProgress: (callback: (progress: SkillInstallProgress) => void) => () => void
   onShareProgress: (callback: (progress: SkillShareProgress) => void) => () => void
-  onUpdateRun: (callback: (run: SkillUpdateRun) => void) => () => void
 }

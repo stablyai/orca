@@ -1,16 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isLocalBrowserPageOwner } from './browser'
 import type { AppState } from '../types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   createBrowserMockApi,
   createTestStore,
   resetBrowserRuntimeMocks
 } from './browser-slice-test-harness'
+import { createTestStoreDrawnFromMain } from './browser-slice-drawn-from-main.test-fixture'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
 vi.mock('@/runtime/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
 }))
@@ -119,14 +132,26 @@ describe('createBrowserSlice runtime guard', () => {
     expect(isLocalBrowserPageOwner(store.getState(), 'remote-wt', null)).toBe(true)
   })
 
-  it('stores a runtime-resolved browser partition without a renderer profile mirror', () => {
-    const store = createTestStore()
-    store.setState({ browserSessionProfiles: [] })
+  it('stores a runtime-resolved browser partition without a renderer profile mirror', async () => {
+    const { store, main } = await createTestStoreDrawnFromMain({ browserSessionProfiles: [] })
 
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       sessionProfileId: 'profile-isolated',
       sessionPartition: 'persist:orca-browser-session-profile-isolated'
     })
+    await main.settle()
+
+    expect(layoutApplyTestTransport.sentOfType('openBrowserTab')).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? [
+            expect.objectContaining({
+              browserTabId: tab.id,
+              profileId: 'profile-isolated',
+              sessionPartition: 'persist:orca-browser-session-profile-isolated'
+            })
+          ]
+        : []
+    )
 
     expect(tab.sessionProfileId).toBe('profile-isolated')
     expect(tab.sessionPartition).toBe('persist:orca-browser-session-profile-isolated')
@@ -135,12 +160,13 @@ describe('createBrowserSlice runtime guard', () => {
     )
   })
 
-  it('stores a runtime-resolved partition when switching browser tab profiles', () => {
-    const store = createTestStore()
+  it('stores a runtime-resolved partition when switching browser tab profiles', async () => {
+    const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       sessionProfileId: null,
       sessionPartition: 'persist:orca-browser'
     })
+    await main.settle()
 
     store
       .getState()
@@ -149,6 +175,20 @@ describe('createBrowserSlice runtime guard', () => {
         'profile-isolated',
         'persist:orca-browser-session-profile-isolated'
       )
+    await main.settle()
+
+    // A layout-owner build's main records the switch; its frame draws the record.
+    expect(layoutApplyTestTransport.sentOfType('setBrowserTabProfile')).toEqual(
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? [
+            expect.objectContaining({
+              browserTabId: tab.id,
+              profileId: 'profile-isolated',
+              sessionPartition: 'persist:orca-browser-session-profile-isolated'
+            })
+          ]
+        : []
+    )
 
     expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toEqual(
       expect.objectContaining({

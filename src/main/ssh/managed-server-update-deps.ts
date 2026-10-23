@@ -3,9 +3,10 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import type { ManagedServerUpdateDeps } from './managed-server-update-check'
 import { autoUpdateManagedOrcadEnvironment } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import { requireManagedOrcadTargetStore } from '../managed-server/lifecycle/orcad-managed-runtime-context'
-
-// Hosts whose update failed this launch. Session-only: SshTarget is published to peers.
-const failedThisLaunch = new Set<string>()
+import {
+  orcadUpdateFailedThisLaunch,
+  recordOrcadUpdateFailedThisLaunch
+} from '../managed-server/lifecycle/orcad-managed-update-failure-memory'
 
 export function managedServerUpdateDeps(userDataPath: string): ManagedServerUpdateDeps {
   const registry = requireManagedOrcadTargetStore()
@@ -18,10 +19,14 @@ export function managedServerUpdateDeps(userDataPath: string): ManagedServerUpda
       const failure = (registry.getTarget(target.id) ?? target).managedServerUpdateFailure
       return failure?.appVersion === appVersion ? failure.reason : null
     },
-    // Why only a failure counts: a deferral or skip never tried the update.
-    failedThisLaunch: (target) => failedThisLaunch.has(target.id),
+    // Why only a failure counts: a deferral or skip never tried the update. Why session-only:
+    // SshTarget is published to peers.
+    failedThisLaunch: (target) => orcadUpdateFailedThisLaunch({ kind: 'ssh', id: target.id }),
     recordUpdateFailure: (target, reason) => {
-      failedThisLaunch.add(target.id)
+      recordOrcadUpdateFailedThisLaunch(
+        { kind: 'ssh', id: target.id },
+        { code: 'orcad_update_failed', reason }
+      )
       registry.updateTarget(target.id, { managedServerUpdateFailure: { reason, appVersion } })
     },
     clearUpdateFailure: (target) => {

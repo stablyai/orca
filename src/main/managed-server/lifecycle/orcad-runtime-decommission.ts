@@ -31,7 +31,7 @@ import { withManagedOrcadLifecycle } from '../../ssh/orcad-runtime-maintenance'
 import { collectManagedTerminalCensus } from '../../ssh/orcad-terminal-census-client'
 import { RemoteInstallLockBusyError } from '../install/remote-install-lock'
 
-export type ManagedOrcadStopPolicy = {
+type ManagedOrcadStopPolicy = {
   isActiveEnvironment: (environmentId: string) => boolean
   /** Invalidates the server's transport and retires its client-side state once it is unlinked. */
   retireLocalState: (environmentId: string) => Promise<void> | void

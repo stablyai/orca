@@ -112,6 +112,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getDb: () => this.getOrchestrationDbIfAvailable(),
     getLeaves: () => this.leaves.values(),
     getPtys: () => this.ptysById.values(),
+    paneOf: (pty) => this.paneOfPty(pty),
     issueLeafHandle: (leaf) => this.issueHandle(leaf),
     issuePtyHandle: (pty) => this.issuePtyHandle(pty),
     makePaneKey: (leaf) => this.makeRuntimePaneKey(leaf),

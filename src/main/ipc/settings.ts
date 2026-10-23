@@ -203,6 +203,14 @@ export function registerSettingsHandlers(
       'alwaysForceDeletePreservedBranches' in sanitizedArgs
         ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
         : store.updateSettings(sanitizedArgs, updateOptions)
+    if (
+      'experimentalAgentDashboardPopout' in sanitizedArgs &&
+      before.experimentalAgentDashboardPopout !== result.experimentalAgentDashboardPopout
+    ) {
+      track('agent_dashboard_enabled', {
+        enabled: result.experimentalAgentDashboardPopout === true
+      })
+    }
     const proxySettingsChanged =
       ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
       ('httpProxyBypassRules' in sanitizedArgs &&

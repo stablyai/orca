@@ -4,6 +4,7 @@ import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-typ
 import { layoutOwnerPaneGestures } from './terminal-pane-layout-owner-gestures'
 import { withPaneSplitRatios } from '../../../../shared/workspace-layout/split-ratio-intents'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const mocks = vi.hoisted(
   (): {
@@ -78,7 +79,7 @@ describe('layoutOwnerPaneGestures', () => {
         refused: expect.any(Function)
       }
     )
-    mocks.send.mock.calls[0]?.[2].apply({})
+    mocks.send.mock.calls[0]?.[2].apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
 
     expect(move).not.toHaveBeenCalled()
   })

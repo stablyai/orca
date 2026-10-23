@@ -159,13 +159,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey)
   }
 
-  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    dispatchClaudeMessage(
-      this.session(input.sessionId),
-      input,
-      this.deps.requestTimeoutMs,
-      this.deps.logger
-    )
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) => {
+    const { requestTimeoutMs, logger } = this.deps
+    return dispatchClaudeMessage(this.session(input.sessionId), input, requestTimeoutMs, logger)
+  }
 
   // A rewind forks the kept conversation into a new session, which the next launch makes.
   forkForRewind = claudeForkForRewind

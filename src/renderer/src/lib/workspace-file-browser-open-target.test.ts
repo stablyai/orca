@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin: () => mocks.environmentId
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => mocks.environmentId
 }))
 
 vi.mock('@/store', () => ({

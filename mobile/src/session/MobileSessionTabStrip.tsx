@@ -7,6 +7,7 @@ import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
 import { agentDotState, agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
 import {
+  getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
@@ -56,7 +57,8 @@ export function MobileSessionTabStrip({
     openSessionTabActionSheetAfterKeyboardDismiss,
     setRenameTarget,
     activeHandleRef,
-    visibleTabs
+    visibleTabs,
+    terminals
   } = controller
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
@@ -187,7 +189,8 @@ export function MobileSessionTabStrip({
         >
           {visibleTabs.map((t, index) => {
             const tabState = tabStates.get(t.id)
-            const title = getMobileSessionTabTitle(t)
+            const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(t, terminals)
+            const title = getMobileSessionTabTitle(t, hostAgentIdentity)
             return (
               <Pressable
                 key={t.id}
@@ -231,7 +234,7 @@ export function MobileSessionTabStrip({
                     {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
                     {t.type === 'terminal' &&
                       (() => {
-                        const agentId = resolveMobileTerminalTabAgentId(t)
+                        const agentId = resolveMobileTerminalTabAgentId(t, hostAgentIdentity)
                         return agentId ? (
                           <MobileAgentIcon agentId={agentId} size={13} />
                         ) : (

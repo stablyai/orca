@@ -54,6 +54,7 @@ function setup(
     mode?: 'off' | 'dry-run' | 'on'
     startedAt?: number
     log?: (line: string) => void
+    demote?: (cellId: string) => string | null
   } = {}
 ) {
   const now = { value: 100_000 }
@@ -72,7 +73,7 @@ function setup(
     }),
     demote: vi.fn(async (target: { cellId: string }, request: { epoch: number; joinedAt: number }) => {
       demoted.push({ cellId: target.cellId, epoch: request.epoch, joinedAt: request.joinedAt })
-      return true
+      return options.demote ? options.demote(target.cellId) : 'demoted'
     })
   } satisfies Pick<CellReserveClient, 'reserve' | 'demote'>
   // Each director's estimate starts empty; a second of refill gives it its share.
@@ -502,5 +503,43 @@ describe('reserve assignment on a director', () => {
       { outcomes: { full: 2 }, cells: { c1: { outcomes: { full: 2 }, fullWithRoom: 2, minFullFreeShare: 0.5 } } },
       { outcomes: { ok: 2 }, cells: { c1: { outcomes: { ok: 2 }, fullWithRoom: 0, minFullFreeShare: null } } }
     ])
+  })
+
+  describe('when a cell answers a demotion', () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+    const outcomes = (lines: string[]) =>
+      lines
+        .map((line) => JSON.parse(line))
+        .filter((entry) => entry.event === 'orca_relay_reserve_demote_outcome')
+
+    // The map follows the cell's feed: a refusing cell repairs that feed itself.
+    it('logs the answer by host digest and leaves the seat to the feed', async () => {
+      const lines: string[] = []
+      const { assignment, directory } = setup({
+        feeds: [feed('c1', { full: [seated(10, 1_000)] }), feed('c2')],
+        demote: () => 'not-seated',
+        log: (line) => lines.push(line)
+      })
+      assignment.demoteSeat({ ...HOST, cellId: 'c1', epoch: 10, joinedAt: 1_000 }, 'reconcile')
+      await settle()
+      expect(outcomes(lines)).toMatchObject([
+        { via: 'reconcile', cellId: 'c1', epoch: 10, outcome: 'not-seated' }
+      ])
+      expect(outcomes(lines)[0].relayHostIdDigest).toMatch(/^[0-9a-f]{12}$/)
+      expect(lines.join('\n')).not.toContain(HOST.relayHostId)
+      expect(directory.seatsOnCell('c1')).toHaveLength(1)
+    })
+
+    it('records a cell it could not reach as unreachable', async () => {
+      const lines: string[] = []
+      const { assignment } = setup({
+        feeds: [feed('c1', { full: [seated(10, 1_000)] }), feed('c2')],
+        demote: () => null,
+        log: (line) => lines.push(line)
+      })
+      assignment.demoteSeat({ ...HOST, cellId: 'c1', epoch: 10, joinedAt: 1_000 }, 'reconcile')
+      await settle()
+      expect(outcomes(lines)).toMatchObject([{ outcome: 'unreachable' }])
+    })
   })
 })

@@ -10,6 +10,7 @@ import {
   readKimiWorkDirBySessionId
 } from './session-scanner-kimi-paths'
 import type { FileWithMtime } from './session-scanner-types'
+import type { TranscriptMessage } from './session-transcript-consumers'
 
 let tempDirs: string[] = []
 
@@ -182,32 +183,50 @@ describe('parseKimiSessionFile', () => {
     expect(session?.resumeCommand).toBe(`kimi --session '${SESSION_ID}'`)
   })
 
-  it('keeps preview messages at the 220-char preview limit, not the 96-char title limit', async () => {
-    const longReply = 'x'.repeat(300)
-    const { file } = await writeKimiSession({
-      wireLines: [
-        {
-          type: 'context.append_message',
-          message: {
-            role: 'user',
-            content: [{ type: 'text', text: 'y'.repeat(300) }],
-            origin: { kind: 'user' }
-          }
-        },
-        {
-          type: 'context.append_loop_event',
-          event: { type: 'content.part', part: { type: 'text', text: longReply } }
-        },
-        { type: 'context.append_loop_event', event: { type: 'step.end' } }
-      ]
-    })
-    const session = await parseKimiSessionFile(file, 'darwin')
-    const [userPreview, assistantPreview] = session!.previewMessages
-    // 220-char cap = 217 chars + '...'; the 96-char title cap would be 93 + '...'.
-    expect(userPreview.text.length).toBe(220)
-    expect(assistantPreview.text.length).toBe(220)
-    expect(assistantPreview.text.endsWith('...')).toBe(true)
-  })
+  it.each([300, 256 * 1024 + 1])(
+    'publishes %i-character Kimi turns independently of the preview cap',
+    async (length) => {
+      const longReply = 'x'.repeat(length)
+      const messages: TranscriptMessage[] = []
+      const { file } = await writeKimiSession({
+        wireLines: [
+          {
+            type: 'context.append_message',
+            message: {
+              role: 'user',
+              content: [{ type: 'text', text: 'y'.repeat(length) }],
+              origin: { kind: 'user' }
+            }
+          },
+          {
+            type: 'context.append_loop_event',
+            event: { type: 'content.part', part: { type: 'text', text: longReply.slice(0, 150) } }
+          },
+          {
+            type: 'context.append_loop_event',
+            event: { type: 'content.part', part: { type: 'text', text: longReply.slice(150) } }
+          },
+          { type: 'context.append_loop_event', event: { type: 'step.end' } }
+        ]
+      })
+      const session = await parseKimiSessionFile(file, 'darwin', {
+        active: true,
+        push: (message) => messages.push(message)
+      })
+      const [userPreview, assistantPreview] = session!.previewMessages
+      // 220-char cap = 217 chars + '...'; the 96-char title cap would be 93 + '...'.
+      expect(userPreview.text.length).toBe(220)
+      expect(assistantPreview.text.length).toBe(220)
+      expect(assistantPreview.text.endsWith('...')).toBe(true)
+      expect(messages.map((message) => message.text)).toEqual([
+        'y'.repeat(Math.min(length, 256 * 1024)),
+        longReply.slice(0, 256 * 1024)
+      ])
+      expect(messages.map((message) => message.textTruncated)).toEqual(
+        length > 256 * 1024 ? [true, true] : [undefined, undefined]
+      )
+    }
+  )
 
   it('falls back to lastPrompt when the title is empty', async () => {
     const { file } = await writeKimiSession({

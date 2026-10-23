@@ -7,7 +7,7 @@ import type { AgentStatusRuntime } from './agent-status-runtime'
 import {
   getAgentRowGeneratedTitleText,
   orchestrationLabelsMatchLiveDispatch
-} from '@/lib/agent-row-primary-text'
+} from '../../../../shared/agent-row-primary-text'
 import {
   mergeCurrentOrchestrationContext,
   orchestrationMapsEqual

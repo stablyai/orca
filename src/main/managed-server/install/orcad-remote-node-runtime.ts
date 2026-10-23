@@ -28,7 +28,7 @@ import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { uploadRelayDirectory } from './remote-install-transfers'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { remoteSha256Command } from './remote-sha256-command'
 import { stageNodeRuntimeArchive } from './remote-node-runtime-host-download'
 import {
@@ -97,11 +97,7 @@ export function posixNodeRuntimeExecutable(host: RemoteHostPlatform, runtimeDir:
 }
 
 /** A per-installer stage beside the runtime; its dot prefix keeps it out of `node-*` listings. */
-export function nodeRuntimeStageDir(
-  host: RemoteHostPlatform,
-  runtimeDir: string,
-  token: string
-): string {
+function nodeRuntimeStageDir(host: RemoteHostPlatform, runtimeDir: string, token: string): string {
   return joinRemotePath(
     host,
     remoteDirname(runtimeDir, host),
@@ -249,11 +245,11 @@ export function installNodeRuntimeFromHostArchiveCommand(
   return `(umask 077 && mkdir -p ${stage} && ${copy} && ${promote}); status=$?; rm -rf ${stage}; exit $status`
 }
 
-export type RemoteRuntimeStep = <T>(operation: () => Promise<T>) => Promise<T>
+type RemoteRuntimeStep = <T>(operation: () => Promise<T>) => Promise<T>
 
 const runDirectly: RemoteRuntimeStep = (operation) => operation()
 
-export type EnsuredRemoteNodeRuntime = {
+type EnsuredRemoteNodeRuntime = {
   executable: string
   transfer: 'cached' | 'uploaded' | 'host-downloaded'
 }
@@ -320,7 +316,7 @@ export async function ensureRemoteOrcadNodeRuntime(options: {
       exec,
       stageDir,
       upload: (dir) =>
-        remoteStep(() => uploadRelayDirectory(conn, dir, stageDir, host, { signal })),
+        remoteStep(() => uploadRemoteInstallDirectory(conn, dir, stageDir, host, { signal })),
       onLocalStage: (dir) => (localStage = dir)
     })
     let promoteRan = false

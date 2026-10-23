@@ -1,9 +1,12 @@
 import { useId, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import {
+  parseAgentDefaultEnvDraft,
+  stringifyAgentDefaultEnvDraft,
+  type AgentDefaultEnvDraftInvalidReason
+} from './agent-default-env-draft'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
 
 export function AgentCommandOverrideInput({
@@ -156,12 +159,15 @@ export function AgentDefaultEnvInput({
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
   const [envDraft, setEnvDraft] = useState(draftSeed)
-  const [envDraftTooLarge, setEnvDraftTooLarge] = useState(false)
+  const [envDraftError, setEnvDraftError] = useState<AgentDefaultEnvDraftInvalidReason | null>(null)
   const envDraftErrorId = useId()
   const commitEnv = (): void => {
+    if (envDraft === draftSeed) {
+      return
+    }
     const parsedDraft = parseAgentDefaultEnvDraft(envDraft)
-    setEnvDraftTooLarge(parsedDraft.tooLarge)
-    if (!parsedDraft.tooLarge) {
+    setEnvDraftError(parsedDraft.invalidReason)
+    if (!parsedDraft.invalidReason) {
       onSaveEnv(parsedDraft.env)
     }
   }
@@ -176,8 +182,8 @@ export function AgentDefaultEnvInput({
           value={envDraft}
           onChange={(event) => {
             setEnvDraft(event.target.value)
-            if (envDraftTooLarge) {
-              setEnvDraftTooLarge(false)
+            if (envDraftError) {
+              setEnvDraftError(null)
             }
           }}
           onBlur={commitEnv}
@@ -188,7 +194,7 @@ export function AgentDefaultEnvInput({
             }
             if (event.key === 'Escape') {
               setEnvDraft(draftSeed)
-              setEnvDraftTooLarge(false)
+              setEnvDraftError(null)
               event.currentTarget.blur()
             }
           }}
@@ -197,12 +203,9 @@ export function AgentDefaultEnvInput({
             translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
           }
           spellCheck={false}
-          aria-invalid={envDraftTooLarge || undefined}
-          aria-describedby={envDraftTooLarge ? envDraftErrorId : undefined}
-          className={cn(
-            'h-7 flex-1 font-mono text-xs',
-            envDraftTooLarge && 'border-destructive/50 bg-destructive/5'
-          )}
+          aria-invalid={envDraftError ? true : undefined}
+          aria-describedby={envDraftError ? envDraftErrorId : undefined}
+          className="h-7 flex-1 font-mono text-xs"
         />
         {draftSeed !== defaultEnvText && (
           <Button
@@ -212,7 +215,7 @@ export function AgentDefaultEnvInput({
             onClick={() => {
               onSaveEnv(defaultEnv)
               setEnvDraft(defaultEnvText)
-              setEnvDraftTooLarge(false)
+              setEnvDraftError(null)
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
@@ -220,12 +223,17 @@ export function AgentDefaultEnvInput({
           </Button>
         )}
       </div>
-      {envDraftTooLarge && (
+      {envDraftError && (
         <p id={envDraftErrorId} className="mt-1 text-[11px] text-destructive">
-          {translate(
-            'auto.components.settings.AgentsPane.3f1bdf3cb4',
-            'Environment text is too large to parse safely.'
-          )}
+          {envDraftError === 'too-large'
+            ? translate(
+                'auto.components.settings.AgentsPane.3f1bdf3cb4',
+                'Environment text is too large to parse safely.'
+              )
+            : translate(
+                'settings.agents.environmentUnclosedQuote',
+                'Close the quote to save the environment.'
+              )}
         </p>
       )}
     </div>

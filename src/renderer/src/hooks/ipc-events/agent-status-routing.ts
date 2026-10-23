@@ -139,4 +139,4 @@ export function resolveHookPayloadAgentType(
   return { ...payload, agentType: 'openclaude' }
 }
 
-export { resolvePaneKey, resolveWorktreeConnection } from '../../lib/agent-status-pane-ownership'
+export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'

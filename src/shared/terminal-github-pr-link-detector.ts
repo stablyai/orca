@@ -101,17 +101,6 @@ type TerminalUrlCandidate = {
   endIndex: number
 }
 
-function findNextHttpSchemeIndex(value: string, start: number): number {
-  let nextIndex = -1
-  for (const prefix of HTTP_SCHEME_PREFIXES) {
-    const candidate = value.indexOf(prefix, start)
-    if (candidate !== -1 && (nextIndex === -1 || candidate < nextIndex)) {
-      nextIndex = candidate
-    }
-  }
-  return nextIndex
-}
-
 function isTerminalUrlTerminator(char: string): boolean {
   return char === '"' || char === "'" || char === '<' || char === '>' || /\s/.test(char)
 }
@@ -127,10 +116,16 @@ function findTerminalUrlCandidateEnd(value: string, start: number): number {
 }
 
 function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCandidate> {
+  const nextSchemeIndexes = HTTP_SCHEME_PREFIXES.map((prefix) => value.indexOf(prefix))
   let searchStart = 0
 
   while (searchStart < value.length) {
-    const candidateStart = findNextHttpSchemeIndex(value, searchStart)
+    let candidateStart = -1
+    for (const index of nextSchemeIndexes) {
+      if (index !== -1 && (candidateStart === -1 || index < candidateStart)) {
+        candidateStart = index
+      }
+    }
     if (candidateStart === -1) {
       return
     }
@@ -138,6 +133,11 @@ function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCand
     const candidateEnd = findTerminalUrlCandidateEnd(value, candidateStart)
     const rawUrl = value.slice(candidateStart, candidateEnd)
     searchStart = Math.max(candidateEnd, candidateStart + 1)
+    for (let index = 0; index < HTTP_SCHEME_PREFIXES.length; index++) {
+      if (nextSchemeIndexes[index] !== -1 && nextSchemeIndexes[index]! < searchStart) {
+        nextSchemeIndexes[index] = value.indexOf(HTTP_SCHEME_PREFIXES[index]!, searchStart)
+      }
+    }
     if (
       rawUrl.length > MAX_TERMINAL_GITHUB_PR_URL_LENGTH ||
       !rawUrl.includes(GITHUB_PR_PATH_MARKER)

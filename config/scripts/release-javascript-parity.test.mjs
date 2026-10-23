@@ -206,3 +206,27 @@ it('compares manifest keys without ordering differences while preserving import 
   })
   expect(compareJavascriptParityFiles(before, changed)).toEqual(['renderer/.vite/manifest.json'])
 })
+
+it('compares web file membership after asset aliases change their sort order', () => {
+  const before = inventory({
+    'renderer/assets/App-AAAAAAAA.js': 'desktop()',
+    'renderer/assets/App-BBBBBBBB.js': 'web()',
+    'renderer/.orca-web-client-files.json': '["assets/App-AAAAAAAA.js","assets/App-BBBBBBBB.js"]'
+  })
+  const files = {
+    'renderer/assets/App-CCCCCCCC.js': 'web()',
+    'renderer/assets/App-DDDDDDDD.js': 'desktop()'
+  }
+  const after = inventory({
+    ...files,
+    'renderer/.orca-web-client-files.json': '["assets/App-CCCCCCCC.js","assets/App-DDDDDDDD.js"]'
+  })
+  expect(compareJavascriptParityFiles(before, after)).toEqual([])
+  const changed = inventory({
+    ...files,
+    'renderer/.orca-web-client-files.json': '["assets/App-CCCCCCCC.js"]'
+  })
+  expect(compareJavascriptParityFiles(before, changed)).toEqual([
+    'renderer/.orca-web-client-files.json'
+  ])
+})

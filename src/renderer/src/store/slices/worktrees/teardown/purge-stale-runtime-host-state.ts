@@ -19,6 +19,7 @@ import {
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
+import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
 
 export function createPurgeStaleRuntimeHostState(
   set: WorktreeSliceSet,
@@ -29,6 +30,8 @@ export function createPurgeStaleRuntimeHostState(
     if (removed.size === 0) {
       return
     }
+    // Why before the purge: delayed views must commit text it may offer back.
+    flushRetiredHostEdits(get(), removed)
     // Why no flag settle: the purged host's rows are dropped here, and a surviving same-id row on
     // another host must keep its own flag (a marker-less Mark as unread included).
     settleAttentionRemovedBy(

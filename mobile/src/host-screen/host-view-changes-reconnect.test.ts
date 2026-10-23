@@ -67,7 +67,7 @@ afterEach(() => {
 async function mountScreen(client: FakeSession) {
   const held: { view?: ReturnType<typeof useHostViewSettings> } = {}
   function Probe({ connState }: { connState: ConnectionState }): null {
-    const state = useHostScreenState('host-1', undefined)
+    const state = useHostScreenState('host-1')
     state.clientRef.current = client
     const view = useHostViewSettings({ client, connState, state })
     held.view = view

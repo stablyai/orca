@@ -123,6 +123,11 @@ export function NativeChatInteractiveCard({
         onCollapse={onCollapse}
         shouldFocus={shouldFocus}
         onCancel={() => {
+          if (card.prompt.replyAsMessage) {
+            // The agent is not waiting on this card, and Escape would interrupt its turn.
+            onDismiss()
+            return
+          }
           if (cancellingRef.current) {
             return
           }

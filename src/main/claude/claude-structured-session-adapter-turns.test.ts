@@ -226,7 +226,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     ).rejects.toThrow('timed out')
   })
 
-  it('hydrates live model choices and maps the resolved current model to its CLI id', async () => {
+  it('reports the running literal model without reading child capability choices', async () => {
     const claude = fakeClaude({
       initModel: 'claude-sonnet-5',
       routes: {
@@ -260,23 +260,13 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       sessionId: 'session-1',
       fence: 7
     })
-    // The listing the host saves for the account: the CLI's rows, none of this session's state.
-    expect(catalogListing?.models.map((model) => model.id)).toEqual(['opus', 'sonnet'])
-    expect(options).toEqual({
-      models: [
-        {
-          id: 'opus',
-          label: 'Opus',
-          isDefault: true,
-          efforts: [
-            { value: 'low', label: 'Low' },
-            { value: 'high', label: 'High' }
-          ]
-        },
-        { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
-      ],
-      current: { model: 'sonnet', effort: 'high', confirmed: ['model', 'effort'] }
+    expect(catalogListing).toBeUndefined()
+    expect(options.current).toEqual({
+      model: 'claude-sonnet-5',
+      effort: 'high',
+      confirmed: ['model', 'effort']
     })
+    expect(options.models.some((model) => model.label === 'Default')).toBe(false)
   })
 
   it('keeps the shared Claude seed when live model discovery is unavailable', async () => {

@@ -23,6 +23,7 @@ import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../src/shared/native-chat-agent-support'
+import { buildNativeChatPasteBytes } from '../../../src/shared/native-chat-paste-bytes'
 
 /** Sends an ask-user answer to the active chat pane. Claude and Codex selectors
  *  use their agent-specific keystrokes; other agents get pasted label text.
@@ -231,9 +232,9 @@ export function useMobileNativeChatAnswerSend(args: {
           }
           return false
         }
-        // Grok commits pasted labels; Claude and Codex need their selector-specific
+        // Grok and async questions take pasted text; Claude and Codex need their selector-specific
         // keystrokes paced so each step renders before the next lands.
-        if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
+        if (prompt.replyAsMessage || !shouldStepNativeChatAskAnswer(agentRef.current)) {
           // This shape pastes the label into the composer and commits it, so an
           // orphaned image paste would be submitted along with the answer (#10228).
           // The selector shapes below deliberately skip the heal: their keys are
@@ -263,7 +264,11 @@ export function useMobileNativeChatAnswerSend(args: {
           // successor's fence. Test the turn slot, not the generation counter —
           // Stop, ask-cancel and a dropped lease all bump the generation with no
           // successor, and there a landed answer IS a success.
-          const sent = (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
+          const sent =
+            (await sendTerminal(
+              buildNativeChatPasteBytes(formatAskAnswer(prompt, selections)),
+              true
+            )) || fail()
           return sent && writeTurnsRef.current.get(handle) === turn
         }
         const groups =

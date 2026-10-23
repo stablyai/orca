@@ -84,4 +84,18 @@ describe('drop overlay label contrast', () => {
       }
     }
   )
+
+  // The refused label carries the reason, so it keeps a readable surface pair; the dashed frame marks it disabled.
+  const disabledLabel = ruleBody(
+    terminalCss,
+    '.tab-drop-overlay[data-disabled] .tab-drop-overlay__label'
+  )
+
+  it.each(themes)('reads the refusal reason at 4.5:1 or better in the %s theme', (_n, block) => {
+    expect(disabledLabel).toMatch(/color:\s*var\(--foreground\);/)
+    expect(disabledLabel).toMatch(/background:\s*var\(--background\);/)
+    expect(
+      contrast(tokenIn(block, '--foreground'), tokenIn(block, '--background'))
+    ).toBeGreaterThanOrEqual(4.5)
+  })
 })

@@ -13,16 +13,60 @@ import {
 describe('disk write precondition', () => {
   it('compares decoded disk text against the baseline signature', () => {
     const precondition = { expectedSignature: getDiskBaselineSignature('base') }
-    expect(compareDiskWritePrecondition(precondition, 'base')).toBeNull()
-    expect(compareDiskWritePrecondition(precondition, 'newer')).toBe('changed')
-    expect(compareDiskWritePrecondition(precondition, undefined)).toBe('changed')
-    expect(compareDiskWritePrecondition(precondition, null)).toBe('missing')
-    expect(compareDiskWritePrecondition({ ...precondition, allowMissing: true }, null)).toBeNull()
+    expect(compareDiskWritePrecondition(precondition, 'base', 'mine')).toBeNull()
+    expect(compareDiskWritePrecondition(precondition, 'newer', 'mine')).toBe('changed')
+    expect(compareDiskWritePrecondition(precondition, undefined, 'mine')).toBe('changed')
+    expect(compareDiskWritePrecondition(precondition, null, 'mine')).toBe('missing')
+    expect(
+      compareDiskWritePrecondition({ ...precondition, allowMissing: true }, null, 'mine')
+    ).toBeNull()
+  })
+
+  it('accepts a changed disk that already holds exactly the text being saved', () => {
+    const precondition = { expectedSignature: getDiskBaselineSignature('base') }
+    expect(compareDiskWritePrecondition(precondition, 'mine', 'mine')).toBe('identical')
+    expect(compareDiskWritePrecondition(precondition, 'base', 'base')).toBe('identical')
+    expect(compareDiskWritePrecondition(precondition, 'mine\r\n', 'mine\n')).toBe('changed')
+    expect(compareDiskWritePrecondition(precondition, undefined, 'mine')).toBe('changed')
+    // A replacement character may stand for bytes the decode dropped, so it proves nothing.
+    expect(compareDiskWritePrecondition(precondition, 'a�', 'a�')).toBe('changed')
+  })
+
+  it('refuses ambiguous automatic baseline matches but preserves explicit saves', () => {
+    const decoded = Buffer.from([0x61, 0xfe]).toString('utf8')
+    const current = Buffer.from([0x61, 0xff]).toString('utf8')
+    const precondition = { expectedSignature: getDiskBaselineSignature(decoded) }
+    expect(
+      compareDiskWritePrecondition({ ...precondition, requireLosslessUtf8: true }, current, decoded)
+    ).toBe('not-utf8')
+    expect(compareDiskWritePrecondition(precondition, current, decoded)).toBeNull()
+  })
+
+  it('reports an external rewrite as changed before checking for U+FFFD', () => {
+    expect(
+      compareDiskWritePrecondition(
+        { expectedSignature: getDiskBaselineSignature('original'), requireLosslessUtf8: true },
+        'rewritten �',
+        'mine'
+      )
+    ).toBe('changed')
   })
 
   it('treats anything but an explicit refusal from a host as a completed write', () => {
+    expect(parseFileWriteResult({ ok: false, diskConflict: 'not-utf8' })).toEqual({
+      ok: false,
+      diskConflict: 'not-utf8'
+    })
+    expect(parseFileWriteResult({ ok: false, diskConflict: 'later' })).toEqual({
+      ok: false,
+      diskConflict: 'changed'
+    })
     expect(parseFileWriteResult(undefined)).toEqual({ ok: true })
     expect(parseFileWriteResult({ ok: true })).toEqual({ ok: true })
+    expect(parseFileWriteResult({ ok: true, unchanged: true })).toEqual({
+      ok: true,
+      unchanged: true
+    })
     expect(parseFileWriteResult({ ok: false, diskConflict: 'missing' })).toEqual({
       ok: false,
       diskConflict: 'missing'

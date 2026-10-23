@@ -3,7 +3,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getExecutionHostIdForWorktree,
   getKnownExecutionHostIdForWorktree,
-  runtimeEnvironmentIdWithLegacyFallbackUnlessTwin
+  runtimeEnvironmentIdOrLocalUnlessTwin
 } from './worktree-runtime-owner'
 import { resolveTerminalPtyOwner } from './terminal-worktree-route'
 import { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
@@ -44,15 +44,13 @@ const state: WorktreeRuntimeOwnerState = {
   ]
 }
 
-describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
+describe('runtimeEnvironmentIdOrLocalUnlessTwin', () => {
   it('routes to the runtime owner of the worktree', () => {
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, 'runtime-repo::wt-b')).toBe(
-      'owner-env'
-    )
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, 'runtime-repo::wt-b')).toBe('owner-env')
   })
 
   it('keeps explicit-local worktrees local even while a runtime is focused', () => {
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, 'local-repo::wt-a')).toBeNull()
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, 'local-repo::wt-a')).toBeNull()
   })
 
   it('keeps the synthetic floating workspace local while a runtime is focused', () => {
@@ -62,7 +60,7 @@ describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
       activeWorkspaceExecutionHostId: 'runtime:focused-env'
     }
     expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(floatingState, FLOATING_TERMINAL_WORKTREE_ID)
+      runtimeEnvironmentIdOrLocalUnlessTwin(floatingState, FLOATING_TERMINAL_WORKTREE_ID)
     ).toBeNull()
     expect(getKnownExecutionHostIdForWorktree(floatingState, FLOATING_TERMINAL_WORKTREE_ID)).toBe(
       'local'
@@ -73,9 +71,7 @@ describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
   })
 
   it('routes folder workspaces to their project group runtime owner', () => {
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, 'folder:runtime-folder')).toBe(
-      'folder-env'
-    )
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, 'folder:runtime-folder')).toBe('folder-env')
     expect(getExecutionHostIdForWorktree(state, 'folder:runtime-folder')).toBe('runtime:folder-env')
   })
 
@@ -111,10 +107,7 @@ describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
     }
 
     expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        restoredFolderState,
-        'folder:restored-folder'
-      )
+      runtimeEnvironmentIdOrLocalUnlessTwin(restoredFolderState, 'folder:restored-folder')
     ).toBe('restored-env')
     expect(ownerEnvironmentId(restoredFolderState, 'folder:restored-folder')).toBe('restored-env')
     expect(getExecutionHostIdForWorktree(restoredFolderState, 'folder:restored-folder')).toBe(
@@ -123,9 +116,7 @@ describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
   })
 
   it('keeps explicit-local folder workspaces local even while a runtime is focused', () => {
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, 'folder:local-folder')
-    ).toBeNull()
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, 'folder:local-folder')).toBeNull()
     expect(getExecutionHostIdForWorktree(state, 'folder:local-folder')).toBe('local')
 
     const restoredOwnerState: WorktreeRuntimeOwnerState = {
@@ -135,7 +126,7 @@ describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
       }
     }
     expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(restoredOwnerState, 'folder:local-folder')
+      runtimeEnvironmentIdOrLocalUnlessTwin(restoredOwnerState, 'folder:local-folder')
     ).toBeNull()
     expect(getExecutionHostIdForWorktree(restoredOwnerState, 'folder:local-folder')).toBe('local')
   })
@@ -150,7 +141,7 @@ describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
     }
 
     expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(folderConnectionState, 'folder:folder-ssh')
+      runtimeEnvironmentIdOrLocalUnlessTwin(folderConnectionState, 'folder:folder-ssh')
     ).toBeNull()
     expect(getExecutionHostIdForWorktree(folderConnectionState, 'folder:folder-ssh')).toBe(
       'ssh:folder-remote'
@@ -166,10 +157,7 @@ describe('runtimeEnvironmentIdWithLegacyFallbackUnlessTwin', () => {
     }
 
     expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        staleFolderConnectionState,
-        'folder:runtime-folder'
-      )
+      runtimeEnvironmentIdOrLocalUnlessTwin(staleFolderConnectionState, 'folder:runtime-folder')
     ).toBe('folder-env')
     expect(getExecutionHostIdForWorktree(staleFolderConnectionState, 'folder:runtime-folder')).toBe(
       'runtime:folder-env'
@@ -200,7 +188,7 @@ describe('resolveTerminalPtyOwner', () => {
       kind: 'ambiguous'
     })
     // Why: read-only callers keep the old collapse to "no server".
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(twinState, 'twin-repo::wt')).toBeNull()
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(twinState, 'twin-repo::wt')).toBeNull()
   })
 })
 
@@ -228,9 +216,9 @@ describe('the explicit owner environment (resolveOwner)', () => {
     }
 
     expect(ownerEnvironmentId(nestedState, 'nested-repo::remote-worktree')).toBe('owner-hub')
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(nestedState, 'nested-repo::remote-worktree')
-    ).toBe('owner-hub')
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(nestedState, 'nested-repo::remote-worktree')).toBe(
+      'owner-hub'
+    )
     expect(getExecutionHostIdForWorktree(nestedState, 'nested-repo::remote-worktree')).toBe(
       'ssh:hub-private-ssh'
     )
@@ -349,12 +337,12 @@ describe('the explicit owner environment (resolveOwner)', () => {
       }
     }
 
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(multiHubState, 'repo-a::ssh-worktree')
-    ).toBe('hub-a')
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(multiHubState, 'repo-b::ssh-worktree')
-    ).toBe('hub-b')
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(multiHubState, 'repo-a::ssh-worktree')).toBe(
+      'hub-a'
+    )
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(multiHubState, 'repo-b::ssh-worktree')).toBe(
+      'hub-b'
+    )
     expect(getExecutionHostIdForWorktree(multiHubState, 'repo-a::ssh-worktree')).toBe(
       'ssh:private-a'
     )
@@ -364,9 +352,7 @@ describe('the explicit owner environment (resolveOwner)', () => {
   })
 
   it('does not treat the focused runtime as ownership for legacy-local worktrees', () => {
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(state, 'legacy-repo::wt-legacy')
-    ).toBeNull()
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(state, 'legacy-repo::wt-legacy')).toBeNull()
     expect(ownerEnvironmentId(state, 'legacy-repo::wt-legacy')).toBeNull()
     expect(getExecutionHostIdForWorktree(state, 'legacy-repo::wt-legacy')).toBe('local')
     expect(getExecutionHostIdForWorktree(state, 'unknown-repo::wt')).toBe('local')
@@ -401,10 +387,7 @@ describe('the explicit owner environment (resolveOwner)', () => {
 
     expect(ownerEnvironmentId(hostOverrideState, 'runtime-repo::wt-local-override')).toBeNull()
     expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        hostOverrideState,
-        'runtime-repo::wt-local-override'
-      )
+      runtimeEnvironmentIdOrLocalUnlessTwin(hostOverrideState, 'runtime-repo::wt-local-override')
     ).toBeNull()
     expect(
       getExecutionHostIdForWorktree(hostOverrideState, 'runtime-repo::wt-local-override')
@@ -413,10 +396,7 @@ describe('the explicit owner environment (resolveOwner)', () => {
       'worktree-env'
     )
     expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        hostOverrideState,
-        'runtime-repo::wt-runtime-override'
-      )
+      runtimeEnvironmentIdOrLocalUnlessTwin(hostOverrideState, 'runtime-repo::wt-runtime-override')
     ).toBe('worktree-env')
     expect(
       getExecutionHostIdForWorktree(hostOverrideState, 'runtime-repo::wt-runtime-override')
@@ -503,13 +483,10 @@ describe('runtime owner identity indexes', () => {
     }
 
     for (let lookup = 0; lookup < 200; lookup += 1) {
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(indexedState, targetWorktreeId)
+      runtimeEnvironmentIdOrLocalUnlessTwin(indexedState, targetWorktreeId)
       ownerEnvironmentId(indexedState, targetWorktreeId)
       getExecutionHostIdForWorktree(indexedState, targetWorktreeId)
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(
-        indexedState,
-        `folder:${targetFolderWorkspaceId}`
-      )
+      runtimeEnvironmentIdOrLocalUnlessTwin(indexedState, `folder:${targetFolderWorkspaceId}`)
       ownerEnvironmentId(indexedState, `folder:${targetFolderWorkspaceId}`)
       getExecutionHostIdForWorktree(indexedState, `folder:${targetFolderWorkspaceId}`)
     }
@@ -519,9 +496,7 @@ describe('runtime owner identity indexes', () => {
     expect(repoIdReads).toBe(200)
     expect(folderWorkspaceIdReads).toBe(1_000)
     expect(projectGroupIdReads).toBe(1_000)
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(indexedState, targetWorktreeId)).toBe(
-      'repo-owner'
-    )
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(indexedState, targetWorktreeId)).toBe('repo-owner')
     expect(getExecutionHostIdForWorktree(indexedState, `folder:${targetFolderWorkspaceId}`)).toBe(
       'runtime:folder-owner'
     )
@@ -534,10 +509,8 @@ describe('runtime owner identity indexes', () => {
       folderWorkspaces: [{ id: 'folder', projectGroupId: 'group' }],
       projectGroups: [{ id: 'group', connectionId: null, executionHostId: 'runtime:folder-one' }]
     }
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(first, 'worktree')).toBe('repo-one')
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(first, 'folder:folder')).toBe(
-      'folder-one'
-    )
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(first, 'worktree')).toBe('repo-one')
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(first, 'folder:folder')).toBe('folder-one')
 
     const second: WorktreeRuntimeOwnerState = {
       repos: [{ id: 'repo', connectionId: null, executionHostId: 'runtime:repo-two' }],
@@ -547,12 +520,8 @@ describe('runtime owner identity indexes', () => {
       folderWorkspaces: [{ id: 'folder', projectGroupId: 'group' }],
       projectGroups: [{ id: 'group', connectionId: null, executionHostId: 'runtime:folder-two' }]
     }
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(second, 'worktree')).toBe(
-      'worktree-two'
-    )
-    expect(runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(second, 'folder:folder')).toBe(
-      'folder-two'
-    )
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(second, 'worktree')).toBe('worktree-two')
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(second, 'folder:folder')).toBe('folder-two')
   })
 })
 
@@ -654,9 +623,9 @@ describe('active workspace host selection', () => {
   }
 
   it('keeps the HUB transport for the active paired SSH worktree', () => {
-    expect(
-      runtimeEnvironmentIdWithLegacyFallbackUnlessTwin(pairedHubState, PAIRED_HUB_WORKTREE_ID)
-    ).toBe('hub-a')
+    expect(runtimeEnvironmentIdOrLocalUnlessTwin(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe(
+      'hub-a'
+    )
     expect(ownerEnvironmentId(pairedHubState, PAIRED_HUB_WORKTREE_ID)).toBe('hub-a')
   })
 

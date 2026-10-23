@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18n from '@/i18n/i18n'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
+import { moveTabToNewPaneColumn } from '@/components/tab-bar/tab-move-to-pane-column'
 
 type ItemProps = { onSelect?: () => void; children?: ReactNode }
 
@@ -40,11 +41,9 @@ vi.mock('@/components/ui/tooltip', () => {
   const Pass = ({ children }: { children?: ReactNode }) => children
   return { Tooltip: Pass, TooltipTrigger: Pass, TooltipContent: () => null }
 })
-vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
-  TabWorkspaceLayoutMenuSection: () => null
-}))
 vi.mock('@/components/tab-bar/tab-move-to-pane-column', () => ({
-  canMoveTabToNewPaneColumn: () => false
+  canMoveTabToNewPaneColumn: () => true,
+  moveTabToNewPaneColumn: vi.fn()
 }))
 vi.mock('@/store', () => ({
   useAppStore: (select: (state: { keybindings: object }) => unknown) => select({ keybindings: {} })
@@ -89,6 +88,19 @@ describe('a structured chat tab', () => {
     callRuntimeRpc.mockReset().mockResolvedValue({ orcaSessionId: `orca_session_id:${SESSION}` })
     Object.assign(window, {
       api: { ui: { writeClipboardText: vi.fn().mockResolvedValue(undefined) } }
+    })
+  })
+
+  it('keeps Move Tab to Split without fresh-chat shortcut hints', () => {
+    renderToStaticMarkup(<StructuredChatTab />)
+    const right = items.list.find((item) => childrenText(item.children) === 'Right')
+    expect(right).toBeDefined()
+    expect(items.list.some((item) => childrenText(item.children) === 'Down')).toBe(true)
+    right?.onSelect?.()
+    expect(moveTabToNewPaneColumn).toHaveBeenCalledWith({
+      unifiedTabId: 'chat-tab',
+      groupId: 'group-1',
+      direction: 'right'
     })
   })
 

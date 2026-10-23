@@ -291,7 +291,13 @@ describe('structured agent session options', () => {
     ).toEqual([expect.objectContaining({ id: 'model', settable: false, valueSource: 'unknown' })])
     // Before the host answers, and on the built-in list, no saved pick is named.
     expect(viewModel(cold, seed, {})).toBeUndefined()
-    expect(viewModel(settleStructuredAgentSessionBuiltinCatalog(cold), seed, {})).toBeUndefined()
+    const settled = settleStructuredAgentSessionBuiltinCatalog(cold, false)
+    expect(viewModel(settled, seed, {})).toBeUndefined()
+    expect(settleStructuredAgentSessionBuiltinCatalog(settled, false)).toBe(settled)
+    expect(
+      settleStructuredAgentSessionBuiltinCatalog({ ...settled, listingInProgress: true }, false)
+        .listingInProgress
+    ).toBe(false)
     // Derived only: the record itself never takes the seed.
     expect(seeded.record.values.model).toBeUndefined()
     const live = applyStructuredAgentSessionOptions(seeded, CODEX_SESSION_OPTION_CATALOG, {

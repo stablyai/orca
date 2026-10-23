@@ -1,4 +1,5 @@
 import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
+import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
 import {
@@ -9,15 +10,11 @@ import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
-  TerminalCloseAll,
   TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
   TerminalReveal,
-  TerminalSleep,
   TerminalSplit,
-  TerminalStop,
-  TerminalStopExact,
   TerminalWait
 } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
@@ -161,34 +158,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             })
     })
   }),
-  defineMethod({
-    name: 'terminal.stop',
-    permission: 'workspace',
-    params: TerminalStop,
-    handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
-  }),
-  defineMethod({
-    name: 'terminal.closeAll',
-    permission: 'workspace',
-    params: TerminalCloseAll,
-    handler: async (params, { runtime }) => runtime.closeTerminalsForWorktree(params.worktree)
-  }),
-  defineMethod({
-    name: 'terminal.sleep',
-    permission: 'workspace',
-    params: TerminalSleep,
-    handler: async (params, { runtime }) => runtime.sleepTerminalsForWorktree(params.worktree)
-  }),
-  defineMethod({
-    name: 'terminal.stopExact',
-    permission: 'workspace',
-    params: TerminalStopExact,
-    handler: async (params, { runtime }) =>
-      runtime.stopExactTerminalsForWorktree(params.worktree, params.expectedPtyIds, {
-        keepHistory: params.keepHistory,
-        targetOnly: params.targetOnly
-      })
-  }),
+  ...TERMINAL_WORKSPACE_STOP_METHODS,
   defineMethod({
     name: 'terminal.resizeForClient',
     permission: 'workspace',

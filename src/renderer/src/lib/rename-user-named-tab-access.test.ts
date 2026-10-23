@@ -124,7 +124,8 @@ async function expectUserNamedAt(filePath: string): Promise<void> {
     filePath,
     'edited',
     { kind: 'user-file' },
-    expect.anything()
+    expect.anything(),
+    expect.any(Function)
   )
 }
 

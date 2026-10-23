@@ -26,7 +26,7 @@ import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
 import {
   listReferenceWorkspaces,
-  selectReferenceWorkspace,
+  selectWarmedReferenceWorkspace,
   listWorkspaceReferences
 } from './runtime-reference-catalog'
 import { findWorkspaceReferences } from './runtime-reference-find'
@@ -99,6 +99,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
         scan: () => this.scanResolvedWorktreeRepos(),
         join: (scans) => this.joinResolvedWorktreeScans(scans),
         visible: (snapshot) => this.visibleResolvedWorktreeSnapshot(snapshot),
+        lifecycle: this.workspaceLifecycle,
         onClientEvent: (listener, options) => this.onClientEvent(listener, options)
       })
     : null
@@ -109,7 +110,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
           sidebarInputsFeedDomains({
             facts: requireSwitchedOn(this.sidebarFacts),
             pairedServerRows: requireSwitchedOn(this.pairedServerRows),
-            workspaceCreations: requireSwitchedOn(this.workspaceCreations),
+            workspaceLifecycle: requireSwitchedOn(this.workspaceLifecycle),
             workspaceRows: requireSwitchedOn(this.workspaceRows),
             repoIcons: requireSwitchedOn(this.repoIconDataUrls),
             store: () => this.store,
@@ -119,24 +120,16 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
       )
     : null
 
-  private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
-    const catalog = listReferenceWorkspaces(
+  private selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
+    return selectWarmedReferenceWorkspace(
       this.requireStore(),
-      this.resolvedWorktrees.peek()?.worktrees
+      {
+        cached: () => this.resolvedWorktrees.peek()?.worktrees,
+        scan: () => this.listResolvedWorktrees()
+      },
+      selector,
+      cwd
     )
-    try {
-      return selectReferenceWorkspace(catalog, selector, cwd)
-    } catch (error) {
-      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
-        throw error
-      }
-      // Why: unsaved worktrees and cold-cache branches only resolve after a worktree scan.
-      const warmed = listReferenceWorkspaces(
-        this.requireStore(),
-        await this.listResolvedWorktrees()
-      )
-      return selectReferenceWorkspace(warmed, selector, cwd)
-    }
   }
 
   async listWorkspaceReferences(selector: string, cwd?: string) {
@@ -240,17 +233,12 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.resolveAgentTerminalCreateOptions(workspace, opts)
   }
 
-  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
-  hasLiveTerminalForPaneKey(paneKey: string): boolean {
-    return this.getPtyRecordForPaneKey(paneKey)?.connected === true
-  }
-
   private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
     store: () => this.store,
     homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key),
     // An empty title is no title.
     liveTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId) || null,
-    paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null
+    ...this.paneFactSources()
   })
 
   protected markPaneLiveTitlesDirty(): void {
@@ -281,11 +269,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             ? this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId)
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
-        (move) => rekeyMovedPaneOwners(this, move)
+        (move) => rekeyMovedPaneOwners(this, move),
+        this.layoutCommandRun(command)
       )
     // A window's sleep or wake lands after the hook statuses main accepted before it, as in the window.
-    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN &&
-    (command.type === 'sleep' || command.type === 'wake')
+    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
       ? this.inResumeRecordOrder(apply)
       : (placing?.then(apply) ?? apply()))
     // Sent before the reply, so the window can wait for the frame that shows the change.

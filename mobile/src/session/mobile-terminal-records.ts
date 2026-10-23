@@ -10,6 +10,8 @@ export type TerminalRecord = {
   connected?: boolean
   /** From `terminal.list`; a live PTY with no leaf, so it never appears as a tab. */
   orphaned?: boolean
+  /** From `terminal.list`; the host's own pane identity, which tab snapshots never carry. */
+  agentIdentity?: string
 }
 
 export type MobileTerminalSessionTab = {
@@ -174,14 +176,15 @@ function mobileSessionTabEqual(
 // Reconcile a partial session snapshot against the last known record for the
 // same terminal. The snapshot owns live fields (title, activity); the known
 // theme only survives when the snapshot omits it, since lightweight snapshots
-// can drop it.
+// can drop it. The host pane identity survives the same way.
 function mergeTerminalSnapshotWithKnownRecord(
   snapshot: TerminalRecord,
   known: TerminalRecord
 ): TerminalRecord {
   return {
     ...snapshot,
-    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme
+    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme,
+    agentIdentity: snapshot.agentIdentity ?? known.agentIdentity
   }
 }
 
@@ -279,7 +282,8 @@ export function terminalRecordsEqual(
         terminal.handle === b[index]?.handle &&
         terminal.title === b[index]?.title &&
         mobileTerminalThemesEqual(terminal.terminalTheme, b[index]?.terminalTheme) &&
-        terminal.isActive === b[index]?.isActive
+        terminal.isActive === b[index]?.isActive &&
+        terminal.agentIdentity === b[index]?.agentIdentity
     )
   )
 }

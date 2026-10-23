@@ -92,7 +92,7 @@ async function exists(path: string): Promise<boolean> {
   )
 }
 
-export type KnownHostsEvidence = {
+type KnownHostsEvidence = {
   entries: KnownHostsEntry[]
   /**
    * Files that EXIST but could not be read — a permissions problem, a directory, an I/O error.

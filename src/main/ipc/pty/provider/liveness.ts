@@ -47,7 +47,7 @@ export async function isProviderPtyLive(
 ): Promise<boolean> {
   // Why: bound the liveness list RPC by the teardown deadline so a wedged daemon
   // fails fast; undefined keeps the provider default for all other callers.
-  return (await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)).some(
+  return (await provider.listProcesses({ deadlineMs, ptyIds: [ptyId] })).some(
     (session) => session.id === ptyId
   )
 }
@@ -56,7 +56,9 @@ export async function isProviderAgentSessionOwnerLive(
   provider: IPtyProvider,
   owner: AgentSessionOwnerBinding
 ): Promise<boolean> {
-  const session = (await provider.listProcesses()).find((candidate) => candidate.id === owner.ptyId)
+  const session = (await provider.listProcesses({ ptyIds: [owner.ptyId] })).find(
+    (candidate) => candidate.id === owner.ptyId
+  )
   if (!session) {
     return false
   }
@@ -76,12 +78,14 @@ export async function isProviderAgentSessionOwnerLive(
 export async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
-  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
+  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined,
+  exitObserved = false
 ): Promise<boolean> {
   if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
-  if (!opts?.keepHistory) {
+  // Why: this incarnation's observed exit is the proof; the settle poll only guards an unobserved stop.
+  if (!opts?.keepHistory || exitObserved) {
     return true
   }
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS

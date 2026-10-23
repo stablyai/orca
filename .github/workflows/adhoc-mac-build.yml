@@ -87,7 +87,7 @@ jobs:
   # Why: every job below checks out its own copy, and a branch name read per job builds whatever
   # the branch points at when that job starts. A push mid-run then mixes commits, e.g. slot lanes
   # from one commit merged by a template step from the next. Resolving once pins the whole run.
-  # The mac job still vets this commit's reachability before anything is signed.
+  # Validate reachability before any job executes the requested source.
   resolve-ref:
     if: github.repository == 'stablyai/orca'
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -103,30 +103,55 @@ jobs:
         env:
           REQUESTED_REF: ${{ inputs.ref || github.ref_name }}
           REPO_URL: https://github.com/${{ github.repository }}
-        run: |
+        run: &vet-repository-ref |
           set -euo pipefail
           case "$REQUESTED_REF" in
             refs/pull/*|pull/*)
-              echo "::error::Refusing to build PR ref '$REQUESTED_REF'; push the code to a branch of stablyai/orca instead."
+              echo "::error::Refusing to build PR ref '$REQUESTED_REF': this workflow signs with release credentials, so it only builds branches, tags, or commits of stablyai/orca. Push the code to a branch of this repo instead."
               exit 1
               ;;
           esac
-          if [[ "$REQUESTED_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            sha="$REQUESTED_REF"
-          else
-            # Branch first, as the mac job's vet does; a peeled annotated tag names its commit.
-            refs="$(git ls-remote "$REPO_URL" "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF" "refs/tags/$REQUESTED_REF^{}")"
-            sha=""
-            for name in "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF^{}" "refs/tags/$REQUESTED_REF"; do
-              sha="$(awk -v ref="$name" '$2 == ref { print $1; exit }' <<<"$refs")"
-              [[ -n "$sha" ]] && break
-            done
+          # Bare: a work-tree repo refuses to fetch over its own checked-out
+          # branch. tree:0 keeps the fetch to the commit graph — no trees, no
+          # blobs — so this stays cheap next to the build it fronts. reftable
+          # because this repo has branches that differ only in casing, and the
+          # files backend cannot store both on a case-insensitive runner disk —
+          # it fails the entire fetch, not just the one ref.
+          scratch="$RUNNER_TEMP/vet-requested-ref"
+          git init -q --bare --ref-format=reftable "$scratch"
+          git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          # Branch first to keep actions/checkout's old tie-break: bare
+          # rev-parse would prefer the tag when a branch shares its name.
+          sha=""
+          case "$REQUESTED_REF" in
+            refs/heads/*|refs/tags/*) candidates=("$REQUESTED_REF") ;;
+            *) candidates=("refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF") ;;
+          esac
+          if [[ "$REQUESTED_REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            candidates+=("$REQUESTED_REF")
           fi
+          for cand in "${candidates[@]}"; do
+            if ! [[ "$cand" =~ ^[0-9a-fA-F]{40}$ ]] && ! git check-ref-format "$cand"; then
+              continue
+            fi
+            if sha="$(git -C "$scratch" rev-parse --verify --quiet --end-of-options "$cand^{commit}")"; then
+              break
+            fi
+            sha=""
+          done
           if [[ -z "$sha" ]]; then
-            echo "::error::'$REQUESTED_REF' is not a branch, tag, or full commit SHA of stablyai/orca."
+            echo "::error::'$REQUESTED_REF' does not resolve to a branch, tag, or commit of stablyai/orca."
             exit 1
           fi
-          echo "Resolved $REQUESTED_REF -> $sha"
+          # The object resolving locally is not proof a branch or tag reaches
+          # it: a partial clone can lazily fetch a bare SHA on demand, and
+          # GitHub serves PR-only commits by SHA. Reachability is the actual
+          # trust test.
+          if [[ -z "$(git -C "$scratch" for-each-ref --count=1 --format='%(refname)' --contains "$sha" refs/heads refs/tags)" ]]; then
+            echo "::error::Commit $REQUESTED_REF is not reachable from any branch or tag of stablyai/orca; refusing to build it with release credentials."
+            exit 1
+          fi
+          echo "Vetted $REQUESTED_REF -> $sha"
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
 
   # Resolve shared build identity while detecting whether this ref ships a template.
@@ -175,6 +200,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           package-manager-cache: false
 
       - name: Compute adhoc version
@@ -349,46 +375,7 @@ jobs:
           # The commit resolve-ref pinned for every job; vetting it keeps the reachability test.
           REQUESTED_REF: ${{ needs.resolve-ref.outputs.sha }}
           REPO_URL: https://github.com/${{ github.repository }}
-        run: |
-          set -euo pipefail
-          case "$REQUESTED_REF" in
-            refs/pull/*|pull/*)
-              echo "::error::Refusing to build PR ref '$REQUESTED_REF': this workflow signs with release credentials, so it only builds branches, tags, or commits of stablyai/orca. Push the code to a branch of this repo instead."
-              exit 1
-              ;;
-          esac
-          # Bare: a work-tree repo refuses to fetch over its own checked-out
-          # branch. tree:0 keeps the fetch to the commit graph — no trees, no
-          # blobs — so this stays cheap next to the build it fronts. reftable
-          # because this repo has branches that differ only in casing, and the
-          # files backend cannot store both on a case-insensitive runner disk —
-          # it fails the entire fetch, not just the one ref.
-          scratch="$RUNNER_TEMP/vet-requested-ref"
-          git init -q --bare --ref-format=reftable "$scratch"
-          git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
-          # Branch first to keep actions/checkout's old tie-break: bare
-          # rev-parse would prefer the tag when a branch shares its name.
-          sha=""
-          for cand in "refs/heads/$REQUESTED_REF" "refs/tags/$REQUESTED_REF" "$REQUESTED_REF"; do
-            if sha="$(git -C "$scratch" rev-parse --verify --quiet "$cand^{commit}")"; then
-              break
-            fi
-            sha=""
-          done
-          if [[ -z "$sha" ]]; then
-            echo "::error::'$REQUESTED_REF' does not resolve to a branch, tag, or commit of stablyai/orca."
-            exit 1
-          fi
-          # The object resolving locally is not proof a branch or tag reaches
-          # it: a partial clone can lazily fetch a bare SHA on demand, and
-          # GitHub serves PR-only commits by SHA. Reachability is the actual
-          # trust test.
-          if [[ -z "$(git -C "$scratch" for-each-ref --contains "$sha" refs/heads refs/tags | head -1)" ]]; then
-            echo "::error::Commit $REQUESTED_REF is not reachable from any branch or tag of stablyai/orca; refusing to build it with release credentials."
-            exit 1
-          fi
-          echo "Vetted $REQUESTED_REF -> $sha"
-          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+        run: *vet-repository-ref
 
       - name: Checkout the requested ref
         uses: actions/checkout@v6
@@ -415,6 +402,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
           cache: pnpm
           cache-dependency-path: |
             pnpm-lock.yaml

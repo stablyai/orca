@@ -503,6 +503,38 @@ describe('applyWebSessionTabsSnapshot', () => {
       expect(patch.openFiles).toMatchObject([{ id: notesPath, isDirty: false }])
     })
 
+    it('adopts host dirty state onto the record a detached mirrored view is kept on', () => {
+      const detachedId = `detached:${notesPath}`
+      const hostDirty = hostCleanSnapshot()
+      for (const tab of hostDirty.tabs) {
+        if (tab.type === 'markdown') {
+          tab.isDirty = true
+        }
+      }
+      const patch = applyWebSessionTabsSnapshot(
+        makeState({
+          openFiles: [mirroredNotes(false)],
+          editorBuffers: {
+            [detachedId]: {
+              isDirty: false,
+              lastKnownDiskSignature: undefined,
+              externalMutation: undefined,
+              pendingOwnerMigration: undefined
+            }
+          },
+          editorBufferIdOf: { [notesPath]: detachedId },
+          unifiedTabsByWorktree: { [WT]: [notesUnifiedTab] }
+        }),
+        hostDirty,
+        ENV,
+        NOW
+      )
+
+      expect(patch.editorBuffers?.[detachedId]?.isDirty).toBe(true)
+      expect(patch.editorBuffers?.[notesPath]).toBeUndefined()
+      expect(patch.openFiles).toMatchObject([{ id: notesPath, isDirty: true }])
+    })
+
     it('does not invent dirtiness from a draft the client already reverted', () => {
       // Why: a lingering draft with isDirty false means the user typed and undid; the tab is
       // clean and must not start prompting on close.

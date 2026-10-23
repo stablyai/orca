@@ -14,7 +14,7 @@ export type OrcadIdleProbe = {
 
 export type OrcadIdleExitEvidence = { quietSince: number; stoppedAt: number; timeoutMs: number }
 
-export type OrcadIdleExitMonitorOptions = {
+type OrcadIdleExitMonitorOptions = {
   timeoutMs: number
   probes: readonly OrcadIdleProbe[]
   /** Any client request restarts the quiet period, even one that came and went between checks. */

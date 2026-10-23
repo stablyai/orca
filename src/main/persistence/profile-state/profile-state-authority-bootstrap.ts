@@ -7,6 +7,11 @@ import type { ProfileStateAuthorityInitialState } from '../loading-store/profile
 import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profile-state-database'
 import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
+import { ProfileStateDocumentCorruptionError } from './profile-state-document-validation'
+import {
+  planProfileStateSectionRepair,
+  type ProfileStateRepairSection
+} from './profile-state-section-repair'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
 import { prepareLegacyProfileState } from './legacy-json/profile-state-legacy-import'
 import {
@@ -39,6 +44,7 @@ export type ProfileStateAuthorityBootstrapResult = {
 )
 
 export type ProfileStateAuthorityBootstrapOptions = {
+  userDataPath?: string
   dataFile: string
   databaseFile: string
   profileId: string
@@ -99,7 +105,25 @@ export function bootstrapProfileStateAuthority(
     ) {
       throw error
     }
-    throw new ProfileStateRecoveryRequiredError(options, error)
+    throw new ProfileStateRecoveryRequiredError(
+      options,
+      error,
+      error instanceof ProfileStateDocumentCorruptionError
+        ? findRepairableSections(options)
+        : undefined
+    )
+  }
+}
+
+/** Diagnosis only: a failure to plan keeps the whole-file recovery guidance. */
+function findRepairableSections(
+  options: ProfileStateAuthorityBootstrapOptions
+): readonly ProfileStateRepairSection[] | undefined {
+  try {
+    return planProfileStateSectionRepair(options)?.sections
+  } catch (error) {
+    console.warn('[profile-state] Could not tell which profile sections are damaged:', error)
+    return undefined
   }
 }
 

@@ -19,9 +19,11 @@ function MobileNativeChatComposer({
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
+    AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
+    Platform: { OS: 'ios' },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -266,26 +268,50 @@ describe('MobileNativeChatComposer', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
-  it('keeps the text input editable while the send is locked', async () => {
+  it('retains an editable draft through a send lock and can send it after unlocking', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    const onChangeText = vi.fn()
+    vi.mocked(Keyboard.dismiss).mockClear()
+    const draw = (disabled: boolean, value = 'half-typed') =>
+      createElement(MobileNativeChatComposer, {
+        value,
+        onChangeText,
+        onSend,
+        sendSurfaceId: 'tab-a',
+        getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+        disabled
+      })
     await act(async () => {
-      renderer = create(
-        createElement(MobileNativeChatComposer, {
-          value: 'half-typed',
-          onChangeText: vi.fn(),
-          onSend: vi.fn().mockResolvedValue(true),
-          sendSurfaceId: 'tab-a',
-          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
-          disabled: true
-        })
-      )
+      renderer = create(draw(false))
     })
+    const input = () =>
+      renderer!.root.find((node) => {
+        const type: unknown = node.type
+        return type === 'TextInput'
+      })
+    const originalInput = input()
+    await act(async () => input().props.onFocus())
+    await act(async () => renderer!.update(draw(true)))
     // Revoking `editable` on a focused field resigns first responder on iOS and
     // yanks the keyboard mid-typing (#10681) — the lock may only gate sending.
-    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
-      props: { editable?: boolean }
-    }
-    expect(input.props.editable).not.toBe(false)
+    expect(input()).toBe(originalInput)
+    expect(input().props.editable).not.toBe(false)
     expect(sendButton().props).toMatchObject({ disabled: true })
+    await act(async () => sendButton().props.onPress())
+    expect(onSend).not.toHaveBeenCalled()
+    expect(onChangeText).not.toHaveBeenCalled()
+    expect(input().props.value).toBe('half-typed')
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
+
+    await act(async () => input().props.onChangeText('finished draft'))
+    expect(onChangeText).toHaveBeenCalledWith('finished draft')
+    await act(async () => renderer!.update(draw(true, 'finished draft')))
+    expect(input().props.value).toBe('finished draft')
+    await act(async () => renderer!.update(draw(false, 'finished draft')))
+    expect(input()).toBe(originalInput)
+    expect(sendButton().props).toMatchObject({ disabled: false })
+    await act(async () => sendButton().props.onPress())
+    expect(onSend).toHaveBeenCalledExactlyOnceWith('finished draft')
   })
 
   it('hands its owner the text field, so Edit can focus it', async () => {

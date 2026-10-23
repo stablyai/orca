@@ -43,6 +43,44 @@ afterEach(() => {
 const local = { runtime: 'host', executionHostId: 'local' } as const
 
 describe('Claude profile namespace', () => {
+  it.skipIf(process.platform === 'win32')(
+    'accepts a WSL casing alias while retaining the original marker and rejecting other owners',
+    () => {
+      const dir = root()
+      const userHome = root()
+      const profile = describeClaudeProfile(dir, 'a', {
+        ...local,
+        runtime: 'wsl',
+        distro: 'Ubuntu'
+      })
+      prepareClaudeProfileDirectory(dir, profile, userHome)()
+      const marker = join(dir, 'claude-profiles/a/profile.json')
+      const original = readFileSync(marker, 'utf8')
+      prepareClaudeProfileDirectory(
+        dir,
+        { ...profile, target: { ...profile.target, runtime: 'wsl', distro: 'ubuntu' } },
+        userHome
+      )()
+      expect(readFileSync(marker, 'utf8')).toBe(original)
+      for (const distro of ['Debian', 'Ubuntu-24.04']) {
+        expect(() =>
+          prepareClaudeProfileDirectory(
+            dir,
+            { ...profile, target: { ...local, runtime: 'wsl', distro } },
+            userHome
+          )
+        ).toThrow('another account or target')
+      }
+      writeFileSync(
+        marker,
+        JSON.stringify({ version: 1, accountId: 'b', runtime: 'wsl', distro: 'ubuntu' })
+      )
+      expect(() => prepareClaudeProfileDirectory(dir, profile, userHome)).toThrow(
+        'another account or target'
+      )
+    }
+  )
+
   // A WSL profile's data root is a POSIX path; a Windows temp dir cannot be one.
   it.skipIf(process.platform === 'win32')(
     'binds the new namespace to an account and execution target without touching legacy auth',

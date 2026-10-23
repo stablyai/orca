@@ -79,6 +79,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
 })
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import {
@@ -361,7 +362,15 @@ describe('a chat whose start was never confirmed', () => {
     hostIsReachableAgain()
     await flush()
     expect(recreated(CLAUDE_SESSION)).toBe(0)
-    expect(lifecycle(CLAUDE_SESSION)).toBe('cancelled')
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // Switch-on, main's host is told to close the chat instead of the window keeping a tombstone.
+      expect(mocks.history).toHaveBeenCalledWith({ kind: 'local' }, 'agentSession.close', {
+        sessionId: CLAUDE_SESSION
+      })
+      expect(lifecycle(CLAUDE_SESSION)).toBeNull()
+    } else {
+      expect(lifecycle(CLAUDE_SESSION)).toBe('cancelled')
+    }
   })
 
   it('re-checks once per return of its own host: one still unknown waits for the next', async () => {

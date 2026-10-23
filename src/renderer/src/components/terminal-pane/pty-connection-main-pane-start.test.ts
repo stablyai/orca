@@ -18,8 +18,20 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
+import {
+  bindsPaneInStore,
+  expectWindowStartAskedMain,
+  mainLayoutApplyTransport,
+  mainStartsPaneAs
+} from './pty-connection-test-main-pane-start-fixtures'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const TAB = 'tab-main-start'
 const PANE_KEY = `${TAB}:${leafIdForPane(1)}`
@@ -33,6 +45,17 @@ function setStore(patch: Partial<StoreState>): void {
   for (const listener of storeSubscribers) {
     listener(mockStoreState)
   }
+}
+
+/** Main's frame binding the pane to `ptyId`, as the store shows it. */
+function bindLeaf1(ptyId: string): void {
+  bindsPaneInStore(() => mockStoreState, TAB, leafIdForPane(1))(ptyId)
+}
+
+/** Main's start: the frame binds the pane and clears its start status, as main's does. */
+function startLeaf1(ptyId: string): void {
+  bindLeaf1(ptyId)
+  mockStoreState = { ...mockStoreState, terminalPaneStartsByPaneKey: {} }
 }
 
 async function connectWithStart(start: TerminalPaneStart | undefined) {
@@ -70,6 +93,7 @@ describe('a pane main is starting a terminal for', () => {
       }
     })
     await installTerminalTestGlobals()
+    ;(await mainLayoutApplyTransport()).reset()
   })
 
   afterEach(async () => {
@@ -165,14 +189,39 @@ describe('a pane main is starting a terminal for', () => {
     )
   })
 
-  it.each(['sleeping', 'resuming', 'held'] as const)(
-    'leaves a %s pane to its restore path, as before',
-    async (status) => {
-      const { transport } = await connectWithStart({ status })
+  it('asks main to start a sleeping pane, then attaches to the terminal main binds', async () => {
+    await mainStartsPaneAs({ ptyId: 'pty-main', bind: startLeaf1 })
+    const { transport } = await connectWithStart({ status: 'sleeping' })
 
-      expect(transport.connect.mock.calls.length + transport.attach.mock.calls.length).toBe(1)
-    }
-  )
+    await expectWindowStartAskedMain(transport, PANE_KEY)
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+    )
+  })
+
+  it('waits on a resuming pane, then attaches to the terminal main binds', async () => {
+    const { transport } = await connectWithStart({ status: 'resuming' })
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(transport.attach).not.toHaveBeenCalled()
+
+    bindLeaf1('pty-main')
+    setStore({ terminalPaneStartsByPaneKey: {} })
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'pty-main', attachOnlyView: true })
+    )
+    expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toEqual([])
+  })
+
+  it("connects a held pane as today, so main's refusal holds it", async () => {
+    const { transport } = await connectWithStart({ status: 'held' })
+
+    expect(transport.connect.mock.calls.length + transport.attach.mock.calls.length).toBe(1)
+    expect((await mainLayoutApplyTransport()).sentOfType('startPane')).toEqual([])
+  })
 
   it('starts a pane with no start from main as before', async () => {
     const { transport } = await connectWithStart(undefined)

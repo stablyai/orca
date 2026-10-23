@@ -109,7 +109,7 @@ export function orcadWindowsPinnedNodePath(host: RemoteHostPlatform, baseDir: st
   )
 }
 
-export function orcadWindowsHostScriptPath(host: RemoteHostPlatform, baseDir: string): string {
+function orcadWindowsHostScriptPath(host: RemoteHostPlatform, baseDir: string): string {
   return joinRemotePath(host, baseDir, ORCAD_WINDOWS_HOST_SCRIPT_FILENAME)
 }
 

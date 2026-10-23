@@ -7,10 +7,14 @@ import {
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire-refusals'
 import type {
+  AgentJournalCursor,
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionOptionsResult
+} from '../../../shared/agent-session-wire'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
@@ -152,4 +156,16 @@ export function threadGoalPlan(params: {
         : null,
     rerunWhenReplayMissing: () => true
   }
+}
+
+/** A goal the host can change, or one only the agent's own `/goal` changes, reported apart. */
+export function structuredAgentSessionThreadGoalReport(
+  hostChangesGoal: boolean,
+  current: AgentJournalThreadGoal | null,
+  contextFloor: { contextFloor?: AgentJournalCursor }
+): Pick<AgentSessionOptionsResult, 'threadGoal' | 'reportedThreadGoal'> {
+  if (hostChangesGoal) {
+    return { threadGoal: { current, ...contextFloor } }
+  }
+  return current ? { reportedThreadGoal: { current, ...contextFloor } } : {}
 }

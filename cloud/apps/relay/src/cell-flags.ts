@@ -73,14 +73,19 @@ const UNOFFERED_FLAG_VALUES: Record<string, string[]> = { ticketCheck: ['enforce
 export function supportedCellFlags(): Record<string, SupportedCellFlag> {
   const supported: Record<string, SupportedCellFlag> = {}
   for (const [key, field] of Object.entries(CellFlagsSchema.shape)) {
-    let inner: z.ZodTypeAny = field
+    let inner: z.core.$ZodType = field
     while (inner instanceof z.ZodDefault || inner instanceof z.ZodOptional) {
       inner = inner instanceof z.ZodDefault ? inner.removeDefault() : inner.unwrap()
     }
     if (inner instanceof z.ZodBoolean) supported[key] = { type: 'boolean' }
     else if (inner instanceof z.ZodEnum) {
       const unoffered = UNOFFERED_FLAG_VALUES[key] ?? []
-      supported[key] = { type: 'enum', values: inner.options.filter((value: string) => !unoffered.includes(value)) }
+      supported[key] = {
+        type: 'enum',
+        values: inner.options.filter(
+          (value): value is string => typeof value === 'string' && !unoffered.includes(value)
+        )
+      }
     }
     else if (inner instanceof z.ZodNumber) {
       supported[key] = {

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore, RelayCellInReserveModeError } from './assignment-store.js'
 import type { RelayCellConfig } from './config.js'

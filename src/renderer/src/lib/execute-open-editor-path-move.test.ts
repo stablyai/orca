@@ -98,8 +98,7 @@ describe('executeOpenEditorPathMove', () => {
     expect(moved.isDirty).toBe(true)
     expect(moved.lastKnownDiskSignature).toBe('sig-a')
     expect(useAppStore.getState().editorDrafts['/repo/sub/a.md']).toBe('unsaved work')
-    // Dirty destination gets the content-verify gate + provenance.
-    expect(moved.pendingLiveDiskVerification).toBe(true)
+    // Dirty destination gets the echo provenance.
     expect(moved.pendingSelfMoveEcho?.targetPath).toBe('/repo/sub/a.md')
     // The in-flight transaction is settled (no leak).
     expect(__activeEditorPathMoveCountForTests()).toBe(0)
@@ -200,8 +199,7 @@ describe('executeOpenEditorPathMove', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     const moved = useAppStore.getState().openFiles[0]!
-    // Disk matched the carried baseline: gate released, no false conflict banner.
-    expect(moved.pendingLiveDiskVerification).toBeFalsy()
+    // Disk matched the carried baseline: no false conflict banner.
     expect(moved.externalMutation).toBeUndefined()
     expect(moved.isDirty).toBe(true)
     // Safety-net verify LEAVES the provenance so a destination watcher event

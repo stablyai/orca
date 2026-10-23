@@ -28,8 +28,13 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
         const member: unknown = Reflect.get(target, property)
         return typeof member === 'function' ? member.bind(target) : member
       }
-      return async (opts?: { deadlineMs?: number }) => {
-        const pending = (snapshot ??= target.listProcesses(opts))
+      return async (opts?: Parameters<IPtyProvider['listProcesses']>[0]) => {
+        // One snapshot serves every missing workspace in this batch.
+        const pending = (snapshot ??= target.listProcesses({
+          ...opts,
+          worktreeId: undefined,
+          ptyIds: undefined
+        }))
         try {
           return await pending
         } catch {

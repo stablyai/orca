@@ -38,7 +38,7 @@ import {
   type OrcadTunnelStartChecks
 } from './orcad-managed-tunnel-target'
 
-export type OrcadManagedTunnelDependencies = {
+type OrcadManagedTunnelDependencies = {
   getConnectionManager: () => SshConnectionManager | null
   getTargetStore: () => ReturnType<typeof getSshTargetRegistryStore>
   forwardManager?: SshPortForwardManager

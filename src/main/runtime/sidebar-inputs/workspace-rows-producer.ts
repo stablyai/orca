@@ -17,6 +17,7 @@ import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/workt
 import { ProducerRevision } from './producer-revision'
 import { WorkspaceGitIdentity } from './workspace-git-identity'
 import { CachedScan } from './cached-scan'
+import type { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
 
 // The settings the visibility filter reads: the defaults, and the layouts that classify a checkout.
 const VISIBILITY_SETTINGS = [
@@ -51,6 +52,8 @@ export type WorkspaceRowsSources = {
   join: (scans: ResolvedWorktreeRepoScans) => ResolvedWorktreeScanJoin
   /** worktree.ps's visibility filters over a listing. */
   visible: (snapshot: ResolvedWorktreeSnapshot) => ResolvedWorktreeSnapshot
+  /** Its finished creates and deletes keep their hints until a fresh scan lists them. */
+  lifecycle?: Pick<WorkspaceLifecycleQueue, 'setMembership'> | null
   onClientEvent: (
     listener: (event: RuntimeClientEvent) => void,
     options: { consumesTerminalSideEffects: false }
@@ -89,6 +92,7 @@ export class WorkspaceRowsProducer {
       demand: () => this.revision.hasListeners(),
       applied: () => this.applied()
     })
+    sources.lifecycle?.setMembership((done) => this.scans.afterFresh(done))
     sources.onClientEvent(
       (event) => {
         if (event.type === 'worktreesChanged' || event.type === 'reposChanged') {

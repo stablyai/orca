@@ -12,6 +12,9 @@ export function createOpenFileState(
   | 'editorBuffers'
   | 'editorBufferIdOf'
   | 'editorBufferViews'
+  | 'editorBufferDetached'
+  | 'editorBufferKept'
+  | 'editorBufferIdentityRevision'
   | 'activeFileId'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
@@ -23,6 +26,9 @@ export function createOpenFileState(
     openFiles: [],
     editorBuffers: {},
     ...EMPTY_EDITOR_BUFFER_VIEW_INDEX,
+    editorBufferDetached: {},
+    editorBufferKept: {},
+    editorBufferIdentityRevision: 0,
     activeFileId: null,
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},

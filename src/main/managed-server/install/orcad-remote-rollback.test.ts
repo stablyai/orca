@@ -13,8 +13,8 @@ vi.mock('../../../shared/shell-argument-quoting', () => ({
   quotePosixShell: (s: string) => `'${s}'`
 }))
 vi.mock('./remote-install-transfers', () => ({
-  writeRelayFile: vi.fn().mockResolvedValue(undefined),
-  uploadRelayDirectory: vi.fn().mockResolvedValue(undefined)
+  writeRemoteInstallFile: vi.fn().mockResolvedValue(undefined),
+  uploadRemoteInstallDirectory: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('./remote-install-lock', async (importOriginal) => ({
   ...(await importOriginal<typeof InstallLock>()),

@@ -13,8 +13,8 @@ import { translate } from '@/i18n/i18n'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import { openWorkspaceFile } from '@/lib/workspace-file-open'
 
 export function shouldUploadRemoteEditorFileDrop(
   target: RuntimeClientTarget,
@@ -142,6 +142,7 @@ async function openEditorFileDropPaths(
   paths: readonly string[]
 ): Promise<void> {
   const { fileContext, worktreePath, connectionId } = context
+  const store = useAppStore.getState()
   const { worktreeId, groupId } = destination
   const groupOptions = groupId ? { targetGroupId: groupId } : null
   const runtimeEnvironmentId = runtimeTargetEnvironmentId(fileContext.target)
@@ -165,6 +166,9 @@ async function openEditorFileDropPaths(
         destinationDir,
         { ensureDestinationDir: true, nameExtensionlessImages: true }
       )
+      if (!canOpenEditorFileDrop(context, destination)) {
+        return
+      }
       for (const result of results) {
         if (!canOpenEditorFileDrop(context, destination)) {
           return
@@ -173,9 +177,9 @@ async function openEditorFileDropPaths(
           continue
         }
         const maybeRelative = toWorktreeRelativePath(result.destPath, worktreePath)
-        openWorkspaceFile({
-          kind: 'file',
-          file: {
+        store.setActiveTabType('editor', worktreeId)
+        store.openFile(
+          {
             filePath: result.destPath,
             relativePath: maybeRelative ?? result.destPath,
             worktreeId,
@@ -183,8 +187,8 @@ async function openEditorFileDropPaths(
             language: detectLanguage(result.destPath),
             mode: 'edit'
           },
-          options: { suppressActiveRuntimeFallback: runtimeEnvironmentId === null, ...groupOptions }
-        })
+          { suppressActiveRuntimeFallback: runtimeEnvironmentId === null, ...groupOptions }
+        )
       }
       if (results.some((result) => result.status !== 'imported')) {
         toast.error(
@@ -221,22 +225,27 @@ async function openEditorFileDropPaths(
           relativePath = maybeRelative
         }
       }
-      const floating = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      openWorkspaceFile({
-        kind: 'file',
-        file: {
-          filePath,
-          relativePath,
-          worktreeId,
-          language: detectLanguage(filePath),
-          mode: 'edit',
-          ...(floating ? { runtimeEnvironmentId: null } : {})
-        },
-        options: {
-          ...groupOptions,
-          ...(floating ? { preview: false, suppressActiveRuntimeFallback: true } : {})
-        }
-      })
+      store.setActiveTabType('editor', worktreeId)
+      if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+        openDocumentInFloatingWorkspace(
+          store.openFile,
+          { filePath, relativePath },
+          groupOptions ?? {}
+        )
+        continue
+      }
+      const file = {
+        filePath,
+        relativePath,
+        worktreeId,
+        language: detectLanguage(filePath),
+        mode: 'edit' as const
+      }
+      if (groupOptions) {
+        store.openFile(file, groupOptions)
+      } else {
+        store.openFile(file)
+      }
     } catch {
       // Ignore files that cannot be stat'd.
     }

@@ -1,4 +1,14 @@
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef } from 'react'
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Keyboard,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native'
 import {
   ChevronLeft,
   FilePenLine,
@@ -102,18 +112,42 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerOpen,
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
+  const open = presentation?.page != null
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      controller.optionSurface?.demandModelCatalog?.()
+    }
+    wasOpen.current = open
+  }, [open, controller.optionSurface])
   const { snapshot, pendingId } = controller
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const permission = snapshot.find(
     (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   )
+  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === presentation?.page)
+  const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
+  const showWorkingNotice =
+    (model !== undefined || permission !== undefined) &&
+    activeDescriptor !== undefined &&
+    isWorking &&
+    !permissionView
+
+  useEffect(() => {
+    if (Platform.OS === 'ios' && showWorkingNotice) {
+      // Queued announcements cannot be canceled when the picker closes or changes pages.
+      AccessibilityInfo.announceForAccessibilityWithOptions(
+        'Agent is working. Model settings unlock when this turn finishes.',
+        { queue: false }
+      )
+    }
+  }, [showWorkingNotice])
+
   const options = sortNativeChatSessionOptions(snapshot)
   if (!model && !permission) {
     return null
   }
   const home = model ?? permission!
-  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === presentation?.page)
-  const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
   // The permission mode applies from the next send, so a running turn never locks it.
@@ -204,7 +238,7 @@ export function MobileNativeChatSessionOptionPickers({
                 ) : null}
               </View>
             </View>
-            {isWorking && !permissionView ? (
+            {showWorkingNotice ? (
               <View style={styles.lockNotice} accessibilityLiveRegion="polite">
                 <LockKeyhole size={16} color={colors.textSecondary} />
                 <View style={styles.lockNoticeBody}>

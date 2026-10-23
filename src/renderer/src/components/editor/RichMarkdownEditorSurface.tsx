@@ -41,6 +41,7 @@ type RichMarkdownEditorSurfaceProps = {
   editorFontZoomLevel: number
   rootElement: HTMLDivElement | null
   rootRef: (node: HTMLDivElement | null) => void
+  onFocusLeave: (event: React.FocusEvent<HTMLDivElement>) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   headerSlot?: React.ReactNode
   reviewRailExpanded: boolean
@@ -129,6 +130,7 @@ export function RichMarkdownEditorSurface({
   editorFontZoomLevel,
   rootElement,
   rootRef,
+  onFocusLeave,
   scrollContainerRef,
   headerSlot,
   reviewRailExpanded,
@@ -193,6 +195,7 @@ export function RichMarkdownEditorSurface({
       ) : null}
       <div
         ref={rootRef}
+        onBlur={onFocusLeave}
         className={`rich-markdown-editor-shell ${
           reviewRailExpanded ? 'has-rich-markdown-review-notes' : ''
         }`.trim()}

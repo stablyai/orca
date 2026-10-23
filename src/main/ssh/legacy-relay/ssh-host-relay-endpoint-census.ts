@@ -21,7 +21,7 @@ import { readRelayDaemonRuntimes } from './ssh-relay-endpoint-runtime'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh-remote-platform'
 
 /** `unenumerable`: Windows named pipes cannot be listed, so the caller keeps today's path. */
-export type HostRelayEndpointVerdict = 'none' | 'idle' | 'live' | 'unverifiable' | 'unenumerable'
+type HostRelayEndpointVerdict = 'none' | 'idle' | 'live' | 'unverifiable' | 'unenumerable'
 
 export type HostRelayEndpointCensus = { verdict: HostRelayEndpointVerdict; count: number }
 
@@ -31,7 +31,7 @@ const MAX_CENSUS_ENDPOINTS = 32
  * Every relay socket under this user's relay directories, whichever target or desktop bound it:
  * the socket name hashes the target id, and another desktop's target id is not ours to know.
  */
-export function hostRelayEndpointListCommand(remoteHome: string): string {
+function hostRelayEndpointListCommand(remoteHome: string): string {
   return [
     `base=${quotePosixShell(`${remoteHome}/${RELAY_REMOTE_DIR}`)}`,
     `short_base="${SHORT_RELAY_SOCKET_DIR_PREFIX}$(id -u 2>/dev/null)"`,

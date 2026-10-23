@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { preparePendingSplitClose } from './pending-split-close-test-fixture'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
 
 const mocks = vi.hoisted(() => ({
   layoutOwnerIsMain: false,
@@ -60,7 +61,7 @@ it('a layout-owner build removes the pane only once main’s frame drops it', as
       refused: expect.any(Function)
     }
   )
-  mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].apply({})
+  mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
   expect(p.transports.has(1)).toBe(true)
 
   // The frame without the pane finds the window's close and runs it.
@@ -77,7 +78,7 @@ it('a layout-owner build closes the pane itself when main closed it and no frame
   ;(await import('@/runtime/layout-frame-position')).endLayoutFramePositions()
 
   p.actions.executeClosePane(1)
-  mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].apply({})
+  mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
 
   expect(p.transports.has(1)).toBe(false)
   expect(mocks.commitTerminalSurfaceClose).not.toHaveBeenCalled()
@@ -89,7 +90,10 @@ it('a layout-owner build closes the pane itself when main holds no such pane, so
   ;(await import('@/runtime/layout-frame-position')).noteLayoutFramePosition(1)
 
   p.actions.executeClosePane(1)
-  mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].apply({ alreadyClosed: true })
+  mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].apply(
+    { alreadyClosed: true },
+    LOCAL_LAYOUT_APPLY_ORIGIN
+  )
 
   const intents = await import('@/runtime/layout-owner-pane-intents')
   expect(intents.takePaneCloseIntent('tab-parent', LEAF)).toBeNull()
@@ -119,7 +123,7 @@ it('a layout-owner build closes the tab when main refuses a second close as the 
 
   // Main took pane 1; its frame is still on the way when main refuses pane 2 as its last.
   ;(await import('@/runtime/layout-frame-position')).noteLayoutFramePosition(1)
-  first?.apply({})
+  first?.apply({}, LOCAL_LAYOUT_APPLY_ORIGIN)
   second?.refused?.('last_pane')
 
   expect(p.controller.onCloseTab).toHaveBeenCalledOnce()
