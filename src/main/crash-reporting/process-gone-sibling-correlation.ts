@@ -69,6 +69,12 @@ export type PendingRendererCrashReport = {
 type TrackedRendererCrashReport = PendingRendererCrashReport & {
   siblingDeaths: ChildProcessDeath[]
   lateAttaches: number
+  /**
+   * Whether the one-incident label may still be on the persisted report. Sticky once set:
+   * the amend that withdraws it is fire-and-forget, so a failed write must leave the next
+   * amend still trying rather than treating the label as already gone.
+   */
+  attributedOneIncident: boolean
 }
 
 export type LateSiblingAttribution = {
@@ -135,7 +141,12 @@ export function trackRendererCrashReport(
     .slice(-(MAX_PENDING_RENDERER_REPORTS - 1))
   pendingRendererReports = [
     ...liveReports,
-    { ...pending, siblingDeaths: [...siblingDeaths], lateAttaches: 0 }
+    {
+      ...pending,
+      siblingDeaths: [...siblingDeaths],
+      lateAttaches: 0,
+      attributedOneIncident: isOneIncident(siblingDeaths, pending.at)
+    }
   ]
 }
 
@@ -181,13 +192,22 @@ function isOneIncident(siblings: ChildProcessDeath[], rendererAt: number): boole
   )
 }
 
+/**
+ * `withdrawStaleAttribution` is for an amend onto a report that already carries the label:
+ * attachDetails merges, so evidence that disproves one incident (report 11a9d459 shipped
+ * `crashAttribution=concurrent-process-deaths` beside `siblingProcessDeathRepeats=2`) has
+ * to say so explicitly. A null detail value withdraws the key.
+ */
 export function siblingProcessDeathDetails(
   siblings: ChildProcessDeath[],
-  rendererAt: number
+  rendererAt: number,
+  { withdrawStaleAttribution = false }: { withdrawStaleAttribution?: boolean } = {}
 ): Record<string, CrashReportDetailValue> {
   const repeats = repeatedIdentityCount(siblings)
+  const oneIncident = isOneIncident(siblings, rendererAt)
   return {
-    ...(isOneIncident(siblings, rendererAt) ? { crashAttribution: CONCURRENT_PROCESS_DEATHS } : {}),
+    ...(oneIncident ? { crashAttribution: CONCURRENT_PROCESS_DEATHS } : {}),
+    ...(!oneIncident && withdrawStaleAttribution ? { crashAttribution: null } : {}),
     siblingProcessDeathCount: siblings.length,
     ...(repeats > 0 ? { siblingProcessDeathRepeats: repeats } : {}),
     siblingProcessDeaths: describeSiblingDeaths(siblings, rendererAt)
@@ -212,10 +232,11 @@ export function collectLateSiblingAttributions(death: ChildProcessDeath): LateSi
     }
     pending.siblingDeaths.push(death)
     pending.lateAttaches += 1
-    attributions.push({
-      pending,
-      attribution: siblingProcessDeathDetails(pending.siblingDeaths, pending.at)
+    const attribution = siblingProcessDeathDetails(pending.siblingDeaths, pending.at, {
+      withdrawStaleAttribution: pending.attributedOneIncident
     })
+    pending.attributedOneIncident ||= attribution.crashAttribution === CONCURRENT_PROCESS_DEATHS
+    attributions.push({ pending, attribution })
   }
   return attributions
 }
