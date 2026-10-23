@@ -21,6 +21,8 @@ import {
   updateMRReviewers
 } from '../gitlab/client'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
+import { invalidateHostedReviewBranchCache } from '../source-control/hosted-review-branch-cache'
+import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 
@@ -211,15 +213,20 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
-    return updateMR(
-      repo.path,
-      iid,
-      updates,
-      repo.issueSourcePreference,
-      getRepoRoutingConnectionId(repo),
-      projectRef,
-      ...this.deps.getLocalGitArgs(repo)
-    )
+    try {
+      return await updateMR(
+        repo.path,
+        iid,
+        updates,
+        repo.issueSourcePreference,
+        getRepoRoutingConnectionId(repo),
+        projectRef,
+        ...this.deps.getLocalGitArgs(repo)
+      )
+    } finally {
+      // Why: the sidebar refresh reads through this host's 60s review cache; drop it so approvals show at once.
+      invalidateHostedReviewBranchCache(repo.path, getStoredRepoExecutionHostId(repo))
+    }
   }
 
   async updateGitLabRepoMRReviewers(

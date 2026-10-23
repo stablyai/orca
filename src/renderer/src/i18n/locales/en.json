@@ -14851,6 +14851,13 @@
                 }
               }
             }
+          },
+          "GitLabApprovalAction": {
+            "progress": "{{given}} of {{required}} approvals",
+            "approved": "Approved",
+            "approve": "Approve",
+            "revoke": "Revoke approval",
+            "failed": "Failed to update approval"
           }
         }
       },

@@ -8,9 +8,11 @@ import {
   glabRepoExecOptions,
   glabExecFileAsync,
   release,
+  type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { fetchMRApproval } from './mr-reviewers-and-approvals'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
@@ -77,6 +79,27 @@ export async function getMergeRequest(
   }
 }
 
+// ponytail: one extra /approvals call per open-MR lookup (shared branch cache includes the worktree list); gate on `active` if the API budget bites.
+async function withApproval(
+  info: MRInfo,
+  repoPath: string,
+  projectRef: ProjectRef,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<MRInfo> {
+  if (info.state !== 'opened') {
+    return info
+  }
+  const approval = await fetchMRApproval(
+    repoPath,
+    projectRef,
+    info.number,
+    connectionId,
+    localGitOptions
+  )
+  return approval ? { ...info, approval } : info
+}
+
 /**
  * Find the explicitly linked merge request, or the newest MR whose source branch matches.
  * Returns null when neither exists.
@@ -117,7 +140,14 @@ export async function getMergeRequestForBranch(
         pipeline?: { status?: string } | null
       }
       const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-      return mapMRInfo(raw, pipelineStatus)
+      // Why: await keeps the /approvals call inside this acquire(); a bare return releases the gate early.
+      return await withApproval(
+        mapMRInfo(raw, pipelineStatus),
+        repoPath,
+        projectRef,
+        connectionId,
+        localGitOptions
+      )
     }
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
@@ -151,7 +181,7 @@ export async function getMergeRequestForBranch(
           localGitOptions
         })
         if (!hideOnDefaultBranch) {
-          return info
+          return await withApproval(info, repoPath, projectRef, connectionId, localGitOptions)
         }
       }
     }
