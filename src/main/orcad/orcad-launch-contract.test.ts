@@ -51,6 +51,28 @@ describe('parseArgs', () => {
     }
   })
 
+  it('accepts the network hardening flags and refuses bad or partial values', () => {
+    expect(
+      parseArgs([
+        '--allow-ip',
+        '100.64.0.0/10,203.0.113.7',
+        '--tls-cert',
+        '/etc/orca/cert.pem',
+        '--tls-key',
+        '/etc/orca/key.pem'
+      ])
+    ).toEqual({
+      allowIp: '100.64.0.0/10,203.0.113.7',
+      tlsCert: '/etc/orca/cert.pem',
+      tlsKey: '/etc/orca/key.pem'
+    })
+    expect(() => parseArgs(['--allow-ip', 'example.com'])).toThrow('--allow-ip expects IP')
+    expect(() => parseArgs(['--allow-ip'])).toThrow('--allow-ip expects a value')
+    expect(() => parseArgs(['--tls-cert', '/etc/orca/cert.pem'])).toThrow(
+      'Use --tls-cert and --tls-key together.'
+    )
+  })
+
   it('accepts the browser client directory orca serve hands it', () => {
     expect(parseArgs(['--web-client-root', '/app/out/web'])).toEqual({
       webClientRoot: '/app/out/web'

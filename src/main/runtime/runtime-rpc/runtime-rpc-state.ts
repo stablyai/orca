@@ -31,6 +31,10 @@ import type {
   PairingOfferUnavailable
 } from './runtime-rpc-pairing-types'
 import { DEFAULT_WS_PORT } from './runtime-rpc-pairing-types'
+import {
+  resolveWsTransportNetworkGuard,
+  type WsTransportNetworkGuard
+} from '../rpc/ws-transport-network-guard'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -45,6 +49,7 @@ export class RuntimeRpcState {
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
   protected readonly webClientRoot: string | undefined
+  protected readonly wsNetworkGuard: WsTransportNetworkGuard
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   protected wsBoundHost: string | null = null
   // Why: STA-2370 — in-flight widen so concurrent pairing requests share a single rebind.
@@ -116,6 +121,7 @@ export class RuntimeRpcState {
     exposeNetworkByDefault = false,
     pinnedBindHost,
     webClientRoot,
+    wsNetworkPolicy,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
@@ -133,6 +139,7 @@ export class RuntimeRpcState {
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
+    this.wsNetworkGuard = resolveWsTransportNetworkGuard(wsNetworkPolicy)
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs

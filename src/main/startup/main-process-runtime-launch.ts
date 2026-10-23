@@ -46,6 +46,7 @@ import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
 import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
 import { resolveUpdateInstallMode } from '../updater'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
+import { electronServeNetworkOptions } from '../orcad/serve-ws-network-policy'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
 
@@ -89,6 +90,7 @@ function installRuntimeRpc(
     // Why: STA-2370 — the desktop app binds the WS listener to loopback until the user pairs a device;
     // `orca serve` is an explicit remote opt-in, and E2E keeps the wide bind its harness connects over.
     exposeNetworkByDefault: Boolean(serveOptions) || isE2E,
+    ...(serveOptions ? electronServeNetworkOptions(serveOptions) : {}),
     ...(isE2E ? { wsPort: e2eWsPort } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
     ...(serveOptions?.wsPort !== undefined

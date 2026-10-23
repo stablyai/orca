@@ -3,6 +3,7 @@ import type { RpcAnyMethodDeclaration } from '../rpc/core'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketTransportMetadata } from '../rpc/mobile-socket-wiring'
+import type { RuntimeWsNetworkPolicy } from '../rpc/ws-transport-network-guard'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../shared/mobile-relay-mint-failure'
@@ -26,8 +27,8 @@ export const WS_BIND_HOST_ALL_INTERFACES = '0.0.0.0'
 
 // Why brackets: `ws://::1:6768` is not a URL, and every consumer of this endpoint parses it
 // with `new URL`. An IPv6 bind address would otherwise publish an unparseable endpoint.
-export function formatWsEndpoint(host: string, port: number): string {
-  return `ws://${host.includes(':') ? `[${host}]` : host}:${port}`
+export function formatWsEndpoint(host: string, port: number, secure = false): string {
+  return `${secure ? 'wss' : 'ws'}://${host.includes(':') ? `[${host}]` : host}:${port}`
 }
 
 export type OrcaRuntimeRpcServerOptions = {
@@ -55,6 +56,8 @@ export type OrcaRuntimeRpcServerOptions = {
    */
   pinnedBindHost?: string
   webClientRoot?: string
+  // Why: `orca serve --tls-cert/--allow-ip` hardening for listeners reachable beyond loopback.
+  wsNetworkPolicy?: RuntimeWsNetworkPolicy
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
   longPollCap?: number

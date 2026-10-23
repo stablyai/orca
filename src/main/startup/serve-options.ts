@@ -1,6 +1,7 @@
 import {
   getServeFlagTypoError,
-  getServeOptionValidationError
+  getServeOptionValidationError,
+  getServeTlsOptionValidationError
 } from '../../shared/serve-option-validation'
 
 export type ServeOptions = {
@@ -12,6 +13,10 @@ export type ServeOptions = {
   grantDesktopControl: boolean
   recipeJson: boolean
   projectRoot: string | null
+  bind?: string | null
+  allowIp?: string | null
+  tlsCert?: string | null
+  tlsKey?: string | null
 }
 
 function optionsBeforeTerminator(argv: readonly string[]): readonly string[] {
@@ -90,6 +95,21 @@ function hasFlag(argv: readonly string[], flags: readonly string[]): boolean {
   return argv.some((token) => flagNames.has(optionName(token)))
 }
 
+function serveNetworkOptions(
+  argv: readonly string[]
+): Pick<ServeOptions, 'bind' | 'allowIp' | 'tlsCert' | 'tlsKey'> {
+  const bind = valueAfter(argv, ['--serve-bind', '--bind'], true, '--serve-bind')
+  const allowIp = valueAfter(argv, ['--serve-allow-ip', '--allow-ip'], true, '--serve-allow-ip')
+  const tlsCert = valueAfter(argv, ['--serve-tls-cert', '--tls-cert'], true, '--serve-tls-cert')
+  const tlsKey = valueAfter(argv, ['--serve-tls-key', '--tls-key'], true, '--serve-tls-key')
+  return {
+    ...(bind ? { bind } : {}),
+    ...(allowIp ? { allowIp } : {}),
+    ...(tlsCert ? { tlsCert } : {}),
+    ...(tlsKey ? { tlsKey } : {})
+  }
+}
+
 export function getServeOptions(argv: readonly string[]): ServeOptions {
   const optionsArgv = optionsBeforeTerminator(argv)
   const typoError = getServeFlagTypoError(optionsArgv)
@@ -129,9 +149,11 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
       ['--serve-project-root', '--project-root'],
       false,
       '--serve-project-root'
-    )
+    ),
+    ...serveNetworkOptions(optionsArgv)
   }
-  const validationError = getServeOptionValidationError(options)
+  const validationError =
+    getServeOptionValidationError(options) ?? getServeTlsOptionValidationError(options)
   if (validationError) {
     throw new Error(validationError)
   }

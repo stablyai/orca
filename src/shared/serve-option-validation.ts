@@ -27,6 +27,17 @@ export function getServeOptionValidationError(options: ServeOptionValidationInpu
   return null
 }
 
+/** `--tls-cert` without `--tls-key` (or the reverse) would otherwise serve plain ws:// silently. */
+export function getServeTlsOptionValidationError(options: {
+  tlsCert?: string | null
+  tlsKey?: string | null
+}): string | null {
+  if (Boolean(options.tlsCert) !== Boolean(options.tlsKey)) {
+    return 'Use --tls-cert and --tls-key together.'
+  }
+  return null
+}
+
 const SERVE_SECURITY_FLAG_NAMES = [
   '--no-pairing',
   '--serve-no-pairing',
@@ -37,7 +48,15 @@ const SERVE_SECURITY_FLAG_NAMES = [
   '--recipe-json',
   '--serve-recipe-json',
   '--pairing-address',
-  '--serve-pairing-address'
+  '--serve-pairing-address',
+  '--bind',
+  '--serve-bind',
+  '--allow-ip',
+  '--serve-allow-ip',
+  '--tls-cert',
+  '--serve-tls-cert',
+  '--tls-key',
+  '--serve-tls-key'
 ] as const
 
 const SERVE_VALUE_FLAG_NAMES = new Set([
@@ -48,7 +67,15 @@ const SERVE_VALUE_FLAG_NAMES = new Set([
   '--project-root',
   '--serve-project-root',
   '--pairing-code',
-  '--environment'
+  '--environment',
+  '--bind',
+  '--serve-bind',
+  '--allow-ip',
+  '--serve-allow-ip',
+  '--tls-cert',
+  '--serve-tls-cert',
+  '--tls-key',
+  '--serve-tls-key'
 ])
 
 function flagName(token: string): string {

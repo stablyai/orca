@@ -43,6 +43,7 @@ import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 import { adoptWslHostLoginEnvironment } from './orcad-wsl-host-login-environment'
 import { installOrcadProcessErrorGuards } from './orcad-process-error-guards'
 import { orcadWsPortOptions } from './orcad-ws-port-policy'
+import { serveWsNetworkPolicy } from './serve-ws-network-policy'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 
@@ -351,6 +352,7 @@ async function startOrcadRuntime(
     // restart after its first client paired.
     pinnedBindHost: bindHost,
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
+    wsNetworkPolicy: serveWsNetworkPolicy(options, bindHost),
     ...orcadWsPortOptions(options.port)
   })
   // Stops first: no RPC may write while the rest of the runtime is torn down.
