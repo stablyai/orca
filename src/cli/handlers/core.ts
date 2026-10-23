@@ -7,6 +7,7 @@ import { resolveCliStatusCaller } from '../runtime/status-caller'
 import { getServeSuperviseValidationError } from '../runtime/serve-supervised-service'
 import { getOptionalServePort } from '../runtime/serve-port-flag'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
+import { getOptionalServeBind } from '../runtime/serve-bind-flag'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -91,6 +92,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const mobilePairing = flags.get('mobile-pairing') === true
     const grantDesktopControl = flags.get('grant-desktop-control') === true
     const recipeJson = flags.get('recipe-json') === true
+    const bind = getOptionalServeBind(flags)
     const force = flags.get('force') === true
     const supervise = flags.get('supervise') === true
     const superviseError = getServeSuperviseValidationError({ supervise, recipeJson })
@@ -98,6 +100,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', superviseError)
     }
     const validationError = getServeOptionValidationError({
+      bindHost: bind,
       noPairing,
       mobilePairing,
       grantDesktopControl,
@@ -112,6 +115,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     const exitCode = await serveOrcaApp({
       json,
       port,
+      bind,
       pairingAddress: typeof pairingAddressValue === 'string' ? pairingAddressValue : null,
       noPairing,
       mobilePairing,

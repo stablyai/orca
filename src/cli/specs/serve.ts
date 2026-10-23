@@ -6,10 +6,11 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--json]',
+      'orca serve [--port <port>] [--bind <addr>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'port',
+      'bind',
       'pairing-address',
       'mobile-pairing',
       'no-pairing',
@@ -23,6 +24,8 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Runs in the foreground and prints the bound endpoint, advertised endpoint, and pairing status. Stop it with Ctrl+C.',
       'With --port, serve exits with an error when that port is already in use. Without it, serve uses 6768 and moves to another port when 6768 is taken.',
       '--pairing-address changes only the client-advertised address; use a reachable LAN, Tailscale, SSH-forward, or reverse-proxy endpoint.',
+      '--bind <addr> pins the runtime WebSocket listener to one literal IP (localhost maps to 127.0.0.1); without it the bind behavior is unchanged.',
+      'Use --bind 127.0.0.1 with --pairing-address when the server is reached through an SSH port-forward or tunnel; a non-wildcard --bind cannot be combined with --mobile-pairing.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
       'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
       "A paired client cannot drive this machine's desktop (orca computer) unless the offer was created with --grant-desktop-control.",
@@ -38,6 +41,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'orca serve --json',
       'orca serve --project-root /workspace/repo --pairing-address wss://sandbox.example.com --recipe-json',
       'orca serve --port 6768 --pairing-address 100.64.1.20',
+      'orca serve --bind 127.0.0.1 --pairing-address wss://tunnel.example.com',
       'orca serve --pairing-address 100.64.1.20 --mobile-pairing'
     ]
   },

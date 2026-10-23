@@ -102,6 +102,34 @@ describe('orca serve asking the app which host to run', () => {
     expect(orcadServeArgs({})).toEqual(['--bind', '0.0.0.0'])
   })
 
+  it.each(['127.0.0.1', '::1', '0.0.0.0'])(
+    'preserves the explicit %s pin instead of adding the all-interfaces default',
+    (bind) => {
+      expect(orcadServeArgs({ bind })).toEqual(['--bind', bind])
+    }
+  )
+
+  it('keeps an explicit pin over the adapter default', () => {
+    expect(orcadServeArgs({ bind: '::1' }, undefined, '127.0.0.1')).toEqual(['--bind', '::1'])
+  })
+
+  it('uses the same resolved loopback pin for both runtime hosts', () => {
+    expect(orcadServeArgs({ bind: 'localhost' })).toEqual(['--bind', '127.0.0.1'])
+    expect(serveOptionArgs({ bind: 'localhost' }, '--serve-')).toEqual([
+      '--serve-bind',
+      '127.0.0.1'
+    ])
+    expect(serveOptionArgs({}, '--serve-')).toEqual([])
+  })
+
+  it.each(['', '  ', '127.0.0.1 & calc', 'internal.example'])(
+    'rejects invalid bind %j instead of silently widening either host',
+    (bind) => {
+      expect(() => orcadServeArgs({ bind })).toThrow(/--bind expects/)
+      expect(() => serveOptionArgs({ bind }, '--serve-')).toThrow(/--bind expects/)
+    }
+  )
+
   // #30100: the slot carries no browser client, so without this orcad served no web page.
   it("hands orcad the app's browser client directory when the app has one", () => {
     expect(

@@ -99,6 +99,11 @@ function installRuntimeRpc(
           requirePinnedWsPort: true
         }
       : {}),
+    ...(serveOptions?.bindHost !== undefined
+      ? {
+          pinnedBindHost: serveOptions.bindHost
+        }
+      : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc

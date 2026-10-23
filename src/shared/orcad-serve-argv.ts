@@ -2,9 +2,12 @@
  * The argv `orca serve` hands a serve host: Electron as `--serve-*`, orcad as plain flags. Shared so
  * orcad's own tests run the exact command line the CLI builds (#30120 dropped one across it).
  */
+import { resolveOrcadBindHost } from './runtime-bind-address'
+
 export type ServeOrcaAppArgs = {
   json?: boolean
   port?: string | null
+  bind?: string | null
   pairingAddress?: string | null
   noPairing?: boolean
   mobilePairing?: boolean
@@ -21,6 +24,9 @@ export function serveOptionArgs(args: ServeOrcaAppArgs, prefix: '--' | '--serve-
   return [
     ...(args.json ? [`${prefix}json`] : []),
     ...(args.port ? [`${prefix}port`, args.port] : []),
+    ...(args.bind !== undefined && args.bind !== null
+      ? [`${prefix}bind`, resolveOrcadBindHost(args.bind)]
+      : []),
     ...(args.pairingAddress ? [`${prefix}pairing-address`, args.pairingAddress] : []),
     ...(args.noPairing ? [`${prefix}no-pairing`] : []),
     ...(args.mobilePairing ? [`${prefix}mobile-pairing`] : []),
@@ -38,8 +44,7 @@ export function orcadServeArgs(
   bindHost = '0.0.0.0'
 ): string[] {
   return [
-    '--bind',
-    bindHost,
+    ...(args.bind === undefined || args.bind === null ? ['--bind', bindHost] : []),
     ...serveOptionArgs(args, '--'),
     ...(webClientRoot ? ['--web-client-root', webClientRoot] : [])
   ]

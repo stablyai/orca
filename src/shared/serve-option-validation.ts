@@ -1,6 +1,7 @@
 import { levenshtein } from './edit-distance'
 
 export type ServeOptionValidationInput = {
+  bindHost?: string | null
   noPairing: boolean
   mobilePairing: boolean
   grantDesktopControl?: boolean
@@ -11,6 +12,11 @@ export type ServeOptionValidationInput = {
 export function getServeOptionValidationError(options: ServeOptionValidationInput): string | null {
   if (options.noPairing && options.mobilePairing) {
     return 'Use either --mobile-pairing or --no-pairing, not both.'
+  }
+  if (options.mobilePairing && options.bindHost && options.bindHost !== '0.0.0.0') {
+    // Why: mobile offer creation unconditionally widens, which a non-wildcard pin always refuses
+    // (runtime-rpc-network-exposure), so the offer could only ever fail as network_exposure_failed.
+    return 'Use either --mobile-pairing or --bind <non-wildcard>, not both; --mobile-pairing needs an all-interfaces bind.'
   }
   if (options.grantDesktopControl && (options.noPairing || options.mobilePairing)) {
     return '--grant-desktop-control applies only to the default runtime pairing offer.'
@@ -37,12 +43,16 @@ const SERVE_SECURITY_FLAG_NAMES = [
   '--recipe-json',
   '--serve-recipe-json',
   '--pairing-address',
-  '--serve-pairing-address'
+  '--serve-pairing-address',
+  '--bind',
+  '--serve-bind'
 ] as const
 
 const SERVE_VALUE_FLAG_NAMES = new Set([
   '--port',
   '--serve-port',
+  '--bind',
+  '--serve-bind',
   '--pairing-address',
   '--serve-pairing-address',
   '--project-root',

@@ -128,6 +128,55 @@ describe('orca serve host selection', () => {
     }
   })
 
+  it.each(['127.0.0.1', 'localhost'])(
+    'keeps the explicit %s loopback pin on the Electron host',
+    async (bind) => {
+      process.env.ORCA_SERVE_RUNTIME = 'electron'
+      electronChild()
+
+      await expect(serveOrcaApp({ bind })).resolves.toBe(0)
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/opt/orca/orca-ide',
+        expect.arrayContaining(['--serve-bind', '127.0.0.1']),
+        expect.any(Object)
+      )
+      expect(resolveLocalServeRuntimeMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps the Electron default unpinned when no bind is requested', async () => {
+    process.env.ORCA_SERVE_RUNTIME = 'electron'
+    electronChild()
+
+    await expect(serveOrcaApp({})).resolves.toBe(0)
+    expect(spawnMock.mock.calls[0]?.[1]).not.toContain('--serve-bind')
+  })
+
+  it('passes the resolved loopback pin to the selected orcad host', async () => {
+    const selection = { kind: 'orcad', runtime: '/node', entry: '/slot/orcad.js', version: '1' }
+    resolveLocalServeRuntimeMock.mockResolvedValue(selection)
+    serveWithOrcadMock.mockResolvedValue(0)
+
+    await expect(serveOrcaApp({ bind: 'localhost' })).resolves.toBe(0)
+    expect(serveWithOrcadMock.mock.calls[0]?.slice(0, 4)).toEqual([
+      selection,
+      { bind: '127.0.0.1' },
+      expect.any(String),
+      expect.any(Object)
+    ])
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it.each(['', '127.0.0.1 & calc', 'internal.example'])(
+    'rejects invalid bind %j before starting runtime selection or either server',
+    (bind) => {
+      expect(() => serveOrcaApp({ bind })).toThrow(/--bind expects/)
+      expect(resolveLocalServeRuntimeMock).not.toHaveBeenCalled()
+      expect(serveWithOrcadMock).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('falls back to Electron and prints why when orcad cannot serve', async () => {
     resolveLocalServeRuntimeMock.mockResolvedValue({ kind: 'electron', reason: 'no template' })
     electronChild()

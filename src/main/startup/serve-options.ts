@@ -2,10 +2,12 @@ import {
   getServeFlagTypoError,
   getServeOptionValidationError
 } from '../../shared/serve-option-validation'
+import { resolveOrcadBindHost } from '../../shared/runtime-bind-address'
 
 export type ServeOptions = {
   json: boolean
   wsPort?: number
+  bindHost?: string
   pairingAddress: string | null
   noPairing: boolean
   mobilePairing: boolean
@@ -107,10 +109,15 @@ export function getServeOptions(argv: readonly string[]): ServeOptions {
     wsPort = parsedPort
   }
 
+  const rawBind = valueAfter(optionsArgv, ['--serve-bind', '--bind'], true, '--serve-bind')
+  // Only an explicit flag pins the listener; orcad's loopback default must not change serve's.
+  const bindHost = rawBind !== null ? resolveOrcadBindHost(rawBind) : undefined
+
   const options: ServeOptions = {
     // The CLI uses `flags.has('json')`, so even `--json=false` enables JSON output.
     json: hasFlag(optionsArgv, ['--serve-json', '--json']),
     ...(wsPort !== undefined ? { wsPort } : {}),
+    ...(bindHost !== undefined ? { bindHost } : {}),
     pairingAddress: valueAfter(
       optionsArgv,
       ['--serve-pairing-address', '--pairing-address'],

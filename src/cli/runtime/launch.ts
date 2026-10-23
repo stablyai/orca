@@ -30,6 +30,7 @@ import {
 import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
 import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
 import { resolveLocalServeRuntime, serveWithOrcad } from './serve-orcad-launch'
+import { resolveServeBindHost } from './serve-bind-flag'
 import { findAppSpeechRecognizerDir } from './serve-speech-recognizer'
 import { serveOptionArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
 import { waitForRecipeJson } from './serve-recipe-json'
@@ -133,6 +134,9 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
 }
 
 export function serveOrcaApp(args: ServeOrcaAppArgs = {}): Promise<number> {
+  if (args.bind !== undefined && args.bind !== null) {
+    args = { ...args, bind: resolveServeBindHost(args.bind) }
+  }
   // Why first: as a container or PrivatePIDs init, nothing would reap orphaned descendants.
   reexecThisServeUnderInitReaper()
   noteServeSupervisorStart()
