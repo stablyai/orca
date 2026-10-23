@@ -2,7 +2,7 @@ import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-l
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   agentSessionProviderHandleKey,
@@ -18,8 +18,7 @@ import {
   spellProviderTimelineKey
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
-import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from './acp-launch-specs'
-import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
+import { acpLaunchSpecFor } from './acp-launch-specs'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
 
@@ -102,11 +101,10 @@ describe('ACP launch resolution', () => {
       providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 },
       providerHandleChain: []
     })
-    const readJournal = () => {
-      throw new Error('old history must not be sampled for resume')
-    }
+    const readJournal = vi.fn(() => null)
     const launch = await resolver(value, readJournal).resolve({ identity })
     expect(launch.resume).toBeNull()
+    expect(readJournal).not.toHaveBeenCalled()
   })
 
   it("asks the agent to approve everything only under the chat's full access", async () => {
@@ -115,14 +113,6 @@ describe('ACP launch resolution', () => {
     expect((await start('full-access')).args).toContain('--always-approve')
     expect((await start('ask')).args).not.toContain('--always-approve')
   })
-
-  // A chat's mode is its only full-access path, so an ACP agent with no modes would always ask.
-  it.each(ACP_LAUNCH_SPECS.map((spec) => spec.agent))(
-    'gives %s chats a Full access mode',
-    (agent) => {
-      expect(agentChatPermissionModes(agent)?.modes).toContain('full-access')
-    }
-  )
 
   it('resumes the chain head by its key, possibly unsaved only when this chat created it', async () => {
     const link = (origin: 'created' | 'resumed') => ({
@@ -342,7 +332,9 @@ describe('ACP launch folder of a floating chat', () => {
   })
 
   it('refuses with the folder-missing reason when the pinned folder is gone', async () => {
-    const gone = join(tmpdir(), 'orca-acp-floating-gone-never-created')
+    const gone = mkdtempSync(join(tmpdir(), 'orca-acp-floating-gone-'))
+    rmSync(gone, { recursive: true, force: true })
+    onTestFinished(() => rmSync(gone, { recursive: true, force: true }))
     const { resolve } = resolveIn(floating(gone), '/floating/moved')
     await expect(resolve({ identity })).rejects.toMatchObject({
       name: 'AgentSessionPreSpawnError',

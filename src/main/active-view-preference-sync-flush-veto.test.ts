@@ -5,10 +5,7 @@ import type * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why this file is separate: the swap in writeAsync is async, so a writer parked on its
-// rename has already cleared the generation guard and nothing downstream can veto it.
-// flushOrThrow runs synchronously from session checkpoints and renderer shutdown, so a
-// stale view landing on top of it is a real loss. Gating rename is the only way to pin it.
+// Gate rename after the generation check to expose sync-flush overwrites by stale async writes.
 
 const gate = vi.hoisted(() => ({
   blockRename: false,
@@ -74,11 +71,9 @@ describe('ActiveViewPreference sync flush vs. parked async rename', () => {
     gate.blockRename = true
     pref.set('activity')
     await vi.waitFor(() => expect(gate.renameCalls).toBeGreaterThan(0))
-    // Why grab it now: flushOrThrow drops pendingWrite, so waitForPendingWrite would
-    // return before the released rename has actually landed.
+    // Capture before sync flush clears pendingWrite, or the test could finish before rename settles.
     const inflight = (pref as unknown as { pendingWrite: Promise<void> | null }).pendingWrite
 
-    // A session checkpoint fires while that write is still parked.
     pref.set('tasks')
     pref.flushOrThrow()
     expect(JSON.parse(readFileSync(viewFile(), 'utf-8')).activeView).toBe('tasks')

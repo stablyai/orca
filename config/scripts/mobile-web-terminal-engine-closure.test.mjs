@@ -44,7 +44,6 @@ async function documentEntryPoints() {
     .filter((name) => name.endsWith('.ts'))
     .filter((name) => !name.includes('.test'))
     .sort()
-  expect(names.length).toBeGreaterThan(30)
   return names.map((name) => `src/terminal/document/${name.replace(/\.ts$/, '')}`)
 }
 

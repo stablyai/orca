@@ -1,6 +1,7 @@
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _internals } from '../agent-hooks/server'
-import { isSubagentBlock } from '../../shared/native-chat-types'
+import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat-types'
 import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
@@ -146,7 +147,40 @@ describe('Grok roster evidence through the existing host child store', () => {
         membership: 'live'
       })
     ])
-    expect(childWork.views()).toMatchObject([{ providerId: 'subagent-1', outcome: 'succeeded' }])
+    expect(childWork.views()).toMatchObject([
+      {
+        providerId: 'subagent-1',
+        description: label,
+        membership: 'settled',
+        outcome: 'succeeded',
+        ...(name === 's7-subagent-foreground' ? { totalTokens: 13778 } : {})
+      }
+    ])
+    const rows = (await hosted.host.history({ sessionId: SESSION, direction: 'tail' })).page.items
+    expect(
+      rows.flatMap((row) =>
+        row.agentId !== undefined && row.body.kind === 'message'
+          ? [{ agentId: row.agentId, blocks: row.body.blocks }]
+          : []
+      )
+    ).toEqual([
+      {
+        agentId: 'subagent-1',
+        blocks: [
+          { type: 'text', text: name === 's7-subagent-foreground' ? '4' : 'notes.txt, README.md' }
+        ]
+      }
+    ])
+    expect(rows.flatMap((row) => readAgentJournalTurn(row.body) ?? [])).toMatchObject([
+      { state: 'completed', outcome: 'success' }
+    ])
+    if (name === 's7-subagent-background') {
+      expect(
+        rows.flatMap((row) =>
+          row.body.kind === 'message' ? row.body.blocks.filter(isBackgroundTaskBlock) : []
+        )
+      ).toEqual([])
+    }
     expect(
       (await hosted.host.history({ sessionId: SESSION, direction: 'tail' })).page.backgroundTasks
     ).toBeNull()

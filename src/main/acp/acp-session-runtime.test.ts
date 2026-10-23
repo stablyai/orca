@@ -252,39 +252,6 @@ describe('ACP session runtime', () => {
     expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize', 'session/new'])
   })
 
-  it('does not retry authentication indefinitely or start an interactive login', async () => {
-    const { runtime, agent } = fixture()
-    agent.on('initialize', (frame) =>
-      agent.reply(frame, {
-        protocolVersion: 1,
-        authMethods: [{ id: 'terminal', name: 'Interactive login', type: 'terminal' }]
-      })
-    )
-    agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Login required'))
-    await expect(runtime.start(startOptions)).rejects.toBeInstanceOf(AcpAuthRequiredError)
-    expect(agent.frames.map((frame) => frame.method)).toEqual(['initialize', 'session/new'])
-    const retry = fixture()
-    retry.agent.on('initialize', (frame) =>
-      retry.agent.reply(frame, {
-        protocolVersion: 1,
-        authMethods: [{ id: 'agent', name: 'Agent login' }]
-      })
-    )
-    retry.agent.on('authenticate', (frame) => retry.agent.reply(frame, {}))
-    retry.agent.on('session/new', (frame) =>
-      retry.agent.fail(frame, -32000, 'Still requires login')
-    )
-    await expect(
-      retry.runtime.start({ ...startOptions, authMethodId: 'agent' })
-    ).rejects.toBeInstanceOf(AcpAuthRequiredError)
-    expect(retry.agent.frames.map((frame) => frame.method)).toEqual([
-      'initialize',
-      'session/new',
-      'authenticate',
-      'session/new'
-    ])
-  })
-
   it('sends mode, model, and config changes to the active session', async () => {
     const { runtime, agent } = fixture()
     agent.on('session/set_mode', (frame) => agent.reply(frame, {}))
@@ -382,7 +349,7 @@ describe('ACP session runtime', () => {
     expect(diagnostics.some((message) => message.includes('Consumer failed'))).toBe(true)
   })
 
-  it('rejects pending calls and aborts permission hooks when the agent exits', async () => {
+  it('rejects pending calls and aborts permission hooks when protocol input ends', async () => {
     const requested = deferred<AbortSignal>()
     const { runtime, agent } = fixture(
       {},

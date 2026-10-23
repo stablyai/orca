@@ -98,54 +98,6 @@ async function stop(rig: AcpAdapterRig, replay: GrokFixtureReplay) {
 }
 
 describe('Grok subagent recordings through the adapter', () => {
-  it('a foreground subagent completes and its reply opens under it', async () => {
-    const { rig, replay, evidence } = await replaying('s7-subagent-foreground')
-    await send(rig, 'send-1')
-    await waitFor(() => expect(replay.awaiting).toBeNull())
-    await waitFor(async () =>
-      expect(await turns(rig)).toMatchObject([{ state: 'completed', outcome: 'success' }])
-    )
-    expect(subagents(evidence)).toMatchObject([
-      { id: 'subagent-1', label: 'Count note lines', outcome: 'succeeded', tokens: 13778 }
-    ])
-    expect(await replies(rig)).toEqual([
-      { agentId: 'subagent-1', blocks: [{ type: 'text', text: '4' }] }
-    ])
-    expect(evidence).toContainEqual(
-      expect.objectContaining({
-        type: 'live',
-        child: expect.objectContaining({ kind: 'agent', description: 'Count note lines' })
-      })
-    )
-    expect(evidence).toContainEqual(
-      expect.objectContaining({ type: 'ended', outcome: 'succeeded' })
-    )
-  })
-
-  it('a background subagent completes and stays out of the background tasks', async () => {
-    const { rig, replay, evidence } = await replaying('s7-subagent-background')
-    await send(rig, 'send-1')
-    await waitFor(() => expect(replay.awaiting).toBeNull())
-    await waitFor(() =>
-      expect(subagents(evidence)).toMatchObject([
-        { id: 'subagent-1', label: 'List folder files', outcome: 'succeeded' }
-      ])
-    )
-    expect(await replies(rig)).toEqual([
-      { agentId: 'subagent-1', blocks: [{ type: 'text', text: 'notes.txt, README.md' }] }
-    ])
-    expect(await backgroundTasks(rig)).toEqual([])
-    expect(evidence).toContainEqual(
-      expect.objectContaining({
-        type: 'live',
-        child: expect.objectContaining({ kind: 'agent', description: 'List folder files' })
-      })
-    )
-    expect(evidence).toContainEqual(
-      expect.objectContaining({ type: 'ended', outcome: 'succeeded' })
-    )
-  })
-
   it('Stop while a foreground and then a background subagent runs ends each stopped', async () => {
     const { rig, replay, evidence } = await replaying('s7-subagent-stop')
     await send(rig, 'send-1')

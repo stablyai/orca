@@ -1,0 +1,122 @@
+{
+  "batch": "upstream-stale-10",
+  "reviewer": "audit_mobile",
+  "platform": "linux",
+  "source_commit": "427fab262ca5c2db953b37cace69b906e8f13310",
+  "source_commit_provenance": "Existing progress.json inventory source reference; exact source snapshots/hashes verified without Git. Root can independently verify the commit before installing records.",
+  "reviewed_files": 10,
+  "original_declarations": 87,
+  "case_records": 87,
+  "original_static_row_uses_retained": 231,
+  "production_derived_row_uses_retained": 49,
+  "quantified_loop_policies": 2,
+  "support_fixture_arrays": 12,
+  "support_fixture_row_uses_retained": 86,
+  "new_admission_rows": 10,
+  "changed_files": [
+    "config/scripts/ci-unit-module-cache.test.mjs",
+    "src/packages/process-host/src/run-process.test.ts"
+  ],
+  "changed_cases": 6,
+  "removed_cases": 0,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test config/scripts/ci-dependency-download-cache.test.mjs config/scripts/ci-unit-module-cache.test.mjs src/packages/process-host/src/posix-lsof-probe.test.ts src/packages/process-host/src/process-tree-termination.test.ts src/packages/process-host/src/run-process-windows-tree-kill.test.ts src/packages/process-host/src/run-process.test.ts src/packages/process-host/src/windows-command-line.test.ts src/packages/process-host/src/windows-tree-kill.test.ts",
+      "result": "8 suites / 190 tests passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-upstream-stale-10/implementation/tests.log",
+      "log_sha256": "25f43f99160536ebb43d897c408dda3be6763bad2fd47743d263a4e2f651316d"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --filter @orca/process-host typecheck",
+      "result": "production and test tsconfigs passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-upstream-stale-10/implementation/typecheck.log",
+      "log_sha256": "fcb72d8ef8d0349b9158f225344fb2215ab82ce1da6125d0856642fbf508965d"
+    },
+    {
+      "command": "pnpm exec oxlint config/scripts/ci-unit-module-cache.test.mjs src/packages/process-host/src/run-process.test.ts",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-upstream-stale-10/implementation/lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "pnpm exec oxfmt --check config/scripts/ci-unit-module-cache.test.mjs src/packages/process-host/src/run-process.test.ts",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-upstream-stale-10/implementation/format.log",
+      "log_sha256": "5c0f52f5d8f15d3ff304f5c12a57adb52867c58709673030f760592f495da3ec"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node /tmp/orca-upstream-stale-10/implementation/mutations.cjs",
+      "result": "four copied-guard and one copied-sink mutations escaped old assertions and failed repaired assertions; four original-source callback controls passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-upstream-stale-10/implementation/mutations.log",
+      "log_sha256": "04ffa5b31424cb455166cbf549d45511b3a15f950bf0c6cf5c670cc02d379eb1"
+    }
+  ],
+  "production_changes": false,
+  "shared_production_mutations": false,
+  "isolated_mutation_results": "/tmp/orca-upstream-stale-10/implementation/mutations/results.json",
+  "isolated_mutation_results_sha256": "e42112fe991a0d6dd6d1f6cae2487567170a95e7b0dd7f8f7788c3e095baa9f2",
+  "mutation_scope": "Actual original/repaired callback bodies are evaluated with a Node assert matcher adapter. Guard input is a copied YAML file. Sink experiments run the actual runProcess implementation from isolated copied production modules and real Node children with ORCA_BACKGROUND_LAUNCH=1.",
+  "mutation_limits": [
+    "The callbacks use a Node assertion matcher adapter rather than Vitest for isolated mutation comparisons. The real eight-suite Vitest run separately passed.",
+    "Copied YAML mutations evaluate policy only; no GitHub workflow or cache service is executed.",
+    "Copied production runProcess/sink checks launch real hidden Node children on Linux; no Windows/macOS native claim is made.",
+    "No shared production mutation, tracker write, staging, hook or Git command was performed."
+  ],
+  "records_sha256": "d2d9f8c8438ebb9a12cac2eb7f58b8a0da23fb1b211266e00c1cbd1546a4ac35",
+  "original_plan_sha256": "f4902820ba48641dfbdb527f2403c5391046b6d4c66ac253be59d910504fafb2",
+  "integrity_sha256": "eb1716daa9609eaca6f2ad59035375afca93940e2509d9bb5ab967a77ddcc3eb",
+  "platform_limits": [
+    "All eight suites and isolated copied-process mutations passed on Linux; no native Windows/macOS test run was performed.",
+    "Windows property substitution and injected adapters exercise state-machine/spawn policy on Linux; no taskkill.exe, Windows scheduler, native PID reuse, cmd.exe or Windows filesystem execution was validated.",
+    "Real Windows argument delivery remains in windows-command-line.win32.test.ts and windows-cmd-shim-resolution.win32.test.ts; these were read to confirm all corpus/fixture consumers, not executed.",
+    "POSIX lsof lifecycle runs real helper subprocesses on macOS/Linux; /proc/net/unix corroboration cases are Linux-only. No fresh macOS native signal/process evidence is available.",
+    "CI suites parse shipped YAML and evaluate selected expressions with synthetic contexts; they do not contact GitHub cache services, execute workflow jobs, install dependencies or measure runner throughput.",
+    "No Electron app launch, visible/native-focus check, desktop activation or live network action is part of this proposal."
+  ],
+  "preservation": [
+    "All ten approved original snapshots, ten prior-reviewed snapshots, ten before snapshots and ten pinned final snapshots remain untouched; superseding checkout source is captured separately.",
+    "All 87 original declaration titles/lines/hashes have one final legal decision; 81 unchanged case bodies match exact original hashes.",
+    "All original static and production-derived input uses, two runtime traversal policies and all support fixture rows remain.",
+    "All eight copied prior review/validation files remain byte-identical to their source records.",
+    "No staging, hooks, Git commands or tracker edits were performed."
+  ],
+  "metadata_reconciliation": "/tmp/orca-upstream-stale-10/implementation/reconciliation.json",
+  "metadata_reconciliation_sha256": "dd8e3b27c059e9b925550fb03a2cbc038d1e60aecc294ea5b9fec29131564ce3",
+  "legal_file_decisions": {
+    "keep": 8,
+    "fix": 2
+  },
+  "legal_case_decisions": {
+    "keep": 81,
+    "fix": 6
+  },
+  "source_scope": "The ten immutable stale-10 pinned final snapshots. Root subsequently integrated a newer ci-dependency-download-cache.test.mjs with the Windows2025 case; its superseding review is separate. Nine other current paths still match this batch.",
+  "superseding_current_source": {
+    "path": "config/scripts/ci-dependency-download-cache.test.mjs",
+    "original_sha256": "5b56169c9a6e96bfad4113e6a4916e27053d3e94ad033c9c13377742d1536ae5",
+    "reviewed_sha256": "5b56169c9a6e96bfad4113e6a4916e27053d3e94ad033c9c13377742d1536ae5",
+    "current_sha256": "ae63abba36ffb633792b1a3a9ac880d17927f555f2b9885a4f22af721b47043a",
+    "current_source_matches": false,
+    "current_snapshot": "/tmp/orca-upstream-stale-10/implementation/01.current-after-root-integration",
+    "current_source_status": "Root integrated the newer Windows2025 upstream version after this pinned ten-path batch. Superseding review belongs to config/root; stale-10 decisions and tests apply to the pinned final snapshot.",
+    "cases": 17,
+    "original_tables": 15,
+    "final_tables": 15
+  },
+  "plan_sha256": "ce4b94983f0d1600db09859c43e9d24dc98f524f12efa7600497b67d0a8e7c37",
+  "integration": {
+    "batch": "upstream-0001",
+    "delivered_records_sha256": "49cb020389df5faf671811d6419da94baa7749ca28f286b9d95ce4e76bd557b8",
+    "manifest_entries_verified": 180,
+    "original_git_hashes_verified": 10,
+    "current_source_hashes_verified": 9,
+    "historical_cache_record_preserved": true,
+    "superseding_cache_review": "upstream-0005",
+    "installed_records_sha256": "d2d9f8c8438ebb9a12cac2eb7f58b8a0da23fb1b211266e00c1cbd1546a4ac35"
+  }
+}

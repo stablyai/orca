@@ -1,7 +1,8 @@
+import { deferred } from './acp-scripted-agent.test-support'
 // A Grok chat's Stop through the real host: it ends the process once Grok settles its turn, and the
 // next send resumes the session.
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { withNativeChatCutTurnNotices } from '../../shared/native-chat-cut-turn-notice'
 import {
   closeProviderTimelineRigs,
@@ -18,6 +19,8 @@ import {
 } from './acp-structured-host.test-support'
 
 afterEach(async () => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   await closeProviderTimelineRigs()
 })
 
@@ -30,12 +33,8 @@ describe('a Grok chat Stop', () => {
     first.agent.notify('session/update', replyChunk(promptIdOf(prompt), 'partial'))
     // Grok takes a moment to wind the turn down; the host waits for it before ending the process.
     const answered: { cancel: boolean; atClose: boolean | null } = { cancel: false, atClose: null }
-    first.agent.on('session/cancel', () =>
-      setTimeout(() => {
-        answered.cancel = true
-        first.agent.reply(prompt, { stopReason: 'cancelled' })
-      }, 50)
-    )
+    const cancellation = deferred<void>()
+    first.agent.on('session/cancel', () => cancellation.resolve())
     const close = first.close.bind(first)
     first.close = async () => {
       answered.atClose ??= answered.cancel
@@ -43,7 +42,15 @@ describe('a Grok chat Stop', () => {
     }
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
-    expect(await stop(host)).toMatchObject({ ok: true, value: { cancelled: true } })
+    try {
+      expect(await stop(host)).toMatchObject({ ok: true, value: { cancelled: true } })
+      await cancellation.promise
+      expect(first.exited).toBe(false)
+      expect(answered.atClose).toBeNull()
+    } finally {
+      answered.cancel = true
+      first.agent.reply(prompt, { stopReason: 'cancelled' })
+    }
     await waitFor(() => expect(first.exited).toBe(true))
     expect(framesOf(first, 'session/cancel')).toHaveLength(1)
     expect(answered.atClose).toBe(true)
@@ -77,12 +84,34 @@ describe('a Grok chat Stop', () => {
     await host.flushStreamedEvents(SESSION)
     // A write that never completes, as a full pipe to a Grok that stopped reading.
     let cancels = 0
+    const deadlineStarted = deferred<void>()
+    let deadlineElapsed = false
+    const requestEnd = rig.adapter.awaitStoppedRequestEnd
+    const waiting = vi
+      .spyOn(rig.adapter, 'awaitStoppedRequestEnd')
+      .mockImplementation((sessionId, at) => {
+        const pending = requestEnd(sessionId, at)
+        deadlineStarted.resolve()
+        return pending.then(() => {
+          deadlineElapsed = true
+        })
+      })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
     first.cancel = () => {
       cancels += 1
       return new Promise(() => {})
     }
     expect(await stop(host)).toMatchObject({ ok: true, value: { cancelled: true } })
+    await deadlineStarted.promise
+    expect(first.exited).toBe(false)
+    await vi.advanceTimersByTimeAsync(29)
+    expect(first.exited).toBe(false)
+    expect(deadlineElapsed).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(deadlineElapsed).toBe(true)
     await waitFor(() => expect(first.exited).toBe(true))
+    waiting.mockRestore()
+    vi.useRealTimers()
     expect(cancels).toBe(1)
     expect((await turns()).at(-1)).toMatchObject({ state: 'interrupted' })
   })

@@ -1,5 +1,4 @@
-import { readFile } from 'node:fs/promises'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { AcpJsonRpcPeer } from './acp-json-rpc-peer'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
@@ -275,22 +274,29 @@ describe('ACP caller-owned waits', () => {
 
   it('keeps a handler answer that finishes saving after its owner withdraws requests', async () => {
     const withdrawal = new AbortController()
-    // A real I/O hop, the shape of a journal write the handler commits before replying.
-    const save = (): Promise<void> => readFile(import.meta.filename).then(() => undefined)
-    const userAnswer = deferred<void>()
+    const planEntered = deferred<void>()
+    const questionEntered = deferred<void>()
+    const savePlan = deferred<void>()
+    const saveQuestion = deferred<void>()
+    onTestFinished(() => {
+      withdrawal.abort()
+      savePlan.resolve()
+      saveQuestion.resolve()
+    })
     const { agent, runtime } = fixture({
-      onRequest: (method) =>
-        new Promise((resolve) => {
-          if (method === '_vendor/plan') {
-            // The user already approved; the save started before the stop and replies after it.
-            void userAnswer.promise.then(save).then(() => resolve({ outcome: 'approved' }))
-          } else {
-            withdrawal.signal.addEventListener(
-              'abort',
-              () => void save().then(() => resolve({ outcome: 'abandoned' }))
-            )
-          }
-        })
+      onRequest: async (method) => {
+        if (method === '_vendor/plan') {
+          planEntered.resolve()
+          await savePlan.promise
+          return { outcome: 'approved' }
+        }
+        await new Promise<void>((resolve) =>
+          withdrawal.signal.addEventListener('abort', () => resolve(), { once: true })
+        )
+        questionEntered.resolve()
+        await saveQuestion.promise
+        return { outcome: 'abandoned' }
+      }
     })
     agent.on('session/prompt', (frame) =>
       agent.on('session/cancel', () => agent.reply(frame, { stopReason: 'cancelled' }))
@@ -299,10 +305,15 @@ describe('ACP caller-owned waits', () => {
     const pending = runtime.prompt([...prompt])
     const plan = agent.request('plan', '_vendor/plan', {})
     const question = agent.request('question', '_vendor/question', {})
-    await tick()
-    userAnswer.resolve()
+    await planEntered.promise
     await runtime.cancel()
     withdrawal.abort()
+    await questionEntered.promise
+    expect(agent.frames.filter((frame) => frame.id === 'plan' || frame.id === 'question')).toEqual(
+      []
+    )
+    savePlan.resolve()
+    saveQuestion.resolve()
     expect(await plan).toMatchObject({ result: { outcome: 'approved' } })
     expect(await question).toMatchObject({ result: { outcome: 'abandoned' } })
     await pending

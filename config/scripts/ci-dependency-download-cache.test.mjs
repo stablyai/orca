@@ -373,9 +373,9 @@ describe('CI dependency download caches', () => {
     const platforms = read(workflow('ci-cache-warmup-platforms').jobs['warm-platforms'].uses)
     const warm = platforms.jobs['warm-windows']
     const context = { runner: { arch }, matrix: { os } }
-    for (const step of warm.steps.filter((step) =>
-      ['Cache Windows CLI launcher', 'Build the Windows native executables'].includes(step.name)
-    )) {
+    for (const name of ['Cache Windows CLI launcher', 'Build the Windows native executables']) {
+      const step = warm.steps.find((step) => step.name === name)
+      expect(step, name).toBeDefined()
       expect(runInNewContext(step.if, context)).toBe(cli)
     }
     const consumer = workflow('wsl-orcad-e2e').jobs.wsl2

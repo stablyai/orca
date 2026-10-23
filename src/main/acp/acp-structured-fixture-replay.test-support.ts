@@ -28,6 +28,7 @@ function promptIdOf(params: unknown): string | undefined {
 
 export class GrokFixtureReplay {
   private cursor = 0
+  private responseFailure: unknown
   private agent: AcpScriptedAgent | null = null
   private readonly promptIds = new Map<string, string>()
   private readonly requestIds = new Map<string | number, string | number | null | undefined>()
@@ -42,6 +43,9 @@ export class GrokFixtureReplay {
 
   /** What the recording waits for Orca to send next; null once it has played to the end. */
   get awaiting(): string | null {
+    if (this.responseFailure !== undefined) {
+      throw this.responseFailure
+    }
     const next = this.frames[this.cursor]
     if (!next) {
       return null
@@ -73,11 +77,31 @@ export class GrokFixtureReplay {
       const message = this.rewrite(recorded.message)
       if (message.method !== undefined && message.id !== undefined) {
         // The agent asks Orca something; the recording resumes once Orca answers it.
-        void agent.request(message.id, message.method, message.params).then(() => {
-          expect(this.frames[this.cursor]?.direction).toBe('out')
-          this.cursor += 1
-          this.play()
-        })
+        void agent
+          .request(message.id, message.method, message.params)
+          .then((response) => {
+            const expected = this.frames[this.cursor]
+            expect(expected?.direction).toBe('out')
+            if (!expected) {
+              throw new Error('Recorded provider request has no response')
+            }
+            const reply = this.rewrite(expected.message)
+            expect(reply.method).toBeUndefined()
+            // The old capture used a different diagnostic for the same unsupported method.
+            if (
+              reply.error?.code === -32601 &&
+              reply.error.message === 'Method not found: fs/write_text_file' &&
+              message.method === 'fs/write_text_file'
+            ) {
+              reply.error.message = 'Unsupported ACP client method: fs/write_text_file'
+            }
+            expect(messageSchema.parse(response)).toEqual(reply)
+            this.cursor += 1
+            this.play()
+          })
+          .catch((error: unknown) => {
+            this.responseFailure = error
+          })
         return
       }
       if (message.method !== undefined) {

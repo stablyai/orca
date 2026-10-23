@@ -1,43 +1,50 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 
-vi.mock('../format', () => ({ printResult: vi.fn() }))
+vi.mock('../format', async (importOriginal) => {
+  const original = await importOriginal<{ printResult: typeof printResult }>()
+  return { printResult: vi.fn(original.printResult) }
+})
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-
-function renderedLine(result: unknown): string {
-  const [value, , render] = vi.mocked(printResult).mock.calls[0] as [
-    unknown,
-    boolean,
-    (value: unknown) => string
-  ]
-  expect(value).toBe(result)
-  return render(value)
-}
+import { okFixture } from '../test-fixtures'
 
 async function showWorker(observation: unknown): Promise<string> {
   const result = {
-    dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' },
-    worker: { state: 'ready', stage: 'dispatch_input', agent_terminal_handle: 'term_1' },
+    dispatch: { id: 'ctx_1', taskId: 'task_1', status: 'dispatched' },
+    worker: { state: 'ready', stage: 'dispatch_input', agentTerminalHandle: 'term_1' },
     ...(observation === undefined ? {} : { observation })
   }
-  callMock.mockResolvedValue(result)
+  callMock.mockResolvedValue(okFixture('req_show', result))
   await ORCHESTRATION_HANDLERS['orchestration worker-show']({
     flags: new Map<string, string | boolean>([['dispatch', 'ctx_1']]),
     client: { call: callMock },
     cwd: '/tmp/repo',
     json: false
   } as never)
-  return renderedLine(result)
+  expect(callMock).toHaveBeenCalledExactlyOnceWith('orchestration.workerShow', {
+    dispatch: 'ctx_1'
+  })
+  expect(console.log).toHaveBeenCalledOnce()
+  const output = vi.mocked(console.log).mock.calls[0]?.[0]
+  if (typeof output !== 'string') {
+    throw new Error('worker-show did not print text')
+  }
+  return output
 }
 
 describe('orchestration worker-show interactive wait output', () => {
   beforeEach(() => {
     callMock.mockReset()
-    vi.mocked(printResult).mockReset()
+    vi.mocked(printResult).mockClear()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('names the prompt when a worker is waiting on a human', async () => {

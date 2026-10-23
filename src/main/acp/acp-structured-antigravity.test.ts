@@ -3,7 +3,7 @@
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, onTestFinished } from 'vitest'
 import { z } from 'zod'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
@@ -82,6 +82,7 @@ it('signs a first chat in, asks in default mode, and answers a question with one
 
 it('launches on its own private folder with file sign-in and no other Google credentials', async () => {
   const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-antigravity-'))
+  onTestFinished(() => rm(stateDirectory, { recursive: true, force: true }))
   const folder = join(stateDirectory, 'antigravity-chat')
   const user = {
     GEMINI_HOME: '/data/.gemini',
@@ -111,7 +112,6 @@ it('launches on its own private folder with file sign-in and no other Google cre
   for (const mode of await Promise.all(modes)) {
     expect(process.platform === 'win32' || (mode & 0o777) === 0o700).toBe(true)
   }
-  await rm(stateDirectory, { recursive: true, force: true })
 })
 
 it('runs the chat permission mode picked mid-chat as the server mode on the next send', async () => {
@@ -176,6 +176,7 @@ it('refuses a new start while its sign-in changes, and stops one already startin
   const starting = rig.acquire()
   await rig.frame('session/new')
   const signIn = deferred<void>()
+  onTestFinished(() => signIn.resolve())
   const operation = gate.run(
     async () => {},
     () => signIn.promise
@@ -189,6 +190,10 @@ it('refuses a new start while its sign-in changes, and stops one already startin
 
   const lateStart = gate.enter(undefined)
   let left = false
+  onTestFinished(() => {
+    left = true
+    lateStart.leave()
+  })
   let stopped = false
   let worked = false
   const failedOperation = gate.run(
@@ -201,6 +206,7 @@ it('refuses a new start while its sign-in changes, and stops one already startin
       worked = true
     }
   )
+  void failedOperation.catch(() => {})
   expect(lateStart.signal.aborted).toBe(true)
   expect(stopped).toBe(false)
   left = true

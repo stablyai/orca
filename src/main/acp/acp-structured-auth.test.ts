@@ -83,6 +83,7 @@ describe('Grok sign-in on its own machine', () => {
       authMethods: [{ id: 'cached_token', name: 'Cached sign-in' }]
     })
     expect(keyNotOffered.methods).toEqual(['cached_token'])
+    expect(keyNotOffered.acquired).toMatchObject({ link: { origin: 'created' } })
   })
 
   it('reports Grok signed out when it offers neither, sending no sign-in', async () => {

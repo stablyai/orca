@@ -4,11 +4,6 @@ const callMock = vi.fn()
 // Reuse one mutation identity when retrying worker_done after runtime_unavailable.
 const WORKER_DONE_REQUEST = { orchestrationRequestId: expect.any(String) }
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
-const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
-const originalPaneKey = process.env.ORCA_PANE_KEY
-// Isolate inherited session markers so the runner cannot change the refusal branch.
-const originalStructuredSession = process.env.ORCA_STRUCTURED_SESSION
-const originalCliCommand = process.env.ORCA_CLI_COMMAND
 const originalExitCode = process.exitCode
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
@@ -20,40 +15,34 @@ vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { RuntimeClientError } from '../runtime-client'
 import { printResult } from '../format'
+import { okFixture } from '../test-fixtures'
+
+beforeEach(() => {
+  callMock.mockReset()
+  getTerminalHandleMock.mockReset()
+  vi.mocked(printResult).mockReset()
+  vi.stubEnv('ORCA_TERMINAL_HANDLE', undefined)
+  vi.stubEnv('ORCA_PANE_KEY', undefined)
+  vi.stubEnv('ORCA_STRUCTURED_SESSION', undefined)
+  vi.stubEnv('ORCA_AGENT_SESSION_ID', undefined)
+  vi.stubEnv('ORCA_CLI_COMMAND', undefined)
+  vi.stubEnv('ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER', undefined)
+  vi.stubEnv('ORCA_DEV_CLI_INVOCATION', undefined)
+  vi.stubEnv('ORCA_USER_DATA_PATH', undefined)
+  process.exitCode = undefined
+})
 
 afterEach(() => {
-  getTerminalHandleMock.mockReset()
-  if (originalTerminalHandle === undefined) {
-    delete process.env.ORCA_TERMINAL_HANDLE
-  } else {
-    process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
-  }
-  if (originalPaneKey === undefined) {
-    delete process.env.ORCA_PANE_KEY
-  } else {
-    process.env.ORCA_PANE_KEY = originalPaneKey
-  }
-  if (originalStructuredSession === undefined) {
-    delete process.env.ORCA_STRUCTURED_SESSION
-  } else {
-    process.env.ORCA_STRUCTURED_SESSION = originalStructuredSession
-  }
-  if (originalCliCommand === undefined) {
-    delete process.env.ORCA_CLI_COMMAND
-  } else {
-    process.env.ORCA_CLI_COMMAND = originalCliCommand
-  }
   process.exitCode = originalExitCode
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
 
 describe('orchestration send structured payload flags', () => {
   beforeEach(() => {
-    callMock.mockReset().mockResolvedValue({ result: { lifecycle: { action: 'completed' } } })
-    getTerminalHandleMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_STRUCTURED_SESSION
+    callMock.mockResolvedValue(
+      okFixture('req_send', { message: { id: 'msg_sent' }, lifecycle: { action: 'completed' } })
+    )
   })
 
   const invokeSend = (flags: Map<string, string | boolean>) =>
@@ -311,15 +300,14 @@ describe('orchestration send structured payload flags', () => {
       invokeSend(
         new Map<string, string | boolean>([
           ['to', 'term_coord'],
-          ['subject', 'done'],
-          ['type', 'worker_done'],
-          ['outcome', 'succeeded']
+          ['subject', 'update']
         ])
       )
     ).rejects.toMatchObject({
       code: 'no_active_sender_terminal',
       message: expect.stringContaining('Pass --from')
     })
+    expect(getTerminalHandleMock).toHaveBeenCalledOnce()
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -378,14 +366,6 @@ describe('orchestration timeout flag validation', () => {
     ['rounded fractional', '9007199254740991.1'],
     ['unsafe integer', String(Number.MAX_SAFE_INTEGER + 1)]
   ]
-
-  beforeEach(() => {
-    callMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_STRUCTURED_SESSION
-    process.exitCode = undefined
-  })
 
   const invokeCheck = (flags: Map<string, string | boolean>) =>
     ORCHESTRATION_HANDLERS['orchestration check']({
@@ -463,23 +443,20 @@ describe('orchestration timeout flag validation', () => {
         formatted: 'banners built from all rows'
       }
     })
-    vi.mocked(printResult).mockClear()
-
     await invokeCheck(new Map<string, string | boolean>([['peek', true]]))
 
-    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
-      result: { messages: { id: string }[]; count: number; formatted?: string }
-    }
-    expect(response.result.messages.map((m) => m.id)).toEqual(['msg_new'])
-    expect(response.result.count).toBe(1)
+    expect(printResult).toHaveBeenCalledOnce()
+    const response = vi.mocked(printResult).mock.calls[0]?.[0]
+    expect(response).toHaveProperty('result.messages', [
+      { id: 'msg_new', from_handle: 'a', subject: 'fresh', read: 0 }
+    ])
+    expect(response).toHaveProperty('result.count', 1)
     // Older formatted output includes read rows removed by the client filter.
-    expect(response.result.formatted).toBeUndefined()
+    expect(response).toHaveProperty('result.formatted', undefined)
   })
 
   it('rejects combined read modes before calling the runtime', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
-    callMock.mockClear()
-
     await expect(
       invokeCheck(
         new Map<string, string | boolean>([
@@ -688,7 +665,6 @@ describe('orchestration timeout flag validation', () => {
       _meta: { runtimeId: 'runtime_1' }
     }
     callMock.mockResolvedValue(response)
-    vi.mocked(printResult).mockClear()
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await invokeAsk(

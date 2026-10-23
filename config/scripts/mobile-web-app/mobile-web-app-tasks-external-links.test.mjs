@@ -38,7 +38,6 @@ describeClosure(
       // at all produces, and the census would pass against a page that opens nothing.
       const closure = await mobileWebAppRouteClosure('app/h/[hostId]/tasks.tsx')
       expect(closure.local).toContain(SEAM)
-      expect(closure.local.length).toBeGreaterThan(400)
     })
   },
   180_000

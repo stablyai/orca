@@ -142,6 +142,7 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
 
   it('gives up after about two minutes and prints the recovery command with the same id', async () => {
     vi.useFakeTimers()
+    const startedAt = Date.now()
     const { client, requestIds } = fakeClient((_attempt, options) => {
       throw unavailable(options)
     })
@@ -153,10 +154,20 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       undefined,
       RETRY_MS
     )
-    const settled = call.catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(RETRY_MS + 30_000)
+    let finishedAt: number | undefined
+    const settled = call.catch((error: unknown) => {
+      finishedAt = Date.now()
+      return error
+    })
+    await vi.advanceTimersByTimeAsync(RETRY_MS)
+    if (finishedAt === undefined) {
+      throw new Error('mutation kept retrying beyond its two-minute budget')
+    }
+    expect(finishedAt - startedAt).toBeGreaterThanOrEqual(RETRY_MS - 15_000)
+    const attempts = requestIds.length
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(requestIds).toHaveLength(attempts)
     const error = await settled
-    expect(requestIds.length).toBeGreaterThan(5)
     expect(new Set(requestIds).size).toBe(1)
     expect(error).toMatchObject({
       code: 'runtime_unavailable',

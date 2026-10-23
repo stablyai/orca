@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _internals } from '../agent-hooks/server'
 import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
 import {
@@ -24,6 +24,7 @@ import { acpChildWorkStatusSink } from './acp-structured-child-work.test-support
 beforeEach(() => _internals.resetCachesForTests())
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => {
+  vi.useRealTimers()
   for (const close of cleanup.splice(0)) {
     await close()
   }
@@ -283,7 +284,12 @@ describe('Grok kill route check', () => {
       deps: { onChildWorkEvidence: (_session, edges) => evidence.push(...edges) }
     })
     cleanup.push(() => rig.adapter.closeAll())
-    await rig.acquire()
+    const acquiring = rig.acquire()
+    if (vi.isFakeTimers()) {
+      await rig.frame('_x.ai/task/kill')
+      await vi.advanceTimersByTimeAsync(2_000)
+    }
+    await acquiring
     rig.child().agent.notify('_x.ai/task_backgrounded', {
       sessionId: PROVIDER_SESSION,
       update: { sessionUpdate: 'task_backgrounded', task_id: TASK, command: 'pnpm dev' }
@@ -315,7 +321,20 @@ describe('Grok kill route check', () => {
     ],
     ['no answer', () => {}]
   ])('leaves Stop to answer for itself after %s', async (_label, answer) => {
-    const { evidence } = await checked(answer)
+    if (_label === 'no answer') {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    }
+    const { rig, evidence } = await checked(answer)
+    vi.useRealTimers()
     expect(evidence).toMatchObject([{ type: 'live', child: { stoppable: true } }])
+    rig.child().agent.on('_x.ai/task/kill', (frame) => {
+      expect(frame.params).toEqual({ sessionId: PROVIDER_SESSION, taskId: TASK })
+      rig.child().agent.reply(frame, { result: { taskId: TASK, outcome: 'killed' } })
+    })
+    await expect(
+      rig.adapter.stopBackgroundTasks({ sessionId: ADAPTER_SESSION, fence: 1, taskIds: [CHILD] })
+    ).resolves.toMatchObject({ cancelled: true })
+    expect(rig.sent('_x.ai/task/kill')).toHaveLength(2)
+    expect(rig.sent('session/cancel')).toEqual([])
   })
 })

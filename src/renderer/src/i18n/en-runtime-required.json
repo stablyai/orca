@@ -2987,6 +2987,25 @@
     "clientHosted": {
       "popupBlocked": "Popup blocked: {{origin}}"
     },
+    "loadFailure": {
+      "cantLoadPage": "Can't load this page",
+      "dnsDescription": "Check the address for typos.",
+      "dnsTitle": "Couldn't find {{host}}",
+      "notRunningDescription": "Start the dev server for this address.",
+      "notRunningSshDescription": "Start the dev server on the workspace's SSH host.",
+      "notRunningTitle": "Nothing is running on {{host}} yet",
+      "offlineTitle": "You're offline",
+      "refusedDescription": "The site may be down, or the address may be wrong.",
+      "refusedTitle": "{{host}} refused to connect",
+      "resetTitle": "The connection to {{host}} was interrupted",
+      "routeDownDescription": "This page loads through the workspace's SSH host, which isn't connected right now.",
+      "routeDownTitle": "Can't reach the SSH host",
+      "timeoutTitle": "{{host}} took too long to respond",
+      "waiting": "Reloads when the server responds",
+      "waitingForHost": "Reloads when the SSH host reconnects",
+      "waitingForNetwork": "Reloads when you're back online",
+      "waitingForServer": "Reloads when the server starts"
+    },
     "sshEgress": {
       "localChip": "This device"
     },

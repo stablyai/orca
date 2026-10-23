@@ -21,11 +21,19 @@ afterEach(async () => {
 })
 
 const STALLED = Symbol('stalled')
-const within = <T>(promise: Promise<T>, ms: number): Promise<T | typeof STALLED> =>
-  Promise.race([
-    promise,
-    new Promise<typeof STALLED>((resolve) => setTimeout(resolve, ms, STALLED))
-  ])
+async function within<T>(promise: Promise<T>, ms: number): Promise<T | typeof STALLED> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<typeof STALLED>((resolve) => {
+        timer = setTimeout(resolve, ms, STALLED)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 /** Runs `atEnd` once, right before the host ends an attach's controller: after its commit. */
 function beforeAttachEnds(host: StructuredAgentSessionHost, atEnd: () => void): void {
@@ -192,7 +200,11 @@ async function expectDeliveredAfterStop(
   secondId: string
 ): Promise<void> {
   const prompt = await rig.frame('session/prompt')
-  expect(JSON.stringify(prompt.params)).toContain('second')
+  expect(prompt.params).toMatchObject({
+    sessionId: 'acp-session-1',
+    prompt: [{ type: 'text', text: 'second' }],
+    _meta: { promptId: `prompt:${secondId}`, requestId: `prompt:${secondId}` }
+  })
   rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
   const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
   await waitFor(() =>

@@ -48,6 +48,7 @@ const MODEL_STATE = {
 
 const agents: AcpScriptedAgent[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const agent of agents.splice(0)) {
     agent.close()
   }
@@ -323,14 +324,16 @@ describe('ACP model catalog probes', () => {
 
   it('opens no session on OpenCode 2.x without a chat folder, as at a prewarm', async () => {
     const { agent, deps, launches } = scriptedOpenCode2(true)
+    const probeVersion = vi.fn(deps.probeVersion)
     await expect(
-      createAcpModelCatalogProbe(
-        OPENCODE,
-        deps
-      )({ kind: 'opencode', locator: { kind: 'unmanaged' } })
+      createAcpModelCatalogProbe(OPENCODE, { ...deps, probeVersion })({
+        kind: 'opencode',
+        locator: { kind: 'unmanaged' }
+      })
     ).rejects.toBeInstanceOf(AgentModelCatalogListingStoppedError)
     expect(launches).toEqual([])
     expect(agent.frames).toEqual([])
+    expect(probeVersion).not.toHaveBeenCalled()
   })
 
   it('keeps the models, and says so, when OpenCode 2.x refuses to delete the listing session', async () => {
@@ -397,20 +400,5 @@ describe('ACP model catalog probes', () => {
       )
     ).rejects.toThrow(/does not run structured chats/)
     expect(runListing).not.toHaveBeenCalled()
-  })
-
-  // The binary may be 2.x, which lists only in a chat's folder; nothing is spawned to find out.
-  it('asks `opencode` nothing, not even its version, without a chat folder', async () => {
-    const probeVersion = vi.fn(async () => ({ version: '1.18.35' }))
-    const probe = createAcpModelCatalogProbe(OPENCODE, {
-      resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-      dataDirectory: '/orca-data',
-      resolveCommand: () => '/opt/opencode/bin/opencode',
-      probeVersion
-    })
-    await expect(
-      probe({ kind: 'opencode', locator: { kind: 'unmanaged' } })
-    ).rejects.toBeInstanceOf(AgentModelCatalogListingStoppedError)
-    expect(probeVersion).not.toHaveBeenCalled()
   })
 })

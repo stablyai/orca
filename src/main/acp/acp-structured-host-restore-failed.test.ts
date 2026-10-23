@@ -28,6 +28,7 @@ import {
 } from './acp-structured-host.test-support'
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await closeProviderTimelineRigs()
 })
 

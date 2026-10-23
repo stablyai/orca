@@ -2,51 +2,71 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const originalExitCode = process.exitCode
-const originalCliCommand = process.env.ORCA_CLI_COMMAND
-
-type RecoveryWorkerStartResult = {
-  taskId: string
-  dispatchId: string
-  state: string
-  effects: unknown[]
-  residualResources: unknown[]
-  nextCommands: string[]
-}
-
-vi.mock('../format', () => ({ printResult: vi.fn() }))
+vi.mock('../format', async (importOriginal) => {
+  const original = await importOriginal<{ printResult: typeof printResult }>()
+  return { printResult: vi.fn(original.printResult) }
+})
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-import { BOOLEAN_FLAGS, parseArgs } from '../args'
+import { parseArgs, validateCommandAndFlags } from '../args'
 import { formatCommandHelp } from '../help'
+import { okFixture } from '../test-fixtures'
+import { RuntimeClient } from '../runtime-client'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from '../specs/orchestration-worker-specs'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+
+const client = new RuntimeClient('/tmp/orca-worker-cli', 60_000, null, null)
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
     callMock.mockReset()
-    vi.mocked(printResult).mockReset()
+    vi.spyOn(client, 'call').mockImplementation(callMock)
+    vi.mocked(printResult).mockClear()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
     process.exitCode = undefined
-    delete process.env.ORCA_CLI_COMMAND
+    vi.stubEnv('ORCA_CLI_COMMAND', undefined)
+    vi.stubEnv('ORCA_DEV_CLI_INVOCATION', undefined)
+    vi.stubEnv('ORCA_USER_DATA_PATH', undefined)
+    vi.stubEnv('ORCA_TERMINAL_HANDLE', 'term_coord')
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', undefined)
   })
 
   afterEach(() => {
     process.exitCode = originalExitCode
-    if (originalCliCommand === undefined) {
-      delete process.env.ORCA_CLI_COMMAND
-    } else {
-      process.env.ORCA_CLI_COMMAND = originalCliCommand
-    }
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
   })
 
   const invokeWorkerStart = (flags: Map<string, string | boolean>, json = true) =>
     ORCHESTRATION_HANDLERS['orchestration worker-start']({
       flags,
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json
-    } as never)
+    })
+
+  function printedText(): string {
+    expect(console.log).toHaveBeenCalledOnce()
+    const output = vi.mocked(console.log).mock.calls[0]?.[0]
+    if (typeof output !== 'string') {
+      throw new Error('worker command did not print text')
+    }
+    return output
+  }
+
+  function mockWorkerListResponse(response: unknown): void {
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'orchestration.runCurrent') {
+        return okFixture('req_current', { run: null })
+      }
+      if (method === 'orchestration.workerList') {
+        return response
+      }
+      throw new Error(`Unexpected worker-list RPC: ${method}`)
+    })
+  }
 
   it('passes the complete supported creation contract and retry receipt', async () => {
     callMock.mockResolvedValue({
@@ -178,7 +198,7 @@ describe('orchestration worker-start CLI contract', () => {
     expect(callMock).toHaveBeenCalledTimes(1)
   })
 
-  it('sets an unsuccessful exit code for failed and unknown receipts', async () => {
+  it('sets an unsuccessful exit code for an unknown receipt', async () => {
     callMock.mockResolvedValue({
       result: {
         taskId: 'task_1',
@@ -230,17 +250,15 @@ describe('orchestration worker-start CLI contract', () => {
         json
       )
 
-      const [response, , formatter] = vi.mocked(printResult).mock.calls[0] as [
-        { result: RecoveryWorkerStartResult },
-        boolean,
-        (result: RecoveryWorkerStartResult) => string
-      ]
-      expect(response.result.nextCommands).toEqual([
+      expect(printResult).toHaveBeenCalledOnce()
+      const response = vi.mocked(printResult).mock.calls[0]?.[0]
+      expect(response).toHaveProperty('result.nextCommands', [
         `${executable} orchestration worker-show --dispatch ctx_unknown --json`,
         `${executable} orchestration worker-abandon --dispatch ctx_unknown --json`
       ])
+      const output = printedText()
       if (!json) {
-        expect(formatter(response.result)).toContain(
+        expect(output).toContain(
           `Next command: ${executable} orchestration worker-show --dispatch ctx_unknown --json`
         )
       }
@@ -266,29 +284,13 @@ describe('orchestration worker-start CLI contract', () => {
         ['terminal', 'term_worker'],
         ['from', 'term_coord']
       ]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: {
-          taskId: string
-          dispatchId: string
-          state: string
-          failedStage?: string
-          lastError?: string
-        }) => string)
-      | undefined
-    expect(
-      formatter?.({
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        state: 'failed',
-        failedStage: 'dispatch_input',
-        lastError: 'terminal_not_writable'
-      })
-    ).toContain('terminal_not_writable')
+    expect(printedText()).toContain('terminal_not_writable')
+    expect(process.exitCode).toBe(1)
   })
 
   it('prints a reveal warning for a live background worker', async () => {
@@ -309,27 +311,14 @@ describe('orchestration worker-start CLI contract', () => {
         ['agent', 'codex'],
         ['from', 'term_coord']
       ]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: {
-          taskId: string
-          dispatchId: string
-          state: string
-          warning?: string
-        }) => string)
-      | undefined
-    expect(
-      formatter?.({
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        state: 'ready',
-        warning: 'Terminal term_worker is running but could not be revealed.'
-      })
-    ).toContain('Warning: Terminal term_worker is running but could not be revealed.')
+    expect(printedText()).toContain(
+      'Warning: Terminal term_worker is running but could not be revealed.'
+    )
   })
 
   it('states the worker mode that actually ran, so a fallback is never silent', async () => {
@@ -356,33 +345,12 @@ describe('orchestration worker-start CLI contract', () => {
         ['terminal', 'term_worker'],
         ['from', 'term_coord']
       ]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: {
-          taskId: string
-          dispatchId: string
-          state: string
-          mode?: { mode: string; preferred: string; reason: string; detail: string }
-        }) => string)
-      | undefined
-    expect(
-      formatter?.({
-        taskId: 'task_1',
-        dispatchId: 'ctx_1',
-        state: 'ready',
-        mode: {
-          mode: 'terminal',
-          preferred: 'structured',
-          reason: 'reused_terminal',
-          detail:
-            'Your default is a structured chat session, but --terminal reuses a running terminal agent; started a terminal agent worker instead.'
-        }
-      })
-    ).toContain('but --terminal reuses a running terminal agent')
+    expect(printedText()).toContain('but --terminal reuses a running terminal agent')
   })
 
   it('prints the retained-process warning for a manual worker-stop', async () => {
@@ -397,27 +365,12 @@ describe('orchestration worker-start CLI contract', () => {
 
     await ORCHESTRATION_HANDLERS['orchestration worker-stop']({
       flags: new Map<string, string | boolean>([['dispatch', 'ctx_manual']]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: {
-          dispatchId: string
-          state: string
-          processAction: string
-          warning?: string
-        }) => string)
-      | undefined
-    expect(
-      formatter?.({
-        dispatchId: 'ctx_manual',
-        state: 'stopped',
-        processAction: 'none',
-        warning: 'The assignment was stopped without closing its unsupervised terminal process.'
-      })
-    ).toContain(
+    expect(printedText()).toContain(
       'Warning: The assignment was stopped without closing its unsupervised terminal process.'
     )
   })
@@ -436,10 +389,10 @@ describe('orchestration worker-start CLI contract', () => {
         ['cursor', '0'],
         ['limit', '100']
       ]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: true
-    } as never)
+    })
 
     expect(callMock).toHaveBeenCalledWith('orchestration.workerRead', {
       dispatch: 'ctx_1',
@@ -464,10 +417,10 @@ describe('orchestration worker-start CLI contract', () => {
         ['cursor', 'owr1_previous'],
         ['source', 'transcript']
       ]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: true
-    } as never)
+    })
 
     expect(callMock).toHaveBeenCalledWith('orchestration.workerRead', {
       dispatch: 'ctx_1',
@@ -478,7 +431,7 @@ describe('orchestration worker-start CLI contract', () => {
   })
 
   it('formats a legacy worker-list response without projection or page fields', async () => {
-    callMock.mockResolvedValue({
+    mockWorkerListResponse({
       result: {
         workers: [
           {
@@ -498,31 +451,12 @@ describe('orchestration worker-start CLI contract', () => {
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map(),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: { workers: unknown[]; counts: Record<string, number> }) => string)
-      | undefined
-    expect(
-      formatter?.({
-        workers: [
-          {
-            dispatchId: 'ctx_legacy',
-            taskId: 'task_legacy',
-            runId: 'run_legacy',
-            workerState: 'ready',
-            dispatchStatus: 'dispatched',
-            agentTerminalHandle: 'term_legacy',
-            terminalState: 'active',
-            resource: null
-          }
-        ],
-        counts: { active: 1 }
-      })
-    ).toContain('ctx_legacy task=task_legacy [ready] terminal=active')
+    expect(printedText()).toContain('ctx_legacy task=task_legacy [ready] terminal=active')
   })
 
   it('passes a truncation warning to the receipt and still prints the cursor hint', async () => {
@@ -534,22 +468,19 @@ describe('orchestration worker-start CLI contract', () => {
         warnings: ['Showing 100 of 105 Dispatches, newest first; more are on later pages.']
       }
     }
-    callMock.mockResolvedValue(response)
+    mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map<string, string | boolean>(),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
-      json: true
-    } as never)
+      json: false
+    })
 
     expect(vi.mocked(printResult).mock.calls[0]?.[0]).toMatchObject({
       result: { warnings: response.result.warnings }
     })
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: (typeof response)['result']) => string)
-      | undefined
-    const output = formatter?.(response.result)
+    const output = printedText()
     expect(output).toContain('More: --cursor owlc_next')
     expect(output).toContain(
       'Warning: Showing 100 of 105 Dispatches, newest first; more are on later pages.'
@@ -561,15 +492,15 @@ describe('orchestration worker-start CLI contract', () => {
     ['--limit', new Map<string, string | boolean>([['limit', '10']])],
     ['--cursor', new Map<string, string | boolean>([['cursor', 'legacy_cursor']])]
   ])('fails closed when an older runtime strips explicit %s semantics', async (_flag, flags) => {
-    callMock.mockResolvedValue({ result: { workers: [], counts: {} } })
+    mockWorkerListResponse({ result: { workers: [], counts: {} } })
 
     await expect(
       ORCHESTRATION_HANDLERS['orchestration worker-list']({
         flags,
-        client: { call: callMock },
+        client,
         cwd: '/tmp/repo',
         json: true
-      } as never)
+      })
     ).rejects.toMatchObject({ code: 'incompatible_runtime' })
 
     expect(
@@ -627,19 +558,16 @@ describe('orchestration worker-start CLI contract', () => {
         page: { total: 2, hasMore: false, nextCursor: null }
       }
     }
-    callMock.mockResolvedValue(response)
+    mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map<string, string | boolean>(),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: (typeof response)['result']) => string)
-      | undefined
-    const output = formatter?.(response.result)
+    const output = printedText()
     expect(output).toContain(
       'ctx_live task=task_live [running/working] attention=settled liveness=live provider=claude/opus host=local workspace=ws_1 terminal=active next=orchestration worker-release --dispatch ctx_live'
     )
@@ -675,19 +603,16 @@ describe('orchestration worker-start CLI contract', () => {
         ]
       }
     }
-    callMock.mockResolvedValue(response)
+    mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map<string, string | boolean>([['include-remote', true]]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: (typeof response)['result']) => string)
-      | undefined
-    const output = formatter?.(response.result)
+    const output = printedText()
     expect(output).toContain('ctx_remote task=task_remote [running] terminal=active')
     expect(output).toContain(
       'Warning: worker observations from Windows host (environment_windows) are incomplete: host_unavailable; dispatches=ctx_remote'
@@ -710,19 +635,16 @@ describe('orchestration worker-start CLI contract', () => {
         ]
       }
     }
-    callMock.mockResolvedValue(response)
+    mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map<string, string | boolean>([['include-remote', true]]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: false
-    } as never)
+    })
 
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
-      | ((result: (typeof response)['result']) => string)
-      | undefined
-    expect(formatter?.(response.result)).toBe(
+    expect(printedText()).toBe(
       'No workers found.\nScope: all Runs (no Run is bound to this terminal; pass --run to narrow)' +
         '\nWarning: worker observations from Linux host (environment_linux) are incomplete: capability_unsupported; dispatches=none'
     )
@@ -744,14 +666,14 @@ describe('orchestration worker-start CLI contract', () => {
         ]
       }
     }
-    callMock.mockResolvedValue(response)
+    mockWorkerListResponse(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map<string, string | boolean>([['include-remote', true]]),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: true
-    } as never)
+    })
 
     expect(printResult).toHaveBeenCalledWith(
       { ...response, result: { ...response.result, scope: { source: 'all' } } },
@@ -764,16 +686,17 @@ describe('orchestration worker-start CLI contract', () => {
     const listSpec = ORCHESTRATION_WORKER_COMMAND_SPECS.find(
       (spec) => spec.path.join(' ') === 'orchestration worker-list'
     )
-    expect(BOOLEAN_FLAGS).toContain('include-remote')
-    expect(
-      parseArgs(['orchestration', 'worker-list', '--include-remote']).flags.get('include-remote')
-    ).toBe(true)
-    expect(listSpec?.allowedFlags).toContain('include-remote')
-    expect(formatCommandHelp(listSpec!)).toContain(
+    const parsed = parseArgs(['orchestration', 'worker-list', '--include-remote'])
+    expect(parsed.flags.get('include-remote')).toBe(true)
+    expect(() => validateCommandAndFlags(ORCHESTRATION_WORKER_COMMAND_SPECS, parsed)).not.toThrow()
+    if (!listSpec) {
+      throw new Error('worker-list command is missing')
+    }
+    expect(formatCommandHelp(listSpec)).toContain(
       '--include-remote      Include connected-server worker observations'
     )
 
-    callMock.mockResolvedValue({
+    mockWorkerListResponse({
       result: {
         workers: [],
         counts: {},
@@ -781,11 +704,11 @@ describe('orchestration worker-start CLI contract', () => {
       }
     })
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
-      flags: new Map<string, string | boolean>([['include-remote', true]]),
-      client: { call: callMock },
+      flags: parsed.flags,
+      client,
       cwd: '/tmp/repo',
       json: true
-    } as never)
+    })
     expect(callMock).toHaveBeenCalledWith(
       'orchestration.workerList',
       expect.objectContaining({ includeRemote: true, paginate: true })
@@ -794,10 +717,10 @@ describe('orchestration worker-start CLI contract', () => {
     callMock.mockClear()
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map(),
-      client: { call: callMock },
+      client,
       cwd: '/tmp/repo',
       json: true
-    } as never)
+    })
     const listParams = callMock.mock.calls.find(
       ([method]) => method === 'orchestration.workerList'
     )?.[1]
@@ -806,27 +729,38 @@ describe('orchestration worker-start CLI contract', () => {
   })
 
   it('keeps cleanup and retention TTL controls off the public CLI surface', async () => {
-    const retainSpec = ORCHESTRATION_WORKER_COMMAND_SPECS.find(
-      (spec) => spec.path.join(' ') === 'orchestration worker-retain'
-    )
-    expect(
-      ORCHESTRATION_WORKER_COMMAND_SPECS.some(
-        (spec) => spec.path.join(' ') === 'orchestration worker-cleanup'
+    const retained = parseArgs(['orchestration', 'worker-retain', '--dispatch', 'ctx_1'])
+    expect(() =>
+      validateCommandAndFlags(ORCHESTRATION_WORKER_COMMAND_SPECS, retained)
+    ).not.toThrow()
+    expect(() =>
+      validateCommandAndFlags(
+        ORCHESTRATION_WORKER_COMMAND_SPECS,
+        parseArgs(['orchestration', 'worker-cleanup'])
       )
-    ).toBe(false)
-    expect(retainSpec?.allowedFlags).not.toContain('until')
-    expect(retainSpec?.allowedFlags).not.toContain('policy')
-    expect(ORCHESTRATION_HANDLERS['orchestration worker-cleanup']).toBeUndefined()
+    ).toThrow('Unknown command: orchestration worker-cleanup')
+    expect(() =>
+      validateCommandAndFlags(
+        ORCHESTRATION_WORKER_COMMAND_SPECS,
+        parseArgs(['orchestration', 'worker-retain', '--until', '2099-01-01T00:00:00Z'])
+      )
+    ).toThrow('Unknown flag --until for command: orchestration worker-retain')
+    expect(() =>
+      validateCommandAndFlags(
+        ORCHESTRATION_WORKER_COMMAND_SPECS,
+        parseArgs(['orchestration', 'worker-retain', '--policy', 'forever'])
+      )
+    ).toThrow('Unknown flag --policy for command: orchestration worker-retain')
 
     callMock.mockResolvedValue({
       result: { dispatchId: 'ctx_1', state: 'retained', processAction: 'none' }
     })
     await ORCHESTRATION_HANDLERS['orchestration worker-retain']({
-      flags: new Map<string, string | boolean>([['dispatch', 'ctx_1']]),
-      client: { call: callMock },
+      flags: retained.flags,
+      client,
       cwd: '/tmp/repo',
       json: true
-    } as never)
+    })
     expect(callMock).toHaveBeenCalledWith('orchestration.workerRetain', { dispatch: 'ctx_1' })
   })
 })

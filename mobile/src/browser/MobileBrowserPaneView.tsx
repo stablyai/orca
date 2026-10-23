@@ -14,6 +14,7 @@ import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-nati
 import { colors } from '../theme/mobile-theme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
+import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
   MobileBrowserPointerModifiers,
   type BrowserPointerModifier
@@ -248,6 +249,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             )}
           </View>
         ) : null}
+        {tab.loadError ? <MobileBrowserLoadFailure loadError={tab.loadError} /> : null}
         {!renderedFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
             {/* Why: a stream can report ready and then deliver no frames, so key the
