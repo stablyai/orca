@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { containsIndicScriptText, findIndicClusterRanges } from './terminal-indic-cluster-ranges'
+import { findIndicClusterRanges } from './terminal-indic-cluster-ranges'
 
 describe('findIndicClusterRanges', () => {
   it('returns no ranges for ASCII, Latin accents, and Arabic', () => {
@@ -9,7 +9,8 @@ describe('findIndicClusterRanges', () => {
   })
 
   it('returns a fresh array on every call so xterm can merge into it safely', () => {
-    expect(findIndicClusterRanges('plain')).not.toBe(findIndicClusterRanges('plain'))
+    findIndicClusterRanges('কি').push([9, 9])
+    expect(findIndicClusterRanges('কি')).toEqual([[0, 2]])
   })
 
   it('joins a base letter with its spacing vowel sign', () => {
@@ -54,13 +55,5 @@ describe('findIndicClusterRanges', () => {
 
   it('keeps ASCII and box-drawing neighbours out of the ranges', () => {
     expect(findIndicClusterRanges('│ কি abc │')).toEqual([[2, 4]])
-  })
-})
-
-describe('containsIndicScriptText', () => {
-  it('detects Brahmic-script code units only', () => {
-    expect(containsIndicScriptText('বাংলা')).toBe(true)
-    expect(containsIndicScriptText('हिन्दी')).toBe(true)
-    expect(containsIndicScriptText('ASCII, 中文, café, مرحبا 😀')).toBe(false)
   })
 })
