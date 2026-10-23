@@ -68,4 +68,13 @@ describe('ImageViewer app zoom ownership', () => {
     expect(zoom('in')).toBe(false)
     expect(screen.getByText('100%')).toBeTruthy()
   })
+
+  it('zooms the popup a combined-diff image opened', () => {
+    renderImage(true, 'intrinsic')
+    fireEvent.click(screen.getByTitle('Open image in popup'))
+
+    expect(zoom('in')).toBe(true)
+    expect(within(screen.getByRole('dialog')).getByText('125%')).toBeTruthy()
+    expect(screen.getAllByText('100%')).toHaveLength(1)
+  })
 })
