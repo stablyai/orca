@@ -11,6 +11,112 @@
   },
   "gates": [
     {
+      "id": "terminal.osc133-scan-handoff-continuity",
+      "title": "OMP app-zone classification survives foreground/background scan handoffs",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "daemon-terminal",
+      "layer": "shared-scanner-daemon-runtime-hook-contract",
+      "surfaces": [
+        "background terminal transient facts",
+        "OMP launch authority",
+        "desktop and mobile hook identity"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Deterministic production scanner, real daemon routing with mock subprocess, runtime and real HTTP hook ingestion. No live OMP, rendered Electron, native PTY, WSL or paired-host acceptance claimed.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/26933",
+        "https://github.com/stablyai/orca/issues/24436"
+      ],
+      "invariant": "Adjacent OSC 133 B C D;0 app-zone closes must not become shell completions when scan authority moves in either direction. Genuine shell and failed command completions still retire launch authority exactly once. Parser state must not cross a stream reattachment that can hide output.",
+      "oracle": "Split BEL/ST app zones at every byte boundary and transfer bounded carry and adjacency without callbacks. Exercise both directions after B, BC and partial D through runtime plus real HTTP hook ingestion; require unchanged accepted session identity and subsequent done/working hook acceptance, then actual shell completion retirement. Check foreground routing markers and detach, unseen output, reattach using the daemon request router.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/terminal-osc133-self-closed-zone.test.ts src/shared/terminal-osc133-scan-handoff.test.ts src/shared/terminal-osc133-carry-retention.test.ts src/shared/terminal-output-side-effects.test.ts src/main/runtime/omp-user-bubble-launch-authority.test.ts src/main/runtime/omp-scan-handoff-launch-authority.test.ts src/main/daemon/daemon-background-transient-facts.test.ts src/main/daemon/terminal-shell-lifecycle-scanner-app-zone.test.ts src/main/daemon/daemon-stream-droppability-lifecycle.test.ts src/main/daemon/daemon-stream-droppable-membership.test.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-pty-adapter-protocol-compatibility.test.ts src/main/runtime/opencode-finished-session-authority.test.ts src/main/daemon/session-terminal-control.test.ts src/main/daemon/terminal-host-agent-session.test.ts src/main/daemon/terminal-host-teardown-recreate.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/terminal-osc133-self-closed-zone.test.ts",
+        "src/shared/terminal-osc133-scan-handoff.test.ts",
+        "src/shared/terminal-osc133-carry-retention.test.ts",
+        "src/shared/terminal-output-side-effects.test.ts",
+        "src/main/runtime/omp-user-bubble-launch-authority.test.ts",
+        "src/main/runtime/omp-scan-handoff-launch-authority.test.ts",
+        "src/main/daemon/daemon-background-transient-facts.test.ts",
+        "src/main/daemon/terminal-shell-lifecycle-scanner-app-zone.test.ts",
+        "src/main/daemon/daemon-stream-droppability-lifecycle.test.ts",
+        "src/main/daemon/daemon-stream-droppable-membership.test.ts",
+        "src/main/daemon/daemon-stream-data-batcher.test.ts",
+        "src/main/daemon/daemon-pty-adapter-protocol-compatibility.test.ts",
+        "src/main/runtime/opencode-finished-session-authority.test.ts",
+        "src/main/daemon/session-terminal-control.test.ts",
+        "src/main/daemon/terminal-host-agent-session.test.ts",
+        "src/main/daemon/terminal-host-teardown-recreate.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/terminal-osc133-scan-handoff.test.ts",
+          "assertions": [
+            "keeps snapshots independent and restores without replaying callbacks",
+            "replaces a gapped tracker carry with authoritative state after generic seeding"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-stream-droppability-lifecycle.test.ts",
+          "assertions": [
+            "returns OSC 133 adjacency and partial carry in the foreground marker",
+            "does not carry app-zone adjacency across detached output and reattachment",
+            "keeps app-zone adjacency when replacing an uninterrupted attachment"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-background-transient-facts.test.ts",
+          "assertions": [
+            "retains only current adjacency through repeated toggles without replaying completion",
+            "forgets adjacency on session exit and ordinary output"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-10-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/terminal-osc133-self-closed-zone.test.ts src/shared/terminal-osc133-scan-handoff.test.ts src/shared/terminal-osc133-carry-retention.test.ts src/shared/terminal-output-side-effects.test.ts src/main/runtime/omp-user-bubble-launch-authority.test.ts src/main/runtime/omp-scan-handoff-launch-authority.test.ts src/main/daemon/daemon-background-transient-facts.test.ts src/main/daemon/terminal-shell-lifecycle-scanner-app-zone.test.ts src/main/daemon/daemon-stream-droppability-lifecycle.test.ts src/main/daemon/daemon-stream-droppable-membership.test.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-pty-adapter-protocol-compatibility.test.ts src/main/runtime/opencode-finished-session-authority.test.ts src/main/daemon/session-terminal-control.test.ts src/main/daemon/terminal-host-agent-session.test.ts src/main/daemon/terminal-host-teardown-recreate.test.ts",
+          "result": "passed",
+          "durationSeconds": 67.22,
+          "summary": "198 tests passed across 16 files, including uninterrupted attachment replacement. Includes 14 real HTTP hook/runtime handoff and true-exit cases plus existing OpenCode retirement controls."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "Deterministic scanner, daemon and runtime contracts; 120s is an allocation, not a measured p95."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One combined local pass; CI soak not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Unmodified a046955d production-API oracle emits false completion in three foreground-to-background boundaries and one background-to-foreground boundary; all-background control suppresses. Candidate tests retain accepted hook identity in both directions and still retire on genuine completion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Reuse existing OSC133 scanner, bounded to 4096 carry code units and two adjacency characters per retained session; plain output without state avoids scanner allocation. No polling, timers, subprocesses or process probes added. State cleared after detached reattach, exit and disposal; uninterrupted attachment replacement preserves it."
+      },
+      "promotionCriteria": [
+        "Collect 100 CI passes or 14 days without unexplained flakes.",
+        "Exercise live OMP split/hide/reveal with native PTYs on macOS, Linux, Windows and WSL; inspect hook cache and rendered chat/sidebar independently."
+      ],
+      "knownGaps": [
+        "An older daemon omits parser context and retains its previous behavior; new daemon state is an optional marker field ignored by older main. Both endpoints need updating for the full handoff repair.",
+        "No captured reporter trace proves this handoff occurred in every Esc/ask/spinner report; ordinary complete adjacent B C D;0 is already fixed upstream. Issues remain open.",
+        "Direct remote-runtime byte parsing is unchanged. Folder workspaces and mobile consume the same runtime facts, with no new UI."
+      ],
+      "demotionRule": "Keep experimental or demote if app zones retire live authority, real shell completion is swallowed, facts duplicate, or reattachment imports stale adjacency."
+    },
+    {
       "id": "agent-session.detached-account-restart-progress",
       "title": "Independent hidden account restarts progress within a shared spawn limit",
       "maturity": "experimental",

@@ -195,7 +195,42 @@ describe('daemon stream droppability lifecycle', () => {
         payload: {
           background: false,
           scanSeedAnsi: '\x1b[?',
-          mode2031PendingSubscribe: true
+          mode2031PendingSubscribe: true,
+          osc133ScanState: { carry: '', adjacentMarkers: '' }
+        }
+      })
+    )
+  })
+
+  it('returns OSC 133 adjacency and partial carry in the foreground marker', async () => {
+    const harness = createServerHarness()
+    server = harness.server
+    const { daemon } = harness
+    addClient(daemon)
+    daemon.attachments.clientIdBySessionId.set('session-toggle', 'client-1')
+    daemon.transientFactRelay.setSessionBackground('session-toggle', true)
+    daemon.transientFactRelay.onSessionData(
+      'session-toggle',
+      '\x1b]133;B\x07\x1b]133;C\x07\x1b]133;D'
+    )
+    vi.spyOn(daemon.host, 'getPartialEscapeTailAnsi').mockReturnValue('\x1b]133;D')
+    const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
+
+    await daemon.requestRouter.route('client-1', {
+      id: 'foreground',
+      type: 'setSessionBackground',
+      payload: { sessionId: 'session-toggle', background: false }
+    })
+
+    expect(enqueue).toHaveBeenCalledWith(
+      'client-1',
+      'session-toggle',
+      expect.objectContaining({
+        event: 'sessionBackgroundMarker',
+        payload: {
+          background: false,
+          scanSeedAnsi: '\x1b]133;D',
+          osc133ScanState: { carry: '\x1b]133;D', adjacentMarkers: 'BC' }
         }
       })
     )
@@ -228,6 +263,71 @@ describe('daemon stream droppability lifecycle', () => {
     })
 
     expect(lifecycle).toEqual(['refresh:client-1', 'marker:sessionBackgroundMarker'])
+  })
+
+  it('keeps app-zone adjacency when replacing an uninterrupted attachment', async () => {
+    const harness = createServerHarness()
+    server = harness.server
+    const { daemon, subprocesses } = harness
+    addClient(daemon)
+    const attach = () =>
+      daemon.requestRouter.route('client-1', {
+        id: 'attach',
+        type: 'createOrAttach',
+        payload: { sessionId: 'session-reattach', cols: 80, rows: 24 }
+      })
+    await attach()
+    daemon.transientFactRelay.setSessionBackground('session-reattach', true)
+    subprocesses[0].emitData('\x1b]133;B\x07\x1b]133;C\x07')
+    await attach()
+    expect(daemon.transientFactRelay.getOsc133ScanState('session-reattach').adjacentMarkers).toBe(
+      'BC'
+    )
+    const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
+    subprocesses[0].emitData('\x1b]133;D;0\x07')
+    expect(enqueue).not.toHaveBeenCalled()
+  })
+
+  it('does not carry app-zone adjacency across detached output and reattachment', async () => {
+    const harness = createServerHarness()
+    server = harness.server
+    const { daemon, subprocesses } = harness
+    addClient(daemon)
+    await daemon.requestRouter.route('client-1', {
+      id: 'attach',
+      type: 'createOrAttach',
+      payload: { sessionId: 'session-reattach', cols: 80, rows: 24 }
+    })
+    daemon.transientFactRelay.setSessionBackground('session-reattach', true)
+    subprocesses[0].emitData('\x1b]133;B\x07\x1b]133;C\x07')
+    expect(daemon.transientFactRelay.getOsc133ScanState('session-reattach').adjacentMarkers).toBe(
+      'BC'
+    )
+    await daemon.requestRouter.route('client-1', {
+      id: 'detach',
+      type: 'detach',
+      payload: { sessionId: 'session-reattach' }
+    })
+    subprocesses[0].emitData('unobserved output')
+    await daemon.requestRouter.route('client-1', {
+      id: 'reattach',
+      type: 'createOrAttach',
+      payload: { sessionId: 'session-reattach', cols: 80, rows: 24 }
+    })
+    expect(daemon.transientFactRelay.getOsc133ScanState('session-reattach')).toEqual({
+      carry: '',
+      adjacentMarkers: ''
+    })
+    const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
+    subprocesses[0].emitData('\x1b]133;D;0\x07')
+    expect(enqueue).toHaveBeenCalledWith(
+      'client-1',
+      'session-reattach',
+      expect.objectContaining({
+        event: 'transientFact',
+        payload: { kind: 'command-finished', exitCode: 0 }
+      })
+    )
   })
 
   it('invalidates droppable membership for final output held behind a deep socket', async () => {

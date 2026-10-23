@@ -27,7 +27,10 @@ import {
   createTerminalGitHubPRLinkDetector,
   type TerminalGitHubPRLink
 } from './terminal-github-pr-link-detector'
-import { createOsc133CommandFinishedScanner } from './terminal-osc133-command-finished'
+import {
+  createOsc133CommandFinishedScanner,
+  type Osc133CommandFinishedScanState
+} from './terminal-osc133-command-finished'
 
 /** Ms of title-less output after a working title before it is cleared. */
 export const STALE_WORKING_TITLE_TIMEOUT_MS = 3000
@@ -105,6 +108,7 @@ export type TerminalTitleTracker = {
    * Titles are unaffected; un-suppressing resets the scanners' cross-chunk carry.
    */
   setTransientFactScanningSuppressed: (suppressed: boolean) => void
+  restoreCommandFinishedScanState: (state: Osc133CommandFinishedScanState) => void
   /** Enable consumer-only bell, PR-link, and mode-2031 scans without resetting title state. */
   setTransientSideEffectScanningEnabled: (enabled: boolean) => void
   /** Cancel the stale-title timer and clear accumulated tracker state. */
@@ -318,6 +322,9 @@ export function createTerminalTitleTracker(
       return agentTracker?.restoreLastExit(confirmedStatus) ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
+    restoreCommandFinishedScanState(state): void {
+      commandFinishedScanner?.restoreScanState(state)
+    },
     setTransientFactScanningSuppressed(suppressed: boolean): void {
       if (suppressed === transientFactScanningSuppressed) {
         return

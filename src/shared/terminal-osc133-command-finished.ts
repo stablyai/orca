@@ -60,11 +60,18 @@ export function closesAppOsc133Zone(adjacentMarkers: string, payload: string): b
   return sequence === 'D' && exitCode === '0' && adjacentMarkers.endsWith('BC')
 }
 
+export type Osc133CommandFinishedScanState = {
+  carry: string
+  adjacentMarkers: string
+}
+
 export type Osc133CommandFinishedScanner = {
   /** Feed one raw PTY chunk; fires once per complete OSC 133;D sequence. */
   scan: (data: string) => void
   /** Drop the cross-chunk carry (transport teardown / parser reset). */
   reset: () => void
+  getScanState: () => Osc133CommandFinishedScanState
+  restoreScanState: (state: Osc133CommandFinishedScanState) => void
 }
 
 export function createOsc133CommandFinishedScanner(
@@ -143,6 +150,16 @@ export function createOsc133CommandFinishedScanner(
 
   return {
     scan,
+    getScanState() {
+      return {
+        carry: ownRetainedString(carry),
+        adjacentMarkers: ownRetainedString(adjacentMarkers)
+      }
+    },
+    restoreScanState(state) {
+      carry = ownRetainedString(state.carry.slice(-MAX_OSC_CARRY_LENGTH))
+      adjacentMarkers = ownRetainedString(state.adjacentMarkers.slice(-2))
+    },
     reset() {
       carry = ''
       adjacentMarkers = ''

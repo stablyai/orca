@@ -50,7 +50,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           payload.id,
           payload.background,
           payload.scanSeedAnsi,
-          payload.mode2031PendingSubscribe
+          payload.mode2031PendingSubscribe,
+          payload.osc133ScanState
         )
         return
       }

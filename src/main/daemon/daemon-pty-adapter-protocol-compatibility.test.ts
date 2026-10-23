@@ -167,45 +167,50 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('forwards a provisional subscribe with the foreground handoff marker', () => {
-      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
-      const forwarded: unknown[] = []
-      current.onBackgroundStreamEvent((payload) => forwarded.push(payload))
-      const listeners: ((event: unknown) => void)[] = []
-      onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
-        listeners.push(listener)
-        return () => {}
-      })
-      try {
-        current['removeEventListener'] = null
-        current['setupEventRouting']()
-        for (const listener of listeners) {
-          listener({
-            type: 'event',
-            event: 'sessionBackgroundMarker',
-            sessionId: 'session-1',
-            payload: {
+    it.each([undefined, { carry: '\x1b]133;D;', adjacentMarkers: 'BC' }])(
+      'forwards the foreground handoff with optional OSC 133 state %j',
+      (osc133ScanState) => {
+        const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+        const forwarded: unknown[] = []
+        current.onBackgroundStreamEvent((payload) => forwarded.push(payload))
+        const listeners: ((event: unknown) => void)[] = []
+        onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
+          listeners.push(listener)
+          return () => {}
+        })
+        try {
+          current['removeEventListener'] = null
+          current['setupEventRouting']()
+          for (const listener of listeners) {
+            listener({
+              type: 'event',
+              event: 'sessionBackgroundMarker',
+              sessionId: 'session-1',
+              payload: {
+                background: false,
+                scanSeedAnsi: '\x1b[?',
+                mode2031PendingSubscribe: true,
+                ...(osc133ScanState ? { osc133ScanState } : {})
+              }
+            })
+          }
+
+          expect(forwarded).toEqual([
+            {
+              id: 'session-1',
+              kind: 'backgroundMarker',
               background: false,
               scanSeedAnsi: '\x1b[?',
-              mode2031PendingSubscribe: true
+              mode2031PendingSubscribe: true,
+              ...(osc133ScanState ? { osc133ScanState } : {})
             }
-          })
+          ])
+        } finally {
+          current.dispose()
+          onEventSpy.mockRestore()
         }
-
-        expect(forwarded).toEqual([
-          {
-            id: 'session-1',
-            kind: 'backgroundMarker',
-            background: false,
-            scanSeedAnsi: '\x1b[?',
-            mode2031PendingSubscribe: true
-          }
-        ])
-      } finally {
-        current.dispose()
-        onEventSpy.mockRestore()
       }
-    })
+    )
 
     it('forwards a v28 unsubscribe, which can only retire state main registered', () => {
       // Asymmetric on purpose: an unretractable subscribe is the hazard, a withdrawal

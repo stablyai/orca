@@ -2,6 +2,7 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { Osc133CommandFinishedScanState } from '../../shared/terminal-osc133-command-finished'
 
 export type DataEvent = {
   type: 'event'
@@ -45,7 +46,8 @@ export type TerminalErrorEvent = {
  *  scanSeedAnsi (un-background only) carries the emulator's dangling
  *  incomplete escape so main can prime its fresh scanner carry — a sequence
  *  split across the handoff must not mint a phantom bell or lose its fact.
- *  mode2031PendingSubscribe preserves a subscribe deferred behind that tail. */
+ *  mode2031PendingSubscribe preserves a subscribe deferred behind that tail.
+ *  osc133ScanState preserves adjacent markers and partial carry on newer daemons. */
 export type SessionBackgroundMarkerEvent = {
   type: 'event'
   event: 'sessionBackgroundMarker'
@@ -54,6 +56,7 @@ export type SessionBackgroundMarkerEvent = {
     background: boolean
     scanSeedAnsi?: string
     mode2031PendingSubscribe?: true
+    osc133ScanState?: Osc133CommandFinishedScanState
   }
 }
 

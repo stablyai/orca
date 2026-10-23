@@ -97,3 +97,75 @@ describe('BackgroundTransientFactRelay', () => {
     }
   })
 })
+
+const marker = (payload: string, terminator: string): string => `\x1b]133;${payload}${terminator}`
+
+describe('OSC 133 continuity across background handoffs', () => {
+  it.each(['\x07', '\x1b\\'])('keeps app zones across every split with terminator %j', (end) => {
+    const zone = marker('B', end) + marker('C', end) + marker('D;0', end)
+    for (let split = 0; split <= zone.length; split += 1) {
+      const { relay, emitted } = createRelay()
+      relay.onSessionData('s1', zone.slice(0, split))
+      relay.setSessionBackground('s1', true)
+      // The emulator may seed a partial escape already consumed by the shadow scanner.
+      relay.seedSessionScanState('s1', relay.getOsc133ScanState('s1').carry)
+      for (const byte of zone.slice(split)) {
+        relay.onSessionData('s1', byte)
+      }
+      expect(emitted, `split ${split}`).toEqual([])
+      relay.dispose()
+    }
+  })
+
+  it.each([
+    ['C', 'D;0', 0],
+    ['B', 'C', 'D;1', 1],
+    ['B', 'typed command', 'C', 'D;0', 0]
+  ])('preserves real command completion through handoffs: %j', (...parts) => {
+    const exitCode = parts.at(-1)
+    const chunks = parts
+      .slice(0, -1)
+      .map((part) => (part === 'typed command' ? part : marker(String(part), '\x07')))
+    const { relay, emitted } = createRelay()
+    relay.onSessionData('s1', chunks[0])
+    relay.setSessionBackground('s1', true)
+    for (const chunk of chunks.slice(1)) {
+      relay.onSessionData('s1', chunk)
+    }
+    expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: 'command-finished', exitCode } }])
+    relay.dispose()
+  })
+
+  it('retains only current adjacency through repeated toggles without replaying completion', () => {
+    const { relay, emitted } = createRelay()
+    relay.onSessionData('s1', marker('B', '\x07'))
+    relay.setSessionBackground('s1', true)
+    relay.setSessionBackground('s1', true)
+    relay.onSessionData('s1', marker('C', '\x07'))
+    relay.setSessionBackground('s1', false)
+    relay.setSessionBackground('s1', true)
+    relay.onSessionData('s1', marker('D;0', '\x07'))
+    expect(emitted).toEqual([])
+    relay.onSessionData('s1', marker('D;0', '\x07'))
+    expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: 'command-finished', exitCode: 0 } }])
+    relay.setSessionBackground('s1', false)
+    relay.setSessionBackground('s1', true)
+    expect(emitted).toHaveLength(1)
+    relay.dispose()
+  })
+
+  it('forgets adjacency on session exit and ordinary output', () => {
+    const { relay, emitted } = createRelay()
+    const bc = marker('B', '\x07') + marker('C', '\x07')
+    relay.onSessionData('s1', bc)
+    relay.onSessionExit('s1')
+    relay.setSessionBackground('s1', true)
+    relay.onSessionData('s1', marker('D;0', '\x07'))
+    relay.onSessionData('s1', `${bc}output${marker('D;0', '\x07')}`)
+    expect(emitted).toEqual([
+      { sessionId: 's1', fact: { kind: 'command-finished', exitCode: 0 } },
+      { sessionId: 's1', fact: { kind: 'command-finished', exitCode: 0 } }
+    ])
+    relay.dispose()
+  })
+})

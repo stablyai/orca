@@ -14,6 +14,7 @@ const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
 
 export type AttachedClient = {
   token: symbol
+  onAttach?: () => void
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
   onExit: (code: number, incarnationId: string, cause?: TerminalExitCause) => void
 }
@@ -75,6 +76,7 @@ export class SessionOutputPlane {
   }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
+    client.onAttach?.()
     const token = Symbol('attach')
     this.attachedClients.push({ token, ...client })
     return token

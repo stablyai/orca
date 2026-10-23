@@ -1,4 +1,5 @@
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { Osc133CommandFinishedScanState } from '../../shared/terminal-osc133-command-finished'
 
 export type PtyDataEvent = {
   id: string
@@ -24,6 +25,7 @@ export type PtyBackgroundStreamEvent =
       background: boolean
       scanSeedAnsi?: string
       mode2031PendingSubscribe?: true
+      osc133ScanState?: Osc133CommandFinishedScanState
     }
   | { id: string; kind: 'dataGap'; droppedChars: number; sequenceChars?: number }
   | { id: string; kind: 'transientFact'; fact: PtyTransientFact }

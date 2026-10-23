@@ -46,6 +46,9 @@ export class DaemonSessionBackgroundRouting {
       sessionId,
       payload: {
         background,
+        ...(!background
+          ? { osc133ScanState: this.options.transientFactRelay.getOsc133ScanState(sessionId) }
+          : {}),
         ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {}),
         ...(mode2031State.pendingSubscribe ? { mode2031PendingSubscribe: true as const } : {})
       }

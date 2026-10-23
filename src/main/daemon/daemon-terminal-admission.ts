@@ -192,6 +192,11 @@ export class DaemonTerminalAdmission {
     sessionId: () => string
   ): CreateOrAttachOptions['streamClient'] {
     return {
+      onAttach: () => {
+        if (!this.options.attachments.clientIdForSession(sessionId())) {
+          this.options.transientFactRelay.resetOsc133ScanState(sessionId())
+        }
+      },
       onData: (data, rawLength = data.length, transformed = false, seq) => {
         const routedSessionId = sessionId()
         this.options.transientFactRelay.onSessionData(routedSessionId, data)

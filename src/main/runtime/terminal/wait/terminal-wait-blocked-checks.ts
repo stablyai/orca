@@ -19,6 +19,7 @@ import { ownRetainedString } from '../../../../shared/own-retained-string'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status-osc'
 import { createTerminalAgentStatusProcessor } from '../../../../shared/terminal-agent-status-processor'
 import type { RuntimePtyTitleTrackerEntry } from '../../runtime-terminal-state-records'
+import type { Osc133CommandFinishedScanState } from '../../../../shared/terminal-osc133-command-finished'
 
 import type { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
 import type { OrcaRuntimeWithEmitDaemonPtyTransientFact } from '../output/terminal-transient-facts'
@@ -207,7 +208,8 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     ptyId: string,
     delegated: boolean,
     scanSeedAnsi?: string,
-    mode2031PendingSubscribe?: true
+    mode2031PendingSubscribe?: true,
+    osc133ScanState?: Osc133CommandFinishedScanState
   ): void {
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.tracker.setTransientFactScanningSuppressed(delegated)
@@ -220,6 +222,9 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
         titleScanData: '',
         mode2031PendingSubscribe
       })
+    }
+    if (!delegated && osc133ScanState) {
+      entry.tracker.restoreCommandFinishedScanState(osc133ScanState)
     }
   }
 }

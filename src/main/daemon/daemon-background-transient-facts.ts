@@ -24,6 +24,11 @@ import {
   scanMode2031ReplyDecision,
   type Mode2031ReplyScanState
 } from '../../shared/terminal-color-scheme-protocol'
+import {
+  createOsc133CommandFinishedScanner,
+  type Osc133CommandFinishedScanner,
+  type Osc133CommandFinishedScanState
+} from '../../shared/terminal-osc133-command-finished'
 import type { DaemonTransientFact } from './types'
 
 // Kill switch for the whole background keep-tail mechanism (thinning +
@@ -34,6 +39,7 @@ export class BackgroundTransientFactRelay {
   private trackersBySessionId = new Map<string, TerminalTitleTracker>()
   // Why: shadow foreground bytes so a provisional subscribe survives either scan-authority handoff.
   private mode2031ReplyScanStateBySessionId = new Map<string, Mode2031ReplyScanState>()
+  private commandFinishedScannersBySessionId = new Map<string, Osc133CommandFinishedScanner>()
   private emitFact: (sessionId: string, fact: DaemonTransientFact) => void
 
   constructor(emitFact: (sessionId: string, fact: DaemonTransientFact) => void) {
@@ -60,8 +66,6 @@ export class BackgroundTransientFactRelay {
         sessionId,
         createTerminalTitleTracker({
           onBell: () => this.emitFact(sessionId, { kind: 'bell' }),
-          onCommandFinished: (exitCode) =>
-            this.emitFact(sessionId, { kind: 'command-finished', exitCode }),
           // Note: recreating the tracker on each background toggle resets the
           // PR-link dedup memory, so a link re-printed across toggles can
           // re-fire — consumers treat pr-link as a latest-association update.
@@ -81,6 +85,9 @@ export class BackgroundTransientFactRelay {
    *  background toggle neither mints a phantom bell nor loses its fact. A
    *  partial tail contains no complete sequence, so this can never fire. */
   seedSessionScanState(sessionId: string, partialEscapeTailAnsi: string): void {
+    if (!this.commandFinishedScannersBySessionId.has(sessionId) && partialEscapeTailAnsi) {
+      this.scanCommandFinished(sessionId, partialEscapeTailAnsi)
+    }
     let mode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
     if (!mode2031State && partialEscapeTailAnsi.length > 0) {
       mode2031State = scanMode2031ReplyDecision(
@@ -104,6 +111,7 @@ export class BackgroundTransientFactRelay {
   /** Feed one raw chunk, in byte order, BEFORE it is enqueued for delivery —
    *  facts must be captured even when the chunk is later keep-tail dropped. */
   onSessionData(sessionId: string, data: string): void {
+    this.scanCommandFinished(sessionId, data)
     const previousMode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
     if (previousMode2031State || data.includes('\x1b') || data.includes('\x9b')) {
       const mode2031Result = scanMode2031ReplyDecision(
@@ -118,8 +126,41 @@ export class BackgroundTransientFactRelay {
     }
     // titleScanData:'' skips title extraction (titles stay main-authoritative)
     // and keeps the stale-working-title timer permanently unarmed — only the
-    // four transient scanners consume the chunk.
+    // non-command transient scanners consume the chunk.
     this.trackersBySessionId.get(sessionId)?.handleChunk(data, { titleScanData: '' })
+  }
+
+  private scanCommandFinished(sessionId: string, data: string): void {
+    let scanner = this.commandFinishedScannersBySessionId.get(sessionId)
+    if (!scanner) {
+      if (!data.includes('\x1b')) {
+        return
+      }
+      scanner = createOsc133CommandFinishedScanner((exitCode) => {
+        if (this.isBackgrounded(sessionId)) {
+          this.emitFact(sessionId, { kind: 'command-finished', exitCode })
+        }
+      })
+      this.commandFinishedScannersBySessionId.set(sessionId, scanner)
+    }
+    scanner.scan(data)
+    const state = scanner.getScanState()
+    if (!state.carry && !state.adjacentMarkers) {
+      this.commandFinishedScannersBySessionId.delete(sessionId)
+    }
+  }
+
+  resetOsc133ScanState(sessionId: string): void {
+    this.commandFinishedScannersBySessionId.delete(sessionId)
+  }
+
+  getOsc133ScanState(sessionId: string): Osc133CommandFinishedScanState {
+    return (
+      this.commandFinishedScannersBySessionId.get(sessionId)?.getScanState() ?? {
+        carry: '',
+        adjacentMarkers: ''
+      }
+    )
   }
 
   getMode2031ReplyScanState(sessionId: string): Mode2031ReplyScanState {
@@ -131,6 +172,7 @@ export class BackgroundTransientFactRelay {
   onSessionExit(sessionId: string): void {
     this.disposeTracker(sessionId)
     this.mode2031ReplyScanStateBySessionId.delete(sessionId)
+    this.commandFinishedScannersBySessionId.delete(sessionId)
   }
 
   dispose(): void {
@@ -138,6 +180,7 @@ export class BackgroundTransientFactRelay {
       this.disposeTracker(sessionId)
     }
     this.mode2031ReplyScanStateBySessionId.clear()
+    this.commandFinishedScannersBySessionId.clear()
   }
 
   private disposeTracker(sessionId: string): void {

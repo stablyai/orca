@@ -153,6 +153,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             : {}),
           ...(event.payload.mode2031PendingSubscribe
             ? { mode2031PendingSubscribe: true as const }
+            : {}),
+          ...(event.payload.osc133ScanState !== undefined
+            ? { osc133ScanState: event.payload.osc133ScanState }
             : {})
         })
       } else if (event.event === 'dataGap') {
