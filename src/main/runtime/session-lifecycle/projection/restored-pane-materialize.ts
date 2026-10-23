@@ -30,7 +30,9 @@ import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-ho
 import type { WorkspaceLayoutStream } from '../../workspace-layout-stream'
 import { collectPersistedTerminalLeafIds } from '../../mobile-session-layout-projection'
 import { getDaemonHistoryDir } from '../../../daemon/daemon-launch-paths'
-import { seedSessionFromStoredScrollback } from '../../terminal/recovery/stored-scrollback-session-seed'
+import { HistoryReader } from '../../../daemon/history-reader'
+import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 function tabHasSolePane(tab: RuntimeMobileSessionTerminalTab): boolean {
   return collectPersistedTerminalLeafIds(tab.parentLayout).length <= 1
@@ -160,51 +162,23 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
   }
 
   /**
-   * A session carrying the pane's stored scrollback when it has no terminal of its own, so its start
-   * cold-restores that history for every client; undefined when there is none to carry.
+   * The session a WSL move installed for this pane (its carried checkpoint, interrupted), so its
+   * first start cold-restores that history once like after an app restart; undefined otherwise.
    */
-  private async seedStoredScrollbackSession(
-    { worktreeId, tabId, leafId }: RestoredPane,
-    cwd: string | undefined
-  ): Promise<string | undefined> {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
-    const ref = session?.terminalLayoutsByTabId?.[tabId]?.scrollbackRefsByLeafId?.[leafId]
-    const tabCreatedAt = session?.tabsByWorktree?.[worktreeId]?.find(
-      (candidate) => candidate.id === tabId
-    )?.createdAt
-    const importedAt = this.store?.wslMoveImportedAtForWorkspace?.(worktreeId) ?? null
-    const read = this.store?.readTerminalScrollbackSnapshotAsync
-    // Why only panes a WSL move carried: an ordinary pane's snapshot is its own window's to restore,
-    // and a tab opened after the move is the host's own.
-    if (
-      !ref ||
-      !read ||
-      importedAt === null ||
-      tabCreatedAt === undefined ||
-      tabCreatedAt > importedAt
-    ) {
-      return undefined
-    }
+  private async claimMovedPaneHistorySession({
+    worktreeId,
+    tabId,
+    leafId
+  }: RestoredPane): Promise<string | undefined> {
     try {
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
-      // Why never over SSH: the remote would be asked to reattach a session it never had.
+      // Why never over SSH: only this host's own daemon holds the installed history.
       if (workspace.connectionId !== null) {
         return undefined
       }
-      const scrollback = await read.call(this.store, ref)
-      if (!scrollback) {
-        return undefined
-      }
-      return seedSessionFromStoredScrollback({
-        historyDir: getDaemonHistoryDir(),
-        worktreeId,
-        tabId,
-        leafId,
-        ref,
-        scrollback,
-        // Why the workspace folder: a cold restore starts the shell where the record says it was.
-        cwd: cwd ?? workspace.path
-      })
+      const sessionId = movedPaneHistorySessionId(worktreeId, makePaneKey(tabId, leafId))
+      const probe = new HistoryReader(getDaemonHistoryDir()).probeRestorableHistory(sessionId)
+      return probe.status === 'restorable' ? sessionId : undefined
     } catch {
       // Why: history is best effort; the pane still starts, only without what it showed before.
       return undefined
@@ -278,10 +252,11 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     try {
       const startSessionId =
         sessionId ??
-        (await this.seedStoredScrollbackSession(
-          { worktreeId, tabId: tab.parentTabId, leafId: tab.leafId },
-          tab.startupCwd
-        ))
+        (await this.claimMovedPaneHistorySession({
+          worktreeId,
+          tabId: tab.parentTabId,
+          leafId: tab.leafId
+        }))
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
         targetsHost,
