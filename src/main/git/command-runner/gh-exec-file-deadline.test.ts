@@ -96,6 +96,25 @@ describe('gh exec deadline', () => {
     expect(options.shell).toBe(false)
   })
 
+  it('writes configured stdin through the child-process capture', async () => {
+    const child = mockChild()
+    const input = JSON.stringify({ title: 'Image issue', body: 'x'.repeat(133_596) })
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => settleChild(child, '{"number":1}'))
+      return child
+    })
+
+    await expect(
+      ghExecFileAsync(['api', '-X', 'POST', 'repos/stablyai/orca/issues', '--input', '-'], {
+        timeout: 15_000,
+        stdin: input
+      })
+    ).resolves.toEqual({ stdout: '{"number":1}', stderr: '' })
+
+    expect(spawnMock).toHaveBeenCalledOnce()
+    expect(child.stdin?.end).toHaveBeenCalledWith(input)
+  })
+
   it('fails rather than returning a clipped answer when gh overruns maxBuffer', async () => {
     const child = mockChild()
     spawnMock.mockImplementation(() => {
