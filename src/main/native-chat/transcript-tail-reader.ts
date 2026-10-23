@@ -5,13 +5,17 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import {
+  isQoderNativeChatAgent,
+  resolveNativeChatTranscriptAgent
+} from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
+  decodeOmpTranscriptLine,
+  decodeQoderTranscriptLine
 } from './transcript-line-decoders'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-file-order'
@@ -40,7 +44,7 @@ export type NativeChatLineDecoder = (line: string, fallbackId: string) => Native
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
+    return isQoderNativeChatAgent(agent) ? decodeQoderTranscriptLine : decodeClaudeTranscriptLine
   }
   if (transcriptAgent === 'codex') {
     return decodeCodexTranscriptLine

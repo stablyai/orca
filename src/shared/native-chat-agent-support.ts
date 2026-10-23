@@ -11,7 +11,9 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'omp',
   'opencode',
   'opencode2',
-  'zcode'
+  'zcode',
+  'qoder',
+  'qoder-cn'
 ]
 
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
@@ -42,12 +44,17 @@ export function nativeChatAskRequiresTerminal(agent: string | null | undefined):
   return resolveNativeChatTranscriptAgent(agent) === 'omp'
 }
 
+/** Qoder CLI and its China build, which share one transcript format and TUI. */
+export function isQoderNativeChatAgent(agent: string | null | undefined): boolean {
+  return agent === 'qoder' || agent === 'qoder-cn'
+}
+
 export function resolveNativeChatTranscriptAgent(
   agent: string | null | undefined
 ): NativeChatTranscriptAgent | null {
-  // Why: OpenClaude writes the Claude transcript format and layout even though
-  // Orca preserves its distinct agent identity for launch and UI behavior.
-  if (agent === 'claude' || agent === 'openclaude') {
+  // Why: OpenClaude and Qoder write the Claude transcript format even though Orca
+  // preserves their distinct agent identity for launch and UI behavior.
+  if (agent === 'claude' || agent === 'openclaude' || isQoderNativeChatAgent(agent)) {
     return 'claude'
   }
   if (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') {

@@ -1,5 +1,8 @@
 import type { AgentType, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import {
+  isQoderNativeChatAgent,
+  resolveNativeChatTranscriptAgent
+} from '../../shared/native-chat-agent-support'
 import { isNoiseMessage } from '../../shared/native-chat-noise'
 import { claudeBashInputAsTypedCommand } from '../../shared/claude-bash-input'
 import {
@@ -11,6 +14,7 @@ import {
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import {
   claudeInterruptedMessageId,
+  qoderInterruptRowId,
   CODEX_EVENT_TURN_ABORTED,
   CODEX_EVENT_TURN_COMPLETE,
   CODEX_EVENT_TURN_STARTED
@@ -29,7 +33,7 @@ export function nativeChatTurnLifecycleDecoderForAgent(
     return decodeCodexTurnLifecycle
   }
   if (transcriptAgent === 'claude') {
-    return decodeClaudeTurnLifecycle
+    return isQoderNativeChatAgent(agent) ? decodeQoderTurnLifecycle : decodeClaudeTurnLifecycle
   }
   return null
 }
@@ -74,13 +78,31 @@ export function decodeClaudeTurnLifecycle(
   line: string,
   fallbackId: string
 ): NativeChatTurnLifecycle | null {
+  return decodeClaudeFormatTurnLifecycle(line, fallbackId, 'claude')
+}
+
+// Why: Qoder writes `stop_reason: null` on every mid-turn row and its interrupt fires no hook.
+export function decodeQoderTurnLifecycle(
+  line: string,
+  fallbackId: string
+): NativeChatTurnLifecycle | null {
+  return decodeClaudeFormatTurnLifecycle(line, fallbackId, 'qoder')
+}
+
+function decodeClaudeFormatTurnLifecycle(
+  line: string,
+  fallbackId: string,
+  format: 'claude' | 'qoder'
+): NativeChatTurnLifecycle | null {
   const record = parseJsonObject(line)
   if (!record) {
     return null
   }
   const message = asRecord(record.message)
   const timestamp = lifecycleTimestamp(record.timestamp)
-  const interruptedMessageId = claudeInterruptedMessageId(record)
+  const interruptedMessageId =
+    claudeInterruptedMessageId(record) ??
+    (format === 'qoder' ? qoderInterruptRowId(record) : undefined)
   if (interruptedMessageId) {
     // Why: Claude stores its interrupt notice as an injected user row; it ends
     // the active generation and must not be mistaken for the next user prompt.
@@ -97,7 +119,8 @@ export function decodeClaudeTurnLifecycle(
     // must not settle the spinner before the tool runs.
     const isTerminal =
       isClaudeTerminalStopReason(stopReason) ||
-      (stopReason == null &&
+      (format === 'claude' &&
+        stopReason == null &&
         assistantHasRenderableContent(message) &&
         !assistantHasToolUse(message))
     if (isTerminal) {

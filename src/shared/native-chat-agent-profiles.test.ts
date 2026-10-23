@@ -49,6 +49,8 @@ describe('host-claimed native chat commands', () => {
   it('claims nothing from the Claude-family catalog', () => {
     expect(names('claude')).toEqual([])
     expect(names('openclaude')).toEqual([])
+    // Qoder's TUI runs the slash commands the chat pastes into it.
+    expect(names('qoder')).toEqual([])
   })
 
   it('keeps the Codex catalog claimed except the model-driven /goal', () => {

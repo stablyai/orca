@@ -10,12 +10,7 @@ import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import { openTranscriptReadStream } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
-import {
-  decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
-} from './transcript-line-decoders'
+import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
 export type ReadTranscriptResult =
@@ -65,18 +60,9 @@ export async function readNativeChatTranscript(
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
-    const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-    if (transcriptAgent === 'claude') {
-      return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
-    }
-    if (transcriptAgent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
-    }
-    if (transcriptAgent === 'grok') {
-      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
-    }
-    if (transcriptAgent === 'omp') {
-      return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
+    const decode = nativeChatLineDecoderForAgent(agent)
+    if (decode) {
+      return { messages: await readTranscript(filePath, decode) }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {

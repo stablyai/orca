@@ -52,6 +52,26 @@ describe('resolveSessionFilePath', () => {
     ).resolves.toBe(target)
   })
 
+  it('resolves Qoder sessions from its own projects root, never from Claude roots', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-qoder-')
+    const qoderProjectsDir = join(root, 'qoder-projects')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const qoderTarget = join(qoderProjectsDir, '-Users-ada-repo', 'sess-qoder.jsonl')
+    const claudeTwin = join(claudeProjectsDir, '-Users-ada-repo', 'sess-qoder.jsonl')
+    const claudeOnly = join(claudeProjectsDir, '-Users-ada-repo', 'sess-claude-only.jsonl')
+    for (const file of [qoderTarget, claudeTwin, claudeOnly]) {
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, '{}\n')
+    }
+
+    const options = { qoderProjectsDir, claudeProjectsDir }
+    await expect(resolveSessionFilePath('qoder', 'sess-qoder', options)).resolves.toBe(qoderTarget)
+    await expect(resolveSessionFilePath('qoder-cn', 'sess-qoder', options)).resolves.toBe(
+      qoderTarget
+    )
+    await expect(resolveSessionFilePath('qoder', 'sess-claude-only', options)).resolves.toBeNull()
+  })
+
   it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {
     const root = await makeRoot('orca-native-chat-resolve-grok-')
     const grokSessionsDir = join(root, 'grok-sessions')

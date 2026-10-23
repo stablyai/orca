@@ -1,9 +1,28 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   decodeClaudeTurnLifecycle,
   decodeCodexTurnLifecycle,
-  nativeChatTurnLifecycleDecoderForAgent
+  decodeQoderTurnLifecycle,
+  nativeChatTurnLifecycleDecoderForAgent,
+  type NativeChatTurnLifecycleDecoder
 } from './transcript-turn-lifecycle'
+
+// Real Qoder 1.1.64 session: two prompts, the first with a Write tool call.
+const QODER_FIXTURE_LINES = readFileSync(
+  join(__dirname, '..', 'ai-vault', '__fixtures__', 'qoder-1.1.64-generated-resumed.jsonl'),
+  'utf8'
+)
+  .split('\n')
+  .filter((line) => line.trim())
+
+function lifecycleStates(decode: NativeChatTurnLifecycleDecoder): string[] {
+  return QODER_FIXTURE_LINES.flatMap((line, index) => {
+    const lifecycle = decode(line, `line-${index}`)
+    return lifecycle ? [lifecycle.state] : []
+  })
+}
 
 describe('native chat transcript turn lifecycle', () => {
   it('exposes a lifecycle decoder only for transcript formats with explicit boundaries', () => {
@@ -11,6 +30,49 @@ describe('native chat transcript turn lifecycle', () => {
     expect(nativeChatTurnLifecycleDecoderForAgent('openclaude')).not.toBeNull()
     expect(nativeChatTurnLifecycleDecoderForAgent('codex')).not.toBeNull()
     expect(nativeChatTurnLifecycleDecoderForAgent('grok')).toBeNull()
+  })
+
+  // Qoder 1.1.75 on Esc: no hook fires, and the notice row carries no `interruptedMessageId`.
+  it('ends an interrupted Qoder turn at its bare notice row', () => {
+    const notice = (content: unknown) =>
+      JSON.stringify({
+        type: 'user',
+        uuid: 'qoder-interrupt',
+        timestamp: '2026-10-21T14:55:30.706Z',
+        message: { role: 'user', content }
+      })
+    const textRow = notice([{ type: 'text', text: '[Request interrupted by user]' }])
+
+    expect(decodeQoderTurnLifecycle(textRow, 'fallback')).toEqual({
+      state: 'interrupted',
+      turnId: 'qoder-interrupt',
+      timestamp: Date.parse('2026-10-21T14:55:30.706Z')
+    })
+    expect(
+      decodeQoderTurnLifecycle(notice('[Request interrupted by user for tool use]'), 'fallback')
+    ).toMatchObject({ state: 'interrupted' })
+    expect(decodeQoderTurnLifecycle(notice('please stop the build'), 'fallback')).toMatchObject({
+      state: 'working'
+    })
+    // Claude marks its own notice with interruptedMessageId; a bare row stays harness noise.
+    expect(decodeClaudeTurnLifecycle(textRow, 'fallback')).toBeNull()
+  })
+
+  it('ends a Qoder turn only at its explicit stop reason, not at mid-turn null rows', () => {
+    const qoder = nativeChatTurnLifecycleDecoderForAgent('qoder')
+    expect(qoder && lifecycleStates(qoder)).toEqual([
+      'working',
+      'completed',
+      'working',
+      'completed'
+    ])
+    // The Claude backup reads each null-stop thinking/text row as done, which is
+    // why Qoder cannot share it.
+    expect(lifecycleStates(decodeClaudeTurnLifecycle).slice(0, 3)).toEqual([
+      'working',
+      'completed',
+      'completed'
+    ])
   })
 
   it('decodes Codex task boundaries with the provider turn id', () => {

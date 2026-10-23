@@ -52,6 +52,17 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillSourceOwner: 'claude',
     expandsSlashCommandsFromText: true
   },
+  // Qoder's TUI expands the slash commands the chat pastes into it, as Claude's does.
+  qoder: {
+    skillPrefix: '/',
+    skillSourceOwner: 'qoder',
+    expandsSlashCommandsFromText: true
+  },
+  'qoder-cn': {
+    skillPrefix: '/',
+    skillSourceOwner: 'qoder-cn',
+    expandsSlashCommandsFromText: true
+  },
   opencode: OPENCODE_PROFILE,
   opencode2: OPENCODE_PROFILE,
   grok: {

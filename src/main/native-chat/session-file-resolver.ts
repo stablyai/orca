@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import {
+  isQoderNativeChatAgent,
   resolveNativeChatTranscriptAgent,
   type NativeChatTranscriptAgent
 } from '../../shared/native-chat-agent-support'
@@ -74,6 +75,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Qoder projects root (`~/.qoder/projects`, `~/.qoder-cn/projects`). */
+  qoderProjectsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -151,7 +154,7 @@ export async function resolveSessionFilePath(
     return null
   }
 
-  const resolved = await resolveSessionFileById(transcriptAgent, sessionId, options, signal)
+  const resolved = await resolveSessionFileById(agent, transcriptAgent, sessionId, options, signal)
   if (!resolved && unavailable) {
     throw unavailable
   }
@@ -159,6 +162,7 @@ export async function resolveSessionFilePath(
 }
 
 async function resolveSessionFileById(
+  agent: AgentType,
   transcriptAgent: NativeChatTranscriptAgent,
   sessionId: string,
   options: ResolveSessionFileOptions,
@@ -170,6 +174,18 @@ async function resolveSessionFileById(
   const trimmedId = sessionId.trim()
   if (!trimmedId) {
     return null
+  }
+
+  // Why: Qoder writes Claude-format files under its own home; Claude's roots could bind a same-id session.
+  if (isQoderNativeChatAgent(agent)) {
+    const root =
+      options.qoderProjectsDir ??
+      join(homedir(), agent === 'qoder' ? '.qoder' : '.qoder-cn', 'projects')
+    return resolveTiered('claude', trimmedId, [root], {
+      wslTier: false,
+      signal,
+      strictErrors: options.strictErrors
+    })
   }
 
   // An explicit root is the caller naming the exact tree its session pinned; adding

@@ -43,6 +43,37 @@ describe('readNativeChatTranscript (claude)', () => {
     ).resolves.toMatchObject({ messages: [{ id: 'openclaude-assistant' }] })
   })
 
+  it('decodes a real Qoder session, its thinking as reasoning, without its bookkeeping rows', async () => {
+    const filePath = join(
+      __dirname,
+      '..',
+      'ai-vault',
+      '__fixtures__',
+      'qoder-1.1.64-generated-resumed.jsonl'
+    )
+
+    const result = await readNativeChatTranscript('qoder', 'session', { filePath })
+    expect('messages' in result).toBe(true)
+    if (!('messages' in result)) {
+      return
+    }
+    const { messages } = result
+
+    expect(messages.map((message) => [message.role, message.blocks[0]?.type])).toEqual([
+      ['user', 'text'],
+      ['reasoning', 'text'],
+      ['assistant', 'text'],
+      ['assistant', 'tool-call'],
+      ['tool', 'tool-result'],
+      ['reasoning', 'text'],
+      ['assistant', 'text'],
+      ['user', 'text'],
+      ['reasoning', 'text'],
+      ['assistant', 'text']
+    ])
+    expect(messages.at(-1)?.blocks[0]).toEqual({ type: 'text', text: 'QODER_ORCA_PROOF_1002' })
+  })
+
   it('returns ordered user/assistant/tool messages with no 5-message cap', async () => {
     const records: unknown[] = []
     // 4 user/assistant turns = 8 messages, well past the AI-Vault preview cap.

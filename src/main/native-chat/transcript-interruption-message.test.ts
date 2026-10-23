@@ -6,6 +6,7 @@ import {
 import { stripNoiseMessages } from '../../shared/native-chat-noise'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
+import { decodeQoderTranscriptLine } from './transcript-line-decoders-qoder'
 
 function expectNormalizedInterruption(message: NativeChatMessage | null): void {
   expect(message).toMatchObject({
@@ -34,6 +35,25 @@ describe('native chat transcript interruption messages', () => {
 
     expectNormalizedInterruption(message)
     expect(message?.id).toBe('interrupt-row')
+  })
+
+  // Qoder 1.1.75 on Esc writes a bare notice row: no interruptedMessageId.
+  it('normalizes Qoder interruption boilerplate into one visible status row', () => {
+    const notice = JSON.stringify({
+      type: 'user',
+      uuid: 'qoder-interrupt',
+      parentUuid: 'qoder-cancelled',
+      timestamp: '2026-10-21T14:55:30.706Z',
+      message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user]' }] }
+    })
+
+    const message = decodeQoderTranscriptLine(notice, 'fallback')
+
+    expectNormalizedInterruption(message)
+    expect(message?.id).toBe('qoder-interrupt')
+    // Claude marks its own notice with interruptedMessageId; a bare row stays harness noise.
+    const claude = decodeClaudeTranscriptLine(notice, 'fallback')
+    expect(claude && stripNoiseMessages([claude])).toEqual([])
   })
 
   it('normalizes Codex turn_aborted into one visible status row', () => {

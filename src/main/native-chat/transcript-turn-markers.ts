@@ -6,7 +6,7 @@
 // rename can't leave a visible "interrupted" row that never settles (or vice
 // versa).
 
-import { extractString } from '../ai-vault/session-scanner-values'
+import { asRecord, extractString } from '../ai-vault/session-scanner-values'
 
 /**
  * The `interruptedMessageId` on a Claude user row when that row is Claude's
@@ -18,6 +18,22 @@ export function claudeInterruptedMessageId(record: Record<string, unknown>): str
     return undefined
   }
   return extractString(record.interruptedMessageId) ?? undefined
+}
+
+const QODER_INTERRUPT_NOTICE = /^\[Request interrupted by user( for tool use)?\]$/
+
+/** The uuid of Qoder's interrupt notice: a bare user text row, without Claude's `interruptedMessageId`. */
+export function qoderInterruptRowId(record: Record<string, unknown>): string | undefined {
+  if (record.type !== 'user') {
+    return undefined
+  }
+  const content = asRecord(record.message)?.content
+  const blocks = Array.isArray(content) ? content : [content]
+  const block = blocks.length === 1 ? blocks[0] : undefined
+  const text = typeof block === 'string' ? block : extractString(asRecord(block)?.text)
+  return text && QODER_INTERRUPT_NOTICE.test(text.trim())
+    ? (extractString(record.uuid) ?? undefined)
+    : undefined
 }
 
 /** Codex `event_msg` payload types that bound a turn's lifecycle. */
