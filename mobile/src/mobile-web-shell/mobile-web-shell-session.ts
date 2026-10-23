@@ -39,7 +39,11 @@ import {
   reconcileManifestCache,
   rendersRoute
 } from './mobile-web-shell-cached-generation'
-import { step } from './mobile-web-shell-session-step'
+import {
+  acceptsSessionEventFlow,
+  step,
+  stepNewFlow
+} from './mobile-web-shell-session-step'
 import { reducePageDocumentLifecycle } from './page-document-lifecycle'
 
 export function createMobileWebShellSession(
@@ -96,11 +100,11 @@ function startFlow(
   }
   const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
   if (gated !== null) {
-    return step(session, { ...base, state: gated }, before)
+    return stepNewFlow(session, { ...base, state: gated }, before)
   }
   // Offline sweeps and reads the cache exactly as a connected host does. What it skips is the
   // compat check, and `onCacheRead` is where that shows.
-  return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
+  return stepNewFlow(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
 /** Holds the generation read off disk. Unreachable opens it alone; connected opens it and asks. */
@@ -310,7 +314,7 @@ export function reduceMobileWebShellSession(
   session: MobileWebShellSession,
   event: MobileWebShellSessionEvent
 ): MobileWebShellStep {
-  if ('flow' in event && event.flow !== session.flow) {
+  if (!acceptsSessionEventFlow(session, event)) {
     return step(session, {})
   }
   switch (event.type) {
@@ -365,7 +369,7 @@ export function reduceMobileWebShellSession(
       // Clears both latches, so the delete-and-refetch and the remount are each available again.
       // Only here: a reconnect is not a reason to grant a second remount of the same session.
       return session.gates === null
-        ? step(session, {
+        ? stepNewFlow(session, {
             retriedOnce: false,
             remountedOnce: false,
             updateNotice: null,

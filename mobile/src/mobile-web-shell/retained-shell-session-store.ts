@@ -115,6 +115,15 @@ export function readRetainedShellSession(args: {
   }
 }
 
+export function recordSessionInRetainedStore(
+  hostId: string,
+  client: object | null,
+  session: MobileWebShellSession
+): void {
+  const { routePathname, wide, appNamesRoute } = session
+  recordRetainedShellSession({ hostId, routePathname, wide, appNamesRoute, client, session })
+}
+
 export function recordRetainedShellSession(args: {
   hostId: string
   routePathname: string
@@ -194,9 +203,6 @@ export function readRetainedPageHostSnapshot(hostId: string): PageHostSnapshot |
   ) {
     return retainedEntry.snapshot
   }
-  if (latestHostSnapshot?.hostId === hostId) {
-    return latestHostSnapshot.snapshot
-  }
   return null
 }
 
@@ -221,6 +227,7 @@ export function takeRetainedBridgeHost(args: {
   sessionId: string
   buildId: string
   client: object
+  sessionEstablished?: boolean
 }): { host: BridgeHost; binding: RetainedBridgeHostBinding } | null {
   const entry = retainedEntry
   if (entry === null || entry.bridge === null) {
@@ -233,6 +240,7 @@ export function takeRetainedBridgeHost(args: {
     return null
   }
   if (
+    args.sessionEstablished === false ||
     entry.bridge.sessionId !== args.sessionId ||
     entry.bridge.buildId !== args.buildId ||
     entry.bridge.client !== args.client ||

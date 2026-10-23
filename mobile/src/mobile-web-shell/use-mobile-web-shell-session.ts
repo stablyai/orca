@@ -25,7 +25,7 @@ import { shellPageFrame, type ShellPageFrame } from './shell-page-frame'
 import {
   evictRetainedShellSessionForHost,
   readRetainedShellSession,
-  recordRetainedShellSession
+  recordSessionInRetainedStore
 } from './retained-shell-session-store'
 import {
   createMobileWebShellSession,
@@ -161,23 +161,11 @@ export function useMobileWebShellSession(args: {
       const stepped = reduceMobileWebShellSession(sessionRef.current, event)
       const trace = traceShellStep(logTraceRef.current, sessionRef.current, event, stepped.session)
       logTraceRef.current = trace
-      for (const line of shellSessionStepLines(
-        sessionRef.current,
-        event,
-        stepped.session,
-        trace
-      )) {
+      for (const line of shellSessionStepLines(sessionRef.current, event, stepped.session, trace)) {
         recordShellLifecycleLine(hostIdRef.current, line)
       }
       sessionRef.current = stepped.session
-      recordRetainedShellSession({
-        hostId: hostIdRef.current,
-        routePathname: stepped.session.routePathname,
-        wide: stepped.session.wide,
-        appNamesRoute: stepped.session.appNamesRoute,
-        client: clientRef.current,
-        session: stepped.session
-      })
+      recordSessionInRetainedStore(hostIdRef.current, clientRef.current, stepped.session)
       const next = stepped.session.state
       if (next.kind === 'fetching') {
         downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
@@ -187,8 +175,6 @@ export function useMobileWebShellSession(args: {
       setPageFrame(shellPageFrame(stepped.session))
       setBackClaimed(shellPageBackClaimed(stepped.session))
       for (const effect of stepped.effects) {
-        // Every effect of a step belongs to the flow that step produced, and its result carries that
-        // number back, so a flow the session has since restarted reports into nothing.
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
     },
@@ -210,52 +196,54 @@ export function useMobileWebShellSession(args: {
   const runEffect = useCallback(
     async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {
       const store = storeRef.current
-      if (store === null) {
-        return
+      if (store !== null) {
+        await runMobileWebShellSessionEffect({
+          effect,
+          flow,
+          client,
+          store,
+          hostId,
+          hostKey,
+          runtime,
+          startedAt: startedAtRef.current,
+          downloads: downloadsRef.current,
+          timers: timersRef.current,
+          send: (event) => dispatch(epoch, event)
+        })
       }
-      await runMobileWebShellSessionEffect({
-        effect,
-        flow,
-        client,
-        store,
-        hostId,
-        hostKey,
-        runtime,
-        startedAt: startedAtRef.current,
-        downloads: downloadsRef.current,
-        timers: timersRef.current,
-        send: (event) => dispatch(epoch, event)
-      })
     },
     [client, dispatch, hostId, hostKey, runtime]
   )
-  // Written after the commit, never during render: React may replay or discard a render, and a
-  // closure from one that never committed would run effects for a session that never existed.
-  // Declared above every effect that dispatches, so the first one already finds it.
   useEffect(() => {
-    runEffectRef.current = (epoch, flow, effect) => {
-      void runEffect(epoch, flow, effect)
-    }
+    runEffectRef.current = (epoch, flow, effect) => void runEffect(epoch, flow, effect)
   }, [runEffect])
 
-  useLayoutEffect(() => {
-    return () => {
+  const mountedIdentityRef = useRef({ hostId, routePathname, appNamesRoute, runtime })
+
+  useLayoutEffect(
+    () => () => {
       const current = sessionRef.current
       if (current.state.kind === 'ready' && current.pagePainted) {
-        recordRetainedShellSession({
-          hostId: hostIdRef.current,
-          routePathname: current.routePathname,
-          wide: current.wide,
-          appNamesRoute: current.appNamesRoute,
-          client: clientRef.current,
-          session: current
-        })
+        recordSessionInRetainedStore(hostIdRef.current, clientRef.current, current)
       }
-    }
-  }, [appNamesRoute, hostId, routePathname])
+    },
+    [appNamesRoute, hostId, routePathname]
+  )
 
   useEffect(() => {
-    // A new host is a new session: the old one's latches, cache handle and in-flight work all go.
+    const prev = mountedIdentityRef.current
+    if (
+      prev.hostId === hostId &&
+      prev.routePathname === routePathname &&
+      prev.appNamesRoute === appNamesRoute &&
+      prev.runtime === runtime
+    ) {
+      if (sessionRef.current.state.kind === 'ready' && sessionRef.current.pagePainted) {
+        runEffectRef.current?.(epochRef.current, sessionRef.current.flow, { kind: 'read-manifest' })
+      }
+      return
+    }
+    mountedIdentityRef.current = { hostId, routePathname, appNamesRoute, runtime }
     invalidate()
     hostIdRef.current = hostId
     logTraceRef.current = EMPTY_SHELL_LOG_TRACE
@@ -276,8 +264,9 @@ export function useMobileWebShellSession(args: {
     if (retained !== null) {
       runEffectRef.current?.(epochRef.current, retained.flow, { kind: 'read-manifest' })
     }
-    return invalidate
   }, [appNamesRoute, hostId, invalidate, routePathname, runtime])
+
+  useEffect(() => invalidate, [invalidate])
 
   // Log-only: one warning per parked state object, cancelled by any state, paint, host or route change.
   // `CHECKING` is one shared object, so checking-to-checking steps keep the first open's timer.
@@ -338,26 +327,12 @@ export function useMobileWebShellSession(args: {
     [dispatch, routePathname]
   )
 
-  const reportDocumentStarted = useCallback(() => {
-    dispatch(epochRef.current, { type: 'document-started' })
-  }, [dispatch])
-
-  const reportDocumentLoaded = useCallback(() => {
-    dispatch(epochRef.current, { type: 'document-loaded' })
-  }, [dispatch])
-
-  const reportPageReady = useCallback(() => {
-    dispatch(epochRef.current, { type: 'page-ready' })
-  }, [dispatch])
-
-  const reportPagePainted = useCallback(() => {
-    dispatch(epochRef.current, { type: 'page-painted' })
-  }, [dispatch])
-
+  const reportDocumentStarted = useCallback(() => dispatch(epochRef.current, { type: 'document-started' }), [dispatch])
+  const reportDocumentLoaded = useCallback(() => dispatch(epochRef.current, { type: 'document-loaded' }), [dispatch])
+  const reportPageReady = useCallback(() => dispatch(epochRef.current, { type: 'page-ready' }), [dispatch])
+  const reportPagePainted = useCallback(() => dispatch(epochRef.current, { type: 'page-painted' }), [dispatch])
   const reportPageBackClaim = useCallback(
-    (claimed: boolean) => {
-      dispatch(epochRef.current, { type: 'page-back-claim', claimed })
-    },
+    (claimed: boolean) => dispatch(epochRef.current, { type: 'page-back-claim', claimed }),
     [dispatch]
   )
 

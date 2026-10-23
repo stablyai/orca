@@ -57,6 +57,11 @@ export type BridgeHost = {
    * to the replacement; a caller that is ending the session simply drops it.
    */
   readSessionBack: () => BridgeSessionBack
+  /**
+   * Drops requests, subscriptions and Back state from a document the native view replaced without
+   * a `close` frame (for example when a parked WebView was evicted and a fresh document started).
+   */
+  resetDocument: () => void
   dispose: () => void
 }
 
@@ -346,6 +351,15 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     sendBack: back.send,
     readSessionBack: back.read,
+    resetDocument(): void {
+      if (closed) {
+        return
+      }
+      settleAll(false)
+      serving = true
+      initSent = false
+      back.drop()
+    },
     dispose
   }
 }

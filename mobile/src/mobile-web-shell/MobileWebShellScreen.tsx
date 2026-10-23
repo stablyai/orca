@@ -441,7 +441,7 @@ export function MobileWebShellScreen({
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
         bridgeEnabled={bridge.bridgeEnabled}
-        retainsSlot={state.kind !== 'failed' && isHostRouteOf(route.pathname, hostId)}
+        retainsSlot={isHostRouteOf(route.pathname, hostId)}
         onBridgeMessage={bridge.onBridgeMessage}
         onExternalNavigation={(event) => {
           const target = cancelledShellNavigationTarget(event.nativeEvent.url)
@@ -482,16 +482,9 @@ export function MobileWebShellScreen({
 }
 
 const styles = StyleSheet.create({
-  shellRoot: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  shellView: {
-    flex: 1
-  },
-  unpaintedOverlay: {
-    opacity: 0
-  },
+  shellRoot: { flex: 1, backgroundColor: colors.bgBase },
+  shellView: { flex: 1 },
+  unpaintedOverlay: { opacity: 0 },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -517,12 +510,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radii.button
   },
-  retryLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  }
+  retryLabel: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
+  pressed: { opacity: 0.7 }
 })

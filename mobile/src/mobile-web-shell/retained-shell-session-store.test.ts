@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BridgeHost } from './bridge-host'
-import { readySession, run } from './mobile-web-shell-session-test-fixtures'
+import { createBridgeHost, type BridgeHost } from './bridge-host'
+import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
+import {
+  afterCacheRead,
+  CACHED,
+  MANIFEST,
+  readySession,
+  run
+} from './mobile-web-shell-session-test-fixtures'
 import {
   evictRetainedShellSession,
   parkRetainedBridgeHost,
@@ -163,5 +170,85 @@ describe('takeRetainedBridgeHost', () => {
       })
     ).toBeNull()
     expect(overflowed.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps an in-flight manifest check and background download alive when document-started bumps the document flow', () => {
+    const cachedOpen = afterCacheRead(CACHED)
+    const initialFlow = cachedOpen.session.flow
+    const activated = run(cachedOpen.session, {
+      type: 'activated',
+      flow: initialFlow,
+      directory: CACHED.directory,
+      sessionId: 'session-1',
+      buildId: CACHED.buildId,
+      totalBytes: CACHED.totalBytes,
+      elapsedMs: 5
+    })
+    const loading = run(activated.session, { type: 'document-started' })
+    expect(loading.session.flow).toBe(initialFlow + 1)
+
+    const manifestArrived = run(loading.session, {
+      type: 'manifest-read',
+      flow: initialFlow,
+      manifest: { ...MANIFEST, buildId: 'newer-build-id' }
+    })
+    expect(manifestArrived.effects).toEqual([{ kind: 'download' }])
+
+    const updated = run(manifestArrived.session, {
+      type: 'activated',
+      flow: initialFlow,
+      directory: '/cache/generations/newer-build-id',
+      sessionId: 'session-2',
+      buildId: 'newer-build-id',
+      totalBytes: 2048,
+      elapsedMs: 25
+    })
+    expect(updated.session.state).toMatchObject({
+      kind: 'ready',
+      sessionId: 'session-2',
+      buildId: 'newer-build-id'
+    })
+  })
+
+  it('resets open subscriptions on BridgeHost when a replacement document starts under the same session id', () => {
+    const client = createFakeRpcClient()
+    const posted: string[] = []
+    const host = createBridgeHost({
+      client,
+      buildId: 'build-a',
+      sessionId: 'session-one',
+      route: { pathname: '/h/host-1' },
+      pageRoutes: ['/h/[hostId]'],
+      routeGrants: [],
+      sessionEstablished: true,
+      host: { id: 'host-1', name: 'Host One', endpoint: 'ws://host-1', lastConnected: 1 },
+      readClientIdentity: () => null,
+      post: (json) => {
+        posted.push(json)
+        return Promise.resolve()
+      },
+      onNavigate: () => {},
+      onNavigateBack: () => 'popped',
+      onExternalLink: () => {},
+      onHaptic: () => {},
+      serveNativeVerb: () => Promise.resolve({}),
+      readStorage: () => ({ storage: {}, storageOversize: [] }),
+      onStorageWrite: () => {},
+      onPageFault: () => {},
+      onRouteParamClear: () => {},
+      onRouteRefused: () => {},
+      onBinaryFramesDropped: () => {},
+      onPageReady: () => {},
+      onPagePainted: () => {},
+      onPageBackClaim: () => {}
+    })
+    const subId = bridgeId(1)
+    host.receive(clientFrame({ type: 'subscribe', id: subId, method: 'x.sub', params: {} }))
+    expect(client.streams).toHaveLength(1)
+
+    host.resetDocument()
+    host.receive(clientFrame({ type: 'ready' }))
+    host.receive(clientFrame({ type: 'subscribe', id: subId, method: 'x.sub', params: {} }))
+    expect(client.streams).toHaveLength(2)
   })
 })
