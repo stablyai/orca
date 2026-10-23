@@ -29,6 +29,16 @@ export function isFrameDrawnServerWorkspace(environmentId: string, worktreeId: s
   return frameDrawnWorktreeIdsByEnvironment.get(environmentId)?.has(worktreeId) ?? false
 }
 
+/** Whether any server's frames draw `worktreeId`, for callers that hold no owner lookup. */
+export function isFrameDrawnByAnyServer(worktreeId: string): boolean {
+  for (const worktreeIds of frameDrawnWorktreeIdsByEnvironment.values()) {
+    if (worktreeIds.has(worktreeId)) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Switch point: a desktop write to a frame-drawn workspace keeps none of the mirror's ledgers. */
 export function isServerFrameDrawnWorkspace(environmentId: string, worktreeId: string): boolean {
   return ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, worktreeId)
