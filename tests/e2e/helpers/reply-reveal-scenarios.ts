@@ -94,6 +94,7 @@ export async function runClaudeReplyScenarios(h: ReplyRevealHarness): Promise<vo
   await h.waitForSubmissions(claude, ++submitted)
   await h.lookElsewhere()
   await h.complete('S12 claude setting off', claude, false)
+  await h.finishChain()
   await setBringToFront(h.page, true)
 
   expect(h.hooks('claude', 'UserPromptSubmit')).toBe(submitted)
@@ -136,12 +137,13 @@ export async function runCodexReplyScenarios(h: ReplyRevealHarness): Promise<voi
   await h.complete('S16 codex program turn after approval Enter', codex, false)
   await h.complete('S16 codex wake after approval', codex, false, { wake: true })
 
-  // S12: the setting is off.
-  await setBringToFront(h.page, false)
+  // S12 starts after cleanup of the linked approval/wake chain.
+  await h.finishChain()
   await h.humanType(codex, 'with the setting off')
   await h.waitForSubmissions(codex, ++submitted)
   await h.lookElsewhere()
   await h.complete('S12 codex setting off', codex, false)
+  await h.finishChain()
   await setBringToFront(h.page, true)
 
   expect(h.hooks('codex', 'UserPromptSubmit')).toBe(submitted)

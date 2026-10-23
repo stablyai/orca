@@ -6,6 +6,8 @@ import { TerminalRunFactsRegister } from '../runtime/terminal-run-facts'
 import { getDefaultNotificationSettings } from '../../shared/notification-settings-defaults'
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
 import { createAgentReplyEligibility } from './agent-reply-eligibility'
+import { createReplyTranscriptFixture } from './claude-reply-origin.test-fixture'
+import type * as ClaudeReplyOrigin from './claude-reply-origin'
 
 const callbacks = vi.hoisted(() => {
   const listeners: {
@@ -22,7 +24,7 @@ const callbacks = vi.hoisted(() => {
     listeners,
     chat,
     chatHost,
-    read: vi.fn<() => Promise<boolean>>(() => Promise.resolve(true))
+    read: vi.fn<typeof ClaudeReplyOrigin.isClaudeHumanReply>()
   }
 })
 vi.mock('../agent-hooks/server', () => ({
@@ -44,17 +46,27 @@ vi.mock('../agent-hooks/server', () => ({
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => (callbacks.chat.enabled ? callbacks.chatHost : null)
 }))
-vi.mock('./claude-reply-origin', () => ({ isClaudeHumanReply: callbacks.read }))
+vi.mock('./claude-reply-origin', async (importOriginal) => {
+  const original = await importOriginal<typeof ClaudeReplyOrigin>()
+  callbacks.read.mockImplementation(original.isClaudeHumanReply)
+  return { isClaudeHumanReply: callbacks.read }
+})
+const { transcript, dispose } = createReplyTranscriptFixture()
 const disposals: (() => void)[] = []
-afterEach(() => {
+afterEach(async () => {
   disposals.splice(0).forEach((dispose) => dispose())
+  await dispose()
   callbacks.read.mockClear()
   callbacks.chat.enabled = false
   callbacks.chat.snapshot = null
   callbacks.chat.floors = new Map()
 })
 
-function rig(source: 'claude' | 'codex' = 'codex', enabled = true) {
+function rig(
+  source: 'claude' | 'codex' = 'codex',
+  enabled = true,
+  transcriptPath = '/invented/transcript.jsonl'
+) {
   const facts = new TerminalRunFactsRegister()
   const settings = { ...getDefaultNotificationSettings(), bringToFrontOnAgentTaskComplete: enabled }
   let settingsChanged: () => void = () => undefined
@@ -93,14 +105,14 @@ function rig(source: 'claude' | 'codex' = 'codex', enabled = true) {
         : {
             key: 'session_id',
             id: 'session',
-            transcriptPath: '/invented/transcript.jsonl'
+            transcriptPath
           },
       payload: { state: hookEventName === 'Stop' ? 'done' : 'working', prompt: 'invented' },
       receivedAt: 1,
       stateStartedAt: 1
     })
-  const input = (origin: 'human' | 'programmatic') =>
-    facts.recordInput('pty', 'driving', '\r', undefined, origin)
+  const input = (origin: 'human' | 'programmatic', data = '\r') =>
+    facts.recordInput('pty', 'driving', data, undefined, origin)
   // The renderer's request carries no turn identity; the host's own hook turn decides.
   const request = { source: 'agent-task-complete' as const, paneKey: 'pane' }
   return { facts, policy, hook, input, request, settings, settingsChanged: () => settingsChanged() }
@@ -154,18 +166,6 @@ describe('host reply eligibility and asynchronous invalidation', () => {
     expect(await verdict).toBe(false)
     expect(r.policy.stillEligible(r.request)).toBe(false)
   })
-  it('A5: a human queued hook on a wake turn still requires Claude human transcript origin', async () => {
-    const r = rig('claude')
-    r.input('programmatic')
-    r.hook('UserPromptSubmit')
-    r.input('human')
-    r.hook('UserPromptSubmit')
-    r.hook('Stop')
-    callbacks.read.mockResolvedValueOnce(false) // The exact prompt has origin.kind task-notification.
-    expect(await r.policy.canBring(r.request)).toBe(false)
-    expect(callbacks.read).toHaveBeenCalledOnce()
-  })
-
   it('S12: off-to-on starts an empty submission epoch; no transcript read while off', async () => {
     const r = rig('claude', false)
     r.input('human')
@@ -196,6 +196,94 @@ describe('host reply eligibility and asynchronous invalidation', () => {
     r.settingsChanged()
     expect(r.policy.stillEligible(r.request)).toBe(false)
   })
+})
+
+describe('uninterrupted terminal refusal scenarios', () => {
+  it.each(['claude', 'codex'] as const)(
+    'S17/S7: %s program submissions stay program-authored after a local /status Enter',
+    async (source) => {
+      const path = await transcript([
+        { type: 'user', promptId: 'turn-A', origin: { kind: 'human' } },
+        { type: 'user', promptId: 'turn-B', origin: { kind: 'human' } },
+        { type: 'user', promptId: 'turn-C', origin: { kind: 'human' } }
+      ])
+      const r = rig(source, true, path)
+      r.input('programmatic', 'worker instruction\r')
+      r.hook('UserPromptSubmit')
+      r.hook('Stop')
+      expect(await r.policy.canBring(r.request)).toBe(false)
+      r.input('human', '/status\r')
+      r.input('programmatic', 'message after status\r')
+      r.hook('UserPromptSubmit', 'turn-B')
+      r.hook('Stop', 'turn-B')
+      expect(await r.policy.canBring(r.request)).toBe(false)
+      expect(callbacks.read).not.toHaveBeenCalled()
+      r.input('human')
+      r.hook('UserPromptSubmit', 'turn-C')
+      r.hook('Stop', 'turn-C')
+      expect(await r.policy.canBring(r.request)).toBe(true)
+    }
+  )
+
+  it.each(['claude', 'codex'] as const)(
+    'S16: %s refuses a program completion and the wake after a human approval Enter',
+    async (source) => {
+      const path = await transcript([
+        { type: 'user', promptId: 'turn-A', origin: { kind: 'human' } },
+        {
+          type: 'user',
+          promptId: 'wake',
+          origin: { kind: 'task-notification' },
+          message: { role: 'user', content: '<task-notification>job finished</task-notification>' }
+        },
+        { type: 'assistant', promptId: 'wake', message: { role: 'assistant', content: 'Done' } },
+        { type: 'user', promptId: 'turn-C', origin: { kind: 'human' } }
+      ])
+      const r = rig(source, true, path)
+      r.input('programmatic', 'program turn needing approval\r')
+      r.hook('UserPromptSubmit')
+      r.input('human')
+      r.hook('Stop')
+      expect(await r.policy.canBring(r.request)).toBe(false)
+      expect(callbacks.read).not.toHaveBeenCalled()
+      r.hook(source === 'claude' ? 'UserPromptSubmit' : 'PreToolUse', 'wake')
+      r.hook('Stop', 'wake')
+      expect(await r.policy.canBring(r.request)).toBe(false)
+      if (source === 'claude') {
+        expect(callbacks.read).toHaveBeenCalledExactlyOnceWith(
+          path,
+          'wake',
+          expect.any(AbortSignal)
+        )
+      } else {
+        expect(callbacks.read).not.toHaveBeenCalled()
+      }
+      r.input('human')
+      r.hook('UserPromptSubmit', 'turn-C')
+      r.hook('Stop', 'turn-C')
+      expect(await r.policy.canBring(r.request)).toBe(true)
+    }
+  )
+
+  it.each(['claude', 'codex'] as const)(
+    'S4: %s wake cannot reuse a completed human submission',
+    async (source) => {
+      const path = await transcript([
+        { type: 'user', promptId: 'turn-A', origin: { kind: 'human' } },
+        { type: 'user', promptId: 'wake', origin: { kind: 'human' } }
+      ])
+      const r = rig(source, true, path)
+      r.input('human')
+      r.hook('UserPromptSubmit')
+      r.hook('Stop')
+      expect(await r.policy.canBring(r.request)).toBe(true)
+      callbacks.read.mockClear()
+      r.hook(source === 'claude' ? 'UserPromptSubmit' : 'PreToolUse', 'wake')
+      r.hook('Stop', 'wake')
+      expect(await r.policy.canBring(r.request)).toBe(false)
+      expect(callbacks.read).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('structured chat submission epochs', () => {

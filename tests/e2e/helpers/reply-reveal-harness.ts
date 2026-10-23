@@ -53,6 +53,7 @@ export type ReplyRevealOutcome = {
 
 export class ReplyRevealHarness {
   readonly outcomes: ReplyRevealOutcome[] = []
+  private pendingRefusal?: (log: ReplyRevealProbeLog) => Promise<void>
 
   constructor(
     readonly page: Page,
@@ -133,6 +134,18 @@ export class ReplyRevealHarness {
     await expect
       .poll(() => this.hooks(agent.provider, 'UserPromptSubmit'), { timeout: 15_000 })
       .toBe(count)
+    await this.finishRefusal(await readReplyRevealProbe(this.app))
+  }
+
+  private async finishRefusal(log: ReplyRevealProbeLog): Promise<void> {
+    const pending = this.pendingRefusal
+    this.pendingRefusal = undefined
+    await pending?.(log)
+  }
+
+  async finishChain(): Promise<void> {
+    await setBringToFront(this.page, false)
+    await this.finishRefusal(await readReplyRevealProbe(this.app))
   }
 
   /** Compacts the running turn the way Claude's auto-compaction reports it. */
@@ -164,8 +177,8 @@ export class ReplyRevealHarness {
   }
 
   /**
-   * Ends the agent's turn (or wakes it) and checks what main did: a reveal of exactly that agent's
-   * pane or none at all, and one banner unless the agent's own workspace is in a focused window.
+   * Positives reveal the right tab; refusals produce no reveal before the next event.
+   * Verdict correctness for refusals is proven in the integration tests.
    */
   async complete(
     scenario: string,
@@ -179,70 +192,75 @@ export class ReplyRevealHarness {
     const before = await readReplyRevealProbe(this.app)
     controlFakeReplyAgent(this.fakeDir, agent.provider, wake ? 'wake' : 'finish')
     await expect.poll(() => this.hooks(agent.provider, 'Stop'), { timeout: 15_000 }).toBe(stops + 1)
-    const since = async (): Promise<ReplyRevealProbeLog> => {
-      const log = await readReplyRevealProbe(this.app)
-      return {
-        dispatches: log.dispatches.slice(before.dispatches.length),
-        banners: log.banners.slice(before.banners.length),
-        reveals: log.reveals.slice(before.reveals.length)
-      }
-    }
+    await this.finishRefusal(await readReplyRevealProbe(this.app))
+    const since = (log: ReplyRevealProbeLog): ReplyRevealProbeLog => ({
+      dispatches: log.dispatches.slice(before.dispatches.length),
+      banners: log.banners.slice(before.banners.length),
+      reveals: log.reveals.slice(before.reveals.length)
+    })
     const paneReveals = (log: ReplyRevealProbeLog): number =>
       log.reveals.filter(
         (reveal) => reveal.channel === 'ui:focusTerminal' && reveal.paneKey === agent.paneKey
       ).length
-    await expect.poll(async () => (await since()).dispatches.length, { timeout: 15_000 }).toBe(1)
+    await expect
+      .poll(async () => since(await readReplyRevealProbe(this.app)).dispatches.length, {
+        timeout: 15_000
+      })
+      .toBe(1)
     if (expected) {
-      await expect.poll(async () => paneReveals(await since()), { timeout: 15_000 }).toBe(1)
-    } else {
-      const enabled = await this.page.evaluate(
-        () => window.__store!.getState().settings!.notifications.bringToFrontOnAgentTaskComplete
+      await expect
+        .poll(async () => paneReveals(since(await readReplyRevealProbe(this.app))), {
+          timeout: 15_000
+        })
+        .toBe(1)
+    }
+    const verify = async (end: ReplyRevealProbeLog): Promise<void> => {
+      const log = since(end)
+      expect(log.dispatches).toEqual([
+        {
+          paneKey: agent.paneKey,
+          result:
+            expectedBanners === 0
+              ? { delivered: false, reason: 'suppressed-focus' }
+              : { delivered: true }
+        }
+      ])
+      const revealed = paneReveals(log) > 0
+      const strayReveals = log.reveals.filter(
+        (reveal) =>
+          !(
+            (reveal.channel === 'ui:focusTerminal' && reveal.paneKey === agent.paneKey) ||
+            (reveal.channel === 'ui:activateWorktree' && reveal.worktreeId === agent.worktreeId)
+          )
       )
-      // A settings epoch change aborts pending provenance and permanently invalidates old verdicts.
-      await setBringToFront(this.page, false)
-      if (enabled) {
-        await setBringToFront(this.page, true)
+      const outcome = {
+        scenario,
+        expected,
+        revealed,
+        reveals: log.reveals.length,
+        banners: log.banners.length
+      }
+      this.outcomes.push(outcome)
+      console.log(`[reply-reveal] ${JSON.stringify(outcome)}`)
+      expect.soft(revealed, `${scenario}: reveal`).toBe(expected)
+      if (expected) {
+        expect.soft(paneReveals(log), `${scenario}: pane reveals`).toBe(1)
+        expect.soft(strayReveals, `${scenario}: reveals of anything but its pane`).toEqual([])
+      } else {
+        expect.soft(log.reveals, `${scenario}: any reveal`).toEqual([])
+      }
+      expect.soft(log.banners.length, `${scenario}: banners`).toBe(expectedBanners)
+      if (revealed) {
+        const view = await readActiveView(this.page)
+        expect.soft(view.tabId, `${scenario}: revealed tab`).toBe(agent.tabId)
+        expect.soft(view.worktreeId, `${scenario}: revealed workspace`).toBe(agent.worktreeId)
       }
     }
-    const log = await since()
-    expect(log.dispatches).toEqual([
-      {
-        paneKey: agent.paneKey,
-        result:
-          expectedBanners === 0
-            ? { delivered: false, reason: 'suppressed-focus' }
-            : { delivered: true }
-      }
-    ])
-    const revealed = paneReveals(log) > 0
-    const strayReveals = log.reveals.filter(
-      (reveal) =>
-        !(
-          (reveal.channel === 'ui:focusTerminal' && reveal.paneKey === agent.paneKey) ||
-          (reveal.channel === 'ui:activateWorktree' && reveal.worktreeId === agent.worktreeId)
-        )
-    )
-    const outcome = {
-      scenario,
-      expected,
-      revealed,
-      reveals: log.reveals.length,
-      banners: log.banners.length
-    }
-    this.outcomes.push(outcome)
-    console.log(`[reply-reveal] ${JSON.stringify(outcome)}`)
-    expect.soft(revealed, `${scenario}: reveal`).toBe(expected)
     if (expected) {
-      expect.soft(paneReveals(log), `${scenario}: pane reveals`).toBe(1)
-      expect.soft(strayReveals, `${scenario}: reveals of anything but its pane`).toEqual([])
+      await verify(await readReplyRevealProbe(this.app))
     } else {
-      expect.soft(log.reveals, `${scenario}: any reveal`).toEqual([])
-    }
-    expect.soft(log.banners.length, `${scenario}: banners`).toBe(expectedBanners)
-    if (revealed) {
-      const view = await readActiveView(this.page)
-      expect.soft(view.tabId, `${scenario}: revealed tab`).toBe(agent.tabId)
-      expect.soft(view.worktreeId, `${scenario}: revealed workspace`).toBe(agent.worktreeId)
+      const delivered = await readReplyRevealProbe(this.app)
+      this.pendingRefusal = (end) => verify({ ...delivered, reveals: end.reveals })
     }
   }
 }

@@ -1,20 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { isClaudeHumanReply } from './claude-reply-origin'
+import { createReplyTranscriptFixture } from './claude-reply-origin.test-fixture'
 
-const directories: string[] = []
-afterEach(async () => {
-  await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
-})
-async function transcript(rows: unknown[]) {
-  const dir = await mkdtemp(join(tmpdir(), 'reply-origin-'))
-  directories.push(dir)
-  const path = join(dir, 'invented.jsonl')
-  await writeFile(path, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`)
-  return path
-}
+const { transcript, dispose } = createReplyTranscriptFixture()
+afterEach(dispose)
 
 describe('Claude exact prompt origin', () => {
   it('S10: recovers a human origin across a compact summary and a large tail', async () => {

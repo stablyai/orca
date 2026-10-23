@@ -4,6 +4,8 @@
  * test writes to their PTYs as a person (keys through xterm) or as Orca (terminal.send, dictation
  * paste). Windowless launch keeps every reveal off the desktop; the reveal's renderer IPC and the
  * tab it lands on are the observable outcome.
+ * Positives reveal the right tab; refusals produce no reveal before the next event.
+ * Verdict correctness for refusals is proven in the integration tests.
  *
  * macOS only, like the setting: today's CI e2e jobs run on Linux and Windows, so CI skips this file.
  */
