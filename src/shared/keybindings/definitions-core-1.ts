@@ -175,6 +175,16 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+E'])
   },
   {
+    id: 'voice.control',
+    title: 'Full Voice Control',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'control', 'voice', 'speech', 'microphone', 'agent'],
+    // Why mac-only: Mod+Shift+V resolves to Ctrl+Shift+V off macOS, which is
+    // terminal.paste there — a global binding would swallow paste in focused terminals.
+    defaultBindings: { darwin: ['Mod+Shift+V'], linux: [], win32: [] }
+  },
+  {
     id: 'view.tasks',
     title: 'Open Tasks',
     group: 'Global',

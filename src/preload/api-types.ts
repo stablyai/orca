@@ -57,6 +57,7 @@ import type { WslMoveApi } from './api/wsl-move-bridge'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
+import type { VoiceControlApi } from './api/voice-control-api'
 import type { SshApi } from './api/ssh-api'
 import type { PlainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
 import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
@@ -167,6 +168,7 @@ export type PreloadApi = {
   agentStatus: AgentStatusApi
   mobile: MobileApi
   speech: SpeechApi
+  voiceControl: VoiceControlApi
 }
 
 export type {

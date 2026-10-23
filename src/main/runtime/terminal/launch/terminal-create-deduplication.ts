@@ -153,7 +153,13 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string; extraAgentArgs?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      extraAgentArgs?: string
+      preAllocatedHandle?: string
+    }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     // Why: `getRepo(id)` is host-blind; the same repo id on two hosts must build the launch for the
@@ -181,7 +187,11 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       launchRuntime: startup.launchRuntime,
       startupCommandDelivery: startup.startup.startupCommandDelivery,
       telemetry: startup.startup.telemetry,
-      title: opts.title
+      title: opts.title,
+      // Why: a caller that must know the handle before the PTY exists (voice dispatch
+      // preambles bake it in) pre-allocates it; createTerminal exports it as
+      // ORCA_TERMINAL_HANDLE, same as the agent-session create flow.
+      ...(opts.preAllocatedHandle ? { preAllocatedHandle: opts.preAllocatedHandle } : {})
     })
     // Why: agents that read the prompt after they start get it typed in, not on argv.
     if (startup.followup) {

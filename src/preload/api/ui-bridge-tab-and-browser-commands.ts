@@ -191,6 +191,11 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('ui:dictationKeyDown', listener)
     return () => ipcRenderer.removeListener('ui:dictationKeyDown', listener)
   },
+  onVoiceControlToggle: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:voiceControlToggle', listener)
+    return () => ipcRenderer.removeListener('ui:voiceControlToggle', listener)
+  },
   onActivateWorktree: (
     callback: (data: {
       repoId: string

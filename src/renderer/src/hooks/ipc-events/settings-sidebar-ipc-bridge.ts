@@ -23,6 +23,20 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
     })
   )
 
+  // Why: voice navigate_ui's close-settings verb. closeSettingsPage unconditionally
+  // restores previousViewBeforeSettings, so it must only fire while settings is showing.
+  // This bypasses the unsaved source-control-prompt guard — that state lives in the
+  // settings page's local controller, unreachable here; a spoken "close settings" is
+  // explicit user intent.
+  unsubs.push(
+    window.api.ui.onCloseSettings?.(() => {
+      const store = useAppStore.getState()
+      if (store.activeView === 'settings') {
+        store.closeSettingsPage()
+      }
+    }) ?? (() => {})
+  )
+
   const unsubscribeOpenSkillShare = window.api.ui.onOpenSkillShare?.((shareId) => {
     useAppStore.getState().openSkillShare(shareId)
   })

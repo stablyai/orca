@@ -24,6 +24,21 @@ export function rememberRunCoordinatorHandle(
     .run(runId, terminalHandle)
 }
 
+/**
+ * Drops this handle's stale cache rows so a synthetic coordinator with no pane/session
+ * identity (where unbindOtherRunsForCoordinator matches nothing) still resolves to exactly
+ * one mailbox — the run it just opened. Rows are a routing cache; the runs table is untouched.
+ */
+export function forgetRunCoordinatorHandlesExcept(
+  this: OrchestrationDb,
+  terminalHandle: string,
+  keepRunId: string
+): void {
+  this.db
+    .prepare(`DELETE FROM run_coordinator_handles WHERE terminal_handle = ? AND run_id != ?`)
+    .run(terminalHandle, keepRunId)
+}
+
 const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')
 const NEW_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('NEW')
 
@@ -127,6 +142,7 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
 export type RunCoordinatorMailRoutingMethods = {
   rememberRunCoordinatorHandle: typeof rememberRunCoordinatorHandle
   rememberCurrentRunCoordinatorHandles: typeof rememberCurrentRunCoordinatorHandles
+  forgetRunCoordinatorHandlesExcept: typeof forgetRunCoordinatorHandlesExcept
   createCoordinatorMailRoutingTrigger: typeof createCoordinatorMailRoutingTrigger
   routeAllUnreadDirectMessagesToRunMailbox: typeof routeAllUnreadDirectMessagesToRunMailbox
 }
@@ -135,6 +151,7 @@ export function attachRunCoordinatorMailRouting(ctor: { prototype: object }): vo
   Object.assign(ctor.prototype, {
     rememberRunCoordinatorHandle,
     rememberCurrentRunCoordinatorHandles,
+    forgetRunCoordinatorHandlesExcept,
     createCoordinatorMailRoutingTrigger,
     routeAllUnreadDirectMessagesToRunMailbox
   })
