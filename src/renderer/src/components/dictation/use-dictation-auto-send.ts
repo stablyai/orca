@@ -15,6 +15,8 @@ export type DictationSessionOutcome = {
   sessionErrored: boolean
 }
 
+export type ReportDictationOutcome = (outcome: DictationSessionOutcome) => void
+
 async function allDelivered(insertions: readonly Promise<boolean>[]): Promise<boolean> {
   const results = await Promise.allSettled(insertions)
   return (
@@ -25,10 +27,11 @@ async function allDelivered(insertions: readonly Promise<boolean>[]): Promise<bo
 /** Owns the one pending send a stopping dictation can start, and everything that cancels it. */
 export function useDictationAutoSend(): {
   trackInsertion: (insertion: Promise<boolean>) => void
-  startWhenStopping: (
-    target: DictationInsertionTarget | null,
-    outcome: Promise<DictationSessionOutcome>
-  ) => void
+  /**
+   * Starts watching for takeover when Stop is first accepted, once per dictation; later calls for
+   * the same dictation return the same reporter. Report the outcome once the stopped event arrives.
+   */
+  watchStopping: (target: DictationInsertionTarget | null) => ReportDictationOutcome
 } {
   const setPendingDictationAutoSend = useAppStore((s) => s.setPendingDictationAutoSend)
   const dictationState = useAppStore((s) => s.dictationState)
@@ -36,6 +39,7 @@ export function useDictationAutoSend(): {
   const autoSendEnabled = useAppStore((s) => s.settings?.voice?.autoSendAfterDictation)
   const autoSendRef = useRef<DictationAutoSend | null>(null)
   const pendingInsertionsRef = useRef<Promise<boolean>[]>([])
+  const reportOutcomeRef = useRef<ReportDictationOutcome | null>(null)
 
   const cancel = useCallback(() => {
     autoSendRef.current?.cancel()
@@ -77,10 +81,30 @@ export function useDictationAutoSend(): {
     [cancel, setPendingDictationAutoSend]
   )
 
+  const watchStopping = useCallback(
+    (target: DictationInsertionTarget | null): ReportDictationOutcome => {
+      if (reportOutcomeRef.current) {
+        return reportOutcomeRef.current
+      }
+      const outcome = Promise.withResolvers<DictationSessionOutcome>()
+      const report: ReportDictationOutcome = (result) => {
+        if (reportOutcomeRef.current === report) {
+          reportOutcomeRef.current = null
+        }
+        outcome.resolve(result)
+      }
+      reportOutcomeRef.current = report
+      startWhenStopping(target, outcome.promise)
+      return report
+    },
+    [startWhenStopping]
+  )
+
   useEffect(() => {
     // Why: new speech appends to the same draft; its own stop starts a fresh countdown.
     if (dictationState === 'starting') {
       pendingInsertionsRef.current = []
+      reportOutcomeRef.current = null
       cancel()
     }
   }, [dictationState, cancel])
@@ -99,5 +123,5 @@ export function useDictationAutoSend(): {
     }
   }, [cancel])
 
-  return { trackInsertion, startWhenStopping }
+  return { trackInsertion, watchStopping }
 }
