@@ -1,7 +1,7 @@
 import { app, webContents } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { registerAppHandlers } from '../app'
-import { createWslMoveDriverDeps, registerWslSleepShellCwdReader } from '../wsl-move-driver-wiring'
+import { registerWslMoveWiring } from '../wsl-move-driver-wiring'
 import { registerCliHandlers } from '../cli'
 import { registerPreflightHandlers } from '../preflight'
 import type { Store } from '../../persistence/loading-store/store'
@@ -30,7 +30,6 @@ import {
   registerRuntimeEnvironmentHandlers
 } from '../runtime-environments/runtime-environments'
 import { registerWslHostHandlers } from '../wsl-host-handlers'
-import { registerWslMoveHandlers } from '../wsl-move-handlers'
 import {
   reapplyWslMoveRewritesAtUnload,
   reapplyWslMoveRewritesWhenDocumentReplaced
@@ -63,11 +62,7 @@ import { registerTelemetryHandlers } from '../telemetry'
 import { registerShellHandlers } from '../shell'
 import { registerPetHandlers } from '../pet'
 import { registerPluginHandlers } from '../plugins'
-import {
-  getTrustedUIRendererWebContents,
-  registerUIHandlers,
-  setTrustedUIRendererWebContentsId
-} from '../ui'
+import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
 import { registerSpeechHandlers } from '../speech'
@@ -277,12 +272,7 @@ export function registerCoreHandlers(
     getUserDataPath: () => app.getPath('userData'),
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerWslSleepShellCwdReader()
-  registerWslMoveHandlers(
-    () => app.getPath('userData'),
-    (senderId) => getTrustedUIRendererWebContents()?.id === senderId,
-    () => createWslMoveDriverDeps(store, runtime)
-  )
+  registerWslMoveWiring(store, runtime)
   registerEphemeralVmHandlers(store, pluginService)
   // Session history and terminal resume are not chats; a refused host leaves nothing to check.
   const ensureStructuredSessionOwnership = () =>

@@ -58,6 +58,8 @@ import {
 import { buildWslMoveShellHistoryBlobs } from '../persistence/moving-wsl-projects/wsl-move-shell-history-blobs'
 import { inspectPtyProviderProcessForRenderer } from '../providers/pty-process-inspection'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { getTrustedUIRendererWebContents } from './ui'
+import { registerWslMoveHandlers } from './wsl-move-handlers'
 import {
   commitRemoteOrcadMigrationCatalog,
   listRemoteOrcadRepositories,
@@ -80,7 +82,16 @@ import { getTrustedUIRendererWindow } from './ui'
  * Lets a sleeping bridge WSL pane keep its shell's folder, so a later move (or wake) reopens it
  * there. Only with the internal WSL hosts gate open, and only on Windows, where the bridge runs.
  */
-export function registerWslSleepShellCwdReader(): void {
+export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
+  registerWslSleepShellCwdReader()
+  registerWslMoveHandlers(
+    () => app.getPath('userData'),
+    (senderId) => getTrustedUIRendererWebContents()?.id === senderId,
+    () => createWslMoveDriverDeps(store, runtime)
+  )
+}
+
+function registerWslSleepShellCwdReader(): void {
   if (process.platform !== 'win32' || !wslHostsGateOpen()) {
     return
   }
