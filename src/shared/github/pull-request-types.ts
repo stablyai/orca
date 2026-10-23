@@ -60,6 +60,8 @@ export type PRInfo = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  /** True once GitHub has a merge-queue entry. Enqueue does not set autoMergeRequest. */
+  inMergeQueue?: boolean
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   /** GitHub-registered stack metadata. Absent for ordinary dependent PR chains. */

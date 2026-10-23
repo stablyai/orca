@@ -184,6 +184,8 @@ export type TaskPageGitHubWorkItemMutationRunner = {
           }
     } | void>
     successToast?: string
+    successToastFromResult?: (result: { enqueued?: boolean } | void) => string
+    serverEntityFromResult?: (result: unknown) => Partial<GitHubWorkItem> | undefined
     errorToast: string
   }) => Promise<'confirmed' | 'rolled_back' | 'stale'>
   isIntentPending: (input: {
