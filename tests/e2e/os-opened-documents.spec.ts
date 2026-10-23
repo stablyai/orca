@@ -36,16 +36,20 @@ for (const extension of ['md', 'csv', 'tsv'] as const) {
     try {
       launched = await session.launch({ extraArgs: [coldPath, pathToFileURL(coldPath).href] })
       const { app, page } = launched
-      const table = page.getByRole('table')
+      // An OS-opened CSV is editable, so it renders as an ARIA grid, not a read-only table.
+      const table = page.getByTestId('csv-grid')
       const coldResult =
         extension === 'md'
           ? page.getByRole('heading', { name: 'Cold result' })
-          : table.getByRole('cell', { name: 'Cold result', exact: true })
+          : table.getByRole('gridcell', { name: 'Cold result', exact: true })
       const warmResult =
         extension === 'md'
           ? page.getByRole('heading', { name: 'Warm result' })
-          : table.getByRole('cell', { name: 'Warm result', exact: true })
+          : table.getByRole('gridcell', { name: 'Warm result', exact: true })
       await expect(coldResult).toBeVisible()
+      if (extension !== 'md') {
+        await expect(table).toHaveRole('grid')
+      }
       await expect(page.getByText('42', { exact: true })).toBeVisible()
       await expect(
         page.locator('[data-tab-id]').filter({ hasText: `cold.${extension}` })

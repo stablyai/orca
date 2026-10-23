@@ -210,7 +210,7 @@ test.describe('Linear URL workspace entry', () => {
     await openJumpPalette(electronApp)
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
     const input = palette.getByPlaceholder(
-      'Search chats, terminals, worktrees, settings, and actions...'
+      'Search chats, terminals, workspaces, tasks, settings, and actions...'
     )
     await expect(input).toBeVisible()
 
