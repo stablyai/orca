@@ -133,9 +133,17 @@ function QuickTasksSection({
       <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-muted-foreground">
         {icon}
         <span className="flex-1">{label}</span>
-        {loading ? <LoaderCircle className="size-3 animate-spin" /> : null}
+        {loading && count > 0 ? <LoaderCircle className="size-3 animate-spin" /> : null}
       </div>
-      {failed ? (
+      {loading && count === 0 ? (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 px-3 py-6 text-xs text-muted-foreground"
+        >
+          <LoaderCircle className="size-4 animate-spin" />
+          {translate('auto.components.rightSidebar.QuickTasksPanel.loading', 'Loading…')}
+        </div>
+      ) : failed ? (
         <div className="px-3 py-2 text-xs text-muted-foreground">
           {translate(
             'auto.components.rightSidebar.QuickTasksPanel.loadFailed',

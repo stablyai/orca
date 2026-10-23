@@ -18003,7 +18003,8 @@
           "noSource": "Sign in to GitHub or GitLab to see this project’s issues.",
           "emptyReviews": "No open merge requests.",
           "issues": "Issues",
-          "mergeRequests": "MRs"
+          "mergeRequests": "MRs",
+          "loading": "Loading…"
         }
       },
       "link": {
