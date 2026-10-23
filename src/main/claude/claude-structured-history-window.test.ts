@@ -1,6 +1,3 @@
-// The Claude half of restart reconciliation: which transcript records become
-// evidence, and when the read may be called boundary-consistent at all.
-
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,7 +44,6 @@ function read(contents: string, previousLeafUuid: string | null, turnInFlight = 
   })
 }
 
-/** The digest the submission row carries for a plain typed send. */
 function sendFingerprint(text: string): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.send',
@@ -149,7 +145,6 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
   })
 
   it('reports an inconsistent boundary when the anchor is gone from the file', () => {
-    // What a compaction or a fresh session file leaves behind.
     const contents = jsonl([prompt('u-1', null, 'ship it')], 'u-1')
 
     expect(read(contents, 'anchor').boundaryConsistent).toBe(false)
@@ -216,8 +211,6 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
   })
 
   it('keeps the FIRST record for a repeated uuid, as the whole-file index did', () => {
-    // An append-only transcript can repeat a uuid. Preferring the later copy
-    // would silently swap one turn's evidence for another's.
     const contents = jsonl(
       [
         ANCHOR,
@@ -234,8 +227,6 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
   })
 
   it('drops a repeated uuid whose first copy is not a prompt', () => {
-    // The de-dupe runs BEFORE the prompt filter, so a later prompt-shaped copy
-    // cannot promote a uuid the index had already resolved to a non-prompt.
     const contents = jsonl(
       [
         ANCHOR,
@@ -250,8 +241,6 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
   })
 
   it('refuses a malformed line rather than skipping past it into the window', () => {
-    // The branch proof runs first and throws on any unparseable record; the
-    // replay that follows only tolerates them because that pass already ran.
     const contents = jsonl([ANCHOR, prompt('u-1', 'anchor', 'ship it')], 'u-1').replace(
       '{"type":"last-prompt"',
       'not json\n{"type":"last-prompt"'
@@ -282,8 +271,7 @@ describe('a crash between Claude saving a prompt and Orca recording its echo', (
     leafUuid
   })
   const side = (type: string): Row => ({ type, sessionId: PROVIDER_SESSION })
-  // Shaped like a real 2.1.280 transcript: after a turn, Claude's marker names its stop-hook
-  // summary, and a crash mid-turn leaves the next prompt after the marker with no newer marker.
+  // Match CLI 2.1.280: a mid-turn crash leaves a prompt beyond the last stop-hook marker.
   const CRASHED_MID_TURN = [
     side('queue-operation'),
     row('attachment', 'hook-start', null, { attachment: { type: 'hook_success' } }),
@@ -304,7 +292,6 @@ describe('a crash between Claude saving a prompt and Orca recording its echo', (
     .join('\n')
 
   it('reconciles the prompt Claude already holds as accepted, not undelivered', () => {
-    // The durable anchor is Orca's last completed turn: the reply it saw on the live stream.
     const window = read(`${CRASHED_MID_TURN}\n`, 'alpha-reply')
     expect(window).toMatchObject({ boundaryConsistent: true })
     expect(window.items.map((item) => item.providerItemId)).toEqual(['bravo'])

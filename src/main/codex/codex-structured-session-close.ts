@@ -15,7 +15,7 @@ export function handleCodexSessionExit(input: {
   sessionId: string
   connection: CodexAppServerConnection | null
   error: Error
-  /** Set for the end of a close Orca began: by that close, or by the root's own exit report. */
+  /** Includes root exits reported during or after an Orca close attempt. */
   closedByOrca?: true
   prompts?: CodexSession['prompts']
   onEvent?: (event: CodexStructuredSessionEvent) => void
@@ -28,14 +28,14 @@ export function handleCodexSessionExit(input: {
   }
   session.exitObservedAt ??= Date.now()
   session.events?.observeExit?.(session.dispatchEchoes.heldSends(), session.exitObservedAt)
-  // Before the admission check: the child is gone whether or not its end was admitted.
+  // Release waits even if terminal journal rows are refused.
   session.turnOpenWaits.releaseAll()
   const event: StructuredAgentSessionEndedEvent = {
     type: 'ended',
     sessionId: input.sessionId,
-    // The connection reports the exit inside the close it ends; the close's own reason is the why.
+    // Preserve the initiating close reason when its exit arrives.
     reason: ((input.closedByOrca && session.orcaClose?.reason) || input.error).message,
-    // Only the child's own exit blames Codex; a close Orca made, for any reason, is Orca's.
+    // Orca-initiated closes are host faults, regardless of the exit report.
     failure: input.closedByOrca
       ? agentSessionFailureFact('hostFault')
       : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(input.error) }),
@@ -44,9 +44,7 @@ export function handleCodexSessionExit(input: {
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt: session.exitObservedAt
   } as const
-  // A synchronous sink rejection (usually backpressure) leaves the terminal rows to the host's
-  // exit settlement, which writes its own bounded fallback. The exit itself is observed, so the
-  // session ends either way: holding a dead child as unproven over a refused row would strand it.
+  // Refused terminal rows use host settlement fallback; the observed child exit remains proven.
   const admission = session.translator?.handle(event) ?? { accepted: true }
   if (!admission.accepted) {
     input.logger?.warn("Codex's final rows were refused; the host settles the turn instead", {
@@ -56,11 +54,9 @@ export function handleCodexSessionExit(input: {
     })
   }
   session.ended = true
-  // Nothing can echo for this child any more; the journal's pending-submission
-  // recovery is what settles the sends these were armed for.
+  // Journal recovery settles sends that can no longer receive a provider echo.
   session.dispatchEchoes.clear()
   session.backgroundTasks.clear()
-  // Every close path funnels here, so the session's children end with it on each one.
   session.backgroundTasks.publishChildWork()
   session.unbindReadingControl?.()
   input.onEvent?.(event)
@@ -96,14 +92,12 @@ export async function closeCodexPublishedSession(
     sessions.delete(sessionId)
     return true
   }
-  // Sink-failure recovery force-closes the child but must preserve the
-  // observed-exit cause so host lease settlement runs as an unexpected death.
+  // Preserve unexpected-death settlement when sink failure forces a close.
   session.orcaClose ??= {
     requested: options?.requestedClose ?? true,
     reason: options?.unexpectedReason ?? new Error('codex session closed')
   }
-  // Keep the session indexed until the child exit is observed. A timeout or
-  // failed kill must leave the live connection available for a safe retry.
+  // Keep unproven closes indexed for a safe retry.
   const exited = await session.connection.close()
   if (exited !== true) {
     return false

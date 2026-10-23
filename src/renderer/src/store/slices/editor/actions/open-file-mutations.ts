@@ -78,7 +78,7 @@ export function createOpenFileMutations(
       }
     },
 
-    markFileDirty: (fileId, dirty) => {
+    markFileDirty: (fileId, dirty, opts) => {
       const promoted: Tab[] = []
       set((s) => {
         // Why: this fires on every keystroke; rebuilding openFiles unconditionally thrashes subscribers and caused typing lag, so bail when nothing changes.
@@ -87,7 +87,10 @@ export function createOpenFileMutations(
           return s
         }
         // Why: read-only tabs can never become dirty; hard no-op any stray change/save callback that reached here.
-        if (file.readOnly === true || file.csvPreviewOnly === true) {
+        if (
+          (file.readOnly === true || file.csvPreviewOnly === true) &&
+          (dirty || opts?.written !== true)
+        ) {
           return s
         }
         const buffer = editorBufferOf(s, file)

@@ -1,6 +1,3 @@
-// The installed Codex, driven through Orca's own visuals setup in an isolated CODEX_HOME: Codex must
-// list the bundled skill and open the thread with the chat folder beside the user's own writable
-// root. Opt-in (ORCA_REAL_CODEX_CLI_TEST=1); no account is used, nothing reaches a model.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

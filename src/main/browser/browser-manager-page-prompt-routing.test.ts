@@ -109,7 +109,7 @@ describe('browserManager page prompt routing', () => {
       })
     }
     const untrustedFrame = { url: 'https://untrusted.example/ad', isDestroyed: () => false }
-    // After a Cancel the page stays quiet until the user clicks in it again.
+    // Cancel quiets prompts until fresh input arrives.
     const clickInPage = (): void => {
       for (const [event, listener] of guestOnMock.mock.calls) {
         if (event === 'input-event') {
@@ -132,7 +132,7 @@ describe('browserManager page prompt routing', () => {
     expect(rendererSendMock).not.toHaveBeenCalledWith('browser:popup', expect.anything())
     answerLatest(false)
     clickInPage()
-    // A page that withholds its referrer is not credited to the top page.
+    // An absent frame referrer must not be credited to the top-level site.
     windowOpenHandler({
       url: 'mailto:help@example.com',
       referrer: { url: '', policy: 'no-referrer' }
@@ -226,7 +226,7 @@ describe('browserManager page prompt routing', () => {
     webContentsFromIdMock.mockImplementation((id: number) =>
       id === guest.id ? guest : id === rendererWebContentsId ? renderer : null
     )
-    // The webview attaches and starts loading before the renderer registers it.
+    // Guests can start loading before renderer registration.
     browserManager.attachGuestPolicies(webContentsFromIdMock(guest.id))
     const event = { preventDefault: vi.fn() }
     const callback = vi.fn()
@@ -242,7 +242,7 @@ describe('browserManager page prompt routing', () => {
       { isProxy: false, scheme: 'basic', host: 'staging.acme.com', port: 443, realm: 'Staging' },
       callback
     )
-    // Electron must not cancel the challenge while the tab has no window to ask in yet.
+    // Keep the challenge pending until registration supplies a prompt window.
     expect(event.preventDefault).toHaveBeenCalled()
     expect(rendererSendMock).not.toHaveBeenCalledWith(
       'browser:page-prompt-requested',

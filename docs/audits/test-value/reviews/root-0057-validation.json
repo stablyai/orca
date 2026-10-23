@@ -1,0 +1,38 @@
+{
+  "batch": "root-0057",
+  "reviewer": "root",
+  "source_commit": "89b3d382847f10b31a731ebd7e18aad022a4b15a",
+  "reviewed_files": 2,
+  "original_declarations": 13,
+  "explicit_parameter_controls": 2,
+  "case_records": 15,
+  "decisions": {
+    "keep": 15
+  },
+  "production_changes": false,
+  "test_source_changes": [],
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/automation-destination-fencing.test.ts src/cli/handlers/automation-owner-fencing.test.ts",
+      "result": "2 suites / 14 tests passed; original bytes retained",
+      "log": "/tmp/orca-root-0057-original-tests.log"
+    }
+  ],
+  "mutation_controls": [
+    {
+      "mutation": "Return before automation.update when no destination is present",
+      "result": "Both original omission cases failed: toHaveProperty requires a valid object, so missing write is already detected. Proposed extra assertions discarded.",
+      "original_exit_code": 1,
+      "log": "/tmp/orca-root-0057-no-unfenced-write-original.log"
+    }
+  ],
+  "integrity": {
+    "original_and_final_hashes_verified": true,
+    "records_sha256": "0cb953224f5e9ae53f8e696417c9541c266e5888669dd6126db3c6eba3d49f05",
+    "production_sources_restored": true
+  },
+  "limitations": [
+    "Authority/RPC fixtures exercise actual CLI calls and real destination predicates but do not perform a server database write or an SSH connection.",
+    "Folder/worktree resolution branches beyond the selected repo-based cases remain independently pending."
+  ]
+}

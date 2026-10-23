@@ -9,7 +9,6 @@ export function claudeProviderHandleLink(input: {
   leafUuid: string | null
   resumed: boolean
   origin?: 'adopted'
-  /** Set when this session is a rewind's fork of the head it replaces. */
   forkedFromKey?: string
   fence: number
   linkId?: string
@@ -41,8 +40,7 @@ export async function claudeProcessIdentity(
   if (input.pid === undefined) {
     throw new Error('claude app-server started without a pid')
   }
-  // Best-effort: without it a later owner probe is indeterminate, and recovery releases such an
-  // owner without signalling it, so an unreadable start time must not refuse the session.
+  // An unreadable start time leaves recovery unverifiable; it must not prevent startup.
   let processStartTimeMs: number | null = null
   for (
     let attempt = 0;

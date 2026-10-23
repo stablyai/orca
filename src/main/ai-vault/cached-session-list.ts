@@ -32,9 +32,7 @@ import {
   type AiVaultSessionDepth
 } from '../../shared/ai-vault-session-depth'
 
-// Why: ONE module owns the scan cache so the desktop IPC handler AND the runtime
-// RPC method share a single cache instance — opening the desktop panel and the
-// mobile screen for the same scope must not double-scan hundreds of transcripts.
+// Desktop and runtime RPC share this cache to avoid duplicate scans when mobile and desktop open together.
 const AI_VAULT_CACHE_TTL_MS = 60_000
 
 export class AiVaultLocalScanError extends Error {
@@ -46,10 +44,7 @@ export class AiVaultLocalScanError extends Error {
   }
 }
 
-// Why: codex-home + WSL home dirs must be sourced from a serve-mode-reachable
-// seam (the OrcaRuntimeService deps), NOT the window-only registerCoreHandlers
-// path — `orca serve` never runs that path, so sourcing it there would silently
-// drop managed-Codex sessions from remote/SSH results.
+// Configure sources through the runtime service; headless serve never runs window-only IPC registration.
 export type AiVaultSessionSources = {
   getAdditionalCodexHomePaths?: () => readonly string[]
 }
@@ -64,21 +59,14 @@ type CachedAiVaultList = {
 let cachedList: CachedAiVaultList | null = null
 let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
-// Bumped on every invalidation. A scan that started before an invalidation
-// carries the old generation and must not write its (now stale) result back
-// into the cache — otherwise a delete's invalidation is silently undone by an
-// in-flight scan that resolves just after it.
+// Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
 let cacheGeneration = 0
 
 export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
   sources = next
 }
 
-/**
- * The trees a local scan enumerates, resolved fresh because a WSL distro can start
- * or stop between scans. The search index reads the same function, so it walks
- * exactly what the session list walks.
- */
+/** Resolve fresh WSL roots for both listing and indexing; distros can start or stop between scans. */
 export async function localAiVaultScanRoots(): Promise<
   Required<Pick<AiVaultScanOptions, 'additionalCodexSessionsDirs' | 'wslHomeDirs'>> &
     Pick<AiVaultScanOptions, 'executionHostId' | 'wslOpenCodeReaders' | 'claudeProfileProjectsDirs'>
@@ -90,17 +78,15 @@ export async function localAiVaultScanRoots(): Promise<
   return {
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
     wslHomeDirs,
-    // Why: the scan runs in a worker or child process, which has no account router.
+    // Scanner workers have no account router; supply profile roots from this process.
     claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
     wslOpenCodeReaders: await prepareOpenCodeWslReaders(wslHomeDirs),
-    // Why: this scan is always host-local; callers addressing this host by a
-    // runtime id get the result restamped at the RPC edge, never rescanned.
+    // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
     executionHostId: LOCAL_EXECUTION_HOST_ID
   }
 }
 
-/** The extra Codex homes session discovery scans. Anything that decides what a listed row may be
- *  resumed from must read the same set, or a row can be listed and then refuse to resume. */
+/** Resume validation must use the same extra Codex homes that discovery lists. */
 export function configuredAdditionalCodexHomePaths(): readonly string[] {
   return sources.getAdditionalCodexHomePaths?.() ?? []
 }
@@ -109,7 +95,6 @@ export async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}
 ): Promise<AiVaultListResult> {
-  // Scope paths change the result set, so they must be part of the cache key.
   const key = aiVaultLocalScanScopeKey(args)
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = aiVaultLocalScanKey(args)
@@ -117,8 +102,6 @@ export async function listAiVaultSessions(
   if (args?.force === true) {
     clearAiVaultBackgroundRestartCircuit()
   }
-  // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
-  // transcripts; explicit refreshes bypass the cache and preempt stale scans.
   if (
     args?.force !== true &&
     cachedList?.key === key &&
@@ -127,9 +110,7 @@ export async function listAiVaultSessions(
   ) {
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
-  // Captured here, not inside start(): the coordinator defers start() by a
-  // microtask, so an invalidation landing in that gap would otherwise be read
-  // as having happened before this scan and leave the stale result cacheable.
+  // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
   const startGeneration = cacheGeneration
   let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
@@ -160,9 +141,7 @@ export async function listAiVaultSessions(
         scanProgress
       )
       const result = { ...attachAiVaultScopeCwdAliases(scanned, scope), scanId }
-      // A delete (or other invalidation) landed while this scan was running:
-      // its result predates the delete, so caching it would resurrect the
-      // deleted session for the TTL. Return it to this caller but don't cache.
+      // Return pre-invalidation results to their caller, but never repopulate the cache with them.
       if (!scanSignal.aborted && startGeneration === cacheGeneration) {
         const current = cachedList
         if (
@@ -184,34 +163,24 @@ export async function listAiVaultSessions(
   })
 }
 
-// Exported for the subagent-transcript IPC path, which validates
-// renderer-supplied paths against the same WSL-aware Claude roots the scan uses.
+// Subagent transcript validation shares these WSL-aware roots with discovery.
 export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
-  // No installed distro can be running: spares WSL-less hosts the running-distro probe.
-  // Cache read only: a rejected wsl.exe probe yields [] without caching, so it must not
-  // narrow the WSL roots delete/subagent validation trusts; and probing here would let this
-  // listing be the first to cache [] and flip a configured distro to "missing".
+  // Trust only cached absence; a failed or new probe must not narrow WSL roots used by deletion and subagent validation.
   if (hasCachedWslDistros() && getCachedWslDistros()?.length === 0) {
     return []
   }
   return listRunningWslHomeDirsAsync()
 }
 
-// Drops the scan-result cache after a session is deleted so a non-force
-// list call within the TTL can't still serve the trashed session. Bumping the
-// generation also disarms any scan already in flight, so a scan that started
-// before this call cannot write its pre-delete result back into the cache.
-// Scan discovery itself walks disk first (session-scanner.ts), so a deleted
-// file is never rediscovered — this only guards the cached RESULT.
+// Invalidate cached results and disarm in-flight cache writes after deletion.
 export function invalidateAiVaultSessionListCache(): void {
   cacheGeneration++
   cachedList = null
 }
 
-// Why: tests reset module-level cache/source state between cases.
 export function resetAiVaultSessionListCacheForTests(): void {
   invalidateAiVaultSessionListCache()
   scanCoordinator = new AiVaultScanCoordinator()

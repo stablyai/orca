@@ -21,7 +21,6 @@ describe('legacy Codex managed profile block', () => {
     expect(next).not.toMatch(/[^\r]\n/)
   })
 
-  // CodeRabbit on #20148: a stray marker above a complete block must not hide it.
   it('removes a complete block that sits below an orphaned marker', () => {
     const content = `${START}\nstray = 1\n\n${START}\n[[hooks]]\nx = 1\n${END}\n\ntail = true\n`
     const next = stripLegacyManagedProfileBlock(content)
@@ -30,7 +29,6 @@ describe('legacy Codex managed profile block', () => {
     expect(next).toContain('tail = true')
   })
 
-  // #18861: the old strip ran to EOF whenever the end marker was gone.
   it('fails closed when the end marker was hand-deleted', () => {
     const content = `model = "o3"\n${START}\n[[hooks]]\nx = 1\n\n[user.table]\nkeep = "mine"\n`
     expect(stripLegacyManagedProfileBlock(content)).toBe(content)

@@ -113,15 +113,8 @@ export async function prepareCodexAccountRestartResume(args: {
 }
 
 /**
- * Repins a per-account resume to the selected account's home, or null to keep
- * the session's own home.
- *
- * Why: the session bridge hardlinks each rollout into every per-account home,
- * and vault dedup keeps the lexicographically-smallest alias — which names an
- * arbitrary account. When the selected account's home holds the same rollout
- * at the same sessions-relative path, resume must run under that account's
- * credentials. Every uncertain branch (no selection, unbridged rollout, odd
- * layout) declines, so resume degrades to today's behavior instead of failing.
+ * Vault dedup may choose any account's bridge alias; prefer selected credentials when its rollout exists.
+ * Return null for unbridged/unsupported layouts; transient read failures must not switch credentials.
  */
 async function resolveSelectedAccountCodexHomeForResume(
   args: AiVaultPrepareSessionResumeArgs,
@@ -147,17 +140,14 @@ async function resolveSelectedAccountCodexHomeForResume(
   const candidatePath = join(selectedCodexHome, 'sessions', relativePath)
   try {
     const candidateStat = await lstat(candidatePath)
-    // Why: the bridge is async, so an unbridged rollout is a real state — decline rather than pin a home codex cannot resume from.
+    // The async bridge may not have populated this account yet.
     return candidateStat.isFile() && !candidateStat.isSymbolicLink() ? selectedCodexHome : null
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return null
     }
-    // Why: a blanket catch here declined the SELECTED account on a briefly
-    // locked file and kept the source per-account home, resuming under another
-    // account's credentials while the UI still showed the selected one. Only a
-    // definitive absence means "not bridged here" (STA-4607).
+    // STA-4607: only definitive absence permits fallback; transient errors must not switch accounts.
     throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
   }
 }

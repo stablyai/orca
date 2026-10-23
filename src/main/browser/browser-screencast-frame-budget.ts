@@ -1,11 +1,6 @@
 import type { BrowserScreencastFrameBudget } from './browser-screencast-stream-types'
 
-// Why: one CDP screencast feeds every subscriber of a page, so the shared budget has to
-// satisfy the most constrained viewer. Size/quality go to the minimum because an
-// over-budget frame is refused outright by the paired-runtime binary limit, while a
-// roomier viewer only loses sharpness. everyNthFrame goes the other way: skipping
-// captures can lose a static page's final frame, so the least-skipping value wins and
-// minFrameIntervalMs (which retains the newest frame) carries the throttling.
+// Respect the smallest viewer budget; throttle with the pacer to retain static pages' final frames.
 export function mergeBrowserScreencastFrameBudgets(
   budgets: readonly BrowserScreencastFrameBudget[]
 ): BrowserScreencastFrameBudget | null {

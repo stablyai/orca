@@ -316,9 +316,9 @@ export function NativeChatComposerField({
                 compositionBaseRef.current = textareaRef.current!.value
                 imeEnterGesture.setComposing(true)
               }}
-              onCompositionEnd={() => {
+              onCompositionEnd={(event) => {
                 const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.setComposing(false)
+                imeEnterGesture.setComposing(false, event.data)
                 if (compositionWasActive) {
                   settleImeValue(textareaRef.current!)
                 }

@@ -13,8 +13,7 @@ function fakeGuest(): WebContents {
 }
 
 type FrameModel = {
-  // Frame id focused in each document: '' is the root, a session id is a cross-site frame's
-  // document, and 'frame:<id>' is a same-site frame's document reached through an isolated world.
+  // Document keys: '' = root, session ID = cross-site frame, 'frame:<id>' = same-site context.
   focusedFrameBySession: Record<string, string | null>
   crossSiteTargets: string[]
   sessionForTarget: Record<string, string>

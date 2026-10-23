@@ -13,12 +13,16 @@ const { detectShallowWatchDeliveryMock, statMock, subscribeMock, watchMock, writ
 vi.mock('node:fs', () => ({
   mkdtempSync: vi.fn(() => '/tmp/orca-watcher-canary-test'),
   rmSync: vi.fn(),
+  // Shallow roots and macOS metadata files are stat-ed before watching.
+  statSync: vi.fn(() => ({ isDirectory: () => true, dev: 1n, ino: 1n, birthtimeNs: 0n })),
   watch: watchMock,
   writeFileSync: writeFileSyncMock
 }))
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
 vi.mock('./shallow-watch-delivery-probe', () => ({
-  detectShallowWatchDelivery: detectShallowWatchDeliveryMock
+  detectShallowWatchDelivery: detectShallowWatchDeliveryMock,
+  hasShallowWatchDelivered: () => false,
+  noteShallowWatchDelivered: vi.fn()
 }))
 vi.mock('@parcel/watcher', () => ({ subscribe: subscribeMock }))
 
@@ -27,8 +31,12 @@ describe('parcel watcher process canary', () => {
   let originalExitListeners: NodeJS.ExitListener[]
   let originalDisconnectListeners: NodeJS.DisconnectListener[]
   let originalSend: typeof process.send
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
   beforeEach(() => {
+    // Why: crawl-gating differs on macOS (no crawl in subscribe); pin a crawling backend.
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    detectShallowWatchDeliveryMock.mockReset()
     vi.useFakeTimers()
     vi.resetModules()
     subscribeMock.mockReset()
@@ -58,6 +66,7 @@ describe('parcel watcher process canary', () => {
       }
     }
     process.send = originalSend
+    Object.defineProperty(process, 'platform', originalPlatform)
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -136,8 +145,14 @@ describe('parcel watcher process canary', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(subscribeMock).toHaveBeenCalledTimes(1)
-    watcherCallbacks.get('/repo/.git')?.('change', 'HEAD')
-    await vi.advanceTimersByTimeAsync(0)
+    // macOS binds the metadata file itself; other platforms bind the directory.
+    if (process.platform === 'darwin') {
+      watcherCallbacks.get('/repo/.git/HEAD')?.('change', 'HEAD')
+    } else {
+      watcherCallbacks.get('/repo/.git')?.('change', 'HEAD')
+    }
+    // macOS confirms the event with a stat after a short coalescing window.
+    await vi.advanceTimersByTimeAsync(200)
     expect(sendMock).toHaveBeenCalledWith(
       {
         op: 'events',
@@ -162,6 +177,84 @@ describe('parcel watcher process canary', () => {
 
     expect(writeFileSyncMock).not.toHaveBeenCalled()
     expect(exitSpy).not.toHaveBeenCalled()
+  })
+
+  it('restarts on macOS when a native subscribe deadlocks while pending', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    detectShallowWatchDeliveryMock.mockResolvedValue(true)
+    let independentListener: (() => void) | undefined
+    watchMock.mockImplementation((_dir: string, _opts: unknown, listener: () => void) => {
+      independentListener = listener
+      return Object.assign(new EventEmitter(), { close: () => undefined })
+    })
+    writeFileSyncMock.mockImplementation(() => independentListener?.())
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockReturnValueOnce(new Promise(() => undefined))
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(exitSpy).toHaveBeenCalledWith(2)
+  })
+
+  it('keeps the child when another native subscription delivers during the probe', async () => {
+    let independentListener: (() => void) | undefined
+    let repoCallback: ((err: Error | null, events: unknown[]) => void) | undefined
+    watchMock.mockImplementation((_dir: string, _opts: unknown, listener: () => void) => {
+      independentListener = listener
+      return Object.assign(new EventEmitter(), { close: () => undefined })
+    })
+    writeFileSyncMock.mockImplementation((path: string) => {
+      independentListener?.()
+      if (path.endsWith('canary-probe.txt')) {
+        repoCallback?.(null, [])
+      }
+    })
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockImplementationOnce(async (_dir, callback) => {
+        repoCallback = callback
+        return { unsubscribe: vi.fn() }
+      })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
+
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(exitSpy).not.toHaveBeenCalled()
+  })
+
+  it('reports canary health transitions to the host', async () => {
+    let canaryCallback: ((err: Error | null) => void) | undefined
+    subscribeMock
+      .mockImplementationOnce(async (_dir, callback) => {
+        canaryCallback = callback
+        return { unsubscribe: vi.fn() }
+      })
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+    writeFileSyncMock.mockImplementation(() => canaryCallback?.(null))
+    const sendMock = vi.fn()
+    process.send = sendMock
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} }, undefined)
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    const healthMessages = sendMock.mock.calls.filter(
+      ([message]) => message.op === 'delivery-health'
+    )
+    expect(healthMessages.map(([message]) => message)).toEqual([
+      { op: 'delivery-health', state: 'healthy' }
+    ])
   })
 
   it('invalidates an outstanding probe when another subscription starts crawling', async () => {
@@ -202,7 +295,7 @@ describe('parcel watcher process canary', () => {
     process.emit('message', { op: 'unsubscribe', id: 1 }, undefined)
     await vi.advanceTimersByTimeAsync(30_000)
 
-    expect(writeFileSyncMock).toHaveBeenCalledTimes(3)
+    expect(writeFileSyncMock).toHaveBeenCalledTimes(2)
     expect(exitSpy).toHaveBeenCalledWith(2)
   })
 
@@ -422,7 +515,7 @@ describe('parcel watcher process canary', () => {
 
     await vi.advanceTimersByTimeAsync(30_000)
 
-    expect(writeFileSyncMock).toHaveBeenCalledTimes(3)
+    expect(writeFileSyncMock).toHaveBeenCalledTimes(2)
     expect(exitSpy).toHaveBeenCalledWith(2)
   })
 

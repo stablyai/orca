@@ -2,9 +2,6 @@ import { Buffer } from 'node:buffer'
 
 export const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 
-// Two interchangeable Bitbucket Cloud auth shapes: a single access token (Bearer)
-// or an email + API token pair (HTTP Basic). Either satisfies `hasAuth`, and both
-// may come from env vars or the in-app credential store.
 export type BitbucketAuthConfig = {
   baseUrl: string
   accessToken: string | null

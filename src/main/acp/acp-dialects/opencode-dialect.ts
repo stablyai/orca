@@ -2,8 +2,7 @@ import { z } from 'zod'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 
-// OpenCode reports a command's output and exit code under `rawOutput.metadata`; the shared shape
-// is `stdout` and `exitCode`.
+// Normalize rawOutput.metadata to the shared stdout/exitCode fields.
 const commandRawOutputSchema = z.looseObject({
   output: z.unknown().optional(),
   metadata: z

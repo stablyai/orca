@@ -76,9 +76,7 @@ function readImportedScope(
   return importedDomainScope(scopeDomains)
 }
 
-// Why (STA-4797): the staged image is a copy of the live jar that may be replayed on the next cold
-// start. Record the exact normalized import scope inside it so replay can merge only these rows into
-// the then-current jar instead of replacing unrelated sessions with an older snapshot.
+// Record exact import scope so replay preserves unrelated sessions created after staging.
 export function prepareStagedCookiesForImport(
   stagingDb: DatabaseSync,
   importScope: ImportedDomainScope
@@ -127,13 +125,7 @@ export function removeCookieImportScopeMarker(liveCookiesPath: string): void {
   }
 }
 
-/**
- * Applies a scoped staged import and returns false for a legacy unmarked whole-image replay.
- *
- * Why: one transaction covers every scoped delete and insert. A failure or crash therefore leaves
- * the current live jar unchanged; after a committed crash, replay is idempotent and still cannot
- * touch an unrelated host key.
- */
+/** Replay scoped deletes and inserts atomically; false identifies a legacy unmarked image. */
 export function applyScopedStagedCookieImport(
   liveCookiesPath: string,
   stagedCookiesPath: string
@@ -159,8 +151,7 @@ export function applyScopedStagedCookieImport(
     ) {
       throw new Error('Staged cookie import has an incompatible cookie schema')
     }
-    // Why: partial column intersections can silently erase a partition key or fill a newly required
-    // column with the wrong default after an app update. Exact schema parity is the safe boundary.
+    // Require schema parity to avoid dropping partition keys or guessing new column defaults.
     const columnList = liveColumns.map(quotedIdentifier).join(', ')
     database.exec('BEGIN IMMEDIATE')
     transactionOpen = true
@@ -180,8 +171,7 @@ export function applyScopedStagedCookieImport(
       deleteLiveHost.run(hostKey)
       insertStagedHost.run(hostKey)
     }
-    // A missing-live replay may have copied a full marked image on an earlier interrupted start.
-    // Never leave that marker in Chromium's live DB where a downgrade could propagate it.
+    // Strip any replay marker copied by an interrupted startup before a downgrade can propagate it.
     database.exec(`DROP TABLE IF EXISTS main.${quotedIdentifier(IMPORT_SCOPE_TABLE)}`)
     database.exec('COMMIT')
     transactionOpen = false

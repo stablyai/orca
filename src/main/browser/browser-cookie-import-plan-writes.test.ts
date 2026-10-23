@@ -49,9 +49,7 @@ describe('planImportWrites', () => {
     expect([...plan.skippedFamilies]).toEqual(['mixed.example'])
   })
 
-  // Why (STA-4300 §4.1): this is the ONLY property that distinguishes two passes from one. A
-  // per-row guard emits the readable sibling before it can know the family will be skipped, so it
-  // passes unreadable-first and fails readable-first. Both orders must produce the same plan.
+  // Both input orders must suppress the whole family, including earlier readable rows.
   it.each([
     [
       'readable before unreadable',
@@ -76,9 +74,6 @@ describe('planImportWrites', () => {
   })
 
   it('closes the family at the registrable boundary, not the exact domain', () => {
-    // Why (§2b): importedDomainScopes expands an imported domain into its descendant roots, so a
-    // readable cookie on mixed.example pulls sub.mixed.example into the removal scope. Preserving
-    // only the exact skipped domain would still erase the sibling's live session.
     const plan = planImportWrites([
       cookie('deep.sub.mixed.example', 'unreadable', UNREADABLE),
       cookie('.mixed.example', 'apex', READABLE),
@@ -90,9 +85,6 @@ describe('planImportWrites', () => {
   })
 
   it('flags a skip whose family cannot be named so the caller can refuse before mutating', () => {
-    // Why (§4.3c): a family we cannot name is one we cannot exclude from the removal plan, and
-    // clearing a family we cannot protect is exactly the P0. Refusal is the caller's job; the
-    // planner's job is to make the condition impossible to miss.
     const plan = planImportWrites([cookie('com', 'bare-suffix', UNREADABLE)])
 
     expect(plan.hasUnrepresentableSkip).toBe(true)

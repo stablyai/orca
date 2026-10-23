@@ -96,7 +96,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     }
   })
 
-  // Why: the poll re-arms off the object it just stored; if that identity ever drifts it stops after the first change.
+  // Poll rearming depends on retaining the identity of the stored roster object.
   it('keeps polling across successive roster changes', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
     dirs.push(dir)
@@ -153,7 +153,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     }
   })
 
-  // Why: a nested non-codex CLI inherits the pane's ORCA_PANE_KEY, so its hook must not tear down the codex poll.
+  // Nested CLIs inherit the pane key and must not tear down the owning Codex poll.
   it('keeps polling when a nested non-codex hook lands on the same pane', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
     dirs.push(dir)
@@ -189,7 +189,6 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         transcript_path: join(dir, 'nested-copilot-transcript.jsonl')
       })
       expect(nested.status).toBe(204)
-      // The nested completion is suppressed, so the pane is still the same live codex turn.
       expect(server.getStatusSnapshot()[0]?.agentType).toBe('codex')
       expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
 

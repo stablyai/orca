@@ -46,7 +46,7 @@ type CommandBuilders = {
   remote: (scriptPath: string) => string[]
 }
 
-// Why: Gemini/Droid/Command Code keep their thin builders private; exercise the wrappers they call.
+// Private Gemini/Droid/Command Code builders delegate to these wrappers.
 const standardCommands: CommandBuilders = {
   local: (path) => [
     process.platform === 'win32' ? wrapWindowsHookCommand(path) : wrapPosixHookCommand(path)
@@ -170,7 +170,6 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     'grok',
     {
       local: (path) => [getGrokManagedCommand(path)],
-      // Why: grok-hook-remote-install.ts calls this wrapper directly, with the pane guard.
       remote: (path) => [wrapPosixHookCommand(path, {}, { requiredEnvVar: 'ORCA_PANE_KEY' })]
     }
   ],
@@ -220,8 +219,7 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     }
   ],
   [
-    // Why bare: jcode parses the hook command line shell-style but executes it
-    // directly, so a `sh -c`/`if [ -f … ]` wrapper would be run as the program name.
+    // jcode directly executes parsed argv; shell wrappers would become an invalid program name.
     'jcode',
     {
       local: (path) => [getJcodeManagedCommand(path)],
@@ -237,7 +235,6 @@ const buildersByAgent = new Map<string, CommandBuilders>([
   ]
 ])
 
-// Why: as in MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS, native plugin source has no shell command to scan.
 const exemptionsByAgent = new Map([
   ['amp', 'Native TypeScript plugin source; no shell hook command'],
   ['hermes', 'Native Python plugin source; no shell hook command']
@@ -248,7 +245,6 @@ describe('managed hook command contract', () => {
     ['local', MANAGED_AGENT_HOOK_INSTALLERS.map(([agent]) => agent)],
     ['remote', REMOTE_MANAGED_HOOK_INSTALLER_AGENTS]
   ] as const)('covers the %s installer registry in both directions', (_target, agents) => {
-    // Why: mirror the remote installer coverage ratchet (#7253); a new provider cannot opt out silently.
     for (const agent of agents) {
       expect(
         Number(buildersByAgent.has(agent)) + Number(exemptionsByAgent.has(agent)),

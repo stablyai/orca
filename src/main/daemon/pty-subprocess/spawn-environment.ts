@@ -53,7 +53,7 @@ function composeGuardedDaemonGitConfigEnv(
   if (policy !== 'guard' && launchAgent === undefined) {
     return
   }
-  // Why: the daemon can outlive Electron, so its process.env is the authoritative inherited config; append only the guard.
+  // Preserve the long-lived daemon’s inherited Git config while appending the guard.
   Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
 }
 
@@ -67,7 +67,7 @@ function deleteRequestedDaemonEnvKeys(
       delete env[key]
     }
   }
-  // Why: persistent daemon state can differ from Electron; delete CODEX_HOME only when its Orca overlay owns it.
+  // Persistent daemon state may differ from Electron; remove CODEX_HOME only if its Orca overlay owns it.
   const deleteOrcaOwnedCodexHome =
     keys?.includes('ORCA_CODEX_HOME') === true &&
     env.ORCA_CODEX_HOME !== undefined &&
@@ -119,7 +119,7 @@ function collapseWindowsPathEnvKeys(
   if (pathKeys.length < 2) {
     return
   }
-  // Why: a one-key main patch is authoritative; zero or two keys came from inherited state.
+  // A single explicit PATH spelling is authoritative; otherwise preserve inherited keys.
   const requestedKeys = requestedEnv
     ? Object.keys(requestedEnv).filter((key) => WINDOWS_PATH_ENV_KEY_RE.test(key))
     : []
@@ -137,7 +137,6 @@ function collapseWindowsPathEnvKeys(
   }
 }
 
-/** Promotes the agent-teams shim path ahead of inherited PATH entries. */
 function promoteAgentTeamsShimPath(
   env: Record<string, string>,
   requestedPath: string | undefined
@@ -165,7 +164,7 @@ function removeInheritedDevAgentHookEndpoint(
   explicitEnv: Record<string, string> | undefined
 ): void {
   if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development' && !explicitEnv.ORCA_AGENT_HOOK_ENDPOINT) {
-    // Why: strip only stale inherited endpoints; a fresh explicit one is needed by hooks that scrub token-like env vars before exec.
+    // Preserve explicit endpoints used by hooks that scrub token-like environment variables.
     delete env.ORCA_AGENT_HOOK_ENDPOINT
   }
 }
@@ -205,8 +204,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeAppImageRuntimeEnv(env)
   removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
-  // Why last: the aliases mirror pane identity AFTER every strip above has settled, so an
-  // alias can never outlive the value it mirrors.
+  // Mirror pane identity only after stripping, so aliases cannot retain removed ownership.
   applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'
   return env

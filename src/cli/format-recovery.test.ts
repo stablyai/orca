@@ -120,7 +120,7 @@ describe('worktree selector recovery', () => {
         error: {
           code: 'selector_not_found',
           message: 'selector_not_found',
-          // The mutation-recovery layer already attached its request id.
+          // Preserve the request ID already attached by mutation recovery.
           data: { orchestrationRequestId: 'req_abc', nextSteps: ['Run request-show first.'] }
         },
         _meta: { runtimeId: 'runtime_local' }
@@ -218,7 +218,7 @@ describe('CLI error recovery', () => {
   })
 
   it('tells an older server to reprovision when its computer sidecar is missing', () => {
-    // An older orcad answers with the generic provider steps, which never name the server install.
+    // Older servers return generic steps without naming the server installation.
     const error = new RuntimeRpcFailureError({
       id: 'req_sidecar_exit',
       ok: false,

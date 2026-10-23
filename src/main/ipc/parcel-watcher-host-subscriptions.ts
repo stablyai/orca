@@ -25,7 +25,7 @@ const hostSubscriptions = new WeakMap<
 export function handleWatcherHostMessage(
   message: Exclude<
     WatcherToHostMessage,
-    { op: 'subscribe-started' } | { op: 'cancel-requires-restart' }
+    { op: 'subscribe-started' } | { op: 'cancel-requires-restart' } | { op: 'delivery-health' }
   >,
   records: Map<number, WatcherProcessSubscriptionRecord>,
   pendingUnsubscribes: Map<number, PendingWatcherUnsubscribe>,

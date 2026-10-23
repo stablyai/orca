@@ -1,0 +1,293 @@
+{
+  "batch": "root-0070",
+  "reviewer": "root",
+  "source_commit": "3afac4f41829c86da99f6268c5676c0533ad2f32",
+  "reviewed_files": 4,
+  "original_declarations": 32,
+  "case_records": 32,
+  "explicit_parameter_rows": 2,
+  "passing_runtime_cases": 33,
+  "decisions": {
+    "keep": 21,
+    "fix": 11
+  },
+  "production_changes": false,
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration/mutation-request.test.ts src/cli/handlers/orchestration/terminal-identity-codex-filtered.test.ts src/cli/handlers/orchestration/worker-list-run-scope.test.ts src/cli/handlers/orchestration/worker-output.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0070-baseline-tests.json",
+      "result": "passed",
+      "exit_code": 0,
+      "report": "/tmp/orca-root-0070-baseline-tests.json",
+      "report_sha256": "4893482a99964b988e57cb9118e9ea0d4d23347352e9eb4c23fd524b65a82bae",
+      "log": "/tmp/orca-root-0070-baseline-tests.log",
+      "log_sha256": "3166744cfffd99fd324893f79367d6f366d8e8b85ad71285b0fbb058667f8bb0",
+      "passing_runtime_cases": 33,
+      "evidence_phase": "original baseline"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/orchestration/mutation-request.test.ts src/cli/handlers/orchestration/terminal-identity-codex-filtered.test.ts src/cli/handlers/orchestration/worker-list-run-scope.test.ts src/cli/handlers/orchestration/worker-output.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0070-reviewed-tests.json",
+      "result": "passed",
+      "exit_code": 0,
+      "report": "/tmp/orca-root-0070-reviewed-tests.json",
+      "report_sha256": "3e39ee02080236f14752d0b147e306589f8a82a89a8405797c86e47e786f4fb1",
+      "log": "/tmp/orca-root-0070-reviewed-tests.log",
+      "log_sha256": "5c25aa59bd4ecdac9cf9dc70df89db47f0c77ff1f3a1a2ea07c681ed7d474ba4",
+      "passing_runtime_cases": 33,
+      "evidence_phase": "reviewed bytes, restored identically after mutation"
+    },
+    {
+      "command": "pnpm exec oxlint <four reviewed paths>",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0070-lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "pnpm exec oxfmt --check <four reviewed paths>",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0070-format.log",
+      "log_sha256": "35ee3988aac8bc6d864d11c4439e914cb311b470610a854a7fc0436d2abcdf6b"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0070-typecheck.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc"
+    }
+  ],
+  "mutation": {
+    "batch": "root-0070-retry-budget-opt-in",
+    "defect": "retry-budget",
+    "production_path": "src/cli/handlers/orchestration/mutation-request.ts",
+    "original_source_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408",
+    "mutated_source_sha256": "cd3fd5b5073716a41a915aa84d727e5885d3af2d424774109ed50d1ccb2208d9",
+    "restored_source_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408",
+    "original_test_sha256": "cb8429bd9eee1b442e991dfc3a7ffd0ae9d7572a8822d70d92c3eb963aa32f76",
+    "reviewed_test_sha256": "3390a87bda316491b8dbbe706a0e6bf49a5fd5c11acb99719e34be167f147645",
+    "entire_selected_suite_executed_each_phase": true,
+    "results": {
+      "original-control": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration/mutation-request.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0070-retry-budget-opt-in-original-control.json"
+        ],
+        "exit_code": 0,
+        "passed": 7,
+        "failed": 0,
+        "failures": [],
+        "report": "/tmp/orca-root-0070-retry-budget-opt-in-original-control.json",
+        "report_sha256": "8c3f1f748e9a907504a310492117fb0df2a854aea6ff3b2249a7dd9250cf6668",
+        "log": "/tmp/orca-root-0070-retry-budget-opt-in-original-control.log",
+        "log_sha256": "e141486f5a1cbdae5c1e44812f164c90aa1886c105944d8947ac8b9635157580",
+        "test_sha256": "cb8429bd9eee1b442e991dfc3a7ffd0ae9d7572a8822d70d92c3eb963aa32f76",
+        "production_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408"
+      },
+      "original-retry-budget-mutant": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration/mutation-request.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0070-retry-budget-opt-in-original-retry-budget-mutant.json"
+        ],
+        "exit_code": 0,
+        "passed": 7,
+        "failed": 0,
+        "failures": [],
+        "report": "/tmp/orca-root-0070-retry-budget-opt-in-original-retry-budget-mutant.json",
+        "report_sha256": "a3c022fcf046dd1f72e6894fca667d61f3b5af81dc4098aecbcf39857ac35759",
+        "log": "/tmp/orca-root-0070-retry-budget-opt-in-original-retry-budget-mutant.log",
+        "log_sha256": "0e65afbe4f9ebf93c87e5f682c23ec384ed7722071ab94e9aa03fbaf66657a23",
+        "test_sha256": "cb8429bd9eee1b442e991dfc3a7ffd0ae9d7572a8822d70d92c3eb963aa32f76",
+        "production_sha256": "cd3fd5b5073716a41a915aa84d727e5885d3af2d424774109ed50d1ccb2208d9"
+      },
+      "reviewed-retry-budget-mutant": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration/mutation-request.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0070-retry-budget-opt-in-reviewed-retry-budget-mutant.json"
+        ],
+        "exit_code": 1,
+        "passed": 6,
+        "failed": 1,
+        "failures": [
+          {
+            "title": "gives up after about two minutes and prints the recovery command with the same id",
+            "messages": [
+              "Error: mutation kept retrying beyond its two-minute budget\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/orchestration/mutation-request.test.ts:164:13\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+            ]
+          }
+        ],
+        "report": "/tmp/orca-root-0070-retry-budget-opt-in-reviewed-retry-budget-mutant.json",
+        "report_sha256": "a4d7746b8992249e83fc84ee71fd5b1023af3d1aa4f7585c40aedf22886898b5",
+        "log": "/tmp/orca-root-0070-retry-budget-opt-in-reviewed-retry-budget-mutant.log",
+        "log_sha256": "5c94f086e932b972ab4db408a82fe4bcc2369378d17c58507f9f1318addcb983",
+        "test_sha256": "3390a87bda316491b8dbbe706a0e6bf49a5fd5c11acb99719e34be167f147645",
+        "production_sha256": "cd3fd5b5073716a41a915aa84d727e5885d3af2d424774109ed50d1ccb2208d9"
+      },
+      "reviewed-restored": {
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/orchestration/mutation-request.test.ts",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0070-retry-budget-opt-in-reviewed-restored.json"
+        ],
+        "exit_code": 0,
+        "passed": 7,
+        "failed": 0,
+        "failures": [],
+        "report": "/tmp/orca-root-0070-retry-budget-opt-in-reviewed-restored.json",
+        "report_sha256": "e11d71b9b13c0f3917b2dd067dd8ea8d5a1431180fcdec6d77ec1ff138ca49d6",
+        "log": "/tmp/orca-root-0070-retry-budget-opt-in-reviewed-restored.log",
+        "log_sha256": "a47249720bdf527cce141af98de7aeb7d63d52cb22b5b2fce5b18e45783ec62c",
+        "test_sha256": "3390a87bda316491b8dbbe706a0e6bf49a5fd5c11acb99719e34be167f147645",
+        "production_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408"
+      }
+    }
+  },
+  "supplemental_rejected_mutation": {
+    "reason": "Initial deadline extension also affected opt-out calls and was already caught by original no-opt-in coverage. Retained as historical evidence; refined opted-in-only extension isolates the reviewed budget gap.",
+    "evidence": {
+      "batch": "root-0070-retry-budget",
+      "defect": "retry-budget",
+      "production_path": "src/cli/handlers/orchestration/mutation-request.ts",
+      "original_source_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408",
+      "mutated_source_sha256": "28fa1f600fbfc761cdb04f7b2001252aa578571cdc1ba0a622f8897e2813700e",
+      "restored_source_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408",
+      "original_test_sha256": "cb8429bd9eee1b442e991dfc3a7ffd0ae9d7572a8822d70d92c3eb963aa32f76",
+      "reviewed_test_sha256": "3390a87bda316491b8dbbe706a0e6bf49a5fd5c11acb99719e34be167f147645",
+      "entire_selected_suite_executed_each_phase": true,
+      "results": {
+        "original-control": {
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/orchestration/mutation-request.test.ts",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0070-retry-budget-original-control.json"
+          ],
+          "exit_code": 0,
+          "passed": 7,
+          "failed": 0,
+          "failures": [],
+          "report": "/tmp/orca-root-0070-retry-budget-original-control.json",
+          "report_sha256": "f28d1bddbf8b1da7560c72f776e766b888a0e398aa4767c019ff5a5df7b04694",
+          "log": "/tmp/orca-root-0070-retry-budget-original-control.log",
+          "log_sha256": "fae8c73f9d4a021cfb2d4fb2631b6173018775a87b8f234f8842441e6b071c7a",
+          "test_sha256": "cb8429bd9eee1b442e991dfc3a7ffd0ae9d7572a8822d70d92c3eb963aa32f76",
+          "production_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408"
+        },
+        "original-retry-budget-mutant": {
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/orchestration/mutation-request.test.ts",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0070-retry-budget-original-retry-budget-mutant.json"
+          ],
+          "exit_code": 1,
+          "passed": 6,
+          "failed": 1,
+          "failures": [
+            {
+              "title": "does not retry mutations that did not opt in",
+              "messages": [
+                "AssertionError: expected [ undefined, undefined, \u2026(3) ] to deeply equal [ undefined ]\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/orchestration/mutation-request.test.ts:119:24\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ],
+          "report": "/tmp/orca-root-0070-retry-budget-original-retry-budget-mutant.json",
+          "report_sha256": "2c02df0a4e4f8cbff67cbd7d506f5ad3f332b65f23a5d70c21ff07ddd3c69f66",
+          "log": "/tmp/orca-root-0070-retry-budget-original-retry-budget-mutant.log",
+          "log_sha256": "9ffcdb1d36b1763177d4d1972754be233165be754bfa239d87436371385d4f42",
+          "test_sha256": "cb8429bd9eee1b442e991dfc3a7ffd0ae9d7572a8822d70d92c3eb963aa32f76",
+          "production_sha256": "28fa1f600fbfc761cdb04f7b2001252aa578571cdc1ba0a622f8897e2813700e"
+        },
+        "reviewed-retry-budget-mutant": {
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/orchestration/mutation-request.test.ts",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0070-retry-budget-reviewed-retry-budget-mutant.json"
+          ],
+          "exit_code": 1,
+          "passed": 5,
+          "failed": 2,
+          "failures": [
+            {
+              "title": "does not retry mutations that did not opt in",
+              "messages": [
+                "AssertionError: expected [ undefined, undefined, \u2026(3) ] to deeply equal [ undefined ]\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/orchestration/mutation-request.test.ts:119:24\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            },
+            {
+              "title": "gives up after about two minutes and prints the recovery command with the same id",
+              "messages": [
+                "Error: mutation kept retrying beyond its two-minute budget\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-7/src/cli/handlers/orchestration/mutation-request.test.ts:164:13\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ],
+          "report": "/tmp/orca-root-0070-retry-budget-reviewed-retry-budget-mutant.json",
+          "report_sha256": "4a19ccfd1773b24ad52f24caa3ce788cf93226b850c65166d4054b010069e1e4",
+          "log": "/tmp/orca-root-0070-retry-budget-reviewed-retry-budget-mutant.log",
+          "log_sha256": "0eac7205152727e109e11c3a2523c33a56c88bb623dc253e837f9012e1e8298d",
+          "test_sha256": "3390a87bda316491b8dbbe706a0e6bf49a5fd5c11acb99719e34be167f147645",
+          "production_sha256": "28fa1f600fbfc761cdb04f7b2001252aa578571cdc1ba0a622f8897e2813700e"
+        },
+        "reviewed-restored": {
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/orchestration/mutation-request.test.ts",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0070-retry-budget-reviewed-restored.json"
+          ],
+          "exit_code": 0,
+          "passed": 7,
+          "failed": 0,
+          "failures": [],
+          "report": "/tmp/orca-root-0070-retry-budget-reviewed-restored.json",
+          "report_sha256": "d44bdc07553a009245a658713d832b55f9ffe27c1de2c624ea768d99c1affb63",
+          "log": "/tmp/orca-root-0070-retry-budget-reviewed-restored.log",
+          "log_sha256": "8037f456603a4fabf426fd2a8e11d177fee9238235895c0cf73449c89be7d760",
+          "test_sha256": "3390a87bda316491b8dbbe706a0e6bf49a5fd5c11acb99719e34be167f147645",
+          "production_sha256": "66158d48995b0f98b828ec6304ec9cd2bc9d3bed7b1b30253fee403f389f4408"
+        }
+      }
+    }
+  },
+  "integrity": {
+    "records_sha256": "e22b7a43cceafa3c235957d07cf0f44a9b0eab76df555123712642110f14d16c",
+    "original_and_final_hashes_verified": true,
+    "exact_original_case_slices_verified": 32,
+    "exact_parameter_rows_verified": 2,
+    "production_restoration_verified": true,
+    "original_snapshot_sha256": "e8f30ad4101c6929980128108053ba40417485092e79141454474e6e300c98a7",
+    "plan_sha256": "bd25ee51a3e654cdd8ca15f017a10511086666ab5f35cb0e425bb779584ed3f7",
+    "record_generator_sha256": "893a81bbfa8c9ac10f7d188cf405b53833fad89254e3a883538dc39ee6a56b43",
+    "mutation_script_sha256": "be683c3c06feef828f2cb75eb42fa20cc22817fbb7d349c6d8e017f28700fa13"
+  },
+  "limitations": [
+    "Actual RuntimeClient recovery uses a real local Unix socket and deliberately dropped request; that existing integration case is explicitly skipped on Windows. Scheduler/flag/output cases use injected ports/fake clocks or pure formatters, and no app window launches.",
+    "Literal roster expectations retain real producer inputs while breaking the borrowed expected-wording oracle; malformed newer-host states/blocks remain intentional RPC-boundary fixtures with line-specific cast explanations.",
+    "The budget test allows the existing15-second maximum-backoff window before the deadline and proves settlement by120000ms with no subsequent attempts. Refined +30000ms opted-in-only defect passes all7 original mutation-request cases and fails exactly the reviewed budget assertion.",
+    "The separate roster-oracle mutation script is prepared but has not run; no mutation result is claimed for that path."
+  ]
+}

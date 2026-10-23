@@ -1,0 +1,27 @@
+{
+  "batch": "root-0038",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 1,
+  "case_records": 3,
+  "production_changes": false,
+  "test_source_changes": false,
+  "review_scope": "Read full proof, fixtures/config/source selectors and relevant real production or archived source boundary; explicitly enumerate generated/manual controls. Supporting permanent suites remain pending.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/session-search-write-fences/reproduce.mjs",
+      "working_directory": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-4",
+      "result": "passed: both variants retire all 1,000 database file rows and reject stale first commit; baseline retains 1,000 paths and current retains zero.",
+      "log": "/tmp/orca-root-0038-fences.log"
+    }
+  ],
+  "limitations": [
+    "Linux x64 Node 26.8.1; not supported Node 24 or platform-wide execution.",
+    "Baseline writer is named commit 243f4431557471daa05636aed1a30be790485eda with current dependencies; this does not execute a whole historical release.",
+    "No transcript messages, actual file reads, scanner transport, RSS or byte retention measured. The script asserts path-entry counts and SQLite cursor fencing."
+  ],
+  "integrity": {
+    "records_sha256": "d63c97bfab1edc74d60c8e0626678739c3a5d98f95f105bf48eccc36fb0b2f5f",
+    "original_and_final_hashes_verified": true
+  }
+}

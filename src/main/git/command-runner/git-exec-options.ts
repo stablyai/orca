@@ -29,6 +29,8 @@ export type GitExecOptions = {
   admissionTier?: GitAdmissionTier
   /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */
   admissionExempt?: true
+  /** Native macOS deletion spawns use the shared process worker. */
+  spawnOnWorkerThread?: boolean
   /** Sees each stderr chunk as it arrives; capture and errors are unchanged. Not
    *  supported with `terminationBarrier`. */
   onStderr?: (chunk: string) => void

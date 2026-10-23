@@ -18,8 +18,6 @@ describe('browser client host authority replacement', () => {
   })
 
   it('recognizes the mismatch when a new client talks to a runtime older than the typed code', () => {
-    // The pre-typed-code wire shape: same condition, reported as a generic error carrying the code
-    // as its whole message. A false negative here destroys live guests on every restart.
     const rejected = new Error(BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE)
 
     expect('code' in rejected).toBe(false)
@@ -57,16 +55,13 @@ describe('browser client host authority replacement', () => {
   })
 
   it('rejects a message that merely contains the mismatch code inside a longer sentence', () => {
-    // Substring matching was rejected deliberately: it would keep guests alive on unrelated errors
-    // that happen to quote the code.
     const quoted = new Error(`failed: ${BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE} occurred`)
 
     expect(isBrowserClientHostAuthorityReplaced(quoted)).toBe(false)
   })
 
   it('pins the mismatch code string', () => {
-    // Wire contract shared with the runtime: changing the value breaks mixed-version clients, whose
-    // legacy message fallback compares against exactly this string.
+    // Older clients compare their fallback error message to this exact wire value.
     expect(BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE).toBe(
       'browser_client_host_authority_mismatch'
     )
@@ -98,9 +93,7 @@ describe('BrowserClientHostAuthorityReplacementWait', () => {
     expect(expire).toHaveBeenCalledOnce()
   })
 
-  // A replaced runtime typically produces a burst of mismatch errors, one per in-flight attach.
-  // Re-arming per error would push the deadline out indefinitely, which is the unbounded hold the
-  // class exists to prevent.
+  // Bursts of mismatch errors must not postpone retirement indefinitely.
   it('keeps the first deadline when armed again while already armed', () => {
     const wait = new BrowserClientHostAuthorityReplacementWait(1_000)
     const first = vi.fn()

@@ -158,6 +158,7 @@ export function createTestStore() {
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+        deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
         ptyIdsByTabId: {},
         tabsByWorktree: {},
         tabBarOrderByWorktree: {},

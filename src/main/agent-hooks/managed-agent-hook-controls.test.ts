@@ -106,8 +106,7 @@ describe('managed agent hook controls', () => {
 
     await installManagedAgentHooks({ agentCmdOverrides: {} })
 
-    // Why (#11549 aftermath): the skipped agent's user-wide config still invokes the
-    // script, so a stale (leaking) script must not be frozen by the presence gate.
+    // Existing scripts remain referenced by user-wide configs after CLI removal.
     expect(mocks.refreshClaude).toHaveBeenCalledTimes(1)
     expect(mocks.refreshCodex).toHaveBeenCalledTimes(1)
     expect(mocks.installClaude).not.toHaveBeenCalled()
@@ -136,9 +135,7 @@ describe('managed agent hook controls', () => {
     })
 
     const install = installManagedAgentHooks({ agentCmdOverrides: {} })
-    // Why waitFor and not a fixed microtask tick: the install path awaits session reconcilers
-    // before refreshing scripts, so the number of ticks before this point is an implementation
-    // detail. The assertion below is the real contract: no CLI probe until the refresh resolves.
+    // Earlier awaits vary; wait for refresh entry before asserting that CLI probing is blocked.
     await vi.waitFor(() => expect(mocks.refreshClaude).toHaveBeenCalled())
 
     expect(mocks.detect).not.toHaveBeenCalled()
@@ -300,8 +297,6 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
   })
 
   it('skips instead of removing when this profile has the off switch set', () => {
-    // Why this matters: the hook files are user-global. Startup removal here deleted the hooks that
-    // every other Orca instance depends on, and Cursor then reads as idle with no status at all.
     expect(resolveStartupManagedHookAction({ agentStatusHooksEnabled: false })).toBe('skip')
   })
 

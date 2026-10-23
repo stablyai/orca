@@ -18,7 +18,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     }
   >()
 
-  /** A live hook proves its own process alive; only another process's hook casts doubt on the owner. */
+  /** A hook proves its sender alive; only another process can challenge the owner. */
   checkAgentPresenceAfterHook(event: AgentHookEventPayload, row: AgentHookEventPayload): void {
     const sender = event.agentPresence?.process
     const owner = row.agentPresence
@@ -37,10 +37,9 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     }
   }
 
-  // Why: a live process already reports from these panes, so their owner's exit is not the pane's.
+  // A live sender means the owner's exit cannot establish pane exit.
   private readonly ownerChallengesByLiveSender = new Map<string, number>()
 
-  /** Whether this pane's owner carries a process identity that its execution host can check. */
   hasVerifiableAgentProcess(paneKey: string): boolean {
     const presence = this.state.lastStatusByPaneKey.get(
       this.resolvePaneKeyAlias(paneKey)
@@ -48,7 +47,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     return presence?.process !== undefined && !presence.ended
   }
 
-  /** A local inspection keeps the exact hook row, rather than probing the pane's next owner. */
+  /** Pin inspection to this row so a replacement owner cannot become its subject. */
   readCliWriterObservation(expected: AgentStatusIpcPayload): CliWriterObservation | null {
     const resolved = this.resolvePaneKeyAlias(expected.paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
@@ -79,13 +78,13 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
     }
   }
 
-  /** As checkAgentPresence, but keeps an exit this host proved at or after `exitedSince`. */
+  /** Include retained exits proven at or after `exitedSince`. */
   async checkAgentPresenceSince(
     paneKey: string,
     exitedSince: number
   ): Promise<AgentProcessVerdict | null> {
     const verdict = await this.checkAgentPresence(paneKey)
-    // Why exits too: a probe's exit counts only if retained (not a replaced owner's).
+    // A replaced owner's probe result counts only if its exit was retained.
     if (verdict !== null && verdict !== 'exited') {
       return verdict
     }
@@ -98,7 +97,6 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
-    // Why: an ended owner already published its exit, and an owner no hook identified cannot be checked.
     if (!row?.agentPresence?.process || row.agentPresence.ended) {
       return Promise.resolve(null)
     }

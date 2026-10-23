@@ -63,18 +63,18 @@ function DrawerBody(): null {
   return null
 }
 
-function drawer(visible: boolean): ReactElement {
+function drawer(visible: boolean, onClose: () => void = () => {}): ReactElement {
   return (
-    <RightDrawer visible={visible} onClose={() => {}}>
+    <RightDrawer visible={visible} onClose={onClose}>
       <DrawerBody />
     </RightDrawer>
   )
 }
 
-function render(visible: boolean): ReactTestRenderer {
+function render(visible: boolean, onClose?: () => void): ReactTestRenderer {
   let renderer!: ReactTestRenderer
   act(() => {
-    renderer = create(drawer(visible))
+    renderer = create(drawer(visible, onClose))
   })
   return renderer
 }
@@ -95,10 +95,15 @@ afterEach(() => {
  * `use-back-claim.web.ts` and is tested there.
  */
 describe('the right drawer and the phone hardware back button', () => {
-  it('arms it on iOS while the drawer is open', () => {
-    const renderer = render(true)
+  it('consumes an iOS hardware back press and closes the open drawer', () => {
+    const onClose = vi.fn()
+    const renderer = render(true, onClose)
     expect(native.addEventListener).toHaveBeenCalledTimes(1)
     expect(native.addEventListener.mock.calls[0]?.[0]).toBe('hardwareBackPress')
+    const handler = native.addEventListener.mock.calls[0]![1]
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => expect(handler()).toBe(true))
+    expect(onClose).toHaveBeenCalledTimes(1)
     act(() => renderer.unmount())
   })
 

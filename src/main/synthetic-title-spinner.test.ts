@@ -47,8 +47,6 @@ describe('advanceSyntheticTitleSpinnerEntries', () => {
 })
 
 describe('getSyntheticTitleSpinnerPaneKeyToStop', () => {
-  // Why: without this the spinner outlived the hook row it stood in for, so a finished
-  // OMP pane kept rotating a working title (#13890).
   it('retires the spinner of a pane-scoped clear', () => {
     expect(getSyntheticTitleSpinnerPaneKeyToStop({ paneKey: 'pane-a' })).toBe('pane-a')
   })

@@ -11,6 +11,7 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { createJournalReducerState, applyJournalRow } from './journal-reducer'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
@@ -33,6 +34,7 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
     role: 'user',
     blocks: [{ type: 'text', text: 'queued text' }]
   }
+  const FINGERPRINT = agentSessionSendBodyFingerprint(IDENTITY.sessionId, BODY)
 
   let root: string
   let clock = 1_000
@@ -48,15 +50,10 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
   }
 
   async function handOff(journal: AgentSessionJournal, draftId: string, submissionId: string) {
-    await journal.queuedMessages.insert({
-      messageId: draftId,
-      body: BODY,
-      fingerprint: 'fp',
-      hostInstance: 'p'
-    })
+    await journal.queuedMessages.insert({ messageId: draftId, body: BODY })
     await journal.appendSubmission(
-      { clientMessageId: submissionId, payloadFingerprint: 'fp', body: BODY, fence: 0 },
-      { messageId: draftId, expect: 'waiting', settledByOp: null }
+      { clientMessageId: submissionId, payloadFingerprint: FINGERPRINT, body: BODY, fence: 0 },
+      { messageId: draftId, expect: 'waiting' }
     )
   }
 
@@ -97,22 +94,17 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
 
     it('refuses a caller naming a different draft than the one it consumes, and writes nothing', async () => {
       const journal = await open()
-      await journal.queuedMessages.insert({
-        messageId: 'draft-1',
-        body: BODY,
-        fingerprint: 'fp',
-        hostInstance: 'p'
-      })
+      await journal.queuedMessages.insert({ messageId: 'draft-1', body: BODY })
       await expect(
         journal.appendSubmission(
           {
             clientMessageId: 'handoff-1',
-            payloadFingerprint: 'fp',
+            payloadFingerprint: FINGERPRINT,
             body: BODY,
             fence: 0,
             queuedMessageId: 'draft-2'
           },
-          { messageId: 'draft-1', expect: 'waiting', settledByOp: null }
+          { messageId: 'draft-1', expect: 'waiting' }
         )
       ).rejects.toThrow()
       expect(journal.submissions()).toHaveLength(0)

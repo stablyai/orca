@@ -73,7 +73,6 @@ describe('orca serve restore resume', () => {
 
     expect(serveOrcaAppMock).not.toHaveBeenCalled()
     expect(callMock).toHaveBeenCalledWith('runtime.automaticWork.resume')
-    // Why null: `serve` commands always target this machine, never an ambient paired host.
     expect(runtimeClientConstructorMock).toHaveBeenLastCalledWith(null, null)
     expect(logSpy.mock.calls[0]?.[0]).toContain('Automatic restores resumed')
     expect(logSpy.mock.calls[0]?.[0]).toContain('stopped unexpectedly')

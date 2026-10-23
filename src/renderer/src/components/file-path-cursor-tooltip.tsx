@@ -101,6 +101,7 @@ export function FilePathCursorTooltip({
       {/* Anchored under the cursor the way a system tooltip is, rather than to
           the row. Collision shifting still applies near the viewport edge. */}
       <TooltipContent
+        data-cursor-tooltip=""
         side="bottom"
         align="start"
         sideOffset={offset.side}

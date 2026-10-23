@@ -1,0 +1,33 @@
+{
+  "batch": "root-0009",
+  "reviewer": "root",
+  "source_commit": "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b",
+  "reviewed_files": 5,
+  "original_declaration_sites": 4,
+  "manual_driver_groups": 2,
+  "production_changes": false,
+  "review_scope": "Read all original three proof candidates plus source loader/config. Cross-check actual permanent destroyed-guest suite/fixture, registration-ownership suite, session/recovery/registry, dispatcher/cache and composition/native ownership boundaries. Permanent suite reads are evidence only and are not separately promoted to reviewed by this batch.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/browser-registration-reply-retention/reproduce.mjs",
+      "result": "Exit 1 at intentional reverse-patch fence: production browser-page-webview-guest-session.ts changed. No phases ran.",
+      "log": "/tmp/orca-root-0009-registration-proof.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/browser-destroyed-guest-retention/reproduce.mjs",
+      "result": "Exit 1 during esbuild launcher setup: historical run-process.ts module was removed upstream. No phases ran.",
+      "log": "/tmp/orca-root-0009-destroyed-proof.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node -e 'require(\"./docs/audits/browser-closed-result-retention/sources.cjs\").loadSources()'",
+      "result": "Exit 1: actual loader rejects changed browser-client-host-command-state.ts caller hash. Hash-fenced suite not executed.",
+      "log": "/tmp/orca-root-0009-closed-source.log"
+    }
+  ],
+  "limitations": [
+    "These are explicitly archived source-bound proofs/support, preserved unchanged. Their historical results do not establish current-head runtime behavior.",
+    "No UI, native guest, subprocess proof phase, external host or app window was launched. No cross-platform/native memory result is claimed.",
+    "Current-head permanent suites remain separate audit candidates even where read as evidence.",
+    "Acknowledged-tab, branch/history and editor lifetime files in pending archive notes remain unreviewed."
+  ]
+}

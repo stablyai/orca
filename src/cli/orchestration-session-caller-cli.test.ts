@@ -1,16 +1,4 @@
-/**
- * A command that runs inside a structured agent session is that session: the injected
- * `ORCA_AGENT_SESSION_ID` names the caller, and nothing resolves or guesses a terminal for it.
- *
- * One rule for every verb that names a caller: a caller flag may restate the session, but a flag
- * naming anyone else is refused — never silently dropped, never allowed to win. A session address
- * the CLI cannot place is left to the host, whose `/clear` lineage decides.
- * The #21097 accident was a chat that named a sibling's terminal and consumed that sibling's mail.
- *
- * The session env here is the hardest case, a chat that inherited a pane's `ORCA_TERMINAL_HANDLE`
- * and `ORCA_PANE_KEY` (an Orca launched from an Orca terminal), and the implicit-terminal guess has
- * a sibling to find.
- */
+// Inherited pane identity and an available sibling must never override the injected session caller.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -30,7 +18,7 @@ import { formatCliError, reportCliError } from './cli-error'
 import { RuntimeRpcFailureError } from './runtime/types'
 
 const SESSION = 'f7a1c0de-1111-4222-8333-444455556666'
-/** The session a `/clear` continued as SESSION: the chat's orchestration address stays this one's. */
+/** SESSION continues ROOT after /clear, retaining ROOT's orchestration address. */
 const ROOT = '0b5e2d7c-9a41-4c3e-8f62-7d1a3e5b9c08'
 const IDENTITY_ENV = [
   'ORCA_AGENT_SESSION_ID',
@@ -40,7 +28,6 @@ const IDENTITY_ENV = [
 ] as const
 const originalEnv = Object.fromEntries(IDENTITY_ENV.map((name) => [name, process.env[name]]))
 
-/** Enough of every receipt shape that each handler finishes after its RPC. */
 const RESULT = {
   result: {
     run: { id: 'run_1', objective: 'o', consumer_generation: 1 },
@@ -73,14 +60,12 @@ const RESULT = {
 type Verb = {
   command: string
   flags: Record<string, string | true>
-  /** The flag that names the caller, when the verb has one. */
   callerFlag?: 'from' | 'terminal'
   method: string
   callerParam: 'from' | 'terminal' | 'callerTerminalHandle'
 }
 
-/** Every verb whose request names its caller: the host's caller-param map, from the CLI side.
- *  `dispatch-show` is not one: its --from only fills preview text, so it is pinned on its own. */
+/** dispatch-show is excluded: its --from fills preview text rather than naming the caller. */
 const CALLER_VERBS: Verb[] = [
   {
     command: 'run-create',
@@ -175,11 +160,9 @@ const CALLER_VERBS: Verb[] = [
     method: 'workerStart',
     callerParam: 'from'
   },
-  // No caller flag: its spec takes none. It asks runCurrent for the caller's Run.
   { command: 'worker-list', flags: {}, method: 'runCurrent', callerParam: 'from' }
 ]
 
-/** Enough flags for any verb to get past its own validation to identity resolution. */
 const EVERY_REQUIRED_FLAG = {
   objective: 'o',
   id: 'id_1',
@@ -199,7 +182,6 @@ function flagMap(flags: Record<string, string | true>): Map<string, string | boo
   return new Map(Object.entries(flags))
 }
 
-/** What `main()` does between parsing and dispatch: the spec-driven caller check, then the handler. */
 async function invoke(
   command: string,
   flags: Map<string, string | boolean>,
@@ -243,7 +225,6 @@ function setEnv(env: Partial<Record<(typeof IDENTITY_ENV)[number], string>>): vo
   }
 }
 
-/** A chat with its id, plus a pane identity it inherited from the Orca that launched it. */
 function asSessionWithInheritedPane(): void {
   setEnv({
     ORCA_AGENT_SESSION_ID: SESSION,
@@ -274,7 +255,6 @@ describe.each(CALLER_VERBS)('orchestration $command run as an agent session', (v
     const [params] = callsTo(verb.method)
     expect(params, 'the verb reached its method').toBeDefined()
     expect(params?.[verb.callerParam]).toBeUndefined()
-    // An inherited pane is not the session's identity.
     expect(params?.terminalPaneKey).toBeUndefined()
     expect(params?.senderPaneKey).toBeUndefined()
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
@@ -325,7 +305,6 @@ describe.each(CALLER_VERBS.filter((verb) => verb.callerFlag !== undefined))(
     beforeEach(asSessionWithInheritedPane)
 
     it('sends the address it had before the clear for the host to place, instead of refusing it', async () => {
-      // The chat's address is its lineage root's, which only the host's session records know.
       const flags = flagMap({
         ...verb.flags,
         [verb.callerFlag ?? 'from']: `orca_session_id:${ROOT}`
@@ -367,8 +346,7 @@ describe.each([
   it.each([`orca_session_id:${ROOT}`, 'orca_session_id:9d4c1b2a-3e5f-4a6b-8c7d-0e1f2a3b4c5d'])(
     'sends a session address it cannot place (%s) for the host to check, never dropping it',
     async (declared) => {
-      // A /clear-ed chat's root is accepted by the host; anyone else is refused there, before any
-      // effect. Dropped here, a conflicting caller would pass unchecked.
+      // Forward session addresses for host lineage checks; dropping them would bypass caller fencing.
       await invoke(command, flagMap({ run: 'run_1', from: declared }))
       expect(callsTo(method)[0]).toMatchObject({ run: 'run_1', [callerParam]: declared })
     }
@@ -445,7 +423,6 @@ describe('the identity a session presents', () => {
     }
     asSessionWithInheritedPane()
     expect(await preview({})).toBe(`orca_session_id:${SESSION}`)
-    // Not a caller flag: it names the text to preview, so it is never fenced.
     expect(await preview({ from: 'term_sibling' })).toBe('term_sibling')
     setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })
     expect(await preview({})).toBe('structworker_self')
@@ -528,9 +505,7 @@ describe('the orchestration envelope', () => {
   })
 
   it('binds whichever current Orca CLI the agent reached, not only the one the session names', () => {
-    // A login shell can put another install's `orca` first, and the packaged Windows launcher
-    // rewrites ORCA_CLI_COMMAND in its own process. Neither matters: the id rides the envelope
-    // and the pinned instance is the one dialed.
+    // Another CLI install may rewrite ORCA_CLI_COMMAND; the envelope must still pin the session instance.
     vi.stubEnv('ORCA_USER_DATA_PATH', '/data/session-orca')
     try {
       const envelope = createOrchestrationCompatibilityEnvelope({
@@ -573,8 +548,6 @@ describe('which flag names the caller, declared on every spec', () => {
   const ORCHESTRATION_SPECS = COMMAND_SPECS.filter((spec) => spec.path[0] === 'orchestration')
 
   it('classifies every --from and --terminal an orchestration verb accepts', () => {
-    // A new verb cannot take either flag without saying whether it names the caller, so the entry
-    // check covers it by construction instead of each handler remembering to refuse.
     const unclassified = ORCHESTRATION_SPECS.flatMap((spec) =>
       (['from', 'terminal'] as const)
         .filter((flag) => spec.allowedFlags.includes(flag) && !spec.identityFlagRoles?.[flag])
@@ -625,7 +598,6 @@ describe('which flag names the caller, declared on every spec', () => {
 })
 
 describe('every orchestration verb, enumerated', () => {
-  /** Runs every verb once; returns the ones that guessed an implicit terminal. */
   async function verbsThatGuess(): Promise<string[]> {
     const guessed: string[] = []
     for (const command of Object.keys(ORCHESTRATION_HANDLERS)) {
@@ -641,8 +613,7 @@ describe('every orchestration verb, enumerated', () => {
   }
 
   it('guesses a terminal for no verb when the session id is present', async () => {
-    // Positive control first: with no identity at all the same harness sees the guess, so an empty
-    // result below is about the id, not a harness that cannot observe a guess.
+    // Prove the harness observes guesses without an injected identity before testing their absence.
     setEnv({})
     const population = await verbsThatGuess()
     expect(population).toEqual([

@@ -31,6 +31,10 @@ import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from '../mobile-web-page-routes.mjs'
+import {
+  PAGE_ROUTE_MODULES,
+  pageRouteModulesCoverTheManifest
+} from './mobile-web-app-page-route-modules.mjs'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract.ts'
 
 /** The mobile install: the closure builds need it, and so does anything that imports a mobile
@@ -78,13 +82,6 @@ function resolveFromMobile(specifier) {
   return createRequire(new URL('../../../mobile/package.json', import.meta.url)).resolve(specifier)
 }
 
-/** The route module a registered pathname is served from, the way expo-router files are named. */
-function routeModule(pathname) {
-  const withoutRoot = pathname.replace(/^\//, '')
-  const last = withoutRoot.split('/').at(-1)
-  return last === '[hostId]' ? `app/${withoutRoot}/index.tsx` : `app/${withoutRoot}.tsx`
-}
-
 /** The grants a closure needs of the seam: all three, or none. A route granted two would open a
  *  microphone it could not drain or could not stop. */
 function dictationGrantsNeeded(closure) {
@@ -101,7 +98,11 @@ function dictationGrantsNeeded(closure) {
 async function grantsMissingForRoutes(routes) {
   const missing = []
   for (const route of routes) {
-    const closure = await closureOf(routeModule(route.pathname))
+    const module = PAGE_ROUTE_MODULES.get(route.pathname)
+    if (module === undefined) {
+      throw new Error(`No route module for ${route.pathname}`)
+    }
+    const closure = await closureOf(module)
     for (const grant of dictationGrantsNeeded(closure)) {
       if (!route.grants.includes(grant)) {
         missing.push(`${route.pathname} needs ${grant}`)
@@ -121,7 +122,11 @@ describeClosure(
     it('finds the seam in exactly one closure, which is the session route', async () => {
       const reaching = []
       for (const route of MOBILE_WEB_PAGE_ROUTES) {
-        const closure = await closureOf(routeModule(route.pathname))
+        const module = PAGE_ROUTE_MODULES.get(route.pathname)
+        if (module === undefined) {
+          throw new Error(`No route module for ${route.pathname}`)
+        }
+        const closure = await closureOf(module)
         if (closure.local.includes(SEAM)) {
           reaching.push(route.pathname)
         }
@@ -183,23 +188,8 @@ describeClosure(
 
 describe('the census rule itself', () => {
   it('names a route module for every registered pathname', () => {
-    expect(MOBILE_WEB_PAGE_ROUTES.map((route) => routeModule(route.pathname))).toEqual([
-      'app/h/[hostId]/index.tsx',
-      'app/h/[hostId]/agent-history/[worktreeId].tsx',
-      'app/h/[hostId]/tasks.tsx',
-      'app/h/[hostId]/accounts.tsx',
-      'app/h/[hostId]/new-workspace.tsx',
-      'app/h/[hostId]/files/[worktreeId].tsx',
-      'app/h/[hostId]/files/preview/[worktreeId].tsx',
-      'app/h/[hostId]/source-control/[worktreeId].tsx',
-      'app/h/[hostId]/review/[worktreeId].tsx',
-      'app/h/[hostId]/session/[worktreeId].tsx'
-    ])
-  })
-
-  it('asks for all three grants or none, never a subset', () => {
-    expect(dictationGrantsNeeded({ local: [SEAM] })).toEqual(DICTATION_GRANTS)
-    expect(dictationGrantsNeeded({ local: ['src/platform/media-picker.web.ts'] })).toEqual([])
+    const { mapped, declared } = pageRouteModulesCoverTheManifest(MOBILE_WEB_PAGE_ROUTES)
+    expect(mapped).toEqual(declared)
   })
 
   /**

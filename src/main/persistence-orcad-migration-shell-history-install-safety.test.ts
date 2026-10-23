@@ -85,7 +85,6 @@ describe('installing moved shell history safely', () => {
     expect(existsSync(hostHistoryDirectory(DORMANT_WORKTREE_ID))).toBe(false)
     expect(existsSync(receivedPath(input, key))).toBe(true)
 
-    // An exit in another worktree changes nothing.
     store.installDeferredOrcadMigrationShellHistory('repo-other::/srv/other', {
       worktreeHasLiveShells
     })
@@ -112,7 +111,6 @@ describe('installing moved shell history safely', () => {
     // HISTSIZE trimmed the file, then a crash left the received blob behind.
     writeFileSync(join(directory, 'zsh_history'), ': 9:0;newest\n')
     writeFileSync(receivedPath(input, key), bytes)
-    // A pane shell that changed since must not install it into the other file either.
     createStore({ paneShellPath: () => '/bin/bash' }).installPendingOrcadMigrationReceivedBlobs({
       worktreeHasLiveShells: noLiveShells
     })

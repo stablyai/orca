@@ -5,7 +5,6 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { releaseAgentExitKey } from './agent-exit-evidence'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
-  /** Drop every status/cache claim attributable to a closed tab prefix. */
   dropStatusEntriesByTabPrefix(tabId: string): void {
     this.markTabClosedForAgentStatus(tabId)
     this.clearTmuxTabSubjects(tabId)
@@ -89,7 +88,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.hookSilenceRechecks.cancel(paneKey)
       this.programStatusFacetRepublishes.cancel(paneKey)
     }
-    // Why: an exit outlives its row, so it is matched by tab rather than by the keys cleared above.
+    // Exits outlive their rows; match tab identity independently of cleared status keys.
     let exitsChanged = false
     for (const key of this.agentExitedAtByPaneKey.keys()) {
       if (paneCacheKeyMatchesTab(key, tabId)) {
@@ -108,7 +107,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     } else if (exitsChanged) {
       this.scheduleStatusPersist()
     }
-    // Why: tab teardown must retire status subscribers' pane-scoped memo state too.
+    // Subscribers must release pane-scoped state when the tab closes.
     for (const paneKey of statusPaneKeysToClear) {
       this.emitPaneStatusCleared({ paneKey })
     }
@@ -144,7 +143,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     this.restartedStatusLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
-    // Why: the pane itself is gone, so its observation clock describes nothing a later pane owns.
+    // A retired pane's evidence clock cannot belong to its successor.
     this.evidenceObservedAtByPaneKey.delete(resolvedPaneKey)
     this.programStatusFacets.delete(resolvedPaneKey)
     this.hookSilenceRechecks.cancel(resolvedPaneKey)

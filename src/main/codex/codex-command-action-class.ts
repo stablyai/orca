@@ -1,35 +1,20 @@
 import { readRecord, readString } from './codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
-/**
- * Codex's own classification of a shell call: the tool name to show, and the
- * fields worth lifting into `input` for the shared label helper (a file target,
- * a search term, a scanned root). A `Map`, not an object — an object index
- * answers `__proto__` with a truthy non-string. Every other action type stays an
- * unclassified `shell` row.
- *
- * Nothing is invented for a field Codex sends as null: a stand-in path is a
- * claim about a target, and the label helper turns any path into a file link.
- */
 type CommandActionClass = {
   name: string
-  /** Action field to the `input` key it lifts to. A scan root and a listed
-   *  directory lift to `directory`, never `path`: the label helper reads `path`
-   *  as a file target, which mobile turns into a tappable open-file link. */
+  /** Directory targets use directory; path becomes an open-file link on mobile. */
   keys: Readonly<Record<string, string>>
 }
 
+// Map avoids prototype-key matches such as __proto__.
 const COMMAND_ACTION_CLASSES = new Map<string, CommandActionClass>([
   ['read', { name: 'read', keys: { path: 'path' } }],
   ['search', { name: 'search', keys: { query: 'query', path: 'directory' } }],
   ['listFiles', { name: 'list', keys: { path: 'directory' } }]
 ])
 
-/** The one class every classified `commandActions` entry agrees on, with the
- *  fields they all agree on; null leaves the row exactly as a Codex that sends no
- *  classification renders it. `cat a.txt && ls src` classifies as two different
- *  things, and naming that row after either would drop the other, so it stays a
- *  `shell` row that shows the whole command. */
+/** Mixed action classes retain the full shell command; matching classes keep only agreed fields. */
 export function commandActionFacts(
   item: CodexThreadItem
 ): { name: string; fields: Record<string, string> } | null {
@@ -49,6 +34,7 @@ export function commandActionFacts(
       const fields: Record<string, string> = {}
       for (const [source, lifted] of Object.entries(classified.keys)) {
         const value = readString(record, source)
+        // Missing targets must stay absent: fabricated paths become misleading file links.
         if (value !== null) {
           fields[lifted] = value
         }

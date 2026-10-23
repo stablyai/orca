@@ -1,0 +1,2393 @@
+{
+  "batch": "config-0008",
+  "status": "implemented-and-validated; integrated by root",
+  "checkout": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-8",
+  "integration_base_commit": "f1157821ce03d7c59323f95a4bac521f13bb841e",
+  "source_scope": {
+    "selected_paths": 50,
+    "changed_selected_test_paths": [
+      "config/scripts/orcad-linear-sdk-package.test.mjs",
+      "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+      "config/scripts/oxc-cli-invocation.test.mjs",
+      "config/scripts/packaged-orcad-template.test.mjs",
+      "config/scripts/packaged-process-host.test.mjs"
+    ],
+    "production_changes": false,
+    "tracked_review_tracker_readme_or_git_writes_performed": false,
+    "review_and_validation_output": "/tmp only; root owns copying review files and tracker/Git integration"
+  },
+  "original_delivery": {
+    "folder": "/tmp/orca-config-0008-f4a1c653",
+    "manifest_sha256": "0ac92a86ac8ec1b77e3bbdf3526d3ed0218680dc8c7c46d9fc36e89cc005800c",
+    "unchanged": true,
+    "all_196_artifact_hashes_reverified": true
+  },
+  "drift_reconciliation": [
+    {
+      "path": ".github/workflows/wsl-orcad-e2e.yml",
+      "original_sha256": "2aeda90bdd969b79ec3c6e26c1fe18b18a59db5e1b26a40d4f5af4d0845b71c9",
+      "current_sha256": "0068a20edc557cccc49f462e3d6ed4790f9f5981a1ed1c72314c19b351435ec0"
+    }
+  ],
+  "drift_review": {
+    "affected_selected_file": "config/scripts/orcad-e2e-change-scope.test.mjs",
+    "affected_declaration_lines": [
+      98,
+      107,
+      111,
+      157,
+      194,
+      213,
+      218,
+      223
+    ],
+    "result": "Only two Linux build/export runner labels changed. PR paths, workflow_dispatch, WSL phase commands/env/order, transport inputs and UI/host routing contracts are unchanged. All 78 cases in the affected suite passed on both runners."
+  },
+  "census": {
+    "original_declarations": 257,
+    "final_declarations": 253,
+    "original_control_rows": 8351,
+    "row_dispositions": {
+      "retained": 8324,
+      "consolidated-declaration-title": 3,
+      "rewritten-case-callback": 9,
+      "rewritten-suite-callback": 5,
+      "compiler-membership-transferred-to-invalidation": 4,
+      "removed-sole-config-import": 1,
+      "removed-source-string-case": 5
+    },
+    "domain_controls": 168,
+    "domain_members": 757,
+    "case_decisions": {
+      "keep": 250,
+      "consolidate": 3,
+      "fix": 3,
+      "remove": 1
+    },
+    "selected_files": 50,
+    "changed_files": 6,
+    "original_named_declarations_are_not_expanded_runtime_counts": true,
+    "normal_test_results": [
+      {
+        "runner": "default-runner",
+        "passed": 188,
+        "failed": 0,
+        "skipped": 0,
+        "files": 7
+      },
+      {
+        "runner": "node-runner",
+        "passed": 188,
+        "failed": 0,
+        "skipped": 0,
+        "files": 7
+      }
+    ],
+    "isolated_mutations": 28,
+    "original_pass_new_fail_pairs": 4,
+    "final_selected_hashes": [
+      {
+        "index": 1,
+        "path": "config/ci/wsl-lifecycle/test-wsl-lifecycle-command.ps1",
+        "sha256": "9940bafa4cf1c49a942d3124bab44392c55f1b48b947d23378b1101a992926b5",
+        "declarations": 0
+      },
+      {
+        "index": 2,
+        "path": "config/scripts/orcad-daemon-protocol-crossing.test.mjs",
+        "sha256": "7bc40140f435815f5d2cb8c80923d2e2ee39465c2d1489ffe1737bceeed75ecf",
+        "declarations": 3
+      },
+      {
+        "index": 3,
+        "path": "config/scripts/orcad-e2e-change-scope.test.mjs",
+        "sha256": "3cdbd8cbcda4afb7cd905272662a8f7fa7e544d30a0fd7d167348e71844db0f1",
+        "declarations": 11
+      },
+      {
+        "index": 4,
+        "path": "config/scripts/orcad-entry-build.test.mjs",
+        "sha256": "9e9bd77508c756f20b30dc147442c4041b37cf4eec411c79ec38b36419362487",
+        "declarations": 8
+      },
+      {
+        "index": 5,
+        "path": "config/scripts/orcad-linear-sdk-package.test.mjs",
+        "sha256": "8403f60c9929604a71fc4362e86f9ac08f89d9795cca5db72352c7acf2bf3795",
+        "declarations": 1
+      },
+      {
+        "index": 6,
+        "path": "config/scripts/orcad-mobile-web-bundle.test.mjs",
+        "sha256": "c7743be2e8d9f0da14faf2b8443bebe28051e7b8d3c05ad18dd4e388f33110d4",
+        "declarations": 4
+      },
+      {
+        "index": 7,
+        "path": "config/scripts/orcad-prebuild-node-gyp.test.mjs",
+        "sha256": "a9016ff688177b12a2742bd262b3b12ebcd2912cbfb243941f9694754505a30c",
+        "declarations": 3
+      },
+      {
+        "index": 8,
+        "path": "config/scripts/orcad-prebuild-slot-contents.test.mjs",
+        "sha256": "51ed277626854565ca4a859745cda814a1481321c67efa4310493026d2c22860",
+        "declarations": 20
+      },
+      {
+        "index": 9,
+        "path": "config/scripts/orcad-prebuild-smoke-child.cjs",
+        "sha256": "5f0ee5ba87e87581e01988cd58324bbf6ba5d8a53aa79ab4d1990528e4326118",
+        "declarations": 0
+      },
+      {
+        "index": 10,
+        "path": "config/scripts/orcad-prebuild-smoke.mjs",
+        "sha256": "befcefeca6b105890e8164e21cfc34b1b4bd6b5b4c19171e23e735445ea0e888",
+        "declarations": 0
+      },
+      {
+        "index": 11,
+        "path": "config/scripts/orcad-template-test-fixture.mjs",
+        "sha256": "8d9c1782dbab7ff912497c35da8c72ae2775e52f83fb25aacf0a09ab4e89cf59",
+        "declarations": 0
+      },
+      {
+        "index": 12,
+        "path": "config/scripts/orcad-terminal-smoke-change-scope.mjs",
+        "sha256": "ed06f3a6c31f3494a36a9fd37075efb16158a66e581c31af12831169913de7bc",
+        "declarations": 0
+      },
+      {
+        "index": 13,
+        "path": "config/scripts/orcad-terminal-smoke-change-scope.test.mjs",
+        "sha256": "1ef3ca907b916438fe371ded603ab75fea893846e8bbc776a7da6152a6c4fec8",
+        "declarations": 6
+      },
+      {
+        "index": 14,
+        "path": "config/scripts/orcad-watcher-package.test.mjs",
+        "sha256": "2614605ad17e34616cb1a7fd86e1b31de63e03b95b744c850ba21c5bcecb6da6",
+        "declarations": 3
+      },
+      {
+        "index": 15,
+        "path": "config/scripts/orcad-windows-cli-launcher.test.mjs",
+        "sha256": "25f827184d4775436178068f7b84bca54726b09f013b6ba2bf86bada0b5d5c27",
+        "declarations": 4
+      },
+      {
+        "index": 16,
+        "path": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+        "sha256": "af70c2d4b63b1e313ab5d6543c09e3125702dcc3a856be0f65a5e81940b277c3",
+        "declarations": 12
+      },
+      {
+        "index": 17,
+        "path": "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+        "sha256": "41c29bcd2cf6afd8b47d6606068799cb69d59b5761042688bf7e182ea8e37ce2",
+        "declarations": 13
+      },
+      {
+        "index": 18,
+        "path": "config/scripts/orcad-windows-process-tree.test.mjs",
+        "sha256": "cf10901acdca1e5fdcb5454ba6fabbff5dde191be88e293b0653613e22f110d2",
+        "declarations": 8
+      },
+      {
+        "index": 19,
+        "path": "config/scripts/orcad-windows-security.test.mjs",
+        "sha256": "c1e1a122cece351b621d473a38176e34e0fe74cc8fcb433cc6c9874d4bee69c1",
+        "declarations": 10
+      },
+      {
+        "index": 20,
+        "path": "config/scripts/oxc-cli-invocation.test.mjs",
+        "sha256": "24221e6231e0f52a71a03d83935260a802082f8c0e35ae15c1e54bb78ccbe8cd",
+        "declarations": 2
+      },
+      {
+        "index": 21,
+        "path": "config/scripts/package-electron-runtime-contract.test.mjs",
+        "sha256": "3bc14c429063f76364ff8fee0df7b6cc5f1a4694be68e5ae443688d6ca750c9d",
+        "declarations": 5
+      },
+      {
+        "index": 22,
+        "path": "config/scripts/package-linux-formats-appimage.test.mjs",
+        "sha256": "5101c49215e59d4f134debc781d082edcebc96c5affb265d37d52dfec8e04ccc",
+        "declarations": 9
+      },
+      {
+        "index": 23,
+        "path": "config/scripts/package-linux-formats.test.mjs",
+        "sha256": "3ea08599ba04e4fc23d30300d07e046c3bb16733a8511c64fdc63c5c572df6da",
+        "declarations": 8
+      },
+      {
+        "index": 24,
+        "path": "config/scripts/packaged-node-pty-prebuild-prune.test.mjs",
+        "sha256": "ab2220eb75bd347ff298036270caf5856f89a664698c6214d8e743322ac2778c",
+        "declarations": 7
+      },
+      {
+        "index": 25,
+        "path": "config/scripts/packaged-orcad-template.test.mjs",
+        "sha256": "3fc464b27befc7dbd0459807a4e55e53419441e12dbb5a7c1eea5ebfa9f0c04e",
+        "declarations": 6
+      },
+      {
+        "index": 26,
+        "path": "config/scripts/packaged-process-host.test.mjs",
+        "sha256": "157961fa6721ad241076c4b6a4dfa9c400a6182a888fba3adcecff593ad49d7f",
+        "declarations": 6
+      },
+      {
+        "index": 27,
+        "path": "config/scripts/packaged-repository-input-exclusion.test.mjs",
+        "sha256": "e9bbfe295a257bed13eeb64088c122708bd740b0c6b900fe2aeaf604df072f2c",
+        "declarations": 1
+      },
+      {
+        "index": 28,
+        "path": "config/scripts/packaged-source-map-prune.test.mjs",
+        "sha256": "1c1af45c0875c905f87df3ab3b38c239a8251b31d575bbb3fb84f93c5dfdbb7a",
+        "declarations": 4
+      },
+      {
+        "index": 29,
+        "path": "config/scripts/packaged-windows-only-runtime-files.test.mjs",
+        "sha256": "43bc7cfb21bd302631b600ea620dc516c235454a7ae63fca3c4da1f56ad787d8",
+        "declarations": 3
+      },
+      {
+        "index": 30,
+        "path": "config/scripts/patched-dependencies-frozen-install.test.mjs",
+        "sha256": "0d61820a95fad3e7f129948d7470333cb883d118284aec5dfa5ec308ab15c6a5",
+        "declarations": 2
+      },
+      {
+        "index": 31,
+        "path": "config/scripts/pdfjs-viewer-assets-stream.test.ts",
+        "sha256": "27515e47a0621afedebe546952814c4879e2cdf2439cdf980d24e8aedbdb84fe",
+        "declarations": 7
+      },
+      {
+        "index": 32,
+        "path": "config/scripts/pinned-bun-executable.test.mjs",
+        "sha256": "73bb05d065e0323a2f9d497f2a6df40d0799a5e505f3f554c9ebf58d7542f86d",
+        "declarations": 4
+      },
+      {
+        "index": 33,
+        "path": "config/scripts/pinned-node-downloads.test.mjs",
+        "sha256": "f6f09a8050ce90e006e5cdc8e64058e3c8f0180a92b5e6961080f60aeda09cd7",
+        "declarations": 4
+      },
+      {
+        "index": 34,
+        "path": "config/scripts/plain-node-entry-guard.test.ts",
+        "sha256": "7a79f568b7512c04e844c2147455f4aca1685e9601dad06fb91ab100d35ef412",
+        "declarations": 18
+      },
+      {
+        "index": 35,
+        "path": "config/scripts/playwright-focused-workflow-selection.test.mjs",
+        "sha256": "1e89ae6339b842736243ee03d029fbd301e8c589b2f3b77d687b501004399d65",
+        "declarations": 1
+      },
+      {
+        "index": 36,
+        "path": "config/scripts/plugin-command-bindings-benchmark.mjs",
+        "sha256": "a13639dfe4ac4133d99fe2fd06d8b837991b6f33ed609a63ed429a4340635b2c",
+        "declarations": 0
+      },
+      {
+        "index": 37,
+        "path": "config/scripts/plugin-message-budget-benchmark.mjs",
+        "sha256": "bd9be0362bfd1f627d174981431b00e7305fe521a731eac3d844a1d1e97ad644",
+        "declarations": 0
+      },
+      {
+        "index": 38,
+        "path": "config/scripts/plugin-shortcut-conflicts-benchmark.mjs",
+        "sha256": "b77d33ce228808af0ba2e3b878c7264150e022226f1d20e682052c2411fac3dd",
+        "declarations": 0
+      },
+      {
+        "index": 39,
+        "path": "config/scripts/pnpm-cli-invocation.test.mjs",
+        "sha256": "749ffdfec14c5a2e00f6b782a18c7099c90868dbf1d7a7ec40b6a4ef38efd125",
+        "declarations": 15
+      },
+      {
+        "index": 40,
+        "path": "config/scripts/pnpm-lockfile-root-importer.test.mjs",
+        "sha256": "81b9dbfbcd8b99a184a74c0aa2297c838ff2268440ffe6d6957ca0aaefd1bc7d",
+        "declarations": 2
+      },
+      {
+        "index": 41,
+        "path": "config/scripts/pnpmfile-global-virtual-store.test.mjs",
+        "sha256": "ff5c1a6ef50a9004f0a272bf8cb0db268dc6c3595c9182dea306c65993b2af2f",
+        "declarations": 2
+      },
+      {
+        "index": 42,
+        "path": "config/scripts/pr-aggregate-gate.test.mjs",
+        "sha256": "7c3928fce9f109f9d11e77401a65ed932b8606f5a6223d9d96c0eb84200cb87c",
+        "declarations": 3
+      },
+      {
+        "index": 43,
+        "path": "config/scripts/pr-auxiliary-preflight-admission.test.mjs",
+        "sha256": "fa0e7b4d18b668a0c7f316117f7bc592f37896df6bf72b40f82732ca7f434c7f",
+        "declarations": 23
+      },
+      {
+        "index": 44,
+        "path": "config/scripts/pr-code-change-scope-cross-version-launch-route.test.mjs",
+        "sha256": "3af73910445b641673263926f27d4d506680abaa10973eedd229a0eac126e262",
+        "declarations": 2
+      },
+      {
+        "index": 45,
+        "path": "config/scripts/pr-code-change-scope-cross-version-send-path.test.mjs",
+        "sha256": "6a377f5e303622eac5bf8744068acec9cc0bb530d59e5d47aaf2bfe3e4760944",
+        "declarations": 2
+      },
+      {
+        "index": 46,
+        "path": "config/scripts/pr-code-change-scope-daemon-protocol.test.mjs",
+        "sha256": "ffd9b9cfb042a490a40603c29e9ffca11993516d0f364f08ccf190f408e03c03",
+        "declarations": 2
+      },
+      {
+        "index": 47,
+        "path": "config/scripts/pr-code-change-scope-format-route.test.mjs",
+        "sha256": "9c92b66bf3fa0e0dccbfd3e48a46d673ad6c69fcd11c964205da20c697dc5e15",
+        "declarations": 3
+      },
+      {
+        "index": 48,
+        "path": "config/scripts/pr-code-change-scope-process-host.test.mjs",
+        "sha256": "eee031871b42c0fdba1aaba3a31d79e928fe16a22005fed9bc6948174cb2e387",
+        "declarations": 3
+      },
+      {
+        "index": 49,
+        "path": "config/scripts/pr-code-change-scope-released-phone.test.mjs",
+        "sha256": "53599c94f17b69d0d76947fb92f78c686d0f6505e70f06063117db24f753b8a9",
+        "declarations": 1
+      },
+      {
+        "index": 50,
+        "path": "config/scripts/pr-code-change-scope-test-inputs.test.mjs",
+        "sha256": "0754652d379f2cdc745aa752f862f881d2b6f8512075a5be2a45a6d8dc11c8bc",
+        "declarations": 2
+      }
+    ]
+  },
+  "ordinary_tests": [
+    {
+      "runner": "repository-default",
+      "command": [
+        "node",
+        "config/scripts/run-vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "config/scripts/orcad-linear-sdk-package.test.mjs",
+        "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+        "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+        "config/scripts/oxc-cli-invocation.test.mjs",
+        "config/scripts/packaged-orcad-template.test.mjs",
+        "config/scripts/packaged-process-host.test.mjs",
+        "config/scripts/orcad-e2e-change-scope.test.mjs",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-config-0008-integration-f1157821/focused-tests.json"
+      ],
+      "cwd": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-8",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "passed": 188,
+      "failed": 0,
+      "skipped": 0,
+      "files": 7,
+      "file_results": [
+        {
+          "path": "config/scripts/orcad-e2e-change-scope.test.mjs",
+          "passed": 78,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/orcad-linear-sdk-package.test.mjs",
+          "passed": 1,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "passed": 55,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "passed": 38,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/oxc-cli-invocation.test.mjs",
+          "passed": 3,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/packaged-orcad-template.test.mjs",
+          "passed": 6,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/packaged-process-host.test.mjs",
+          "passed": 7,
+          "failed": 0
+        }
+      ],
+      "report": "/tmp/orca-config-0008-integration-f1157821/focused-tests.json",
+      "report_sha256": "10154345201a26ec65b819308ac1940689b044d12890b4a692e214f0379318e4",
+      "log": "/tmp/orca-config-0008-integration-f1157821/focused-tests.log",
+      "log_sha256": "ffbce86e552d9c33ba501ffca07f0cec22f2dc957b3254384b66d1902474a1a3"
+    },
+    {
+      "runner": "explicit-node",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "config/scripts/orcad-linear-sdk-package.test.mjs",
+        "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+        "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+        "config/scripts/oxc-cli-invocation.test.mjs",
+        "config/scripts/packaged-orcad-template.test.mjs",
+        "config/scripts/packaged-process-host.test.mjs",
+        "config/scripts/orcad-e2e-change-scope.test.mjs",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-config-0008-integration-f1157821/focused-node-tests.json"
+      ],
+      "cwd": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-8",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "passed": 188,
+      "failed": 0,
+      "skipped": 0,
+      "files": 7,
+      "file_results": [
+        {
+          "path": "config/scripts/orcad-e2e-change-scope.test.mjs",
+          "passed": 78,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/orcad-linear-sdk-package.test.mjs",
+          "passed": 1,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "passed": 55,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "passed": 38,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/oxc-cli-invocation.test.mjs",
+          "passed": 3,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/packaged-orcad-template.test.mjs",
+          "passed": 6,
+          "failed": 0
+        },
+        {
+          "path": "config/scripts/packaged-process-host.test.mjs",
+          "passed": 7,
+          "failed": 0
+        }
+      ],
+      "report": "/tmp/orca-config-0008-integration-f1157821/focused-node-tests.json",
+      "report_sha256": "53f3cc626de4c0522f0b8203d97e90579a42e86e891c204ee9f235997812e459",
+      "log": "/tmp/orca-config-0008-integration-f1157821/focused-node-tests.log",
+      "log_sha256": "f7e376b01ef1ed86f88812764b6c4f62ca11f10f893a39e3131924d4da0405bf"
+    }
+  ],
+  "runtime_scope": {
+    "host": "Linux x64",
+    "node_version": "v26.8.1",
+    "default_runner": "Repository run-vitest.mjs resolves its pinned Bun executable and launches the ordinary project configuration. The explicit Node run uses the same project config with Node as the Vitest process.",
+    "unique_normal_test_instances_per_runner": 188,
+    "changed_six_files_tests_per_runner": 110,
+    "affected_unchanged_wsl_suite_tests_per_runner": 78,
+    "counts_are_not_combined_into_376_unique_scenarios": true
+  },
+  "isolated_baseline": {
+    "passed": 110,
+    "failed": 0,
+    "files": 6,
+    "report": "/tmp/orca-config-0008-integration-f1157821/isolated-baseline.json",
+    "report_sha256": "630d59a6e7b98bfe9d3ec7ec17a623c67b45e44fa724af4030efc1f2b5edef75",
+    "log_sha256": "b2580638627e9b84126b5359b8d7ad532bc07f1aac40d3b20f6fad34153d33f2",
+    "scope": "All six changed suites, same repository runner and config, copied source tree; node_modules symlink supplies dependencies only."
+  },
+  "mutation_summary": {
+    "mutated_production_source_files_in_shared_checkout": false,
+    "recipes": 28,
+    "expected_assertion_failures": 28,
+    "failed_parameter_instances": 31,
+    "original_pass_new_fail_counterexamples": 4,
+    "compiler_input_omissions_detected": 17,
+    "missing_workflow_gates_detected": 3,
+    "other_detected_defects": [
+      "cache save before smoke",
+      "Windows whole reseal no-op",
+      "app-relative backslash normalization omitted",
+      "SDK artifact membership omitted",
+      "deployed SDK has wrong actual exports",
+      "OXC wrong runtime command",
+      "OXC batch shim prefix",
+      "OXC real child fails despite valid command/existing non-batch path"
+    ],
+    "shared_mutated_path_hashes_unchanged": true,
+    "all_isolated_mutated_paths_restored": true,
+    "assertion_failures_only_no_loader_or_collection_errors": true
+  },
+  "mutation_results": [
+    {
+      "name": "cache-omits-independent-01",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-01.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "5e654c2eb2493e6ec098c90bb6b1a8ab6635c7b4313248202b85ad54d3556c4d",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/run-process\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/run-process.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/run-process\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-01-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/run-process.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-3…' not to be 'orcad-windows-prebuild-v1-win32-x64-3…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-01-proposed-fail.json",
+        "report_sha256": "07a62fca8567b1fe65194d410bb96dce9faf670fb616a5d8f36e254ddce46de0",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-01-proposed-fail.log",
+        "log_sha256": "270e5a3b2860c824e2512160675d5a83b89e3585d7998e1b6e2ed402ec3b3fc3",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-02",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-02.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "00819065fff10162fc3c2041dd09502885012a09b097f8b0d4d9b080dd97eb98",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/spawn-resolution\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/spawn-resolution.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/spawn-resolution\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-02-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/spawn-resolution.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-d…' not to be 'orcad-windows-prebuild-v1-win32-x64-d…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-02-proposed-fail.json",
+        "report_sha256": "aa106d366a6b18835ad4e0f1e756e44a5979fb24d26109fd0bb827fd01439f20",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-02-proposed-fail.log",
+        "log_sha256": "1879efd5c44c4a3831466ee1dbb60fc8ca4d9773867213b0a8563075131b4872",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-03",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-03.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "8503d5e95d7bd52dc8e8d6ea33f0d1549fe74c31552a44874e987d654b96791a",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/process-tree-termination\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/process-tree-termination.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/process-tree-termination\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-03-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/process-tree-termination.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-e…' not to be 'orcad-windows-prebuild-v1-win32-x64-e…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-03-proposed-fail.json",
+        "report_sha256": "2fd9f99450cd1a3a31115a978d44cb57aee1bac1d0bfecad9c18101ff977d802",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-03-proposed-fail.log",
+        "log_sha256": "578a6f0dc8f4010cf27e4a920084463571a68f2d5eecc9f0877b078ccd0a2ed7",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-04",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-04.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "9a4664af24b6928e531fd0e1bf133f0c8994bd588288803cd76abb0185de7af8",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/process-tree-kill-gate\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/process-tree-kill-gate.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/process-tree-kill-gate\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-04-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.716,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/process-tree-kill-gate.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-6…' not to be 'orcad-windows-prebuild-v1-win32-x64-6…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-04-proposed-fail.json",
+        "report_sha256": "da4bc0d7aa78819f2f3e646c2a5755ef76123efc7657033407e292da4dd411be",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-04-proposed-fail.log",
+        "log_sha256": "20068619ee277e6a807c32512bf3777694cd89f18a5550755c5d9b3e5ba8f52a",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-05",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-05.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "f5aaefc52b39f0bd466279dccaac4f468bb661351f104974d6758d572292c776",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/spawn-observer\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/spawn-observer.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/spawn-observer\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-05-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.716,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/spawn-observer.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-1…' not to be 'orcad-windows-prebuild-v1-win32-x64-1…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-05-proposed-fail.json",
+        "report_sha256": "0cd232b096e944be317cc1cbe1d6c75d9caefc5464bc19a2d21388597b04c79d",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-05-proposed-fail.log",
+        "log_sha256": "b479f809885c753bb79ad12544554908a5e362780056ba226515f46a678efd75",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-06",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-06.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "577689dfa1a815aa322df0c0e65eeb9d6e5ed6a7078103bc242a3b4bbcdef832",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/bounded-output-sink\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/bounded-output-sink.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/bounded-output-sink\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-06-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/bounded-output-sink.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-5…' not to be 'orcad-windows-prebuild-v1-win32-x64-5…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-06-proposed-fail.json",
+        "report_sha256": "872c0c2a73a16bea65fc46699db2676ebc88559ad68c336b3adf41313623a2e4",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-06-proposed-fail.log",
+        "log_sha256": "385920c2ad218c2476ebab689d30f1b36cd1de623e34b84a07994da9d0765d0d",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-07",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-07.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "8e7e27f187b185c235ea84efc8bd1df046dd35ca0f2e7c64cb150672e1b6beae",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/growing-byte-buffer\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/growing-byte-buffer.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/growing-byte-buffer\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-07-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/growing-byte-buffer.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-c…' not to be 'orcad-windows-prebuild-v1-win32-x64-c…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-07-proposed-fail.json",
+        "report_sha256": "7e98b741ec2c65dbb064f32fbd3c2391495b2c0150a84e5e8a15131e9cee60b5",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-07-proposed-fail.log",
+        "log_sha256": "a3ca670a871bfa8666cf4b172a2f42667cf8aadfd3041a1ea342b481b6ed2691",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-08",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-08.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "f20a29a458b1029e698aca248f10782d9ac9e0c5aa85a57f015fe0e58af9622c",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/child-termination-reporter\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/child-termination-reporter.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/child-termination-reporter\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-08-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/child-termination-reporter.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-f…' not to be 'orcad-windows-prebuild-v1-win32-x64-f…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-08-proposed-fail.json",
+        "report_sha256": "4a14ec7ef53e269c47f0a127747d435da564aeca3101cdfb806cd4f7b85b64e0",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-08-proposed-fail.log",
+        "log_sha256": "d9b3391ea794b50f7eb3c192eab73b440ff74da9a09a94438167c3ee4f0d85e9",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-09",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-09.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "cab6950606cc2757eaa063c9e1dfe7a36fdf6da84c4e8ad6971f088dbc538f04",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/process-spec\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/process-spec.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/process-spec\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-09-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/process-spec.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-7…' not to be 'orcad-windows-prebuild-v1-win32-x64-7…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-09-proposed-fail.json",
+        "report_sha256": "29fa59acef5ec673e9c5fbd95b3bedd32bef3fa60ab946bd22a251ab58f548e8",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-09-proposed-fail.log",
+        "log_sha256": "5b68c0818ea6847abb4395e1157783debbd5d9359bb195ac6b22915fe65c1f4c",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-10",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-10.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "ce51371fd5bb4d0f7783ac402f303e720a9c30b3719718057b77398c0a7717f3",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/windows-command-line\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/windows-command-line.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/windows-command-line\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-10-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/windows-command-line.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-d…' not to be 'orcad-windows-prebuild-v1-win32-x64-d…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-10-proposed-fail.json",
+        "report_sha256": "19935d112a6875bebcbc7fde96721e2c417c7815a6bc2dff59fad0c0c636d875",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-10-proposed-fail.log",
+        "log_sha256": "516547c28dc80d28be82db2d203e7d7c9c82cd6a7858c606f09900ec9a4e8958",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-11",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-11.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "b12637c46acdef3bd3e54cb621c77ac5793ed070b651621432178f7e47c6d393",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/windows-cmd-shim-resolution\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/windows-cmd-shim-resolution.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/windows-cmd-shim-resolution\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-11-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.766,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/windows-cmd-shim-resolution.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-b…' not to be 'orcad-windows-prebuild-v1-win32-x64-b…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-11-proposed-fail.json",
+        "report_sha256": "8c6548f4d84dd0b09add235b77532553ac7381b375ab05e0df3417e2a5c7630e",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-11-proposed-fail.log",
+        "log_sha256": "c2f69d6e3486ffec33650b135497877693551b292c88bb2af7224f0f1240e774",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-12",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-12.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "1eaa6a867f1c8833bcd933f4423852efc80385ceb18fd1ba717570b940743adf",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/windows-system-binary\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/windows-system-binary.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/windows-system-binary\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-12-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.716,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/windows-system-binary.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-d…' not to be 'orcad-windows-prebuild-v1-win32-x64-d…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-12-proposed-fail.json",
+        "report_sha256": "d1f890ac0c522296038fa910fb911064fb3fb466cfc59adeea74c5d59814a7ca",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-12-proposed-fail.log",
+        "log_sha256": "50680b2577c30b5447f6c84fac189b0825ceabc6c49ef70b323f7bbb08c201ef",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-13",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-13.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "14f0952e9c31aaa31d2768f53a47f0b6437b7b14eb2714fe1d40afce9fcd824f",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/src/windows-tree-kill\\.ts input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/src/windows-tree-kill.ts",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/src/windows-tree-kill\\.ts input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-13-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.716,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/src/windows-tree-kill.ts input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-4…' not to be 'orcad-windows-prebuild-v1-win32-x64-4…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-13-proposed-fail.json",
+        "report_sha256": "38470ff8938995c2a8c2bdaedc030dc9ec63eed6646b1bdfa9b84d02ac7ca5d5",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-13-proposed-fail.log",
+        "log_sha256": "70560a13bb6821b44af1e085ed1231bce7b44b70c9f3a136ad9918c98dfe90e6",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-14",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-14.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "5c738e2ee2f99514909e4fd03f54fd0e6677c6f98da6915c787cb44a7c19d4ac",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/\\.gitignore input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/.gitignore",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/\\.gitignore input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-14-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.716,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/.gitignore input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-1…' not to be 'orcad-windows-prebuild-v1-win32-x64-1…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-14-proposed-fail.json",
+        "report_sha256": "ca07ce98cadbac08a9751ef049c495474ab4ba3fac3d0043570e372e760bbcae",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-14-proposed-fail.log",
+        "log_sha256": "8d3dcaf40e1c10215bc2d9f42623170c40259edb5c5d32fb28a774c20dd92ed5",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-15",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-15.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "e8c8d4bb3db5479a53d796c5bf790a9ba9e61142e1b62daf9ca15a297165bbe5",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/package\\.json input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/package.json",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/package\\.json input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-15-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.715,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/package.json input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-2…' not to be 'orcad-windows-prebuild-v1-win32-x64-2…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-15-proposed-fail.json",
+        "report_sha256": "fdf2d5fb4e5b3552bab81e4b4c5c0958985526ca46aca5a91c1af2d1ce246648",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-15-proposed-fail.log",
+        "log_sha256": "5140efa0276802f545dcf2f1e2be690f38a24818686573bb259ff3260884b9b4",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-16",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-16.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "fed4047dc0fcdddd4c34bdfffc105e5eff61b82ef6fad33fa27063a7acd26597",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/scripts/build-dist\\.mjs input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/scripts/build-dist.mjs",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/scripts/build-dist\\.mjs input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-16-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.666,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/scripts/build-dist.mjs input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-4…' not to be 'orcad-windows-prebuild-v1-win32-x64-4…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-16-proposed-fail.json",
+        "report_sha256": "76056fa5138ab0537a1334a2f8c686d8db22093edd0a8ad594dbf956d873613c",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-16-proposed-fail.log",
+        "log_sha256": "0a59510bf80d52fa38491c134eb175d0b9f76b7812c2bcc04a6a346bf445a50c",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "cache-omits-independent-17",
+      "path": "config/scripts/orcad-windows-prebuild-cache.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/cache-omits-independent-17.txt",
+      "original_sha256": "8724a17248c27115ccd3eb451cfd5c4ede5ca0cb4931976d0099b749c86a9817",
+      "mutated_sha256": "5218fb3f82366a65d54762fcb88c0654a5d892f512138a09eb91f17ff2b7fdf0",
+      "test": "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+      "pattern": "invalidates a changed src/packages/process-host/tsconfig\\.json input",
+      "reason": "Required compiler input omitted from actual production fingerprint loop: src/packages/process-host/tsconfig.json",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "-t",
+          "invalidates a changed src/packages/process-host/tsconfig\\.json input",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-17-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.666,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 54,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache inputs invalidates a changed src/packages/process-host/tsconfig.json input",
+            "failure_messages": [
+              "AssertionError: expected 'orcad-windows-prebuild-v1-win32-x64-4…' not to be 'orcad-windows-prebuild-v1-win32-x64-4…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-cache.test.mjs:275:82\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-17-proposed-fail.json",
+        "report_sha256": "dabbff3aed21a4e32a8f4943d57e6e89a4225bd1c668c4400609a69e7f2086a5",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-cache-omits-independent-17-proposed-fail.log",
+        "log_sha256": "3eb0d25572bcc1d7cf7355a602e9e0b2d55d024d9cd7718daebe8bae815d770c",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "workflow-missing-gate-1",
+      "path": ".github/workflows/node-server-tests.yml",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/workflow-missing-gate-1.txt",
+      "original_sha256": "ce215d47f979273576716afb04f06a82975d34ff7c2617a48ecebebfb47256e4",
+      "mutated_sha256": "52f7fa04b99d5a473a6dcca7fea896d36117cddf50bf417ce83a2e643cf3c67e",
+      "test": "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+      "pattern": "restores only the exact key and saves after every qualification gate",
+      "reason": "Delete independently required command pnpm build:orcad",
+      "compare_original": true,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "original_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "-t",
+          "restores only the exact key and saves after every qualification gate",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-1-original-pass.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.666,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 37,
+        "assertion_failures": [],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-1-original-pass.json",
+        "report_sha256": "ff0430ef01320d1d88d225148bc280cbee245a6992aba6c814be3d4412634174",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-1-original-pass.log",
+        "log_sha256": "63b228842dbe57f986fa60922174b8c64703b2fdec90583474b6351f068841af",
+        "expected_assertion_failure": false
+      },
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "-t",
+          "restores only the exact key and saves after every qualification gate",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-1-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.666,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 37,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache workflow restores only the exact key and saves after every qualification gate",
+            "failure_messages": [
+              "AssertionError: pnpm build:orcad: expected undefined to be defined\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-workflow.test.mjs:162:40\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-1-proposed-fail.json",
+        "report_sha256": "0babe092052068772770aa3c40ff3120790108068d9c638d0026bb14ed7bfb39",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-1-proposed-fail.log",
+        "log_sha256": "bfca1bf5296ec39a91892ddd376566fb37f9d09702c388fa6bbbb6fba78b3057",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "workflow-missing-gate-2",
+      "path": ".github/workflows/node-server-tests.yml",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/workflow-missing-gate-2.txt",
+      "original_sha256": "ce215d47f979273576716afb04f06a82975d34ff7c2617a48ecebebfb47256e4",
+      "mutated_sha256": "89a433867faeebc2269494b2b5e298611715fd1ad5729f916c30259c9178d44e",
+      "test": "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+      "pattern": "restores only the exact key and saves after every qualification gate",
+      "reason": "Delete independently required command pnpm test:node-server --artifact ${{ runner.os",
+      "compare_original": true,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "original_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "-t",
+          "restores only the exact key and saves after every qualification gate",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-2-original-pass.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.666,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 37,
+        "assertion_failures": [],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-2-original-pass.json",
+        "report_sha256": "e00f150c8e00e19557064636dd885c75cd80448ac0df65705f761ddfde1f33b6",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-2-original-pass.log",
+        "log_sha256": "ad18770d8557dff6c6ccc3f21e3c59e1ce32dbab5e5c60667e09ac4e2c378e6e",
+        "expected_assertion_failure": false
+      },
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "-t",
+          "restores only the exact key and saves after every qualification gate",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-2-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.666,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 37,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache workflow restores only the exact key and saves after every qualification gate",
+            "failure_messages": [
+              "AssertionError: pnpm test:node-server --artifact ${{ runner.os: expected undefined to be defined\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-workflow.test.mjs:162:40\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-2-proposed-fail.json",
+        "report_sha256": "c8282eb0ee9a30089fa5be069035e61aae378a05b597d7ff975d430ef4487bd2",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-2-proposed-fail.log",
+        "log_sha256": "9219321d2f4607558b54a9f5a8f85814329adda2f32453c08ca9d81af47325ef",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "workflow-missing-gate-3",
+      "path": ".github/workflows/node-server-tests.yml",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/workflow-missing-gate-3.txt",
+      "original_sha256": "ce215d47f979273576716afb04f06a82975d34ff7c2617a48ecebebfb47256e4",
+      "mutated_sha256": "24276b6bce4d1f0cef94f5ec6befae4704115be8f9f2968282fab0da6f745b17",
+      "test": "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+      "pattern": "restores only the exact key and saves after every qualification gate",
+      "reason": "Delete independently required command node out/orcad/orcad.js --orcad-smoke-load-check",
+      "compare_original": true,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "original_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "-t",
+          "restores only the exact key and saves after every qualification gate",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-3-original-pass.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.665,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 37,
+        "assertion_failures": [],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-3-original-pass.json",
+        "report_sha256": "2aa5b7e7af22e74ff201952425e65a571bc418d8565ed34fb1392cbd9eeec5fc",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-3-original-pass.log",
+        "log_sha256": "5d5bc696484a37996fc775684dfa41fb60cfc7d79b15e272430eecbc60b2082a",
+        "expected_assertion_failure": false
+      },
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "-t",
+          "restores only the exact key and saves after every qualification gate",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-3-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.665,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 37,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache workflow restores only the exact key and saves after every qualification gate",
+            "failure_messages": [
+              "AssertionError: node out/orcad/orcad.js --orcad-smoke-load-check: expected undefined to be defined\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-workflow.test.mjs:162:40\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-3-proposed-fail.json",
+        "report_sha256": "b533c6819afc1b44da05f38789b6aab59b5c69291891b3398afe3e86c9cdda9c",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-missing-gate-3-proposed-fail.log",
+        "log_sha256": "65f90c3e5633da1f66aaa3aa163cbfcfa08d868c6254d0218b444103e4a147c8",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "workflow-saves-before-smoke",
+      "path": ".github/workflows/node-server-tests.yml",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/workflow-saves-before-smoke.txt",
+      "original_sha256": "ce215d47f979273576716afb04f06a82975d34ff7c2617a48ecebebfb47256e4",
+      "mutated_sha256": "14feb7d709e177bc9b605a6c4c385fb89d3b6768b8774d49bcf5db49cc56de0b",
+      "test": "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+      "pattern": "restores only the exact key and saves after every qualification gate",
+      "reason": "Cache save moved immediately before final smoke gate; remains after preparation and earlier gates.",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "-t",
+          "restores only the exact key and saves after every qualification gate",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-workflow-saves-before-smoke-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.665,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 37,
+        "assertion_failures": [
+          {
+            "full_name": "Windows server prebuild cache workflow restores only the exact key and saves after every qualification gate",
+            "failure_messages": [
+              "AssertionError: expected 20 to be greater than 21\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-windows-prebuild-workflow.test.mjs:169:50\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-saves-before-smoke-proposed-fail.json",
+        "report_sha256": "030a8df8da0dd453ffe10f1bf27ff21721157d3a571d488b1079e46dfe03ba2f",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-workflow-saves-before-smoke-proposed-fail.log",
+        "log_sha256": "9c83697ee06e71e83a297129abece1dde208d87d56ac410b55a999f3419b3dd2",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "windows-reseal-noop",
+      "path": "config/scripts/packaged-orcad-template.cjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/windows-reseal-noop.txt",
+      "original_sha256": "e76ffbd8195b165c6dbe10283705ed0b16b3b7b6cf9b765a9151a442aa2ab7ce",
+      "mutated_sha256": "9eb8d60c107198c4acaf894f234718ed20cddc84f200e8adc33f47d4cb494225",
+      "test": "config/scripts/packaged-orcad-template.test.mjs",
+      "pattern": "reseals the Windows files SignPath returned",
+      "reason": "Replace actual reseal implementation with an entire no-op; old notThrow passed, new independent digest must fail.",
+      "compare_original": true,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "original_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/packaged-orcad-template.test.mjs",
+          "-t",
+          "reseals the Windows files SignPath returned",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-noop-original-pass.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.665,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 5,
+        "assertion_failures": [],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-noop-original-pass.json",
+        "report_sha256": "ec58ee2fd4d261afa4e7352ac36797defca2db49fbeff945b9a33fac6a6b536e",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-noop-original-pass.log",
+        "log_sha256": "1736d4e09e535e4e9e059f2afcc1c21235376c18d4e30654978810da15b49e95",
+        "expected_assertion_failure": false
+      },
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/packaged-orcad-template.test.mjs",
+          "-t",
+          "reseals the Windows files SignPath returned",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-noop-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.616,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 5,
+        "assertion_failures": [
+          {
+            "full_name": "packaged orcad template reseals the Windows files SignPath returned, by their app-relative list",
+            "failure_messages": [
+              "AssertionError: expected 'd02db643a486af29823a80412d0292450c75c…' to be '1d2bf2bbee0ecfdd86439c72700b4bb74f1fc…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/packaged-orcad-template.test.mjs:145:61"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-noop-proposed-fail.json",
+        "report_sha256": "2e4985e11649c8d0846a33e2900b3bcda9604a3a5246f8581a791a6d05be37bc",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-noop-proposed-fail.log",
+        "log_sha256": "7e4a3090bbe6def93bc5f96b6ae4b31fab7c12ad6be851bc4491c60ee24a3c68",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "windows-reseal-no-backslash-normalization",
+      "path": "config/scripts/packaged-orcad-template.cjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/windows-reseal-no-backslash-normalization.txt",
+      "original_sha256": "e76ffbd8195b165c6dbe10283705ed0b16b3b7b6cf9b765a9151a442aa2ab7ce",
+      "mutated_sha256": "27cc99cd567f5e41141ea995276a37ed15435c8c2908a4b2d3ee4bca3a25c067",
+      "test": "config/scripts/packaged-orcad-template.test.mjs",
+      "pattern": "reseals the Windows files SignPath returned",
+      "reason": "Drop normalization of app-relative SignPath backslash paths; retained rejection/digest controls must fail.",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/packaged-orcad-template.test.mjs",
+          "-t",
+          "reseals the Windows files SignPath returned",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-no-backslash-normalization-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.615,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 5,
+        "assertion_failures": [
+          {
+            "full_name": "packaged orcad template reseals the Windows files SignPath returned, by their app-relative list",
+            "failure_messages": [
+              "AssertionError: expected [Function] to not throw an error but 'Error: [verify-packaged-orcad-templat…' was thrown\n    at native\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at methodWrapper (/home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1737:25)\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/packaged-orcad-template.test.mjs:138:67"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-no-backslash-normalization-proposed-fail.json",
+        "report_sha256": "2fcf6ac5282d89c1c825254c6f9fe7f36fb547adfa6002b5b714d8ffd51309fd",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-windows-reseal-no-backslash-normalization-proposed-fail.log",
+        "log_sha256": "30eb1ef33e691bb81a140798918c95975d109cc3fb33c4c268724e1c803ffbc3",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "sdk-missing-artifact-entry",
+      "path": "src/shared/orcad-artifacts.ts",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/sdk-missing-artifact-entry.txt",
+      "original_sha256": "066f1ac0ef99b5c358b1ac51901bdd92be6a1dcdebedd87f462f1938fde0cdf9",
+      "mutated_sha256": "d8e340892ce86240a2c31f7bbf303f0d2190625d047460dbdcef36d22da9dac5",
+      "test": "config/scripts/orcad-linear-sdk-package.test.mjs",
+      "pattern": "resolves linear-sdk.ts's lazy require",
+      "reason": "Remove SDK artifact membership while leaving the actual deployed SDK load working; transferred membership assertion must fail.",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-linear-sdk-package.test.mjs",
+          "-t",
+          "resolves linear-sdk.ts's lazy require",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-sdk-missing-artifact-entry-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.716,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 0,
+        "assertion_failures": [
+          {
+            "full_name": "resolves linear-sdk.ts's lazy require from the deployed server under plain Node",
+            "failure_messages": [
+              "AssertionError: expected [ 'out/cli/index.js', …(47) ] to include 'node_modules/@linear/sdk/index.js'\n    at native\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at methodWrapper (/home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1737:25)\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-linear-sdk-package.test.mjs:26:73\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-sdk-missing-artifact-entry-proposed-fail.json",
+        "report_sha256": "adb3e83ce03022b324c06d94118b3909810c92611a7ff68bd4fae59c24c1497f",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-sdk-missing-artifact-entry-proposed-fail.log",
+        "log_sha256": "8a95c1a87123597d31e8ca38952b6136978fd7ae670b1ca25183999e3c819f50",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "sdk-wrong-deployed-exports",
+      "path": "config/scripts/orcad-linear-sdk-package.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/sdk-wrong-deployed-exports.txt",
+      "original_sha256": "e1237eeb54927a3bb9c2f65305930fad1875929957d1ed28d08bde99518fd6d7",
+      "mutated_sha256": "ede793c6ee74f6cb5ae6b5c0ea79204454f3740c73b14e619fc19f0d0f6132b4",
+      "test": "config/scripts/orcad-linear-sdk-package.test.mjs",
+      "pattern": "resolves linear-sdk.ts's lazy require",
+      "reason": "Real plain-Node child loads a wrong SDK stub; output/constructor contract must fail.",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/orcad-linear-sdk-package.test.mjs",
+          "-t",
+          "resolves linear-sdk.ts's lazy require",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-sdk-wrong-deployed-exports-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.616,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 0,
+        "assertion_failures": [
+          {
+            "full_name": "resolves linear-sdk.ts's lazy require from the deployed server under plain Node",
+            "failure_messages": [
+              "AssertionError: expected { …(3) } to deeply equal { …(3) }\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/orcad-linear-sdk-package.test.mjs:46:51\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-sdk-wrong-deployed-exports-proposed-fail.json",
+        "report_sha256": "f2bc2d74e8ada76ba6f1b9e1f7c55dd9435de160fa82dcc3d71a3baa8076ff8b",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-sdk-wrong-deployed-exports-proposed-fail.log",
+        "log_sha256": "5b835cce0587dcf72f676536736624d9c5d60c6b00f50bf6fe869b77038a27a6",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "oxc-wrong-node-command",
+      "path": "config/scripts/oxc-cli-invocation.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/oxc-wrong-node-command.txt",
+      "original_sha256": "3c477ff15d5122e7e7f40d1ed6ea083cb9ebcf8d1003583fc52477eb9649dabf",
+      "mutated_sha256": "5086dc953159054e00e35ca7ffe570fd8aa1d249a55491ee93c4468abb18d207",
+      "test": "config/scripts/oxc-cli-invocation.test.mjs",
+      "pattern": "launches the installed CLI without a shell",
+      "reason": "Transferred command assertion must reject a different runtime for both installed tools.",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/oxc-cli-invocation.test.mjs",
+          "-t",
+          "launches the installed CLI without a shell",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-oxc-wrong-node-command-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.616,
+        "passed": 0,
+        "failed": 2,
+        "skipped": 1,
+        "assertion_failures": [
+          {
+            "full_name": "oxfmt CLI invocation launches the installed CLI without a shell",
+            "failure_messages": [
+              "AssertionError: expected '/home/neil/.local/share/mise/installs…' to be '/home/neil/.local/share/mise/installs…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/oxc-cli-invocation.test.mjs:18:27\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "full_name": "oxlint CLI invocation launches the installed CLI without a shell",
+            "failure_messages": [
+              "AssertionError: expected '/home/neil/.local/share/mise/installs…' to be '/home/neil/.local/share/mise/installs…' // Object.is equality\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/oxc-cli-invocation.test.mjs:18:27\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-oxc-wrong-node-command-proposed-fail.json",
+        "report_sha256": "f11b14a238fc3f58b38e48dc2919df5fc3f37a38e07ed98242262a7f6916fd7d",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-oxc-wrong-node-command-proposed-fail.log",
+        "log_sha256": "8e7e08de61e7c224a294bfc714e5bcf3f65bc79de2b98fcbb8f56dbf27ba249b",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "oxc-batch-shim-prefix",
+      "path": "config/scripts/oxc-cli-invocation.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/oxc-batch-shim-prefix.txt",
+      "original_sha256": "3c477ff15d5122e7e7f40d1ed6ea083cb9ebcf8d1003583fc52477eb9649dabf",
+      "mutated_sha256": "07db61c23e1ffa88e4db5bf4a798431f2e16352eae751e5d0600acdaa39479b1",
+      "test": "config/scripts/oxc-cli-invocation.test.mjs",
+      "pattern": "launches the installed CLI without a shell",
+      "reason": "Transferred non-batch prefix assertion must reject a .cmd shim for both installed tools.",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/oxc-cli-invocation.test.mjs",
+          "-t",
+          "launches the installed CLI without a shell",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-oxc-batch-shim-prefix-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.615,
+        "passed": 0,
+        "failed": 2,
+        "skipped": 1,
+        "assertion_failures": [
+          {
+            "full_name": "oxfmt CLI invocation launches the installed CLI without a shell",
+            "failure_messages": [
+              "AssertionError: expected '/home/neil/.local/share/pnpm/store/v1…' not to match /\\.(cmd|bat)$/i\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/oxc-cli-invocation.test.mjs:20:40\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "full_name": "oxlint CLI invocation launches the installed CLI without a shell",
+            "failure_messages": [
+              "AssertionError: expected '/home/neil/.local/share/pnpm/store/v1…' not to match /\\.(cmd|bat)$/i\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/oxc-cli-invocation.test.mjs:20:40\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-oxc-batch-shim-prefix-proposed-fail.json",
+        "report_sha256": "9fd434745625919b19612301ba23327b4638cb69931b8ebd3564faa2a0fc2657",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-oxc-batch-shim-prefix-proposed-fail.log",
+        "log_sha256": "ae0f7638a8d57be3a0c0bdeaa375b5c7564a2d5f06e89315ab000b1173dc2988",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    },
+    {
+      "name": "oxc-real-child-fails",
+      "path": "config/scripts/oxc-cli-invocation.mjs",
+      "payload": "/tmp/orca-config-0008-integration-f1157821/mutants/oxc-real-child-fails.txt",
+      "original_sha256": "3c477ff15d5122e7e7f40d1ed6ea083cb9ebcf8d1003583fc52477eb9649dabf",
+      "mutated_sha256": "50f56c6a8ff9ad9691c3c66420ed2bcfdb55d9dcfb681cbae6d1226d22dd57c2",
+      "test": "config/scripts/oxc-cli-invocation.test.mjs",
+      "pattern": "launches the installed CLI without a shell",
+      "reason": "Command and one existing non-batch path pass metadata checks, but the real child cannot execute package JSON; retained exit assertion must fail.",
+      "compare_original": false,
+      "isolation": "Regular source copy under /tmp; shared node_modules only supplies dependencies. No production/test source symlinks mutated.",
+      "proposed_case_counterexample": {
+        "command": [
+          "node",
+          "config/scripts/run-vitest.mjs",
+          "run",
+          "--config",
+          "config/vitest.config.ts",
+          "config/scripts/oxc-cli-invocation.test.mjs",
+          "-t",
+          "launches the installed CLI without a shell",
+          "--maxWorkers=1",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-config-0008-integration-f1157821/mutation-oxc-real-child-fails-proposed-fail.json"
+        ],
+        "cwd": "/tmp/orca-config-0008-integration-f1157821/mutation-repo",
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.616,
+        "passed": 0,
+        "failed": 2,
+        "skipped": 1,
+        "assertion_failures": [
+          {
+            "full_name": "oxfmt CLI invocation launches the installed CLI without a shell",
+            "failure_messages": [
+              "AssertionError: expected '' to contain 'oxfmt'\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/oxc-cli-invocation.test.mjs:30:38\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "full_name": "oxlint CLI invocation launches the installed CLI without a shell",
+            "failure_messages": [
+              "AssertionError: expected '' to contain 'oxlint'\n    at native\n    at /tmp/orca-config-0008-integration-f1157821/mutation-repo/config/scripts/oxc-cli-invocation.test.mjs:30:38\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20)\n    at Promise (native)\n    at runWithCancel (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at <anonymous> (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20)\n    at Promise (native)\n    at runWithTimeout (/home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "unexpected_suite_errors": [],
+        "report": "/tmp/orca-config-0008-integration-f1157821/mutation-oxc-real-child-fails-proposed-fail.json",
+        "report_sha256": "0e08280ba67441bd6e2c62cde8e274bde38dd72af98ffb50266cb748c2383531",
+        "log": "/tmp/orca-config-0008-integration-f1157821/mutation-oxc-real-child-fails-proposed-fail.log",
+        "log_sha256": "f1fabdaad6e6baee03393cd17263928f8a4c8be34d25029555b542dd15649572",
+        "expected_assertion_failure": true
+      },
+      "isolated_original_restored": true,
+      "shared_source_hash_unchanged": true
+    }
+  ],
+  "setup_attempts": [
+    {
+      "stage": "isolated runner preparation",
+      "result": "missing config/.bun-version; test runner did not start",
+      "log": "/tmp/orca-config-0008-integration-f1157821/isolated-setup-missing-bun-version.log",
+      "counted_as_mutation_evidence": false
+    },
+    {
+      "stage": "isolated runner preparation",
+      "result": "missing config/tsconfig.node.json; six suites failed collection with zero tests; copied existing config files and obtained 110/110 passing baseline",
+      "report": "/tmp/orca-config-0008-integration-f1157821/isolated-setup-missing-tsconfig.json",
+      "report_sha256": "ab145e579b76d4562abc482ee233ed4efbc8091824939260a8d1735574043506",
+      "counted_as_mutation_evidence": false
+    }
+  ],
+  "static_integrity": {
+    "delivery_manifest_preserved": true,
+    "delivery_manifest_sha256": "0ac92a86ac8ec1b77e3bbdf3526d3ed0218680dc8c7c46d9fc36e89cc005800c",
+    "all_original_delivery_artifacts_rehashed": 196,
+    "selected_and_evidence_checks": 155,
+    "distinct_current_paths_verified": 153,
+    "selected_files_verified": 50,
+    "changed_files_match_approved_proposals": 6,
+    "all_original_control_rows_have_implementation_mapping": true,
+    "all_domain_members_have_implementation_mapping": true,
+    "review_records": 50,
+    "static_checks": [
+      {
+        "name": "oxfmt",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/oxfmt/bin/oxfmt",
+          "--check",
+          "config/scripts/orcad-linear-sdk-package.test.mjs",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "config/scripts/oxc-cli-invocation.test.mjs",
+          "config/scripts/packaged-orcad-template.test.mjs",
+          "config/scripts/packaged-process-host.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.037,
+        "log": "/tmp/orca-config-0008-integration-f1157821/oxfmt-final.log",
+        "log_sha256": "cb7156fa577a868d6a9d1528ad1bec0ce8830ebe1e3475db8b51c5042958b475"
+      },
+      {
+        "name": "oxlint",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/oxlint/bin/oxlint",
+          "config/scripts/orcad-linear-sdk-package.test.mjs",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "config/scripts/oxc-cli-invocation.test.mjs",
+          "config/scripts/packaged-orcad-template.test.mjs",
+          "config/scripts/packaged-process-host.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.123,
+        "log": "/tmp/orca-config-0008-integration-f1157821/oxlint-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "diff-whitespace",
+        "command": [
+          "git",
+          "diff",
+          "--check",
+          "--",
+          "config/scripts/orcad-linear-sdk-package.test.mjs",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs",
+          "config/scripts/oxc-cli-invocation.test.mjs",
+          "config/scripts/packaged-orcad-template.test.mjs",
+          "config/scripts/packaged-process-host.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.008,
+        "log": "/tmp/orca-config-0008-integration-f1157821/diff-whitespace-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "node-check-5",
+        "command": [
+          "node",
+          "--check",
+          "config/scripts/orcad-linear-sdk-package.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.017,
+        "log": "/tmp/orca-config-0008-integration-f1157821/node-check-5-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "node-check-16",
+        "command": [
+          "node",
+          "--check",
+          "config/scripts/orcad-windows-prebuild-cache.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.019,
+        "log": "/tmp/orca-config-0008-integration-f1157821/node-check-16-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "node-check-17",
+        "command": [
+          "node",
+          "--check",
+          "config/scripts/orcad-windows-prebuild-workflow.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.018,
+        "log": "/tmp/orca-config-0008-integration-f1157821/node-check-17-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "node-check-20",
+        "command": [
+          "node",
+          "--check",
+          "config/scripts/oxc-cli-invocation.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.019,
+        "log": "/tmp/orca-config-0008-integration-f1157821/node-check-20-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "node-check-25",
+        "command": [
+          "node",
+          "--check",
+          "config/scripts/packaged-orcad-template.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.017,
+        "log": "/tmp/orca-config-0008-integration-f1157821/node-check-25-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "node-check-26",
+        "command": [
+          "node",
+          "--check",
+          "config/scripts/packaged-process-host.test.mjs"
+        ],
+        "environment": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.025,
+        "log": "/tmp/orca-config-0008-integration-f1157821/node-check-26-final.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "meaning_preserved": {
+    "case_decisions": "250 keep, 3 consolidate, 3 fix, 1 remove; declarations 257 to 253. Source declaration counts differ from expanded runtime instances.",
+    "cache_inputs": "All original 33 production inputs plus 17 independent required compiler/config paths are in the union; baseline deduplicates to 33. Both fixture-copy loops and invalidation parameterization use the union. All 17 independent omission counterexamples fail the actual invalidation assertion.",
+    "workflow_gates": "Three independent existence checks added while retaining original filtered ordering/no-continue loop. Current four matching steps remain; no broad-filter rows removed.",
+    "sdk": "Artifact membership moved into actual staged lazy load; actual constructor exports and resolution remain. Both membership and wrong deployed exports detected.",
+    "oxc": "All command/prefix length/non-batch/existence checks moved into real shell:false --help launch for each tool; missing bin rejection remains. Three distinct bad invocation/launch counterexamples detected.",
+    "packaging": "Windows digest now checked independently after signed-list reseal. Mac resealing and mixed PE/MZ executable checks remain unchanged.",
+    "removed_hook_case_limit": "Retained output guards and relocated consumer do not independently prove beforePack invokes its guard; no coverage-equivalence claim.",
+    "control_rows": {
+      "retained": 8324,
+      "consolidated-declaration-title": 3,
+      "rewritten-case-callback": 9,
+      "rewritten-suite-callback": 5,
+      "compiler-membership-transferred-to-invalidation": 4,
+      "removed-sole-config-import": 1,
+      "removed-source-string-case": 5
+    }
+  },
+  "limitations": [
+    "Only seven selected suites ran: six changed and the WSL evidence-drift suite. The other 35 automated selected suites have complete source review but were not executed in this batch.",
+    "Eight standalone/native/support/benchmark files were reviewed as source; PowerShell/WSL/native PTY smokes and benchmarks were not executed.",
+    "Host is Linux x64 and explicit Node is v26.8.1. No native macOS/Windows run, SignPath service signing, macOS codesign, Windows job objects/ABI load, pinned Node 24 run, or Node 18 runtime-floor run is claimed. Packaging platform branches use synthetic fixture bytes and signer callbacks.",
+    "Supporting suites in evidence snapshots remain scoped ownership evidence, not implicitly completed independent audits.",
+    "All original case/control/member coordinates and source hashes refer to their original snapshots. Current-case positions and reviewed file hashes refer to the integrated reviewed source; the Git commit containing this record also contains the six test changes.",
+    "Repository static checks were focused formatting, lint, syntax, and whitespace. Full-repository typecheck/CI was not run by this subtask."
+  ],
+  "root_integration": {
+    "reviewer": "root",
+    "review_records": 50,
+    "original_cases": 257,
+    "verified_original_utf16_spans": 15205,
+    "verified_current_evidence_references": 100,
+    "verified_manifest_files": 183,
+    "verified_mutation_reports": 28,
+    "original_pass_reviewed_fail_pairs": 4,
+    "source_pin_preserved": true,
+    "original_delivery_unchanged": true,
+    "metadata_normalization": "sha256/source_commit/snapshot preserve original source; reviewed_sha256/current_cases/current_snapshot identify final bytes; required reviewer/evidence fields supplied from original production review evidence."
+  }
+}

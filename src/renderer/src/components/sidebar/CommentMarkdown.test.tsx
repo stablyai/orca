@@ -333,6 +333,23 @@ function renderComment(content: string, variant: 'compact' | 'document' = 'docum
   return renderToStaticMarkup(<CommentMarkdown variant={variant} content={content} />)
 }
 
+describe('CJK emphasis', () => {
+  it('closes bold that ends in punctuation right before CJK text', () => {
+    expect(
+      renderComment('**单算 Runtime 执行引擎，平均每题 29.78 秒。**边界是开始执行到产出结果。')
+    ).toContain(
+      '<strong>单算 Runtime 执行引擎，平均每题 29.78 秒。</strong>边界是开始执行到产出结果。'
+    )
+  })
+
+  it('keeps CommonMark flanking rules between non-CJK characters', () => {
+    const markup = renderComment('**Note.**Next')
+
+    expect(markup).not.toContain('<strong>')
+    expect(markup).toContain('**Note.**Next')
+  })
+})
+
 describe('GitHub callouts', () => {
   it.each(['compact', 'document'] as const)(
     'renders a %s quote that opens with a marker as a titled callout',

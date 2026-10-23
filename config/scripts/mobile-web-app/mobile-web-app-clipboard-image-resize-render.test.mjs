@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium } from 'playwright-core'
+import { mobileWebAppBuildOptions } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -34,15 +35,8 @@ let uploadChunkBase64Chars = null
 /** Noise at this size encodes to more base64 than the chunk above, so the loop has work to do. */
 const FIXTURE = { width: 1400, height: 1000 }
 
-/**
- * The page under test: the real resizer and the real downscale loop, with nothing else in it.
- *
- * `prepare` is inlined from `mobile-clipboard-image.ts` rather than imported, because that module
- * pulls the upload path's RPC operations and its logical client with it; the two functions it
- * needs are imported from the leaf that holds them, so the arithmetic here is the product's.
- */
 const ENTRY_SOURCE = `
-import { computeMobileClipboardImageDownscale } from './mobile-clipboard-image-downscale'
+import { prepareMobileClipboardImageBase64 } from './mobile-clipboard-image'
 import { resizeMobileClipboardImage } from './mobile-clipboard-image-resize'
 
 function noisePng(width, height) {
@@ -71,26 +65,18 @@ async function measuredDimensions(base64) {
   return { width: image.naturalWidth, height: image.naturalHeight }
 }
 
-globalThis.__orcaResizeCheck = async ({ width, height, maxBase64Length, attempts }) => {
+globalThis.__orcaResizeCheck = async ({ width, height, maxBase64Length }) => {
   const source = noisePng(width, height)
   const resizes = []
-  let data = source
-  let size = { width, height }
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const target = computeMobileClipboardImageDownscale(
-      data.length,
-      size.width,
-      size.height,
-      maxBase64Length
-    )
-    if (!target) {
-      break
-    }
-    const resized = await resizeMobileClipboardImage(data, target)
-    resizes.push({ asked: target, answered: { width: resized.width, height: resized.height } })
-    data = resized.data
-    size = { width: resized.width, height: resized.height }
-  }
+  const data = await prepareMobileClipboardImageBase64(
+    { data: source, size: { width, height } },
+    async (data, target) => {
+      const resized = await resizeMobileClipboardImage(data, target)
+      resizes.push({ asked: target, answered: { width: resized.width, height: resized.height } })
+      return resized
+    },
+    maxBase64Length
+  )
   return {
     sourceBase64Length: source.length,
     resultBase64Length: data.length,
@@ -140,6 +126,7 @@ beforeAll(async () => {
     },
     bundle: true,
     format: 'iife',
+    banner: mobileWebAppBuildOptions([]).banner,
     outfile: join(outDir, 'resize-check.js'),
     target: ['es2022'],
     logLevel: 'silent',
@@ -207,8 +194,7 @@ describeResize(
       try {
         const measured = await page.evaluate((args) => globalThis.__orcaResizeCheck(args), {
           ...FIXTURE,
-          maxBase64Length: uploadChunkBase64Chars,
-          attempts: 3
+          maxBase64Length: uploadChunkBase64Chars
         })
 
         // The fixture is over the budget, so the loop had something to do: a run that started

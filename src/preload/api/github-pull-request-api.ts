@@ -197,12 +197,8 @@ export type GithubPullRequestApi = {
   ) => Promise<GitHubCommentResult>
   checkOrcaStarred: () => Promise<boolean | null>
   starOrca: (source: AppStarSource) => Promise<boolean>
-  /**
-   * GitHub API rate-limit snapshot. Does NOT consume quota (the
-   * `rate_limit` endpoint is exempt). Cached 30s server-side — pass
-   * `force: true` to bust after a known-expensive op.
-   */
+  /** Quota-exempt; cached for 30s unless force is true. */
   rateLimit: (args?: { force?: boolean }) => Promise<GetRateLimitResult>
-  /** Explains scope_missing ProjectV2 failures — notably a shell `GITHUB_TOKEN` shadowing the keyring credential, where `gh auth refresh` is a no-op. */
+  /** Detects missing scopes and shell tokens shadowing keyring credentials. */
   diagnoseAuth: (args?: { host?: string }) => Promise<GhAuthDiagnostic>
 }

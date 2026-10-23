@@ -27,12 +27,10 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
       child = execFile(
         this.agentBrowserBin,
         args,
-        // Why: screenshots return large base64 that exceeds Node's default 1MB maxBuffer (ENOBUFS).
         {
           timeout: execOptions?.timeoutMs ?? EXEC_TIMEOUT_MS,
           maxBuffer: 50 * 1024 * 1024,
-          // Why windowsHide: see the stale-session close above -- every
-          // agent-browser invocation would otherwise flash a console (#14543).
+          // Hide Windows helper consoles so they cannot take keyboard focus.
           windowsHide: true,
           env: execOptions?.envOverrides
             ? { ...this.agentBrowserEnv, ...execOptions.envOverrides }
@@ -61,7 +59,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
             if (liveSession) {
               liveSession.consecutiveTimeouts++
               if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
-                // Why: 3 consecutive timeouts means the daemon is likely stuck — destroy and recreate
+                // Repeated timeouts can indicate a stuck daemon; retire it before reuse.
                 this.destroySession(sessionName)
               }
             }
@@ -74,7 +72,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           }
 
           if (error) {
-            // Why: agent-browser exits non-zero on failure but still writes structured JSON to stdout — parse it for the real error.
+            // Failed helpers can still return a structured error on stdout.
             if (stdout) {
               try {
                 const parsed = JSON.parse(stdout)
@@ -85,9 +83,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
                   )
                   return
                 }
-              } catch {
-                // stdout not valid JSON — fall through to stderr/error.message
-              }
+              } catch {}
             }
             const message = stderr || error.message
             const code = classifyErrorCode(message)
@@ -98,8 +94,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           resolve(stdout)
         }
       )
-      // Why: a Windows daemon inherits the helper's stdio pipes (vercel-labs/agent-browser#1407), so
-      // EOF never arrives; after exit, drain briefly then release the pipes so execFile settles.
+      // Windows daemons inherit stdio; drain after helper exit, then close pipes to settle execFile (vercel-labs/agent-browser#1407).
       child.once('exit', () => {
         exitDrainTimer = setTimeout(() => {
           child.stdout?.destroy()
@@ -110,7 +105,6 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
         session.activeProcess = child
       }
       if (execOptions?.stdinText !== undefined && child?.stdin) {
-        // Why: eval --stdin keeps paste-sized scripts out of argv on every platform.
         child.stdin.on('error', () => {})
         child.stdin.end(execOptions.stdinText)
       }

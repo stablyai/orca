@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
+    "build:process-host": "tsc -p ../src/packages/process-host/tsconfig.json --typeRoots ./node_modules/@types",
     "dev": "pnpm --filter @orca-cloud/relay dev",
     "lint": "pnpm -r lint",
     "pretest": "pnpm test:runner",

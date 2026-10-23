@@ -13,7 +13,7 @@ export type CliErrorContext = {
   commandPath?: readonly string[]
   /** The `--worktree` value this invocation sent; the runtime's error never echoes it. */
   worktreeSelector?: string
-  /** The `--repo` value this invocation sent, for the same reason. */
+  /** The runtime error omits the original --repo selector. */
   repoSelector?: string
   /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
   remoteServerSelected?: boolean
@@ -38,7 +38,7 @@ function contextRecovery(
       remoteServerSelected: context.remoteServerSelected
     })
   }
-  // Why: a paired server's handle sent to this machine reads as a dead terminal, not a missing flag.
+  // A remote handle sent locally looks stale rather than missing a flag.
   if (
     code === 'terminal_handle_stale' &&
     context.commandPath?.[0] === 'terminal' &&
@@ -78,8 +78,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     }
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
-  // Why: error-specific recovery must win over the generic computer fallback.
-  // Classified from the whole error, not just `.code`: a hop that flattens the class leaves only the token.
+  // Match before generic recovery; flattened errors may retain only the conflict token.
   const conflict = automationOwnerConflictRecovery(matchAutomationOwnerConflict(error))
   if (conflict) {
     return formatMessageWithNextSteps(stripAutomationOwnerConflictCode(message), conflict.nextSteps)
@@ -167,7 +166,6 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
   }
 }
 
-/** Machine-readable half of the same recovery the human message carries. */
 function withAutomationOwnerConflictRecovery(response: RuntimeRpcFailure): RuntimeRpcFailure {
   const code = matchAutomationOwnerConflict(response)
   const conflict = automationOwnerConflictRecovery(code)
@@ -178,7 +176,7 @@ function withAutomationOwnerConflictRecovery(response: RuntimeRpcFailure): Runti
     ...response,
     error: {
       ...response.error,
-      // Restores the classification a flattening hop dropped, so --json consumers read the conflict, not the transport.
+      // Restore conflict classification lost during transport flattening.
       code,
       message: stripAutomationOwnerConflictCode(response.error.message),
       data: response.error.data ?? conflict
@@ -193,7 +191,7 @@ function formatMessageWithNextSteps(message: string, nextSteps: readonly string[
   return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
 }
 
-/** Why merge: a mutation error already carries its request id, and `??` dropped the selector grammar. */
+// Preserve both mutation request IDs and selector recovery hints.
 function mergeContextRecovery(
   data: unknown,
   selector: ReturnType<typeof contextRecovery>
@@ -224,7 +222,7 @@ function nextStepsFromData(data: unknown): string[] {
   return []
 }
 
-/** Read here, not from the error's data: the servers that send this predate the hint (#31777). */
+// Older servers do not include this recovery hint in error data.
 function computerSidecarExitRecovery(error: unknown, context: CliErrorContext) {
   if (
     context.commandPath?.[0] !== 'computer' ||
@@ -243,7 +241,7 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
     return sidecarExit
   }
   const selector = contextRecovery(errorCode(error), context)
-  // Why: error-specific recovery must win over the generic computer fallback.
+  // Error-specific recovery takes precedence over the generic fallback.
   if (error instanceof RuntimeClientError && error.data !== undefined) {
     return mergeContextRecovery(error.data, selector)
   }

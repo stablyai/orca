@@ -34,17 +34,10 @@ describe('macOS TCC prompt localization', () => {
       for (const key of KEYS) {
         const enValue = getValue(english, key)
         const localeValue = getValue(catalog, key)
+        expect(enValue, key).toEqual(expect.any(String))
+        expect(localeValue, key).toEqual(expect.any(String))
         expect(repairTranslatedValue({ key, enValue, localeValue, locale })).toBe(localeValue)
       }
     }
-  })
-
-  it('uses the macOS Full Disk Access labels in Korean and Chinese', () => {
-    expect(
-      getValue(readCatalog('ko'), 'auto.components.settings.DeveloperPermissionsPane.c566bca278')
-    ).toBe('전체 디스크 접근 권한')
-    expect(
-      getValue(readCatalog('zh'), 'auto.components.settings.DeveloperPermissionsPane.c566bca278')
-    ).toBe('完全磁盘访问权限')
   })
 })

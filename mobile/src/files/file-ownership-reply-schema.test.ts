@@ -6,8 +6,7 @@ import {
 
 describe('file ownership reply schemas', () => {
   it('keeps the three hostId states distinct', () => {
-    // Absent means no host recorded and captures local; explicit null means the host said local;
-    // a string is parsed. Collapsing absent and null would change where a write lands.
+    // Absent captures local; explicit null refuses an unplaceable owner; a string is parsed.
     expect(fileOwnershipWorktreeSchema.parse({ worktree: {} })?.hostId).toBeUndefined()
     expect(fileOwnershipWorktreeSchema.parse({ worktree: { hostId: null } })?.hostId).toBeNull()
     expect(fileOwnershipWorktreeSchema.parse({ worktree: { hostId: 'ssh:a' } })?.hostId).toBe(

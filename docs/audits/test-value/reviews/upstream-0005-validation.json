@@ -1,0 +1,866 @@
+{
+  "ordinary_suite": {
+    "command": ["pnpm", "test", "config/scripts/ci-dependency-download-cache.test.mjs"],
+    "cwd": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7",
+    "env": {
+      "ORCA_BACKGROUND_LAUNCH": "1"
+    },
+    "exit_code": 0,
+    "files": 1,
+    "tests": 70,
+    "skipped": 0,
+    "log": "/tmp/orca-upstream-windows2025-implemented/focused-test.log",
+    "log_sha256": "2d6a4a2a520cb09a07f5210c39f66306aa5c5f1dbbb94b1fce2f46c490058cb4"
+  },
+  "format": {
+    "command": [
+      "pnpm",
+      "exec",
+      "oxfmt",
+      "--check",
+      "config/scripts/ci-dependency-download-cache.test.mjs"
+    ],
+    "exit_code": 0,
+    "log": "/tmp/orca-upstream-windows2025-implemented/oxfmt.log",
+    "log_sha256": "ae40c55b9cfe287e17b1a2a18a032f1fc70b70be8a840294a70909d9c7101bf3"
+  },
+  "lint": {
+    "command": ["pnpm", "exec", "oxlint", "config/scripts/ci-dependency-download-cache.test.mjs"],
+    "exit_code": 0,
+    "log": "/tmp/orca-upstream-windows2025-implemented/oxlint.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "diff_check": {
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "config/scripts/ci-dependency-download-cache.test.mjs"
+    ],
+    "exit_code": 0
+  },
+  "isolated_mutation_checks": {
+    "baseline_invocations": 2,
+    "original_missing_step_counterexamples": 3,
+    "revised_missing_step_checks": 3,
+    "revised_individual_guard_checks": 6,
+    "all_expected_outcomes_seen": true,
+    "results": [
+      {
+        "id": "isolated-original-baseline",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-isolated-original-baseline.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.515,
+        "test_sha256": "ae63abba36ffb633792b1a3a9ac880d17927f555f2b9885a4f22af721b47043a",
+        "workflow_sha256": "7f434df3bea75fea8e49fd2d47973755159da3e510222b7f6b6f9f7418a3c72b",
+        "passed": 70,
+        "failed": 0,
+        "skipped": 0,
+        "expected_failed_rows": [],
+        "failures": [],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-isolated-original-baseline.log",
+        "log_sha256": "56050d4033c2a8d3c0ff29fa343508d16a55bcd3f6c1015dc14e7202cc67eeb3",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-isolated-original-baseline.json",
+        "report_sha256": "48033dc17bf9c432ea06d514a65d3343949987496d2a66a9eca7937640b8b408"
+      },
+      {
+        "id": "isolated-revised-baseline",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-isolated-revised-baseline.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.516,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "7f434df3bea75fea8e49fd2d47973755159da3e510222b7f6b6f9f7418a3c72b",
+        "passed": 70,
+        "failed": 0,
+        "skipped": 0,
+        "expected_failed_rows": [],
+        "failures": [],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-isolated-revised-baseline.log",
+        "log_sha256": "192557ee955729e3dfa08e1fa112af35eb36a45da85a36cc5ce7a277901afaff",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-isolated-revised-baseline.json",
+        "report_sha256": "8931cf01f0e91801e847d63f8148c61ec43b910aa368d446eb1dcb7f24433066"
+      },
+      {
+        "id": "original-remove-step-1",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-step-1.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.365,
+        "test_sha256": "ae63abba36ffb633792b1a3a9ac880d17927f555f2b9885a4f22af721b47043a",
+        "workflow_sha256": "0a865b017526e78b594b100c4cebe39c53c03ecce1290bc504284f7c5d0bb1a7",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 67,
+        "expected_failed_rows": [],
+        "failures": [],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-step-1.log",
+        "log_sha256": "e09fc5c688f3a6b3a014b9a0fe1142356f0ba6a266f7080541f81f94a8ae40c0",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-step-1.json",
+        "report_sha256": "4e3e22aa98b97df18c3b7ab1e7e815050299a18c5f1416a471369610dd4ca32a"
+      },
+      {
+        "id": "revised-remove-step-1",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-step-1.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.365,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "0a865b017526e78b594b100c4cebe39c53c03ecce1290bc504284f7c5d0bb1a7",
+        "passed": 0,
+        "failed": 3,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-2022", "windows-11-arm", "windows-2025"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-2022",
+            "failureMessages": [
+              "AssertionError: Cache Windows CLI launcher: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "title": "warms native addons without unused CLI builds on windows-11-arm",
+            "failureMessages": [
+              "AssertionError: Cache Windows CLI launcher: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "title": "warms native addons without unused CLI builds on windows-2025",
+            "failureMessages": [
+              "AssertionError: Cache Windows CLI launcher: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-step-1.log",
+        "log_sha256": "3f26817422caae65ec3780f9758da9bf126daa2bac336510c10a05f652bc2a6c",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-step-1.json",
+        "report_sha256": "7b838d54bd41970e0baed2f8ac46796ab795667e2ca8b61c667785213764e09c"
+      },
+      {
+        "id": "original-remove-step-2",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-step-2.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.365,
+        "test_sha256": "ae63abba36ffb633792b1a3a9ac880d17927f555f2b9885a4f22af721b47043a",
+        "workflow_sha256": "8cb4f276f6ada1635c1cd493ba1a2de23e4f70d73ad028d377cfea12607154d1",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 67,
+        "expected_failed_rows": [],
+        "failures": [],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-step-2.log",
+        "log_sha256": "cb60e73f134cf99672665c5920cbd2e6c11d4179c510f52a200b99640cccdb66",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-step-2.json",
+        "report_sha256": "aa313d6074b63c97fa071cd69d4767791f19e641f888510b620dee0d84b02db2"
+      },
+      {
+        "id": "revised-remove-step-2",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-step-2.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.365,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "8cb4f276f6ada1635c1cd493ba1a2de23e4f70d73ad028d377cfea12607154d1",
+        "passed": 0,
+        "failed": 3,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-2022", "windows-11-arm", "windows-2025"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-2022",
+            "failureMessages": [
+              "AssertionError: Build the Windows native executables: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "title": "warms native addons without unused CLI builds on windows-11-arm",
+            "failureMessages": [
+              "AssertionError: Build the Windows native executables: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "title": "warms native addons without unused CLI builds on windows-2025",
+            "failureMessages": [
+              "AssertionError: Build the Windows native executables: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-step-2.log",
+        "log_sha256": "72d1f54488a855572f9c064dae8ace165ebac6d0b095cabfe1ccf1ec4ca24519",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-step-2.json",
+        "report_sha256": "6437edd93ca9fb20d318c54e622692e5240b3eafb330ddbf3136e47ee3dcb71f"
+      },
+      {
+        "id": "original-remove-both-steps",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-both-steps.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 0,
+        "seconds": 0.365,
+        "test_sha256": "ae63abba36ffb633792b1a3a9ac880d17927f555f2b9885a4f22af721b47043a",
+        "workflow_sha256": "3f3c1f403a556613e090de1ed2781e405250ad162ec04344e1ab08e407bb9fd4",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 67,
+        "expected_failed_rows": [],
+        "failures": [],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-both-steps.log",
+        "log_sha256": "698494c5b4aaec48a026a0f1b26165ea4bd6309528a101962adbe24335becc3d",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-original-remove-both-steps.json",
+        "report_sha256": "ee9200058dc5d17f581ef3c3738a0ad01b8cd39905c219f3acab162328b70b19"
+      },
+      {
+        "id": "revised-remove-both-steps",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-both-steps.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.315,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "3f3c1f403a556613e090de1ed2781e405250ad162ec04344e1ab08e407bb9fd4",
+        "passed": 0,
+        "failed": 3,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-2022", "windows-11-arm", "windows-2025"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-2022",
+            "failureMessages": [
+              "AssertionError: Cache Windows CLI launcher: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "title": "warms native addons without unused CLI builds on windows-11-arm",
+            "failureMessages": [
+              "AssertionError: Cache Windows CLI launcher: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          },
+          {
+            "title": "warms native addons without unused CLI builds on windows-2025",
+            "failureMessages": [
+              "AssertionError: Cache Windows CLI launcher: expected undefined to be defined\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:378:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-both-steps.log",
+        "log_sha256": "b04349dea2729e6ef9cc213ad5045d91f017b64f4758bcc3ef361aadd8fc408f",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-remove-both-steps.json",
+        "report_sha256": "f2098620ecf43e22526f9d21497e7bf14a5afae53ce2036d45b34183755fe50d"
+      },
+      {
+        "id": "revised-step-1-admits-2025",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-admits-2025.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.365,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "5148ca9ad53c4e455b23b125c571d6d63556c5e57fe93195843069bd0b7ddc37",
+        "passed": 2,
+        "failed": 1,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-2025"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-2025",
+            "failureMessages": [
+              "AssertionError: expected true to be false // Object.is equality\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:379:49\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-admits-2025.log",
+        "log_sha256": "204366514cb31c8f6b239e7fbfe2cb868b3b43ad9ee2ac5381e9ec7a415f116c",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-admits-2025.json",
+        "report_sha256": "cd7ac4db00d2a095abc7db33da66220df6da6beffb67c941a47d94d1f5f3c36e"
+      },
+      {
+        "id": "revised-step-1-suppresses-2022",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-suppresses-2022.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.365,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "2e76a5ed6cd8b28558ee601af77980c52abe36f6216e47d39881bb39580814c5",
+        "passed": 2,
+        "failed": 1,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-2022"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-2022",
+            "failureMessages": [
+              "AssertionError: expected false to be true // Object.is equality\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:379:49\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-suppresses-2022.log",
+        "log_sha256": "4a21aa28036b85d643ee0f3d4a994d16e4ed001fbbc02478ba2665ae9eb59500",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-suppresses-2022.json",
+        "report_sha256": "b65a85ce25ca7db5676c5bac04a1bbd6804f3f88e791a5e89923ba7893febb3d"
+      },
+      {
+        "id": "revised-step-1-admits-arm",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-admits-arm.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.415,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "b872a1711601a364708a5f9b59bd6ef13c42a5551e9bf07aee59d7bfc5dabe70",
+        "passed": 2,
+        "failed": 1,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-11-arm"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-11-arm",
+            "failureMessages": [
+              "AssertionError: expected true to be false // Object.is equality\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:379:49\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-admits-arm.log",
+        "log_sha256": "2a824bae7a3408a8b2ac39240fb14d689ac366aae5e5f5f123a668b5d4e35cbf",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-1-admits-arm.json",
+        "report_sha256": "4b0dff698b4220e47f239e9b802ec53eb6b5f192056a6b619fd71a535719e7c6"
+      },
+      {
+        "id": "revised-step-2-admits-2025",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-admits-2025.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.365,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "f151bbf9ef7204cadefe20aa36781749b2c7d21f791fcc47e35410ed3da2c9f5",
+        "passed": 2,
+        "failed": 1,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-2025"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-2025",
+            "failureMessages": [
+              "AssertionError: expected true to be false // Object.is equality\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:379:49\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-admits-2025.log",
+        "log_sha256": "e3dbf9b2bb50323489b2327920c219ddf1883719bbdb24e0ece9c998331f7d4c",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-admits-2025.json",
+        "report_sha256": "89790c3695c687f16245952145be1b100c0bcbb92ce9651e50df0fe49f1af1c2"
+      },
+      {
+        "id": "revised-step-2-suppresses-2022",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-suppresses-2022.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.365,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "da78e2480f93f7a0e8a8e177afc916ae4dc81519c20b225c342db04c7b730279",
+        "passed": 2,
+        "failed": 1,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-2022"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-2022",
+            "failureMessages": [
+              "AssertionError: expected false to be true // Object.is equality\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:379:49\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-suppresses-2022.log",
+        "log_sha256": "beb887cc40c76cea031bf1b5b7e2f8603fe2d08adc8e3415ecf526acc30503a0",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-suppresses-2022.json",
+        "report_sha256": "328e72a2439c8c69cc5acfb0eb395d0fe15f9ad6a2b804fda28b82955693e64f"
+      },
+      {
+        "id": "revised-step-2-admits-arm",
+        "command": [
+          "node",
+          "/home/neil/orca/workspaces/orca/comprehensive-test-audit-7/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.mutation.config.mjs",
+          "config/scripts/ci-dependency-download-cache.test.mjs",
+          "-t",
+          "warms native addons without unused CLI builds on",
+          "--reporter=json",
+          "--outputFile",
+          "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-admits-arm.json"
+        ],
+        "cwd": "/tmp/orca-upstream-windows2025-implemented/mutation-workspace",
+        "env": {
+          "ORCA_BACKGROUND_LAUNCH": "1"
+        },
+        "exit_code": 1,
+        "seconds": 0.365,
+        "test_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "workflow_sha256": "7494e1437bb129545a0e79cb5305c958fb8b9fda0de027dcb8a695cf7bf90dae",
+        "passed": 2,
+        "failed": 1,
+        "skipped": 67,
+        "expected_failed_rows": ["windows-11-arm"],
+        "failures": [
+          {
+            "title": "warms native addons without unused CLI builds on windows-11-arm",
+            "failureMessages": [
+              "AssertionError: expected true to be false // Object.is equality\n    at /tmp/orca-upstream-windows2025-implemented/mutation-workspace/config/scripts/ci-dependency-download-cache.test.mjs:379:49\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2885:79\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3276:10)"
+            ]
+          }
+        ],
+        "expectations_met": true,
+        "log": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-admits-arm.log",
+        "log_sha256": "27707819f8496d2194761125d1de1ec117524f700650b09a7293a875c45be38c",
+        "report": "/tmp/orca-upstream-windows2025-implemented/mutation-revised-step-2-admits-arm.json",
+        "report_sha256": "537054fe1ccd708ff85dc58e5f66c32a1b6b23e522eb3f0792d8f1ca2756185e"
+      }
+    ],
+    "plan": "/tmp/orca-upstream-windows2025-implemented/mutation-plan.json",
+    "checkout_production_mutations": false,
+    "isolation_integrity": "/tmp/orca-upstream-windows2025-implemented/mutation-isolation-integrity.json",
+    "runner": "Node Vitest5.0.5 with a minimal isolated config; ordinary checked-out validation uses the standard pnpm test wrapper."
+  },
+  "attempt_history": [
+    {
+      "path": "/tmp/orca-upstream-windows2025-implemented/mutation-first-attempt",
+      "result": "The first harness run observed the expected missing-step assertion failure, then stopped because its diagnostic meta-check incorrectly expected matcher spelling toBeDefined in rendered text. The check was corrected to the exact undefined diagnostic, named step, and source line. All14 invocations subsequently completed successfully."
+    }
+  ],
+  "limits": [
+    "The source-expression suite does not execute Windows native builds, WSL, cache downloads, or GitHub Actions jobs.",
+    "The copied-YAML mutation checks execute the actual complete original/revised test file; targeted mutant runs skip67 unrelated tests by design. Both isolated baselines execute all70 tests.",
+    "No mobile suite was rerun; no tracker edits, staging, commits, or checkout production mutations were made by this task."
+  ],
+  "batch": "upstream-0005",
+  "reviewed_files": 1,
+  "original_declarations": 18,
+  "source_commit": "41b5cf015be7970a23e91d4ce76d52d781db4e1b",
+  "records_sha256": "ba04f069f12464db5ae5b762c43b9fe7d4ba8e7f0fdf5e25cfe2d6fc6066c4b8",
+  "integrity": {
+    "source_commit": "41b5cf015be7970a23e91d4ce76d52d781db4e1b",
+    "original_sha256": "ae63abba36ffb633792b1a3a9ac880d17927f555f2b9885a4f22af721b47043a",
+    "final_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+    "source_integrity": [
+      {
+        "path": ".github/actions/install-node-dependencies/action.yml",
+        "pinned_sha256": "5260d60d87ac83100f3d724c323812469b39fb27e2d5b0f2bb78870046729613",
+        "checkout_sha256": "5260d60d87ac83100f3d724c323812469b39fb27e2d5b0f2bb78870046729613",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/actions/prepare-native-runtime/action.yml",
+        "pinned_sha256": "a48fd50b9f1633a521d25fd8d787ec3085c0ebdc5e06b2be8fcdad124b54ddbe",
+        "checkout_sha256": "a48fd50b9f1633a521d25fd8d787ec3085c0ebdc5e06b2be8fcdad124b54ddbe",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/adhoc-mac-build.yml",
+        "pinned_sha256": "6b46446e4450f121b69f808b9b12a87031cacfee855ca26b68a27ceb48e8af35",
+        "checkout_sha256": "6b46446e4450f121b69f808b9b12a87031cacfee855ca26b68a27ceb48e8af35",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/ci-cache-warmup-platform-jobs.yml",
+        "pinned_sha256": "7f434df3bea75fea8e49fd2d47973755159da3e510222b7f6b6f9f7418a3c72b",
+        "checkout_sha256": "7f434df3bea75fea8e49fd2d47973755159da3e510222b7f6b6f9f7418a3c72b",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/ci-cache-warmup-platforms.yml",
+        "pinned_sha256": "c1127e3da143099c3f54ccd752fffba2415120102865c81e6cefe1c0f45a81ca",
+        "checkout_sha256": "c1127e3da143099c3f54ccd752fffba2415120102865c81e6cefe1c0f45a81ca",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/ci-cache-warmup.yml",
+        "pinned_sha256": "052e9a3d7fbfbf8db96bafd7509d65530b81a343c4123a3d74a06d7238859c61",
+        "checkout_sha256": "052e9a3d7fbfbf8db96bafd7509d65530b81a343c4123a3d74a06d7238859c61",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/daily-mac-build.yml",
+        "pinned_sha256": "241b3e16e2a509b3b70031aed528d8f82ab45233c78440c20c064e3e0e95628f",
+        "checkout_sha256": "241b3e16e2a509b3b70031aed528d8f82ab45233c78440c20c064e3e0e95628f",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/dev-channel-win-build.yml",
+        "pinned_sha256": "df27927658a52b55e32a1e24957b3d50449c39ff1fef22b87cf320f20dd480c7",
+        "checkout_sha256": "df27927658a52b55e32a1e24957b3d50449c39ff1fef22b87cf320f20dd480c7",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/hourly-mac-build.yml",
+        "pinned_sha256": "d25f2c9fc6eaa00564589bca5a0368930e8a306c33a623534e46cf266af47e79",
+        "checkout_sha256": "d25f2c9fc6eaa00564589bca5a0368930e8a306c33a623534e46cf266af47e79",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/mobile.yml",
+        "pinned_sha256": "fc423b32e5d5adfdfeeb8fc114950bcbe7ec4a2fd50be0b4692154b09f789813",
+        "checkout_sha256": "fc423b32e5d5adfdfeeb8fc114950bcbe7ec4a2fd50be0b4692154b09f789813",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/node-server-tests.yml",
+        "pinned_sha256": "ce215d47f979273576716afb04f06a82975d34ff7c2617a48ecebebfb47256e4",
+        "checkout_sha256": "ce215d47f979273576716afb04f06a82975d34ff7c2617a48ecebebfb47256e4",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/pr.yml",
+        "pinned_sha256": "f282650cc06a250e2b41f9603afcd409fdb3f4f651f3fffd77b97f4e1a569bd2",
+        "checkout_sha256": "f282650cc06a250e2b41f9603afcd409fdb3f4f651f3fffd77b97f4e1a569bd2",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/release-cut.yml",
+        "pinned_sha256": "dd773f0aef78910b6937c24e0d524f193ee56104ee78a06b83e85376d77b61d0",
+        "checkout_sha256": "dd773f0aef78910b6937c24e0d524f193ee56104ee78a06b83e85376d77b61d0",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/release-mac-build.yml",
+        "pinned_sha256": "d7497dfbb51cc482e03918e5607fa9b5fc72a1ee8b32ac24d245581bbc9db9ea",
+        "checkout_sha256": "d7497dfbb51cc482e03918e5607fa9b5fc72a1ee8b32ac24d245581bbc9db9ea",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/ssh-windows-hosts.yml",
+        "pinned_sha256": "b23f66f6984bddbfb70fa9e173f3187252fd0256ecef786e2adcd8c9154e0274",
+        "checkout_sha256": "b23f66f6984bddbfb70fa9e173f3187252fd0256ecef786e2adcd8c9154e0274",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/unit-module-cache-benchmark.yml",
+        "pinned_sha256": "e0e6d472383af53e52f7249d72bde25b8f16d3980017044573ee292977ec53f3",
+        "checkout_sha256": "e0e6d472383af53e52f7249d72bde25b8f16d3980017044573ee292977ec53f3",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/unit-tests.yml",
+        "pinned_sha256": "ec67722335c94d1633e099e3ccb057d6f522f2e212066c2b2eb2ffe3d9031df5",
+        "checkout_sha256": "ec67722335c94d1633e099e3ccb057d6f522f2e212066c2b2eb2ffe3d9031df5",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/windows-signing-rehearsal.yml",
+        "pinned_sha256": "1c968d44e896ba61ae283a09ca909e2506ced966ea4d229284b2230e2a59f8f7",
+        "checkout_sha256": "1c968d44e896ba61ae283a09ca909e2506ced966ea4d229284b2230e2a59f8f7",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".github/workflows/wsl-orcad-e2e.yml",
+        "pinned_sha256": "2aeda90bdd969b79ec3c6e26c1fe18b18a59db5e1b26a40d4f5af4d0845b71c9",
+        "checkout_sha256": "2aeda90bdd969b79ec3c6e26c1fe18b18a59db5e1b26a40d4f5af4d0845b71c9",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": ".oxfmtrc.json",
+        "pinned_sha256": "d600e0106bc7c29493054b550c426e8f58af273c1c191bc26d6c9ff4947f1ef3",
+        "checkout_sha256": "d600e0106bc7c29493054b550c426e8f58af273c1c191bc26d6c9ff4947f1ef3",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "config/scripts/ci-dependency-download-cache.test.mjs",
+        "pinned_sha256": "ae63abba36ffb633792b1a3a9ac880d17927f555f2b9885a4f22af721b47043a",
+        "checkout_sha256": "0aceff18ad0b1c5061d40061b7f3a8dda92ad18919d20c724ca7a12088ccbd66",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "config/scripts/ci-unit-module-cache-contents.mjs",
+        "pinned_sha256": "26a958194b7dde996496a78cfe2782e487a107d1ce8351436940b1b0ef00842e",
+        "checkout_sha256": "26a958194b7dde996496a78cfe2782e487a107d1ce8351436940b1b0ef00842e",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "config/scripts/ci-unit-module-cache-trailer.mjs",
+        "pinned_sha256": "c6a2260df1b3e4b98c6f1463ce654ee5e338f22c3a02c140d2444df00a7e4380",
+        "checkout_sha256": "c6a2260df1b3e4b98c6f1463ce654ee5e338f22c3a02c140d2444df00a7e4380",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "config/scripts/ci-unit-module-cache.mjs",
+        "pinned_sha256": "20de9a2179967a8c712f154e737643e83cf1a28f8339debb856c676ad2925a16",
+        "checkout_sha256": "20de9a2179967a8c712f154e737643e83cf1a28f8339debb856c676ad2925a16",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "config/scripts/pr-code-change-scope.mjs",
+        "pinned_sha256": "2fc23b3bd84cd30d1aabd3bf309979e848dcd954ae062cddcb971c71a42c3d7e",
+        "checkout_sha256": "2fc23b3bd84cd30d1aabd3bf309979e848dcd954ae062cddcb971c71a42c3d7e",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "config/scripts/pr-layout-oracle-route.mjs",
+        "pinned_sha256": "ce0c4a4ea08ea6354fd24f94d169d6ef941a81c5aaef6bbd078126fdbb0ad77f",
+        "checkout_sha256": "ce0c4a4ea08ea6354fd24f94d169d6ef941a81c5aaef6bbd078126fdbb0ad77f",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "config/scripts/pr-package-test-paths.mjs",
+        "pinned_sha256": "1dbeb3fbc69a187ea8371b93f2e83a33e77e2a48cacc9c8b20267eb26dcc7e07",
+        "checkout_sha256": "1dbeb3fbc69a187ea8371b93f2e83a33e77e2a48cacc9c8b20267eb26dcc7e07",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      },
+      {
+        "path": "package.json",
+        "pinned_sha256": "90b9162dbc7ee3812116a60887cd0abd4ff85f85f819c56c95f731701a043205",
+        "checkout_sha256": "90b9162dbc7ee3812116a60887cd0abd4ff85f85f819c56c95f731701a043205",
+        "pinned_snapshot_verified": true,
+        "checkout_expected_match": true
+      }
+    ],
+    "verified_source_span_occurrences": 3766,
+    "unique_verified_source_spans": 3174,
+    "case_bodies_unchanged": 17,
+    "case_bodies_changed": 1,
+    "all_previous_111_inputs_retained": true,
+    "all_57_each_rows_retained": true,
+    "original_assertions_retained": 122,
+    "final_assertions": 123,
+    "literal_controls_retained": 101,
+    "no_aliases": true,
+    "mutation_outcomes_verified": 14,
+    "checkout_production_mutations": false,
+    "tracker_or_git_mutations": false,
+    "completed_review_sha256": "7fe4b7532df4f81133ab87abdc0a93e3c2390ced61fb58ceaefefd6d5b83d6d8"
+  },
+  "integration": {
+    "delivered_record_sha256": "7fe4b7532df4f81133ab87abdc0a93e3c2390ced61fb58ceaefefd6d5b83d6d8",
+    "artifact_manifest_sha256": "66c20de84bad44b6057974da2814d5bb99b47b0bcc62095bc4a092612bc082c3",
+    "all_artifacts_verified": 119,
+    "schema_adaptation": "Normalize sha256 to original_sha256 for the pinned pre-edit source_commit; independently verify all 18 original case slices and the repaired reviewed_sha256. Preserve the delivered validation array as validation_commands; validation references the committed batch file."
+  }
+}

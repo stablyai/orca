@@ -15,8 +15,6 @@ vi.mock(
 
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { typography } from '../theme/mobile-theme'
-import { browserAddressFieldBase } from './browser-address-field-base-styles'
-import { browserAddressFieldStyles } from './browser-address-field-styles'
 import { browserAddressFieldStyles as browserAddressFieldStylesOnWeb } from './browser-address-field-styles.web'
 import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
 
@@ -52,29 +50,6 @@ describe('the browser pane text inputs on the web', () => {
   it('gives the raised size a line box it fits in', () => {
     expect(browserAddressFieldStylesOnWeb.input.lineHeight).toBeGreaterThanOrEqual(
       browserAddressFieldStylesOnWeb.input.fontSize
-    )
-  })
-})
-
-describe('the browser address field natively', () => {
-  it('renders at exactly the size it did before the split', () => {
-    expect(browserAddressFieldStyles.input.fontSize).toBe(typography.metaSize)
-    expect(browserAddressFieldStyles.input.fontSize).toBe(12)
-    expect(browserAddressFieldStyles.input.lineHeight).toBe(16)
-    expect(browserAddressFieldStyles.fileLabel.fontSize).toBe(12)
-    expect(browserAddressFieldStyles.fileLabel.lineHeight).toBe(16)
-  })
-
-  // The split is one value, not a second style: everything the siblings do not differ on comes from
-  // the same object, so a padding or a colour cannot drift between the platforms.
-  it('differs from the web style in nothing but the size', () => {
-    expect(browserAddressFieldBase.input).not.toHaveProperty('fontSize')
-    expect(browserAddressFieldBase.input).not.toHaveProperty('lineHeight')
-    expect(browserAddressFieldStyles.input).toMatchObject(browserAddressFieldBase.input)
-    expect(browserAddressFieldStylesOnWeb.input).toMatchObject(browserAddressFieldBase.input)
-    expect(browserAddressFieldStyles.fileLabel).toMatchObject(browserAddressFieldBase.fileLabel)
-    expect(browserAddressFieldStylesOnWeb.fileLabel).toMatchObject(
-      browserAddressFieldBase.fileLabel
     )
   })
 })

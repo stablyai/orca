@@ -39,8 +39,6 @@ const USER_MESSAGE: AgentJournalMessageItem = {
 
 type Route = (params: Record<string, unknown> | undefined) => unknown
 
-// `closed` is readonly on the real connection; the fake flips it so a test can
-// kill the child at a chosen moment.
 type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closed: boolean
   launch: CodexAppServerLaunch
@@ -50,8 +48,6 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closeCount: number
 }
 
-/** Stands in for a live `codex app-server`: every RPC is answered from `routes`,
- *  and the test drives Codex's own traffic through `handlers`. */
 function fakeCodex(routes: Record<string, Route> = {}): {
   connections: FakeConnection[]
   openConnection: typeof openCodexAppServerConnection
@@ -303,7 +299,6 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     await adapter.closeSession('session-1')
 
     expect(bodies.at(-1)?.blocks).toEqual([{ type: 'text', text: 'last words' }])
-    // A requested close interrupts the open turn; the row is revised, not removed.
     expect(tombstones).toEqual([])
     expect(lifecycles.at(-1)).toEqual({
       identity: {

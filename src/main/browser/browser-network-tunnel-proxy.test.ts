@@ -30,7 +30,6 @@ function listen<T extends Server | ReturnType<typeof createServer>>(server: T): 
   })
 }
 
-/** Echo server standing in for a destination only the proxy can reach. */
 async function startEchoServer(): Promise<number> {
   const sockets = new Set<Socket>()
   const server = createServer((socket) => {
@@ -44,7 +43,6 @@ async function startEchoServer(): Promise<number> {
 
 type ConnectRecord = { authority: string; authorization?: string }
 
-/** CONNECT proxy that resolves every requested host to the local echo server. */
 async function startConnectProxy(
   echoPort: number,
   options: { reject?: number } = {}
@@ -139,7 +137,6 @@ describe('native browser tunnel upstream proxy (#29154)', () => {
     expect(
       selectBrowserNetworkTunnelProxy({ host: 'a.example.test', port: 443 }, null, env)
     ).toEqual({ kind: 'direct' })
-    // `0:0:0:0:0:0:0:1` is how the client's SOCKS front end hands over `[::1]`.
     for (const host of ['localhost.', 'app.localhost.', '::1', '0:0:0:0:0:0:0:1', '127.1.2.3']) {
       expect(selectBrowserNetworkTunnelProxy({ host, port: 3000 }, null, env)).toEqual({
         kind: 'direct'
@@ -186,7 +183,6 @@ describe('proxy bypass rules', () => {
     ['.corp.test', 'corp.test', 443, true, false],
     ['*.corp.test', 'corp.test', 443, true, false],
     ['*corp.test', 'corp.test', 443, true, true],
-    // A bare host covers subdomains in NO_PROXY, but is exact in Chromium (Orca's setting).
     ['corp.test', 'deep.a.corp.test', 443, true, false],
     ['corp.test', 'corp.test', 443, true, true],
     ['corp.test', 'notcorp.test', 443, false, false],

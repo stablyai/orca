@@ -7,6 +7,7 @@ import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
+  waitForPageFrames,
   installShellDouble,
   parseCspDirectives,
   projectDir,
@@ -603,7 +604,7 @@ describeRender('the Route A page in a real browser', () => {
       expect(await opened.page.evaluate(() => document.body.innerText)).not.toContain(
         SHELL_HOST.name
       )
-      await opened.page.waitForTimeout(1_000)
+      await waitForPageFrames(opened.page)
       expect(await paintReports(opened.page, paintName)).toBe(0)
 
       arrive()
@@ -649,7 +650,7 @@ describeRender('the Route A page in a real browser', () => {
         { timeout: 30_000, polling: 250 }
       )
       // The router has moved on and the hub is still arriving, so the document is showing nothing.
-      await opened.page.waitForTimeout(1_000)
+      await waitForPageFrames(opened.page)
       expect(await paintReports(opened.page, paintName)).toBe(0)
 
       arrive()
@@ -681,7 +682,7 @@ describeRender('the Route A page in a real browser', () => {
     await page.getByLabel('Back to hosts').click()
     // Nothing to wait for but the absence of a navigation, so settle the microtask the handoff
     // would have posted on and then read the page that is still there.
-    await page.waitForTimeout(1_000)
+    await waitForPageFrames(page)
     expect(await page.evaluate(() => location.pathname)).toBe(HOST_ROUTE)
     const text = await page.evaluate(() => document.body.innerText)
     expect(text).toContain(SHELL_HOST.name)
@@ -753,7 +754,7 @@ describeRender('the stack the page Back button rests on', () => {
   /** Clicks and then lets the router settle; a `GO_BACK` that changes nothing settles too. */
   async function clickAndSettle(page, selector) {
     await page.click(selector)
-    await page.waitForTimeout(500)
+    await waitForPageFrames(page)
     return page.evaluate(() => location.pathname + location.search)
   }
 
@@ -770,10 +771,13 @@ describeRender('the stack the page Back button rests on', () => {
     await opened.page.goto(`${origin}/`, { waitUntil: 'load' })
     await waitForRoute(opened, HOST_ROUTE, SHELL_HOST.name)
     const url = await clickAndSettle(opened.page, '[aria-label="Back to hosts"]')
-    const notifies = await opened.page.evaluate(() => globalThis.__orcaRenderCheckNotifies ?? [])
-    expect(notifies.filter((frame) => frame.name === 'navigate')).toEqual([
-      { v: bridgeVersion, type: 'notify', name: 'navigate', href: '/' }
-    ])
+    await expect
+      .poll(() =>
+        opened.page.evaluate(() =>
+          (globalThis.__orcaRenderCheckNotifies ?? []).filter((frame) => frame.name === 'navigate')
+        )
+      )
+      .toEqual([{ v: bridgeVersion, type: 'notify', name: 'navigate', href: '/' }])
     // Handed over, not taken: the page stayed where it was rather than routing to a screen it does
     // not carry, which is what a fallthrough to the local router would have painted.
     expect(url).toBe(HOST_ROUTE)

@@ -1,7 +1,3 @@
-// Grok's recorded subagents (Grok 1.0.46, s7 fixtures) through translation, assembly and the
-// journal: each subagent is one host record, which the host saves as its row, and its reply is its
-// own row.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { isBackgroundTaskBlock } from '../../shared/native-chat-types'
@@ -40,7 +36,6 @@ function notification(update: Record<string, unknown>) {
   return { sessionId: 'session-1', update }
 }
 
-/** The background recording up to Grok's spawn notice: the subagent is running. */
 async function untilSpawned() {
   const frames = await readAcpFixture('s7-subagent-background')
   const spawned = frames.findIndex((frame) =>
@@ -65,7 +60,7 @@ describe('Grok subagents through the shared timeline', () => {
     expect(replies(rows)).toEqual([
       { agentId: 'subagent-1', role: 'assistant', blocks: [{ type: 'text', text: '4' }] }
     ])
-    // The spawn call keeps its own row; the child's own traffic is not the conversation's.
+    // Child traffic must not become parent-conversation messages.
     expect(
       rows.flatMap((row) =>
         row.body.kind === 'tool-call' ? [[row.body.name, row.body.state]] : []

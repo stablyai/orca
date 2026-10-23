@@ -2,6 +2,8 @@ import { statSync, watch, type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
+import { startShallowFileWatcher } from './parcel-watcher-shallow-file-subscription'
+import { closeFileSystemWatcher } from './rebinding-file-watch'
 import { watcherDirectoryIdentity } from './watcher-directory-identity'
 
 export type ShallowWatcherSubscription = {
@@ -15,18 +17,20 @@ export type ShallowWatcherSubscription = {
 // bounded cadence. Two stats per interval is the whole steady-state cost.
 const REBIND_CHECK_INTERVAL_MS = 30_000
 
-function closeFileSystemWatcher(watcher: FSWatcher): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>()
-  watcher.once('close', resolve)
-  try {
-    watcher.close()
-  } catch {
-    resolve()
-  }
-  return promise
+export function startShallowWatcher(
+  rootPath: string,
+  relativePaths: readonly string[],
+  onEvents: (events: ParcelWatcherEvent[]) => void,
+  onError: (error: Error) => void
+): ShallowWatcherSubscription {
+  // Why: on macOS fs.watch(dir) is a recursive FSEvents stream, so a `.git`
+  // root would stream every object, ref and linked-worktree write to fseventsd.
+  return process.platform === 'darwin'
+    ? startShallowFileWatcher(rootPath, relativePaths, onEvents, onError)
+    : startShallowDirectoryWatcher(rootPath, relativePaths, onEvents, onError)
 }
 
-export function startShallowWatcher(
+export function startShallowDirectoryWatcher(
   rootPath: string,
   relativePaths: readonly string[],
   onEvents: (events: ParcelWatcherEvent[]) => void,
@@ -103,7 +107,14 @@ export function startShallowWatcher(
           emitUpdates(parent, [name])
         }
       })
-      watcher.on('error', reportError)
+      watcher.on('error', (error) => {
+        // The runtime already closed it; unsubscribe must not wait on its 'close'.
+        if (watchers.get(parent) === watcher) {
+          watchers.delete(parent)
+          boundIdentities.delete(parent)
+        }
+        reportError(error)
+      })
       watchers.set(parent, watcher)
       return true
     } catch (error) {

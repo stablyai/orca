@@ -46,7 +46,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"ubuntu-latest":"blacksmith-4vcpu-ubuntu-2404","macos-latest":"blacksmith-6vcpu-macos-latest","windows-latest":"blacksmith-4vcpu-windows-2025"}')[matrix.os] || matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6

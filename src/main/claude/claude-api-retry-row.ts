@@ -1,6 +1,3 @@
-// The one row a Claude `system/api_retry` frame writes: a sentence and a `providerRetrying` fact,
-// revised in place for every attempt of the same retry run.
-
 import {
   agentSessionFailureFact,
   providerDiagnostic,
@@ -29,7 +26,7 @@ export function claudeApiRetryRowBody(message: Record<string, unknown>): AgentJo
   return { kind: 'status', tone: 'warning', ...words }
 }
 
-/** Numbers retry runs: a frame whose attempt does not follow the last one starts a new run. */
+// Missing or non-increasing attempt numbers start a new retry run.
 export function createClaudeApiRetryRuns(): (message: Record<string, unknown>) => number {
   let run = 0
   let lastAttempt: number | null = null

@@ -1,0 +1,33 @@
+{
+  "batch": "root-0008",
+  "reviewer": "root",
+  "source_commit": "8d94ed06570adb2b7300cf16fe9f43b4680e3f2b",
+  "platform": "Linux",
+  "reviewed_files": 5,
+  "original_declaration_sites": 0,
+  "manual_assertion_groups": 5,
+  "production_changes": false,
+  "review_scope": "Read all five original scripts/support modules and relevant actual auth operation/waiter, CDP writer/queue and task tracker/frame/retention/string-owner bodies. Narrow batch from earlier pending archive notes; other archive candidates remain unreviewed.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc docs/audits/claude-task-retention/reproduce.cjs",
+      "result": "Passed all 36 before/after GC arms with baseline sensitivity and fixed/cleanup thresholds.",
+      "log": "/tmp/orca-root-0008-task-proof.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/cdp-stream-retention/reproduce.mjs",
+      "result": "Completed 128 MiB manual measurement with eight samples and cleanup. No assertion-bearing test pass is claimed.",
+      "log": "/tmp/orca-root-0008-cdp-measurement.log"
+    },
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc docs/audits/auth-filesystem-wait-retention/reproduce.cjs /tmp/orca-root-0008-auth-results.json",
+      "result": "Exit 1 before phases: intentional reverse-patch source guard rejects evolved promise-settlement-waiters.ts. Retained as archived proof, not a current-head passing suite.",
+      "log": "/tmp/orca-root-0008-auth-proof.log"
+    }
+  ],
+  "limitations": [
+    "No production, UI, wire or platform behavior changes. These measurements ran on Linux Node; no Electron or cross-platform memory result is claimed.",
+    "Archived auth proof requires its matching source graph; old before/after results are historical evidence. It was not rewritten to accept a different graph.",
+    "This review classifies five standalone/support files only. Other root-0008 pending-note candidates still require full review and records."
+  ]
+}

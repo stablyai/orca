@@ -1,0 +1,141 @@
+{
+  "batch": "upstream-0002",
+  "reviewer": "root",
+  "source_commit": "b6101c69369",
+  "current_commit": "41b5cf015be7970a23e91d4ce76d52d781db4e1b",
+  "files": 8,
+  "original_declarations": 88,
+  "parameter_inputs": 31,
+  "records_sha256": "c9b1cc2dd2cce5c7ec682bdbf68313bcec6d1822305aba934f66e81fbc862755",
+  "source_edits": false,
+  "review": "Read all changed comment text; independently verify identical non-trivia token streams and comment-free TypeScript AST for all eight complete suites and all referenced production/support files. Preserve prior case decisions and mutation provenance at their historical source hashes.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test <eight orchestration suites> --reporter=json --outputFile=/tmp/orca-audit-7-postmerge-root-tests.json",
+      "result": "8 suites / 110 tests passed",
+      "num_passed_tests": 110,
+      "num_failed_tests": 0,
+      "report": "/tmp/orca-audit-7-postmerge-root-tests.json",
+      "report_sha256": "2de1aa299e795b15b1ffe948f0cba2c56a62891d760ada257dc2614583116de1",
+      "log": "/tmp/orca-audit-7-postmerge-root-tests.log",
+      "log_sha256": "03e42be26239b618b45d7c13dd928fd7f60996566f8ee4687bfc4285decd59a5"
+    }
+  ],
+  "integrity": [
+    {
+      "path": "src/cli/handlers/orchestration-request-show-cli.test.ts",
+      "original_sha256": "2fe9b87adb3299d6e51bef12d88d6b4dff3109ee2a4912c694b329484f07e491",
+      "current_sha256": "2d3b204f422fdbaf36b6bc3dad38f39939bb4c4c9c79ce3111c4c0c11798bbe7",
+      "non_trivia_tokens": 400,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": [
+        "src/cli/handlers/orchestration/mutation-request-show-handler.ts",
+        "src/cli/test-fixtures.ts",
+        "src/cli/format.ts"
+      ]
+    },
+    {
+      "path": "src/cli/handlers/orchestration-task-list-brief.test.ts",
+      "original_sha256": "d96abac2198f698f6765f04b1aedd37a6d1a82e9c6db8be7b774db185a8aa3db",
+      "current_sha256": "9626ccc08202eff4bd26a8af901b6438bbeda87b0b94ba70819d600ab04c1dc8",
+      "non_trivia_tokens": 444,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": [
+        "src/cli/handlers/orchestration/task-handlers.ts",
+        "src/cli/handlers/orchestration/terminal-identity.ts",
+        "src/cli/format.ts",
+        "src/cli/test-fixtures.ts"
+      ]
+    },
+    {
+      "path": "src/cli/handlers/orchestration-worker-cli.test.ts",
+      "original_sha256": "4bd566b92e4621dc7963ae0df106337dfea79027946eea767262d5365f3edd3c",
+      "current_sha256": "aadd091613f5e559c61de4a4f3261d9866b6e798844b291991f527ef733ffe52",
+      "non_trivia_tokens": 3607,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": [
+        "src/cli/handlers/orchestration/worker-terminal-handlers.ts",
+        "src/cli/handlers/orchestration/worker-observation-handlers.ts",
+        "src/cli/handlers/orchestration/worker-output.ts",
+        "src/cli/handlers/orchestration/worker-list-run-scope.ts",
+        "src/cli/handlers/orchestration/terminal-identity.ts",
+        "src/cli/handlers/orchestration/mutation-request.ts",
+        "src/cli/args.ts",
+        "src/cli/help.ts",
+        "src/cli/format.ts",
+        "src/cli/test-fixtures.ts"
+      ]
+    },
+    {
+      "path": "src/cli/handlers/orchestration-worker-show-wait-cli.test.ts",
+      "original_sha256": "7b8a37bfde13936b093e46eda0911484b403603f85556138b335febd7b0b9c7c",
+      "current_sha256": "710992a3d868c1d803f506946815f93d3e3340f962669aada056bb58c65a0f1d",
+      "non_trivia_tokens": 522,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": [
+        "src/cli/handlers/orchestration/worker-observation-handlers.ts",
+        "src/cli/format.ts",
+        "src/cli/test-fixtures.ts"
+      ]
+    },
+    {
+      "path": "src/cli/handlers/orchestration.test.ts",
+      "original_sha256": "7b4d7cec11b53639a118d9222cb8464031a9f81104fe65d0cbc9ef9477b1c75a",
+      "current_sha256": "16f4fe004f94050f71fa6fdbaa13f2c5aa8a12b421752a89f60212dfaf0b6df0",
+      "non_trivia_tokens": 3791,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": [
+        "src/cli/handlers/orchestration/message-send-handler.ts",
+        "src/cli/handlers/orchestration/message-check-handler.ts",
+        "src/cli/handlers/orchestration/question-handler.ts",
+        "src/cli/handlers/orchestration/message-payload.ts",
+        "src/cli/handlers/orchestration/terminal-identity.ts"
+      ]
+    },
+    {
+      "path": "src/cli/handlers/orchestration/mutation-request.test.ts",
+      "original_sha256": "3390a87bda316491b8dbbe706a0e6bf49a5fd5c11acb99719e34be167f147645",
+      "current_sha256": "f730d6ef1e630586421b79b1d4f256cacd8d754b1210f011b5a9e65c9667d91d",
+      "non_trivia_tokens": 1424,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": [
+        "src/cli/handlers/orchestration/mutation-request.ts",
+        "src/cli/orchestration-mutation-recovery.ts"
+      ]
+    },
+    {
+      "path": "src/cli/handlers/orchestration/worker-list-run-scope.test.ts",
+      "original_sha256": "f49c1d6f02367a1768521b57c1cbcbc85be492dae239c0f7c5033eba9f0bb839",
+      "current_sha256": "89cb8c2316f50ad7e2e2dc11cffab9bf8608cecc00507def888150c1af36be8a",
+      "non_trivia_tokens": 698,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": [
+        "src/cli/handlers/orchestration/worker-list-run-scope.ts",
+        "src/cli/handlers/orchestration/worker-terminal-handlers.ts",
+        "src/cli/handlers/orchestration/terminal-identity.ts",
+        "src/cli/format.ts",
+        "src/cli/test-fixtures.ts"
+      ]
+    },
+    {
+      "path": "src/cli/handlers/orchestration/worker-output.test.ts",
+      "original_sha256": "f298b6c7e256e591cf11b4f4403d0255620ac8474a41235e5eb938edfd20b4bf",
+      "current_sha256": "edb6aa60817383bc900222aa0d7e96c0e1c67dd043d2b9b9573fa6221ba492eb",
+      "non_trivia_tokens": 2499,
+      "ast_equal": true,
+      "token_equal": true,
+      "evidence_comment_deltas": ["src/cli/handlers/orchestration/worker-output.ts"]
+    }
+  ],
+  "platform_limits": [
+    "Runtime validation is Linux. Existing Windows-only Unix-socket exclusion is retained; no native Windows/macOS execution is claimed.",
+    "Historical mutation results remain tied to their recorded earlier source hashes; this batch does not rerun mutations for comment-only changes."
+  ]
+}

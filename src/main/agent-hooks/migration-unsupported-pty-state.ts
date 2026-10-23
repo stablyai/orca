@@ -64,9 +64,7 @@ export function clearMigrationUnsupportedPtysForPaneKey(paneKey: string): void {
   if (ptyIdsToClear.length === 0) {
     return
   }
-  // Why: pane teardown can clear several legacy PTYs for one stable pane.
-  // Persist once after the batch instead of rebuilding the full snapshot for
-  // every entry while still emitting individual renderer clear events.
+  // Batch persistence while still emitting individual renderer clear events.
   for (const ptyId of ptyIdsToClear) {
     entriesByPtyId.delete(ptyId)
     listener?.({ type: 'clear', ptyId })

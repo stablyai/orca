@@ -12,6 +12,7 @@ import { createBrowserPageStateActions } from './browser-page-state-actions'
 import { createBrowserPageMetadataActions } from './browser-page-metadata-actions'
 import { createBrowserHydrationActions } from './browser-hydration-actions'
 import { createBrowserProfileListActions } from './browser-profile-list-actions'
+import { createBrowserManagedProfileActions } from './browser-managed-profile-actions'
 import { createBrowserProfileImportActions } from './browser-profile-import-actions'
 import { createBrowserCookieImportActions } from './browser-cookie-import-actions'
 import { createBrowserHistoryActions } from './browser-history-actions'
@@ -32,6 +33,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   pendingAddressBarFocusByPageId: {},
   browserSessionProfiles: [],
   browserSessionProfilesByHostId: {},
+  managedBrowserProfileStatusById: {},
   browserSessionHostIdOverride: null,
   browserSessionImportState: null,
   browserUrlHistory: [],
@@ -52,6 +54,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   ...createBrowserPageMetadataActions(set, get),
   ...createBrowserHydrationActions(set, get),
   ...createBrowserProfileListActions(set, get),
+  ...createBrowserManagedProfileActions(set, get),
   ...createBrowserProfileImportActions(set, get),
   ...createBrowserCookieImportActions(set, get),
   ...createBrowserHistoryActions(set, get)

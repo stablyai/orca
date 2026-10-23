@@ -32,7 +32,7 @@ type HooksConfig = {
 let tempRoots: string[] = []
 
 beforeEach(() => {
-  // Why: the trust-grant ledger lives in Orca's userData, which otherwise resolves to the live one.
+  // Isolate the trust ledger from the running app's userData.
   const userData = mkdtempSync(join(tmpdir(), 'orca-codex-wsl-hooks-userdata-'))
   tempRoots.push(userData)
   vi.stubEnv('ORCA_USER_DATA_PATH', userData)
@@ -285,8 +285,7 @@ describe('Codex WSL runtime hook install', () => {
   )
 
   it('sweeps all managed WSL trust for disable or confirmed absence', async () => {
-    // Why: disable and confirmed absence intentionally pass []. Transient
-    // unavailability must NOT use this path — last known-good trust remains.
+    // Empty keys revoke all trust; transient unavailability must retain known-good keys.
     const plan = createTestPlan()
     writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
     writeFileSync(plan.tomlPath, '', 'utf-8')
@@ -328,8 +327,7 @@ describe('Codex WSL runtime hook install', () => {
       })
     ).toBe('remove')
 
-    // Why: a `missing` probe right after a verified grant is a false negative;
-    // revoking would delete the fresh trust the launching pane reads (#8847).
+    // A successful install outweighs a concurrent missing probe; retain its fresh trust.
     expect(
       _internals.getWslHookReconciliationAction({
         settlement: { status: 'missing' },
@@ -350,8 +348,6 @@ describe('Codex WSL runtime hook install', () => {
       })
     ).toBe('none')
 
-    // Why: a genuinely moved home resolves to a different path and still
-    // reinstalls, even though the original install succeeded.
     expect(
       _internals.getWslHookReconciliationAction({
         settlement: { status: 'resolved', canonicalPath: '/windows/d/home' },
@@ -569,8 +565,6 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     writeFileSync(plan.tomlPath, '', 'utf-8')
 
     const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
-      // Simulate codex's side: write trusted_hash blocks the way its config
-      // writer would, then report the entries trusted.
       upsertHookTrustEntries(
         plan.tomlPath,
         request.expectedTrustKeys.map((key) => ({
@@ -605,8 +599,6 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     const command = expectedManagedCommand(plan.commandScriptPath)
     const managedTrustEntry = getManagedTrustEntry(plan, command)
     const trustEntries = readHookTrustEntries(plan.tomlPath)
-    // Why: the codex-granted hash must be authoritative — the self-computed
-    // hash must not overwrite it after a successful grant.
     expect(trustEntries.get(computeTrustKey(managedTrustEntry))?.trustedHash).toBe(
       'sha256:codex-user_prompt_submit'
     )

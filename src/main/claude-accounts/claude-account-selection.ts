@@ -63,7 +63,6 @@ export class ClaudeAccountSelection {
     private readonly runtimeAuth: ClaudeAccountRuntime
   ) {}
 
-  /** Each row is labelled with the login its folder holds (superset U/profiles.ts:121-137). */
   list(): ClaudeRateLimitAccountsState {
     this.pruneSelection()
     const settings = this.store.getSettings()
@@ -79,8 +78,7 @@ export class ClaudeAccountSelection {
       })
       .sort((a, b) => b.updatedAt - a.updatedAt)
     const userConfigDir = this.runtimeAuth.router.userConfigDir()
-    // Why only with accounts, and at most every 5 s: the personal state file is large and every
-    // running Claude rewrites it, so a list would otherwise re-parse it on main each time.
+    // Throttle parsing of the large, frequently rewritten personal state file.
     const systemDefault =
       accounts.length > 0 ? readClaudeFolderLogin(claudeStateFile(userConfigDir), 5_000) : null
     return {
@@ -97,8 +95,7 @@ export class ClaudeAccountSelection {
   private summarize(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
     const summary = this.savedSummary(account)
     if (account.managedAuthRuntime === 'wsl') {
-      // Why no read: listing must not start a stopped distro. Only an older Orca's folder layout
-      // is known to hold no login; a launch refuses a missing folder with its own reason.
+      // Avoid starting stopped distros; only legacy layouts are known to need sign-in.
       return savedWslClaudeAccountHome(account) ? summary : { ...summary, needsSignIn: true }
     }
     const login = readClaudeFolderLogin(
@@ -112,7 +109,7 @@ export class ClaudeAccountSelection {
         organizationName: login.organizationName
       }
     }
-    // Why: an account System default is signed in to runs there until it signs in on its own.
+    // Allow System default to supply the login until the account signs in separately.
     return this.runtimeAuth.router.coveredBySystemDefault(account.id)
       ? { ...summary, runsOnSystemDefault: true }
       : { ...summary, needsSignIn: true }
@@ -147,12 +144,12 @@ export class ClaudeAccountSelection {
         settings.activeClaudeManagedAccountId === accountId ? null : nextSelection.host,
       activeClaudeManagedAccountIdsByRuntime: nextSelection
     })
-    // Why before the delete: no new launch may pick the folder while it is being removed.
+    // Stop new launches from selecting the folder before deleting it.
     await this.runtimeAuth.syncForCurrentSelection(target)
     try {
       await this.runtimeAuth.removeAccountFolder(accountId, target)
     } catch (error) {
-      // Why keep the row: the folder (on Windows, with its history) is still there to retry.
+      // Keep the account available to retry folder deletion.
       console.warn('[claude-accounts] Could not delete the account folder:', error)
       throw new Error(CLAUDE_ACCOUNT_FOLDER_IN_USE_MESSAGE)
     }
@@ -161,7 +158,7 @@ export class ClaudeAccountSelection {
         .getSettings()
         .claudeManagedAccounts.filter((entry) => entry.id !== accountId)
     })
-    // Why again: the last account's removal also removes the which-account file.
+    // Removing the last account also removes the selection file.
     await this.runtimeAuth.syncForCurrentSelection(target)
     this.rateLimits.evictInactiveClaudeCache(accountId)
     this.refreshUsage(wasSelected ? accountId : undefined, target)
@@ -186,7 +183,7 @@ export class ClaudeAccountSelection {
       ) {
         throw new Error('That Claude account belongs to a different runtime.')
       }
-      // Why on the host: the CLI and paired clients select without the renderer's check.
+      // CLI and paired clients bypass the renderer's sign-in check.
       if (this.summarize(account).needsSignIn) {
         throw new Error(CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE)
       }
@@ -220,7 +217,7 @@ export class ClaudeAccountSelection {
     return this.list()
   }
 
-  /** Bookkeeping: a usage failure never undoes the account change that triggered it. */
+  /** Usage failures must not undo account changes. */
   refreshUsage(
     outgoingAccountId: string | null | undefined,
     target: ClaudeAccountSelectionTarget | undefined
@@ -244,8 +241,7 @@ export class ClaudeAccountSelection {
     return account
   }
 
-  // Why notify: every window's switcher and Settings read the selection from settings, including
-  // selections made by the CLI, a paired client or another window.
+  // Notify every window of selections made by the CLI, paired clients, or other windows.
   saveSettings(patch: Partial<ClaudeAccountSettings>): void {
     this.store.updateSettings(patch, { notifyListeners: true })
   }

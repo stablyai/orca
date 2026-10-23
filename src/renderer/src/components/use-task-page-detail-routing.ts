@@ -4,7 +4,7 @@ import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../shared/jira-types'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { findTaskPageLinearIssue } from '@/components/task-page-cache-selectors'
+import { findTaskPageLinearIssue } from './task-page/linear/task-page-linear-cache-selectors'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
   const {

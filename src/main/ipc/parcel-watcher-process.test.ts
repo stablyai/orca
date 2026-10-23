@@ -660,7 +660,7 @@ describe('subscribeViaWatcherProcess', () => {
     )
   })
 
-  it('does not respawn for later subscriptions after the crash fuse opens', async () => {
+  it('does not respawn for later subscriptions while the crash fuse cools down', async () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(0)
@@ -681,7 +681,7 @@ describe('subscribeViaWatcherProcess', () => {
       last.emit('exit', 3221226505, null)
       expect(forkMock).toHaveBeenCalledTimes(3)
 
-      vi.setSystemTime(10 * 60_000)
+      vi.setSystemTime(80_000 + 4 * 60_000)
       await expect(subscribeViaWatcherProcess('/later', vi.fn(), {})).rejects.toMatchObject({
         code: 'process_unavailable'
       })

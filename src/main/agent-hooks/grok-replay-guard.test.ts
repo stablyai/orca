@@ -37,7 +37,9 @@ function expectGuardBeforeTransport(
   spool?: string
 ): void {
   const guardIndex = script.indexOf(guard)
-  expect(guardIndex).toBeGreaterThan(script.indexOf(response))
+  const responseIndex = script.indexOf(response)
+  expect(responseIndex).toBeGreaterThan(-1)
+  expect(guardIndex).toBeGreaterThan(responseIndex)
   expect(guardIndex).toBeLessThan(script.indexOf('curl'))
   if (spool) {
     expect(guardIndex).toBeLessThan(script.indexOf(spool))
@@ -67,11 +69,15 @@ function runPosixHook(
     const result = spawnSync('/bin/sh', [scriptPath], {
       encoding: 'utf8',
       input: '{"hook_event_name":"Stop"}',
+      timeout: 5000,
       env: {
         ...process.env,
         PATH: `${dir}:${process.env.PATH ?? ''}`,
         CURL_LOG: curlLog,
         GROK_HOOK_EVENT: grokHookEvent,
+        DEVIN_PROJECT_DIR: '',
+        CLAUDE_JOB_DIR: '',
+        ORCA_CURSOR_HOOK_RESPONSE: '',
         ORCA_AGENT_HOOK_ENDPOINT: '',
         ORCA_AGENT_HOOK_PORT: '1234',
         ORCA_AGENT_HOOK_TOKEN: 'token',

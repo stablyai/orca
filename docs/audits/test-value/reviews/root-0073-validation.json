@@ -1,0 +1,286 @@
+{
+  "batch": "root-0073",
+  "source_commit": "88b47bc7d8785e615b2e79a5dc75ab1991cc2265",
+  "files": 4,
+  "original_declarations": 22,
+  "final_declarations": 22,
+  "original_explicit_parameter_rows": 2,
+  "runtime_cases": 23,
+  "decisions": {
+    "keep": 18,
+    "fix": 4
+  },
+  "records_sha256": "0c0654f6a25dec4e33da21d06defe2d5259b978c7878821721ae0f99479a5b52",
+  "commands": [
+    {
+      "name": "baseline-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/serve-restore.test.ts src/cli/handlers/serve-service.test.ts src/cli/handlers/skill-sharing.test.ts src/cli/handlers/speech.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0073-baseline-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0073-baseline-tests.log",
+      "log_sha256": "c73a648d372b89979f6f4a66f3f64e09066c3f731ad256aafa5a81a26cc1b6e7",
+      "report": "/tmp/orca-root-0073-baseline-tests.json",
+      "report_sha256": "48999792c96d13f31ee6cf4bca4ea3d75951ed0e5dbfb14754ff9a1c588d7ddc",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "name": "reviewed-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/serve-restore.test.ts src/cli/handlers/serve-service.test.ts src/cli/handlers/skill-sharing.test.ts src/cli/handlers/speech.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0073-reviewed-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0073-reviewed-tests.log",
+      "log_sha256": "46ba788ff5816fcfe363967270b2cabd91abcd7ff094851a607c8db3004e721d",
+      "report": "/tmp/orca-root-0073-reviewed-tests.json",
+      "report_sha256": "e6eb9c589fe7830b581c41179dad4622e5c5ef201b873e3e65d6ab328ae4afc6",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "name": "final-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/serve-restore.test.ts src/cli/handlers/serve-service.test.ts src/cli/handlers/skill-sharing.test.ts src/cli/handlers/speech.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0073-final-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0073-final-tests.log",
+      "log_sha256": "7a9eeab91043d64f1069f1eb1d051f4f47f922a00b6df1983aa1826ad14ee1e4",
+      "report": "/tmp/orca-root-0073-final-tests.json",
+      "report_sha256": "f1cb954b1c06c6a8a237d833833528f01cad18bffb2e91a253466829505f70e1",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "name": "final-typecheck",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0073-final-typecheck.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc"
+    },
+    {
+      "name": "final-lint",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint src/cli/handlers/serve-restore.test.ts src/cli/handlers/serve-service.test.ts src/cli/handlers/skill-sharing.test.ts src/cli/handlers/speech.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0073-final-lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "final-format",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxfmt --check src/cli/handlers/serve-restore.test.ts src/cli/handlers/serve-service.test.ts src/cli/handlers/skill-sharing.test.ts src/cli/handlers/speech.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0073-final-format.log",
+      "log_sha256": "35ee3988aac8bc6d864d11c4439e914cb311b470610a854a7fc0436d2abcdf6b"
+    }
+  ],
+  "mutations": [
+    {
+      "defect": "extra-publish-version",
+      "production_path": "src/cli/handlers/skill-sharing.ts",
+      "test_path": "src/cli/handlers/skill-sharing.test.ts",
+      "original_production_sha256": "bf5845add572551a6f280cef5225e865991df4c45c19494c49ea524f1092ec44",
+      "mutant_production_sha256": "3b538a71de43d1cdcf15c410b84c7c0317c0615ea2b99960e085ee937e0aab4c",
+      "original_test_sha256": "7fb2a54a7cafd0c126cbd1752c89c106e40a51138987bd735ce09d230a588cce",
+      "reviewed_test_sha256": "6a798e8b0e37b088c95a51c9ef50b1e7f9152d337b86edcdd20a47a724c731cd",
+      "results": [
+        {
+          "phase": "original",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/skill-sharing.test.ts",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0073-extra-publish-version-original.json"
+          ],
+          "exit_code": 0,
+          "passed": 8,
+          "failed": 0,
+          "failures": [],
+          "test_sha256": "7fb2a54a7cafd0c126cbd1752c89c106e40a51138987bd735ce09d230a588cce",
+          "production_sha256": "3b538a71de43d1cdcf15c410b84c7c0317c0615ea2b99960e085ee937e0aab4c",
+          "report": "/tmp/orca-root-0073-extra-publish-version-original.json",
+          "report_sha256": "e7407518c8e223c7c5ae06f3e9fcae3018269dc76da50ace6f8ac46fbd269617",
+          "log": "/tmp/orca-root-0073-extra-publish-version-original.log",
+          "log_sha256": "c366587a1a266d7de53d6c8e2e16f25f278ece76d05d796184244dc25aa65715"
+        },
+        {
+          "phase": "reviewed",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/skill-sharing.test.ts",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0073-extra-publish-version-reviewed.json"
+          ],
+          "exit_code": 1,
+          "passed": 7,
+          "failed": 1,
+          "failures": [
+            {
+              "title": "publishes multiple explicit skills and prints only public output",
+              "messages": [
+                "AssertionError: expected { version: { …(3) }, …(6) } to deeply equal { …(6) }\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-8/src/cli/handlers/skill-sharing.test.ts:142:39\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ],
+          "test_sha256": "6a798e8b0e37b088c95a51c9ef50b1e7f9152d337b86edcdd20a47a724c731cd",
+          "production_sha256": "3b538a71de43d1cdcf15c410b84c7c0317c0615ea2b99960e085ee937e0aab4c",
+          "report": "/tmp/orca-root-0073-extra-publish-version-reviewed.json",
+          "report_sha256": "7753609cfdd60c114cade6a29bedb302896e14f1dd5aa97f43004e3aa32522b2",
+          "log": "/tmp/orca-root-0073-extra-publish-version-reviewed.log",
+          "log_sha256": "743fb765893f52d050dbf42e2cd17fbfa3edc975256d82b937650943380b812d"
+        }
+      ],
+      "production_restored": true,
+      "test_restored": true
+    },
+    {
+      "defect": "wrong-speech-upgrade-code",
+      "production_path": "src/cli/handlers/speech.ts",
+      "test_path": "src/cli/handlers/speech.test.ts",
+      "original_production_sha256": "79e43816a4806ee25e288eda351dc43114bc605a719e68545aca731cab193551",
+      "mutant_production_sha256": "6e780662fd25f82e514781a2a58becd74da677538d1efa71159df7a3a74acc53",
+      "original_test_sha256": "ee511572cc3598a915acbcadbac22fa5ed1d4a531e7bbc91705f1d640f0af6f1",
+      "reviewed_test_sha256": "88bfc162adacfe9e776d5967f3c943e19cf606c228ef82ffc9ce459b860db842",
+      "results": [
+        {
+          "phase": "original",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/speech.test.ts",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0073-wrong-speech-upgrade-code-original.json"
+          ],
+          "exit_code": 0,
+          "passed": 4,
+          "failed": 0,
+          "failures": [],
+          "test_sha256": "ee511572cc3598a915acbcadbac22fa5ed1d4a531e7bbc91705f1d640f0af6f1",
+          "production_sha256": "6e780662fd25f82e514781a2a58becd74da677538d1efa71159df7a3a74acc53",
+          "report": "/tmp/orca-root-0073-wrong-speech-upgrade-code-original.json",
+          "report_sha256": "2c85bf9226ca128e34b4a61f25a861c97cca4b49c2a3722aa7bd45f9e1fcf8b5",
+          "log": "/tmp/orca-root-0073-wrong-speech-upgrade-code-original.log",
+          "log_sha256": "e1536fcc03d351070ab727ff109b21a81cc36887986e722b21ad6d640ea85ce3"
+        },
+        {
+          "phase": "reviewed",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/speech.test.ts",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0073-wrong-speech-upgrade-code-reviewed.json"
+          ],
+          "exit_code": 1,
+          "passed": 3,
+          "failed": 1,
+          "failures": [
+            {
+              "title": "names the update instead of surfacing method_not_found",
+              "messages": [
+                "Error: expected Error: This Orca server cannot store a vo… { …(2) } to match object { code: 'incompatible_runtime', …(1) }\n(1 matching property omitted from actual)\n    at Assertion.__VITEST_REJECTS__ (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2480:33)\n    at Assertion.propertyGetter (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1607:27)\n    at Reflect.get (<anonymous>)\n    at Object.proxyGetter [as get] (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1696:22)\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-8/src/cli/handlers/speech.test.ts:38:73\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)"
+              ]
+            }
+          ],
+          "test_sha256": "88bfc162adacfe9e776d5967f3c943e19cf606c228ef82ffc9ce459b860db842",
+          "production_sha256": "6e780662fd25f82e514781a2a58becd74da677538d1efa71159df7a3a74acc53",
+          "report": "/tmp/orca-root-0073-wrong-speech-upgrade-code-reviewed.json",
+          "report_sha256": "5b215618f911862cf9f8f0b8354bd55644ab550b319c9297fb1fc959c7c9a5ca",
+          "log": "/tmp/orca-root-0073-wrong-speech-upgrade-code-reviewed.log",
+          "log_sha256": "cc6b2b118b1855e9289f7eb0eef6ec9eea90443ce482afb92ca10c2d0906438a"
+        }
+      ],
+      "production_restored": true,
+      "test_restored": true
+    },
+    {
+      "defect": "wrong-uninstall-unit",
+      "production_path": "src/cli/handlers/serve-service.ts",
+      "test_path": "src/cli/handlers/serve-service.test.ts",
+      "original_production_sha256": "f2b43b8cf468a9ea4df8a53288cfc1dc4cd9acffa9bbbdcde455336d6adb4213",
+      "mutant_production_sha256": "e6d4a9ddf5c4c401cea7807a57c412a2ebdad3807c3d59a2ad80ea4f37d82e31",
+      "original_test_sha256": "f975e0e90980462a0ca79f242de386abd370433011133782c441cd2a69e956dd",
+      "reviewed_test_sha256": "4c1ecc4dc8f6448daab7e228eb123310b3979f5344d8cc534a4fd23aba58e7b4",
+      "results": [
+        {
+          "phase": "original",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/serve-service.test.ts",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0073-wrong-uninstall-unit-original.json"
+          ],
+          "exit_code": 0,
+          "passed": 9,
+          "failed": 0,
+          "failures": [],
+          "test_sha256": "f975e0e90980462a0ca79f242de386abd370433011133782c441cd2a69e956dd",
+          "production_sha256": "e6d4a9ddf5c4c401cea7807a57c412a2ebdad3807c3d59a2ad80ea4f37d82e31",
+          "report": "/tmp/orca-root-0073-wrong-uninstall-unit-original.json",
+          "report_sha256": "01835a81370a3f6e4a22d1b2cfc6ba1a3409363d6b43e1248184948ff71726dd",
+          "log": "/tmp/orca-root-0073-wrong-uninstall-unit-original.log",
+          "log_sha256": "587edc469e8f7fc025cd9aadc9e250be0ea071cde98f9de057b8ca635835e838"
+        },
+        {
+          "phase": "reviewed",
+          "command": [
+            "pnpm",
+            "test",
+            "src/cli/handlers/serve-service.test.ts",
+            "--maxWorkers=1",
+            "--reporter=default",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0073-wrong-uninstall-unit-reviewed.json"
+          ],
+          "exit_code": 1,
+          "passed": 8,
+          "failed": 1,
+          "failures": [
+            {
+              "title": "uninstalls by stopping the service and removing the unit",
+              "messages": [
+                "AssertionError: expected [ …(2) ] to deeply equal [ …(2) ]\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-8/src/cli/handlers/serve-service.test.ts:118:19\n    at async file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+              ]
+            }
+          ],
+          "test_sha256": "4c1ecc4dc8f6448daab7e228eb123310b3979f5344d8cc534a4fd23aba58e7b4",
+          "production_sha256": "e6d4a9ddf5c4c401cea7807a57c412a2ebdad3807c3d59a2ad80ea4f37d82e31",
+          "report": "/tmp/orca-root-0073-wrong-uninstall-unit-reviewed.json",
+          "report_sha256": "7ddb2f9b38b13685d3e405a8c8c45f8699b7883fed902a3cf4c6aaf2bbc248b9",
+          "log": "/tmp/orca-root-0073-wrong-uninstall-unit-reviewed.log",
+          "log_sha256": "5e79c779f013ceea65004fb088c2669eb8e2e310dcbd6d35917e38bad128db21"
+        }
+      ],
+      "production_restored": true,
+      "test_restored": true
+    }
+  ],
+  "corrected_initial_typecheck": {
+    "exit_code": 1,
+    "log": "/tmp/orca-root-0073-typecheck.log",
+    "log_sha256": "85f5b1f99309da92e0dd4f8d56bcda762c94c120307613759b493198c6632dbc",
+    "reason": "The generic ReturnType of overloaded vi.fn included a constructable mock; the context now accepts RuntimeClient.call directly. Final CLI typecheck passes."
+  },
+  "integrity": {
+    "exact_original_case_slices_verified": 22,
+    "exact_parameter_rows_verified": 2,
+    "original_and_reviewed_hashes_verified": true,
+    "production_restoration_verified": true,
+    "original_snapshot_sha256": "d7266d30ac393a1a523460db269d5f755ad9d16c6388e22282597860aa6a5095",
+    "plan_sha256": "00c7607db411c448d145f01e0aaeca44c7acc7cc0fda6e78943807467ccda99a"
+  },
+  "limitations": [
+    "All twenty-two declarations and both explicit remote-environment table rows remain, expanding to twenty-three runtime cases.",
+    "Real temporary unit, launcher and brake files ran on Linux; injected launchctl/systemctl/loginctl dependencies establish command construction and parsing, not native manager integration.",
+    "The service-launcher title is corrected to profile skip and bare Linux CLI refusal; no mounted-AppImage input or coverage is claimed.",
+    "Speech stdin tests cover concatenation, trimming, TTY, blank and post-read character overflow; they do not establish the early streaming-byte cap.",
+    "Skill sharing uses a mocked runtime RPC. No actual publish, upload, credential use, socket or app launch occurred.",
+    "Supporting source reads do not complete reviews of other pending tests."
+  ]
+}

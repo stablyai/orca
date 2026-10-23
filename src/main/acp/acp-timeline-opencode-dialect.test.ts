@@ -26,8 +26,7 @@ async function openCodeRig() {
   return { rig, translator, apply, update }
 }
 
-// The shapes OpenCode's ACP server writes for a shell tool: its output and exit code ride under
-// `rawOutput.metadata`, beside the text content.
+// OpenCode puts shell output and exit status in rawOutput.metadata.
 const bashStart = {
   sessionUpdate: 'tool_call',
   toolCallId: 'call-1',
@@ -38,42 +37,43 @@ const bashStart = {
 }
 
 describe('OpenCode over ACP', () => {
-  it("reads a shell tool's exit code and output from OpenCode's metadata", async () => {
-    const { rig, update } = await openCodeRig()
-    update(bashStart, 1001)
-    update(
-      {
-        sessionUpdate: 'tool_call_update',
-        toolCallId: 'call-1',
-        status: 'completed',
-        rawOutput: {
-          output: 'ls: missing: No such file or directory\n',
-          metadata: { output: 'ls: missing: No such file or directory\n', exit: 1 }
-        }
+  it.each([
+    {
+      label: 'metadata output and exit fallback',
+      rawOutput: {
+        output: 'ls: missing: No such file or directory\n',
+        metadata: { output: 'ls: missing: No such file or directory\n', exit: 1 }
       },
-      1002
-    )
-    const tool = (await rig.rows()).find((row) => row.body.kind === 'tool-call')?.body
-    expect(tool).toMatchObject({
-      kind: 'tool-call',
-      state: 'completed',
-      exitCode: 1,
-      output: { head: 'ls: missing: No such file or directory\n' }
-    })
-  })
-
-  it('keeps a shared exit code the agent already reported', () => {
-    const normalized = OPENCODE_ACP_DIALECT.normalizeToolUpdate!({
-      toolCallId: 'call-1',
-      rawOutput: { exitCode: 0, metadata: { exit: 3 } }
-    })
-    expect(normalized.rawOutput).toEqual({ exitCode: 0, metadata: { exit: 3 } })
-  })
-
-  it('leaves a tool with no command metadata as it came', () => {
-    const plain = { toolCallId: 'call-2', rawOutput: 'done' }
-    expect(OPENCODE_ACP_DIALECT.normalizeToolUpdate!(plain)).toBe(plain)
-  })
+      expected: { exitCode: 1, output: { head: 'ls: missing: No such file or directory\n' } }
+    },
+    {
+      label: 'explicit zero takes precedence over metadata exit three',
+      rawOutput: { exitCode: 0, metadata: { exit: 3 } },
+      expected: { exitCode: 0 }
+    },
+    {
+      label: 'plain output without metadata',
+      rawOutput: 'done',
+      expected: { output: { head: 'done' } }
+    }
+  ])(
+    'keeps shell result semantics through the journal: $label',
+    async ({ rawOutput, expected }) => {
+      const { rig, update } = await openCodeRig()
+      update(bashStart, 1001)
+      update(
+        {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'call-1',
+          status: 'completed',
+          rawOutput
+        },
+        1002
+      )
+      const tool = (await rig.rows()).find((row) => row.body.kind === 'tool-call')?.body
+      expect(tool).toMatchObject({ kind: 'tool-call', state: 'completed', ...expected })
+    }
+  )
 
   it("shows OpenCode's own permission option names", async () => {
     const { translator, apply, update } = await openCodeRig()

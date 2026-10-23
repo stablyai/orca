@@ -6504,7 +6504,7 @@
     "ko": "워크스페이스 {{count}}개 연결됨"
   },
   "auto.components.sidebar.WorktreeContextMenu.sleepWithDescendants": {
-    "ko": "하위 항목도 절전 ({{value0}})"
+    "ko": "하위 항목도 패널 닫기 ({{value0}})"
   },
   "auto.components.sidebar.WorktreeContextMenu.sleepWithDescendantsDescription": {
     "ko": "이 워크스페이스와 모든 하위 워크스페이스의 활성 패널을 닫아 메모리와 CPU 사용량을 줄입니다."

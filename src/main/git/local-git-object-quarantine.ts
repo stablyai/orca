@@ -54,7 +54,12 @@ export function inheritedLocalObjectStore(
 /** Scratch object store for throwaway Git writes on the local (native or WSL) host. */
 export function createLocalGitObjectQuarantine(
   repoPath: string,
-  options: { wslDistro?: string; signal?: AbortSignal; admissionTier?: GitAdmissionTier } = {}
+  options: {
+    wslDistro?: string
+    signal?: AbortSignal
+    admissionTier?: GitAdmissionTier
+    spawnOnWorkerThread?: boolean
+  } = {}
 ): LocalGitObjectQuarantine {
   const wslDistro = parseWslPath(repoPath)?.distro ?? options.wslDistro
   const quarantine = createGitObjectQuarantine(async () => {
@@ -65,6 +70,7 @@ export function createLocalGitObjectQuarantine(
     const commonDir = await readRepoCommonDirFromGit(repoPath, {
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
       ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
     })
     // Why after the read: that first Git call is what settles the WSL linked-worktree route,

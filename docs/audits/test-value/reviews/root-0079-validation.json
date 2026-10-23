@@ -1,0 +1,499 @@
+{
+  "batch": "root-0079",
+  "status": "implemented-and-validated",
+  "reviewer": "root",
+  "source_commit": "18c27344d15c3d0bc253b43fa82ccfb937a50a86",
+  "review_records_sha256": "7a6b5545380d002d097a6360d1a6d4848336600b9e7584e70cfc179b4f5712eb",
+  "reviewed_files": 3,
+  "original_declarations": 10,
+  "final_declarations": 10,
+  "explicit_parameter_rows": 0,
+  "case_decisions": {
+    "keep": 6,
+    "fix": 4,
+    "consolidate": 0,
+    "remove": 0
+  },
+  "scope": "Complete source review of three CLI suites and controlled runtime fixtures. Actual CLI parsing, command dispatch and formatting under mocked runtime/local-store ports; no app, native device, emulator, live transport or server.",
+  "changes": [
+    "The privacy checks permit empty environment success output; require positive saved environment identity and exact sanitized endpoint.",
+    "The first-refusal test has only one changed entry; provide a later entry and prove there is no second file-open request.",
+    "The JSON recovery test counts advice strings but never checks their contents; assert both actionable steps.",
+    "Negative cases restore process.exitCode only after assertions; use failure-safe teardown.",
+    "Suite resets exitCode before cases but leaves the final failure code installed; restore original exitCode in teardown."
+  ],
+  "historical_proposal": {
+    "path": "/tmp/orca-root-0079-pre-review/plan.json",
+    "sha256": "ecf5f79d6e4995a95e68a0aa556efb396b0d52029ff3495aa16e98cf633c04ad",
+    "phase": "Source-only proposal preceded isolated implementation; pending/runtime statements in that file are historical."
+  },
+  "production_evidence_sha256": {
+    "src/cli/index.ts": "3e6cfe8add5c1dba2ca1ac0764292ce4f4ac6d8c5b9cf68b0595b3540faf6f83",
+    "src/cli/index-test-harness.ts": "8a80ec493e26d08406d8a10fee75bec61e3bbc278558b4037ccf038472060e84",
+    "src/cli/dispatch.ts": "783ec3a6499c6c79c1c93d19924f3bda91fcf65e6fba0e5bd3fbf1cab4c9fe2e",
+    "src/cli/handlers/browser-tab.ts": "ffabf0b3b8f52070e899a69fd5ad7f5c3dca9f2897430a797c9e93eac690d302",
+    "src/cli/handlers/emulator.ts": "da1d7d82b3c71be5a1d518cbad2b1864dba21939ae3b2ef38caa08add4b1edbf",
+    "src/cli/handlers/environment.ts": "95eb30e45f167a68c325eb192185cc01a28ee666e626fbf7da89bba8e2c85dbd",
+    "src/cli/handlers/file.ts": "ffb0d469eec3a529efd1f8d89f6074809fc21a744b14a7672fce798447f8185d",
+    "src/cli/handlers/file-open-call.ts": "201157c9e716168ef6bed2a54850bbf708ad22e74f3f2e4fa92a8fda8f9d7396",
+    "src/cli/specs/file.ts": "18208829d3fb535ab24d227890c8eec8ca551c20d529a172a319d928c8e0424d",
+    "src/cli/specs/emulator.ts": "976bc5175ddedac2e348353ac1f7d3ae299c88bf29b2bc670d169fe912668848",
+    "src/cli/specs/environment.ts": "65ab5985f74982b316081fe4b7405b7b40b88f443ce3e2764d8b2a51ef0b714b",
+    "src/cli/selectors.ts": "26e124328769c825047780114ca14cdb99fb8850f59a4e92665f84781ad43259",
+    "src/cli/format.ts": "6dc590cc2ba444024dbfb156af548af4bcdd687c77b64a107ae5bd4573284414",
+    "src/shared/runtime-environments.ts": "81bbfc29f63ef5c75af20b4a95b2d5d13d4c0266434b55f78789237d17ba4e3d",
+    "src/cli/cli-error.ts": "ad176669de9b8f31abbc6fcfa7a9ed1a8488057ac172b78eb1132b187200de57"
+  },
+  "runtime_results": [
+    {
+      "phase": "isolated-baseline",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+      "command": [
+        "node",
+        "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "src/cli/index-device-commands.test.ts",
+        "src/cli/index-environment-commands.test.ts",
+        "src/cli/index-file-open-headless.test.ts",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-root-0079-pre-review/baseline.json"
+      ],
+      "exit_code": 0,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/orca-root-0079-pre-review/baseline.json",
+      "report_sha256": "e29393051ee1e04e889cedbec06e678dc362b53c2456b161aaa2f5affc7d3bf1",
+      "log": "/tmp/orca-root-0079-pre-review/baseline.log",
+      "log_sha256": "48690e51d4566e2ebcd8086df7e90c6406098a421dcd8fcb3a5812395f0e6520"
+    },
+    {
+      "phase": "isolated-reviewed",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+      "command": [
+        "node",
+        "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "config/vitest.config.ts",
+        "src/cli/index-device-commands.test.ts",
+        "src/cli/index-environment-commands.test.ts",
+        "src/cli/index-file-open-headless.test.ts",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-root-0079-pre-review/reviewed.json"
+      ],
+      "exit_code": 0,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/orca-root-0079-pre-review/reviewed.json",
+      "report_sha256": "ddc8331a10394f1147cd53a16e9c958da4695d1f7072fcfa9991458d323858eb",
+      "log": "/tmp/orca-root-0079-pre-review/reviewed.log",
+      "log_sha256": "9487a8fc760467fad60318a080a5cebf90b43257d8e501b5f1b8b0b7973bb3fe"
+    }
+  ],
+  "mutations": [
+    {
+      "name": "empty-environment-results",
+      "production": "src/cli/handlers/environment.ts",
+      "test": "src/cli/index-environment-commands.test.ts",
+      "production_sha256": "95eb30e45f167a68c325eb192185cc01a28ee666e626fbf7da89bba8e2c85dbd",
+      "mutated_sha256": "40647512886c06bd7a41db9e205d86e5a4f12918ebbee2c7c05441f0ac337359",
+      "runs": [
+        {
+          "mode": "original",
+          "command": [
+            "node",
+            "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-environment-commands.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0079-pre-review/mutations/empty-environment-results/original.json"
+          ],
+          "exit_code": 0,
+          "passed": 2,
+          "failed": 0,
+          "report_sha256": "b4887b050f25abb7c0c68404b5c001ed72d2544692ddce546710b5faf891c74d",
+          "report": "/tmp/orca-root-0079-pre-review/mutations/empty-environment-results/original.json",
+          "log": "/tmp/orca-root-0079-pre-review/mutations/empty-environment-results/original.log",
+          "log_sha256": "fb9325fc33f22258bc6cf4429bd27d490db3fae26f8476a63d24563bc4e02106",
+          "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          }
+        },
+        {
+          "mode": "reviewed",
+          "command": [
+            "node",
+            "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-environment-commands.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0079-pre-review/mutations/empty-environment-results/reviewed.json"
+          ],
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 2,
+          "report_sha256": "d7e007453babf8f47efb221538de9ed1a5158809be192387f6bf33832381c61c",
+          "report": "/tmp/orca-root-0079-pre-review/mutations/empty-environment-results/reviewed.json",
+          "log": "/tmp/orca-root-0079-pre-review/mutations/empty-environment-results/reviewed.log",
+          "log_sha256": "87df8c8916fd3931fd36e98ce01c195667d8b41b4cbfbc75b5766bed16a345d6",
+          "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          }
+        }
+      ],
+      "copied_production_restored": true,
+      "shared_production_unchanged": true,
+      "failures": [
+        {
+          "title": "lists saved environments even when ORCA_ENVIRONMENT is set",
+          "messages": [
+            "AssertionError: expected { id: 'local', ok: true, \u2026(2) } to match object { ok: true, result: { \u2026(1) } }\n(3 matching properties omitted from actual)\n    at Proxy.<anonymous> (file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2066:10)\n    at Proxy.<anonymous> (file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at Proxy.methodWrapper (file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/chai@6.3.0/node_modules/chai/index.js:1737:25)\n    at /tmp/orca-root-0079-pre-review/isolated-repo/src/cli/index-environment-commands.test.ts:65:59\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+          ]
+        },
+        {
+          "title": "adds saved environments even when ORCA_ENVIRONMENT is set",
+          "messages": [
+            "AssertionError: expected { id: 'local', ok: true, \u2026(2) } to match object { ok: true, result: { \u2026(1) } }\n(3 matching properties omitted from actual)\n    at Proxy.<anonymous> (file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2066:10)\n    at Proxy.<anonymous> (file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:1958:14)\n    at Proxy.methodWrapper (file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/chai@6.3.0/node_modules/chai/index.js:1737:25)\n    at /tmp/orca-root-0079-pre-review/isolated-repo/src/cli/index-environment-commands.test.ts:95:59\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "unrelated-recovery-advice",
+      "production": "src/cli/handlers/file-open-call.ts",
+      "test": "src/cli/index-file-open-headless.test.ts",
+      "production_sha256": "201157c9e716168ef6bed2a54850bbf708ad22e74f3f2e4fa92a8fda8f9d7396",
+      "mutated_sha256": "520043767280168391077acb0de00dec7461e6fa94b32d0f987799c1aeb6f2dd",
+      "runs": [
+        {
+          "mode": "original",
+          "command": [
+            "node",
+            "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-file-open-headless.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0079-pre-review/mutations/unrelated-recovery-advice/original.json",
+            "-t",
+            "keeps a stable code and recovery"
+          ],
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "report_sha256": "a37e9a723c2f60050559ce8a1f8e504fc6210a90c00e547d89f3cf98208b93a8",
+          "report": "/tmp/orca-root-0079-pre-review/mutations/unrelated-recovery-advice/original.json",
+          "log": "/tmp/orca-root-0079-pre-review/mutations/unrelated-recovery-advice/original.log",
+          "log_sha256": "ad01bf7874cee96902ef3f919ef4777499ccfe72a81c90da9433e8589a3e2735",
+          "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          }
+        },
+        {
+          "mode": "reviewed",
+          "command": [
+            "node",
+            "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-file-open-headless.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0079-pre-review/mutations/unrelated-recovery-advice/reviewed.json",
+            "-t",
+            "keeps a stable code and recovery"
+          ],
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "report_sha256": "4460e7594cadf0caa10f4055fecf7e302c64a6c82e102d4124cd123f29c29fc3",
+          "report": "/tmp/orca-root-0079-pre-review/mutations/unrelated-recovery-advice/reviewed.json",
+          "log": "/tmp/orca-root-0079-pre-review/mutations/unrelated-recovery-advice/reviewed.log",
+          "log_sha256": "b916ec1a28a4bedc97814c06bc1276fa0fdb8c393271a7df607beb6ff8afd2aa",
+          "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          }
+        }
+      ],
+      "copied_production_restored": true,
+      "shared_production_unchanged": true,
+      "failures": [
+        {
+          "title": "keeps a stable code and recovery in --json output",
+          "messages": [
+            "AssertionError: expected [ 'unrelated advice', \u2026(1) ] to deeply equal [ \u2026(2) ]\n    at /tmp/orca-root-0079-pre-review/isolated-repo/src/cli/index-file-open-headless.test.ts:65:41\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "wrong-first-changed-path",
+      "production": "src/cli/handlers/file.ts",
+      "test": "src/cli/index-file-open-headless.test.ts",
+      "production_sha256": "ffb0d469eec3a529efd1f8d89f6074809fc21a744b14a7672fce798447f8185d",
+      "mutated_sha256": "ecac251f4a92f606be459843a589bce962e803471cdeb2e377678c3f86fba9b7",
+      "runs": [
+        {
+          "mode": "original",
+          "command": [
+            "node",
+            "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-file-open-headless.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0079-pre-review/mutations/wrong-first-changed-path/original.json",
+            "-t",
+            "stops open-changed at the first refusal"
+          ],
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "report_sha256": "88f26345134faeca542fbe29d4baf2424d331f436fdd902a76c845580893e197",
+          "report": "/tmp/orca-root-0079-pre-review/mutations/wrong-first-changed-path/original.json",
+          "log": "/tmp/orca-root-0079-pre-review/mutations/wrong-first-changed-path/original.log",
+          "log_sha256": "32f047e5ff16560d44159767ada0e203733d3f66adb2c28bf6eb10a477b3bfc1",
+          "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          }
+        },
+        {
+          "mode": "reviewed",
+          "command": [
+            "node",
+            "/tmp/orca-root-0079-pre-review/isolated-repo/node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "config/vitest.config.ts",
+            "src/cli/index-file-open-headless.test.ts",
+            "--maxWorkers=1",
+            "--reporter=json",
+            "--outputFile=/tmp/orca-root-0079-pre-review/mutations/wrong-first-changed-path/reviewed.json",
+            "-t",
+            "stops open-changed at the first refusal"
+          ],
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "report_sha256": "93752b5e606baa9643d3295ca5b2316f28e40c731f5169d1c5accd66f5a67685",
+          "report": "/tmp/orca-root-0079-pre-review/mutations/wrong-first-changed-path/reviewed.json",
+          "log": "/tmp/orca-root-0079-pre-review/mutations/wrong-first-changed-path/reviewed.log",
+          "log_sha256": "d90707905cce485a5743f0295f37326a6527a3fc8ff1e83b8f9fe8a65d4c49b1",
+          "cwd": "/tmp/orca-root-0079-pre-review/isolated-repo",
+          "environment": {
+            "ORCA_BACKGROUND_LAUNCH": "1"
+          }
+        }
+      ],
+      "copied_production_restored": true,
+      "shared_production_unchanged": true,
+      "failures": [
+        {
+          "title": "stops open-changed at the first refusal with the same explanation",
+          "messages": [
+            "AssertionError: expected [ [ 'git.status', \u2026(1) ], \u2026(1) ] to deeply equal [ [ 'git.status', \u2026(1) ], \u2026(1) ]\n    at /tmp/orca-root-0079-pre-review/isolated-repo/src/cli/index-file-open-headless.test.ts:85:39\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///home/neil/orca/workspaces/orca/comprehensive-test-audit-8/node_modules/.pnpm/vitest@5.0.5_@opentelemetry+api@1.9.1_@types+node@24.19.2_happy-dom@20.14.5_msw@2.14.3__601922c55ab0fad56496841311de3fe5/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:20"
+          ]
+        }
+      ]
+    }
+  ],
+  "typecheck": {
+    "mode": "TypeScript API 6.0.3 original/reviewed overlay; full supported repository runner integration pending",
+    "result": "Same three unrelated existing diagnostics in baseline and reviewed; no selected-suite diagnostics. This is not a clean full typecheck.",
+    "details": {
+      "compiler": "6.0.3",
+      "baseline": {
+        "diagnostics": [
+          {
+            "file": "src/shared/locale-text-collators.test.ts",
+            "code": 2835,
+            "message": "Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './locale-text-collators.js'?",
+            "line": 65
+          },
+          {
+            "file": "src/shared/orcad-artifacts.test.ts",
+            "code": 1470,
+            "message": "The 'import.meta' meta-property is not allowed in files which will build into CommonJS output.",
+            "line": 100
+          },
+          {
+            "file": "src/shared/plugins/hello-orca-panel-messages.test.ts",
+            "code": 1470,
+            "message": "The 'import.meta' meta-property is not allowed in files which will build into CommonJS output.",
+            "line": 23
+          }
+        ],
+        "selected": [
+          {
+            "path": "src/cli/index-device-commands.test.ts",
+            "sha256": "168c15e24b5c979eefc68079e943e210a08cf3c30e8d5da5e9108c387af3ef6a"
+          },
+          {
+            "path": "src/cli/index-environment-commands.test.ts",
+            "sha256": "187a9ccdbbc5b8e0c548e7feb67a6bad0d10894a9da78b4ef9fba91a0e451f51"
+          },
+          {
+            "path": "src/cli/index-file-open-headless.test.ts",
+            "sha256": "a63f0a8a89af8b870234fd18795ed073b0d95b2ac9dd44bc2b18c7a8a80f62b0"
+          }
+        ]
+      },
+      "reviewed": {
+        "diagnostics": [
+          {
+            "file": "src/shared/locale-text-collators.test.ts",
+            "code": 2835,
+            "message": "Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './locale-text-collators.js'?",
+            "line": 65
+          },
+          {
+            "file": "src/shared/orcad-artifacts.test.ts",
+            "code": 1470,
+            "message": "The 'import.meta' meta-property is not allowed in files which will build into CommonJS output.",
+            "line": 100
+          },
+          {
+            "file": "src/shared/plugins/hello-orca-panel-messages.test.ts",
+            "code": 1470,
+            "message": "The 'import.meta' meta-property is not allowed in files which will build into CommonJS output.",
+            "line": 23
+          }
+        ],
+        "selected": [
+          {
+            "path": "src/cli/index-device-commands.test.ts",
+            "sha256": "9a992c557b9ca164b9430cd3a6292f77cb348cc7d41cd444e6e0ecc3f77ff01b"
+          },
+          {
+            "path": "src/cli/index-environment-commands.test.ts",
+            "sha256": "1bbb3f94fc965280cd70f1680e802df0d1d85387d9af4c2c6978597452266fa5"
+          },
+          {
+            "path": "src/cli/index-file-open-headless.test.ts",
+            "sha256": "37ac495b542fc3e14912d08b8596dfe64bba4fe1050f7c48c736284e6d267f48"
+          }
+        ]
+      }
+    },
+    "report": "/tmp/orca-root-0079-pre-review/typecheck-overlay.json",
+    "report_sha256": "1486d782f6f75bbd029a7ee7130abebb759708ef0cd444abe5a12ad2397d8193"
+  },
+  "checks": [
+    {
+      "command": "isolated oxlint for three selected files",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0079-pre-review/lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "isolated oxfmt --check for three selected files",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0079-pre-review/format-reviewed.log",
+      "log_sha256": "2dc28edff7e30542985596474ecf9aa8ba969579e6cf9c2c6f952e24b5bf15ab"
+    }
+  ],
+  "restoration": {
+    "isolated_mutated_sources_restored": true,
+    "shared_production_unchanged": true,
+    "shared_selected_tests_unchanged": true
+  },
+  "limitations": [
+    "Linux host only. Platform/user-data paths are fixtures, not native cross-platform integration.",
+    "Saved environments are local-store port fixtures; pairing and actual network authorization are not exercised.",
+    "Baseline and reviewed isolated test runs use shared dependencies via an existing node_modules link; no pnpm installs or package-manager invocations belong in that snapshot."
+  ],
+  "root_integration": {
+    "mode": "Tracked source integrated and validated in audit-9",
+    "checkout": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-9",
+    "integration_base_commit": "a9d242d16b5af552fa368fad68d266c9c28bfa14",
+    "source_files_verified": 3,
+    "production_evidence_sha256_verified": true,
+    "original_source_commits_preserved": true,
+    "integrated_test_command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--config",
+      "config/vitest.config.ts",
+      "src/cli/index-device-commands.test.ts",
+      "src/cli/index-environment-commands.test.ts",
+      "src/cli/index-file-open-headless.test.ts",
+      "src/cli/index-jira.test.ts",
+      "src/cli/index-local-command-routing-flags.test.ts",
+      "src/cli/index-memory-diagnostics.test.ts",
+      "src/cli/index-omitted-host-scope-selectors.test.ts",
+      "src/cli/index-orchestration.test.ts",
+      "src/cli/index-project-name-selectors.test.ts",
+      "--maxWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/orca-audit9-integrated-cli-tests.json"
+    ],
+    "environment": {
+      "ORCA_BACKGROUND_LAUNCH": "1"
+    },
+    "test_exit_code": 0,
+    "aggregate_passed": 98,
+    "selected_passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "report": "/tmp/orca-audit9-integrated-cli-tests.json",
+    "report_sha256": "c0c9509518d7bf4032e5252e1f965ffa9fc83228482d43487b3beaf3d18de7db",
+    "log": "/tmp/orca-audit9-integrated-cli-tests-retry.log",
+    "log_sha256": "dc6e22426dae69bbf0cfffc4df380e18e5803134a54d919939f68ce786ecf11a",
+    "supported_typecheck": {
+      "command": ["pnpm", "tc:cli"],
+      "exit_code": 0,
+      "log": "/tmp/orca-audit9-typecheck-cli.log",
+      "log_sha256": "36b286306857cdaaf4c21032fc24ddc97fbf4b091cdaa8da086616d2667d4ae6"
+    },
+    "changed_code_quality": {
+      "command": ["pnpm", "run", "check:code-quality:changed"],
+      "exit_code": 0,
+      "log": "/tmp/orca-audit9-code-quality.log",
+      "log_sha256": "e5057a10341e523dcb4f9863de789a0561b6855782e499901f1ee42e1f6ba311"
+    },
+    "setup": {
+      "install_command": [
+        "pnpm",
+        "install",
+        "--frozen-lockfile",
+        "--ignore-scripts",
+        "--config.enable-global-virtual-store=false"
+      ],
+      "initial_test_startup": "Attempted before @orca/process-host was built; Vitest config failed to resolve its package entry, before any suite ran. The supported tc:cli command built the unchanged package, then the identical selected suites passed under explicit Node.",
+      "initial_startup_log": "/tmp/orca-audit9-integrated-cli-tests.log",
+      "initial_startup_log_sha256": "10c2d4adc553cb054208c2f716849b0b9e4e29add0656f92c3ce38b6f8ed65a7",
+      "production_source_modified": false
+    },
+    "full_sources_and_evidence_hashes_verified": true
+  },
+  "phase_evidence": "Isolated reports/overlay diagnostics above are historical original/reviewed phase evidence; current checkout validation follows in root_integration."
+}

@@ -18,7 +18,6 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     this.paneKeyAliasPersistenceListener = listener
   }
 
-  /** The pane key that owns `paneKey`'s agent status once aliases are followed. */
   resolvePaneAuthorityOwner(paneKey: string): string {
     return this.resolvePaneKeyAlias(paneKey)
   }
@@ -44,7 +43,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
 
   protected boundPaneKeyAliases(): void {
     while (this.legacyPaneKeyAliases.size > PANE_KEY_ALIASES_MAX) {
-      // Why: renderer-originated aliases are untrusted; insertion-order eviction bounds memory and per-message cleanup.
+      // Bound memory and cleanup work for untrusted renderer aliases.
       const oldestKey = this.legacyPaneKeyAliases.keys().next().value
       if (!oldestKey) {
         break
@@ -88,7 +87,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         (ownerPaneKey !== physicalPaneKey && ownsPty(ownerPaneKey, ptyId))
       )
     }
-    // Why: hook status is renderer evidence, not PTY ownership; ID-less moves are safe only after a verified transfer minted an alias.
+    // Status does not prove PTY ownership; ID-less moves require a verified alias.
     return alias?.authorityVerified === true
   }
 
@@ -108,8 +107,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (existing && options?.overwriteExisting === false) {
       return
     }
-    // Why: remint tokens have no embedded tab id; first pane wins so a later spawn
-    // cannot steal leftover $$…:L$$ posts onto a different tab:leaf.
+    // Remint tokens lack tab identity; first ownership wins to prevent cross-tab reuse.
     if (existing && existing.stablePaneKey !== toPaneKey && isOpaqueRemintedPaneKey(fromPaneKey)) {
       return
     }
@@ -152,7 +150,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     const previousOwnerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
     const requestedPtyId = ptyId?.trim()
-    // Why: a repeat would clear the owner's own polls; a pane move announces from main and renderer.
+    // Main and renderer both announce moves; repeats must not clear the owner's polls.
     if (
       previousOwnerPaneKey === toPaneKey &&
       (!requestedPtyId || this.legacyPaneKeyAliases.get(physicalPaneKey)?.ptyId === requestedPtyId)
@@ -265,7 +263,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       // Why: the pane came back to the key its process posts under, so it owns itself; a self-alias would persist.
       this.legacyPaneKeyAliases.delete(physicalPaneKey)
     } else {
-      // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
+      // Detached processes keep posting the physical key; retain its mapping to the current owner.
       this.legacyPaneKeyAliases.set(physicalPaneKey, {
         stablePaneKey: toPaneKey,
         ptyId: normalizedPtyId,

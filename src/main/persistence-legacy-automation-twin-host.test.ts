@@ -35,7 +35,7 @@ const sshRow: Repo = {
 }
 
 function legacyAutomation(overrides: Partial<Automation> = {}): Record<string, unknown> {
-  // Pre-host-context records stored only the repo id in `projectId`.
+  // Legacy projectId values named a repo ID without host context.
   return {
     id: 'legacy-1',
     name: 'Nightly',

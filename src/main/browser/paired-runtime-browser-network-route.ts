@@ -231,11 +231,7 @@ export class PairedRuntimeBrowserNetworkRoute {
     this.beginRecovery(error)
   }
 
-  /**
-   * The tunnel attaches on its own subscription, so a tunnel-only death is invisible to the
-   * client-host channel that drives registry-level suspend/reconnect. Without a rebuild here the
-   * route stays dark and every page request fails until an unrelated retain happens to revive it.
-   */
+  // Tunnel subscriptions fail independently of the host channel, so they need their own recovery.
   private beginRecovery(error: Error): void {
     if (this.closed || !this.started || this.recovery) {
       return

@@ -185,7 +185,7 @@ describe('Relay region API', () => {
       { regionReserve, hostRequested: true }
     )
     plan.mockClear()
-    await app.request(
+    const report = await app.request(
       '/v1/assign',
       assignmentRequest('abcdefghijklmnop', {
         regionCorrection: {
@@ -199,6 +199,7 @@ describe('Relay region API', () => {
         }
       })
     )
+    expect(report.status).toBe(200)
     expect(plan).not.toHaveBeenCalled()
   })
 

@@ -12,6 +12,8 @@ import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
+import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
@@ -70,12 +72,43 @@ export function placeHandedOverMessage(
     return
   }
   const { sequenceIndex: _acceptedAt, ...accepted } = item
-  state.items.set(itemId, {
-    ...accepted,
+  const place = {
     sequence: row.seq,
     observedAt: row.ts,
     turnScope: row.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
-  })
+  }
+  state.items.set(itemId, { ...accepted, ...place })
+  if (submission.queuedMessageId !== undefined) {
+    state.queuedHandOffPlaces.set(submission.clientMessageId, place)
+  }
+}
+
+/**
+ * A queued card's hand-off refused with no proof the agent never got it: it may have run, so its
+ * message reads as sent and is never sent again. With a turn it was answered into, it reads as
+ * that turn's unconfirmed message, where it was handed over, and the turn's own end says Stop; a
+ * withdrawal before any turn opened reads as a person's own send a Stop took back. Derived on
+ * every fold from the stored rejection, which stays as written.
+ */
+export function foldQueuedHandOffInDoubt(
+  state: JournalReducerState,
+  submission: AgentJournalSubmission
+): void {
+  const itemId = agentJournalSubmissionKey(submission.clientMessageId)
+  const item = state.items.get(itemId)
+  const place = state.queuedHandOffPlaces.get(submission.clientMessageId)
+  if (item && place) {
+    const { sequenceIndex: _rejectedAt, ...rest } = item
+    state.items.set(itemId, { ...rest, ...place })
+  }
+  if (dispatchWasWithdrawn(submission) && !submission.answeredInTurn) {
+    delete submission.queuedMessageId
+    return
+  }
+  submission.dispatchState = 'unknown'
+  submission.reason = DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
+  submission.recovered = true
+  delete submission.rejection
 }
 
 /** A rejected message — queued, handed over, or sent directly — joins the conversation where it was

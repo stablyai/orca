@@ -15,14 +15,12 @@ export type AcpPromptTurn = {
   requestedAt: number
   opened: boolean
   durationMs?: number
-  /** A `/compact` running as the turn the host opened for it. */
   compaction?: AcpCompaction
 }
 
-/** An injected identity is known before any provider output arrives. */
 export class AcpPromptTurns {
   current?: AcpPromptTurn
-  /** The last prompt that ended, so its answer can still add the failure reason the end lacked. */
+  /** Retain the ended prompt so its reply can supply a late failure reason. */
   last?: AcpPromptTurn
 
   constructor(
@@ -31,8 +29,7 @@ export class AcpPromptTurns {
     private readonly agentName?: string
   ) {}
 
-  /** `compactionTurn` runs a `/compact` as the command turn the host already opened, which its
-   *  frames join and its answer ends. */
+  /** Reuse the host's already-open command turn for compaction. */
   open(
     clientMessageId: string,
     at: number,
@@ -57,14 +54,13 @@ export class AcpPromptTurns {
     return { promptId: turn, events: injected ? [] : this.start(turn, at) }
   }
 
-  /** The running `/compact`, when `turn` is its turn. */
   compacting(turn: string | undefined): AcpPromptTurn | undefined {
     return turn !== undefined && this.current?.turn === turn && this.current.compaction
       ? this.current
       : undefined
   }
 
-  /** True for a frame the running compaction `turn` read as its own. */
+  /** True suppresses rendering the compaction's frame. */
   absorbCompaction(
     turn: string | undefined,
     extension: AcpCompactionFrame | undefined,
@@ -74,7 +70,6 @@ export class AcpPromptTurns {
     return prompt !== undefined && absorbAcpCompactionFrame(prompt, extension, update)
   }
 
-  /** The running compaction's result row and end, when `turn` is its turn. */
   endCompaction(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] | undefined {
     const prompt = this.compacting(turn)
     if (!prompt?.compaction) {
@@ -95,7 +90,7 @@ export class AcpPromptTurns {
     this.current = undefined
   }
 
-  /** Forgets a prompt the agent refused before its turn opened; false for any other. */
+  /** Only discard refusals received before the turn opens. */
   refuse(clientMessageId: string): boolean {
     if (this.current?.clientMessageId !== clientMessageId || this.current.opened) {
       return false
@@ -122,8 +117,7 @@ export class AcpPromptTurns {
   }
 }
 
-/** A hook-denied turn completed rather than stopped: its row, under one identity however often
- *  the agent reports the end, then the end. */
+/** Hook denial completes the turn; a stable row key deduplicates repeated endings. */
 export function acpTurnEndEvents(
   thread: string,
   turn: string,

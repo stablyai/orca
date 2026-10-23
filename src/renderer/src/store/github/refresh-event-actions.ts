@@ -1,3 +1,4 @@
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../shared/worktree/hosted-review-links'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -241,36 +242,28 @@ export const createRefreshEventActions = (
         : s
     })
     for (const clear of divergedLinkedPRClears) {
-      void get().updateWorktreeMeta(
-        clear.worktreeId,
-        { linkedPR: null },
-        {
-          shouldApply: () =>
-            shouldApplyDivergedLinkedPRClear({
-              worktree:
-                findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
-              linkedPRNumber: clear.linkedPRNumber,
-              branch: clear.branch,
-              requestHeadOid: clear.requestHeadOid
-            })
-        }
-      )
+      void get().updateWorktreeMeta(clear.worktreeId, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES, {
+        shouldApply: () =>
+          shouldApplyDivergedLinkedPRClear({
+            worktree:
+              findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
+            linkedPRNumber: clear.linkedPRNumber,
+            branch: clear.branch,
+            requestHeadOid: clear.requestHeadOid
+          })
+      })
     }
     for (const clear of branchMismatchedLinkedPRClears) {
-      void get().updateWorktreeMeta(
-        clear.worktreeId,
-        { linkedPR: null },
-        {
-          shouldApply: () =>
-            shouldApplyBranchMismatchedLinkedPRClear({
-              worktree:
-                findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
-              linkedPRNumber: clear.linkedPRNumber,
-              branch: clear.branch,
-              requestHeadOid: clear.requestHeadOid
-            })
-        }
-      )
+      void get().updateWorktreeMeta(clear.worktreeId, CLEARED_HOSTED_REVIEW_SELECTION_UPDATES, {
+        shouldApply: () =>
+          shouldApplyBranchMismatchedLinkedPRClear({
+            worktree:
+              findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
+            linkedPRNumber: clear.linkedPRNumber,
+            branch: clear.branch,
+            requestHeadOid: clear.requestHeadOid
+          })
+      })
     }
   }
 })

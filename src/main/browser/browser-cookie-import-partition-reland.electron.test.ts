@@ -16,11 +16,7 @@ afterAll(() => {
   }
 })
 
-// STA-4300: cookies.set() silently drops partitionKey, so an imported partitioned cookie is
-// written into the target jar as an unpartitioned cookie even though the import reports success.
-// Why: a CHIPS partition key is keyed by SITE, not origin — Chromium canonicalises
-// topLevelSite to the registrable domain, so "https://app.example.com" reads back as
-// "https://example.com". Source rows must use that canonical site.
+// CHIPS keys use schemeful registrable sites, so app.example.com canonicalizes to example.com.
 const EXPECTED_PARTITION_KEY = {
   topLevelSite: 'https://example.com',
   hasCrossSiteAncestor: true
@@ -106,7 +102,6 @@ function createPartitionedChromiumSourceDatabase(
   return database
 }
 
-// Why: the repro is only meaningful if the fixture row really is partitioned.
 function assertSourceRowPartitioned(database: DatabaseSync, name: string): void {
   const row = database
     .prepare('SELECT top_frame_site_key, has_cross_site_ancestor FROM cookies WHERE name = ?')
@@ -329,11 +324,6 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
         httpOnly: false,
         sameSite: 'no_restriction',
         expirationDate: Math.floor(Date.now() / 1000) + 30 * 86400,
-        // Why: readJsonCookiePartition reads a NESTED partitionKey object. The first version of
-        // this fixture put topLevelSite/hasCrossSiteAncestor at the entry's top level, where the
-        // importer never looks — so the file/paste case failed on main for a fixture-shape reason
-        // rather than for the defect, and its own non-vacuity check validated what the fixture
-        // wrote instead of what the parser reads.
         partitionKey: {
           topLevelSite: EXPECTED_PARTITION_KEY.topLevelSite,
           hasCrossSiteAncestor: true
@@ -405,14 +395,9 @@ function expectImportNonVacuity(result: FixtureResult): void {
   expect(result.importResult?.ok).toBe(true)
   expect(result.importResult?.summary?.importedCookies ?? 0).toBeGreaterThan(0)
   expect(result.sourcePartitionVerified).toBe(true)
-  // Why (STA-4300 §4.4/§6.6): on `main` these asserted that the user-data write went through
-  // cookies.set WITHOUT a partitionKey — that was the defect. After the reland the import write
-  // path does not touch cookies.set for user data at all, so the assertion is INVERTED rather than
-  // deleted, which is strictly stronger: it now pins the structural guard itself.
   expect(result.setCalls?.some((call) => call.name === result.importedCookie?.name)).toBe(false)
   expect(result.controlCookiePartitionKey).toEqual(EXPECTED_PARTITION_KEY)
   expect(result.importedCookie?.name).toBeTruthy()
-  // Why: proves the fixture ran inside a launched Electron main process.
   expect(result.electronVersion).toBeTruthy()
   expect(result.elapsedMs ?? 0).toBeGreaterThan(0)
 }
@@ -442,7 +427,6 @@ describe('STA-4300 reland: import preserves partitionKey on the native Chromium 
     expectImportNonVacuity(result)
     expect(result.importedCookie?.value).toBe(COOKIE_VALUE_NATIVE)
 
-    // The oracle: the imported cookie keeps its partition identity. RED on main, green here.
     expect(result.importedCookie?.partitionKey, partitionFailureMessage(result)).toEqual(
       EXPECTED_PARTITION_KEY
     )
@@ -456,7 +440,6 @@ describe('STA-4300 reland: import preserves partitionKey on the file/paste write
     expectImportNonVacuity(result)
     expect(result.importedCookie?.value).toBe(COOKIE_VALUE_FILE)
 
-    // The oracle: the imported cookie keeps its partition identity. RED on main, green here.
     expect(result.importedCookie?.partitionKey, partitionFailureMessage(result)).toEqual(
       EXPECTED_PARTITION_KEY
     )

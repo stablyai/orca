@@ -11,9 +11,7 @@ import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from './cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
 
-// Why: electron-builder's /opt directory name varies with productName sanitization, which is why
-// resources/linux/packaging/after-install.sh enumerates all three of these. A symlink into one is a
-// previous packaged Orca and is ours to reclaim; anything else stays a conflict.
+// Match after-install.sh's electron-builder name variants when reclaiming packaged launchers.
 const PACKAGED_LINUX_LAUNCHER_DIRECTORIES = ['/opt/Orca', '/opt/orca-ide', '/opt/orca']
 
 export class CliCommandInspection extends CliInstallLocation {
@@ -60,8 +58,7 @@ export class CliCommandInspection extends CliInstallLocation {
         if (!isPermissionError(error)) {
           throw error
         }
-        // Why: macOS enforces a symlink's own mode on readlink. Older Orca published the root-owned link
-        // as 0700 under umask 077, so only the privileged transaction can read and replace it.
+        // macOS cannot read old root-owned 0700 links; privileged repair must precede ownership checks.
         return this.buildStatus({
           commandPath,
           launcherPath,
@@ -143,7 +140,6 @@ export class CliCommandInspection extends CliInstallLocation {
     return false
   }
 
-  /** A launcher inside a packaged Linux install tree, left behind by a deb/rpm Orca. */
   protected isPackagedLinuxLauncherTarget(resolvedTarget: string, expectedName: string): boolean {
     return PACKAGED_LINUX_LAUNCHER_DIRECTORIES.some(
       (directory) => resolvedTarget === `${directory}/resources/bin/${expectedName}`

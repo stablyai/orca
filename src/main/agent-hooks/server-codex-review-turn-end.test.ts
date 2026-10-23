@@ -73,7 +73,7 @@ describe('Codex turn completion without Stop', () => {
     await startHost(false)
     const childPath = join(directory, 'review-child.jsonl')
     writeFileSync(childPath, `${reviewRecords[0]}\n`)
-    // Real review hooks carry the root session ID and child turn/path, with no agent_id or Stop.
+    // Review hooks use the root session with child turn/path and emit no agent_id or Stop.
     const review = { transcript_path: childPath, turn_id: 'child-turn' }
     await hook({ ...review, hook_event_name: 'UserPromptSubmit', prompt: 'Review changes' })
     for (const hookEventName of ['PreToolUse', 'PostToolUse', 'PreToolUse', 'PostToolUse']) {
@@ -96,7 +96,6 @@ describe('Codex turn completion without Stop', () => {
     // Desktops that predate host-owned turn verdicts still recognize a labelled Stop.
     expect(published.at(-1)).toBe('Stop')
 
-    // Neither a compaction queued before the next prompt nor a newer turn replays the review's end.
     await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
     await settle()
     expect(published.at(-1)).toBe('SessionStart')
@@ -109,11 +108,10 @@ describe('Codex turn completion without Stop', () => {
     })
     await settle()
     expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
-    // A delayed hook from the review's ended turn does not end the newer turn.
     await hook({ ...review, hook_event_name: 'PostToolUse', tool_name: 'Bash' })
     expect(desktop.getStatusSnapshot()[0]).toMatchObject({ mainAgent: { state: 'working' } })
 
-    // A real Stop that lands before its rollout end, then a compaction, never rearms that turn.
+    // A Stop consumed before rollout completion must not be rearmed by compaction.
     await hook({ ...review, turn_id: 'next-turn', hook_event_name: 'Stop' })
     await hook({ hook_event_name: 'SessionStart', source: 'compact', transcript_path: childPath })
     appendFileSync(childPath, event({ type: 'task_complete', turn_id: 'next-turn' }))
@@ -156,7 +154,7 @@ describe('Codex turn completion without Stop', () => {
           }),
         { timeout: 3_000 }
       )
-      // Desktops derive a labelled Stop's outcome as success, so a failure goes out unlabelled.
+      // Legacy desktops interpret labelled Stops as success; leave failures unlabelled.
       expect(published.at(-1)).toBeUndefined()
     }
   )

@@ -47,8 +47,7 @@ describe('runtime transport timeout validation', () => {
   )
 })
 
-// Why: these tests create Unix domain socket servers in temp directories.
-// Windows does not support Unix domain sockets in the same way.
+// These fixtures create Unix domain sockets rather than Windows named pipes.
 describe.skipIf(process.platform === 'win32')('runtime transport', () => {
   it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
@@ -64,8 +63,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       })
       socket.once('data', (data) => {
         const request = JSON.parse(String(data).trim()) as { id: string }
-        // Why: full-suite load can delay short timers; keep the response past
-        // the client timeout while leaving enough margin between keepalives.
+        // Leave keepalive scheduling margin under load while responding after the original timeout.
         keepalive = setInterval(() => {
           socket.write('{"_keepalive":true}\n')
         }, 50)
@@ -114,7 +112,6 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
-      // Read the request, then close cleanly without writing a terminal frame.
       socket.once('data', () => socket.end())
     })
     servers.add(server)
@@ -128,8 +125,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       startedAt: 1
     }
 
-    // A generous timeout: a passing fix rejects on close well before this; the
-    // pre-fix behavior would hang the full duration and trip vitest's own limit.
+    // Reject on close well before this timeout; waiting for it would exceed the test limit.
     const start = Date.now()
     await expect(sendRequest(metadata, 'status.get', undefined, 60000)).rejects.toMatchObject({
       code: 'runtime_unavailable',

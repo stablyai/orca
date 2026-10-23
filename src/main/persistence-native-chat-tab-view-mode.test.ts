@@ -10,7 +10,6 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -60,7 +59,7 @@ describe('Store native-chat tab viewMode persistence', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // Why: tabs persisted before viewMode existed default to 'terminal' so older sessions stay backward-compatible.
+  // Preserve absent viewMode for legacy tabs; renderer hydration supplies terminal mode.
   it('round-trips viewMode for unified tabs and defaults legacy tabs to terminal', async () => {
     const WORKTREE = 'repo1::/worktree'
     writeDataFile({
@@ -93,7 +92,6 @@ describe('Store native-chat tab viewMode persistence', () => {
               viewMode: 'chat'
             },
             {
-              // Legacy tab persisted before viewMode existed — no field at all.
               id: 'legacy-tab',
               entityId: 'legacy-tab',
               groupId: 'g1',
@@ -126,7 +124,6 @@ describe('Store native-chat tab viewMode persistence', () => {
     const legacyTab = restored.find((tab) => tab.id === 'legacy-tab')
 
     expect(chatTab?.viewMode).toBe('chat')
-    // Missing on a legacy tab; renderer hydration treats absent as 'terminal'.
     expect(legacyTab?.viewMode).toBeUndefined()
   })
 })

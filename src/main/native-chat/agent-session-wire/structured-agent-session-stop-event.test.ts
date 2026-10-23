@@ -231,7 +231,7 @@ describe("a Stop's event", () => {
     expect(stopEvents()).toHaveLength(2)
   })
 
-  it('a second press after a card was sent into the turn writes again, and holds that card', async () => {
+  it('a second press after a card was sent into the turn writes again, and the card stays sent', async () => {
     rig = await createQueuedMessageTestRig()
     const working = await rig.workingSend()
     await rig.stop()
@@ -242,11 +242,13 @@ describe("a Stop's event", () => {
     await eventually(async () => expect((await rig.handoff(steered))?.handedOverAt).toBeDefined())
     await rig.stop()
     expect(stopEvents()).toHaveLength(2)
-    await withdraw(await rig.handoffId(steered))
+    const handoff = await rig.handoffId(steered)
+    await withdraw(handoff)
     await rig.settleAccepted(working, 'stopped')
     await observationClock.observe(250)
-    expect(await rig.drafts()).toEqual([{ messageId: steered, state: 'waiting' }])
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    // Handed over before the Stop with nothing proving the agent never got it: never re-queued.
+    expect(await rig.drafts()).toEqual([])
+    expect((await rig.submission(handoff))?.dispatchState).toBe('rejected')
   })
 
   it('naming no turn, names the turn running when it takes effect', async () => {
@@ -302,8 +304,8 @@ describe("a Stop's event", () => {
     // Stop and the drain share one serialized lane, so this interleaving is forced: a pause
     // written after the drain chose the card must still hold it in the claim's transaction.
     vi.spyOn(open, 'appendSubmission').mockImplementation(async (input, consume) => {
-      // The queue's own claim is the one no operation settles.
-      if (consume?.settledByOp === null && consume.messageId === draftId && !injected) {
+      // The queue's own claim is the one that yields to a pause.
+      if (consume?.yieldsToPause && consume.messageId === draftId && !injected) {
         injected = true
         await open.appendStopEvent({ reason: 'user-stop' }, input.fence)
       }
