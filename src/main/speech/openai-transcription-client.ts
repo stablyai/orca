@@ -5,7 +5,19 @@ export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-4o-transcribe': 'gpt-4o-transcribe'
 }
 
-const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1'
+
+export function resolveOpenAiBaseUrl(baseUrl?: string): string {
+  const trimmed = (baseUrl?.trim() || process.env.OPENAI_BASE_URL?.trim() || '')
+  const source = trimmed === '' ? DEFAULT_OPENAI_BASE_URL : trimmed
+  const stripped = source.replace(/\/+$/, '')
+  return stripped.endsWith('/v1') ? stripped : (stripped + '/v1')
+}
+
+export function resolveOpenAiTranscriptionUrl(baseUrl?: string): string {
+  return resolveOpenAiBaseUrl(baseUrl) + '/audio/transcriptions'
+}
+
 const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16000
 const MAX_CLOUD_AUDIO_SECONDS = 10 * 60
 
@@ -115,7 +127,7 @@ export class OpenAiTranscriptionSession {
     // a named WAV blob avoids filesystem temp files and works in packaged apps.
     form.append('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), 'dictation.wav')
 
-    const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
+    const response = await fetch(resolveOpenAiTranscriptionUrl(), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.readApiKey()}`
