@@ -23,7 +23,7 @@ export type AgentLaunchModelPreferenceCheck =
 
 export function checkAgentLaunchModelPreferences(args: {
   agent: TuiAgent
-  /** OpenCode needs the execution host to verify its CLI before it can start on a chosen model. */
+  /** OpenCode model choices need a fresh terminal on a supported execution host. */
   openCodeModelLaunchSupported?: boolean
   createsWorktree?: boolean
   model?: string
@@ -44,7 +44,7 @@ export function checkAgentLaunchModelPreferences(args: {
   if (args.agent === 'opencode' && args.openCodeModelLaunchSupported !== true) {
     return refuse(
       'capability_unsupported',
-      'This OpenCode TUI cannot verify launch-time model selection. Omit --model or use a supported OpenCode CLI.'
+      'OpenCode cannot apply a model choice on this execution host. Use a fresh local terminal in an existing workspace, or omit --model.'
     )
   }
 

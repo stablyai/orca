@@ -138,7 +138,7 @@ describe('OpenCode model probe termination evidence', () => {
       vi.fn(async () => new Response(new ReadableStream({ cancel }), { status: 200 }))
     )
     expect(await probeOpenCodeLaunchModelContext(options)).toBeNull()
-    expect(cancel).toHaveBeenCalledTimes(4)
+    expect(cancel).toHaveBeenCalledTimes(2)
     expect(child.kill).toHaveBeenCalledWith('SIGTERM')
   })
 

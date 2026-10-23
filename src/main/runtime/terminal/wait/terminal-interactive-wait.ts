@@ -32,9 +32,6 @@ import { resolveConfiguredWorkerAgent } from '../../orchestration/configured-wor
 import { resolveAgentLaunchRuntime } from '../../agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 
-import { prepareOpenCodeModelStartupInputs } from '../../../opencode/opencode-model-startup-plan'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
-
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
@@ -293,25 +290,11 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       return false
     }
-    try {
-      await prepareOpenCodeModelStartupInputs({
-        inputs: resolveAgentStartupPlanInputs({
-          agent: 'opencode',
-          settings: store.getSettings(),
-          platform: launchRuntime.platform,
-          isRemote: false,
-          // A yes/no model probe; nothing is typed into a shell.
-          shell: undefined,
-          sessionOptions: { model: target.model }
-        }),
-        cwd: path,
-        isWsl: Boolean(parseWslUncPath(path)),
-        hostIdentity: this.getRuntimeId()
-      })
-      return true
-    } catch {
-      return false
-    }
+    return (
+      target.model.trim().length > 0 &&
+      launchRuntime.platform === process.platform &&
+      !parseWslUncPath(path)
+    )
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {

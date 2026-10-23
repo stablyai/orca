@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
-import {
-  probeOpenCodeModelAvailability,
-  resolveOpenCodeDirectModelExecutable
-} from './opencode-model-availability'
+import { resolveOpenCodeDirectModelExecutable } from './opencode-model-executable'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { buildExecutionHostAgentStartupPlan } from './opencode-model-startup-plan'
 
@@ -13,9 +10,8 @@ vi.mock('../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()
 }))
 vi.mock('./opencode-launch-capabilities', () => ({ probeOpenCodeLaunchCapabilities: vi.fn() }))
-vi.mock('./opencode-model-availability', () => ({
-  resolveOpenCodeDirectModelExecutable: vi.fn(),
-  probeOpenCodeModelAvailability: vi.fn()
+vi.mock('./opencode-model-executable', () => ({
+  resolveOpenCodeDirectModelExecutable: vi.fn()
 }))
 vi.mock('./opencode-launch-model-context', () => ({ probeOpenCodeLaunchModelContext: vi.fn() }))
 
@@ -53,18 +49,7 @@ describe('execution-host OpenCode model startup', () => {
       pluginApi: 'v2',
       promptMode: 'prefill'
     })
-    vi.mocked(probeOpenCodeModelAvailability).mockResolvedValue(true)
-    vi.mocked(probeOpenCodeLaunchModelContext)
-      .mockResolvedValueOnce({
-        primaryAgent: 'reviewer',
-        availableModels: [preferred],
-        primaryModel: 'opencode/big-pickle'
-      })
-      .mockResolvedValue({
-        primaryAgent: 'reviewer',
-        availableModels: [preferred],
-        primaryModel: preferred
-      })
+    vi.mocked(probeOpenCodeLaunchModelContext).mockResolvedValue({ primaryAgent: 'reviewer' })
   })
 
   it('refuses unsupported effort preferences before probing or dropping them', async () => {
@@ -97,12 +82,13 @@ describe('execution-host OpenCode model startup', () => {
     expect(options.inputs.agentEnv.OPENCODE_CONFIG_CONTENT).toBe(original)
   })
 
-  it('uses the selected account environment in both authoritative probes', async () => {
+  it('uses the selected account environment in its single primary-agent probe', async () => {
     vi.mocked(applyManagedDataAccountEnvironment).mockImplementation((env) => {
       env.XDG_DATA_HOME = '/selected/data'
       env.OPENCODE_DB = 'opencode.db'
     })
     await buildExecutionHostAgentStartupPlan(scope())
+    expect(probeOpenCodeLaunchModelContext).toHaveBeenCalledOnce()
     for (const call of vi.mocked(probeOpenCodeLaunchModelContext).mock.calls) {
       expect(call[0].env).toMatchObject({
         XDG_DATA_HOME: '/selected/data',
@@ -111,8 +97,8 @@ describe('execution-host OpenCode model startup', () => {
     }
   })
 
-  it.each(['1.18.30', '1.18.32'])(
-    'preserves the verified legacy launch route %s',
+  it.each(['1.18.30', '1.18.32', '1.18.31', '1.19.3', '1.20.0-beta.1'])(
+    'launches legacy %s with the requested model flag and no catalog probe',
     async (version) => {
       vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
         version,
@@ -147,23 +133,31 @@ describe('execution-host OpenCode model startup', () => {
     }
   )
 
-  it('refuses unavailable models and mismatched observed model preferences', async () => {
-    vi.mocked(probeOpenCodeLaunchModelContext)
-      .mockReset()
-      .mockResolvedValue({ primaryAgent: 'reviewer', availableModels: [], primaryModel: null })
-    await expect(buildExecutionHostAgentStartupPlan(scope())).rejects.toMatchObject({
-      code: 'capability_unsupported'
-    })
-    vi.mocked(probeOpenCodeLaunchModelContext)
-      .mockReset()
-      .mockResolvedValue({
-        primaryAgent: 'reviewer',
-        availableModels: [preferred],
-        primaryModel: 'opencode/big-pickle'
+  it.each(['2.0.14', '2.0.17', '2.1.2', '2.2.0-beta.1', '3.0.0', null])(
+    'launches %s with the overlay and no rejected model flag',
+    async (version) => {
+      vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
+        version,
+        pluginApi: 'unknown',
+        promptMode: 'unknown'
       })
-    await expect(buildExecutionHostAgentStartupPlan(scope())).rejects.toMatchObject({
-      code: 'capability_unsupported'
-    })
+      const plan = await buildExecutionHostAgentStartupPlan(scope())
+      expect(plan?.launchCommand).toContain('--standalone')
+      expect(plan?.launchCommand).not.toContain('--model')
+      expect(JSON.parse(plan?.env?.OPENCODE_CONFIG_CONTENT ?? 'null').agents.reviewer.model).toBe(
+        preferred
+      )
+      expect(probeOpenCodeLaunchModelContext).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('keeps the v2 overlay when primary metadata is unavailable', async () => {
+    vi.mocked(probeOpenCodeLaunchModelContext).mockResolvedValue(null)
+    const plan = await buildExecutionHostAgentStartupPlan(scope())
+    expect(plan?.launchCommand).not.toContain('--model')
+    expect(JSON.parse(plan?.env?.OPENCODE_CONFIG_CONTENT ?? 'null').agents.reviewer.model).toBe(
+      preferred
+    )
   })
 
   it('refuses remote and WSL execution before touching the local binary', async () => {
@@ -178,22 +172,6 @@ describe('execution-host OpenCode model startup', () => {
     ).rejects.toMatchObject({ code: 'capability_unsupported' })
     expect(resolveOpenCodeDirectModelExecutable).not.toHaveBeenCalled()
   })
-
-  it.each(['1.18.31', '1.18.33', '2.0.17'])(
-    'refuses unverified version %s before model probing',
-    async (version) => {
-      vi.mocked(probeOpenCodeLaunchCapabilities).mockResolvedValue({
-        version,
-        pluginApi: 'v2',
-        promptMode: 'prefill'
-      })
-      await expect(buildExecutionHostAgentStartupPlan(scope())).rejects.toMatchObject({
-        code: 'capability_unsupported'
-      })
-      expect(probeOpenCodeLaunchModelContext).not.toHaveBeenCalled()
-      expect(probeOpenCodeModelAvailability).not.toHaveBeenCalled()
-    }
-  )
 
   it('resolves the default bare launch command through the execution host', async () => {
     await buildExecutionHostAgentStartupPlan(scope())

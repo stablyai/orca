@@ -10,15 +10,11 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import type { TuiAgent } from '../../shared/tui-agent'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { resolveOpenCodeLaunchModelConfig } from './opencode-launch-model-config'
-import { isVerifiedOpenCodeLegacyModelVersion } from './opencode-model-version-policy'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { applyManagedDataAccountEnvironment } from '../managed-data-accounts/launch-environment'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
 import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
-import {
-  probeOpenCodeModelAvailability,
-  resolveOpenCodeDirectModelExecutable
-} from './opencode-model-availability'
+import { resolveOpenCodeDirectModelExecutable } from './opencode-model-executable'
 
 type StartupScope = {
   inputs: AgentStartupPlanInputs
@@ -31,7 +27,7 @@ type StartupScope = {
 function refuseModel(): never {
   throw new OrchestrationError(
     'capability_unsupported',
-    'The execution host cannot verify this OpenCode model launch.'
+    'OpenCode cannot apply this model choice to this launch. Start a fresh local terminal with supported launch arguments, or omit the model choice.'
   )
 }
 
@@ -70,61 +66,38 @@ export async function prepareOpenCodeModelStartupInputs(
     }
   }
   applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
-  const executable = await resolveOpenCodeDirectModelExecutable({
-    command,
-    model,
-    cwd: options.cwd,
-    env
-  })
-  if (!executable) {
-    refuseModel()
-  }
   const capabilities = await probeOpenCodeLaunchCapabilities({
     command,
     agent: 'opencode',
     cwd: options.cwd,
     env,
     hostIdentity: options.hostIdentity
-  })
-  if (isVerifiedOpenCodeLegacyModelVersion(capabilities?.version)) {
-    if (!(await probeOpenCodeModelAvailability({ command, model, cwd: options.cwd, env }))) {
-      refuseModel()
-    }
+  }).catch(() => null)
+  if (capabilities?.version?.split('.')[0] === '1') {
     return { inputs }
   }
-  if (capabilities?.version !== '2.0.16' || inputs.agentArgs?.trim()) {
+  if (inputs.agentArgs?.trim()) {
     refuseModel()
   }
-  const before = await probeOpenCodeLaunchModelContext({
-    executable,
+  const executable = await resolveOpenCodeDirectModelExecutable({
+    command,
     cwd: options.cwd,
-    env,
-    signal: options.signal
+    env
   }).catch(() => null)
-  if (!before?.availableModels.includes(model)) {
-    refuseModel()
-  }
+  const context = executable
+    ? await probeOpenCodeLaunchModelContext({
+        executable,
+        cwd: options.cwd,
+        env,
+        signal: options.signal
+      }).catch(() => null)
+    : null
   const configContent = resolveOpenCodeLaunchModelConfig({
     configContent: env.OPENCODE_CONFIG_CONTENT,
-    primaryAgent: before.primaryAgent,
+    primaryAgent: context?.primaryAgent,
     model
   })
   if (configContent === null) {
-    refuseModel()
-  }
-  const after = await probeOpenCodeLaunchModelContext({
-    executable,
-    cwd: options.cwd,
-    env: { ...env, OPENCODE_CONFIG_CONTENT: configContent },
-    expectedPrimaryAgent: before.primaryAgent,
-    expectedPrimaryModel: model,
-    signal: options.signal
-  }).catch(() => null)
-  if (
-    after?.primaryAgent !== before.primaryAgent ||
-    after.primaryModel !== model ||
-    !after.availableModels.includes(model)
-  ) {
     refuseModel()
   }
   return {

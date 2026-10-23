@@ -57,7 +57,7 @@ describe('per-launch OpenCode model config', () => {
     }
   )
 
-  it('refuses oversized config and absent resolved preferences', () => {
+  it('refuses oversized config and a missing requested model', () => {
     expect(
       resolveOpenCodeLaunchModelConfig({
         configContent: ' '.repeat(1_048_577),
@@ -68,8 +68,8 @@ describe('per-launch OpenCode model config', () => {
     expect(
       resolveOpenCodeLaunchModelConfig({
         configContent: '{}',
-        primaryAgent: '',
-        model: 'provider/a'
+        primaryAgent: 'build',
+        model: ''
       })
     ).toBeNull()
   })

@@ -1,10 +1,8 @@
 import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
-import { runProcess } from '@orca/process-host'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
 
 export async function resolveOpenCodeDirectModelExecutable(options: {
   command: string | undefined
-  model: string
   env: NodeJS.ProcessEnv
   cwd?: string
   wsl?: { distro?: string }
@@ -28,32 +26,4 @@ export async function resolveOpenCodeDirectModelExecutable(options: {
     env: options.env,
     cwd: options.cwd
   })
-}
-
-export async function probeOpenCodeModelAvailability(
-  options: Parameters<typeof resolveOpenCodeDirectModelExecutable>[0]
-): Promise<boolean> {
-  const executable = await resolveOpenCodeDirectModelExecutable(options)
-  if (!executable) {
-    return false
-  }
-  try {
-    const result = await runProcess({
-      program: executable,
-      args: ['models'],
-      cwd: options.cwd,
-      env: options.env,
-      timeoutMs: 10_000,
-      maxOutputBytes: 1_048_576
-    })
-    return (
-      result.code === 0 &&
-      !result.timedOut &&
-      !result.outputTruncated &&
-      result.stdout.endsWith('\n') &&
-      result.stdout.split(/\r?\n/).some((line) => line === options.model)
-    )
-  } catch {
-    return false
-  }
 }
