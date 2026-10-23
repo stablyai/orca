@@ -40,6 +40,17 @@ describe('Bitbucket repository refs', () => {
     expect(parseBitbucketRepoRef('https://github.com/team/project.git')).toBeNull()
   })
 
+  it('parses remotes on the ssh.bitbucket.org SSH host', () => {
+    expect(parseBitbucketRepoRef('ssh://git@ssh.bitbucket.org/team/project.git')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
+    expect(parseBitbucketRepoRef('git@ssh.bitbucket.org:team/project.git')).toEqual({
+      workspace: 'team',
+      repoSlug: 'project'
+    })
+  })
+
   it('strips trailing slashes after .git suffixes', () => {
     expect(parseBitbucketRepoRef('https://bitbucket.org/team/project.git/')).toEqual({
       workspace: 'team',

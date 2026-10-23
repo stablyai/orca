@@ -26,6 +26,12 @@ export function normalizeGitLabRemoteHost(host: string): string {
   return normalizedHost === 'altssh.gitlab.com' ? 'gitlab.com' : normalizedHost
 }
 
+export function normalizeBitbucketRemoteHost(host: string): string {
+  const normalizedHost = normalizeRemoteHost(host)
+  // Why: Bitbucket Cloud is moving SSH access from bitbucket.org to ssh.bitbucket.org.
+  return normalizedHost === 'ssh.bitbucket.org' ? 'bitbucket.org' : normalizedHost
+}
+
 /** Comparison-only host fold: the forge alias plus `www.`, for matching a remote to a pasted URL. */
 export function foldComparableGitHubHost(host: string): string {
   return normalizeGitHubRemoteHost(foldWwwHostAlias(host))

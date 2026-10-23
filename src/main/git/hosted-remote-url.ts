@@ -1,6 +1,8 @@
 // Scoped local fork of the hosted-git-info@9.0.3 behavior Orca used.
 // Why: source links only need GitHub/GitLab/Bitbucket remote parsing and file
 // URL construction, so we keep that small surface local and tested.
+import { normalizeBitbucketRemoteHost } from '../../shared/git-remote-host-alias'
+
 type HostedRemoteProvider = 'github' | 'gitlab' | 'bitbucket'
 
 type HostedRemote = {
@@ -30,7 +32,7 @@ function providerForHost(host: string): HostedRemoteHost | null {
   if (normalized === 'gitlab.com') {
     return { host: 'gitlab.com', provider: 'gitlab' }
   }
-  if (normalized === 'bitbucket.org') {
+  if (normalizeBitbucketRemoteHost(normalized) === 'bitbucket.org') {
     return { host: 'bitbucket.org', provider: 'bitbucket' }
   }
   return null

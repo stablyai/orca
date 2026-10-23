@@ -45,6 +45,16 @@ describe('hosted remote URLs', () => {
       path: 'team/repo',
       provider: 'bitbucket'
     })
+    expect(parseHostedRemote('ssh://git@ssh.bitbucket.org/team/repo.git')).toEqual({
+      host: 'bitbucket.org',
+      path: 'team/repo',
+      provider: 'bitbucket'
+    })
+    expect(parseHostedRemote('git@ssh.bitbucket.org:team/repo.git')).toEqual({
+      host: 'bitbucket.org',
+      path: 'team/repo',
+      provider: 'bitbucket'
+    })
   })
 
   it('builds file URLs with encoded branches and paths', () => {
