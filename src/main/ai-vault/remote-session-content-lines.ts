@@ -8,10 +8,7 @@ export type RemoteSessionContent = string | AsyncIterable<string>
 const REMOTE_CONTENT_YIELD_LINE_COUNT = 200
 const REMOTE_CONTENT_YIELD_CHAR_COUNT = 256 * 1024
 
-/** Splits transcript content into lines. Without a signal there is nothing to
- * observe, so it splits in one pass; with one it yields to the event loop so a
- * cancelled scan stops mid-transcript instead of parsing megabytes for a caller
- * that already left. */
+/** Yield while splitting cancellable strings so large transcripts cannot starve cancellation. */
 export function remoteSessionContentLines(
   content: RemoteSessionContent,
   signal?: AbortSignal
@@ -26,7 +23,7 @@ async function* cancellableContentLines(
   content: string,
   signal: AbortSignal
 ): AsyncGenerator<string> {
-  // Content below one yield window would otherwise never observe cancellation.
+  // Short input must observe cancellation even when no yield is needed.
   throwIfAiVaultScanCancelled(signal)
   let lineStart = 0
   let yieldStart = 0
@@ -36,13 +33,12 @@ async function* cancellableContentLines(
     if (index < content.length && content.charCodeAt(index) !== 10) {
       const newline = content.indexOf('\n', index)
       const lineBreak = newline === -1 ? content.length : newline
-      // Bound the jump so a newline-free segment still observes cancellation.
+      // Even newline-free segments must yield for cancellation.
       const windowEnd = yieldStart + REMOTE_CONTENT_YIELD_CHAR_COUNT
       if (lineBreak > windowEnd) {
         await yieldUnlessCancelled(signal)
         linesSinceYield = 0
         yieldStart = windowEnd
-        // Resume the search at windowEnd itself; the loop increment lands there.
         index = windowEnd - 1
         continue
       }

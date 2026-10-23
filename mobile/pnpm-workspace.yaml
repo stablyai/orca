@@ -48,6 +48,7 @@ minimumReleaseAgeExclude:
   - oxlint@1.88.0
 
 overrides:
+  dompurify@<3.4.17: 3.4.17
   sprintf-js@<1.1.3: 1.1.3
   markdown-it@>=14.0.0 <14.3.3: 14.3.3
   # Mermaid 11 still requests KaTeX 0.16; the security fix starts at 0.18.2.

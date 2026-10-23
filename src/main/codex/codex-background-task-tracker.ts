@@ -16,7 +16,6 @@ import type { CodexAbandonedCommand } from './codex-prompt-registry'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
 import { boundSubagentLabel } from '../native-chat/agent-session-journal/journal-subagent-item'
 
-/** Where a session's child-work evidence goes, and the host clock that stamps it. */
 export type CodexChildWorkSink = {
   deliver: (evidence: AgentChildWorkEvidence[]) => void
   now: () => number
@@ -33,7 +32,7 @@ export function codexChildWorkSink(
   }
 }
 
-/** What a probe learned: `unknown` when the app-server gave no answer, so the next chance asks again. */
+/** No answer leaves support unknown and permits a later retry. */
 export type CodexTerminalStopSupport = 'supported' | 'unsupported' | 'unknown'
 
 /** Projects the same child execution facts the durable roster consumes. */
@@ -42,7 +41,6 @@ export class CodexBackgroundTaskTracker {
   private publishedState: AgentSessionBackgroundTaskState | null = null
   private readonly commands: CodexBackgroundCommandTracker
   private readonly childWork: CodexChildWorkEvidence
-  /** Whether this app-server can terminate a background command, settled by its first answer. */
   private terminalStops: CodexTerminalStopSupport | 'probing' = 'unknown'
 
   constructor(
@@ -63,8 +61,7 @@ export class CodexBackgroundTaskTracker {
     return this.terminalStops === 'supported'
   }
 
-  /** True when a running command has a process a stop could name and the app-server has not
-   *  answered yet: the caller probes then, and settles the answer here. */
+  /** Starts one probe once a command has a process ID; unknown results permit retry. */
   beginTerminalStopProbe(): boolean {
     if (this.terminalStops !== 'unknown' || !this.commands.holdsProcess) {
       return false
@@ -73,8 +70,7 @@ export class CodexBackgroundTaskTracker {
     return true
   }
 
-  /** On yes, restates every running command so its record says it can be stopped; callers publish
-   *  the child work after. */
+  /** Restates stoppable commands on success; callers must then publish child work. */
   settleTerminalStopProbe(support: CodexTerminalStopSupport): void {
     if (this.terminalStops !== 'probing') {
       return
@@ -85,14 +81,11 @@ export class CodexBackgroundTaskTracker {
     }
   }
 
-  /** The processes behind the named tasks that a stop reaches. */
   backgroundProcesses(taskIds: readonly string[]): { threadId: string; processId: string }[] {
     return this.stopsTerminals ? this.commands.backgroundProcesses(taskIds) : []
   }
 
-  /** What a Stop of the named sub-agents reaches: the run each one and each of its descendants is
-   *  working on, and, when this app-server can terminate them, the processes their threads hold.
-   *  A sub-agent row's providerId is its thread id. */
+  /** Includes descendants' active turns and supported terminals; task IDs here are thread IDs. */
   subagentStopTargets(taskIds: readonly string[]): {
     turns: { threadId: string; turnId: string }[]
     terminals: { threadId: string; processId: string }[]
@@ -122,7 +115,6 @@ export class CodexBackgroundTaskTracker {
     }
   }
 
-  /** Whether the sub-agent is still working on this run. */
   runsSubagentTurn(threadId: string, turnId: string): boolean {
     const execution = this.executions.find(threadId)?.execution
     return execution?.state === 'working' && execution.turnId === turnId
@@ -157,9 +149,7 @@ export class CodexBackgroundTaskTracker {
     if (!frame) {
       return itemEvent || commands.length > 0 ? this.refresh() : false
     }
-    // A primary-turn frame only prompts a republish: turn end reveals children,
-    // it never settles them. Codex `spawn_agent` children keep reporting well
-    // past their parent turn, so nothing here may sweep the roster.
+    // Children can outlive the parent turn; republish without settling or sweeping them.
     return this.refresh()
   }
 
@@ -169,13 +159,11 @@ export class CodexBackgroundTaskTracker {
     return this.refresh()
   }
 
-  /** Everything the frames observed since the last drain said about the session's child work. */
   drainChildWorkEvidence(observedAt: number): AgentChildWorkEvidence[] {
     return this.childWork.drain(observedAt)
   }
 
-  /** Hand the pending evidence to the host. Callers run this after the journal wrote the frame
-   *  and the parent's own row republished, so a child record never lands ahead of either. */
+  /** Publish after the journal frame and parent row, so child records cannot arrive ahead of either. */
   publishChildWork(): void {
     // Drained even with no sink, so undelivered evidence never accumulates.
     const evidence = this.drainChildWorkEvidence(this.childWorkSink?.now() ?? Date.now())

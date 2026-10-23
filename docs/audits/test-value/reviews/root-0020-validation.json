@@ -1,0 +1,28 @@
+{
+  "original_declaration_sites": 0,
+  "expanded_scenario_groups": 16,
+  "driver_controls": 7,
+  "review_scope": "Complete driver, scenario, source loader and before-suite overlay. Actual current Codex stream caller/coalescer read only as supporting production evidence.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 timeout 45s node docs/audits/empty-streamed-delta-retention/reproduce.cjs /tmp/orca-root-0020-empty-results.json",
+      "exit_code": 1,
+      "result": "Fixed source drift rejects 26f6892e... versus recorded 7caf0f24... before CRLF control or any four source phases.",
+      "log": "/tmp/orca-root-0020-empty.log"
+    }
+  ],
+  "limitations": [
+    "No current proof pass, source guards unchanged. Current Codex stream caller now requires additional producer/attribution dependencies.",
+    "Final empty-slot count is asserted; per-batch growth samples are measured and not independently asserted.",
+    "Cardinalities describe owned arrays/maps, not bytes, heap, RSS or incident frequency.",
+    "Historical phases replace only coalescer with current recorded caller/dependencies; they are not full historical application replays.",
+    "Standalone global observer is deleted on successful scenario completion; script process exits on failure."
+  ],
+  "batch": "root-0020",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 4,
+  "case_records": 23,
+  "production_changes": false,
+  "test_source_changes": false
+}

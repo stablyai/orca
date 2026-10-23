@@ -16,33 +16,35 @@ afterEach(() => {
   __clearNonUtf8AutosavePausesForTests()
 })
 
-it.each(['autosave', 'restart', 'user', 'overwrite'] as const)(
-  'requires a lossless baseline only for automatic writes (%s)',
-  async (trigger) => {
-    const decoded = Buffer.from([0x61, 0xfe]).toString('utf8')
-    const newer = Buffer.from([0x61, 0xff]).toString('utf8')
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: newer })
-    const store = createEditorStore()
-    openGuardedFile(store, { baseline: decoded, draft: decoded })
-    const queue = createEditorSaveQueue(store)
-    try {
-      const automatic = trigger === 'autosave' || trigger === 'restart'
-      expect(await queue.queueSave(store.getState().openFiles[0], decoded, trigger)).toBe(
-        automatic ? 'failed' : 'written'
-      )
-      expect(store.getState().openFiles[0]?.isDirty).toBe(automatic)
-      // Why: a non-UTF-8 refusal is not a changed-on-disk conflict.
-      expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
-      expect(isAutosaveSuspendedForFile(store.getState().openFiles[0]!)).toBe(automatic)
-      expect(toast.warning).toHaveBeenCalledTimes(automatic ? 1 : 0)
-      expect(disk.files.get(GUARDED_PATH)).toBe(decoded)
-    } finally {
-      queue.dispose()
-    }
+it.each([
+  ['autosave', 'failed'],
+  ['restart', 'failed'],
+  ['user', 'not-utf8'],
+  ['convert', 'written'],
+  ['overwrite', 'written']
+] as const)('a lossy baseline needs consent to write (%s: %s)', async (trigger, expected) => {
+  const decoded = Buffer.from([0x61, 0xfe]).toString('utf8')
+  const newer = Buffer.from([0x61, 0xff]).toString('utf8')
+  const disk = stubGuardedDisk({ [GUARDED_PATH]: newer })
+  const store = createEditorStore()
+  openGuardedFile(store, { baseline: decoded, draft: decoded })
+  const queue = createEditorSaveQueue(store)
+  try {
+    const automatic = trigger === 'autosave' || trigger === 'restart'
+    expect(await queue.queueSave(store.getState().openFiles[0], decoded, trigger)).toBe(expected)
+    expect(store.getState().openFiles[0]?.isDirty).toBe(expected !== 'written')
+    // Why: a non-UTF-8 refusal is not a changed-on-disk conflict.
+    expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
+    // Why: an explicit save asks to convert instead of pausing autosave with a notice.
+    expect(isAutosaveSuspendedForFile(store.getState().openFiles[0]!)).toBe(automatic)
+    expect(toast.warning).toHaveBeenCalledTimes(automatic ? 1 : 0)
+    expect(disk.files.get(GUARDED_PATH)).toBe(expected === 'written' ? decoded : newer)
+  } finally {
+    queue.dispose()
   }
-)
+})
 
-it('pauses autosave once for a non-UTF-8 file until an explicit save converts it', async () => {
+it('pauses autosave once for a non-UTF-8 file until a confirmed explicit save converts it', async () => {
   const latin1 = Buffer.from([0x63, 0x61, 0x66, 0xe9]).toString('utf8')
   const disk = stubGuardedDisk({ [GUARDED_PATH]: latin1 })
   const store = createEditorStore()
@@ -58,7 +60,10 @@ it('pauses autosave once for a non-UTF-8 file until an explicit save converts it
     expect(toast.warning).toHaveBeenCalledTimes(1)
     expect(vi.mocked(toast.warning).mock.calls[0]?.[0]).toContain("isn't UTF-8 text")
 
-    expect(await queue.queueSave(file(), `${latin1}!`, 'user')).toBe('written')
+    // An explicit save without consent leaves the bytes alone.
+    expect(await queue.queueSave(file(), `${latin1}!`, 'user')).toBe('not-utf8')
+    expect(disk.files.get(GUARDED_PATH)).toBe(latin1)
+    expect(await queue.queueSave(file(), `${latin1}!`, 'convert')).toBe('written')
     expect(disk.files.get(GUARDED_PATH)).toBe(`${latin1}!`)
     expect(isAutosaveSuspendedForFile(file())).toBe(false)
   } finally {

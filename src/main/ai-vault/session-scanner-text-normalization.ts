@@ -39,10 +39,7 @@ export function normalizeTitleText(value: string): string | null {
   return finalizeNormalizedText(normalizeStringText(value, SESSION_TITLE_TEXT_LIMIT))
 }
 
-/**
- * `role` 'assistant': a reply's visual lines show only in a chat transcript, so a preview drops
- * them, per text part and before lines are folded into one.
- */
+/** Remove assistant visual directives from each part before folding preview lines. */
 export function extractPreviewContentText(value: unknown, role?: string): string | null {
   return normalizeContentText(value, SESSION_PREVIEW_TEXT_LIMIT, role === 'assistant')
 }
@@ -140,8 +137,7 @@ function appendNormalizedString(builder: TextBuilder, value: string, maxScanLeng
       if (builder.text.length > 0) {
         builder.pendingSpace = true
       }
-      // Why: hidden blocks may jump past the scan budget; clamp so multi-MB
-      // suppressed context cannot keep the first-prompt path busy.
+      // Clamp hidden-block skips to the scan budget to bound first-prompt work.
       index = Math.min(hiddenBlockEnd, scanEnd)
       continue
     }
@@ -164,8 +160,7 @@ function appendNormalizedString(builder: TextBuilder, value: string, maxScanLeng
     }
 
     const charLength = codePointLength(value, index)
-    // Why: do not read past scanEnd mid code-point when the budget lands inside
-    // a surrogate pair — drop the incomplete char instead.
+    // Drop incomplete surrogate pairs at the scan boundary.
     if (index + charLength > scanEnd) {
       break
     }
@@ -200,7 +195,7 @@ function hiddenTextBlockEnd(value: string, index: number): number | null {
 
     const openEnd = tagEndIndex(value, afterName)
     if (openEnd === null) {
-      // Why: malformed hidden context should not leak into AI Vault titles/previews.
+      // Suppress malformed hidden context rather than leaking it into titles or previews.
       return value.length
     }
 

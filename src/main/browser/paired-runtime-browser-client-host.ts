@@ -99,9 +99,7 @@ export class PairedRuntimeBrowserClientHost {
     return !this.closed && this.lease.fileChannelNegotiated
   }
 
-  // An attached authority that never named the file channel is an older host, the one case a
-  // download may keep its desktop destination. Anything else — no lease yet, transport lost, host
-  // closed — is merely unavailable, and guessing "local" there would silently move the bytes.
+  // Only unsupported file channels permit desktop download fallback; outages must not move the destination.
   get fileChannelAvailability(): BrowserClientFileChannelAvailability {
     if (this.fileChannelNegotiated) {
       return 'negotiated'

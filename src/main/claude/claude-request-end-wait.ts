@@ -1,16 +1,12 @@
-// A Stop ends Claude's child. Before it does, Claude gets what is left of the grace to wind down what
-// it has in flight through its own path: an unechoed send echoes and opens its turn, the stopped turn
-// ends with its own result, and Claude writes both to its transcript. Keyed on Claude's own request,
-// not on a journal turn: a Stop pressed before the echo has no turn row yet.
+// Stop grace follows the provider request, including sends whose echo has not opened a turn yet.
 
 import type { ClaudeSession } from './claude-structured-session-state'
 
-/** One budget from the Stop's interrupt: for Claude to answer it and wind its request down. */
+/** Interrupt acknowledgement and request wind-down share this budget. */
 export const CLAUDE_STOP_GRACE_MS = 3_000
 
 const waiters = new WeakMap<ClaudeSession, Set<() => void>>()
 
-/** Claude has a turn open, or a send it has not answered yet. */
 function claudeRequestInFlight(session: ClaudeSession): boolean {
   return (session.translator?.currentTurnId ?? null) !== null || session.dispatchWaiters.length > 0
 }
@@ -30,7 +26,6 @@ function nextSettle(session: ClaudeSession): { settled: Promise<void>; forget: (
   return { settled, forget: () => set.delete(wake) }
 }
 
-/** Resolves once Claude has nothing in flight, re-read at each settle, or after `ms`. */
 export async function awaitClaudeRequestEnd(session: ClaudeSession, ms: number): Promise<void> {
   let elapsed = false
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -42,7 +37,7 @@ export async function awaitClaudeRequestEnd(session: ClaudeSession, ms: number):
     timer.unref?.()
   })
   try {
-    // A settle that leaves something in flight, such as a subagent's result, waits on.
+    // Subagent results can wake this loop while the main request remains in flight.
     while (!elapsed && claudeRequestInFlight(session)) {
       const next = nextSettle(session)
       try {
@@ -56,7 +51,6 @@ export async function awaitClaudeRequestEnd(session: ClaudeSession, ms: number):
   }
 }
 
-/** The adapter's wait: whatever of the grace the Stop's interrupt left, counted from `stoppedAt`. */
 export function claudeStoppedRequestEndWait(
   sessions: Map<string, ClaudeSession>
 ): (sessionId: string, stoppedAt: number) => Promise<void> {
@@ -71,7 +65,6 @@ export function claudeStoppedRequestEndWait(
   }
 }
 
-/** Something Claude had in flight settled: a result, the CLI's idle, the child's exit or its close. */
 export function settleClaudeTurnEndWaiters(session: ClaudeSession): void {
   const waiting = waiters.get(session)
   waiters.delete(session)

@@ -1,0 +1,314 @@
+{
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "selected_files": 50,
+  "original_declarations": 203,
+  "additional_alias_declarations": 1,
+  "explicit_controls": 182,
+  "explicit_control_rows": 536,
+  "parameter_tables": 17,
+  "original_declaration_counts_unchanged": true,
+  "runtime_validation_count_unchanged": 280,
+  "notes": "Nested rows retain exact original source lines/text and static literal decoding; dynamic/generated traversal policies stay explicit expressions. Rows are control inputs, not additional test/runtime case counts.",
+  "files": [
+    {
+      "path": "config/scripts/main-entry-facade.test.ts",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/managed-data-account-runtime.test.ts",
+      "controls": 2,
+      "explicit_rows": 7,
+      "parameter_tables": 1
+    },
+    {
+      "path": "config/scripts/markdown-blank-run-scan-benchmark.mjs",
+      "controls": 4,
+      "explicit_rows": 10,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/markdown-note-line-scan-benchmark.mjs",
+      "controls": 5,
+      "explicit_rows": 4,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/markdown-toc-parse-benchmark.mjs",
+      "controls": 7,
+      "explicit_rows": 7,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/merge-orcad-prebuilds.test.mjs",
+      "controls": 2,
+      "explicit_rows": 2,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mjpeg-frame-parser-alloc-benchmark.mjs",
+      "controls": 5,
+      "explicit_rows": 5,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-agent-status-projection-benchmark.mjs",
+      "controls": 7,
+      "explicit_rows": 6,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-backspace-benchmark.mjs",
+      "controls": 10,
+      "explicit_rows": 47,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-diagnostics-prefix-benchmark.mjs",
+      "controls": 13,
+      "explicit_rows": 23,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-entry-static-closure.test.mjs",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-file-ranking-benchmark.mjs",
+      "controls": 9,
+      "explicit_rows": 16,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-history-scope-paths-benchmark.mjs",
+      "controls": 6,
+      "explicit_rows": 8,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-linear-group-sorted-benchmark.mjs",
+      "controls": 6,
+      "explicit_rows": 6,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-linear-sort-benchmark.mjs",
+      "controls": 6,
+      "explicit_rows": 10,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-log-revisions-benchmark.mjs",
+      "controls": 5,
+      "explicit_rows": 6,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-markdown-placeholder-benchmark.mjs",
+      "controls": 3,
+      "explicit_rows": 5,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-pairing-qrcode-import-plugin.test.mjs",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-process-host-tooling.test.mjs",
+      "controls": 3,
+      "explicit_rows": 5,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-release-check-scope.test.mjs",
+      "controls": 7,
+      "explicit_rows": 47,
+      "parameter_tables": 2
+    },
+    {
+      "path": "config/scripts/mobile-source-control-collation-benchmark.mjs",
+      "controls": 5,
+      "explicit_rows": 8,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-task-sort-benchmark.mjs",
+      "controls": 6,
+      "explicit_rows": 8,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-test-change-scope.test.mjs",
+      "controls": 10,
+      "explicit_rows": 71,
+      "parameter_tables": 4
+    },
+    {
+      "path": "config/scripts/mobile-typecheck-cache.test.mjs",
+      "controls": 2,
+      "explicit_rows": 4,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-agent-history-render.test.mjs",
+      "controls": 1,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-browser-pane-render.test.mjs",
+      "controls": 3,
+      "explicit_rows": 31,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-bundle-test-fixture.mjs",
+      "controls": 2,
+      "explicit_rows": 2,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-clipboard-image-resize-render.test.mjs",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-drawer-render.test.mjs",
+      "controls": 2,
+      "explicit_rows": 2,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-external-navigation-grant.test.mjs",
+      "controls": 2,
+      "explicit_rows": 20,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-files-external-links.test.mjs",
+      "controls": 4,
+      "explicit_rows": 8,
+      "parameter_tables": 4
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-files-render.test.mjs",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts",
+      "controls": 2,
+      "explicit_rows": 12,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-handoff-grants-render.test.mjs",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-held-press-render.test.mjs",
+      "controls": 1,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-mermaid-render.test.mjs",
+      "controls": 2,
+      "explicit_rows": 3,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-module-closure-entrypoints.test.mjs",
+      "controls": 4,
+      "explicit_rows": 13,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-native-chat-visual-links.test.mjs",
+      "controls": 3,
+      "explicit_rows": 8,
+      "parameter_tables": 1
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-native-parity-render.test.mjs",
+      "controls": 4,
+      "explicit_rows": 4,
+      "parameter_tables": 1
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-page-closure-families.test.mjs",
+      "controls": 3,
+      "explicit_rows": 4,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-page-grant-call-sites.test.mjs",
+      "controls": 6,
+      "explicit_rows": 36,
+      "parameter_tables": 3
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-push-subsystem-closure.test.mjs",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-render.test.mjs",
+      "controls": 2,
+      "explicit_rows": 3,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-rich-markdown-render.test.mjs",
+      "controls": 3,
+      "explicit_rows": 16,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-route-manifest.test.mjs",
+      "controls": 3,
+      "explicit_rows": 8,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-route-snapshot.test.mjs",
+      "controls": 2,
+      "explicit_rows": 13,
+      "parameter_tables": 1
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-safe-area-render.test.mjs",
+      "controls": 1,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-screencast-lane-grant.test.mjs",
+      "controls": 2,
+      "explicit_rows": 20,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-session-dictation-capture.test.mjs",
+      "controls": 7,
+      "explicit_rows": 28,
+      "parameter_tables": 0
+    },
+    {
+      "path": "config/scripts/mobile-web-app/mobile-web-app-session-external-links.test.mjs",
+      "controls": 0,
+      "explicit_rows": 0,
+      "parameter_tables": 0
+    }
+  ]
+}

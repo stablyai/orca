@@ -34,22 +34,14 @@ async function tempRoot(): Promise<string> {
   return root
 }
 
-/**
- * A reader's own handle on the index, with the engine's schema installed.
- *
- * PR 2's store keeps its connection private, so a reader opens its own — which
- * is what the fence has to survive: nothing this handle does moves the
- * generation, and it must still see every writer's move.
- */
+/** Read through a separate connection so generation checks must observe other writers. */
 function reader(path: string): SyncDatabase {
   const db = openSessionSearchDatabase(path)
   handles.push(db)
-  // Constructing an engine is what installs the triggers.
   new SessionSearchEngine(db)
   return db
 }
 
-/** Indexes one transcript through the real consumer and returns its path. */
 async function indexOneTranscript(root: string, store: SessionSearchStore): Promise<string> {
   resetSessionParseCacheForTests()
   const sessionId = `aaaaaaaa-0000-4000-8000-${String(roots.length).padStart(12, '0')}`
@@ -81,9 +73,6 @@ it('moves the generation forward when a committed read changes what a read retur
 })
 
 it('moves the generation forward when an append adds rows to a live session', async () => {
-  // The first read of a file inserts its `files` row; every read after that
-  // updates it. An append changes a session's rank and its message count, so a
-  // cursor minted before it indexes into a list that no longer exists.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -126,9 +115,7 @@ it('moves the generation forward when a proven deletion hides a session', async 
 })
 
 it('moves the generation forward when retention cuts a session loose', async () => {
-  // Retention deletes the session row and the file row in one transaction, then
-  // reclaims the messages over many. It is the first half that changes what a
-  // search returns, and the first half that has to move the generation.
+  // Visibility changes when file/session rows disappear; later reclamation also changes vocabulary.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -147,12 +134,7 @@ it('moves the generation forward when retention cuts a session loose', async () 
 })
 
 it('moves the generation when a purge reclaims rows nothing can reach', async () => {
-  // The drain writes only `messages`, and for a while that was argued to change
-  // no answer. Retrieval never saw those rows; the typo repair's dictionary
-  // did, because `messages_vocab` is a view over the FTS b-tree and lists a
-  // term whether or not a reader can reach it. See
-  // `session-search-orphan-rows.test.ts` for the answer that moved. The price
-  // of fencing it is a cursor refused once per batch while a purge runs.
+  // Orphan deletion changes typo vocabulary even though retrieval already excludes those messages.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -161,7 +143,6 @@ it('moves the generation when a purge reclaims rows nothing can reach', async ()
   })
   try {
     await indexOneTranscript(root, store)
-    // The shape an interrupted purge leaves: rows with no session row.
     db.prepare('DELETE FROM sessions').run()
     const orphaned = readIndexGeneration(db)
     expect(db.prepare('SELECT COUNT(*) AS c FROM messages').get()).not.toEqual({ c: 0 })
@@ -174,10 +155,7 @@ it('moves the generation when a purge reclaims rows nothing can reach', async ()
 })
 
 it("leaves the generation alone when a replace swaps a session's own rows", async () => {
-  // The same trigger must not fire here, or every re-read of a large transcript
-  // would move the generation once per deleted row on top of the one bump its
-  // file record already makes. A replace deletes rows whose session row still
-  // stands, which is what the trigger's `WHEN` clause tests.
+  // Deleting messages attached to live sessions must not fire the orphan-reclamation trigger.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -197,8 +175,6 @@ it("leaves the generation alone when a replace swaps a session's own rows", asyn
 })
 
 it('leaves the generation alone when a removal hides nothing', async () => {
-  // A backfill retires paths it never held; if that moved the generation, every
-  // cursor would be refused for as long as indexing ran.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -216,8 +192,6 @@ it('leaves the generation alone when a removal hides nothing', async () => {
 })
 
 it('keeps the generation across a reopen, because the bump rides its own commit', async () => {
-  // The bump is inside the transaction that changes visibility, so nothing can
-  // be lost to a crash and reopening need not invalidate anyone's cursor.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   reader(path)
@@ -240,10 +214,7 @@ it('keeps the generation across a reopen, because the bump rides its own commit'
 })
 
 it('fences a reader against a writer it does not share a process with', async () => {
-  // The shape PR 3 creates: the indexer writes from the scanner child while an
-  // engine reads elsewhere. A generation cached in the reader's memory tracks
-  // only that reader's own writes, so it would stand still through the
-  // writer's deletion, honour the stale cursor, and skip a session.
+  // A process-local generation would miss another process’s writes and admit stale cursors.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -261,7 +232,6 @@ it('fences a reader against a writer it does not share a process with', async ()
 
     writer.removeFile(transcripts[0]!)
 
-    // The reader never wrote anything, and must still refuse.
     try {
       engine.search({ query: 'needle', limit: 1, cursor: page.page.cursor! })
       expect.unreachable('a page cursor must not survive another writer moving the index')
@@ -274,9 +244,6 @@ it('fences a reader against a writer it does not share a process with', async ()
 })
 
 it('re-creates a fence something dropped, on the next search', async () => {
-  // An index whose triggers are gone cannot move its generation, so every stale
-  // cursor would compare equal and be honoured against a list the caller never
-  // saw. The engine owns those triggers, so it puts them back.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -295,9 +262,7 @@ it('re-creates a fence something dropped, on the next search', async () => {
         .get('search_generation_file_update')
     ).toEqual({ name: 'search_generation_file_update' })
 
-    // An UPDATE of the row that already exists, because that is the trigger
-    // this dropped: re-indexing a transcript also inserts and deletes, so it
-    // moves the generation whether or not the dropped one came back.
+    // Update only the restored trigger’s table so other trigger types cannot mask a missing repair.
     const restored = readIndexGeneration(db)
     db.exec(`UPDATE files SET mtime_ms = mtime_ms + 1 WHERE path = '${transcript}'`)
     expect(readIndexGeneration(db)).toBeGreaterThan(restored)
@@ -322,7 +287,6 @@ it('mints a distinct generation per change even when two handles write', async (
       await indexOneTranscript(root, store)
       seen.push(readIndexGeneration(db))
     }
-    // Read-then-write from two connections would hand out one value twice.
     expect(new Set(seen).size).toBe(seen.length)
     expect([...seen].sort((left, right) => left - right)).toEqual(seen)
   } finally {

@@ -1,6 +1,3 @@
-// Why: one regression fixture proves the managed hook timeout budget across every
-// managed agent (config entries, wrapper curl flags, and a real dead-endpoint
-// shell run) so the cross-agent coverage lives together rather than fragmenting.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
 import { createServer, type Server, type Socket } from 'node:net'
@@ -45,9 +42,7 @@ import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory
 
 const REMOTE_HOME = '/home/dev'
 
-// Each managed agent that ships an SSH-compatible JSON/TOML hook config. Amp and
-// Hermes are intentionally excluded: they are plugin systems with no hook config
-// entries, so their transport budgets live in plugin source (see design doc).
+// Amp/Hermes plugins define transport budgets in source rather than JSON/TOML hook entries.
 const JSON_INSTALLERS = [
   {
     agent: 'claude',
@@ -64,7 +59,7 @@ const JSON_INSTALLERS = [
   {
     agent: 'codex',
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
-    // Why: Codex clamps Interrupt to 3s, so Orca writes that cap instead of the shared budget.
+    // Codex caps Interrupt at three seconds.
     eventTimeouts: { Interrupt: 3 },
     configPath: `${REMOTE_HOME}/.codex/hooks.json`,
     install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
@@ -114,14 +109,10 @@ const JSON_INSTALLERS = [
 ] as const
 
 const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
-// Why: statusLine is not a hook — Claude's schema has no timeout field (type/command/padding/refreshInterval), and a slow statusline can't block agent turns.
+// Claude's statusLine schema has no timeout field and cannot block agent turns.
 const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
 
-// Walk the parsed config and assert every Orca-managed command carrier (a node
-// with a `command`/`bash`/`powershell` string pointing at the managed script
-// dir) has a positive config-level timeout sibling (`timeout` or the
-// provider-specific `timeoutSec`). Returns the count of managed carriers found
-// so callers can assert the scan was not vacuous.
+// Count managed command carriers while asserting their provider-specific timeout fields.
 function countManagedCarriersWithTimeout(
   node: unknown,
   expectedTimeout: number,
@@ -194,7 +185,6 @@ describe('managed agent hook timeouts', () => {
     const status = await new KimiHookService().installRemote(sftp, REMOTE_HOME)
     expect(status.state).toBe('installed')
     const config = fs.files.get(`${REMOTE_HOME}/.kimi-code/config.toml`)!
-    // One timeout line per managed [[hooks]] event entry.
     const timeoutLines = config.match(new RegExp(`timeout = ${MANAGED_HOOK_TIMEOUT_SECONDS}`, 'g'))
     expect(timeoutLines?.length ?? 0).toBeGreaterThan(0)
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
@@ -298,15 +288,10 @@ describe('managed agent hook timeouts', () => {
       })
     }
 
-    // Why: an accepted-but-unanswered connection is the worst-case hang that only
-    // `--max-time` (1.5s) governs — `--connect-timeout` already passes once the
-    // TCP handshake completes. Point the wrapper at a real loopback listener that
-    // accepts and then stalls, and assert the wrapper still returns well under a
-    // generous CI budget.
+    // An accepted, unanswered connection exercises max-time after connect-timeout has already passed.
     it.skipIf(!hasPosixCurl)(
       'returns within budget when the local listener accepts but never responds',
       async () => {
-        // Reuse a real generated POSIX wrapper rather than re-deriving the script.
         const { sftp, fs } = createFakeSftp()
         await new CodexHookService().installRemote(sftp, REMOTE_HOME)
         const wrapperBody = fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/codex-hook.sh`)!
@@ -317,7 +302,6 @@ describe('managed agent hook timeouts', () => {
         chmodSync(scriptPath, 0o755)
 
         const stallingServer = createServer((socket) => {
-          // Accept the connection and hold it open without ever replying.
           openSockets.push(socket)
         })
         server = stallingServer
@@ -332,11 +316,11 @@ describe('managed agent hook timeouts', () => {
         const result = await runHookScript(scriptPath, port)
         const elapsedMs = Date.now() - startedAt
 
-        // The hook fails open (`|| true`) and exits 0 even though the POST timed out.
+        // POST timeout must fail open.
         expect(result.status).toBe(0)
         expect(openSockets.length).toBeGreaterThan(0)
         expect(elapsedMs).toBeGreaterThanOrEqual(1_000)
-        // --max-time 1.5s + process overhead; a hang would blow well past this.
+        // Allow overhead beyond curl's 1.5-second cap.
         expect(elapsedMs).toBeLessThan(6_000)
       }
     )

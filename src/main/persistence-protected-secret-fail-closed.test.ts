@@ -61,7 +61,7 @@ async function createStore() {
     describeProtectionGap: () => null
   })
   const { Store, initDataPath } = await import('./persistence')
-  // Each reopened store must resolve userData to this fixture's directory.
+  // Reopened stores must use this fixture’s userData directory.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
@@ -95,7 +95,7 @@ const PENDING = {
   cookie: 'new-opencode-cookie',
   kagi: 'https://kagi.test/session/new-token'
 } as const
-// Only relay-era builds wrote this record; this build carries it sealed so a downgrade can use it.
+// Preserve relay-era owner leases sealed so downgrades can still read them.
 const OWNER_LEASE = `old-ssh-owner-lease-${'x'.repeat(480)}`
 const sealOwnerLease = (lease: string) =>
   Buffer.from(`enc:${randomUUID()}:${lease}`, 'utf-8').toString('base64')

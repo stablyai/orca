@@ -372,7 +372,7 @@ describe('remote hook service installers', () => {
         `ORCA_ANTIGRAVITY_EVENT='${eventName}'`
       )
     }
-    // Why: #2426 was an SSH report — a remote host missing the script must still answer the gate, not deny every tool.
+    // Remote missing-script gates need a fallback answer to avoid denying every tool call.
     expect(
       tokenizeCommandLine(
         antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command ?? ''
@@ -439,7 +439,7 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
       expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
-    // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
+    // Grok expects regex matchers; bare * is invalid.
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
     expect(grokConfig.hooks.StopFailure?.[0]?.matcher).toBeUndefined()
@@ -512,7 +512,6 @@ describe('remote hook service installers', () => {
     expect(status.state).toBe('installed')
 
     const config = fs.files.get('/home/dev/.kimi-code/config.toml')!
-    // User config above the managed block is preserved.
     expect(config).toContain('default_model = "kimi-k2.6"')
     expect(config).toContain('api_key = "sk-secret"')
     for (const eventName of [
@@ -526,7 +525,6 @@ describe('remote hook service installers', () => {
     ]) {
       expect(config).toContain(`event = "${eventName}"`)
     }
-    // The command points at the POSIX managed script via the regular-file guard.
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
     expect(config).toMatch(/command = "if \[ -f /)
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
@@ -748,7 +746,6 @@ describe('remote hook service installers', () => {
       installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: [] })
     ).resolves.toEqual([])
 
-    // Why: fake SFTP seeds '/' only; no agent config homes or files may appear.
     expect([...fs.files.keys()]).toEqual([])
     expect([...fs.dirs]).toEqual(['/'])
   })
@@ -810,7 +807,6 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
     }
-    // Tool/permission events carry a `*` matcher; lifecycle events do not.
     expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')
     expect(config.hooks.PostToolUse?.[0]?.matcher).toBe('*')
     expect(config.hooks.PermissionRequest?.[0]?.matcher).toBe('*')

@@ -81,7 +81,6 @@ export class AiVaultScannerServiceClient {
     })
   }
 
-  /** Push a consent or retention change, and while the index is on keep a child. */
   updateSessionSearch(init: AiVaultSessionSearchInit): void {
     if (this.disposed) {
       return
@@ -164,12 +163,7 @@ export class AiVaultScannerServiceClient {
     this.scheduleIdleIfNeeded()
   }
 
-  /**
-   * The index's own restart. A child indexing for the hold has no queued call to
-   * bring it back, so without this a fault stops the indexing until an unrelated
-   * request happens to arrive. The restart delay and circuit bound it, exactly as
-   * they bound a queued call's start.
-   */
+  /** Restart held indexing children even without queued requests, subject to backoff and the circuit. */
   private startSessionSearchChild(): void {
     if (this.disposed || !this.sessionSearch.holdsChild || this.child || this.readyWaiter) {
       return
@@ -288,8 +282,7 @@ export class AiVaultScannerServiceClient {
       this.readyWaiter.reject(error)
       this.readyWaiter = null
     }
-    // Recorded before the pending calls are settled so retryStartOrReject can see
-    // whether a respawn is actually coming.
+    // Record the respawn decision before settling calls that may retry.
     this.restartPolicy.recordFault(() => this.pump())
     const active = [...this.active.values()]
     this.active.clear()

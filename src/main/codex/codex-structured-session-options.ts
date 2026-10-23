@@ -36,7 +36,6 @@ export function reportedCodexSessionOptions(
   const effort =
     session.options.get('effort') ??
     (model === session.reportedOptions.model ? session.reportedOptions.effort : undefined)
-  // The saved tier, which the next turn sends as-is.
   const serviceTier = session.options.get('serviceTier')
   return {
     model,
@@ -110,10 +109,7 @@ export async function applyCodexStructuredSessionOption(
   }
 }
 
-/**
- * With no listing known, a pick is kept as the next turn's intent rather than refused: catalog
- * bookkeeping must not gate it. Codex judges the model and tier on `turn/start`.
- */
+/** Save intent without a catalog; dispatch applies current capabilities before Codex validates it. */
 function applyUnlistedCodexSessionOption(
   session: CodexSession,
   key: 'model' | 'effort' | 'serviceTier',
@@ -123,7 +119,7 @@ function applyUnlistedCodexSessionOption(
     key === 'model' &&
     value !== (session.options.get('model') ?? session.reportedOptions.model)
   ) {
-    // An effort saved under another model is unverified for this one; its default applies.
+    // An undiscovered model cannot validate the previous model's effort.
     session.options.delete('effort')
   }
   session.options.set(key, value)
@@ -145,7 +141,6 @@ function applyValidatedCodexStructuredSessionOption(
         current: priorModel ? { model: priorModel } : {}
       })
     : null
-  // An older client still sends its Fast toggle.
   const key = requestedKey === 'fastMode' ? 'serviceTier' : requestedKey
   const value =
     requestedKey === 'fastMode'
@@ -208,7 +203,7 @@ function applyValidatedCodexStructuredSessionOption(
   return Object.fromEntries(session.options)
 }
 
-/** The tier an older client's Fast toggle asks for; unknown Fast support is refused. */
+/** Legacy Fast-on requests require a known Fast tier. */
 function codexServiceTierOfFastMode(
   encoded: string,
   model: Parameters<typeof codexFastServiceTier>[0]

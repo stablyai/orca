@@ -27,7 +27,7 @@ import type { AppImageBuildState } from './serve-appimage-update'
 export const SERVE_INSTALL_HOLD_POLL_MS = 2_000
 /** A hold this long is reported as stuck; it still never times out into a spawn. */
 export const SERVE_INSTALL_HOLD_STUCK_MS = 30 * 60_000
-/** A version-specific executable this long gone was removed by an update, not swapped by one. */
+/** After this delay, exit so the service manager can find the updated launcher. */
 export const SERVE_EXECUTABLE_MISSING_EXIT_MS = 2 * 60_000
 
 type StopListener = () => void
@@ -112,10 +112,7 @@ async function settle(run: () => Promise<number>): Promise<PromiseSettledResult<
   }
 }
 
-/**
- * `orca serve --supervise`: the restart owner for a service manager. It never exits because its
- * child died; it exits on a stop signal, or with 0 after giving up so the manager stops too.
- */
+/** Own server restarts; exit 0 after giving up so the service manager stops retrying. */
 export async function superviseServeService(options: SupervisedServeOptions): Promise<number> {
   const now = options.now ?? Date.now
   const random = options.random ?? Math.random
@@ -127,7 +124,7 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
     ((executable: string) => serveBuildIdentity(executable, options.appRoot))
   const writeBrake = options.writeBrake ?? writeServeSupervisorBrake
 
-  // Why not keyed yet: mid-install the executable may be missing, which must not reset a give-up.
+  // Mid-install missing executables must not reset the crash brake.
   let record: ServeSupervisorBrake | null = (options.readBrake ?? readServeSupervisorBrake)(
     options.userDataPath
   )
@@ -139,7 +136,7 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
     log(`[serve] Not starting: ${gaveUp.reason} ${SERVE_GAVE_UP_ADVICE}`)
     return 0
   }
-  // Why the AppImage check: a replaced AppImage is a new build, which a give-up must not block.
+  // A new AppImage deserves a retry even after the previous build hit the brake.
   if (
     record?.gaveUp &&
     record.build === identify(options.executable) &&
@@ -192,7 +189,6 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         evidence.reason === 'bundle-missing' &&
         now() - since >= SERVE_EXECUTABLE_MISSING_EXIT_MS
       ) {
-        // The outer loop sees the same hold and hands the restart to the service manager.
         return false
       }
       await sleep(SERVE_INSTALL_HOLD_POLL_MS)
@@ -225,7 +221,7 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
           evidence.reason === 'bundle-missing' &&
           now() - held.since >= SERVE_EXECUTABLE_MISSING_EXIT_MS
         ) {
-          // Why exit 1: the manager restarts the CLI through the stable launcher, which finds the installed build.
+          // Let the service manager find the updated app through its stable launcher.
           log(
             '[serve] The Orca executable this service started from is gone; exiting so the service manager starts the installed Orca.'
           )
@@ -242,7 +238,7 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
       hold.current = null
       const appImage = appImageUpdate?.inspect() ?? 'current'
       if (appImage === 'settling') {
-        // Why: the AppImage file is still being written; starting either build now would be wrong.
+        // Wait until the new AppImage finishes copying before choosing a build.
         await sleep(SERVE_INSTALL_HOLD_POLL_MS)
         continue
       }
@@ -265,14 +261,14 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         break
       }
       if (attempt.parked) {
-        // Why not a failure: the desktop stopped this server to install an update.
+        // Desktop update parks do not count against the crash brake.
         continue
       }
       let failure: string
       if (attempt.settled.status === 'fulfilled') {
         const code = attempt.settled.value
         if (code === SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE) {
-          // Why not a failure: another Orca serves this profile, so wait for it instead of racing it.
+          // An occupied profile warrants standby, not a crash-brake failure.
           const delayMs = standbyDelayMs(standbyAttempt++, random)
           log(
             `[serve] Another Orca serves this profile; checking again in ${Math.round(delayMs / 1000)}s.`
@@ -283,7 +279,6 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         failure = `exited with code ${code}`
       } else {
         const error: unknown = attempt.settled.reason
-        // Why: the child's own errors read "Orca serve exited via SIGKILL."; the log line names serve once.
         failure = (error instanceof Error ? error.message : String(error))
           .replace(/^Orca serve /, '')
           .replace(/\.$/, '')

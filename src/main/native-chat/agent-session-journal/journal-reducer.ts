@@ -42,6 +42,11 @@ import {
   foldJournalQueuePauseMark,
   type JournalQueuePauseMarks
 } from './queued-message-pause'
+import {
+  createJournalQueueState,
+  foldJournalQueueRow,
+  type JournalQueueState
+} from './journal-queue-fold'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -81,6 +86,13 @@ export type JournalReducerState = {
   queuePauseMarks: JournalQueuePauseMarks
   /** Host-only: each handed-over send's stopped-message history, from its latest `pending` row. */
   stoppedHistoryCarried: Map<string, readonly string[]>
+  /** Where each queued card's hand-off was placed when handed over; never stored. */
+  queuedHandOffPlaces: Map<
+    string,
+    Pick<AgentJournalRenderItem, 'sequence' | 'observedAt' | 'turnScope'>
+  >
+  /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
+  queue: JournalQueueState
   /** Original adoption evidence, independent of the current epoch's reason/time. */
   historyOrigin: JournalHistoryOrigin | null
 }
@@ -108,6 +120,8 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     latestAcceptedTurnSequence: 0,
     queuePauseMarks: createJournalQueuePauseMarks(),
     stoppedHistoryCarried: new Map(),
+    queuedHandOffPlaces: new Map(),
+    queue: createJournalQueueState(),
     historyOrigin: null
   }
 }
@@ -117,10 +131,19 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  applyJournalRowFacts(state, row, savedAt)
+  foldJournalQueueRow(state, row)
+}
+
+function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
     state.historyOrigin = journalHistoryOrigin(row)
+    return
+  }
+  // A queued card is never activity: it feeds no working status and no idle sweep.
+  if (row.kind === 'queue') {
     return
   }
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)

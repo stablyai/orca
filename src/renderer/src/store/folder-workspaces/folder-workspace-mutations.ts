@@ -294,6 +294,8 @@ export function createFolderWorkspaceMutationActions(
           // Folder workspaces use the same browser registry key as worktrees;
           // tear down Chromium guests before purging the remaining renderer state.
           await Promise.resolve(get().shutdownWorktreeBrowsers(workspaceKey))
+          // Why here too: a server-hosted folder's local pages use this desktop's profile, which the server can't reach.
+          void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: workspaceKey })
           get().purgeWorktreeTerminalState([workspaceKey])
           deleteWorkspaceChatDrafts(chatDraftKeys)
         }

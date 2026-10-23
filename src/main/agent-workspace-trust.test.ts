@@ -77,7 +77,6 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     ['cursor', mocks.cursor],
     ['copilot', mocks.copilot],
     ['qoder', mocks.qoder],
-    // Why: one of the old copied switches omitted Antigravity, so workers launched there asked.
     ['antigravity', mocks.antigravity]
   ] as const)('writes the %s preset for the workspace', async (preset, writer) => {
     await expect(applyAgentWorkspaceTrust(preset, WORKSPACE, local)).resolves.toEqual({})
@@ -128,7 +127,7 @@ describe('applyAgentWorkspaceTrust on this machine', () => {
     warn.mockRestore()
   })
 
-  // Why: a config dir that does not exist keeps a regression here from writing a real config.
+  // A nonexistent config directory prevents this test from modifying real Claude config.
   const noConfig = { ...local, env: { CLAUDE_CONFIG_DIR: join(tmpdir(), 'orca-no-claude-config') } }
   it.each([
     ['the home folder', homedir(), noConfig],

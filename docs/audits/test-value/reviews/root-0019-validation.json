@@ -1,0 +1,85 @@
+{
+  "original_declaration_sites": 0,
+  "manual_scenarios": 3,
+  "review_scope": "Complete real-socket driver with all three input/mode scenarios and actual current batcher source. No production or archived measurement edits.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 timeout 45s node docs/audits/daemon-stream-retention/reproduce.mjs",
+      "exit_code": 0,
+      "result": "All three explicit scenarios passed on Linux Node 26.8.1; visible 64KiB producer paused after 4,849,664 chars; visible 1KiB after 5,653,504; hidden processed all 8,388,608. All ended unpaused with zero socket/batcher queues.",
+      "bundle_sha256": "abe2d14a882146e7815abc9efa6de32c0766d33702d43a2653e8239f6faf8630",
+      "log": "/tmp/orca-root-0019-daemon-stream.log"
+    }
+  ],
+  "measured_results": {
+    "node": "v26.8.1",
+    "platform": "linux",
+    "bundleSha256": "abe2d14a882146e7815abc9efa6de32c0766d33702d43a2653e8239f6faf8630",
+    "cases": [
+      {
+        "chunkSize": 65536,
+        "hidden": false,
+        "stalled": {
+          "producedChars": 4849664,
+          "producerPaused": true,
+          "socketBufferedBytes": 131300,
+          "batcherQueuedChars": 2031616,
+          "rssBytes": 71204864
+        },
+        "receivedBytes": 4855440,
+        "afterDrain": {
+          "producerPaused": false,
+          "socketBufferedBytes": 0,
+          "batcherQueuedChars": 0
+        }
+      },
+      {
+        "chunkSize": 1024,
+        "hidden": false,
+        "stalled": {
+          "producedChars": 5653504,
+          "producerPaused": true,
+          "socketBufferedBytes": 3401200,
+          "batcherQueuedChars": 0,
+          "rssBytes": 97333248
+        },
+        "receivedBytes": 6073100,
+        "afterDrain": {
+          "producerPaused": false,
+          "socketBufferedBytes": 0,
+          "batcherQueuedChars": 0
+        }
+      },
+      {
+        "chunkSize": 1024,
+        "hidden": true,
+        "stalled": {
+          "producedChars": 8388608,
+          "producerPaused": false,
+          "socketBufferedBytes": 132076,
+          "batcherQueuedChars": 525312,
+          "rssBytes": 117612544
+        },
+        "receivedBytes": 3330088,
+        "afterDrain": {
+          "producerPaused": false,
+          "socketBufferedBytes": 0,
+          "batcherQueuedChars": 0
+        }
+      }
+    ]
+  },
+  "limitations": [
+    "Real socket backpressure/drain needs the event loop; the five-second timeout is an operational deadline, not a speed guarantee.",
+    "Does not assert exact byte delivery/framing or a precise hidden retained-size cap; bytes include protocol overhead and hidden keep-tail intentionally drops data.",
+    "RSS is observed with allocator/GC effects, not an asserted memory bound or incident cause.",
+    "Local run is Node 26 Linux; separate supported-Node/platform evidence is not claimed."
+  ],
+  "batch": "root-0019",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 1,
+  "case_records": 3,
+  "production_changes": false,
+  "test_source_changes": false
+}

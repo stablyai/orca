@@ -20,10 +20,10 @@ export type CodexPendingPrompt = {
   method: string
   threadId: string
   turnId: string | null
-  /** Oversized compatibility turn ids stay comparable without escaping the registry byte cap. */
+  /** Oversized turn IDs stay comparable within the registry byte cap. */
   turnIdDigest?: string
   codexItemId: string
-  /** One tool item can ask more than once, so approvalId wins over itemId when present. */
+  /** Prefer approvalId for repeated requests from one tool item. */
   promptKey: string
   questionIds: readonly string[]
   questionIdAliases: ReadonlyMap<string, string>
@@ -51,7 +51,7 @@ export function isCodexPromptMethod(method: string): boolean {
   )
 }
 
-/** Session-local callback ownership; none of this state is reconstructed from the journal. */
+// Callback ownership is session-local and cannot be reconstructed from the journal.
 export class CodexPromptRegistry {
   private readonly byAddress = new Map<string, CodexPendingPrompt>()
   private readonly journalItemIds = new Map<string, string>()
@@ -219,8 +219,7 @@ export class CodexPromptRegistry {
     )
     for (const prompt of prompts) {
       this.forget(prompt)
-      // Codex abandons a turn's unanswered prompts: a command still awaiting approval never ran.
-      // An `approvalId` asks for a subcommand, not the item's own command.
+      // Only whole-command approvals imply no execution; approvalId targets a subcommand.
       if (
         prompt.method === CODEX_COMMAND_APPROVAL_METHOD &&
         prompt.promptKey === prompt.codexItemId
@@ -230,7 +229,6 @@ export class CodexPromptRegistry {
     }
   }
 
-  /** The commands whose approval a turn ended without, since the last call. */
   takeAbandonedCommands(): readonly CodexAbandonedCommand[] {
     if (this.abandonedCommands.length === 0) {
       return NO_ABANDONED_COMMANDS

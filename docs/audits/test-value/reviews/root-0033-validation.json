@@ -1,0 +1,27 @@
+{
+  "original_declaration_sites": 0,
+  "generated_runtime_cases": 15,
+  "manual_case_control_records": 21,
+  "review_scope": "Complete driver and both fixtures; current graphLeafConnected, physical-exit certification and weak-inventory certificate-preservation implementation read as supporting evidence.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/queued-terminal-graph-exit/reproduce.mjs /tmp/orca-root-0033-queued-graph-results.json",
+      "exit_code": 1,
+      "result": "ENOENT for retired orca-runtime-sync-window-graph.ts before transforms/runner/fixtures. No current case pass or report.",
+      "log": "/tmp/orca-root-0033-queued-graph.log"
+    }
+  ],
+  "limitations": [
+    "Twenty-one case/control records include the 15 generated phase cases and five reusable fixture controls plus source guard; not 21 independent runtime tests.",
+    "Real local socket and temporary persistence, controlled subprocess/IPC dispatch/resolver ports; no native PTY or rendered application.",
+    "Fixture captures more fields than combined oracle asserts; no process leak, heap slope or exact incident frequency is established.",
+    "Current child-project base and retired source entrypoints prevent treating historical results as current execution."
+  ],
+  "batch": "root-0033",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 3,
+  "case_records": 21,
+  "production_changes": false,
+  "test_source_changes": false
+}

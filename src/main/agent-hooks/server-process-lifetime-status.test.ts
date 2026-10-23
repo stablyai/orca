@@ -48,8 +48,7 @@ async function nextMillisecond(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 5))
 }
 
-// One `opencode run` command in one pane: the host reports it from the process lifetime unless a
-// hook producer (OpenCode 1's in-process plugin) reports the same pane during that command.
+// Process-lifetime status yields when a hook producer reports the same pane during the command.
 describe('process-lifetime status', () => {
   it('reports Working, then Done, when no hook speaks for the command', () => {
     const commandStartedAt = Date.now()
@@ -63,7 +62,6 @@ describe('process-lifetime status', () => {
     const commandStartedAt = Date.now()
     processLifetime('working', commandStartedAt)
     await openCodeHook('SessionBusy')
-    // The hook is still Working, so the process exit must not write a second Done over it.
     processLifetime('done', commandStartedAt)
     expect(paneState()).toBe('working')
     await openCodeHook('SessionIdle')
@@ -87,7 +85,6 @@ describe('process-lifetime status', () => {
     expect(paneState()).toBe('done')
   })
 
-  // Why: a pane where an Orca-launched agent exited is retired; a new `opencode run` there is a new run.
   it('revives a retired pane on its Working, as a hook new-turn event does', () => {
     server.retirePaneAuthority(PANE)
     const commandStartedAt = Date.now()

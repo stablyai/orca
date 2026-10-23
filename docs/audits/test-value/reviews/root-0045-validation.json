@@ -1,0 +1,26 @@
+{
+  "batch": "root-0045",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 2,
+  "case_records": 74,
+  "production_changes": false,
+  "test_source_changes": false,
+  "review_scope": "Read every proof/fixture/config body and parameter loop. Record all expanded manual controls and actual source fences; supporting permanent suites are evidence only unless independently reviewed.",
+  "checks": [
+    {
+      "command": "node -e 'require(\"./docs/audits/terminal-mode-tail-retention/load-source.cjs\").loadSource(true).catch(error => {console.error(error); process.exitCode=1})'",
+      "working_directory": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-5",
+      "result": "rejected before measurement: retired terminal-mouse-mode-mirror cannot resolve; kitty fixed SHA differs (actual 3036f500..., expected a8da7045...). No archived output overwritten.",
+      "log": "/tmp/orca-root-0045-source.log"
+    }
+  ],
+  "limitations": [
+    "Heap bounds depend on V8 string representation and process noise; historical reports are not new passes.",
+    "No renderer/Electron window or native PTY needed; GC/string storage experiment cannot attribute production incidents."
+  ],
+  "integrity": {
+    "records_sha256": "462a72a0d32710dc3ec7d6f368067b46227fea385f19697d99ee45fae401110c",
+    "original_and_final_hashes_verified": true
+  }
+}

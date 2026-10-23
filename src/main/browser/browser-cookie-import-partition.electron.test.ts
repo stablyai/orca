@@ -16,7 +16,7 @@ afterAll(() => {
   }
 })
 
-// Retry once when Electron startup times out before `ready`; keep later failures fatal.
+// Retry only pre-ready startup timeouts; retain later failures.
 const FIXTURE_LAUNCH_ATTEMPTS = 2
 
 function neverReachedElectronReady(fixtureResult: string): boolean {
@@ -196,8 +196,7 @@ async function runFixture(): Promise<FixtureResult> {
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
   for (let attempt = 1; ; attempt += 1) {
     rmSync(resultPath, { force: true })
-    // Why a fresh profile per attempt: a launch that never reached `ready` may have left the
-    // Chromium profile mid-initialization, and reusing it would bias the retry.
+    // A failed launch may leave its profile half-initialized; retry with a fresh one.
     const electronArgs = [fixturePath, `--user-data-dir=${join(root, `profile-${attempt}`)}`]
     const run = spawnSync(
       executable,

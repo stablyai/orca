@@ -22,14 +22,11 @@ function partitionAt(index: number): string {
   return `persist:orca-browser-v1-${index.toString(16).padStart(64, '0')}`
 }
 
-/** Persisted v2 state, written directly so entry shapes older builds wrote can be replayed. */
 function writeBindings(filePath: string, bindings: Record<string, unknown>): void {
   writeFileSync(filePath, JSON.stringify({ version: 2, bindings }))
 }
 
 describe('browser route partition binding capacity', () => {
-  // Why: the cap bounds the persisted file and the eviction sweep; a wider default accepts
-  // state the store is meant to refuse.
   it('defaults the binding cap to 512 entries', () => {
     const atCap = createPath()
     const overCap = createPath()
@@ -49,8 +46,6 @@ describe('browser route partition binding capacity', () => {
     ).toThrow('browser_route_partition_binding_store_invalid')
   })
 
-  // Why: a partition just adopted from the pre-migration name holds the user's live session,
-  // so recording the adoption must not leave it looking like the oldest entry.
   it('counts an adopted binding as used when it is rebound', () => {
     const store = new BrowserRoutePartitionBindingStore({
       filePath: createPath(),
@@ -70,8 +65,6 @@ describe('browser route partition binding capacity', () => {
     expect(store.get(partitionAt(1))).toBe('c'.repeat(64))
   })
 
-  // Why: an entry written before the store recorded recency has no claim on being fresh,
-  // and treating it as current would evict a genuinely newer partition instead.
   it('evicts an entry with no recorded recency first', () => {
     const filePath = createPath()
     writeBindings(filePath, {

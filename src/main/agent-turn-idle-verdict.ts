@@ -1,12 +1,5 @@
-/**
- * Whether an agent's turn, sent at a known moment, is really over once its pane reads idle. A ready
- * shell prompt satisfies `tui-idle` too, so a prompt typed at a shell whose agent is not installed
- * ("command not found") would read as finished. The agent's own `done`, reached since the turn was
- * sent, completes it; a reused pane's previous `done` is not this turn's. Not every agent reports
- * status (no hooks on the host, no recognised title), so for a pane that never reported any an idle
- * pane still means done, but only after the agent had time to start and only when no shell refused
- * its command. Automations judge their runs by it; a connector judges each message's turn by it.
- */
+// A shell prompt can look complete even after command-not-found; require fresh agent completion.
+// Status-free panes may finish after startup grace if the shell did not refuse the command.
 import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
 
 /** Covers agent spin-up over SSH before an idle pane without agent status is believed. */
@@ -28,9 +21,8 @@ export type AgentTurnStatusRow = Pick<
 >
 
 export type IdleAgentTurnEvidence = {
-  /** The pane's agent status rows, from hooks, OSC and titles alike. */
   rows: readonly AgentTurnStatusRow[]
-  /** When the turn's prompt went in: status from before it is a previous turn's. */
+  /** Ignore status from turns before this prompt. */
   sentAt: number
   tail: readonly string[]
   /** Read only when no fresh `done` decides it: the names the agent command may run under. */
@@ -43,7 +35,7 @@ export type IdleAgentTurnVerdict =
   /** An idle shell that may not have started the agent yet. */
   | { kind: 'wait' }
 
-/** A shell refusing one of the agent's own commands; an agent's tool output never matches. */
+/** Match shell refusals of the agent command, excluding commands run by its tools. */
 export function findMissingCommandLine(
   tail: readonly string[],
   commands: readonly string[]

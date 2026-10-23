@@ -1,16 +1,10 @@
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
 
-// agent-browser's own session-name rule; doubles as a traversal fence for the `join` below.
+// Match agent-browser session names and reject path traversal.
 const SAFE_SESSION_NAME = /^[A-Za-z0-9_-]+$/
 
-/**
- * True when no daemon can be holding `sessionName`, so closing it would only start one.
- *
- * Only an Orca-derived socket directory proves that (`ownsSocketDirectory`): it is a
- * private per-profile `/tmp` directory, never an inherited one shared with a second
- * profile, and never Windows, which uses named pipes and leaves no socket to inspect.
- */
+/** Skip daemon-starting resets only when this profile's owned Unix socket is provably absent. */
 export function canSkipAgentBrowserSessionReset(options: {
   ownsSocketDirectory: boolean
   socketDirectory: string | undefined

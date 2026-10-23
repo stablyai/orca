@@ -37,7 +37,7 @@ vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
 
 let desktopHistory: string
 
-// A lone WSL bash history follows the host pane's shell; these cases pin it to bash.
+// Pin bash because lone WSL history follows the host’s resolved pane shell.
 function bashHostStore(): ReturnType<typeof createStore> {
   return createStore({ paneShellPath: () => '/bin/bash' })
 }
@@ -85,7 +85,6 @@ describe('orcad migration shell history through the store', () => {
       expect(statSync(join(directory, 'zsh_history')).mode & 0o777).toBe(0o600)
     }
 
-    // The HISTFILE a zsh and a bash pane in the moved worktree get on this host.
     for (const [shell, file] of [
       ['/bin/zsh', 'zsh_history'],
       ['/bin/bash', 'bash_history']
@@ -163,7 +162,7 @@ describe('orcad migration shell history through the store', () => {
     expect(hostHistory(DORMANT_WORKTREE_ID, 'zsh_history')).toBe(merged)
     expect(readHistoryMeta(directory)?.createdAt).toBe('then')
 
-    // A crash after the install but before the received blob was deleted leaves it in place.
+    // Simulate a crash after installation but before deleting the received blob.
     const [blob] = blobs
     writeFileSync(receivedPath(input, blob.descriptor.key), blob.bytes)
     expect(await commitDurably(bashHostStore(), input)).toBe('committed')
@@ -179,7 +178,7 @@ describe('orcad migration shell history through the store', () => {
       { worktreeId: FOLDER_KEY, file: 'bash_history', content: BASH }
     ])
     stage(store, input, blobs)
-    // A file where the history directory belongs makes that one install fail.
+    // Block one history directory with a file to force an installation error.
     mkdirSync(getHistoryRoot(), { recursive: true })
     writeFileSync(hostHistoryDirectory(DORMANT_WORKTREE_ID), '')
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -189,7 +188,6 @@ describe('orcad migration shell history through the store', () => {
       '[orcad-migration] installing received blobs failed:',
       expect.any(Error)
     )
-    // The other history still installed.
     expect(hostHistory(FOLDER_KEY, 'bash_history')).toBe(BASH)
     const pendingKey = `${hashWorktreeId(DORMANT_WORKTREE_ID)}-zsh`
     expect(existsSync(receivedPath(input, pendingKey))).toBe(true)
@@ -199,7 +197,7 @@ describe('orcad migration shell history through the store', () => {
     error.mockRestore()
 
     rmSync(hostHistoryDirectory(DORMANT_WORKTREE_ID))
-    // Store load cannot see live shells, so history waits for a runtime-driven retry.
+    // Loading has no live-shell inventory; installation must wait for a runtime-driven retry.
     bashHostStore()
     expect(existsSync(receivedPath(input, pendingKey))).toBe(true)
     expect(
@@ -236,7 +234,6 @@ describe('orcad migration shell history through the store', () => {
     reloaded.installPendingOrcadMigrationReceivedBlobs({ worktreeHasLiveShells: noLiveShells })
     expect(hostHistory(DORMANT_WORKTREE_ID, 'bash_history')).toBe(BASH)
     expect(existsSync(receivedPath(input, blobs[0].descriptor.key))).toBe(false)
-    // Every later orcad start skips the post-attach pass and its terminal inventory.
     expect(reloaded.hasPendingOrcadMigrationShellHistory()).toBe(false)
   })
 

@@ -51,8 +51,6 @@ type SourceChipsRow = {
   has_cross_site_ancestor: number
 }
 
-// Why: the correct behavior — the CDP object form Network.setCookie writes and
-// Network.getAllCookies returns, as proven by the rollback fixture on this Electron.
 const EXPECTED_PARTITION_KEY = {
   topLevelSite: 'https://top.example',
   hasCrossSiteAncestor: true
@@ -161,8 +159,6 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceChips: Sour
   const fixturePath = join(root, 'main.cjs')
   const sourceDbPath = join(root, SOURCE_DB_RELATIVE_PATH)
   const sourceDb = createChromiumCookieTestDatabase(sourceDbPath, [
-    // Why: the CHIPS row is a genuine partitioned cookie: top_frame_site_key names the
-    // top-level site and has_cross_site_ancestor=1 means it was set cross-site.
     {
       domain: '.app.acme-chips.test',
       name: 'chips-auth',
@@ -172,8 +168,6 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceChips: Sour
       topFrameSiteKey: EXPECTED_PARTITION_KEY.topLevelSite,
       hasCrossSiteAncestor: 1
     },
-    // Why: an ordinary row with identical attributes minus the partition columns proves
-    // the import still works for the unpartitioned case.
     {
       domain: '.plain.example',
       name: 'plain',
@@ -226,8 +220,6 @@ describe('STA-4300: partitioned (CHIPS) cookies on the native Chromium import su
   it('preserves the source partitionKey through importCookiesFromBrowser', async () => {
     const { fixture, sourceChips } = await runFixture()
 
-    // Non-vacuity breadcrumbs: the fixture reached the import, the source row really was
-    // partitioned before import, and the import reported success with both cookies.
     expect(fixture.step).toBe('import finished')
     expect(fixture.beforeCookieCount).toBe(0)
     expect(sourceChips).toEqual({
@@ -240,11 +232,8 @@ describe('STA-4300: partitioned (CHIPS) cookies on the native Chromium import su
     expect(fixture.importResult.ok).toBe(true)
     expect(fixture.importResult.summary?.importedCookies).toBe(2)
 
-    // Ordinary unpartitioned import still works end to end.
     expect(fixture.afterPlain).toEqual([{ name: 'plain', value: 'plain-ok', partitionKey: null }])
 
-    // The partitioned cookie must keep its partition — cookies.set() silently drops it, so
-    // this is the assertion that fails on current main and goes green once writes go through CDP.
     expect(fixture.afterChips).toHaveLength(1)
     expect(fixture.afterChips[0].value).toBe('keep-me')
     expect(fixture.afterChips[0].partitionKey).toEqual(EXPECTED_PARTITION_KEY)

@@ -13,7 +13,7 @@ import {
 } from './codex-trust-grant-ledger'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
-// Why: WSL pays cold-distro and login-shell startup, but stays hard-bounded on launch prep.
+// Allow cold-distro and login-shell startup while bounding launch preparation.
 const WSL_GRANT_TIMEOUT_MS = 30_000
 
 /** Only WSL runs a grant session; native homes approve with the hash Codex lists. */
@@ -30,12 +30,6 @@ export type ResolvedCodexTrustGrantHost = {
   buildRequest: (input: CodexTrustGrantRequestInput) => CodexHookTrustGrantRequest
 }
 
-/**
- * Resolves the host that runs the codex binary for a grant session.
- *
- * Async because the WSL identity probe shells into the distro; #16441 measured
- * a 15s main-thread stall when launch prep did this work synchronously.
- */
 export async function resolveCodexTrustGrantHost(
   host: CodexTrustGrantHost
 ): Promise<ResolvedCodexTrustGrantHost> {
@@ -44,7 +38,7 @@ export async function resolveCodexTrustGrantHost(
     buildRequest: (input) => ({
       invocation: {
         command: 'wsl.exe',
-        // Why null: the guest resolves `codex` inside the distro, so a host path pairs nothing.
+        // The guest resolves codex; a host CLI path cannot identify it.
         cliPath: null,
         args: buildWslCodexAppServerArgs(host.distro, host.linuxRuntimeHome),
         timeoutMs: WSL_GRANT_TIMEOUT_MS
@@ -60,8 +54,7 @@ async function buildWslCodexBinaryStamp(
   distro: string
 ): Promise<CodexTrustGrantBinaryStamp | null> {
   try {
-    // Why: WSL PATH resolution happens inside the distro's login shell. The
-    // resolved path plus CLI version detects upgrades without assuming UNC access.
+    // Resolve the guest CLI path and version without requiring UNC access.
     const probe = buildWslCodexIdentityProbe(distro)
     const result = await runProcess({
       program: 'wsl.exe',
@@ -72,8 +65,7 @@ async function buildWslCodexBinaryStamp(
     if (result.code !== 0 || result.timedOut) {
       return null
     }
-    // Why: the split below is positional, so login-shell rc output ahead of the
-    // payload would silently become the "path" and destabilize the stamp.
+    // Strip login-shell banners before parsing positional identity fields.
     const output = probe.readStdout(result.stdout)
     if (output === null) {
       return null

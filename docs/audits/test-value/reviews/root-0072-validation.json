@@ -1,0 +1,163 @@
+{
+  "batch": "root-0072",
+  "source_commit": "88b47bc7d8785e615b2e79a5dc75ab1991cc2265",
+  "files": 2,
+  "original_declarations": 18,
+  "final_declarations": 18,
+  "original_explicit_parameter_rows": 13,
+  "runtime_cases": 28,
+  "decisions": {
+    "keep": 16,
+    "fix": 1,
+    "consolidate": 1
+  },
+  "records_sha256": "e26d86fbd4e9737b57da4c3ae37724d25eaf01171494af9bb6c3b85351ad3727",
+  "commands": [
+    {
+      "name": "baseline-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/repo-visibility.test.ts src/cli/handlers/search.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0072-baseline-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0072-baseline-tests.log",
+      "log_sha256": "06fde7b98f73763128237c9cb0fef6b89884b50fb99937ca892d7f6be5f1bbef",
+      "report": "/tmp/orca-root-0072-baseline-tests.json",
+      "report_sha256": "7f3b8a2e3a8cd9b84a91f7f48c8b0143ce71a7d99b4607cbe80a9ee2fb2eb276",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "name": "reviewed-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/repo-visibility.test.ts src/cli/handlers/search.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0072-reviewed-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0072-reviewed-tests.log",
+      "log_sha256": "77578fdf9a61737c8b3082b0a4499d34a2fde8464a4bfb5c953a70b92be02444",
+      "report": "/tmp/orca-root-0072-reviewed-tests.json",
+      "report_sha256": "db8cc799038ad65eaac0c3812afa62dc9a73b2df67b392e73bfe56f511501792",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "name": "final-tests",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/handlers/repo-visibility.test.ts src/cli/handlers/search.test.ts --reporter=default --reporter=json --outputFile=/tmp/orca-root-0072-final-tests.json",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0072-final-tests.log",
+      "log_sha256": "0441dcd40d715aa9f67c601594c3dc48b7207e3965cb89d5ac952edbc2826f54",
+      "report": "/tmp/orca-root-0072-final-tests.json",
+      "report_sha256": "2f26101d6d44c63ca55c1b9e171e7642fd5353ef48b0a2d229446b93d47d67aa",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "name": "typecheck",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm tc:cli",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0072-typecheck.log",
+      "log_sha256": "64350cfafba2dd6bb61adf325923dc3c41762eb81a276ff9302796e6e77b09bc"
+    },
+    {
+      "name": "lint",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxlint src/cli/handlers/repo-visibility.test.ts src/cli/handlers/search.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0072-lint.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec oxfmt --check src/cli/handlers/repo-visibility.test.ts src/cli/handlers/search.test.ts",
+      "exit_code": 0,
+      "log": "/tmp/orca-root-0072-format.log",
+      "log_sha256": "db18dad3f63a09aac07c06d926b7ad30fe62fa1a7057638a0ec63e29eb052d36"
+    }
+  ],
+  "mutation": {
+    "mutation": "wrong CLI error code with unchanged malformed-cursor guidance",
+    "production_path": "src/cli/handlers/search.ts",
+    "original_production_sha256": "7e48f2bd7c7454b7ed1dd183284ba021a9d583f07e0765e1717370def69551d3",
+    "reviewed_test_sha256": "2fc10cd2e192c002ede3373f43eccef337f9df983966d5d47a8ea251ad4a2f3b",
+    "results": [
+      {
+        "phase": "original",
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/search.test.ts",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0072-mutation-original.json"
+        ],
+        "exit_code": 0,
+        "passed": 19,
+        "failed": 0,
+        "failures": [],
+        "source_sha256": "43d21cbbb67b9ab28aa7477e00feafb6b3bcd52b1fddccc90d867760b8970f5d",
+        "production_mutant_sha256": "5e272d4fd5d53b3ce65c34c8e14d660d62d6ad5024af4214eca8396115df37f0",
+        "report": "/tmp/orca-root-0072-mutation-original.json",
+        "report_sha256": "18964339385f0e4c5c819c7848d9cc96f50501c7c4e5546e0c412afd46517603",
+        "log": "/tmp/orca-root-0072-mutation-original.log",
+        "log_sha256": "cfdc390e6773d748b1b07f176ead81e7b3258b73d02c979706d2b6ac28d12ef3"
+      },
+      {
+        "phase": "reviewed",
+        "command": [
+          "pnpm",
+          "test",
+          "src/cli/handlers/search.test.ts",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-root-0072-mutation-reviewed.json"
+        ],
+        "exit_code": 1,
+        "passed": 18,
+        "failed": 1,
+        "failures": [
+          {
+            "title": "raises a malformed cursor through the CLI error channel",
+            "failureMessages": [
+              "Error: expected Error: The host did not recognise that --… { …(2) } to match object { code: 'invalid_argument', …(1) }\n(1 matching property omitted from actual)\n    at Assertion.__VITEST_REJECTS__ (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/index.aTZaPVhf.js:2480:33)\n    at Assertion.propertyGetter (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1607:27)\n    at Reflect.get (<anonymous>)\n    at Object.proxyGetter [as get] (file:///home/neil/.local/share/pnpm/store/v11/links/@/chai/6.3.0/25b5fcf6626be1440275f25f04f4b64170f3760bb1da107f5691c470b8dd65d1/node_modules/chai/index.js:1696:22)\n    at /home/neil/orca/workspaces/orca/comprehensive-test-audit-8/src/cli/handlers/search.test.ts:239:6\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:1632:35\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:2801:26\n    at file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel (file:///home/neil/.local/share/pnpm/store/v11/links/@/vitest/5.0.5/33cbff1369a4b9daff886ded552569e103d10620b524069c589409db81774c01/node_modules/vitest/dist/chunks/run.BPv-BBRv.js:3333:10)"
+            ]
+          }
+        ],
+        "source_sha256": "2fc10cd2e192c002ede3373f43eccef337f9df983966d5d47a8ea251ad4a2f3b",
+        "production_mutant_sha256": "5e272d4fd5d53b3ce65c34c8e14d660d62d6ad5024af4214eca8396115df37f0",
+        "report": "/tmp/orca-root-0072-mutation-reviewed.json",
+        "report_sha256": "af98aef17f41e7b692ed4e0d0de22170754084da343997456d498863e6a135e1",
+        "log": "/tmp/orca-root-0072-mutation-reviewed.log",
+        "log_sha256": "3a984879db81320fbe4662027288cfa089fe04c0c4fb38ba89dd2e9ebd043ecc"
+      }
+    ],
+    "production_restored": true,
+    "test_restored": true
+  },
+  "original_source_repin": [
+    {
+      "path": "src/cli/handlers/repo-visibility.test.ts",
+      "earlier_source_commit": "41b5cf015be7970a23e91d4ce76d52d781db4e1b",
+      "source_commit": "88b47bc7d8785e615b2e79a5dc75ab1991cc2265",
+      "sha256": "a67305c6ef886420547ef542f7396dc0e473833645386b5d1824c69a583ac317",
+      "bytes_identical": true
+    },
+    {
+      "path": "src/cli/handlers/search.test.ts",
+      "earlier_source_commit": "41b5cf015be7970a23e91d4ce76d52d781db4e1b",
+      "source_commit": "88b47bc7d8785e615b2e79a5dc75ab1991cc2265",
+      "sha256": "43d21cbbb67b9ab28aa7477e00feafb6b3bcd52b1fddccc90d867760b8970f5d",
+      "bytes_identical": true
+    }
+  ],
+  "integrity": {
+    "exact_original_case_slices_verified": 18,
+    "exact_parameter_rows_verified": 13,
+    "original_and_reviewed_hashes_verified": true,
+    "production_restoration_verified": true,
+    "original_snapshot_sha256": "f528ef3f87d800ae46102db9bb54a92eaa64a1b50429fbf3e6c86c9e09f55a46",
+    "plan_sha256": "0472472b1994ad42b6ff7e24afc7bfc954c82f5b0463c5818aad72b4a33b230c"
+  },
+  "limitations": [
+    "These Linux CLI tests mock RuntimeClient.call and the remote getter. No real socket, runtime launch, native platform execution or server integration is claimed.",
+    "All eighteen declarations and thirteen explicit table rows are retained; the two-file suite expands to twenty-eight passing runtime cases.",
+    "Supported-agent expectations check forwarding only; imported registry values do not independently establish registry completeness.",
+    "Supporting production and test-fixture reads do not complete reviews of other pending test files.",
+    "The baseline ran in audit-7 at the earlier source pin; both original test files were independently verified byte-identical at the audit-8 source pin."
+  ]
+}

@@ -136,8 +136,8 @@ if (window.navigation && typeof window.navigation.addEventListener === 'function
     if (!event.hashChange && event.cancelable) event.preventDefault()
   })
 }
-try { Object.defineProperty(window, 'open', { value: function () { return null }, writable: false, configurable: false }) }
-catch (_) { try { window.open = function () { return null } } catch (_) {} }
+// Keep open configurable for visual declarations; the iframe sandbox blocks popups.
+try { window.open = function () { return null } } catch (_) {}
 document.addEventListener('click', function (event) {
   var node = event.target
   while (node && node.nodeType !== 1) node = node.parentNode

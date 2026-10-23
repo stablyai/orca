@@ -1,0 +1,27 @@
+{
+  "batch": "root-0044",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 5,
+  "case_records": 24,
+  "production_changes": false,
+  "test_source_changes": false,
+  "review_scope": "Read every proof/fixture/config body and parameter loop. Record all expanded manual controls and actual source fences; supporting permanent suites are evidence only unless independently reviewed.",
+  "checks": [
+    {
+      "command": "node -e 'require(\"./docs/audits/terminal-completed-spawn-inputs/spawn-source.cjs\")'",
+      "working_directory": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-5",
+      "result": "rejected at exact source-pair check for terminal-host-session-create.ts before bundling, scenarios, admission or baseline suite; archive reports unchanged.",
+      "log": "/tmp/orca-root-0044-source.log"
+    }
+  ],
+  "limitations": [
+    "No historical scenario or native process run; current source has evolved beyond accepted create-module pairs.",
+    "Tiny WeakRef objects do not establish released memory magnitude, copied environment strings or user-incident cause.",
+    "Mapped module mode, when used historically, runs current dependencies rather than a complete historical app."
+  ],
+  "integrity": {
+    "records_sha256": "4f2656594c0b9126117ba86a6ff2371b3b193b3f881a3fb05f62b81a02eb7840",
+    "original_and_final_hashes_verified": true
+  }
+}

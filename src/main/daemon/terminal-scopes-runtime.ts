@@ -1,4 +1,3 @@
-/** The daemon's terminal scopes and process ceiling, applied to every PTY spawn it makes. */
 import { existsSync } from 'node:fs'
 import { spawnProcess } from '@orca/process-host'
 import { userManagerEnv } from './daemon-cgroup-scope'
@@ -11,7 +10,6 @@ type DaemonLog = (event: string, details?: Record<string, unknown>) => void
 let active: { scopes: TerminalScopeRuntime; log: DaemonLog } | null = null
 let scopeCounter = 0
 
-/** Daemon start: decide, remember for every spawn, and return what the pid record reports. */
 export function initializeTerminalScopes(
   daemonScope: string | null,
   log: DaemonLog
@@ -24,8 +22,7 @@ export function initializeTerminalScopes(
   })
   active = 'on' in resolved.scopes ? { scopes: resolved.scopes.on, log } : null
   if (active && daemonScope) {
-    // Why best-effort: oomd should pick a terminal before the daemon that holds every
-    // terminal's scrollback; older systemd ignores or rejects it, which changes nothing.
+    // Prefer losing one terminal to oomd over the daemon holding every scrollback; older systemd may reject this.
     try {
       const child = spawnProcess({
         program: 'systemctl',
@@ -36,7 +33,7 @@ export function initializeTerminalScopes(
       child.on('error', () => {})
       child.unref()
     } catch {
-      // Only a spawn refused outright lands here; terminal scopes work without it.
+      // Terminal scopes remain usable if this optional preference fails.
     }
   }
   if (process.platform === 'linux') {
@@ -48,7 +45,7 @@ export function initializeTerminalScopes(
     )
   }
   if (resolved.memory) {
-    // Why log every platform: an operator who set a limit must learn when it did nothing.
+    // Report requested limits even on hosts that cannot enforce them.
     log('terminal-memory-limits', { platform: process.platform, ...resolved.memory })
   }
   return resolved.ceiling
@@ -61,7 +58,7 @@ export function setTerminalScopesForTest(
   active = scopes ? { scopes, log } : null
 }
 
-/** Orca's own wrappers, by the exact argv[0] it execs them with; a user's `systemd-run` differs. */
+/** Match Orca’s exact wrapper paths so an unrelated user systemd-run is not hidden. */
 export function isTerminalScopeWrapper(processName: string): boolean {
   return (
     active !== null &&
@@ -71,11 +68,7 @@ export function isTerminalScopeWrapper(processName: string): boolean {
 
 const SESSION_KEYS = ['DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR'] as const
 
-/**
- * Linux with terminal scopes: exec through `systemd-run --scope`, which keeps the pid and exit
- * status, into this terminal's own scope. `systemd-run` talks to the user manager the daemon
- * verified; `env` then gives the shell its own session variables back. Off, it is the identity.
- */
+/** Reach the verified user manager, then restore the shell’s session variables inside its terminal scope. */
 export function wrapPtySpawnInTerminalScope(
   file: string,
   args: string[],
@@ -86,7 +79,7 @@ export function wrapPtySpawnInTerminalScope(
     return { file, args, env }
   }
   const { scopes, log } = active
-  // Why: `systemd-run --slice` would silently recreate a stopped slice unbound and unlimited.
+  // systemd-run would recreate a stopped slice without its original binding or limits.
   if (!sliceExists(scopes.sliceCgroupPath)) {
     active = null
     log('terminal-scopes-slice-lost', {

@@ -1,3 +1,4 @@
+import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -153,3 +154,5 @@ describe('git worktree paths', () => {
     expect(branchExists(repoPath, 'feature/locked-delete')).toBe(true)
   })
 })
+
+installRealWorkerThreadChildProcesses()

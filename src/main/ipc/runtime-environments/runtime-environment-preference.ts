@@ -1,11 +1,10 @@
-import { watch, type FSWatcher } from 'node:fs'
-import { basename } from 'node:path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   getEnvironmentStorePath,
   listEnvironments
 } from '../../../shared/runtime-environment-store'
 import type { Store } from '../../persistence'
+import { watchFileAcrossReplacement } from '../rebinding-file-watch'
 
 type PreferenceStore = Pick<Store, 'getSettings' | 'updateSettings'>
 
@@ -40,11 +39,14 @@ export function readSettingsWithRuntimeEnvironmentPreference(
   return reconcileRuntimeEnvironmentPreference(store, environments)
 }
 
+// Why: finds a registry created, or replaced unseen, after the watch started.
+// Settings reads repair on their own, so this only bounds renderer staleness.
+const REGISTRY_REBIND_SWEEP_MS = 30_000
+
 export function watchRuntimeEnvironmentPreference(
   store: PreferenceStore,
   userDataPath: string
 ): () => void {
-  const registryName = basename(getEnvironmentStorePath(userDataPath))
   const repairPreference = (): void => {
     try {
       readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)
@@ -54,23 +56,18 @@ export function watchRuntimeEnvironmentPreference(
   }
   // Reconcile changes made while the native watch was being installed.
   const initialCheck = setImmediate(repairPreference)
-  let watcher: FSWatcher | undefined
-  try {
-    // Watch the directory because registry writes atomically replace the file.
-    watcher = watch(userDataPath, { persistent: false }, (_event, filename) => {
-      if (filename === null || filename.toString() === registryName) {
-        repairPreference()
-      }
-    })
-    watcher.on('error', (error) => {
-      watcher?.close()
-      console.warn('[runtime-environments] Active Server preference watch failed:', error)
-    })
-  } catch (error) {
-    console.warn('[runtime-environments] Active Server preference watch failed:', error)
-  }
+  // Why: watch the registry file, not userData. On macOS a directory watch is a
+  // recursive FSEvents stream that Orca's own userData writes keep busy.
+  const registryWatch = watchFileAcrossReplacement(
+    getEnvironmentStorePath(userDataPath),
+    repairPreference,
+    (error) => console.warn('[runtime-environments] Active Server preference watch failed:', error)
+  )
+  const sweep = setInterval(() => void registryWatch.refresh(), REGISTRY_REBIND_SWEEP_MS)
+  sweep.unref?.()
   return () => {
     clearImmediate(initialCheck)
-    watcher?.close()
+    clearInterval(sweep)
+    void registryWatch.close()
   }
 }

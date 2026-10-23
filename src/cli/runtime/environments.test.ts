@@ -55,8 +55,7 @@ describe('CLI runtime environments', () => {
       now: 100
     })
 
-    // Why: NTFS mode bits do not prove Windows ACL hardening; shared secure-file
-    // tests cover that path, while POSIX hosts must keep the token store at 0600.
+    // POSIX mode bits cannot prove Windows ACL hardening; secure-file tests cover it.
     expect((statSync(getEnvironmentStorePath(userDataPath)).mode & 0o777).toString(8)).toBe('600')
   })
 

@@ -2,9 +2,6 @@ import { closeTestStores, createSqliteTestStore, testState } from './persistence
 import { Store as CanonicalStore } from './persistence/loading-store/store'
 import { initDataPath as initCanonicalDataPath } from './persistence/loading-store/user-data-path'
 import { resetRetirementCollisionKeyCacheForTests } from './worktree-name-retirement'
-// Why this file exists: removing a workspace's session rows must take its close records with it,
-// or they hold cap slots until the TTL and read as "emptied on purpose" for a new workspace at the
-// same path.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -133,7 +130,6 @@ describe('close records on workspace removal', () => {
     ).toEqual(['closed-kept'])
   })
 
-  // Why: repo ids and paths repeat across hosts; the local owner of the same id is still live.
   it('keeps a same-id worktree’s records on another host when one host’s copy is removed', async () => {
     const store = await createStore()
     const repo = { id: 'repo-a', displayName: 'A', badgeColor: 'gray', addedAt: 1 }
@@ -185,7 +181,6 @@ describe('close records on workspace removal', () => {
     expect(store.getWorkspaceSession(SSH_HOST).closedTerminalTabTombstonesByTabId).toEqual({})
   })
 
-  // Why the removed worktree has no meta here: records alone must still mark it as the repo's.
   it('drops every worktree’s records when its project is removed, and keeps other projects’', async () => {
     const store = await createStore()
     store.addRepo({
@@ -211,7 +206,6 @@ describe('close records on workspace removal', () => {
     ).toEqual(['closed-b'])
   })
 
-  // Why: dead records used to hold cap slots until their TTL, so fresh closes evicted a live one.
   it('frees the removed worktree’s cap slots, so later closes keep a live worktree’s record', async () => {
     const store = await createStore()
     const now = Date.now()

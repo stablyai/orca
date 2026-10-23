@@ -159,6 +159,18 @@ export function registerJournalUnknownRowKindTests(): void {
         kind: 'lifecycle-batch',
         settlementId: 's',
         mutations: [{ kind: 'tombstone', itemId: 'i', revision: 3 }]
+      },
+      queue: {
+        ...base,
+        seq: 7,
+        kind: 'queue',
+        messageId: 'q',
+        change: {
+          op: 'queued',
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'later' }] },
+          position: 1,
+          queuedAt: null
+        }
       }
     }
   }

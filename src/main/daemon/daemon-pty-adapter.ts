@@ -59,8 +59,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             incarnationBeforeKill === expectedIncarnationId) &&
           (currentIncarnationId === undefined || currentIncarnationId === expectedIncarnationId)
         ) {
-          // Exit may already have marked history ended and cleared its incarnation.
-          // Keep the spawn lock through removal so a replacement cannot inherit this close.
+          // Exit may clear the incarnation first; hold the spawn lock through removal to protect replacement sessions.
           await this.completeShutdownWithHistoryLock(id, {})
         }
         return result
@@ -197,10 +196,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           )
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
-        // Keep a raced exit available to the in-flight spawn even when the
-        // adapter still remembers the predecessor's generation. Only the
-        // generation currently published by this adapter may clear state or
-        // notify listeners.
+        // Retain raced exits for pending spawns; only this adapter's published incarnation may clear state or notify.
         if (
           currentIncarnationId !== undefined &&
           event.payload.incarnationId !== currentIncarnationId
@@ -235,7 +231,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     try {
       return await this.client.request<T>(type, undefined)
     } catch (error) {
-      // Why not "no gate": a daemon from before these requests may still hold a recorded pause.
+      // Unsupported requests cannot prove a recorded pause is absent.
       if (isUnknownRequestTypeError(error)) {
         return AUTOMATIC_WORK_RESUME_UNSUPPORTED
       }

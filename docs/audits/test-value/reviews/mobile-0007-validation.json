@@ -1,0 +1,2355 @@
+{
+  "batch": "mobile-0007",
+  "reviewer": "audit_mobile",
+  "status": "implemented-and-validated",
+  "created_at_utc": "2026-10-23T17:12:31.960338+00:00",
+  "source_pin": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+  "implementation_start_commit": "d514d6155256aa3a65b499023f20b5d88e0c2b92",
+  "root_reported_head_at_packaging": "18c27344d15",
+  "head_verification_note": "Root reported the later integration HEAD. It was not re-read by this agent during the requested quiescent period.",
+  "authorization": {
+    "artifact": "implementation-authorization.txt",
+    "explicit": true,
+    "scope": "Accepted 17 concrete draft files plus deeper repairs 22.1, 42.10, 42.12 and 47.8; selected mobile tests/fixtures only; isolated dependency install, focused runtime/type/lint/format and /tmp-only production mutation validation.",
+    "root_followup": "Root additionally requested and reviewed a surviving-bridge witness after actual surface detach; the same bridge successfully served a new PTY stream after the two original streams retired.",
+    "prohibited_writes_observed": "No production, Git, tracker or tracked review files were written by this delegated implementation. Root owns integration.",
+    "quiescence": "After root requested quiescence, packaging read and wrote /tmp artifacts only; no further tracked source reads, scans, tests, typechecks or writes were launched."
+  },
+  "counts": {
+    "selected_files": 50,
+    "test_files": 49,
+    "support_files": 1,
+    "changed_files": 19,
+    "original_declarations": 499,
+    "final_declarations": 489,
+    "original_registered_instances": 540,
+    "selected_runtime_tests_passed": 530,
+    "extra_fixture_consumer_tests_passed": 18,
+    "all_runtime_tests_passed": 548,
+    "original_case_decisions": {
+      "keep": 466,
+      "fix": 23,
+      "consolidate": 7,
+      "remove": 3
+    },
+    "final_parameter_tables": 10,
+    "final_literal_arrays": 716,
+    "final_literal_array_elements": 978,
+    "final_loops": 64,
+    "final_runtime_traversals": 102,
+    "final_generators": 112,
+    "final_controls": 367,
+    "final_helper_branches": 73,
+    "final_assertions": 1081,
+    "diff_added_lines": 372,
+    "diff_removed_lines": 254
+  },
+  "source_reconciliation": {
+    "pre_edit_paths": 140,
+    "pre_edit_drift": [],
+    "selected_original_sources": [
+      {
+        "path": "mobile/src/components/mobile-markdown-tree.test.ts",
+        "bytes": 885,
+        "sha256": "c94502323ce19c85dab9d78f0456ed0b0bb0aba47d9b9c047ee958c47786130e",
+        "git_blob_oid": "382cef6fbf8168097518e78781eced80bab57ddb",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/01.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-route-update.test.ts",
+        "bytes": 5060,
+        "sha256": "faf63a08bb7605689d8e304f67bfb0bc8de7476bb0923e9b12ce088c3160d407",
+        "git_blob_oid": "ff3b1c0b3bb126fb6a20d886f556692a350e809b",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/02.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-client-frames.test.ts",
+        "bytes": 28026,
+        "sha256": "53b4e3bd28942e4adc7ca91a7acde6b584ee9b054860c98be0346d9835221741",
+        "git_blob_oid": "498879821c2d3a3f5395c1c3ba1ecc9979a3ae1d",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/03.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-client.test.ts",
+        "bytes": 13845,
+        "sha256": "e93b8c4c3d7512d43692e2d61abd2f0b84832358d65879f33829bb91f7a419cd",
+        "git_blob_oid": "2517dc2b4fd2450be3ccd32d73c82f9f4ba08bad",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/04.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-envelope.test.ts",
+        "bytes": 9088,
+        "sha256": "e133c4b6bcc3d2fe48ec5718c411ed50402d0f38cb0f0f8b26d172f396a12fdd",
+        "git_blob_oid": "66fdc594a0663ef252c7ed3cfa359a28f7ba03ef",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/05.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-safe-area-insets.test.ts",
+        "bytes": 3651,
+        "sha256": "eaec2c56c30181a5c76ee85296c15dbe7d74222627bf76960cf0769834960355",
+        "git_blob_oid": "5f6e5a9f626d7a9971e5f249a25eea03c449b299",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/06.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-screencast-encoder.test.ts",
+        "bytes": 3837,
+        "sha256": "4f3de540de57ce71358874e7e23109fad3e842ae31226b68742e5fe7e61d658d",
+        "git_blob_oid": "cfafd4b6fd7d89be17db1c6d0e26eafc5f0665d8",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/07.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/orca-bridge-page-channel.test.ts",
+        "bytes": 1820,
+        "sha256": "151fba00d645c90c13dc6c3de7ac57d056cfdbc6fa464a57e50aca56f997bd2c",
+        "git_blob_oid": "518142a779603ca5f2daa4d616ca909e16056ea4",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/08.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts",
+        "bytes": 9694,
+        "sha256": "5a04ccf8f0a2a513e98ba13a777283630cbbd4a727486308961ff5aedbd086b4",
+        "git_blob_oid": "f1efbdef872d7e1a1e8f993de52e239b8b459be6",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/09.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-back-consumers.test.ts",
+        "bytes": 4718,
+        "sha256": "a2a771e6fbe8874bb8f6e9204d0f6e78fd1f8d01358b5f0b7fa5238a042a246d",
+        "git_blob_oid": "47f91c534daabcf39b43cc6bcf8ae7def177c34a",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/10.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-bootstrap.test.ts",
+        "bytes": 8169,
+        "sha256": "7ea252333636d647902ee28f6379a0f3ff424261e90326a070915d4cebdc1282",
+        "git_blob_oid": "32a82b9f9c002f8430d9e23d04025fc39aa789fd",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/11.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-fault-boundary.test.tsx",
+        "bytes": 2790,
+        "sha256": "c6f263af3cd6a8043aa91ed74ce676e499077302f5be710f9f40c741b2262115",
+        "git_blob_oid": "433aacfe4016c57a7ba826cc2a91cd83dfd8ba15",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/12.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-first-paint-through-the-bridge.test.ts",
+        "bytes": 1615,
+        "sha256": "da5f19ca4056b5a469a686731782a93f6b259a78e6bfc7b24e0ab54ae770b0ca",
+        "git_blob_oid": "46faf5f38c1482ed41cd6b2a19b10c81580e9346",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/13.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-first-paint.test.tsx",
+        "bytes": 5892,
+        "sha256": "bad3d5be7b344ee80ca0ac0720d6516443849778f65b54da5e5ec2b9ed480357",
+        "git_blob_oid": "0699f330a2f70d42c88e2b3cd15a0bad5fcba360",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/14.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/use-native-verbs.test.tsx",
+        "bytes": 10813,
+        "sha256": "e02d2dfd3618362d06d384b973146c10fbaffad9c9d71b201768db1f2567e5fe",
+        "git_blob_oid": "e775ecb7bfe1dea768d60b7d5ecac6290053b521",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/15.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/cancelled-navigation-target.test.ts",
+        "bytes": 1808,
+        "sha256": "7e3da246c6eed7620efdfac1190baced026f1c8a43bf0f53217b809030b410d0",
+        "git_blob_oid": "ec0341d13f46e2f6c4437984039568cde1d02222",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/16.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/catch-all-page-route-states.test.tsx",
+        "bytes": 11558,
+        "sha256": "e54fe71a9eba2e2253ddd9d5bf8b60a3691ecabd5814b5b5478c742aa90f460f",
+        "git_blob_oid": "5719cd7660057ed31179abadcd0e00087ab3c189",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/17.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/catch-all-page-route.test.tsx",
+        "bytes": 9273,
+        "sha256": "dc948c839aa30793c2fac3bd5c1933d54bff25d98619ea6abf053e26df3e0b5f",
+        "git_blob_oid": "d9edb3da307bf8db41bed0c8a30d63807d735c2b",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/18.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store-file-system.test.ts",
+        "bytes": 1267,
+        "sha256": "a1fc1b27c34fe898e80aa179bb50ddbcb97836f73661f99d0a85781d88711ec0",
+        "git_blob_oid": "19bbf29f1bd78f2428e0afec4824c3ec336110a2",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/19.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store-host-removal-race.test.ts",
+        "bytes": 6978,
+        "sha256": "e1128863cb0234365292c0660940bc1de0534fd905aad7bc61cff0084772323e",
+        "git_blob_oid": "be9a236f94d10931b6acd9e1a3aca73fb0471ef8",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/20.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store.test.ts",
+        "bytes": 26548,
+        "sha256": "a87b0f8b91c3d9c22d9d126f038fba9cffd8f5c0438b613194186df551492bfd",
+        "git_blob_oid": "ae485dd7443a2bca462fa9a27e8a3fed9308d386",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/21.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+        "bytes": 7567,
+        "sha256": "237d0d56cf80d4943fa0c03793536a1770147d71b4efd8f53009afddaa8dbe9c",
+        "git_blob_oid": "f449a1147ac2786aa3bdbcd9d63b8fe9d8467e81",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/22.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-layout-class-change.test.tsx",
+        "bytes": 6668,
+        "sha256": "63b36cb609eb55e9fa7bdff0fb9e4bd6b154bea7d9b1e13be715546a88afe0e8",
+        "git_blob_oid": "88f171ca187dfecff06ee5565240be99aabb0af8",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/23.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-leave-session.test.tsx",
+        "bytes": 7104,
+        "sha256": "aee8d900d39a19a259c07dc95a8a1bf860c45ace1f628002f535f7655477b612",
+        "git_blob_oid": "e6372993c957dfae7ae1125f963b325432f0c50e",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/24.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-page-storage.test.tsx",
+        "bytes": 8802,
+        "sha256": "0ee7eb30ec95bf11c019c3b9ae2706a7749b3456d1aabc0323c90e48d9a3a184",
+        "git_blob_oid": "fb260efecfb8d66c752dfcb9d75ca22056405b39",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/25.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-session.test.ts",
+        "bytes": 9972,
+        "sha256": "d7ebc8e7536b2770a7677676fa54da657cff7be309b3fc6d39517ba26af0f4f0",
+        "git_blob_oid": "c4a8a08e4654ec73e81d0a49ea4decd65d148f92",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/26.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-sidebar-matrix.test.tsx",
+        "bytes": 15044,
+        "sha256": "69f5a102063e53e0516e04e555a5f758ed50fec6da4d906f4213c040aa0a004d",
+        "git_blob_oid": "08f74e23976289bf9cd39e925e4eb2dac1c87665",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/27.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-two-hosts.test.tsx",
+        "bytes": 5121,
+        "sha256": "fa186ecb0bc710e2d42dd216a7741fbe72797f5090666c5a7cc5544f27eee499",
+        "git_blob_oid": "23996e977777fc66d0904c9add1ce2d375371920",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/28.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/media-handle-registry.test.ts",
+        "bytes": 9201,
+        "sha256": "f9934416540242d54b20c193c620e25e0a54b0372b19cb0f276ecabb6ddc1e51",
+        "git_blob_oid": "a41c900f5a8de9ac3d4e6051d61c6d2278c68df1",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/29.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-agent-history-route.test.tsx",
+        "bytes": 6787,
+        "sha256": "7c846d0991c8c19b1cfd3eb8dde0776adfa07b76dcb6cb344d74ac1860bbae3a",
+        "git_blob_oid": "c5837839d26a4d0acc04d23dd5a1949e769c1494",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/30.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-back-claim-state.test.ts",
+        "bytes": 2399,
+        "sha256": "932fdbc5db6af0fc993b528d50c0d36ffc4cb804e505e2c0ef124c4696cd17db",
+        "git_blob_oid": "b75cd2b544773f5b7745ae6221be02908d240ea6",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/31.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-dev-facts.test.ts",
+        "bytes": 1401,
+        "sha256": "ff94133cbc24def50cf4046f8784f4653443d4e1a4d660e533daee98069281f8",
+        "git_blob_oid": "d3a497599257bb4d1234414f7a0f1c3d97738f78",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/32.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-failed-update-fallback.test.ts",
+        "bytes": 15216,
+        "sha256": "669ddc6f9a1d47a440e2c9a5984fed228021d69c66f11d4cb31ff73e2b2bc77c",
+        "git_blob_oid": "ea17e706df7a2b2248a7e763ca1c5a1274410b3b",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/33.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-files-route.test.tsx",
+        "bytes": 8817,
+        "sha256": "5477ca3128015b664af433749d3c7a51915bdf486dc19a2f03b003c4af0a309d",
+        "git_blob_oid": "53644e78c51303c554ac3917b19590f4b8f31fec",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/34.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-host-list-route.test.tsx",
+        "bytes": 3497,
+        "sha256": "2a4db8b072b6c58f11b4d65cad7ff7726c68af32f58491b54fe53db344eeef5d",
+        "git_blob_oid": "adc07484457a9c3307988d8ac6219486b9fee664",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/35.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-keyboard-overlay-screen.test.tsx",
+        "bytes": 4773,
+        "sha256": "a6c7d32c8f1028a2e2e8f9662e99d0c5d09ca3ff8b44b8fea957f69355a32925",
+        "git_blob_oid": "917b4faaeccb9cedd952fb6efa1a1e84b1f7ad76",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/36.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-offline-grant-staleness.test.ts",
+        "bytes": 10528,
+        "sha256": "8e14c1b1bf6124f416cd15274876e7f29f0e63d32e9860f8d97ba7e2ff88a5ee",
+        "git_blob_oid": "058b6c0b898ce4d27a78d92f177f0d2e0907a5d1",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/37.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-page-route-wall.test.ts",
+        "bytes": 3617,
+        "sha256": "2e442d914f1659b4ac9fadeefb8e20c645aa0176ba1a8ad1a61412c1edb37548",
+        "git_blob_oid": "0dcbc016aac1515fb724857450c01181b7b8fd57",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/38.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-reachability.test.ts",
+        "bytes": 2034,
+        "sha256": "25a5699aef620faaf96814d4f10150ce222e3dc4a6cb463a5ee42663cd530ca5",
+        "git_blob_oid": "5e49502f09b7913527ed42e8f000ca6b85ea1a88",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/39.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-refused-update-decision.test.ts",
+        "bytes": 11686,
+        "sha256": "bfa984fbeaae4d3434699083e3ed8ed7d63d6186c14b1f2a956878d188f325ed",
+        "git_blob_oid": "46787c52261f60fdc3895c6abf4f67f59bbd6d99",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/40.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-safe-area-screen.test.tsx",
+        "bytes": 4327,
+        "sha256": "f36601ae0ef9b7a2210da7913abe81d42c9749347dc9a7c426ff4d688e32e166",
+        "git_blob_oid": "71e970786c8f2cf9f9cc55c50e4b88795b5b0754",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/41.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+        "bytes": 10137,
+        "sha256": "c0b063e1ed602c0d8fcebb373e40d56fa63d263a29896adaf8ca6e0bbf854160",
+        "git_blob_oid": "72d422f78beb2f3c16dddbb3abf35afe01e5fd02",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/42.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-grants.test.ts",
+        "bytes": 5207,
+        "sha256": "822c641cfcb6c27a312169252d0e573206f969d40ef29cf42b3f19c6d0349eb5",
+        "git_blob_oid": "42b61d3212189cf4d195ca59c32ac458b8115167",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/43.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-route.test.tsx",
+        "bytes": 8914,
+        "sha256": "fdab5c38fa31e62cbb0932e0e5f622cd46e7d613e4704ee9929fcee7132a2470",
+        "git_blob_oid": "dea4f920d2652e62e810f7d768e902e0d3ba6581",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/44.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-test-fixtures.ts",
+        "bytes": 7027,
+        "sha256": "71aead13da7fcbe9f7b4862841dc3c61c80fff43afe417baf9dbeaf7b07123bb",
+        "git_blob_oid": "87fcfd7baa4a4845ef3d251959a89ce58ecb3354",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/45.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session.test.ts",
+        "bytes": 36106,
+        "sha256": "b763ec6a1cda548711c0c5e48e83eba3a9ef420a478cad281d412f262b2aa2e6",
+        "git_blob_oid": "4cb3a63d12ee4ddfda6f9f63a15e83e5d872c9cb",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/46.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure-log.test.ts",
+        "bytes": 5155,
+        "sha256": "a383c62a1bb43ceeb005a1307dff7c0a216ef02c92ee68cbbbcf0970c7caadb8",
+        "git_blob_oid": "abd4c300bf8cd0210aab5cb6ec60e0508d6bedf3",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/47.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure-record.test.ts",
+        "bytes": 9195,
+        "sha256": "babed53d858c8e931a5fccbfa06bf037b145afd3c3bb017fc0aa6d597876ac44",
+        "git_blob_oid": "f545267e7852be237eaaea907bc327a8eba7f42c",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/48.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure.test.ts",
+        "bytes": 4020,
+        "sha256": "0d7d9c6f147d297b8187b227eae7dd7a46364ea87bc887ee71f815856957f110",
+        "git_blob_oid": "89e6706f038edb5897bc7fcb4b0568ffe9c17987",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/49.source"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/native-stack-return.test.ts",
+        "bytes": 2763,
+        "sha256": "bc9464361bca2cc154dd61d6936e1b5f13285d7cefa89b454951e8d45cc1b4c6",
+        "git_blob_oid": "3d1d80e60058c809f8b24c8d40a30ce8f951749f",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "selected-source",
+        "snapshot": "snapshots/50.source"
+      }
+    ],
+    "supporting_evidence_sources": [
+      {
+        "path": "AGENTS.md",
+        "bytes": 4381,
+        "sha256": "ce082c0e272016915b06a9ed1ca79a14efa9be2fcd283fa36ba6d285f59cb6a5",
+        "git_blob_oid": "2901079247cfdcdd2bbe7e5d517a3173f6c6fb3e",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/AGENTS.md"
+      },
+      {
+        "path": "docs/audits/test-value/README.md",
+        "bytes": 21630,
+        "sha256": "10b822edb4ed69f6e411c0aa1bad1f793bb0ac06d4682b61e5654e65e1385513",
+        "git_blob_oid": "e93850fa4b8851622c429c118d019fb10e484ef4",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/docs/audits/test-value/README.md"
+      },
+      {
+        "path": "docs/reference/cross-platform-support.md",
+        "bytes": 3515,
+        "sha256": "c4cc35162e16f93b75e2a1b4613e6eac001149bff7097ea9569f41b7d875bf9e",
+        "git_blob_oid": "0eff0738b61458abe1f4c579dd7f8ff3efb17ef8",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/docs/reference/cross-platform-support.md"
+      },
+      {
+        "path": "docs/reference/test-antipatterns.md",
+        "bytes": 1205,
+        "sha256": "9c13c031107f8bcbcb31ea423652230106e693eab707050d8e77c80c90297875",
+        "git_blob_oid": "e122e7ea59b85bc1bbdf3f79a68fb05b21aa5a10",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/docs/reference/test-antipatterns.md"
+      },
+      {
+        "path": "mobile/app/h/[hostId]/agent-history/[worktreeId].tsx",
+        "bytes": 2774,
+        "sha256": "e1d942bd6636260322d538414970ea82e2628aa5c380b233eb35af1fbd3ae199",
+        "git_blob_oid": "54c84c5bfea626ad66ca7f1e056d3e5bb618f1f5",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/app/h/[hostId]/agent-history/[worktreeId].tsx"
+      },
+      {
+        "path": "mobile/app/h/[hostId]/files/[worktreeId].tsx",
+        "bytes": 2737,
+        "sha256": "660fbb2f255fdfec52c34f8a52117d6cf7beeeefa9fd61b5ecaa32f548ca7709",
+        "git_blob_oid": "adcf346bffbe3ad8a69f0584818452c94d3a4211",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/app/h/[hostId]/files/[worktreeId].tsx"
+      },
+      {
+        "path": "mobile/app/h/[hostId]/files/preview/[worktreeId].tsx",
+        "bytes": 3213,
+        "sha256": "81d5570b1259cf164471661ccc1de876b8f0b4ff7c3478af8e096b5dd5a7568e",
+        "git_blob_oid": "bea557bc457daeacb964ccc0f9d7e013de8e0b9f",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/app/h/[hostId]/files/preview/[worktreeId].tsx"
+      },
+      {
+        "path": "mobile/app/h/[hostId]/index.tsx",
+        "bytes": 2029,
+        "sha256": "49f0fc3729148490579772d04664ea9d48be03d2d71e1f262218d23a3f3eb9bf",
+        "git_blob_oid": "cc092850766bdab48897ba1383c0993c4970195a",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/app/h/[hostId]/index.tsx"
+      },
+      {
+        "path": "mobile/app/h/[hostId]/session/[worktreeId].tsx",
+        "bytes": 4922,
+        "sha256": "414c77115b1b6cc7929ed6b4003f863ae369079ac3af8625544d0065824b2f52",
+        "git_blob_oid": "d47b41efd0bd9882c59c12a4d51d7f4b9582eca7",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/app/h/[hostId]/session/[worktreeId].tsx"
+      },
+      {
+        "path": "mobile/app/h/_layout.tsx",
+        "bytes": 7105,
+        "sha256": "ba82b33f9eaa4cd252ab4bca5e4c2c016c08d630b01297bcc5002d92c8de452f",
+        "git_blob_oid": "caa90655a91a2a5b08505013e36af4fd55aa2838",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/app/h/_layout.tsx"
+      },
+      {
+        "path": "mobile/package.json",
+        "bytes": 3610,
+        "sha256": "4701c26d73a9fd893cd07af12baad587020306fe7941301d61aa58002d81de9b",
+        "git_blob_oid": "675ff465a19e779c3eee6083784f52f7ed920ec4",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/package.json"
+      },
+      {
+        "path": "mobile/src/components/mobile-markdown-tree.ts",
+        "bytes": 11361,
+        "sha256": "7671a8e8de5b7ee645856158574eba21249b37215ac8cdd2457589830e91292e",
+        "git_blob_oid": "15aea826e3113eebd064187e55103dfd407b4a8a",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/components/mobile-markdown-tree.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/MobileWebShellScreen.tsx",
+        "bytes": 21984,
+        "sha256": "3fa1aee69fe9bb6faacbb7ffb71ce95d7adf3b4ecbda0880d3aafd497ceff502",
+        "git_blob_oid": "e3793e64b084e3bb1196274bbee9a0e9bb200445",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/MobileWebShellScreen.tsx"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge-host-notify.ts",
+        "bytes": 6817,
+        "sha256": "afe5836146677b94c367bcb55540c2d3ce15fb7ae3149f858e8bf7623272cfe4",
+        "git_blob_oid": "d5fdb8f0dbef153754b6487a941a3ea0ec2e884c",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge-host-notify.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge-host-requests.ts",
+        "bytes": 5794,
+        "sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+        "git_blob_oid": "41a94e6d99fbd848d3cfb1533c3db56c35950f25",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge-host-requests.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge-host-route.ts",
+        "bytes": 4699,
+        "sha256": "901c37d5166d62c1150e480039819ec563bd247a6f41ccdb6a947ef2b7db86fb",
+        "git_blob_oid": "1306ea276a29351332b80fee3b9fa0a6a07d06df",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge-host-route.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge-host-subscriptions.ts",
+        "bytes": 15514,
+        "sha256": "a9e903307f287da51f1c66758191762a3095c5fbff58339798dcd4feb9f7ec1d",
+        "git_blob_oid": "e1e177368983ceab4f90ab27afcf7269dd426af3",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge-host-subscriptions.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge-host-test-fakes.ts",
+        "bytes": 3914,
+        "sha256": "aadb8850ad06741bdf6b4e062a79072333aff5e2e71cf430ae3f9be6b5987cfb",
+        "git_blob_oid": "11d5d61918fdb31724e0010fcf571a87f2db547e",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge-host-test-fakes.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge-host.ts",
+        "bytes": 14293,
+        "sha256": "ec20ea9fd647605c89ef97cc4fc9d657cfe01c39c652fc9d4ca9f37d762c0f91",
+        "git_blob_oid": "fbf177b7be09fc0a0d98410c70c3530ef68e9784",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge-host.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-caps.ts",
+        "bytes": 13873,
+        "sha256": "614c3511b4c47c12525f2752fc2c88f31bf473e553beaae3916d8bb78f06f6b8",
+        "git_blob_oid": "a8b0c145d8f063bce98d3cb2e4284aff97e8d2fe",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-caps.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-connection-cache.ts",
+        "bytes": 3096,
+        "sha256": "928e379d90a438bc1b8af794b01283e9ead17b2f802514ec180379378f10228c",
+        "git_blob_oid": "260d9bb044d234bfbcdbb5cc89b607f65e935570",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-connection-cache.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-inbound-frames.ts",
+        "bytes": 4539,
+        "sha256": "0e12dd6a326f6e09ce63c3b12b099b9b37c4b60947e7124e7c006a7c946627a1",
+        "git_blob_oid": "64cbd89d15d161a99be6817f213d2a54d16c2b70",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-inbound-frames.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-init-handshake.ts",
+        "bytes": 1774,
+        "sha256": "90ef3c33ab396f695eb52d5bde08790761c85cbeac1051e6be39c9910f1b7604",
+        "git_blob_oid": "24060668e24b16d77e581a83ef2388b17d14766f",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-init-handshake.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-requests.ts",
+        "bytes": 3026,
+        "sha256": "f43b93b4f2b7a275f8e83cf4cd469f591fe2e29a18033b6f36372541175c46f0",
+        "git_blob_oid": "83c1880f80e4ff98572603ed8c5173596703d2c3",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-requests.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-rpc-envelope.ts",
+        "bytes": 2093,
+        "sha256": "65314a113541bd1f156eab59224960d998d46ae8b6e40e4359fae2f570eed3f6",
+        "git_blob_oid": "07cddaa4385fefc02232a5118dd1ce1c70c2a5c9",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-rpc-envelope.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-session.ts",
+        "bytes": 2964,
+        "sha256": "02ce0467d787e00a3bec0ed17132257b326c2e300de0dd94372a88b46b4ceea1",
+        "git_blob_oid": "ea628aba09dfe694311766d477e642dd992e5439",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-session.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-shell-session.ts",
+        "bytes": 6000,
+        "sha256": "e79441f4c90cc80d37f81220b0c9e81de610fa4a034e67cf8e0087716c8ea7c6",
+        "git_blob_oid": "03181a4e03fd9583d12de0fa0c533fef4b64e1a8",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-shell-session.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-client-subscriptions.ts",
+        "bytes": 7636,
+        "sha256": "e140f3799c803282982b60a6e8ede08375915f9e9afe928272ff2cd03f48f2ee",
+        "git_blob_oid": "537808165fde91ec8a4556b8313410e5bbeb5e9e",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-client-subscriptions.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.ts",
+        "bytes": 15408,
+        "sha256": "14b97c3d62e001f091b5fdeaaa2fd6efac3003798bd59e12790c5f958adaa714",
+        "git_blob_oid": "fd79f1c5a01b4a5ce79e7ea37c8718619c8dbbd4",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-envelope.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-init-frame.ts",
+        "bytes": 4956,
+        "sha256": "54bf6c1a501753d715b7153a3bdc7843f9364bb539c46bf9c17c082600f1590d",
+        "git_blob_oid": "7b0f067defba741d0342419fa071b4d36c45f4ee",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-init-frame.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-media-verbs.ts",
+        "bytes": 6357,
+        "sha256": "edec07fcc209618f66f960e313adc02b5bf2b21818c3caff59ee90d71d600741",
+        "git_blob_oid": "3317e5f35784c4e4b69a2515b326f23a07c05c02",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-media-verbs.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-test-harness.ts",
+        "bytes": 3155,
+        "sha256": "a1aec337c56ecfc2f857c4766bd8af1e8912f8d5016d831d087ddfca66addbd6",
+        "git_blob_oid": "e66f6094c1ea1a8cb0093e556b99c4b788cf31a9",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-page-client-test-harness.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts",
+        "bytes": 13325,
+        "sha256": "9e112a501cc34d79c8eaa2a398fca79b772ba552f737befefbfdb961902e98ea",
+        "git_blob_oid": "614edd5dfb3a63f7989f92c36e57fb0ca21dd226",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-route-update.ts",
+        "bytes": 4360,
+        "sha256": "3cd3be14f8ed24eb7230ab13e3e3799b701c713456c51caa92ae1e57f598408f",
+        "git_blob_oid": "d68b320869d26171c394fe10c3be84240c1f453c",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-route-update.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-client.ts",
+        "bytes": 22435,
+        "sha256": "ce91832366b9c48dbda40ad819892994be9f82df540d10914e25b765c0b051aa",
+        "git_blob_oid": "1e16319ce609acd463cbdb7661f6ad35359c52f2",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-rpc-client.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-safe-area-insets.ts",
+        "bytes": 1369,
+        "sha256": "18962be422e92e361102c6969801c74e82d8f13ccae94542908603749151919c",
+        "git_blob_oid": "67d42c774c4cb7c6e5bb67b8a5d5147aa6660e77",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-safe-area-insets.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-screencast-binary.ts",
+        "bytes": 2020,
+        "sha256": "93e955d3e4a29b54f15302d2b5fdac0af2de71672750fe7abb7cc00d1eda21ef",
+        "git_blob_oid": "9ab83883ff8a5f9553def065bb2650f3a8f15d1e",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-screencast-binary.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-screencast-encoder.ts",
+        "bytes": 3768,
+        "sha256": "1678f143308fb2544450bc540d2d2819cdb86e7f9eeeb3816a78ed3eeada6a93",
+        "git_blob_oid": "108ddf4ec03a0a3781d7d34b3032f42923b49176",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/bridge-screencast-encoder.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/orca-bridge-page-channel.ts",
+        "bytes": 1775,
+        "sha256": "da3f891637f2b29ae8653621a48d49286483fdf95724bde42d3cfe15ffde7783",
+        "git_blob_oid": "57aa7f79fea083f34ae7cd63140dce8c22a9ce78",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/orca-bridge-page-channel.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-async-storage.ts",
+        "bytes": 8897,
+        "sha256": "3b1d4816bcfe1b0dfe8528512f4c10230edc00495ce64c061f28303be6b69bd1",
+        "git_blob_oid": "17d285dd6f10b814da2e2480f1358f161cd1cbe0",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/page-async-storage.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-back-consumers.ts",
+        "bytes": 3499,
+        "sha256": "6aadc688b2a4fa6a958f034e4258316d6e583133c501f8e0575b3a16d32d42c5",
+        "git_blob_oid": "5bac9ceeb04992ca5c3d85b6fcdc1445788f5f97",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/page-back-consumers.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-bootstrap.ts",
+        "bytes": 5403,
+        "sha256": "3778652e18a8766bfbb693670261a360c196d559a1698901460477a360aa874b",
+        "git_blob_oid": "f4e85f08c1ca2f57645e34336368d8da5246220f",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/page-bootstrap.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-fault-boundary.tsx",
+        "bytes": 1836,
+        "sha256": "1f2bebdab5d13b87b76e8605fd3d032ce9e88738edf3052e9394bb76f2803fc2",
+        "git_blob_oid": "356330e549d697aec20a8859f0eb9072f0f80287",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/page-fault-boundary.tsx"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-first-paint.tsx",
+        "bytes": 3860,
+        "sha256": "29ce2a2262617c83cb33a4b8070620015ddc5913b10feebbc64ccc2451d9bf67",
+        "git_blob_oid": "9ac1e11a0b047a1ff86f3958cc171082dfdc1c6a",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/page-first-paint.tsx"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/use-native-verbs.ts",
+        "bytes": 10562,
+        "sha256": "2f5509e4067d0d512ee086284fe86fc377f28485013da43ff7f1b63ec4b9e1bc",
+        "git_blob_oid": "4881e597362c24c4ada0f994fb4d5985b42897d5",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/bridge/use-native-verbs.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/cancelled-navigation-target.ts",
+        "bytes": 2546,
+        "sha256": "414ab3912002a03cbd7e3d5f36fd3227f81407a5682bfc68063ae136bf0120fc",
+        "git_blob_oid": "8b3fb7663b4d9c4df4e7699ebd6049074bcf5b42",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/cancelled-navigation-target.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/catch-all-page-route.tsx",
+        "bytes": 3993,
+        "sha256": "67541300e37d6f33719fa84bd8653ffd86112195e4b78580e1a0d7e662c73d04",
+        "git_blob_oid": "03c6530e08ffe6ab4b4b09122b3a4e45a919a03a",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/catch-all-page-route.tsx"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-file-system-fake.ts",
+        "bytes": 5028,
+        "sha256": "e02561301432e757f99e659c59ec1e06b60142d0364b4d9e7104a74319d5cc6e",
+        "git_blob_oid": "e266bf7d6de17e24c2013e8ff73168772e1d2ce1",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/generation-file-system-fake.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store-file-system.ts",
+        "bytes": 4521,
+        "sha256": "b04a6d5b5627e379541a8c9f00239bc23b707ea0205753c9af0e4e3e789f2952",
+        "git_blob_oid": "f6b91742ee78cbd1728b2407cfd7fe58f41d08cc",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/generation-store-file-system.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store.ts",
+        "bytes": 16358,
+        "sha256": "3409c3d844bbce6e6dc0162fa9da152fdce31b3ed6c0092c059ab93a46ac3e1e",
+        "git_blob_oid": "2aedcb75c7859c04b635b17f1596d7162d251661",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/generation-store.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-serving.ts",
+        "bytes": 677,
+        "sha256": "dbdb713b53a7c9b161303a25ccd76888fc51838454e6a54afc40451163e48710",
+        "git_blob_oid": "395d8f05fb1cebae30a46b2ca3b15f599b404f57",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/host-area-serving.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-cache-key.ts",
+        "bytes": 929,
+        "sha256": "c9b0561344a002cd02218cce11848ae4e5d543bebda081abb5fe4c018a8c7963",
+        "git_blob_oid": "0058c4eebca5a2d86d514b7708887e26bfbf07fd",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/host-cache-key.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/media-handle-registry.ts",
+        "bytes": 8487,
+        "sha256": "3b0ddc0791ccc177a13b4cd049c878cff4417e9b9f6a010227d489aed2a4e388",
+        "git_blob_oid": "91fe55066f18ba8428077651988dd8333000bf1d",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/media-handle-registry.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-cached-generation.ts",
+        "bytes": 2666,
+        "sha256": "7202d51ac464f44a31af6d18119c35214cf2ab975b7c4aefed1d87574feab59e",
+        "git_blob_oid": "bde3485b6c852f231974052cdef306f317fec686",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-cached-generation.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-dev-facts.ts",
+        "bytes": 3148,
+        "sha256": "9695a2ae1bdd15b6ca36a1cf4b65f6fb3f3d2ed1084198d9376f94f151efd9c6",
+        "git_blob_oid": "623bcd37435e28712e10254f655ec0ec51f4aafa",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-dev-facts.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-gates.ts",
+        "bytes": 6168,
+        "sha256": "4f74237f64c39f51c70fff2011a58c75cff7a99728b2d503120a25fa6c45ba2f",
+        "git_blob_oid": "63a90d4d939eb7bd72c0daf8a81c5686f4547c71",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-gates.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-reachability.ts",
+        "bytes": 1223,
+        "sha256": "67cab4c0b0c1031e13be95843e53d722a6c797689c1466440a28f483cae14d35",
+        "git_blob_oid": "6992ba08ffb0e25843635e887528f8e86df053a2",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-reachability.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-runtime.ts",
+        "bytes": 2297,
+        "sha256": "382a3a01d2d2b3ad9cd42621e9822fdd5387fddd48b3c862b575a694dc95b711",
+        "git_blob_oid": "7446bd4d36bd9f968eca5634c28707ccc071b811",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-runtime.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-screen-test-harness.tsx",
+        "bytes": 10105,
+        "sha256": "2ccfd42a543cdaf51e8bba1504a77351e2f17a789117b421f07f8ec38fc151ad",
+        "git_blob_oid": "7bd0a28f1360e55fccfa2ccef8b4a0198d0ab5b9",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-screen-test-harness.tsx"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-screen-test-mocks.tsx",
+        "bytes": 9270,
+        "sha256": "c4c604a047935bf1e71d0a55307ab4a2747ec2f9662b16f3ed1e289500714e0c",
+        "git_blob_oid": "b13db66e613ef9ca504cd92b329358d8c7e14028",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-screen-test-mocks.tsx"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-effects.ts",
+        "bytes": 5950,
+        "sha256": "4cd96b49b2a0a906d8d752a4937d58a4f7fe1f2d264c46d197b611950082b07a",
+        "git_blob_oid": "c8777c3f79c308eb59d1e556aa1f0d25e9401322",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-session-effects.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session.ts",
+        "bytes": 15855,
+        "sha256": "d06a5aa2362b17732dd9296db766c35d1f4b524fc3fbdb836ffb44d74d44eb4b",
+        "git_blob_oid": "31ad76129463d5b9a163e0aef3b3c78fadd8e005",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-session.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure-log.ts",
+        "bytes": 4459,
+        "sha256": "a1c76cd54cde8f84d91e3a455d70e36fda003405774b75d2f16a10dcba74625b",
+        "git_blob_oid": "dbca08f5f1015e1ce3f04a314c679e036798b761",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-update-failure-log.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure.ts",
+        "bytes": 4683,
+        "sha256": "033dc50de3df19305da4ccb669061c8d86acdb5e626536243a6989c72d46df20",
+        "git_blob_oid": "79e7fa96595a2acb3791383c38136459de46c5c0",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/mobile-web-shell-update-failure.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/native-stack-return.ts",
+        "bytes": 4194,
+        "sha256": "a8ad062019d3825f63bbdb8546ee97f2069855a0f8b4cf3df9ce5ae3430bb28a",
+        "git_blob_oid": "e9d3a879469d6767e12cd035cb8e729259366390",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/native-stack-return.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/page-document-lifecycle.ts",
+        "bytes": 3476,
+        "sha256": "9dbe322040957afb86bbefae3eecd3cee194a398c87700b4156525b96308953e",
+        "git_blob_oid": "031c8bf42e32db52a187705f2c7f1fca166d1a48",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/page-document-lifecycle.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/page-document-state.ts",
+        "bytes": 1284,
+        "sha256": "eaca2faaba8052cee16875a091093c8d73bf978b126aaf5b609f6fa1a5df1c48",
+        "git_blob_oid": "74a1385e148c5562d16a09f82d61cfe281c9619a",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/page-document-state.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/page-owns-host-area.ts",
+        "bytes": 156,
+        "sha256": "9048f97544b774e22fd0f212466d575d31a0acfb0fcfb3287bc6dabfc34bb2d1",
+        "git_blob_oid": "84d5168bd2f48b534c499afaa9c0ede9270dc2d3",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/page-owns-host-area.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/page-owns-host-area.web.ts",
+        "bytes": 380,
+        "sha256": "0457e159c8f86b1c2ae2c6e6762c8bc29d88f753136a8112260e02688bd98895",
+        "git_blob_oid": "fd694bc610420e17971cf514a010507412b32262",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/page-owns-host-area.web.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/page-route-policy.ts",
+        "bytes": 14730,
+        "sha256": "7bb0ac5770f1c55df2f912eb3b3e0728682646fcd1d2dc24085639f191f10dea",
+        "git_blob_oid": "3de345d1bd5dd763b6bcd0ebe2dccd09e061d65a",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/page-route-policy.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/page-storage-keys.ts",
+        "bytes": 10795,
+        "sha256": "9290ba3912610df775cab13f759cd23bbce0c4d20959415c46e663656e9554a6",
+        "git_blob_oid": "c9e1bbbaf427bf2260faaa570516996a4073bc28",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/page-storage-keys.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/process-generation-store.ts",
+        "bytes": 727,
+        "sha256": "601a0439197b1d47822d26a3cd5065a33e855520905f061e3c87fd03629a1bd0",
+        "git_blob_oid": "ea403b9bb699e125b3c9470f9db625bbac2ebda4",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/process-generation-store.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/removed-host-shell-cache.ts",
+        "bytes": 619,
+        "sha256": "403818137a5fdd8462150e2b19e4787954f756f11ffdc5596425d4c51c73ac7e",
+        "git_blob_oid": "052298c529e085d9acb84d4a50a2ff188e22482c",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/removed-host-shell-cache.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/shell-screen-route.ts",
+        "bytes": 3062,
+        "sha256": "18e9a632634e408b35a3561e267e2c0e16cdec53dfd1d080a2de137696186d45",
+        "git_blob_oid": "836f12c2ab183276da19c79ef6d0f3810890f1b3",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/shell-screen-route.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/use-mobile-web-shell-bridge.ts",
+        "bytes": 16974,
+        "sha256": "5f9240f158a09ad124d832c48f9200d864140ef0e37a6512dc11c83b480c8d21",
+        "git_blob_oid": "db216269345c6f357b7f7ebf17a38378040d9c59",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/use-mobile-web-shell-bridge.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/use-mobile-web-shell-session.ts",
+        "bytes": 15049,
+        "sha256": "8ea0f2313cec1ef7710dc52df1b4ac7e3a7773c3869519aa2d7dcdef4f283463",
+        "git_blob_oid": "2fba22caf1932aaccb9b1691dbd0d5e1495ebf50",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/use-mobile-web-shell-session.ts"
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/use-page-host-snapshot.ts",
+        "bytes": 6768,
+        "sha256": "5e66f6b311528d7ec06b3c817644a5edc9bfe4eb3fa4d5ae6ee4534593cb6e08",
+        "git_blob_oid": "52df6c7f145498786aa5fb6573b2ecabbb468bc1",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/mobile-web-shell/use-page-host-snapshot.ts"
+      },
+      {
+        "path": "mobile/src/session/MobileSessionSurface.tsx",
+        "bytes": 936,
+        "sha256": "fd0d93f882e8ed46ce9e99337491442a67e5bdd53a85829559d6e24492ae354f",
+        "git_blob_oid": "0526d117e8d3e2a5026f6cccdd8206fbfd611d32",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/session/MobileSessionSurface.tsx"
+      },
+      {
+        "path": "mobile/src/session/mobile-session-toast-owner-cleanup.test.tsx",
+        "bytes": 16321,
+        "sha256": "5ad86057b11b835422117be6db00859471b15b5b2cba4028b52da26ee973b921",
+        "git_blob_oid": "3ba4220962b1cd3bc83e46b7adc96b182c21cfb0",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/session/mobile-session-toast-owner-cleanup.test.tsx"
+      },
+      {
+        "path": "mobile/src/session/mobile-terminal-stream-subscribe.ts",
+        "bytes": 1749,
+        "sha256": "51a8b88e705694adaa6a702503d1068a00140522a6fb97d3dd7aa4c59c164840",
+        "git_blob_oid": "bfc7cc5e6ccdb2942602fa7a680c306aabe14ed5",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/session/mobile-terminal-stream-subscribe.ts"
+      },
+      {
+        "path": "mobile/src/session/use-mobile-session-accessory-selection.ts",
+        "bytes": 8383,
+        "sha256": "8c05d64b668d6c2195995d2944c6bb1b3be2183056aaa800eebc93b72b2ce9de",
+        "git_blob_oid": "3ef450d19dd03c2ffc5fe4e78509200010970c31",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/session/use-mobile-session-accessory-selection.ts"
+      },
+      {
+        "path": "mobile/src/session/use-mobile-session-terminal-subscription-foundation.ts",
+        "bytes": 3992,
+        "sha256": "2c56a5531b285325bf96e3390f21b0c023cbaebb30e34900f8bf3351494bb285",
+        "git_blob_oid": "ae279e065edb163dacf597d036ea9a57a0dfb626",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/session/use-mobile-session-terminal-subscription-foundation.ts"
+      },
+      {
+        "path": "mobile/src/storage/mirrored-storage-keys.ts",
+        "bytes": 5913,
+        "sha256": "974901716ffe19ce729de4da1d847ce83563d2cc91d5cfcfb497b51de6c24191",
+        "git_blob_oid": "c1d0539acfea1846152e72774773dbbbfe59c6f6",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/storage/mirrored-storage-keys.ts"
+      },
+      {
+        "path": "mobile/src/transport/host-removal-lifecycle.ts",
+        "bytes": 1311,
+        "sha256": "da278afdde8415db7cfd64a5085b09cb4d435da9ff9bd2a0d596acabced7702c",
+        "git_blob_oid": "493cf54412f8b3d6ef288d18c07ba87071cc1f28",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/transport/host-removal-lifecycle.ts"
+      },
+      {
+        "path": "mobile/src/transport/mobile-web-bundle-fetch-refusal.ts",
+        "bytes": 848,
+        "sha256": "f5c83aba60cf4bea55bcf3e07aa31c6a81d6f24bf58bfe0ac65fc6d27b3f4074",
+        "git_blob_oid": "ca9a154272284f519f1ac7dab256e47b5fa88aaa",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/transport/mobile-web-bundle-fetch-refusal.ts"
+      },
+      {
+        "path": "mobile/src/transport/mobile-web-bundle-reply-schemas.ts",
+        "bytes": 8332,
+        "sha256": "85aee3b9a74df3681ef2064bbacfc5f140ded560974e7a7d6ec06f692cba9df5",
+        "git_blob_oid": "6944d441db97c24933fec5cc24e3f5346ac6f7e4",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/src/transport/mobile-web-bundle-reply-schemas.ts"
+      },
+      {
+        "path": "mobile/vitest.config.ts",
+        "bytes": 1224,
+        "sha256": "bb9a90b6f4e41d9a9823c40b4765aa0704c8b613c0d1371e217800a6511dea4b",
+        "git_blob_oid": "78bc004c541966b1487eaf0f36568a19d966b9b9",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/vitest.config.ts"
+      },
+      {
+        "path": "mobile/vitest.setup.ts",
+        "bytes": 357,
+        "sha256": "5f6a426f8db0563a3cdcd875c8df50b37ea7d252b731e5171b6fadd615b6e746",
+        "git_blob_oid": "e1a3e32a6e2548834a8b5d3a6996a5ebf3c60d84",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/mobile/vitest.setup.ts"
+      },
+      {
+        "path": "src/shared/mobile-bridge-frame-bytes.ts",
+        "bytes": 311,
+        "sha256": "d8fbc3b722c75b4d50e35ed9d56063115aa7dd0e1b6b382f387100cbe6f68fb2",
+        "git_blob_oid": "10980a8cd3c01c7c0774f65974f60c53542adca2",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/src/shared/mobile-bridge-frame-bytes.ts"
+      },
+      {
+        "path": "src/shared/mobile-web-bundle/manifest-contract.ts",
+        "bytes": 12796,
+        "sha256": "81678aea2b6083ce199c7932fed86a1683f1c978e71b7419a4128ffd2275f430",
+        "git_blob_oid": "e50e68974d90664eac7fceff664a85fe71bf2f07",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "role": "read-supporting-evidence-not-an-extra-reviewed-candidate",
+        "snapshot": "evidence-snapshots/src/shared/mobile-web-bundle/manifest-contract.ts"
+      }
+    ],
+    "selected_final_sources": [
+      {
+        "path": "mobile/src/components/mobile-markdown-tree.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "c94502323ce19c85dab9d78f0456ed0b0bb0aba47d9b9c047ee958c47786130e",
+        "reviewed_sha256": "c94502323ce19c85dab9d78f0456ed0b0bb0aba47d9b9c047ee958c47786130e",
+        "original_bytes": 885,
+        "final_bytes": 885,
+        "final_snapshot": "final-source-scan/snapshots/01.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-route-update.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "faf63a08bb7605689d8e304f67bfb0bc8de7476bb0923e9b12ce088c3160d407",
+        "reviewed_sha256": "faf63a08bb7605689d8e304f67bfb0bc8de7476bb0923e9b12ce088c3160d407",
+        "original_bytes": 5060,
+        "final_bytes": 5060,
+        "final_snapshot": "final-source-scan/snapshots/02.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-client-frames.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "53b4e3bd28942e4adc7ca91a7acde6b584ee9b054860c98be0346d9835221741",
+        "reviewed_sha256": "fcac49936346fd71941c5f15c57ae827fdc792c4e81d6792eb51c0b46c70aa37",
+        "original_bytes": 28026,
+        "final_bytes": 28321,
+        "final_snapshot": "final-source-scan/snapshots/03.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-client.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "e93b8c4c3d7512d43692e2d61abd2f0b84832358d65879f33829bb91f7a419cd",
+        "reviewed_sha256": "d0921860731581952ce78188be69efd1bfa65816c79effd43b269c5f6c4d5260",
+        "original_bytes": 13845,
+        "final_bytes": 14145,
+        "final_snapshot": "final-source-scan/snapshots/04.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-envelope.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "e133c4b6bcc3d2fe48ec5718c411ed50402d0f38cb0f0f8b26d172f396a12fdd",
+        "reviewed_sha256": "da17e03757c0fd187075ecf290ab9d88a0bd0b883ea6608b231eb96060d798f6",
+        "original_bytes": 9088,
+        "final_bytes": 8948,
+        "final_snapshot": "final-source-scan/snapshots/05.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-safe-area-insets.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "eaec2c56c30181a5c76ee85296c15dbe7d74222627bf76960cf0769834960355",
+        "reviewed_sha256": "eaec2c56c30181a5c76ee85296c15dbe7d74222627bf76960cf0769834960355",
+        "original_bytes": 3651,
+        "final_bytes": 3651,
+        "final_snapshot": "final-source-scan/snapshots/06.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/bridge-screencast-encoder.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "4f3de540de57ce71358874e7e23109fad3e842ae31226b68742e5fe7e61d658d",
+        "reviewed_sha256": "4f3de540de57ce71358874e7e23109fad3e842ae31226b68742e5fe7e61d658d",
+        "original_bytes": 3837,
+        "final_bytes": 3837,
+        "final_snapshot": "final-source-scan/snapshots/07.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/orca-bridge-page-channel.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "151fba00d645c90c13dc6c3de7ac57d056cfdbc6fa464a57e50aca56f997bd2c",
+        "reviewed_sha256": "151fba00d645c90c13dc6c3de7ac57d056cfdbc6fa464a57e50aca56f997bd2c",
+        "original_bytes": 1820,
+        "final_bytes": 1820,
+        "final_snapshot": "final-source-scan/snapshots/08.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-async-storage.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "5a04ccf8f0a2a513e98ba13a777283630cbbd4a727486308961ff5aedbd086b4",
+        "reviewed_sha256": "c0239b703eb3cb0c80f3f97ad9da127ea4fc4791a6b6fdb79c48a9e2fc2887bd",
+        "original_bytes": 9694,
+        "final_bytes": 9754,
+        "final_snapshot": "final-source-scan/snapshots/09.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-back-consumers.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "a2a771e6fbe8874bb8f6e9204d0f6e78fd1f8d01358b5f0b7fa5238a042a246d",
+        "reviewed_sha256": "a2a771e6fbe8874bb8f6e9204d0f6e78fd1f8d01358b5f0b7fa5238a042a246d",
+        "original_bytes": 4718,
+        "final_bytes": 4718,
+        "final_snapshot": "final-source-scan/snapshots/10.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-bootstrap.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "7ea252333636d647902ee28f6379a0f3ff424261e90326a070915d4cebdc1282",
+        "reviewed_sha256": "7ea252333636d647902ee28f6379a0f3ff424261e90326a070915d4cebdc1282",
+        "original_bytes": 8169,
+        "final_bytes": 8169,
+        "final_snapshot": "final-source-scan/snapshots/11.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-fault-boundary.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "c6f263af3cd6a8043aa91ed74ce676e499077302f5be710f9f40c741b2262115",
+        "reviewed_sha256": "c6f263af3cd6a8043aa91ed74ce676e499077302f5be710f9f40c741b2262115",
+        "original_bytes": 2790,
+        "final_bytes": 2790,
+        "final_snapshot": "final-source-scan/snapshots/12.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-first-paint-through-the-bridge.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "da5f19ca4056b5a469a686731782a93f6b259a78e6bfc7b24e0ab54ae770b0ca",
+        "reviewed_sha256": "da5f19ca4056b5a469a686731782a93f6b259a78e6bfc7b24e0ab54ae770b0ca",
+        "original_bytes": 1615,
+        "final_bytes": 1615,
+        "final_snapshot": "final-source-scan/snapshots/13.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/page-first-paint.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "bad3d5be7b344ee80ca0ac0720d6516443849778f65b54da5e5ec2b9ed480357",
+        "reviewed_sha256": "bad3d5be7b344ee80ca0ac0720d6516443849778f65b54da5e5ec2b9ed480357",
+        "original_bytes": 5892,
+        "final_bytes": 5892,
+        "final_snapshot": "final-source-scan/snapshots/14.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/bridge/use-native-verbs.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "e02d2dfd3618362d06d384b973146c10fbaffad9c9d71b201768db1f2567e5fe",
+        "reviewed_sha256": "8a0425aa016425d437251ceed46e22ffe7f1f2be95403e2bf7776a6d59881d9e",
+        "original_bytes": 10813,
+        "final_bytes": 10260,
+        "final_snapshot": "final-source-scan/snapshots/15.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/cancelled-navigation-target.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "7e3da246c6eed7620efdfac1190baced026f1c8a43bf0f53217b809030b410d0",
+        "reviewed_sha256": "7e3da246c6eed7620efdfac1190baced026f1c8a43bf0f53217b809030b410d0",
+        "original_bytes": 1808,
+        "final_bytes": 1808,
+        "final_snapshot": "final-source-scan/snapshots/16.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/catch-all-page-route-states.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "e54fe71a9eba2e2253ddd9d5bf8b60a3691ecabd5814b5b5478c742aa90f460f",
+        "reviewed_sha256": "e54fe71a9eba2e2253ddd9d5bf8b60a3691ecabd5814b5b5478c742aa90f460f",
+        "original_bytes": 11558,
+        "final_bytes": 11558,
+        "final_snapshot": "final-source-scan/snapshots/17.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/catch-all-page-route.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "dc948c839aa30793c2fac3bd5c1933d54bff25d98619ea6abf053e26df3e0b5f",
+        "reviewed_sha256": "dc948c839aa30793c2fac3bd5c1933d54bff25d98619ea6abf053e26df3e0b5f",
+        "original_bytes": 9273,
+        "final_bytes": 9273,
+        "final_snapshot": "final-source-scan/snapshots/18.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store-file-system.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "a1fc1b27c34fe898e80aa179bb50ddbcb97836f73661f99d0a85781d88711ec0",
+        "reviewed_sha256": "a1fc1b27c34fe898e80aa179bb50ddbcb97836f73661f99d0a85781d88711ec0",
+        "original_bytes": 1267,
+        "final_bytes": 1267,
+        "final_snapshot": "final-source-scan/snapshots/19.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store-host-removal-race.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "e1128863cb0234365292c0660940bc1de0534fd905aad7bc61cff0084772323e",
+        "reviewed_sha256": "06ce0ba245851e3742715a3716a8eceb6f15e6b4c67ea9cc7a8572a5a79acc02",
+        "original_bytes": 6978,
+        "final_bytes": 5823,
+        "final_snapshot": "final-source-scan/snapshots/20.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/generation-store.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "a87b0f8b91c3d9c22d9d126f038fba9cffd8f5c0438b613194186df551492bfd",
+        "reviewed_sha256": "a87b0f8b91c3d9c22d9d126f038fba9cffd8f5c0438b613194186df551492bfd",
+        "original_bytes": 26548,
+        "final_bytes": 26548,
+        "final_snapshot": "final-source-scan/snapshots/21.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "237d0d56cf80d4943fa0c03793536a1770147d71b4efd8f53009afddaa8dbe9c",
+        "reviewed_sha256": "3236bb70004c89ff5ca244ee886876ffd148b88a94929d5cd66f8fc8aa9d6c6f",
+        "original_bytes": 7567,
+        "final_bytes": 11161,
+        "final_snapshot": "final-source-scan/snapshots/22.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-layout-class-change.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "63b36cb609eb55e9fa7bdff0fb9e4bd6b154bea7d9b1e13be715546a88afe0e8",
+        "reviewed_sha256": "63b36cb609eb55e9fa7bdff0fb9e4bd6b154bea7d9b1e13be715546a88afe0e8",
+        "original_bytes": 6668,
+        "final_bytes": 6668,
+        "final_snapshot": "final-source-scan/snapshots/23.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-leave-session.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "aee8d900d39a19a259c07dc95a8a1bf860c45ace1f628002f535f7655477b612",
+        "reviewed_sha256": "aee8d900d39a19a259c07dc95a8a1bf860c45ace1f628002f535f7655477b612",
+        "original_bytes": 7104,
+        "final_bytes": 7104,
+        "final_snapshot": "final-source-scan/snapshots/24.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-page-storage.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "0ee7eb30ec95bf11c019c3b9ae2706a7749b3456d1aabc0323c90e48d9a3a184",
+        "reviewed_sha256": "641be86b8de82c28a6d8eadeb3985540c3909a8946c7dabe8ce9d8da9bdc7ff2",
+        "original_bytes": 8802,
+        "final_bytes": 8988,
+        "final_snapshot": "final-source-scan/snapshots/25.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-session.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "d7ebc8e7536b2770a7677676fa54da657cff7be309b3fc6d39517ba26af0f4f0",
+        "reviewed_sha256": "38f77bc88d93db131b00da6a9d33ae6dd5df20a55e0491167c9182d1d702c9d0",
+        "original_bytes": 9972,
+        "final_bytes": 9974,
+        "final_snapshot": "final-source-scan/snapshots/26.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-sidebar-matrix.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "69f5a102063e53e0516e04e555a5f758ed50fec6da4d906f4213c040aa0a004d",
+        "reviewed_sha256": "69f5a102063e53e0516e04e555a5f758ed50fec6da4d906f4213c040aa0a004d",
+        "original_bytes": 15044,
+        "final_bytes": 15044,
+        "final_snapshot": "final-source-scan/snapshots/27.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/host-area-two-hosts.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "fa186ecb0bc710e2d42dd216a7741fbe72797f5090666c5a7cc5544f27eee499",
+        "reviewed_sha256": "fa186ecb0bc710e2d42dd216a7741fbe72797f5090666c5a7cc5544f27eee499",
+        "original_bytes": 5121,
+        "final_bytes": 5121,
+        "final_snapshot": "final-source-scan/snapshots/28.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/media-handle-registry.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "f9934416540242d54b20c193c620e25e0a54b0372b19cb0f276ecabb6ddc1e51",
+        "reviewed_sha256": "a06d35ffbb46a0294f3464ed3bacf4fbe4e9e0b02e4ef4d22eefa91844b1e2d2",
+        "original_bytes": 9201,
+        "final_bytes": 9285,
+        "final_snapshot": "final-source-scan/snapshots/29.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-agent-history-route.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "7c846d0991c8c19b1cfd3eb8dde0776adfa07b76dcb6cb344d74ac1860bbae3a",
+        "reviewed_sha256": "7c846d0991c8c19b1cfd3eb8dde0776adfa07b76dcb6cb344d74ac1860bbae3a",
+        "original_bytes": 6787,
+        "final_bytes": 6787,
+        "final_snapshot": "final-source-scan/snapshots/30.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-back-claim-state.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "932fdbc5db6af0fc993b528d50c0d36ffc4cb804e505e2c0ef124c4696cd17db",
+        "reviewed_sha256": "932fdbc5db6af0fc993b528d50c0d36ffc4cb804e505e2c0ef124c4696cd17db",
+        "original_bytes": 2399,
+        "final_bytes": 2399,
+        "final_snapshot": "final-source-scan/snapshots/31.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-dev-facts.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "ff94133cbc24def50cf4046f8784f4653443d4e1a4d660e533daee98069281f8",
+        "reviewed_sha256": "fd0cb1508ae0dc3ba139b910dbabbe04c8bbe76f4e0565c18356a7fd28e54aed",
+        "original_bytes": 1401,
+        "final_bytes": 1061,
+        "final_snapshot": "final-source-scan/snapshots/32.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-failed-update-fallback.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "669ddc6f9a1d47a440e2c9a5984fed228021d69c66f11d4cb31ff73e2b2bc77c",
+        "reviewed_sha256": "24af9d271b7e9c8ed36ee034e1140c08dd06bf9f1f0a91b1c696e6fc656e462a",
+        "original_bytes": 15216,
+        "final_bytes": 14222,
+        "final_snapshot": "final-source-scan/snapshots/33.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-files-route.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "5477ca3128015b664af433749d3c7a51915bdf486dc19a2f03b003c4af0a309d",
+        "reviewed_sha256": "5477ca3128015b664af433749d3c7a51915bdf486dc19a2f03b003c4af0a309d",
+        "original_bytes": 8817,
+        "final_bytes": 8817,
+        "final_snapshot": "final-source-scan/snapshots/34.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-host-list-route.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "2a4db8b072b6c58f11b4d65cad7ff7726c68af32f58491b54fe53db344eeef5d",
+        "reviewed_sha256": "2a4db8b072b6c58f11b4d65cad7ff7726c68af32f58491b54fe53db344eeef5d",
+        "original_bytes": 3497,
+        "final_bytes": 3497,
+        "final_snapshot": "final-source-scan/snapshots/35.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-keyboard-overlay-screen.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "a6c7d32c8f1028a2e2e8f9662e99d0c5d09ca3ff8b44b8fea957f69355a32925",
+        "reviewed_sha256": "a6c7d32c8f1028a2e2e8f9662e99d0c5d09ca3ff8b44b8fea957f69355a32925",
+        "original_bytes": 4773,
+        "final_bytes": 4773,
+        "final_snapshot": "final-source-scan/snapshots/36.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-offline-grant-staleness.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "8e14c1b1bf6124f416cd15274876e7f29f0e63d32e9860f8d97ba7e2ff88a5ee",
+        "reviewed_sha256": "8e14c1b1bf6124f416cd15274876e7f29f0e63d32e9860f8d97ba7e2ff88a5ee",
+        "original_bytes": 10528,
+        "final_bytes": 10528,
+        "final_snapshot": "final-source-scan/snapshots/37.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-page-route-wall.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "2e442d914f1659b4ac9fadeefb8e20c645aa0176ba1a8ad1a61412c1edb37548",
+        "reviewed_sha256": "2e442d914f1659b4ac9fadeefb8e20c645aa0176ba1a8ad1a61412c1edb37548",
+        "original_bytes": 3617,
+        "final_bytes": 3617,
+        "final_snapshot": "final-source-scan/snapshots/38.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-reachability.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "25a5699aef620faaf96814d4f10150ce222e3dc4a6cb463a5ee42663cd530ca5",
+        "reviewed_sha256": "25a5699aef620faaf96814d4f10150ce222e3dc4a6cb463a5ee42663cd530ca5",
+        "original_bytes": 2034,
+        "final_bytes": 2034,
+        "final_snapshot": "final-source-scan/snapshots/39.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-refused-update-decision.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "bfa984fbeaae4d3434699083e3ed8ed7d63d6186c14b1f2a956878d188f325ed",
+        "reviewed_sha256": "834813af0b57e7c0f24062c09ea210ec1ae5e53b2e9062fe1fa2fdc4382e9765",
+        "original_bytes": 11686,
+        "final_bytes": 11486,
+        "final_snapshot": "final-source-scan/snapshots/40.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-safe-area-screen.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "f36601ae0ef9b7a2210da7913abe81d42c9749347dc9a7c426ff4d688e32e166",
+        "reviewed_sha256": "f36601ae0ef9b7a2210da7913abe81d42c9749347dc9a7c426ff4d688e32e166",
+        "original_bytes": 4327,
+        "final_bytes": 4327,
+        "final_snapshot": "final-source-scan/snapshots/41.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "c0b063e1ed602c0d8fcebb373e40d56fa63d263a29896adaf8ca6e0bbf854160",
+        "reviewed_sha256": "6284cea18ef9dea64c63476e347c66bb0ad8ee4d870b604a3cabd92fc07ab0fa",
+        "original_bytes": 10137,
+        "final_bytes": 11971,
+        "final_snapshot": "final-source-scan/snapshots/42.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-grants.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "822c641cfcb6c27a312169252d0e573206f969d40ef29cf42b3f19c6d0349eb5",
+        "reviewed_sha256": "b6150c6d46ab5c264221a43e1489649b5f54ac5acb79d51d97110eb7758ad4d0",
+        "original_bytes": 5207,
+        "final_bytes": 4863,
+        "final_snapshot": "final-source-scan/snapshots/43.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-route.test.tsx",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "fdab5c38fa31e62cbb0932e0e5f622cd46e7d613e4704ee9929fcee7132a2470",
+        "reviewed_sha256": "fdab5c38fa31e62cbb0932e0e5f622cd46e7d613e4704ee9929fcee7132a2470",
+        "original_bytes": 8914,
+        "final_bytes": 8914,
+        "final_snapshot": "final-source-scan/snapshots/44.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session-test-fixtures.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "71aead13da7fcbe9f7b4862841dc3c61c80fff43afe417baf9dbeaf7b07123bb",
+        "reviewed_sha256": "446dc683c6a149dd495d07cac8547827ea7bf49fce906a0e003689fbe546f80d",
+        "original_bytes": 7027,
+        "final_bytes": 7203,
+        "final_snapshot": "final-source-scan/snapshots/45.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-session.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "b763ec6a1cda548711c0c5e48e83eba3a9ef420a478cad281d412f262b2aa2e6",
+        "reviewed_sha256": "2bacfdff1a49cd43d3cba202766c095120ed5598c06721382cd48eaa48157ff9",
+        "original_bytes": 36106,
+        "final_bytes": 36067,
+        "final_snapshot": "final-source-scan/snapshots/46.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure-log.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "a383c62a1bb43ceeb005a1307dff7c0a216ef02c92ee68cbbbcf0970c7caadb8",
+        "reviewed_sha256": "d838d7174d4af515dbbc2f8f3ad61f22b7e047e115a75be9bb6962906624d93e",
+        "original_bytes": 5155,
+        "final_bytes": 6733,
+        "final_snapshot": "final-source-scan/snapshots/47.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure-record.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "babed53d858c8e931a5fccbfa06bf037b145afd3c3bb017fc0aa6d597876ac44",
+        "reviewed_sha256": "babed53d858c8e931a5fccbfa06bf037b145afd3c3bb017fc0aa6d597876ac44",
+        "original_bytes": 9195,
+        "final_bytes": 9195,
+        "final_snapshot": "final-source-scan/snapshots/48.source",
+        "changed": false
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/mobile-web-shell-update-failure.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "0d7d9c6f147d297b8187b227eae7dd7a46364ea87bc887ee71f815856957f110",
+        "reviewed_sha256": "f36c7b85bbf245654a451190bb34b9db44175fbdfc320dc2d65c41d817997aab",
+        "original_bytes": 4020,
+        "final_bytes": 4053,
+        "final_snapshot": "final-source-scan/snapshots/49.source",
+        "changed": true
+      },
+      {
+        "path": "mobile/src/mobile-web-shell/native-stack-return.test.ts",
+        "source_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+        "source_sha256": "bc9464361bca2cc154dd61d6936e1b5f13285d7cefa89b454951e8d45cc1b4c6",
+        "reviewed_sha256": "bc9464361bca2cc154dd61d6936e1b5f13285d7cefa89b454951e8d45cc1b4c6",
+        "original_bytes": 2763,
+        "final_bytes": 2763,
+        "final_snapshot": "final-source-scan/snapshots/50.source",
+        "changed": false
+      }
+    ],
+    "supporting_evidence_scope": "90 pinned supporting paths are evidence, not additional completed candidates. The unchanged shell-lifecycle-log consumer contributes 18 validation tests only.",
+    "root_independent_report": "root-integrity.json",
+    "root_independent_result": {
+      "records": 50,
+      "original_case_mappings": 499,
+      "final_case_mappings": 489,
+      "source_spans": 7274,
+      "resolved_parameter_rows": 30,
+      "evidence_references": 133,
+      "runtime": {
+        "selected": 530,
+        "extra": 18
+      },
+      "mutation_witnesses": 10,
+      "errors": []
+    }
+  },
+  "durable_review": {
+    "required_review_artifacts": [
+      "mobile-0007.jsonl",
+      "mobile-0007-validation.json"
+    ],
+    "ledger_rows": 50,
+    "inline_fields": [
+      "cases",
+      "original_table_reviews",
+      "table_reviews",
+      "original_domain_review",
+      "final_domain_review",
+      "original_generated_domains",
+      "original_registered_instances",
+      "final_registered_instances"
+    ],
+    "preservation": "Every original case decision/reason, parameter row, literal operand, generated-input row, loop domain, traversal policy, timer/mock/hook control and helper branch is embedded unchanged under explicit original fields. Final inventories, assertions, declaration mappings, registered instances and completed actions are embedded alongside them.",
+    "domain_reference_policy": "domain_census_artifact and final_domain_census_artifact identify inline ledger fields. Standalone original-domains.json and implemented-domains.json are duplicate inspection copies, not required /tmp-only dependencies.",
+    "historical_claim_policy": "Original review status, support boundaries, proposal steps, validation limits and reasons are explicitly scoped to their original review. Current status, boundaries and actions describe executed implementation validation.",
+    "case_decisions": {
+      "keep": 466,
+      "fix": 23,
+      "consolidate": 7,
+      "remove": 3
+    },
+    "original_generated_domain_groups": 7,
+    "original_registered_instances": 540,
+    "final_registered_instances": 530,
+    "syntactic_inventory_policy": "Domain source spans, registered cases, array operands, generated bytes, helper branches and runtime traversals are separate counts; inventories are not extra executed tests."
+  },
+  "runtime": {
+    "status": "passed",
+    "environment": {
+      "ORCA_BACKGROUND_LAUNCH": "1"
+    },
+    "cwd": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-8/mobile",
+    "command": [
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "src/components/mobile-markdown-tree.test.ts",
+      "src/mobile-web-shell/bridge/bridge-route-update.test.ts",
+      "src/mobile-web-shell/bridge/bridge-rpc-client-frames.test.ts",
+      "src/mobile-web-shell/bridge/bridge-rpc-client.test.ts",
+      "src/mobile-web-shell/bridge/bridge-rpc-envelope.test.ts",
+      "src/mobile-web-shell/bridge/bridge-safe-area-insets.test.ts",
+      "src/mobile-web-shell/bridge/bridge-screencast-encoder.test.ts",
+      "src/mobile-web-shell/bridge/orca-bridge-page-channel.test.ts",
+      "src/mobile-web-shell/bridge/page-async-storage.test.ts",
+      "src/mobile-web-shell/bridge/page-back-consumers.test.ts",
+      "src/mobile-web-shell/bridge/page-bootstrap.test.ts",
+      "src/mobile-web-shell/bridge/page-fault-boundary.test.tsx",
+      "src/mobile-web-shell/bridge/page-first-paint-through-the-bridge.test.ts",
+      "src/mobile-web-shell/bridge/page-first-paint.test.tsx",
+      "src/mobile-web-shell/bridge/use-native-verbs.test.tsx",
+      "src/mobile-web-shell/cancelled-navigation-target.test.ts",
+      "src/mobile-web-shell/catch-all-page-route-states.test.tsx",
+      "src/mobile-web-shell/catch-all-page-route.test.tsx",
+      "src/mobile-web-shell/generation-store-file-system.test.ts",
+      "src/mobile-web-shell/generation-store-host-removal-race.test.ts",
+      "src/mobile-web-shell/generation-store.test.ts",
+      "src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+      "src/mobile-web-shell/host-area-layout-class-change.test.tsx",
+      "src/mobile-web-shell/host-area-leave-session.test.tsx",
+      "src/mobile-web-shell/host-area-page-storage.test.tsx",
+      "src/mobile-web-shell/host-area-session.test.ts",
+      "src/mobile-web-shell/host-area-sidebar-matrix.test.tsx",
+      "src/mobile-web-shell/host-area-two-hosts.test.tsx",
+      "src/mobile-web-shell/media-handle-registry.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-agent-history-route.test.tsx",
+      "src/mobile-web-shell/mobile-web-shell-back-claim-state.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-dev-facts.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-failed-update-fallback.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-files-route.test.tsx",
+      "src/mobile-web-shell/mobile-web-shell-host-list-route.test.tsx",
+      "src/mobile-web-shell/mobile-web-shell-keyboard-overlay-screen.test.tsx",
+      "src/mobile-web-shell/mobile-web-shell-offline-grant-staleness.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-page-route-wall.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-reachability.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-refused-update-decision.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-safe-area-screen.test.tsx",
+      "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-session-grants.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-session-route.test.tsx",
+      "src/mobile-web-shell/mobile-web-shell-session.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-update-failure-log.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-update-failure-record.test.ts",
+      "src/mobile-web-shell/mobile-web-shell-update-failure.test.ts",
+      "src/mobile-web-shell/native-stack-return.test.ts",
+      "src/mobile-web-shell/shell-lifecycle-log.test.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/tmp/orca-mobile-0007-implementation/runtime-results.json"
+    ],
+    "report": "runtime-results.json",
+    "log": "runtime-final.log",
+    "test_files": 50,
+    "selected_test_files": 49,
+    "selected_tests_passed": 530,
+    "extra_consumer": "mobile/src/mobile-web-shell/shell-lifecycle-log.test.ts",
+    "extra_tests_passed": 18,
+    "total_tests_passed": 548,
+    "failed": 0,
+    "skipped": 0,
+    "boundary": "Actual logical production modules execute with controlled native/RPC endpoints, React test renderer and in-memory filesystem where recorded."
+  },
+  "typecheck": {
+    "status": "baseline-equivalent-with-existing-errors",
+    "full_typecheck_passed": false,
+    "command": [
+      "pnpm",
+      "exec",
+      "tsc",
+      "--noEmit",
+      "-p",
+      "tsconfig.test.json"
+    ],
+    "exit_code": 2,
+    "baseline_comparison_method": "Same mobile TypeScript program/config, with 50 original selected snapshots overlaid for baseline versus the final selected sources. All 50 loaded source contents were verified in each program.",
+    "comparison_script": "type-comparison.cjs",
+    "compiler_version": "6.0.3",
+    "baseline_diagnostics": 556,
+    "current_diagnostics": 556,
+    "new_diagnostics": 0,
+    "removed_diagnostics": 0,
+    "selected_source_diagnostics": 0,
+    "exact_diagnostic_multiset_unchanged": true,
+    "final_selected_source_hashes_match": true,
+    "limitation": "The full mobile typecheck fails on 556 pre-existing diagnostics outside the selected files. Baseline equivalence establishes no added type diagnostics; it is not a clean full typecheck."
+  },
+  "format_and_lint": {
+    "status": "passed",
+    "changed_files": 19,
+    "format_log": "format.log",
+    "format_check_log": "format-check.log",
+    "lint_log": "lint.log",
+    "result": "All 19 changed files pass focused formatting and lint; the final lint log has no diagnostics.",
+    "initial_failures_and_fixes": [
+      "Added braces around renderer-cleanup loops in two files.",
+      "Removed the unused BRIDGE_ACK_INTERVAL_BYTES import after replacing the constant-ratio assertion."
+    ],
+    "command_capture_limit": "The focused formatter/linter log files retain tool results, not the exact complete command argument vectors."
+  },
+  "dependencies": {
+    "status": "installed-isolated-mobile-workspace",
+    "log": "install.log",
+    "command": [
+      "pnpm",
+      "install",
+      "--frozen-lockfile",
+      "--ignore-scripts",
+      "--config.enable-global-virtual-store=false"
+    ],
+    "environment": {
+      "ORCA_BACKGROUND_LAUNCH": "1"
+    },
+    "boundary": "Mobile dependencies installed into its own node_modules; no shared node_modules symlink and no native install scripts."
+  },
+  "mutation_validation": {
+    "status": "all-10-detected-by-assertions",
+    "count": 10,
+    "shared_production_written": false,
+    "method": "A Vite pre-transform substitutes mutated production source copied under /tmp in memory. Each targeted case executes and fails an assertion; no loader failure is counted. Tracked production bytes are never written.",
+    "results": [
+      {
+        "name": "byte-ack-disabled",
+        "target": "src/mobile-web-shell/bridge/bridge-client-subscriptions.ts",
+        "test": "src/mobile-web-shell/bridge/bridge-rpc-client-frames.test.ts",
+        "title_filter": "keeps a byte-heavy stream alive beyond the host window",
+        "source_sha256": "e140f3799c803282982b60a6e8ede08375915f9e9afe928272ff2cd03f48f2ee",
+        "mutated_sha256": "1312e5fb69de9ba97d6d432fc0a8c3d0c3f28b463248b02503481683f6ff4d02",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/byte-ack-disabled/bridge-client-subscriptions.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/byte-ack-disabled/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/byte-ack-disabled/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/bridge/bridge-rpc-client-frames.test.ts",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/byte-ack-disabled/vitest.config.mts",
+          "-t",
+          "keeps a byte-heavy stream alive beyond the host window"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "Only 7 payloads arrived where the complete 16-payload byte-heavy sequence was required.",
+        "runtime_log_sha256": "66091fac63ca35f6fefb5e113d5e81ad0da03d60f22e10932df2bc8e03e1d65b",
+        "vite_config_sha256": "30a4725a075ce89db4780f9f7bcedddb15bdbc4f1072b48d79eded0839ca370a"
+      },
+      {
+        "name": "surface-ref-disconnected",
+        "target": "src/session/MobileSessionSurface.tsx",
+        "test": "src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+        "title_filter": "releases every terminal stream when the session root detaches",
+        "source_sha256": "fd0d93f882e8ed46ce9e99337491442a67e5bdd53a85829559d6e24492ae354f",
+        "mutated_sha256": "56e449b351e018a3796e3ce2d7d459db260a17fe9f6b87718536f0f6bb65b71c",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/surface-ref-disconnected/MobileSessionSurface.tsx",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/surface-ref-disconnected/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/surface-ref-disconnected/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/surface-ref-disconnected/vitest.config.mts",
+          "-t",
+          "releases every terminal stream when the session root detaches"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "Original stream unsubscribe counts stayed [0,0] instead of [1,1] after actual surface unmount.",
+        "runtime_log_sha256": "32608c06e30c33c82ac377aefe3a8b8ba9a21f7c50b69440768aa9f432505061",
+        "vite_config_sha256": "d6c0405fdba772b778eeddc55b8ae4ddf055a7727ba02614f3c83650c8563ce3"
+      },
+      {
+        "name": "root-detach-skips-cache-clear",
+        "target": "src/session/use-mobile-session-accessory-selection.ts",
+        "test": "src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+        "title_filter": "releases every terminal stream when the session root detaches",
+        "source_sha256": "8c05d64b668d6c2195995d2944c6bb1b3be2183056aaa800eebc93b72b2ce9de",
+        "mutated_sha256": "50179a595485d4bd2dfcb2707cb9cb835be321e3377cda630c2f60b9ec4264bc",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/root-detach-skips-cache-clear/use-mobile-session-accessory-selection.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/root-detach-skips-cache-clear/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/root-detach-skips-cache-clear/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/root-detach-skips-cache-clear/vitest.config.mts",
+          "-t",
+          "releases every terminal stream when the session root detaches"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "Original stream unsubscribe counts stayed [0,0] instead of [1,1] after actual surface unmount.",
+        "runtime_log_sha256": "333a145e19b93d35f5a1aa567b3be46462a7c98eec02596d85879744a19a61cf",
+        "vite_config_sha256": "17e9148b5066d894d39042aff1672bc862242de43c6d3b298dd5b5ada1f5633b"
+      },
+      {
+        "name": "root-detach-closes-bridge",
+        "target": "src/session/use-mobile-session-accessory-selection.ts",
+        "test": "src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+        "title_filter": "releases every terminal stream when the session root detaches",
+        "source_sha256": "8c05d64b668d6c2195995d2944c6bb1b3be2183056aaa800eebc93b72b2ce9de",
+        "mutated_sha256": "8afcc03a53acdbaa5dd7fe056de10c914486beb3a26f26b7d2dbb7020a084fcf",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/root-detach-closes-bridge/use-mobile-session-accessory-selection.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/root-detach-closes-bridge/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/root-detach-closes-bridge/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/host-area-in-page-cleanup.test.tsx",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/root-detach-closes-bridge/vitest.config.mts",
+          "-t",
+          "releases every terminal stream when the session root detaches"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "The third post-detach subscription never reached the host; its exact stream parameters were undefined.",
+        "runtime_log_sha256": "642f503149c1d3139c1fc39b44ca3c52f2869f02dfcd82f6363ca3b7ebab3357",
+        "vite_config_sha256": "c18a39c4b5af5ed712a1e32a978b29ef722dca760dce0aadfc185e9a3476f19d"
+      },
+      {
+        "name": "download-does-nothing",
+        "target": "src/mobile-web-shell/mobile-web-shell-session-effects.ts",
+        "test": "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+        "title_filter": "that lands whole reports no failure",
+        "source_sha256": "4cd96b49b2a0a906d8d752a4937d58a4f7fe1f2d264c46d197b611950082b07a",
+        "mutated_sha256": "a8d51ef41365452e01bcf3d4c3a6a17553b0aacb30f2eddc761c3a8556ee6a6b",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/download-does-nothing/mobile-web-shell-session-effects.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/download-does-nothing/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/download-does-nothing/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/download-does-nothing/vitest.config.mts",
+          "-t",
+          "that lands whole reports no failure"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "No staged/activated events arrived where the exact two-event sequence was required.",
+        "runtime_log_sha256": "d0197543133889915b311e4595eec80d437be8c63988011272d50e791f8a8ef7",
+        "vite_config_sha256": "b0514508c25b1dbc0471aa3e215921960b510cea26be582fa2abe11cd2e7e641"
+      },
+      {
+        "name": "download-controller-not-retired",
+        "target": "src/mobile-web-shell/mobile-web-shell-session-effects.ts",
+        "test": "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+        "title_filter": "that lands whole reports no failure",
+        "source_sha256": "4cd96b49b2a0a906d8d752a4937d58a4f7fe1f2d264c46d197b611950082b07a",
+        "mutated_sha256": "30a66fc3dfb65852be6f24ce2e846c8bf51a9a8718ae0e3491b77fbb45eef1ee",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/download-controller-not-retired/mobile-web-shell-session-effects.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/download-controller-not-retired/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/download-controller-not-retired/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/download-controller-not-retired/vitest.config.mts",
+          "-t",
+          "that lands whole reports no failure"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "The downloads Set retained one controller instead of becoming empty.",
+        "runtime_log_sha256": "8151e46deabc2cca0a241899a8e92e6874bb49bb093e74ead4a00d6a244a759e",
+        "vite_config_sha256": "6a98a21ee35604d3867ed057136fc698b5bba831838bcfb1e5aa95268bfc9b19"
+      },
+      {
+        "name": "generation-moved-three-times",
+        "target": "src/mobile-web-shell/generation-store.ts",
+        "test": "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+        "title_filter": "commits once when two downloads of the same build finish together",
+        "source_sha256": "3409c3d844bbce6e6dc0162fa9da152fdce31b3ed6c0092c059ab93a46ac3e1e",
+        "mutated_sha256": "49860ec13f52363ac92cd350a8af3989f6610b6aad9d8f8ccd02c4c7c14755ec",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/generation-moved-three-times/generation-store.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/generation-moved-three-times/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/generation-moved-three-times/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/generation-moved-three-times/vitest.config.mts",
+          "-t",
+          "commits once when two downloads of the same build finish together"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "Three delegated physical move pairs were observed where exactly one was required.",
+        "runtime_log_sha256": "698925c332781ccbfdc9dc973c8020ef3b7738a11435b9ff2517f812c2118ce9",
+        "vite_config_sha256": "519b3205660634b2fc9c213ec8b10e2a0e99cd5dc39cf04eed86e2a76379bfa0"
+      },
+      {
+        "name": "committed-callers-not-activated",
+        "target": "src/mobile-web-shell/mobile-web-shell-session-effects.ts",
+        "test": "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+        "title_filter": "commits once when two downloads of the same build finish together",
+        "source_sha256": "4cd96b49b2a0a906d8d752a4937d58a4f7fe1f2d264c46d197b611950082b07a",
+        "mutated_sha256": "588de933be4fdfe8bc404e4dff9718fde242616de112093c38eae182bb44ea8a",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/committed-callers-not-activated/mobile-web-shell-session-effects.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/committed-callers-not-activated/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/committed-callers-not-activated/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/mobile-web-shell-session-effects.test.ts",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/committed-callers-not-activated/vitest.config.mts",
+          "-t",
+          "commits once when two downloads of the same build finish together"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "One caller event arrived instead of the required staged/activated sequence.",
+        "runtime_log_sha256": "b0c9e617b83101b22a2fa1ec079d1198f8c8a7cf03e91f3cfc0de3f0e7af04fc",
+        "vite_config_sha256": "2de8c9d105405bd10c4f0e9b24692a8f0d76449b9b1aed572614f3ca45f83ef1"
+      },
+      {
+        "name": "delete-cache-does-nothing",
+        "target": "src/mobile-web-shell/generation-store.ts",
+        "test": "src/mobile-web-shell/mobile-web-shell-update-failure-log.test.ts",
+        "title_filter": "outlives the host's own cache",
+        "source_sha256": "3409c3d844bbce6e6dc0162fa9da152fdce31b3ed6c0092c059ab93a46ac3e1e",
+        "mutated_sha256": "bd5d18bda73011288befc729dd47eec2135d2f1c6d53d8e78caab7b75a46a0ea",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-does-nothing/generation-store.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-does-nothing/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-does-nothing/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/mobile-web-shell-update-failure-log.test.ts",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-does-nothing/vitest.config.mts",
+          "-t",
+          "outlives the host's own cache"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "The seeded host subtree still existed after deleteHostCache.",
+        "runtime_log_sha256": "3c959f1b670989a98f518b248676c63525e2a00d1a20d99859277dd0ed07e1ff",
+        "vite_config_sha256": "21359756f4d5828d44210584bd534c5722026514a7c24e78058c94c5882cfa9e"
+      },
+      {
+        "name": "delete-cache-loses-global-failure-log",
+        "target": "src/mobile-web-shell/generation-store.ts",
+        "test": "src/mobile-web-shell/mobile-web-shell-update-failure-log.test.ts",
+        "title_filter": "outlives the host's own cache",
+        "source_sha256": "3409c3d844bbce6e6dc0162fa9da152fdce31b3ed6c0092c059ab93a46ac3e1e",
+        "mutated_sha256": "895c158fa2615d26d25a29bc6f01ff25200efa43f0791429342c46a9b44d2fcd",
+        "mutation_source": "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-loses-global-failure-log/generation-store.ts",
+        "config": "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-loses-global-failure-log/vitest.config.mts",
+        "log": "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-loses-global-failure-log/runtime.log",
+        "command": [
+          "pnpm",
+          "exec",
+          "vitest",
+          "run",
+          "src/mobile-web-shell/mobile-web-shell-update-failure-log.test.ts",
+          "--config",
+          "/tmp/orca-mobile-0007-implementation/mutations/delete-cache-loses-global-failure-log/vitest.config.mts",
+          "-t",
+          "outlives the host's own cache"
+        ],
+        "exit_code": 1,
+        "detected_by_test_assertion": true,
+        "tracked_production_unchanged": true,
+        "method": "Vite pre-transform substitutes a /tmp source copy in memory; tracked production bytes are never written.",
+        "assertion_outcome": "The global failure log was empty instead of containing the exact original failure.",
+        "runtime_log_sha256": "f4cc10c5cc8e7ad9139e12ac235606a578d18b2401faf3b77059e1f5be6ba1c8",
+        "vite_config_sha256": "38f0e135b7d8dd5102d0181b2563a5054515376f9f55a6ae5c0a001e8e4b2a12"
+      }
+    ]
+  },
+  "limitations": [
+    "No actual mobile device or visible/native renderer was launched.",
+    "No native disk, live RPC/network, historical binaries, microphone capture or OS focus behavior was validated.",
+    "Fake endpoints and in-memory filesystems establish the specifically documented logical behavior.",
+    "Full mobile typecheck remains red for 556 unchanged pre-existing errors."
+  ],
+  "package_validation": {
+    "artifact": "package-self-check.json",
+    "status": "passed",
+    "checks_passed": 1267,
+    "scope": "/tmp-only artifact validation; no tracked checkout reads or writes"
+  },
+  "original_frozen_delivery": {
+    "path": "/tmp/orca-mobile-0007",
+    "manifest_sha256": "d247318b1f6a45de5a1321544cc5982134e3bc231a3854257797c70ea5863fd8",
+    "artifact_files": 186,
+    "all_original_artifact_hashes_unchanged": true
+  },
+  "artifact_sha256": {
+    "mobile-0007.jsonl": "93f43bbf1e0843d82eab0306afc3d963ad04cb5ef9465939a5c9874bbec066f4",
+    "original-domains.json": "11ac6d71990d880d738159e0729fe1241030646f03da8c7551de4bc6b96cfd39",
+    "implemented-domains.json": "264bfbfab7374efbd0a94493c57a1edf76526f0a7fb01a2245f8dac976b32314",
+    "original-registered-instances.json": "89d99a0128a814118a268b65242358851b550b2decaf9f8a0e69a64834eb3d8b",
+    "retained-instances.json": "da5d9f4ea1281723fb6d7168419678e9e34f90f2c2ecb40922137e4f6be4c651",
+    "case-mapping.json": "72f334c3e81b3283a70079a9fa5def58e1d305d40eae1708d436aa26cd3c6678",
+    "selected-final-manifest.json": "542704440fe32eee6456e3d2c51de033f1b2e92b93d12ceb988d76175d14f9fc",
+    "pre-edit-reconciliation.json": "fc504dacf06926f875f7ceeaf981fcf21db553343a513299a03514773ccc3184",
+    "runtime-results.json": "a9be37c112281651baa57d29025b6be6dd5873ba7a6f8900a5539c4a25696679",
+    "runtime-final.log": "1b905b10672ddf1e3e4f79663a526fd95b8c15ec176ea1a5fa53b26ee98def47",
+    "runtime-selection.json": "69edd815f842f486712eb0d2a879ab6d5ea45ac3d6852a9bfbaa284562098116",
+    "typecheck-baseline.json": "64a52305a486864f238f58f7620a52e31e50960ec49f01b80fb0ba225d8f2319",
+    "typecheck-current.json": "27b1effc3653cc9285eec072805ae30a1084ab6e6b481c1e88a39991587bd91e",
+    "typecheck-comparison.json": "0d01af85a7eaa473891a0be91293d0d8b69688200326c1a4bc2231362e701363",
+    "typecheck.log": "308d0d58f6f6c3970aeacf3bd41677531531635cd1c668b9e772acd48a8124bf",
+    "format-check.log": "ee4c62d2e3523942a9ab0cb740b726a05d3c535e4f583d81cf2d5f08fe476b51",
+    "lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "implemented.diff": "b732e4aa2ee62c6f9a16053adfb4e748b3425f8f9bf921390ec7943f96401ced",
+    "package-self-check.json": "5a7250936e526e0993d6349f7cdef4a47f6d735d13e869c9ca2df3e3e9779997",
+    "root-integrity.json": "7fcd190716a0654a3c8cb13af6e559ebf066f582fe080e94cb66ed7e3886da3e",
+    "implementation-authorization.txt": "559a1df4339094c95dcca9abf1e7236eec5696a3e2955cc3451d06a0d7768aa9"
+  },
+  "root_integration": {
+    "integration_base_commit": "18c27344d15c3d0bc253b43fa82ccfb937a50a86",
+    "agent_validation_sha256": "973319ab4414d639fd4193f602997cfafa69f4f1e4c8eeae017b7b5c6883feee",
+    "agent_manifest_sha256": "caeb9efa02d8f42f0bc1814c88cf8dc01a7f3fae16d3c80f9b6237764f56b03b",
+    "integrity": {
+      "records": 50,
+      "original_case_mappings": 499,
+      "final_case_mappings": 489,
+      "source_spans": 7274,
+      "resolved_parameter_rows": 30,
+      "evidence_references": 133,
+      "runtime": {
+        "selected": 530,
+        "extra": 18
+      },
+      "mutation_witnesses": 10,
+      "errors": []
+    },
+    "artifact_hashes_checked": 279,
+    "embedded_original_and_final_domains_verified": 50,
+    "upstream_main": "a4a0e605eef4a3864b572213f81c17ecb26ded2c",
+    "upstream_selected_or_recorded_evidence_drift": []
+  }
+}

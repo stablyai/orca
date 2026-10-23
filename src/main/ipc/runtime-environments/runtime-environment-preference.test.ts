@@ -91,6 +91,30 @@ describe('Active Server after a saved host is removed', () => {
     }
   })
 
+  it('keeps following the registry after earlier replacements', async () => {
+    const kept = saveEnvironment('kept')
+    const removed = saveEnvironment('removed')
+    const store = preferenceStore(removed.id)
+    const stopWatching = watchRuntimeEnvironmentPreference(store, userDataPath)
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      // Unrelated replacements move the registry to new inodes first.
+      saveEnvironment('first')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      saveEnvironment('second')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      expect(store.getSettings().activeRuntimeEnvironmentId).toBe(removed.id)
+
+      removeEnvironment(userDataPath, removed.id)
+      await vi.waitFor(() => expect(store.getSettings().activeRuntimeEnvironmentId).toBeNull(), {
+        timeout: 5_000
+      })
+      expect(listEnvironments(userDataPath).map(({ id }) => id)).toContain(kept.id)
+    } finally {
+      stopWatching()
+    }
+  })
+
   it('repairs a CLI removal before settings can route to the deleted pairing', () => {
     const environment = saveEnvironment()
     const store = preferenceStore(environment.id)

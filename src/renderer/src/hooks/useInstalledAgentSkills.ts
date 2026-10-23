@@ -12,9 +12,7 @@ import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
-  getRuntimeScopedSkillDiscoveryKey,
-  getSkillDiscoveryTargetKey,
-  resetSkillDiscoveryCacheForTests
+  getRuntimeScopedSkillDiscoveryKey
 } from './installed-agent-skill-discovery'
 import {
   getInstalledAgentSkillVerdict,
@@ -105,13 +103,6 @@ export function notifyInstalledAgentSkillsRefreshed(): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT))
   }
-}
-
-export const _installedAgentSkillDiscoveryInternalsForTests = {
-  discoverInstalledAgentSkills,
-  getSkillDiscoveryTargetKey,
-  isOrchestrationSkillName,
-  reset: resetSkillDiscoveryCacheForTests
 }
 
 export function useInstalledAgentSkill(

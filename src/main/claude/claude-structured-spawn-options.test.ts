@@ -35,7 +35,6 @@ describe('a Claude chat launched with its saved options', () => {
       model: 'opus',
       effort: 'high',
       settings: { fastMode: true },
-      // The base launch is kept whole.
       includePartialMessages: true,
       extraArgs: { 'replay-user-messages': null }
     })
@@ -46,8 +45,6 @@ describe('a Claude chat launched with its saved options', () => {
     })
   })
 
-  // A resolved id, a model newer than any listing Orca holds, a retired one: the CLI's own answer
-  // decides, and a turn's model-not-found error drops it then.
   it.each(['claude-sonnet-5', 'claude-next-9', 'claude-retired-1'])(
     'passes the saved model %s as it was picked',
     (model) => {
@@ -79,8 +76,7 @@ describe('a Claude chat launched with its saved options', () => {
     expect(spawn.fastModeAtStart).toBe(false)
   })
 
-  // The SDK writes the agent Arguments after its own options, so left in, the Arguments' flag would
-  // reach the CLI as a second `--model` after the chat's pick.
+  // SDK extraArgs follow its own flags, so configured flags would override saved choices.
   it("replaces the agent Arguments' model and effort with the chat's saved ones", () => {
     const base = {
       ...CLAUDE_STRUCTURED_BASE_OPTIONS,
@@ -95,11 +91,9 @@ describe('a Claude chat launched with its saved options', () => {
     expect(launched({ model: 'sonnet', effort: 'low' }, { base }).sdkOptions.extraArgs).toEqual({
       'replay-user-messages': null
     })
-    // With nothing saved, the Arguments decide.
     expect(launched({}, { base }).sdkOptions.extraArgs).toEqual(base.extraArgs)
   })
 
-  // One `--settings` reaches the CLI: the Arguments' file is kept, and the start applies Fast.
   it.each(['true', 'false'])(
     "keeps the agent Arguments' settings and leaves a saved Fast %s to the start",
     (fastMode) => {
@@ -116,7 +110,6 @@ describe('a Claude chat launched with its saved options', () => {
     }
   )
 
-  // The chat's permission mode is the launch's, never a saved option: the record keeps it whole.
   it.each(['full-access', 'plan', 'bypassPermissions'])(
     'leaves the launch permission alone with a saved permission mode %s',
     (permissionMode) => {

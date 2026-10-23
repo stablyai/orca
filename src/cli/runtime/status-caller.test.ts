@@ -20,10 +20,6 @@ type ReceivedRequest = RuntimeOrchestrationEnvelope & {
 
 type HostReply = { result: unknown } | { error: { code: string; message: string } }
 
-/**
- * The real `orca status` handler and CLI client over a real Unix socket. The host's side of
- * `orchestration.callerShow` is covered against the real dispatcher in orchestration-caller-show.
- */
 describe.skipIf(process.platform === 'win32')(
   "orca status reports a session caller's Orca session ID",
   () => {
@@ -124,7 +120,7 @@ describe.skipIf(process.platform === 'win32')(
 
       expect(await statusCaller()).toEqual(caller)
       const [request] = callerShowRequests()
-      // Nothing names the caller in params: the host reads the envelope, as every verb's entry does.
+      // Caller identity travels in the envelope, not caller-controlled params.
       expect(request?.params).toBeUndefined()
       expect(request?.orchestrationCompatibilityEvidence).toMatchObject({
         agentSessionId: SESSION,
@@ -144,7 +140,6 @@ describe.skipIf(process.platform === 'win32')(
       const text = await status(false)
 
       expect(printed.result).not.toHaveProperty('caller')
-      // The status text ends where main's does, with nothing about the caller.
       expect(text.split('\n').at(-1)).toMatch(/^graphState: /)
       expect(text).not.toMatch(/^(?:orcaSessionId|caller):/m)
       expect(callerShowRequests()).toHaveLength(0)

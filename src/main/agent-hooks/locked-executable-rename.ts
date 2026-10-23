@@ -2,11 +2,7 @@ import { existsSync, renameSync, rmSync } from 'node:fs'
 import { rename, rm, stat } from 'node:fs/promises'
 import { isPermissionError } from '../win32-utils'
 
-/**
- * Where a copy still running from the previous build is moved so the new file can take its name.
- * Windows refuses to replace a running executable but lets it be renamed; the next install deletes
- * the aside, and while the aside itself still runs, a further replacement throws.
- */
+/** Windows permits renaming a running executable aside so a new build can take its path. */
 export function getLockedExecutableAsidePath(targetPath: string): string {
   return `${targetPath}.old`
 }
@@ -54,7 +50,7 @@ export async function renameOverLockedTargetAsync(
     try {
       await rename(tmpPath, targetPath)
     } catch (placeError) {
-      // Same rollback as the sync path.
+      // Restore the registered path if placement fails.
       const targetExists = await stat(targetPath).then(
         () => true,
         () => false

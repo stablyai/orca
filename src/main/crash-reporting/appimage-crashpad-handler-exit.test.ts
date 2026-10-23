@@ -12,7 +12,6 @@ const PROC_EXECUTABLES: Record<string, string> = {
   '40': `${MOUNT}/chrome_crashpad_handler`,
   '41': `${MOUNT}/chrome_crashpad_handler`,
   '42': `${MOUNT}/orca-ide`,
-  // Another launch's mount, and a handler whose mount is already gone.
   '43': '/tmp/.mount_Orca-zzz999/chrome_crashpad_handler',
   '44': '/chrome_crashpad_handler'
 }
@@ -68,7 +67,7 @@ describe('installAppImageCrashpadHandlerExit', () => {
     ])
   })
 
-  // A deb/rpm handler binary is shared by every instance, so it must never be matched.
+  // Installed deb/rpm handler binaries are shared across launches and must never match.
   it('does not hook exit outside a validated AppImage', () => {
     expect(installExitHook(false)).toBeUndefined()
   })

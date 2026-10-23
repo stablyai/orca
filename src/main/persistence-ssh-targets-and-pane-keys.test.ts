@@ -17,7 +17,6 @@ import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-typ
 
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -69,10 +68,9 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {
-    // Why: hydration serves the persisted username without spawning git/gh (issue #7225); resolution happens in background enrichment.
+    // Hydration must use persisted usernames; Git/gh enrichment runs in background (#7225).
     const repo = makeRepo({ gitUsername: 'testuser' })
     writeDataFile({
       schemaVersion: 1,
@@ -213,7 +211,6 @@ describe('Store', () => {
       source: 'ssh-config'
     })
 
-    // normalizeSshTarget must not strip `source` on update and the new port must take effect (persistence-layer guard for #4684 item #1).
     const updated = store.updateSshTarget('ssh-src-1', { port: 2222, source: 'ssh-config' })
     expect(updated?.port).toBe(2222)
     expect(updated?.source).toBe('ssh-config')
@@ -291,7 +288,7 @@ describe('Store', () => {
       host: 'newer.example.com',
       port: 22,
       username: 'dev',
-      // A value from a newer build, which this one must not act on.
+      // Unknown future runtime values must remain inactive.
       ...JSON.parse('{"remoteRuntime":"auto"}')
     })
 
@@ -299,7 +296,6 @@ describe('Store', () => {
     const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
     const byId = (id: string) => persisted.sshTargets?.find((t) => t.id === id)
     expect(byId('ssh-runtime-pinned')?.remoteRuntime).toBe('pinned-node')
-    // An explicit Host Node choice must outlive a later default flip.
     expect(byId('ssh-runtime-host-node')?.remoteRuntime).toBe('legacy')
     expect(byId('ssh-runtime-unknown')).not.toHaveProperty('remoteRuntime')
   })
@@ -368,23 +364,20 @@ describe('Store', () => {
     const store = await createStore()
     const sshStore = new SshConnectionStore(store)
 
-    // First sync inserts the config host, stamped as config-managed.
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2200, 'ssh-cfg-1'))
     const inserted = sshStore.importFromSshConfig()
     expect(inserted).toHaveLength(1)
     expect(inserted[0]?.source).toBe('ssh-config')
     expect(inserted[0]?.port).toBe(2200)
-    // Rotated port: upsert updates the same target in place and normalizeSshTarget must keep `source` (no false re-derive into a permanently-dirty state).
+    // Keep config ownership during port rotation so repeated imports do not dirty the profile.
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
     const changed = sshStore.importFromSshConfig()
     expect(changed).toHaveLength(1)
     expect(changed[0]?.port).toBe(2222)
     expect(changed[0]?.source).toBe('ssh-config')
 
-    // A third identical sync is a no-op — repeated auto-sync on every pane open writes nothing.
     expect(sshStore.importFromSshConfig()).toHaveLength(0)
 
-    // Exactly one cluster target on disk with the rotated port and source kept.
     store.flush()
     const onDisk = (readDataFile() as { sshTargets?: Record<string, unknown>[] }).sshTargets
     const clusterTargets = (onDisk ?? []).filter((t) => t.configHost === 'cluster')
@@ -392,7 +385,6 @@ describe('Store', () => {
     expect(clusterTargets[0]?.port).toBe(2222)
     expect(clusterTargets[0]?.source).toBe('ssh-config')
 
-    // Survives a fresh load from the same data file.
     const reloaded = await createStore()
     const reloadedCluster = reloaded.getSshTargets().find((t) => t.configHost === 'cluster')
     expect(reloadedCluster?.port).toBe(2222)

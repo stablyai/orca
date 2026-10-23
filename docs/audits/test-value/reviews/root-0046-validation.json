@@ -1,0 +1,26 @@
+{
+  "batch": "root-0046",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 1,
+  "case_records": 18,
+  "production_changes": false,
+  "test_source_changes": false,
+  "review_scope": "Read every proof/fixture/config body and parameter loop. Record all expanded manual controls and actual source fences; supporting permanent suites are evidence only unless independently reviewed.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node docs/audits/terminal-wait-leading-blank/reproduce.mjs",
+      "working_directory": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-5",
+      "result": "current helper/support reads and baseline anchors succeed, then runner build rejects removed src/shared/child-process/run-process.ts; no child cases executed.",
+      "log": "/tmp/orca-root-0046-leading-blank.log"
+    }
+  ],
+  "limitations": [
+    "Historical process-runner dependency blocks current comparison; no hang reproduced this run.",
+    "Child termination/output evidence concerns a helper loop, not retained bytes or incident attribution."
+  ],
+  "integrity": {
+    "records_sha256": "d40c83c61da5c344c5fc9e531e947be04bb53aafeafd8273720cc725e80e5af8",
+    "original_and_final_hashes_verified": true
+  }
+}

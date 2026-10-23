@@ -16,6 +16,7 @@ import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsS
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
+import { BrowserProfileScopeSetting } from './BrowserProfileScopeSetting'
 import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
 import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -117,6 +118,7 @@ export function BrowserPane({
   const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[9]])
   const showUserAgent = matchesSettingsSearch(searchQuery, [browserSearchEntries[10]])
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
+  const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -282,6 +284,10 @@ export function BrowserPane({
           settings={settings}
           updateSettings={updateSettings}
         />
+      ) : null}
+
+      {showProfileScope ? (
+        <BrowserProfileScopeSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showClientHostedRemote || showSshWorkspaceRouting ? (

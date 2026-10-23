@@ -106,7 +106,6 @@ it('keeps the session\u2019s stored name, counts tokens, and skips internal turn
       title: 'Release prep',
       model: 'claude-haiku-4-5',
       messages: [
-        // display_role background_task is StoredDisplayRole::BackgroundTask.
         { id: 'm0', role: 'user', display_role: 'background_task', content: 'internal' },
         { id: 'm1', role: 'user', content: '[Scheduled task] nightly sweep' },
         {

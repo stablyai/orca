@@ -8,11 +8,11 @@
     "build": "pnpm clean && tsc -p tsconfig.build.json",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "dev": "tsx watch src/index.ts",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "pretest": "pnpm --filter @orca-cloud/postgres-schema build && pnpm --filter @orca-cloud/relay-contract build",
+    "lint": "pnpm typecheck",
+    "pretest": "pnpm --dir ../.. build:process-host && pnpm --filter @orca-cloud/postgres-schema build && pnpm --filter @orca-cloud/relay-contract build",
     "start": "node dist/index.js",
     "test": "node --import tsx --conditions=orca-source ../../dev/scripts/run-relay-tests.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "pnpm --dir ../.. build:process-host && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

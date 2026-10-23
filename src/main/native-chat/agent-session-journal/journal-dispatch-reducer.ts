@@ -22,7 +22,7 @@ export function applyJournalDispatchRow(
   row: Extract<JournalRow, { kind: 'dispatch' }>
 ): void {
   const submission = state.submissions.get(row.clientMessageId)
-  // Shared with the queued-draft returned hook: a row ignored here must not alter a draft.
+  // Shared with the queue's fold: a row ignored here must not alter a card.
   if (!submission || !journalDispatchRowApplies(submission)) {
     return
   }
@@ -107,7 +107,7 @@ function readAnsweredTurn(value: unknown): AgentJournalAnsweredTurn | null {
 
 /** A stored rejection fact, read where it can be placed; a kind it cannot place is kept as
  *  written, so the classifier still knows a fact was there without this build claiming what it
- *  says. Shared with the queued-draft table, whose returned card mirrors its submission. */
+ *  says. Shared with the queue's fold, whose returned card carries its hand-off's. */
 export function readStoredRejectionFact(value: unknown): UnreadAgentSessionFailureFact | undefined {
   return readAgentSessionFailureFact(value) ?? unreadFailureFact(value)
 }

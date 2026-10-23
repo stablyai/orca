@@ -65,7 +65,6 @@ describe('LegacyRestoreRecords', () => {
 
   it('keeps the newest records within its bound and forgets old ones', () => {
     const records = open()
-    // A storm refusing as many restores as the host could run keeps every handle.
     for (let i = 0; i < DEFAULT_MAX_HOST_TERMINALS + 8; i++) {
       records.record(details({ command: `claude --resume ${i}` }), 'pressure')
     }

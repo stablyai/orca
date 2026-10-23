@@ -72,8 +72,7 @@ export type RuntimeApi = {
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
-    // Why optional: matches onNativeChatLaunchDraftResolved — a renderer running against an older
-    // preload keeps working without the retention signal instead of throwing on every mount.
+    // Older preloads lack this signal.
     onBrowserRemoteViewersChanged?: (
       callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
     ) => () => void
@@ -129,7 +128,7 @@ export type RuntimeApi = {
     prepareBrowserClientHostPlacement: (
       args: BrowserClientHostPlacementPreparationRequest
     ) => Promise<BrowserPageCreationPlacement>
-    // Why: system resume / browser online advance pending shared-control reconnect timers only.
+    // Resume/online events advance only pending shared-control reconnect timers.
     retryConnectionsNow?: () => Promise<void>
     call: (args: {
       selector: string
@@ -157,9 +156,9 @@ export type RuntimeApi = {
         onClose?: () => void
       }
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
-    // Why optional: only the desktop preload deploys servers over SSH.
+    // Only desktop clients deploy servers over SSH.
     managedOrcad?: ManagedOrcadPreloadApi
-    // Why optional: only a Windows desktop (or the e2e fake) has WSL distros to host.
+    // Only Windows desktops (or e2e fakes) host WSL distros.
     wslHosts?: WslHostsPreloadApi
   }
   wsl: {

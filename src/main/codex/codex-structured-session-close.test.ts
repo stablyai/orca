@@ -154,7 +154,6 @@ describe('Codex structured session close lifecycle', () => {
       })
     ).toBe(true)
     await Promise.resolve()
-    // The exit is observed: the refused row is the host's to settle, and nothing waits on a turn.
     expect(session.ended).toBe(true)
     expect(released).toBe(true)
   })

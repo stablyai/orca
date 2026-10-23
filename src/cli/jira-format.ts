@@ -99,7 +99,6 @@ export function formatJiraCommentList(comments: JiraComment[]): string {
     .join('\n\n')
 }
 
-// Why: the handler throws on ok:false, so only successful creates reach here.
 export function formatJiraCreate(result: Extract<JiraCreateIssueResult, { ok: true }>): string {
   return [`Created ${result.key}`, `URL: ${result.url}`].join('\n')
 }

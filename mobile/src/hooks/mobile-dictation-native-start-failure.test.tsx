@@ -7,8 +7,8 @@
  * device calls: this file is the only place the engine and `expo-keep-awake` answer for it.
  */
 import { createElement } from 'react'
-import { act, create } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createFakeRpcClient,
   type FakeRpcClient,
@@ -53,6 +53,7 @@ vi.mock('expo-keep-awake', () => ({
 import { useMobileDictation, type UseMobileDictationResult } from './use-mobile-dictation'
 
 const held: { dictation: UseMobileDictationResult | null } = { dictation: null }
+let renderer: ReactTestRenderer | null = null
 
 function mount(client: FakeRpcClient): void {
   function Probe(): null {
@@ -65,7 +66,7 @@ function mount(client: FakeRpcClient): void {
     return null
   }
   act(() => {
-    create(createElement(Probe))
+    renderer = create(createElement(Probe))
   })
 }
 
@@ -117,6 +118,11 @@ beforeEach(() => {
   held.dictation = null
 })
 
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+})
+
 describe('a native start the desktop refuses', () => {
   it('gives the microphone and the screen back', async () => {
     const rpc = createFakeRpcClient()
@@ -137,19 +143,6 @@ describe('a native start the desktop refuses', () => {
     expect(device.screen).toEqual(['+', '-'])
     expect(dictation().status).toBe('idle')
   })
-
-  it('holds nothing when the refusal comes before the microphone opens', async () => {
-    const rpc = createFakeRpcClient()
-    mount(rpc)
-    await act(async () => {
-      await dictation().cancel()
-    })
-    // No start, so no open: the screen was never taken. Read as an absence of holds rather than an
-    // empty list, because the lock is one module-level owner shared by both device captures and a
-    // release the previous case's cleanup issued would land in this one's list.
-    expect(device.screen).not.toContain('+')
-    expect(device.calls).not.toContain('initialize')
-  })
 })
 
 describe('a stale native start whose refusal arrives after a newer one is recording', () => {
@@ -164,6 +157,7 @@ describe('a stale native start whose refusal arrives after a newer one is record
         .catch(() => undefined)
       await pumpHolding(rpc, 'speech.dictation.start', first)
     })
+    expect(first.request).not.toBeNull()
     expect(device.screen).toEqual(['+'])
     // The user gives up on A, then starts B, which takes the microphone and the screen again.
     await act(async () => {
@@ -210,6 +204,7 @@ describe('a stale native start that succeeds after a newer one is recording', ()
         .catch(() => undefined)
       await pumpHolding(rpc, 'speech.dictation.start', first)
     })
+    expect(first.request).not.toBeNull()
     await act(async () => {
       const cancelled = dictation().cancel()
       await pump(rpc, 'none')

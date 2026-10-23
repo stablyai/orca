@@ -404,7 +404,6 @@ describe('CodexAccountService config sync', () => {
       createRuntimeHome() as never
     )
 
-    // The orphan pending attempt wedges the target-scoped default reset until removal.
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
 
     await service.removeAccount('account-1')

@@ -1,5 +1,6 @@
 import type { RuntimeMobileSessionBrowserTab } from '../../shared/runtime-types'
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
+import { browserLoadErrorsEqual } from '../../shared/browser-load-failure'
 
 // Why: change detection for headless browser tabs. Compares the fields that
 // actually vary (a JSON.stringify equality was order-sensitive and silently
@@ -34,25 +35,6 @@ export function headlessBrowserTabsUnchanged(
       browserCertificateFailuresEqual(tab.certificateFailure, prev.certificateFailure)
     )
   })
-}
-
-export function browserLoadErrorsEqual(
-  a: RuntimeMobileSessionBrowserTab['loadError'],
-  b: RuntimeMobileSessionBrowserTab['loadError']
-): boolean {
-  const left = a ?? null
-  const right = b ?? null
-  if (left === right) {
-    return true
-  }
-  if (!left || !right) {
-    return false
-  }
-  return (
-    left.code === right.code &&
-    left.description === right.description &&
-    left.validatedUrl === right.validatedUrl
-  )
 }
 
 export function browserCertificateFailuresEqual(

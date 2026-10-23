@@ -86,7 +86,6 @@ describe('superviseServeService', () => {
     const record = readServeSupervisorBrake(userDataPath)
     expect(record?.gaveUp?.reason).toContain('exited with code 1')
 
-    // A restart by the service manager must not start the loop again.
     let rerun = 0
     const again = harness({
       userDataPath,

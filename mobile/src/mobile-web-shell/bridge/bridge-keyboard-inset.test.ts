@@ -1,8 +1,24 @@
-import { describe, expect, it } from 'vitest'
-import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createFakeBridgePortPair as createPair } from './bridge-port-pair-test-harness'
 import { readBridgeHostMessage } from './bridge-envelope'
 import { createBridgeInitFrame } from './bridge-init-frame'
 import { readShellSession } from './bridge-client-session'
+
+const resources = new Set<ReturnType<typeof createPair>>()
+function createFakeBridgePortPair(
+  ...args: Parameters<typeof createPair>
+): ReturnType<typeof createPair> {
+  const resource = createPair(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+    resource.host.dispose()
+  }
+  resources.clear()
+}
 
 function initFrame(keyboardInset?: number) {
   return createBridgeInitFrame({
@@ -36,21 +52,19 @@ function readInit(json: string) {
 
 describe('keyboardInset on init', () => {
   it('reads an init without the field as 0, which is every shell before it', () => {
-    const init = readInit(JSON.stringify(initFrame()))
-    expect('keyboardInset' in init).toBe(false)
-    expect(readShellSession(init).keyboardInset).toBe(0)
+    for (const value of [undefined, 0]) {
+      const init = readInit(JSON.stringify(initFrame(value)))
+      expect('keyboardInset' in init).toBe(false)
+      expect(readShellSession(init).keyboardInset).toBe(0)
+    }
   })
 
   it('passes the keyboard height through to the session the page holds', () => {
     expect(readShellSession(readInit(JSON.stringify(initFrame(312)))).keyboardInset).toBe(312)
   })
 
-  it('omits 0, since absent and closed are the same answer', () => {
-    expect('keyboardInset' in initFrame(0)).toBe(false)
-  })
-
-  it('refuses an init whose keyboard no device produces', () => {
-    for (const bad of [-1, 1e9, Number.NaN, '312']) {
+  it('refuses negative, oversized, null and string keyboard heights', () => {
+    for (const bad of [-1, 1e9, null, '312']) {
       const frame = { ...initFrame(), keyboardInset: bad }
       expect(readBridgeHostMessage(JSON.stringify(frame)).ok, String(bad)).toBe(false)
     }
@@ -64,7 +78,7 @@ describe('a keyboard that moves under a live page', () => {
     const session = pair.client.getShellSession()
     expect(session?.keyboardInset).toBe(0)
     const seen: number[] = []
-    pair.client.onKeyboardInsetUpdate((height) => seen.push(height))
+    const unsubscribe = pair.client.onKeyboardInsetUpdate((height) => seen.push(height))
 
     // Pixel_API_37: the IME opens at 312, the suggestion strip grows it by 34, then it closes.
     for (const height of [312, 346, 0]) {
@@ -73,6 +87,7 @@ describe('a keyboard that moves under a live page', () => {
       expect(pair.client.getShellSession()?.keyboardInset).toBe(height)
     }
     expect(seen).toEqual([312, 346, 0])
+    unsubscribe()
     // Same session: a keyboard update is not a replacement.
     expect(pair.client.getShellSession()?.sessionId).toBe(session?.sessionId)
     expect(pair.client.getShellSession()?.route).toEqual(session?.route)
@@ -89,3 +104,5 @@ describe('a keyboard that moves under a live page', () => {
     expect(pair.client.getShellSession()?.keyboardInset).toBe(312)
   })
 })
+
+afterEach(closeResources)

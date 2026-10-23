@@ -1,7 +1,3 @@
-// The ACP adapter behind the real host: the host's own order (a fresh sink per start, bound only
-// once the start proved its owner; Close and Stop reaching a start from outside the session's
-// queue), with a scripted Grok, the real record store and an on-disk journal.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
@@ -35,8 +31,7 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-/** On every reopen, Grok sends what its load may carry: the saved `reply` marked as replay, and a
- *  task the dead process left running, ended by the restart. */
+/** Replay history and end the task left behind by the prior process. */
 function loads(reply: string, count: { loads: number }) {
   return (agent: AcpScriptedAgent) =>
     agent.on('session/load', (frame) => {
@@ -93,7 +88,6 @@ describe('reopening a Grok chat through the host', () => {
     await ready()
     resumed = true
     await exchange('complete', false)
-    // Grok dies mid-reply; the host ends its record, which moves the chat's fence.
     const cutAt = fence()
     rig.child().exit()
     await waitFor(() => expect(fence()).toBeGreaterThan(cutAt))
@@ -105,7 +99,6 @@ describe('reopening a Grok chat through the host', () => {
     expect(rows.flatMap((row) => readAgentJournalTurn(row.body)?.state ?? [])).not.toContain(
       'completed'
     )
-    // The transcript explains the cut the way a Claude or Codex chat's does.
     const transcript = withNativeChatCutTurnNotices(rows, { agentName: 'Grok' })
     expect(
       transcript.some(
@@ -135,7 +128,7 @@ describe('a Grok crash whose exit is not proven yet', () => {
       return proves
     }
     child.stderr = 'panic: out of memory'
-    // Both pipes close as the process dies, before its exit is seen.
+    // Model pipes closing before the process exit is observed.
     child.agent.close()
     await rig.settle()
     const next = await send(host, 'next')
@@ -155,7 +148,6 @@ describe('a Grok crash whose exit is not proven yet', () => {
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
     const transcript = withNativeChatCutTurnNotices(await rows(), { agentName: 'Grok' })
-    // The crash's own notice, as for any crash; not a Stop's.
     expect(
       transcript.flatMap((row) =>
         row.body.kind === 'status'
@@ -206,7 +198,6 @@ describe('closing or stopping a Grok chat while it starts', () => {
     const attaching = host.attach(CALLER, attachParams())
     await rig.frame('initialize')
     const stopping = host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
-    // With no close behind it.
     await waitFor(() => expect(rig.child().exited).toBe(true))
     expect((await attaching).ok).toBe(true)
     expect(await stopping).toMatchObject({ ok: true })
@@ -224,7 +215,6 @@ describe('closing or stopping a Grok chat while it starts', () => {
       }
     })
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
-    // The chat closes; the next send has to start Grok again, and that start never answers.
     await host.close(SESSION, 'user-close')
     await host.send(CALLER, {
       envelope: envelope('agentSession.send', { body: hello }),
@@ -297,7 +287,7 @@ describe('a Grok send whose acceptance could not be written', () => {
     vi.spyOn(journal, 'acceptLate').mockRejectedValue(new Error('disk full'))
     const sent = await send(host, 'hello')
     const prompt = await rig.frame('session/prompt')
-    // Grok names the prompt only with its first frame: until then it holds the send.
+    // The first provider frame supplies prompt identity and proves acceptance.
     await waitFor(() => expect(host.currentWork(SESSION)?.working()).toBe(true))
 
     rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'hi'))
@@ -305,7 +295,7 @@ describe('a Grok send whose acceptance could not be written', () => {
     await rig.settle()
 
     await waitFor(() => expect(host.currentWork(SESSION)?.working()).toBe(false))
-    // The acceptance never landed: the row is still the handover's alone.
+    // Rejected journal admission leaves the send pending.
     expect(
       (await host.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === sent)
     ).toMatchObject({ dispatchState: 'pending' })

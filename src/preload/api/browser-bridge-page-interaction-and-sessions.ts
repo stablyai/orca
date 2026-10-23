@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
+import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
 import type { GrabIntent } from '../../shared/browser-grab-types'
 import type {
   BrowserSitePermission,
@@ -131,6 +132,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:prepareSshWorkspacePartition', args),
   sessionCreateProfile: (args: { scope: 'default' | 'isolated' | 'imported'; label: string }) =>
     ipcRenderer.invoke('browser:session:createProfile', args),
+  sessionEnsureManagedProfile: (args: { owner: ManagedBrowserProfileOwner; label: string }) =>
+    ipcRenderer.invoke('browser:session:ensureManagedProfile', args),
   identityGet: () => ipcRenderer.invoke('browser:identity:get'),
   identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>

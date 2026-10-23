@@ -1,13 +1,11 @@
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
 
-// Why match the text: every host version refuses an undecided `ask` create with exactly this
-// message and the generic runtime_error code, so it is the only stable signal.
+// Hosts use generic runtime_error here; this message is the stable discriminator.
 const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'
 const SETUP_DECISION_NEXT_STEP =
   'Pass --setup run to run the setup script, or --setup skip to create without it.'
 
-/** Why here, not on the host: desktop and phone choose setup in their own UI, so the host's
- *  shared refusal names no flag; only the CLI user answers it with --setup. */
+/** Only the CLI answers setup prompts with --setup; desktop and mobile have their own UI. */
 export async function withSetupDecisionRecovery<T>(
   create: Promise<T>,
   replayingLaunch = false

@@ -1,6 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge-caps'
-import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
+import { createFakeBridgePortPair as createPair } from './bridge-port-pair-test-harness'
+
+const resources = new Set<ReturnType<typeof createPair>>()
+function createFakeBridgePortPair(
+  ...args: Parameters<typeof createPair>
+): ReturnType<typeof createPair> {
+  const resource = createPair(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+    resource.host.dispose()
+  }
+  resources.clear()
+}
 
 /**
  * A frame the page cannot serialize, which is a send that failed and not an exception.
@@ -26,12 +42,6 @@ function cyclicParams(): Record<string, unknown> {
   return params
 }
 
-/**
- * How many requests this client still accepts, read by filling past the cap and counting refusals.
- *
- * A macrotask rather than a flush: the cap answers with a rejected promise, and a microtask drain
- * races the rejection against the assertion that reads it.
- */
 async function acceptedRequestCount(client: {
   sendRequest: (method: string, params?: unknown) => Promise<unknown>
 }): Promise<number> {
@@ -42,16 +52,30 @@ async function acceptedRequestCount(client: {
       refusals.push(error.name)
     })
   }
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await Promise.resolve()
+  await Promise.resolve()
   return attempts - refusals.filter((name) => name === 'BridgeClientCapExceededError').length
 }
 
+const unserializable = [
+  { name: 'cycle', params: cyclicParams },
+  { name: 'BigInt', params: () => ({ count: 1n }) },
+  {
+    name: 'throwing toJSON',
+    params: () => ({
+      toJSON() {
+        throw new Error('cannot serialize')
+      }
+    })
+  }
+]
+
 describe('a request frame the page cannot serialize', () => {
-  it('rejects as a send failure and says so on the diagnostic channel', async () => {
+  it.each(unserializable)('rejects $name as a send failure and reports it', async ({ params }) => {
     const pair = createFakeBridgePortPair()
     await pair.flush()
 
-    const rejection = await pair.client.sendRequest('git.status', cyclicParams()).then(
+    const rejection = await pair.client.sendRequest('git.status', params()).then(
       () => null,
       (error: unknown) => error
     )
@@ -66,21 +90,21 @@ describe('a request frame the page cannot serialize', () => {
     expect(pair.readToShell().filter((message) => message.type === 'request')).toEqual([])
   })
 
-  it('gives the in-flight slot back, so the client is not one request poorer', async () => {
-    const pair = createFakeBridgePortPair()
-    await pair.flush()
-    void pair.client.sendRequest('git.status', cyclicParams()).catch(() => undefined)
+  it.each(unserializable)(
+    'restores the whole request capacity after $name fails',
+    async ({ params }) => {
+      const pair = createFakeBridgePortPair()
+      await pair.flush()
+      void pair.client.sendRequest('git.status', params()).catch(() => undefined)
 
-    // The whole cap, not one short of it. 63 here is the defect: the id opened for the frame that
-    // never serialized is still in the pending map, and nothing will ever settle it.
-    expect(await acceptedRequestCount(pair.client)).toBe(BRIDGE_MAX_PENDING_REQUESTS)
-  })
-
-  it('accepts the same count on a client that sent no such frame', async () => {
-    // The control. Without it the case above also passes against a client whose cap moved, which is
-    // a different change with the same number in it.
-    const pair = createFakeBridgePortPair()
-    await pair.flush()
-    expect(await acceptedRequestCount(pair.client)).toBe(BRIDGE_MAX_PENDING_REQUESTS)
-  })
+      // The whole cap, not one short of it. 63 here is the defect: the id opened for the frame that
+      // never serialized is still in the pending map, and nothing will ever settle it.
+      const clean = createFakeBridgePortPair()
+      await clean.flush()
+      expect(await acceptedRequestCount(clean.client)).toBe(BRIDGE_MAX_PENDING_REQUESTS)
+      expect(await acceptedRequestCount(pair.client)).toBe(BRIDGE_MAX_PENDING_REQUESTS)
+    }
+  )
 })
+
+afterEach(closeResources)

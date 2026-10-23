@@ -1,6 +1,3 @@
-// Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
-// Orca's script while the presence gate skips install() forever. These tests pin the
-// repair — existing scripts come current, missing ones are never created.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import {
@@ -41,7 +38,6 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-// Why: stands in for asking a real Codex for its hook hashes, as the grant stub once did.
 vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: async () =>
@@ -125,8 +121,7 @@ describe('managed hook script refresh', () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-refresh-'))
     homedirMock.mockReturnValue(home)
     try {
-      // Why: the bug population has a script (from a past install) but no reachable
-      // CLI — and possibly no config dir Orca may create. Seed only the script.
+      // Simulate a prior install whose CLI and provider config directory are now absent.
       const hooksDir = join(home, '.orca', 'agent-hooks')
       mkdirSync(hooksDir, { recursive: true })
       writeFileSync(join(hooksDir, 'claude-hook.cmd'), STALE_WINDOWS_HOOK)
@@ -136,9 +131,7 @@ describe('managed hook script refresh', () => {
       const refreshed = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8')
       expect(refreshed).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0')
       expect(refreshed).not.toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" goto')
-      // Why: refresh must not resurrect config for a CLI the user may have removed.
       expect(existsSync(join(home, '.claude'))).toBe(false)
-      // Why: the statusline script was never installed here, so it must not appear.
       expect(existsSync(join(hooksDir, 'claude-statusline.cmd'))).toBe(false)
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
@@ -156,7 +149,6 @@ describe('managed hook script refresh', () => {
     delete process.env.KIMI_CODE_HOME
     delete process.env.XDG_CONFIG_HOME
     try {
-      // Why awaited: the Codex installer waits for Codex's hook hashes before it writes.
       await withPlatform('win32', async () => {
         for (const [, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
           await install()
@@ -166,16 +158,12 @@ describe('managed hook script refresh', () => {
       const files = readdirSync(hooksDir)
       expect(files.length).toBeGreaterThan(0)
       const refresherAgents = MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS.map(([agent]) => agent)
-      // Why: an installer that writes a shared launcher but skips the refresher list would
-      // recreate the frozen-stale-script class this suite exists to prevent.
       for (const file of files) {
         expect(
           refresherAgents.some((agent) => file.startsWith(`${agent}-`)),
           `${file} is written to ~/.orca/agent-hooks but no refresher owns it`
         ).toBe(true)
       }
-      // Why: the reverse direction — a refresher naming an agent that writes nothing is a
-      // stale registry entry, likely a renamed script file.
       for (const agent of refresherAgents) {
         expect(
           files.some((file) => file.startsWith(`${agent}-`)),
@@ -212,7 +200,6 @@ describe('managed hook script refresh', () => {
           await expect(refresh(), `${agent} refresh on empty home`).resolves.toBeUndefined()
         }
       })
-      // Why: a refresh pass on a machine with no prior installs must be a strict no-op.
       expect(readdirSync(home)).toEqual([])
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())

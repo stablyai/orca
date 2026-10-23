@@ -1,0 +1,6181 @@
+{
+  "batch": "main-0002",
+  "mode": "implemented-and-validated",
+  "source_commit": "41b5cf015be7970a23e91d4ce76d52d781db4e1b",
+  "reconciled_source_commit": "f1157821ce03d7c59323f95a4bac521f13bb841e",
+  "selected_files": 50,
+  "selected_bytes": 353205,
+  "selected_lines": 9326,
+  "original_case_declarations": 337,
+  "case_decisions": {
+    "keep": 298,
+    "fix": 37,
+    "consolidate": 2,
+    "remove": 0
+  },
+  "auxiliary_files_without_cases": [
+    "src/main/agent-hooks/agent-hook-memory-sftp.test-fixture.ts",
+    "src/main/agent-hooks/claude-cancel-capture.test-fixture.ts",
+    "src/main/agent-hooks/claude-terminal-interrupt-capture.test-fixture.ts"
+  ],
+  "supporting_snapshots": 75,
+  "resolver_snapshots": 76,
+  "source_reconciliation_all_unchanged": false,
+  "repo_test_suites_run": 51,
+  "typechecks_run": 1,
+  "controls": {
+    "files": 50,
+    "parameter_groups": 37,
+    "parameter_rows": 127,
+    "loops": 34,
+    "loop_literal_rows": 38,
+    "generated_policy_values": 1260,
+    "named_functions": 117,
+    "explicit_array_literals": 632,
+    "expanded_parameter_cases": 437,
+    "notes": "Parameter products include nested describe.each ownership; in-body loops are workload/control inputs rather than additional test cases. Source expressions remain exact when runtime collection values cannot be statically known."
+  },
+  "integration_status": "All 50 selected files implemented or retained, 47 runnable suites and four fixture-consumer suites validated; final hashes verified.",
+  "remaining_validation": [
+    "Audit 8 PR aggregate and platform CI after the PR is opened."
+  ],
+  "phase": "implemented-and-validated",
+  "original_declarations": 337,
+  "final_declarations": 335,
+  "baseline_runtime_cases": 437,
+  "reviewed_runtime_cases": 438,
+  "commands": [
+    {
+      "name": "baseline",
+      "exit_code": 0,
+      "passed": 437,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/orca-audit8-main-baseline.json",
+      "report_sha256": "473df185df973a495cb651603e06a7df2c5c69d8e5551c60e7e61f97b1814671",
+      "log": "/tmp/orca-audit8-main-baseline.log",
+      "log_sha256": "d98d1a8df94a98b0d63da206d969f88d7e616581207c3a66eca618e848359ff6"
+    },
+    {
+      "name": "reviewed",
+      "exit_code": 0,
+      "passed": 438,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/orca-audit8-main-reviewed.json",
+      "report_sha256": "c56b7fa4adcb6ccb4a6fc8974554eb16f2cd4c735aaba0b32920bb0b9d9a671d",
+      "log": "/tmp/orca-audit8-main-reviewed.log",
+      "log_sha256": "f4fd9a1c14c341a9721d08db9f4fec770ac4e9ae1eec0f7800098aefe21ff9b2"
+    },
+    {
+      "name": "final-affected-and-fixture-consumers",
+      "exit_code": 0,
+      "passed": 72,
+      "failed": 0,
+      "skipped": 0,
+      "report": "/tmp/orca-audit8-main-final-affected.json",
+      "report_sha256": "09c60966446fbe2e6d175e2313f38e43201b2d46f598eabe8e4224478978e57d",
+      "log": "/tmp/orca-audit8-main-final-affected.log",
+      "log_sha256": "3c477ec2b329d330b09df3670b8ed8a83c8bc26795ed6ced41d04cd1dfc77668"
+    },
+    {
+      "name": "typecheck",
+      "exit_code": 0,
+      "log": "/tmp/orca-audit8-main-typecheck.log",
+      "log_sha256": "8efc13c1501d8ec6901c2a31e8437ee5908f1e352d1d3a54e4894cfa1987a58e"
+    },
+    {
+      "name": "lint",
+      "exit_code": 1,
+      "log": "/tmp/orca-audit8-main-lint.log",
+      "log_sha256": "c5079e363b136c7b8ae76a85304bb1c5abadb833d81f61de09e390b45a040647"
+    },
+    {
+      "name": "lint-final",
+      "exit_code": 0,
+      "log": "/tmp/orca-audit8-main-lint-final.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "format-final",
+      "exit_code": 0,
+      "log": "/tmp/orca-audit8-main-format-final.log",
+      "log_sha256": "c5a4794117a0e5b26cbe3c3689964881f4bcf83257bf8bf02e56741df3bb8532"
+    }
+  ],
+  "reviewed_source_hashes": {
+    "src/main/acp/acp-structured-opencode-recordings.test.ts": "db5a5c468ee8a51ef0b6d2f61640f1293968c4fbc43fb1e43e3ace626a73e052",
+    "src/main/acp/acp-structured-options.test.ts": "580767f2d5abfe5846b0b1470e0821eb7eb635ca3620b77274dd22d1334f941e",
+    "src/main/acp/acp-structured-private-temp.test.ts": "d1461291069713d5e3d3aa598a6937bb0291417ecae4be20436542348349b4de",
+    "src/main/acp/acp-structured-prompt-failure.test.ts": "e155c62f47704e53e8fa5cc2d7932bf6b42edb258b76f64765775f5faca891fe",
+    "src/main/acp/acp-structured-publish-at-spawn.test.ts": "56bfdec90d02eb62ce3d9bc6bcb9150479d11ed48bfaed8543a4591d6fa896a3",
+    "src/main/acp/acp-structured-request-admission.test.ts": "6451b4e94ca44c2436ad1224793881ed68b53e6cf171467c2952fd97394bd5fd",
+    "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts": "865163901f94d1b8a262147942bd0b045f5355f22dcf233a024da21dff6659cd",
+    "src/main/acp/acp-structured-session-adapter-recordings.test.ts": "00f5a4deb7331c2b4fb8a20e564b0451e71f30e59d978a2a1ac9b9704d52128d",
+    "src/main/acp/acp-structured-session-adapter-resume.test.ts": "ff9a7786a73508aaf2d9aa04a343fcc5996f53d3d89beae46f211c0427a3bc49",
+    "src/main/acp/acp-structured-session-adapter-teardown.test.ts": "2b058ad92b8a7b76e0611aebf2085ecbf3fd913a3ce51cd302696cb5acb50439",
+    "src/main/acp/acp-structured-session-adapter.test.ts": "0e4d57d74150abe124824df601dba4b117de6c8b669571cebe9621013d8aab32",
+    "src/main/acp/acp-structured-sign-in.test.ts": "b0553b81fb1813cf1dc889e3ac8d5bbd9cd94a58200a63f1ebbfcf5f03e6ea30",
+    "src/main/acp/acp-structured-steer.test.ts": "7fd57161d4bd76fcc440a1042ff23f257b3cccc07890730a5f43b44945c0c7ef",
+    "src/main/acp/acp-text-message-ownership.test.ts": "22c16cb71f4484c965832fd4bfa1cbdd8cb2f839203e0b1ab38cb1f604f4a8ff",
+    "src/main/acp/acp-text-stream-identity.test.ts": "674ecdab94d13c1c0a022c3a1395c630061cd79b119f86f56565f896289b5272",
+    "src/main/acp/acp-timeline-background-task-evidence.test.ts": "77b33e6910a554e0473f05a4f7630ca2e8560e96d9e003a989e7b89f7214f3fd",
+    "src/main/acp/acp-timeline-background-task-results.test.ts": "64e452fded1e36ebf772e722dad2dc3e17538e68c1546872548d42b60efae14c",
+    "src/main/acp/acp-timeline-background-task-words.test.ts": "db610b74c7ca5b1bec25bae9d5cb6550c1e1c07667a9c64f9d6d15fd08e296df",
+    "src/main/acp/acp-timeline-background-tasks.test.ts": "c65dd0c12dab53580869c9aa1bb508f1ff8e6ca47d098ea0c062283dc72ce422",
+    "src/main/acp/acp-timeline-dialect.test.ts": "cc22b08ce22c691ebb0095f73f868490c6f2c4cb5b3704a8e83c522161b2cd29",
+    "src/main/acp/acp-timeline-generic.test.ts": "dd4b61ada239ad9e0be5395509d45b3e8d54c59bc0a1ca43fba1242a47d27fdc",
+    "src/main/acp/acp-timeline-grok-subagent-retention.test.ts": "577de81617ce647e2248cea2de07408b8707c9b7ae787419f17ad2c60350956f",
+    "src/main/acp/acp-timeline-grok-subagents.test.ts": "1235a8daddc42b530b5323cea509c55d6091775b518d4653d1cb833d7f0598c1",
+    "src/main/acp/acp-timeline-joins.test.ts": "937bc1b35ad39fe71e1b477871aff7370a5f849448f15d2a96ef7a1534841394",
+    "src/main/acp/acp-timeline-open-enums.test.ts": "799baa895edf4b7a53420e87f43c8544820dbc20060fbbed8b71182897c34aab",
+    "src/main/acp/acp-timeline-opencode-dialect.test.ts": "81e0473138ddb66f2d43a8cd63745ddd400fa9fab92dc7a3d450cfaa65c620eb",
+    "src/main/acp/acp-timeline-recordings.test.ts": "bcfee295f489a786fa6e93495d5ed89da6d989b0faf8582ddb1bad2477a19101",
+    "src/main/acp/acp-timeline-recovery.test.ts": "26f1f7dc8943bf282d534831e93ed289c50d9e870dea2b6e4ac9fd83621de52f",
+    "src/main/acp/acp-timeline-routing.test.ts": "cd8c718119eb2e5163ce8f42643faec0c7ac9917d5f38e9ad110a306db8044ae",
+    "src/main/acp/acp-timeline-turn-failures.test.ts": "5c8a9751405802a49753e56fdd7643e615082130c4744fd8fb685cefb5d5f829",
+    "src/main/acp/acp-visuals-skill.test.ts": "4b3d01ca12dbe68621720b3b0a917c088f37763dfca33626da0a1be59cf83e5b",
+    "src/main/acp/acp-write-queue-retention.test.ts": "82759a50778660c8a1927c7b7bd729fdaf8d794ca74449e6613cf7db09718d7e",
+    "src/main/active-view-persistence-boundary.test.ts": "0cc8d43ce212fd09ab1dcc8e09c02defcc4164aad597e1aa9d33d557aa847ff3",
+    "src/main/active-view-preference-sync-flush-veto.test.ts": "6b71df6ec58f04729cf9b52c577d3d8915f16abb08e05efaeaa9f75ba3c105b8",
+    "src/main/active-view-preference.test.ts": "2ac2f17b3133d8b3dd46c2ac8a05820fd0c4a4a0123bc13e15ac6aff50cefaaa",
+    "src/main/agent-auth-restart-preservation.test.ts": "8ded145a06c2bdb72843ad44460300d8de9cb8e82f5ea3026dc18199d851bde4",
+    "src/main/agent-awake-service-platform-assertions.test.ts": "319285152521198e671eb12284926ef1166d7ff1cb1fe1355f4a2029e69828c1",
+    "src/main/agent-awake-service.test.ts": "e281a2b0661163f01db6c85ae4257a15e706c455ebeae80b02d59231b56753ba",
+    "src/main/agent-cli-version-probe.test.ts": "88e27ebd63a6d917eafa2684a964c799c91feb3b31569b3413b26c46071dff3c",
+    "src/main/agent-hooks/agent-home-login-shell.test.ts": "4315b3ae29ecf5200d5be62ca5ca3b1588a035fc75548d0296d304c3385ec2dc",
+    "src/main/agent-hooks/agent-hook-memory-sftp.test-fixture.ts": "96d056f67d17b5357b89222fb20931fbd3217464814f619c5d98bcfb31365d71",
+    "src/main/agent-hooks/agent-transition-detector.test.ts": "69db62a74d26cd5a2d8f583e43fa3ba96b902c92170ab174c3d55bd26d018c61",
+    "src/main/agent-hooks/branch-rename-failure-output.test.ts": "ad3c1245a6faf68571be005c11b2838b97e9598659f3a77c4e11e7de4c92b625",
+    "src/main/agent-hooks/claude-cancel-capture.test-fixture.ts": "f0c9fa411cbd9cf4a4d0c7355ddbdb0064e8a9f1841c9fdcddf36a0a51b0170c",
+    "src/main/agent-hooks/claude-terminal-interrupt-capture.test-fixture.ts": "0972f03a0d1cff0fbbb4f1c8569f65dc0105b4d19e695c5be01064b6d1cd79b0",
+    "src/main/agent-hooks/cursor-replay-guard.test.ts": "0eedb5219871402eb33b92d5ef4709b3e9009118fe3975b3b89ede2299dc1a0f",
+    "src/main/agent-hooks/ended-process-reconciliation.test.ts": "075517c71965120d951b9688ceb0e7e0511a539c6db29129da782ea908906f8b",
+    "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts": "ee4a0d2bfbafa7a8462ce6556c667e7bed56ba4eef2e6a9ccae2dc1f86efd380",
+    "src/main/agent-hooks/first-work-branch-rename.test.ts": "889b68aef7a793e3a47830f9cd1895b1e3fed03bb58ef152ca5b54763819c61a",
+    "src/main/agent-hooks/first-work-folder-rename.test.ts": "73af85142e62c3193a4a1266c172c3c3e6919925bfff8362348ee3dc4ec79043"
+  },
+  "records_sha256": "a6c132463fd61c03da4d9b9f04b2c20d290ba28d5dc2e1e17d37c6fd1c7e936a",
+  "upstream_reconciliation": {
+    "baseline_commit": "f4a1c653e6e4405018f1f06de9b29c5485648103",
+    "current_commit": "f1157821ce03d7c59323f95a4bac521f13bb841e",
+    "drift": [
+      {
+        "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+        "old_sha256": "d57826d67c5520b698a6fd8a373314c21fcdbc96c3a38a646671f72c99989bc4",
+        "current_sha256": "c471598833209e28f30833d51bb40092de9d4dab306406effbc153603dfaf34d",
+        "nontrivia_tokens": 1637,
+        "token_stream_sha256": "3392c7e2fe9286127c95721cdcccf9146e59a091120a2f00054af130903eabcd",
+        "tokens_identical": true,
+        "manual_diff_review": "All six complete diffs read; changes contain comments only."
+      },
+      {
+        "path": "src/main/active-view-preference.test.ts",
+        "old_sha256": "bebaa0501474f9f356f4e9355fd5038b8c830938abb5f5316ce433bd11e28ad9",
+        "current_sha256": "2ac2f17b3133d8b3dd46c2ac8a05820fd0c4a4a0123bc13e15ac6aff50cefaaa",
+        "nontrivia_tokens": 570,
+        "token_stream_sha256": "90f4d1588f9be253a11d235cb39b8d4d3f1335ac1afd4d7b2ca96f0917c8987d",
+        "tokens_identical": true,
+        "manual_diff_review": "All six complete diffs read; changes contain comments only."
+      },
+      {
+        "path": "src/main/active-view-preference.ts",
+        "old_sha256": "f8d25b763a4c397447d30ee1606cdf6bf5ae3b9b26fe2b950b84bdabfeadf948",
+        "current_sha256": "82b20c8dfb08dd979f694fcf7ccb54e6084dd1057d09dd18b1af218ddc21e6a3",
+        "nontrivia_tokens": 1362,
+        "token_stream_sha256": "289d679fbb28595472c075608174435ff58d2c48504b07e6733a7194bbefae7f",
+        "tokens_identical": true,
+        "manual_diff_review": "All six complete diffs read; changes contain comments only."
+      },
+      {
+        "path": "src/main/agent-auth-restart-preservation.ts",
+        "old_sha256": "7fb15d220f6287675bc6e61390b82fed52fe25989ccbff5d59df08c338fb1eaa",
+        "current_sha256": "c1cf3ac1b75d3841fc7cc64f73e5baa278697ad9d908fa0043657509ed8a819c",
+        "nontrivia_tokens": 492,
+        "token_stream_sha256": "0ae91ccfbb414f996f6344b496344ce9c309dc85ff2366c97c4c1a0896c9ac02",
+        "tokens_identical": true,
+        "manual_diff_review": "All six complete diffs read; changes contain comments only."
+      },
+      {
+        "path": "src/main/agent-awake-service.ts",
+        "old_sha256": "2e6734eb11cc90e8a06ae400913b7d65f586f14000e67969fadc6ede1a0067d6",
+        "current_sha256": "09004c432ec31333300206c01a495e81d167c9a2e26138cf9dc4100d5592592a",
+        "nontrivia_tokens": 1475,
+        "token_stream_sha256": "d3801a856e69f95aee70822c8f3a41703d1c85994af730d5a23c8bea136af9a9",
+        "tokens_identical": true,
+        "manual_diff_review": "All six complete diffs read; changes contain comments only."
+      },
+      {
+        "path": "src/main/agent-cli-version-probe.ts",
+        "old_sha256": "aed90359304f79c027e4788409541be83b8e1c96b4a547e4c522125e60571e22",
+        "current_sha256": "56a4f9cbed9521eebef127459bf2ee081d2fcac7a3faa9470bf878d17f9a483a",
+        "nontrivia_tokens": 603,
+        "token_stream_sha256": "ddc0b17145b55041d12f6e83984cc869d8df18badce90d54ddd11b5299e6960e",
+        "tokens_identical": true,
+        "manual_diff_review": "All six complete diffs read; changes contain comments only."
+      }
+    ]
+  },
+  "source_span_verification": {
+    "files": 50,
+    "original_cases": 337,
+    "hashed_UTF16_spans": 2461
+  },
+  "case_line_reconciliation": [
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 70,
+      "current_line": 70,
+      "title": "an approved shell command lands with its exit code, and \"always\" keeps OpenCode's own name",
+      "decision": "keep",
+      "proposed_lines": [
+        70
+      ],
+      "proposed_titles": [
+        "an approved shell command lands with its exit code, and \"always\" keeps OpenCode's own name"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        70
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 91,
+      "current_line": 91,
+      "title": "a rejected permission fails its tool and the turn still ends",
+      "decision": "keep",
+      "proposed_lines": [
+        91
+      ],
+      "proposed_titles": [
+        "a rejected permission fails its tool and the turn still ends"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        91
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 99,
+      "current_line": 99,
+      "title": "a subagent's approval never arrives (a known OpenCode bug); Stop still ends the turn",
+      "decision": "keep",
+      "proposed_lines": [
+        99
+      ],
+      "proposed_titles": [
+        "a subagent's approval never arrives (a known OpenCode bug); Stop still ends the turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        99
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 111,
+      "current_line": 111,
+      "title": "OpenCode's stray file write after an approved edit is refused without breaking the turn",
+      "decision": "keep",
+      "proposed_lines": [
+        111
+      ],
+      "proposed_titles": [
+        "OpenCode's stray file write after an approved edit is refused without breaking the turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        111
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 123,
+      "current_line": 123,
+      "title": "a provider error fails the turn in OpenCode's own words",
+      "decision": "keep",
+      "proposed_lines": [
+        123
+      ],
+      "proposed_titles": [
+        "a provider error fails the turn in OpenCode's own words"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        123
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 133,
+      "current_line": 133,
+      "title": "an approved shell command completes with its output and exit code",
+      "decision": "fix",
+      "proposed_lines": [
+        133
+      ],
+      "proposed_titles": [
+        "an approved shell command completes with its output and exit code"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        133
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 155,
+      "current_line": 155,
+      "title": "a rejected permission fails its tool and OpenCode ends the turn as cancelled",
+      "decision": "keep",
+      "proposed_lines": [
+        156
+      ],
+      "proposed_titles": [
+        "a rejected permission fails its tool and OpenCode ends the turn as cancelled"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        156
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "original_line": 165,
+      "current_line": 165,
+      "title": "Stop during an approved command cancels it and ends the turn",
+      "decision": "keep",
+      "proposed_lines": [
+        166
+      ],
+      "proposed_titles": [
+        "Stop during an approved command cancels it and ends the turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        166
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 32,
+      "current_line": 32,
+      "title": "keeps the session\u2019s picks out of the catalog facts",
+      "decision": "keep",
+      "proposed_lines": [
+        32
+      ],
+      "proposed_titles": [
+        "keeps the session\u2019s picks out of the catalog facts"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        32
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 52,
+      "current_line": 52,
+      "title": "reads each model\u2019s own menu where the agent advertises one",
+      "decision": "keep",
+      "proposed_lines": [
+        52
+      ],
+      "proposed_titles": [
+        "reads each model\u2019s own menu where the agent advertises one"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        52
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 101,
+      "current_line": 101,
+      "title": "keeps the session\u2019s effort menu for the running model when its advertised one is empty",
+      "decision": "keep",
+      "proposed_lines": [
+        101
+      ],
+      "proposed_titles": [
+        "keeps the session\u2019s effort menu for the running model when its advertised one is empty"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        101
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 124,
+      "current_line": 124,
+      "title": "is the model and effort the agent chose for itself",
+      "decision": "keep",
+      "proposed_lines": [
+        124
+      ],
+      "proposed_titles": [
+        "is the model and effort the agent chose for itself"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        124
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 130,
+      "current_line": 130,
+      "title": "says nothing of a loaded session, which keeps the model it ran",
+      "decision": "keep",
+      "proposed_lines": [
+        130
+      ],
+      "proposed_titles": [
+        "says nothing of a loaded session, which keeps the model it ran"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        130
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 136,
+      "current_line": 136,
+      "title": "says nothing once the chat holds a model pick, even one the session already runs",
+      "decision": "keep",
+      "proposed_lines": [
+        136
+      ],
+      "proposed_titles": [
+        "says nothing once the chat holds a model pick, even one the session already runs"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        136
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 143,
+      "current_line": 143,
+      "title": "keeps the model but not an effort the chat picked",
+      "decision": "keep",
+      "proposed_lines": [
+        143
+      ],
+      "proposed_titles": [
+        "keeps the model but not an effort the chat picked"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        143
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 150,
+      "current_line": 150,
+      "title": "says nothing when the agent reports no model, so no empty default is saved",
+      "decision": "keep",
+      "proposed_lines": [
+        150
+      ],
+      "proposed_titles": [
+        "says nothing when the agent reports no model, so no empty default is saved"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        150
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-options.test.ts",
+      "original_line": 161,
+      "current_line": 161,
+      "title": "retires a saved default when the session runs a model it does not list",
+      "decision": "keep",
+      "proposed_lines": [
+        161
+      ],
+      "proposed_titles": [
+        "retires a saved default when the session runs a model it does not list"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        161
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-private-temp.test.ts",
+      "original_line": 11,
+      "current_line": 11,
+      "title": "gives each process its own temp folder, removed at exit, and clears an earlier run at the first start",
+      "decision": "fix",
+      "proposed_lines": [
+        20
+      ],
+      "proposed_titles": [
+        "gives each process its own temp folder, removed at exit, and clears an earlier run at the first start"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        22
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-prompt-failure.test.ts",
+      "original_line": 65,
+      "current_line": 65,
+      "title": "shows the agent words from %s",
+      "decision": "keep",
+      "proposed_lines": [
+        65
+      ],
+      "proposed_titles": [
+        "shows the agent words from %s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        65
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-prompt-failure.test.ts",
+      "original_line": 77,
+      "current_line": 77,
+      "title": "quotes data.details after the sign-in sentence",
+      "decision": "keep",
+      "proposed_lines": [
+        77
+      ],
+      "proposed_titles": [
+        "quotes data.details after the sign-in sentence"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        77
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-prompt-failure.test.ts",
+      "original_line": 94,
+      "current_line": 94,
+      "title": "quotes the agent words: %j",
+      "decision": "keep",
+      "proposed_lines": [
+        94
+      ],
+      "proposed_titles": [
+        "quotes the agent words: %j"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        94
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-publish-at-spawn.test.ts",
+      "original_line": 19,
+      "current_line": 19,
+      "title": "opens without writing saved message choices to the provider",
+      "decision": "keep",
+      "proposed_lines": [
+        19
+      ],
+      "proposed_titles": [
+        "opens without writing saved message choices to the provider"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        19
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-publish-at-spawn.test.ts",
+      "original_line": 73,
+      "current_line": 73,
+      "title": "lets %s stop the starting process without a late start",
+      "decision": "keep",
+      "proposed_lines": [
+        73
+      ],
+      "proposed_titles": [
+        "lets %s stop the starting process without a late start"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        73
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-publish-at-spawn.test.ts",
+      "original_line": 113,
+      "current_line": 113,
+      "title": "reports a startup exit with initialize answered = %s",
+      "decision": "keep",
+      "proposed_lines": [
+        113
+      ],
+      "proposed_titles": [
+        "reports a startup exit with initialize answered = %s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        113
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-publish-at-spawn.test.ts",
+      "original_line": 139,
+      "current_line": 139,
+      "title": "reports signed-out startup as a notSignedIn fact and proves the process ended",
+      "decision": "keep",
+      "proposed_lines": [
+        139
+      ],
+      "proposed_titles": [
+        "reports signed-out startup as a notSignedIn fact and proves the process ended"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        139
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-publish-at-spawn.test.ts",
+      "original_line": 158,
+      "current_line": 158,
+      "title": "waits until message input to try a saved choice the provider will refuse",
+      "decision": "keep",
+      "proposed_lines": [
+        158
+      ],
+      "proposed_titles": [
+        "waits until message input to try a saved choice the provider will refuse"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        158
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-publish-at-spawn.test.ts",
+      "original_line": 184,
+      "current_line": 184,
+      "title": "reports the session it loaded as the resumed link",
+      "decision": "keep",
+      "proposed_lines": [
+        184
+      ],
+      "proposed_titles": [
+        "reports the session it loaded as the resumed link"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        184
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-request-admission.test.ts",
+      "original_line": 48,
+      "current_line": 48,
+      "title": "shows a question while its turn runs, and withdraws it on Stop with Grok own reply",
+      "decision": "fix",
+      "proposed_lines": [
+        48
+      ],
+      "proposed_titles": [
+        "shows a question while its turn runs, and withdraws it on Stop with Grok own reply"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        48
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-request-admission.test.ts",
+      "original_line": 57,
+      "current_line": 57,
+      "title": "withdraws an open question when a steer cancels its turn",
+      "decision": "fix",
+      "proposed_lines": [
+        61
+      ],
+      "proposed_titles": [
+        "withdraws an open question when a steer cancels its turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        61
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-request-admission.test.ts",
+      "original_line": 66,
+      "current_line": 66,
+      "title": "refuses a question that arrives after a Stop, opening no card",
+      "decision": "keep",
+      "proposed_lines": [
+        74
+      ],
+      "proposed_titles": [
+        "refuses a question that arrives after a Stop, opening no card"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        74
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-request-admission.test.ts",
+      "original_line": 74,
+      "current_line": 74,
+      "title": "refuses a permission or a question that arrives while a steer cuts the turn short",
+      "decision": "keep",
+      "proposed_lines": [
+        82
+      ],
+      "proposed_titles": [
+        "refuses a permission or a question that arrives while a steer cuts the turn short"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        82
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-request-admission.test.ts",
+      "original_line": 88,
+      "current_line": 88,
+      "title": "refuses a question during a turn Grok began itself, opening no card, yet shows its plan",
+      "decision": "keep",
+      "proposed_lines": [
+        96
+      ],
+      "proposed_titles": [
+        "refuses a question during a turn Grok began itself, opening no card, yet shows its plan"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        96
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-request-admission.test.ts",
+      "original_line": 112,
+      "current_line": 112,
+      "title": "refuses a question when no turn is open",
+      "decision": "keep",
+      "proposed_lines": [
+        120
+      ],
+      "proposed_titles": [
+        "refuses a question when no turn is open"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        120
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 31,
+      "current_line": 31,
+      "title": "a Stop naming a turn that has ended stops nothing running now",
+      "decision": "keep",
+      "proposed_lines": [
+        32
+      ],
+      "proposed_titles": [
+        "a Stop naming a turn that has ended stops nothing running now"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        32
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 62,
+      "current_line": 62,
+      "title": "a Stop naming a turn with no journal row, in the gap before the next prompt opens, stops that prompt",
+      "decision": "keep",
+      "proposed_lines": [
+        63
+      ],
+      "proposed_titles": [
+        "a Stop naming a turn with no journal row, in the gap before the next prompt opens, stops that prompt"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        63
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 85,
+      "current_line": 85,
+      "title": "a Stop naming the turn running now stops it and withdraws the steer waiting on its cancel",
+      "decision": "keep",
+      "proposed_lines": [
+        86
+      ],
+      "proposed_titles": [
+        "a Stop naming the turn running now stops it and withdraws the steer waiting on its cancel"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        86
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 123,
+      "current_line": 123,
+      "title": "cancels a turn opened by a background completion; the Stop waits for it to end",
+      "decision": "keep",
+      "proposed_lines": [
+        124
+      ],
+      "proposed_titles": [
+        "cancels a turn opened by a background completion; the Stop waits for it to end"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        124
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 150,
+      "current_line": 150,
+      "title": "ends the Stop's wait at its grace when Grok never ends its own turn",
+      "decision": "fix",
+      "proposed_lines": [
+        151
+      ],
+      "proposed_titles": [
+        "ends the Stop's wait at its grace when Grok never ends its own turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        151
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 165,
+      "current_line": 165,
+      "title": "settles a send the agent never took as unknown when its stdin breaks, stops the child and tells the host",
+      "decision": "keep",
+      "proposed_lines": [
+        174
+      ],
+      "proposed_titles": [
+        "settles a send the agent never took as unknown when its stdin breaks, stops the child and tells the host"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        176
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 190,
+      "current_line": 190,
+      "title": "ends a crash whose stdout closed before its exit at that exit, with Grok's last words",
+      "decision": "keep",
+      "proposed_lines": [
+        199
+      ],
+      "proposed_titles": [
+        "ends a crash whose stdout closed before its exit at that exit, with Grok's last words"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        201
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 207,
+      "current_line": 207,
+      "title": "keeps a crash a crash when a stop Orca asks for lands before its unproven exit",
+      "decision": "keep",
+      "proposed_lines": [
+        216
+      ],
+      "proposed_titles": [
+        "keeps a crash a crash when a stop Orca asks for lands before its unproven exit"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        218
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 242,
+      "current_line": 242,
+      "title": "leaves a running turn unverifiable, never completed, when its stdin breaks mid-turn",
+      "decision": "keep",
+      "proposed_lines": [
+        251
+      ],
+      "proposed_titles": [
+        "leaves a running turn unverifiable, never completed, when its stdin breaks mid-turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        253
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 256,
+      "current_line": 256,
+      "title": "ends the turn as failed on an answer Orca cannot read, and sends the next message",
+      "decision": "keep",
+      "proposed_lines": [
+        265
+      ],
+      "proposed_titles": [
+        "ends the turn as failed on an answer Orca cannot read, and sends the next message"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        267
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 283,
+      "current_line": 283,
+      "title": "leaves Grok running when it ends its stdout but can still be written to",
+      "decision": "keep",
+      "proposed_lines": [
+        292
+      ],
+      "proposed_titles": [
+        "leaves Grok running when it ends its stdout but can still be written to"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        294
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 301,
+      "current_line": 301,
+      "title": "rejects a send the agent refused before starting its turn",
+      "decision": "keep",
+      "proposed_lines": [
+        310
+      ],
+      "proposed_titles": [
+        "rejects a send the agent refused before starting its turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        312
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 320,
+      "current_line": 320,
+      "title": "ends a started turn as failed when the agent answers its prompt with an error",
+      "decision": "keep",
+      "proposed_lines": [
+        329
+      ],
+      "proposed_titles": [
+        "ends a started turn as failed when the agent answers its prompt with an error"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        331
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 340,
+      "current_line": 340,
+      "title": "lets a close stop the published child while initialize is unanswered",
+      "decision": "keep",
+      "proposed_lines": [
+        349
+      ],
+      "proposed_titles": [
+        "lets a close stop the published child while initialize is unanswered"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        351
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 358,
+      "current_line": 358,
+      "title": "leaves a published child alone when the acquisition signal aborts later",
+      "decision": "keep",
+      "proposed_lines": [
+        367
+      ],
+      "proposed_titles": [
+        "leaves a published child alone when the acquisition signal aborts later"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        369
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 368,
+      "current_line": 368,
+      "title": "does not time out a published handshake, and closes it through the session",
+      "decision": "keep",
+      "proposed_lines": [
+        377
+      ],
+      "proposed_titles": [
+        "does not time out a published handshake, and closes it through the session"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        379
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 392,
+      "current_line": 392,
+      "title": "keeps a failed startup child until its exit is proven, and spawns no other meanwhile",
+      "decision": "keep",
+      "proposed_lines": [
+        401
+      ],
+      "proposed_titles": [
+        "keeps a failed startup child until its exit is proven, and spawns no other meanwhile"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        403
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 421,
+      "current_line": 421,
+      "title": "spawns nothing for a start a close reached before its spawn",
+      "decision": "keep",
+      "proposed_lines": [
+        430
+      ],
+      "proposed_titles": [
+        "spawns nothing for a start a close reached before its spawn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        432
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 451,
+      "current_line": 451,
+      "title": "refuses a floating chat whose folder is gone with the reason the person reads",
+      "decision": "keep",
+      "proposed_lines": [
+        460
+      ],
+      "proposed_titles": [
+        "refuses a floating chat whose folder is gone with the reason the person reads"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        462
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 468,
+      "current_line": 468,
+      "title": "stops nothing for a chat it never started, as one an earlier Orca left",
+      "decision": "keep",
+      "proposed_lines": [
+        477
+      ],
+      "proposed_titles": [
+        "stops nothing for a chat it never started, as one an earlier Orca left"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        479
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 475,
+      "current_line": 475,
+      "title": "keeps nothing of a chat once its child is proven closed",
+      "decision": "keep",
+      "proposed_lines": [
+        484
+      ],
+      "proposed_titles": [
+        "keeps nothing of a chat once its child is proven closed"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        486
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "original_line": 485,
+      "current_line": 485,
+      "title": "keeps nothing of a chat whose child exited on its own",
+      "decision": "keep",
+      "proposed_lines": [
+        494
+      ],
+      "proposed_titles": [
+        "keeps nothing of a chat whose child exited on its own"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        496
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-recordings.test.ts",
+      "original_line": 49,
+      "current_line": 49,
+      "title": "s1: a read-only turn lands as one completed turn with its tools and reply",
+      "decision": "keep",
+      "proposed_lines": [
+        49
+      ],
+      "proposed_titles": [
+        "s1: a read-only turn lands as one completed turn with its tools and reply"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        49
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-recordings.test.ts",
+      "original_line": 69,
+      "current_line": 69,
+      "title": "s2: an allowed and then a rejected permission are each answered once, after the commit",
+      "decision": "fix",
+      "proposed_lines": [
+        69
+      ],
+      "proposed_titles": [
+        "s2: an allowed and then a rejected permission keep their recorded replies"
+      ],
+      "mapping": "renamed; behavior retained",
+      "final_lines": [
+        69
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-recordings.test.ts",
+      "original_line": 103,
+      "current_line": 103,
+      "title": "s3: a Stop mid-tool ends the turn interrupted and the session takes the next prompt",
+      "decision": "keep",
+      "proposed_lines": [
+        103
+      ],
+      "proposed_titles": [
+        "s3: a Stop mid-tool ends the turn interrupted and the session takes the next prompt"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        103
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 113,
+      "current_line": 113,
+      "title": "writes nothing Grok sends while it loads, even unmarked as replay",
+      "decision": "keep",
+      "proposed_lines": [
+        113
+      ],
+      "proposed_titles": [
+        "writes nothing Grok sends while it loads, even unmarked as replay"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        113
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 120,
+      "current_line": 120,
+      "title": "leaves no turn from the window for a later Stop to find",
+      "decision": "keep",
+      "proposed_lines": [
+        120
+      ],
+      "proposed_titles": [
+        "leaves no turn from the window for a later Stop to find"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        120
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 141,
+      "current_line": 141,
+      "title": "keeps the last reading the journal holds; the load only refreshes the window",
+      "decision": "keep",
+      "proposed_lines": [
+        141
+      ],
+      "proposed_titles": [
+        "keeps the last reading the journal holds; the load only refreshes the window"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        141
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 181,
+      "current_line": 181,
+      "title": "starts in the chat's own permission mode, asks when none is named, and fails an unconfirmed one",
+      "decision": "keep",
+      "proposed_lines": [
+        181
+      ],
+      "proposed_titles": [
+        "starts in the chat's own permission mode, asks when none is named, and fails an unconfirmed one"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        181
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 219,
+      "current_line": 219,
+      "title": "loads with session/load though Grok also resumes, and writes nothing it replays",
+      "decision": "keep",
+      "proposed_lines": [
+        219
+      ],
+      "proposed_titles": [
+        "loads with session/load though Grok also resumes, and writes nothing it replays"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        219
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 246,
+      "current_line": 246,
+      "title": "loads an agent that only loads, writing none of what it replays",
+      "decision": "keep",
+      "proposed_lines": [
+        246
+      ],
+      "proposed_titles": [
+        "loads an agent that only loads, writing none of what it replays"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        246
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 266,
+      "current_line": 266,
+      "title": "leaves a reply cut off mid-turn as it was cut, never completed from what Grok saved",
+      "decision": "keep",
+      "proposed_lines": [
+        266
+      ],
+      "proposed_titles": [
+        "leaves a reply cut off mid-turn as it was cut, never completed from what Grok saved"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        266
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 287,
+      "current_line": 287,
+      "title": "writes nothing of the reattach into a sink the host binds only after the start",
+      "decision": "fix",
+      "proposed_lines": [
+        287
+      ],
+      "proposed_titles": [
+        "writes nothing of the reattach into a sink the host binds only after the start"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        287
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 322,
+      "current_line": 322,
+      "title": "starts a new session in place of a created one that session/load reports missing",
+      "decision": "keep",
+      "proposed_lines": [
+        332
+      ],
+      "proposed_titles": [
+        "starts a new session in place of a created one that session/load reports missing"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        334
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 349,
+      "current_line": 349,
+      "title": "continues %s it cannot reopen in a new one, says so once, and keeps working",
+      "decision": "keep",
+      "proposed_lines": [
+        359
+      ],
+      "proposed_titles": [
+        "continues %s it cannot reopen in a new one, says so once, and keeps working"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        361
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 385,
+      "current_line": 385,
+      "title": "refuses a signed-out agent at reopen rather than replacing its session",
+      "decision": "keep",
+      "proposed_lines": [
+        395
+      ],
+      "proposed_titles": [
+        "refuses a signed-out agent at reopen rather than replacing its session"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        397
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 404,
+      "current_line": 404,
+      "title": "fails a start closed while the agent reopens rather than opening a new session",
+      "decision": "keep",
+      "proposed_lines": [
+        414
+      ],
+      "proposed_titles": [
+        "fails a start closed while the agent reopens rather than opening a new session"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        416
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "original_line": 432,
+      "current_line": 432,
+      "title": "keeps the slash commands Grok reports while it loads",
+      "decision": "keep",
+      "proposed_lines": [
+        442
+      ],
+      "proposed_titles": [
+        "keeps the slash commands Grok reports while it loads"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        444
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 57,
+      "current_line": 57,
+      "title": "a close cancels the turn first and ends the child once the agent ends it",
+      "decision": "fix",
+      "proposed_lines": [
+        55
+      ],
+      "proposed_titles": [
+        "a close cancels the turn first and ends the child once the agent ends it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        55
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 68,
+      "current_line": 68,
+      "title": "a dispose ends the child at the grace when the agent never ends its turn",
+      "decision": "keep",
+      "proposed_lines": [
+        71
+      ],
+      "proposed_titles": [
+        "a dispose ends the child at the grace when the agent never ends its turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        71
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 83,
+      "current_line": 83,
+      "title": "a quit cancels every running turn before it ends the children, within the grace",
+      "decision": "fix",
+      "proposed_lines": [
+        86
+      ],
+      "proposed_titles": [
+        "a quit cancels the running turn before ending its child at the grace"
+      ],
+      "mapping": "renamed; behavior retained",
+      "final_lines": [
+        86
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 92,
+      "current_line": 92,
+      "title": "a close still ends the child when the cancel cannot be written",
+      "decision": "fix",
+      "proposed_lines": [
+        100
+      ],
+      "proposed_titles": [
+        "a close still ends the child when the cancel cannot be written"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        100
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 101,
+      "current_line": 101,
+      "title": "a close after a Stop asks no second cancel and waits only what is left of its grace",
+      "decision": "keep",
+      "proposed_lines": [
+        114
+      ],
+      "proposed_titles": [
+        "a close after a Stop asks no second cancel and waits only what is left of its grace"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        114
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 120,
+      "current_line": 120,
+      "title": "an idle close writes no cancel and ends the child at once",
+      "decision": "keep",
+      "proposed_lines": [
+        133
+      ],
+      "proposed_titles": [
+        "an idle close writes no cancel and ends the child at once"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        133
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 128,
+      "current_line": 128,
+      "title": "a close after the connection broke writes no cancel and waits for nothing",
+      "decision": "keep",
+      "proposed_lines": [
+        141
+      ],
+      "proposed_titles": [
+        "a close after the connection broke writes no cancel and waits for nothing"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        141
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "original_line": 149,
+      "current_line": 149,
+      "title": "cancels the turn before ending the process, and the turn ends interrupted",
+      "decision": "fix",
+      "proposed_lines": [
+        162
+      ],
+      "proposed_titles": [
+        "cancels the turn before ending the process, and the turn ends interrupted"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        162
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 46,
+      "current_line": 46,
+      "title": "records the child before the handshake and starts a new session with client fs and terminals off",
+      "decision": "keep",
+      "proposed_lines": [
+        44
+      ],
+      "proposed_titles": [
+        "records the child before the handshake and starts a new session with client fs and terminals off"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        44
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 65,
+      "current_line": 65,
+      "title": "launches without any pane identity, so the agent own status hooks stay silent",
+      "decision": "fix",
+      "proposed_lines": [
+        63
+      ],
+      "proposed_titles": [
+        "launches without any pane identity, so the agent own status hooks stay silent"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        63
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 99,
+      "current_line": 99,
+      "title": "replaces a created session the agent never saved with a new one",
+      "decision": "keep",
+      "proposed_lines": [
+        121
+      ],
+      "proposed_titles": [
+        "replaces a created session the agent never saved with a new one"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        121
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 116,
+      "current_line": 116,
+      "title": "refuses a signed-out agent through the existing start-failure surface and stops its child",
+      "decision": "keep",
+      "proposed_lines": [
+        138
+      ],
+      "proposed_titles": [
+        "refuses a signed-out agent through the existing start-failure surface and stops its child"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        138
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 128,
+      "current_line": 128,
+      "title": "reports an agent that exits while starting with its own last words",
+      "decision": "keep",
+      "proposed_lines": [
+        150
+      ],
+      "proposed_titles": [
+        "reports an agent that exits while starting with its own last words"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        150
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 143,
+      "current_line": 143,
+      "title": "reads those last words when the agent ends its stdout before its exit is seen",
+      "decision": "fix",
+      "proposed_lines": [
+        165
+      ],
+      "proposed_titles": [
+        "reads those last words when the agent ends its stdout before its exit is seen"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        165
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 161,
+      "current_line": 161,
+      "title": "applies a sent message\u2019s model and effort before its prompt",
+      "decision": "keep",
+      "proposed_lines": [
+        189
+      ],
+      "proposed_titles": [
+        "applies a sent message\u2019s model and effort before its prompt"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        188
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 183,
+      "current_line": 183,
+      "title": "sends model-only choices away from the opening model, back, and away again",
+      "decision": "keep",
+      "proposed_lines": [
+        211
+      ],
+      "proposed_titles": [
+        "sends model-only choices away from the opening model, back, and away again"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        210
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 212,
+      "current_line": 212,
+      "title": "sends Grok's prompt identity only to an agent whose dialect echoes it",
+      "decision": "keep",
+      "proposed_lines": [
+        240
+      ],
+      "proposed_titles": [
+        "sends Grok's prompt identity only to an agent whose dialect echoes it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        239
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 222,
+      "current_line": 222,
+      "title": "sends a prompt under an injected id and settles it on the agent first event",
+      "decision": "keep",
+      "proposed_lines": [
+        250
+      ],
+      "proposed_titles": [
+        "sends a prompt under an injected id and settles it on the agent first event"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        249
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 248,
+      "current_line": 248,
+      "title": "stops a running turn: open permissions answer cancelled, session/cancel goes out",
+      "decision": "keep",
+      "proposed_lines": [
+        276
+      ],
+      "proposed_titles": [
+        "stops a running turn: open permissions answer cancelled, session/cancel goes out"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        275
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 272,
+      "current_line": 272,
+      "title": "answers a Stop with no turn running as one the agent was not running",
+      "decision": "keep",
+      "proposed_lines": [
+        300
+      ],
+      "proposed_titles": [
+        "answers a Stop with no turn running as one the agent was not running"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        299
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 283,
+      "current_line": 283,
+      "title": "commits the journal answer before replying with the option the person chose",
+      "decision": "keep",
+      "proposed_lines": [
+        311
+      ],
+      "proposed_titles": [
+        "commits the journal answer before replying with the option the person chose"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        310
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 335,
+      "current_line": 335,
+      "title": "answers cancelled a permission Grok asks during a turn it began itself, with no card",
+      "decision": "keep",
+      "proposed_lines": [
+        363
+      ],
+      "proposed_titles": [
+        "answers cancelled a permission Grok asks during a turn it began itself, with no card"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        362
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 352,
+      "current_line": 352,
+      "title": "answers an open question with Grok's own cancelled reply once a Stop cancels it",
+      "decision": "keep",
+      "proposed_lines": [
+        380
+      ],
+      "proposed_titles": [
+        "answers an open question with Grok's own cancelled reply once a Stop cancels it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        379
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 374,
+      "current_line": 374,
+      "title": "shows Grok's plan in the plan row and answers its plan-mode exit at once, with no card",
+      "decision": "keep",
+      "proposed_lines": [
+        402
+      ],
+      "proposed_titles": [
+        "shows Grok's plan in the plan row and answers its plan-mode exit at once, with no card"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        401
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 398,
+      "current_line": 398,
+      "title": "sends a permission answer whose save was under way when the Stop landed",
+      "decision": "keep",
+      "proposed_lines": [
+        426
+      ],
+      "proposed_titles": [
+        "sends a permission answer whose save was under way when the Stop landed"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        425
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 434,
+      "current_line": 434,
+      "title": "reads the agent own models and effort and writes a pick through set_config_option",
+      "decision": "keep",
+      "proposed_lines": [
+        462
+      ],
+      "proposed_titles": [
+        "reads the agent own models and effort and writes a pick through set_config_option"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        461
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 454,
+      "current_line": 454,
+      "title": "reports the agent own slash commands",
+      "decision": "keep",
+      "proposed_lines": [
+        482
+      ],
+      "proposed_titles": [
+        "reports the agent own slash commands"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        481
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 478,
+      "current_line": 478,
+      "title": "reports a close whose root exited but whose process tree was not proven gone",
+      "decision": "keep",
+      "proposed_lines": [
+        506
+      ],
+      "proposed_titles": [
+        "reports a close whose root exited but whose process tree was not proven gone"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        505
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 488,
+      "current_line": 488,
+      "title": "closes with proof and reports a requested close",
+      "decision": "keep",
+      "proposed_lines": [
+        516
+      ],
+      "proposed_titles": [
+        "closes with proof and reports a requested close"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        515
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 499,
+      "current_line": 499,
+      "title": "ends the session on an unexpected exit: held sends rejected, the running one unknown",
+      "decision": "keep",
+      "proposed_lines": [
+        527
+      ],
+      "proposed_titles": [
+        "ends the session on an unexpected exit: held sends rejected, the running one unknown"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        526
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "original_line": 528,
+      "current_line": 528,
+      "title": "runs `grok agent stdio`, asking for always-approve only with full access",
+      "decision": "fix",
+      "proposed_lines": [
+        556
+      ],
+      "proposed_titles": [
+        "runs `grok agent stdio`, asking for always-approve only with full access"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        555
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-sign-in.test.ts",
+      "original_line": 19,
+      "current_line": 19,
+      "title": "classifies $agent before and after acceptance",
+      "decision": "keep",
+      "proposed_lines": [
+        19
+      ],
+      "proposed_titles": [
+        "classifies $agent before and after acceptance"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        19
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-sign-in.test.ts",
+      "original_line": 79,
+      "current_line": 79,
+      "title": "ends a running turn signed out when the connection closes for sign-in",
+      "decision": "keep",
+      "proposed_lines": [
+        79
+      ],
+      "proposed_titles": [
+        "ends a running turn signed out when the connection closes for sign-in"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        79
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-sign-in.test.ts",
+      "original_line": 100,
+      "current_line": 100,
+      "title": "starts signed out without Orca words when the connection closes for sign-in",
+      "decision": "keep",
+      "proposed_lines": [
+        100
+      ],
+      "proposed_titles": [
+        "starts signed out without Orca words when the connection closes for sign-in"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        100
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-sign-in.test.ts",
+      "original_line": 114,
+      "current_line": 114,
+      "title": "preserves $agent startup auth classification and its detail",
+      "decision": "keep",
+      "proposed_lines": [
+        114
+      ],
+      "proposed_titles": [
+        "preserves $agent startup auth classification and its detail"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        114
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-sign-in.test.ts",
+      "original_line": 133,
+      "current_line": 133,
+      "title": "keeps $agent's sign-in words over log lines it wrote before refusing its start",
+      "decision": "keep",
+      "proposed_lines": [
+        133
+      ],
+      "proposed_titles": [
+        "keeps $agent's sign-in words over log lines it wrote before refusing its start"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        133
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-sign-in.test.ts",
+      "original_line": 151,
+      "current_line": 151,
+      "title": "reads OMP internal-error detail without guessing auth: %s",
+      "decision": "keep",
+      "proposed_lines": [
+        151
+      ],
+      "proposed_titles": [
+        "reads OMP internal-error detail without guessing auth: %s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        151
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 62,
+      "current_line": 62,
+      "title": "cancels the running prompt, then sends as the next one",
+      "decision": "keep",
+      "proposed_lines": [
+        62
+      ],
+      "proposed_titles": [
+        "cancels the running prompt, then sends as the next one"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        62
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 85,
+      "current_line": 85,
+      "title": "runs the last of two quick steers; the one between is sent and cancelled",
+      "decision": "keep",
+      "proposed_lines": [
+        85
+      ],
+      "proposed_titles": [
+        "runs the last of two quick steers; the one between is sent and cancelled"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        85
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 109,
+      "current_line": 109,
+      "title": "asks again on the next steer when the first cancel was never written",
+      "decision": "keep",
+      "proposed_lines": [
+        109
+      ],
+      "proposed_titles": [
+        "asks again on the next steer when the first cancel was never written"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        109
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 135,
+      "current_line": 135,
+      "title": "withdraws a steer a Stop reaches before its cancel lands",
+      "decision": "keep",
+      "proposed_lines": [
+        135
+      ],
+      "proposed_titles": [
+        "withdraws a steer a Stop reaches before its cancel lands"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        135
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 158,
+      "current_line": 158,
+      "title": "waits as long as Grok takes to answer a steer cancel, and a Stop then still ends it",
+      "decision": "fix",
+      "proposed_lines": [
+        158
+      ],
+      "proposed_titles": [
+        "waits as long as Grok takes to answer a steer cancel, and a Stop then still ends it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        158
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 184,
+      "current_line": 184,
+      "title": "goes to Grok at once, with no cancel of that turn",
+      "decision": "keep",
+      "proposed_lines": [
+        191
+      ],
+      "proposed_titles": [
+        "goes to Grok at once, with no cancel of that turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        191
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 207,
+      "current_line": 207,
+      "title": "cuts Grok's turn on a second send and runs both messages, never ending Grok",
+      "decision": "fix",
+      "proposed_lines": [
+        214
+      ],
+      "proposed_titles": [
+        "cuts Grok's turn on a second send and runs both messages, never ending Grok"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        214
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 286,
+      "current_line": 286,
+      "title": "leaves the card in the host queue while the turn runs, and cancels then sends it on Steer",
+      "decision": "keep",
+      "proposed_lines": [
+        301
+      ],
+      "proposed_titles": [
+        "leaves the card in the host queue while the turn runs, and cancels then sends it on Steer"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        301
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 307,
+      "current_line": 307,
+      "title": "steers an older client's send the same way",
+      "decision": "keep",
+      "proposed_lines": [
+        322
+      ],
+      "proposed_titles": [
+        "steers an older client's send the same way"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        322
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 324,
+      "current_line": 324,
+      "title": "brings the card back paused when a Stop reaches it before the cancel lands",
+      "decision": "keep",
+      "proposed_lines": [
+        339
+      ],
+      "proposed_titles": [
+        "brings the card back paused when a Stop reaches it before the cancel lands"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        339
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-structured-steer.test.ts",
+      "original_line": 347,
+      "current_line": 347,
+      "title": "sends the card at once on Steer during a turn Grok began itself, with no cancel",
+      "decision": "keep",
+      "proposed_lines": [
+        362
+      ],
+      "proposed_titles": [
+        "sends the card at once on Steer during a turn Grok began itself, with no cancel"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        362
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-text-message-ownership.test.ts",
+      "original_line": 18,
+      "current_line": 18,
+      "title": "refuses a late answer after $stopReason (next prompt: $nextPrompt)",
+      "decision": "keep",
+      "proposed_lines": [
+        18
+      ],
+      "proposed_titles": [
+        "refuses a late answer after $stopReason (next prompt: $nextPrompt)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        18
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-text-stream-identity.test.ts",
+      "original_line": 17,
+      "current_line": 17,
+      "title": "keeps interleaved reasoning and answers separate for %s",
+      "decision": "keep",
+      "proposed_lines": [
+        17
+      ],
+      "proposed_titles": [
+        "keeps interleaved reasoning and answers separate for %s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        17
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-text-stream-identity.test.ts",
+      "original_line": 56,
+      "current_line": 56,
+      "title": "diagnoses stream rejection without blocking settlement (logger throws: %s)",
+      "decision": "keep",
+      "proposed_lines": [
+        56
+      ],
+      "proposed_titles": [
+        "diagnoses stream rejection without blocking settlement (logger throws: %s)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        56
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-evidence.test.ts",
+      "original_line": 63,
+      "current_line": 63,
+      "title": "SF1 keeps multiline stdout out of the task sentence and preserves the description across frames",
+      "decision": "keep",
+      "proposed_lines": [
+        63
+      ],
+      "proposed_titles": [
+        "SF1 keeps multiline stdout out of the task sentence and preserves the description across frames"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        63
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-evidence.test.ts",
+      "original_line": 103,
+      "current_line": 103,
+      "title": "uses the command when the provider never gives a description",
+      "decision": "keep",
+      "proposed_lines": [
+        103
+      ],
+      "proposed_titles": [
+        "uses the command when the provider never gives a description"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        103
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-evidence.test.ts",
+      "original_line": 113,
+      "current_line": 113,
+      "title": "joins the captured task and queue notices into one completed row beside its launch tool",
+      "decision": "keep",
+      "proposed_lines": [
+        113
+      ],
+      "proposed_titles": [
+        "joins the captured task and queue notices into one completed row beside its launch tool"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        113
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-evidence.test.ts",
+      "original_line": 132,
+      "current_line": 132,
+      "title": "SF2 settles named tasks on a completed kill call after %s",
+      "decision": "keep",
+      "proposed_lines": [
+        132
+      ],
+      "proposed_titles": [
+        "SF2 settles named tasks on a completed kill call after %s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        132
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-evidence.test.ts",
+      "original_line": 183,
+      "current_line": 183,
+      "title": "does not infer a stop from a %s kill call",
+      "decision": "keep",
+      "proposed_lines": [
+        183
+      ],
+      "proposed_titles": [
+        "does not infer a stop from a %s kill call"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        183
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-evidence.test.ts",
+      "original_line": 198,
+      "current_line": 198,
+      "title": "SF3 drops replayed %s evidence during load and accepts a later completion",
+      "decision": "keep",
+      "proposed_lines": [
+        198
+      ],
+      "proposed_titles": [
+        "SF3 drops replayed %s evidence during load and accepts a later completion"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        198
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-results.test.ts",
+      "original_line": 9,
+      "current_line": 9,
+      "title": "settles a task from a TaskOutput result with status %s and exit code %s",
+      "decision": "keep",
+      "proposed_lines": [
+        9
+      ],
+      "proposed_titles": [
+        "settles a task from a TaskOutput result with status %s and exit code %s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        9
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-results.test.ts",
+      "original_line": 60,
+      "current_line": 60,
+      "title": "uses each structured kill result rather than inferring a stop for unsuccessful targets",
+      "decision": "keep",
+      "proposed_lines": [
+        60
+      ],
+      "proposed_titles": [
+        "uses each structured kill result rather than inferring a stop for unsuccessful targets"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        60
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-words.test.ts",
+      "original_line": 26,
+      "current_line": 26,
+      "title": "describes a running recorded command by its description, not the start summary",
+      "decision": "keep",
+      "proposed_lines": [
+        26
+      ],
+      "proposed_titles": [
+        "describes a running recorded command by its description, not the start summary"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        26
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-words.test.ts",
+      "original_line": 46,
+      "current_line": 46,
+      "title": "keeps a monitor a monitor when the agent reads its output",
+      "decision": "fix",
+      "proposed_lines": [
+        46
+      ],
+      "proposed_titles": [
+        "keeps a monitor a monitor when the agent reads its output"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        46
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-task-words.test.ts",
+      "original_line": 79,
+      "current_line": 79,
+      "title": "reads a monitor from its output command alone, and a named kind still wins",
+      "decision": "keep",
+      "proposed_lines": [
+        79
+      ],
+      "proposed_titles": [
+        "reads a monitor from its output command alone, and a named kind still wins"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        79
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-tasks.test.ts",
+      "original_line": 58,
+      "current_line": 58,
+      "title": "renders the recorded task outside turn settlement and marks it unverifiable when the session ends",
+      "decision": "keep",
+      "proposed_lines": [
+        58
+      ],
+      "proposed_titles": [
+        "renders the recorded task outside turn settlement and marks it unverifiable when the session ends"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        58
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-tasks.test.ts",
+      "original_line": 93,
+      "current_line": 93,
+      "title": "joins %s task notifications and the tool result into one row that keeps its origin",
+      "decision": "keep",
+      "proposed_lines": [
+        93
+      ],
+      "proposed_titles": [
+        "joins %s task notifications and the tool result into one row that keeps its origin"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        93
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-tasks.test.ts",
+      "original_line": 128,
+      "current_line": 128,
+      "title": "preserves explicit task completion and the provider outcome %j",
+      "decision": "keep",
+      "proposed_lines": [
+        128
+      ],
+      "proposed_titles": [
+        "preserves explicit task completion and the provider outcome %j"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        128
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-tasks.test.ts",
+      "original_line": 144,
+      "current_line": 144,
+      "title": "keeps the label and placement of a running task beside 130 other running tasks",
+      "decision": "keep",
+      "proposed_lines": [
+        144
+      ],
+      "proposed_titles": [
+        "keeps the label and placement of a running task beside 130 other running tasks"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        144
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-tasks.test.ts",
+      "original_line": 166,
+      "current_line": 166,
+      "title": "places a first task notice beside its original tool after its turn ended and another began",
+      "decision": "keep",
+      "proposed_lines": [
+        166
+      ],
+      "proposed_titles": [
+        "places a first task notice beside its original tool after its turn ended and another began"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        166
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-background-tasks.test.ts",
+      "original_line": 204,
+      "current_line": 204,
+      "title": "ignores malformed, other-session and replay-only task notifications without opening turns",
+      "decision": "keep",
+      "proposed_lines": [
+        204
+      ],
+      "proposed_titles": [
+        "ignores malformed, other-session and replay-only task notifications without opening turns"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        204
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-dialect.test.ts",
+      "original_line": 42,
+      "current_line": 42,
+      "title": "preserves provider permission labels, validates selected ids, and cancels unanswered rows on turn end",
+      "decision": "keep",
+      "proposed_lines": [
+        42
+      ],
+      "proposed_titles": [
+        "preserves provider permission labels, validates selected ids, and cancels unanswered rows on turn end"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        42
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-dialect.test.ts",
+      "original_line": 85,
+      "current_line": 85,
+      "title": "encodes labels and free text under the question text, validates grouped choices, and settles a plan without a gate",
+      "decision": "keep",
+      "proposed_lines": [
+        85
+      ],
+      "proposed_titles": [
+        "encodes labels and free text under the question text, validates grouped choices, and settles a plan without a gate"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        85
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-dialect.test.ts",
+      "original_line": 150,
+      "current_line": 150,
+      "title": "keeps client prompt settlement on the response, and never gives an autonomous turn invented success",
+      "decision": "keep",
+      "proposed_lines": [
+        150
+      ],
+      "proposed_titles": [
+        "keeps client prompt settlement on the response, and never gives an autonomous turn invented success"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        150
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-dialect.test.ts",
+      "original_line": 185,
+      "current_line": 185,
+      "title": "keeps live autonomous output while suppressing marked replay during load",
+      "decision": "keep",
+      "proposed_lines": [
+        185
+      ],
+      "proposed_titles": [
+        "keeps live autonomous output while suppressing marked replay during load"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        185
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 29,
+      "current_line": 29,
+      "title": "keeps named text across non-text barriers, splits anonymous text, and assembles reasoning",
+      "decision": "keep",
+      "proposed_lines": [
+        29
+      ],
+      "proposed_titles": [
+        "keeps named text across non-text barriers, splits anonymous text, and assembles reasoning"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        29
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 70,
+      "current_line": 70,
+      "title": "merges tool snapshots, settles input and output whole and keys a valid diff",
+      "decision": "keep",
+      "proposed_lines": [
+        70
+      ],
+      "proposed_titles": [
+        "merges tool snapshots, settles input and output whole and keys a valid diff"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        70
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 119,
+      "current_line": 119,
+      "title": "keeps context occupancy from usage_update instead of aggregate prompt usage",
+      "decision": "keep",
+      "proposed_lines": [
+        119
+      ],
+      "proposed_titles": [
+        "keeps context occupancy from usage_update instead of aggregate prompt usage"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        119
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 156,
+      "current_line": 156,
+      "title": "records %s as provider failure without an extra status row",
+      "decision": "keep",
+      "proposed_lines": [
+        156
+      ],
+      "proposed_titles": [
+        "records %s as provider failure without an extra status row"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        156
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 172,
+      "current_line": 172,
+      "title": "writes a failed turn row in the agent's words, or names the agent (%s) without any",
+      "decision": "keep",
+      "proposed_lines": [
+        172
+      ],
+      "proposed_titles": [
+        "writes a failed turn row in the agent's words, or names the agent (%s) without any"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        172
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 198,
+      "current_line": 198,
+      "title": "keeps unknown verdicts unknown and preserves unknown frames without opening a turn",
+      "decision": "fix",
+      "proposed_lines": [
+        198
+      ],
+      "proposed_titles": [
+        "bounds unknown frames without opening a turn and leaves unknown stop outcomes unset"
+      ],
+      "mapping": "renamed; behavior retained",
+      "final_lines": [
+        198
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 224,
+      "current_line": 224,
+      "title": "ignores live user echoes and options metadata, and rejects cross-session requests",
+      "decision": "keep",
+      "proposed_lines": [
+        228
+      ],
+      "proposed_titles": [
+        "ignores live user echoes and options metadata, and rejects cross-session requests"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        228
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 247,
+      "current_line": 247,
+      "title": "drops unmarked load history, except context usage",
+      "decision": "keep",
+      "proposed_lines": [
+        251
+      ],
+      "proposed_titles": [
+        "drops unmarked load history, except context usage"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        251
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 263,
+      "current_line": 263,
+      "title": "drops marked replay outside a load and uses typed standard events",
+      "decision": "keep",
+      "proposed_lines": [
+        267
+      ],
+      "proposed_titles": [
+        "drops marked replay outside a load and uses typed standard events"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        267
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 298,
+      "current_line": 298,
+      "title": "evicts completed snapshots during long turns while preserving active tool input",
+      "decision": "fix",
+      "proposed_lines": [
+        302
+      ],
+      "proposed_titles": [
+        "preserves active tool input during long turns with many completed snapshots"
+      ],
+      "mapping": "renamed; behavior retained",
+      "final_lines": [
+        302
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "original_line": 339,
+      "current_line": 339,
+      "title": "keeps a valid replacement patch when a diff exceeds the edit-search budget",
+      "decision": "keep",
+      "proposed_lines": [
+        343
+      ],
+      "proposed_titles": [
+        "keeps a valid replacement patch when a diff exceeds the edit-search budget"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        343
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagent-retention.test.ts",
+      "original_line": 118,
+      "current_line": 118,
+      "title": "finishes the original child and files its reply under its spawn turn when 33 later turns settled=%s",
+      "decision": "keep",
+      "proposed_lines": [
+        118
+      ],
+      "proposed_titles": [
+        "finishes the original child and files its reply under its spawn turn when 33 later turns settled=%s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        118
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagent-retention.test.ts",
+      "original_line": 164,
+      "current_line": 164,
+      "title": "a known-only %s still reaches the original child",
+      "decision": "keep",
+      "proposed_lines": [
+        164
+      ],
+      "proposed_titles": [
+        "a known-only %s still reaches the original child"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        164
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagent-retention.test.ts",
+      "original_line": 187,
+      "current_line": 187,
+      "title": "keeps a stopped child stopped through late progress, a repeated spawn and a finish",
+      "decision": "keep",
+      "proposed_lines": [
+        187
+      ],
+      "proposed_titles": [
+        "keeps a stopped child stopped through late progress, a repeated spawn and a finish"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        187
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagent-retention.test.ts",
+      "original_line": 211,
+      "current_line": 211,
+      "title": "lane disposal ends observation: the host hears the session end, and nothing after it",
+      "decision": "keep",
+      "proposed_lines": [
+        211
+      ],
+      "proposed_titles": [
+        "lane disposal ends observation: the host hears the session end, and nothing after it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        211
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagents.test.ts",
+      "original_line": 53,
+      "current_line": 53,
+      "title": "a foreground subagent is one record that completes, with its reply filed under it",
+      "decision": "keep",
+      "proposed_lines": [
+        53
+      ],
+      "proposed_titles": [
+        "a foreground subagent is one record that completes, with its reply filed under it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        53
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagents.test.ts",
+      "original_line": 78,
+      "current_line": 78,
+      "title": "a background subagent completes from Grok, and reading its output adds no background task",
+      "decision": "keep",
+      "proposed_lines": [
+        78
+      ],
+      "proposed_titles": [
+        "a background subagent completes from Grok, and reading its output adds no background task"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        78
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagents.test.ts",
+      "original_line": 94,
+      "current_line": 94,
+      "title": "Stop ends a foreground and a background subagent as stopped, and a later read keeps them so",
+      "decision": "keep",
+      "proposed_lines": [
+        94
+      ],
+      "proposed_titles": [
+        "Stop ends a foreground and a background subagent as stopped, and a later read keeps them so"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        94
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagents.test.ts",
+      "original_line": 110,
+      "current_line": 110,
+      "title": "a kill stops a running subagent without a background-task row, and nothing relights it",
+      "decision": "keep",
+      "proposed_lines": [
+        110
+      ],
+      "proposed_titles": [
+        "a kill stops a running subagent without a background-task row, and nothing relights it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        110
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagents.test.ts",
+      "original_line": 156,
+      "current_line": 156,
+      "title": "an output read naming a subagent this run never saw adds no entry",
+      "decision": "keep",
+      "proposed_lines": [
+        156
+      ],
+      "proposed_titles": [
+        "an output read naming a subagent this run never saw adds no entry"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        156
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-grok-subagents.test.ts",
+      "original_line": 185,
+      "current_line": 185,
+      "title": "a subagent still running when the session ends reads unverifiable",
+      "decision": "keep",
+      "proposed_lines": [
+        185
+      ],
+      "proposed_titles": [
+        "a subagent still running when the session ends reads unverifiable"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        185
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-joins.test.ts",
+      "original_line": 14,
+      "current_line": 14,
+      "title": "keeps provider message and tool ids apart across ACP sessions",
+      "decision": "keep",
+      "proposed_lines": [
+        14
+      ],
+      "proposed_titles": [
+        "keeps provider message and tool ids apart across ACP sessions"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        14
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-joins.test.ts",
+      "original_line": 50,
+      "current_line": 50,
+      "title": "keeps a request id a new child reuses apart from the old child",
+      "decision": "keep",
+      "proposed_lines": [
+        50
+      ],
+      "proposed_titles": [
+        "keeps a request id a new child reuses apart from the old child"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        50
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-open-enums.test.ts",
+      "original_line": 26,
+      "current_line": 26,
+      "title": "keeps a tool with a newer kind or status as a tool row in its last known state",
+      "decision": "keep",
+      "proposed_lines": [
+        26
+      ],
+      "proposed_titles": [
+        "keeps a tool with a newer kind or status as a tool row in its last known state"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        26
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-open-enums.test.ts",
+      "original_line": 47,
+      "current_line": 47,
+      "title": "reads a plan entry with a newer status or priority as not done",
+      "decision": "keep",
+      "proposed_lines": [
+        47
+      ],
+      "proposed_titles": [
+        "reads a plan entry with a newer status or priority as not done"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        47
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-open-enums.test.ts",
+      "original_line": 60,
+      "current_line": 60,
+      "title": "ends a turn with a newer stop reason without inventing an outcome",
+      "decision": "keep",
+      "proposed_lines": [
+        60
+      ],
+      "proposed_titles": [
+        "ends a turn with a newer stop reason without inventing an outcome"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        60
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-open-enums.test.ts",
+      "original_line": 70,
+      "current_line": 70,
+      "title": "shows a permission the runtime could only partly read, with what it could read",
+      "decision": "keep",
+      "proposed_lines": [
+        70
+      ],
+      "proposed_titles": [
+        "shows a permission the runtime could only partly read, with what it could read"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        70
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-opencode-dialect.test.ts",
+      "original_line": 41,
+      "current_line": 41,
+      "title": "reads a shell tool's exit code and output from OpenCode's metadata",
+      "decision": "fix",
+      "proposed_lines": [
+        41
+      ],
+      "proposed_titles": [
+        "keeps shell result semantics through the journal: $label"
+      ],
+      "mapping": "renamed; behavior retained",
+      "final_lines": [
+        41
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-opencode-dialect.test.ts",
+      "original_line": 65,
+      "current_line": 65,
+      "title": "keeps a shared exit code the agent already reported",
+      "decision": "consolidate",
+      "proposed_lines": [
+        41
+      ],
+      "proposed_titles": [
+        "keeps shell result semantics through the journal: $label"
+      ],
+      "mapping": "transferred to parameter table",
+      "final_lines": [
+        41
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-opencode-dialect.test.ts",
+      "original_line": 73,
+      "current_line": 73,
+      "title": "leaves a tool with no command metadata as it came",
+      "decision": "consolidate",
+      "proposed_lines": [
+        41
+      ],
+      "proposed_titles": [
+        "keeps shell result semantics through the journal: $label"
+      ],
+      "mapping": "transferred to parameter table",
+      "final_lines": [
+        41
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-opencode-dialect.test.ts",
+      "original_line": 78,
+      "current_line": 78,
+      "title": "shows OpenCode's own permission option names",
+      "decision": "keep",
+      "proposed_lines": [
+        73
+      ],
+      "proposed_titles": [
+        "shows OpenCode's own permission option names"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        79
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recordings.test.ts",
+      "original_line": 13,
+      "current_line": 13,
+      "title": "assembles basic chunks and partial tool calls with stable identities and usage",
+      "decision": "keep",
+      "proposed_lines": [
+        13
+      ],
+      "proposed_titles": [
+        "assembles basic chunks and partial tool calls with stable identities and usage"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        13
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recordings.test.ts",
+      "original_line": 39,
+      "current_line": 39,
+      "title": "shows permission options verbatim and keeps allow and reject answers after turn settlement",
+      "decision": "keep",
+      "proposed_lines": [
+        39
+      ],
+      "proposed_titles": [
+        "shows permission options verbatim and keeps allow and reject answers after turn settlement"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        39
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recordings.test.ts",
+      "original_line": 63,
+      "current_line": 63,
+      "title": "settles the abandoned in_progress tool on cancel and accepts the next prompt",
+      "decision": "keep",
+      "proposed_lines": [
+        63
+      ],
+      "proposed_titles": [
+        "settles the abandoned in_progress tool on cancel and accepts the next prompt"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        63
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recordings.test.ts",
+      "original_line": 76,
+      "current_line": 76,
+      "title": "drops load history, except its context usage",
+      "decision": "keep",
+      "proposed_lines": [
+        76
+      ],
+      "proposed_titles": [
+        "drops load history, except its context usage"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        76
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recordings.test.ts",
+      "original_line": 111,
+      "current_line": 111,
+      "title": "keeps an OpenCode 2 chat's history once across a reopen, and adds the follow-up turn",
+      "decision": "keep",
+      "proposed_lines": [
+        111
+      ],
+      "proposed_titles": [
+        "keeps an OpenCode 2 chat's history once across a reopen, and adds the follow-up turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        111
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recordings.test.ts",
+      "original_line": 137,
+      "current_line": 137,
+      "title": "answers questions with the recorded reply shape and shows the plan as a plan, not a gate",
+      "decision": "keep",
+      "proposed_lines": [
+        137
+      ],
+      "proposed_titles": [
+        "answers questions with the recorded reply shape and shows the plan as a plan, not a gate"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        137
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recordings.test.ts",
+      "original_line": 154,
+      "current_line": 154,
+      "title": "opens and ends the background completion turn without a client prompt",
+      "decision": "keep",
+      "proposed_lines": [
+        154
+      ],
+      "proposed_titles": [
+        "opens and ends the background completion turn without a client prompt"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        154
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recovery.test.ts",
+      "original_line": 11,
+      "current_line": 11,
+      "title": "replays every notification in the full recording without extension status rows or persisted signatures",
+      "decision": "fix",
+      "proposed_lines": [
+        11
+      ],
+      "proposed_titles": [
+        "replays every notification in the full recording without extension status rows or persisted signatures"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        11
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recovery.test.ts",
+      "original_line": 28,
+      "current_line": 28,
+      "title": "uses the last of nine model calls instead of the aggregate turn usage",
+      "decision": "keep",
+      "proposed_lines": [
+        27
+      ],
+      "proposed_titles": [
+        "uses the last of nine model calls instead of the aggregate turn usage"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        27
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recovery.test.ts",
+      "original_line": 35,
+      "current_line": 35,
+      "title": "accepts an empty plan request: placeholder plan row, answered at once without approving (%s)",
+      "decision": "keep",
+      "proposed_lines": [
+        34
+      ],
+      "proposed_titles": [
+        "accepts an empty plan request: placeholder plan row, answered at once without approving (%s)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        34
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recovery.test.ts",
+      "original_line": 59,
+      "current_line": 59,
+      "title": "degrades tool snapshots under forty large concurrent tools without throwing or losing later updates",
+      "decision": "keep",
+      "proposed_lines": [
+        58
+      ],
+      "proposed_titles": [
+        "degrades tool snapshots under forty large concurrent tools without throwing or losing later updates"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        58
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-recovery.test.ts",
+      "original_line": 99,
+      "current_line": 99,
+      "title": "ignores stray replay and both extension method aliases by default",
+      "decision": "keep",
+      "proposed_lines": [
+        98
+      ],
+      "proposed_titles": [
+        "ignores stray replay and both extension method aliases by default"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        98
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-routing.test.ts",
+      "original_line": 21,
+      "current_line": 21,
+      "title": "opens %s independently of a queued user prompt",
+      "decision": "keep",
+      "proposed_lines": [
+        21
+      ],
+      "proposed_titles": [
+        "opens %s independently of a queued user prompt"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        21
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-routing.test.ts",
+      "original_line": 41,
+      "current_line": 41,
+      "title": "keeps a streaming background turn open when the user sends and scopes its permission to the tool",
+      "decision": "keep",
+      "proposed_lines": [
+        41
+      ],
+      "proposed_titles": [
+        "keeps a streaming background turn open when the user sends and scopes its permission to the tool"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        41
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-routing.test.ts",
+      "original_line": 95,
+      "current_line": 95,
+      "title": "reports %s before an RPC rejection and accepts the next prompt",
+      "decision": "keep",
+      "proposed_lines": [
+        95
+      ],
+      "proposed_titles": [
+        "reports %s before an RPC rejection and accepts the next prompt"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        95
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-routing.test.ts",
+      "original_line": 115,
+      "current_line": 115,
+      "title": "settles an RPC-only failure even if the provider never streamed a frame",
+      "decision": "keep",
+      "proposed_lines": [
+        115
+      ],
+      "proposed_titles": [
+        "settles an RPC-only failure even if the provider never streamed a frame"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        115
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-turn-failures.test.ts",
+      "original_line": 49,
+      "current_line": 49,
+      "title": "writes the reason once when Grok sends it four times, in the failed turn",
+      "decision": "keep",
+      "proposed_lines": [
+        49
+      ],
+      "proposed_titles": [
+        "writes the reason once when Grok sends it four times, in the failed turn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        49
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-turn-failures.test.ts",
+      "original_line": 101,
+      "current_line": 101,
+      "title": "takes the reason from the prompt error answer when no frame carried it",
+      "decision": "keep",
+      "proposed_lines": [
+        101
+      ],
+      "proposed_titles": [
+        "takes the reason from the prompt error answer when no frame carried it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        101
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-turn-failures.test.ts",
+      "original_line": 119,
+      "current_line": 119,
+      "title": "reads the reason when only the %s carries it",
+      "decision": "keep",
+      "proposed_lines": [
+        119
+      ],
+      "proposed_titles": [
+        "reads the reason when only the %s carries it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        119
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-turn-failures.test.ts",
+      "original_line": 156,
+      "current_line": 156,
+      "title": "keeps the reason when a later copy carries none",
+      "decision": "keep",
+      "proposed_lines": [
+        156
+      ],
+      "proposed_titles": [
+        "keeps the reason when a later copy carries none"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        156
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-turn-failures.test.ts",
+      "original_line": 168,
+      "current_line": 168,
+      "title": "upgrades an early diagnostic to a usage failure without a later downgrade",
+      "decision": "keep",
+      "proposed_lines": [
+        168
+      ],
+      "proposed_titles": [
+        "upgrades an early diagnostic to a usage failure without a later downgrade"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        168
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-turn-failures.test.ts",
+      "original_line": 197,
+      "current_line": 197,
+      "title": "writes no failure row for a turn the provider ended on purpose",
+      "decision": "keep",
+      "proposed_lines": [
+        197
+      ],
+      "proposed_titles": [
+        "writes no failure row for a turn the provider ended on purpose"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        197
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-timeline-turn-failures.test.ts",
+      "original_line": 209,
+      "current_line": 209,
+      "title": "does not reopen or retarget an ended prompt for its late frame",
+      "decision": "keep",
+      "proposed_lines": [
+        209
+      ],
+      "proposed_titles": [
+        "does not reopen or retarget an ended prompt for its late frame"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        209
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-visuals-skill.test.ts",
+      "original_line": 22,
+      "current_line": 22,
+      "title": "names the plugin folder only on a release known to take --plugin-dir",
+      "decision": "keep",
+      "proposed_lines": [
+        22
+      ],
+      "proposed_titles": [
+        "names the plugin folder only on a release known to take --plugin-dir"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        22
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-visuals-skill.test.ts",
+      "original_line": 35,
+      "current_line": 35,
+      "title": "adds the skills root as the only inline config when the user has none",
+      "decision": "keep",
+      "proposed_lines": [
+        35
+      ],
+      "proposed_titles": [
+        "adds the skills root as the only inline config when the user has none"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        35
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-visuals-skill.test.ts",
+      "original_line": 41,
+      "current_line": 41,
+      "title": "keeps the user's own inline config and skill paths",
+      "decision": "keep",
+      "proposed_lines": [
+        41
+      ],
+      "proposed_titles": [
+        "keeps the user's own inline config and skill paths"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        41
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-visuals-skill.test.ts",
+      "original_line": 55,
+      "current_line": 55,
+      "title": "leaves a config it cannot extend safely alone",
+      "decision": "keep",
+      "proposed_lines": [
+        55
+      ],
+      "proposed_titles": [
+        "leaves a config it cannot extend safely alone"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        55
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-visuals-skill.test.ts",
+      "original_line": 66,
+      "current_line": 66,
+      "title": "skips 1.x, where the inline list would replace the user's own skill paths",
+      "decision": "keep",
+      "proposed_lines": [
+        66
+      ],
+      "proposed_titles": [
+        "skips 1.x, where the inline list would replace the user's own skill paths"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        66
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-visuals-skill.test.ts",
+      "original_line": 73,
+      "current_line": 73,
+      "title": "names the plugin folder and leaves the user's own config files alone",
+      "decision": "keep",
+      "proposed_lines": [
+        73
+      ],
+      "proposed_titles": [
+        "names the plugin folder and leaves the user's own config files alone"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        73
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-write-queue-retention.test.ts",
+      "original_line": 59,
+      "current_line": 59,
+      "title": "releases the completed last drain closure while the peer remains usable (backpressure=%s)",
+      "decision": "keep",
+      "proposed_lines": [
+        59
+      ],
+      "proposed_titles": [
+        "releases the completed last drain closure while the peer remains usable (backpressure=%s)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        59
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-write-queue-retention.test.ts",
+      "original_line": 77,
+      "current_line": 77,
+      "title": "keeps the active write until stream completion then releases its drain closure",
+      "decision": "keep",
+      "proposed_lines": [
+        77
+      ],
+      "proposed_titles": [
+        "keeps the active write until stream completion then releases its drain closure"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        77
+      ]
+    },
+    {
+      "path": "src/main/acp/acp-write-queue-retention.test.ts",
+      "original_line": 98,
+      "current_line": 98,
+      "title": "retires a closed peer drain closure after its late stream completion",
+      "decision": "keep",
+      "proposed_lines": [
+        98
+      ],
+      "proposed_titles": [
+        "retires a closed peer drain closure after its late stream completion"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        98
+      ]
+    },
+    {
+      "path": "src/main/active-view-persistence-boundary.test.ts",
+      "original_line": 41,
+      "current_line": 41,
+      "title": "persists a view switch without changing the global durable snapshot",
+      "decision": "keep",
+      "proposed_lines": [
+        41
+      ],
+      "proposed_titles": [
+        "persists a view switch without changing the global durable snapshot"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        41
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "original_line": 70,
+      "current_line": 67,
+      "title": "a write parked on its rename cannot overwrite a later flushOrThrow",
+      "decision": "fix",
+      "proposed_lines": [
+        79
+      ],
+      "proposed_titles": [
+        "a write parked on its rename cannot overwrite a later flushOrThrow"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        79
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "original_line": 94,
+      "current_line": 89,
+      "title": "an unlink veto failure queues a newest-value correction",
+      "decision": "keep",
+      "proposed_lines": [
+        102
+      ],
+      "proposed_titles": [
+        "an unlink veto failure queues a newest-value correction"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        102
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "original_line": 115,
+      "current_line": 110,
+      "title": "a completed stale rename cannot regress the persisted marker",
+      "decision": "keep",
+      "proposed_lines": [
+        124
+      ],
+      "proposed_titles": [
+        "a completed stale rename cannot regress the persisted marker"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        124
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "original_line": 137,
+      "current_line": 132,
+      "title": "a pending flush drains a view changed during its rename",
+      "decision": "keep",
+      "proposed_lines": [
+        147
+      ],
+      "proposed_titles": [
+        "a pending flush drains a view changed during its rename"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        147
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "original_line": 155,
+      "current_line": 150,
+      "title": "coalesces concurrent pending flushes while draining the newest view",
+      "decision": "keep",
+      "proposed_lines": [
+        166
+      ],
+      "proposed_titles": [
+        "coalesces concurrent pending flushes while draining the newest view"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        166
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "original_line": 175,
+      "current_line": 170,
+      "title": "keeps an unabortable shared drain alive when an attached signal aborts",
+      "decision": "keep",
+      "proposed_lines": [
+        187
+      ],
+      "proposed_titles": [
+        "keeps an unabortable shared drain alive when an attached signal aborts"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        187
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "original_line": 195,
+      "current_line": 190,
+      "title": "stops an abortable-only drain after its signal aborts",
+      "decision": "keep",
+      "proposed_lines": [
+        208
+      ],
+      "proposed_titles": [
+        "stops an abortable-only drain after its signal aborts"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        208
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference.test.ts",
+      "original_line": 21,
+      "current_line": 21,
+      "title": "migrates the legacy durable-state value into the profile sidecar",
+      "decision": "keep",
+      "proposed_lines": [
+        21
+      ],
+      "proposed_titles": [
+        "migrates the legacy durable-state value into the profile sidecar"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        21
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference.test.ts",
+      "original_line": 38,
+      "current_line": 37,
+      "title": "coalesces rapid switches into one tiny preference write",
+      "decision": "keep",
+      "proposed_lines": [
+        37
+      ],
+      "proposed_titles": [
+        "coalesces rapid switches into one tiny preference write"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        37
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference.test.ts",
+      "original_line": 56,
+      "current_line": 55,
+      "title": "flushes synchronously for an immediate graceful exit",
+      "decision": "keep",
+      "proposed_lines": [
+        55
+      ],
+      "proposed_titles": [
+        "flushes synchronously for an immediate graceful exit"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        55
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference.test.ts",
+      "original_line": 72,
+      "current_line": 71,
+      "title": "ignores an invalid sidecar and invalid updates",
+      "decision": "keep",
+      "proposed_lines": [
+        71
+      ],
+      "proposed_titles": [
+        "ignores an invalid sidecar and invalid updates"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        71
+      ]
+    },
+    {
+      "path": "src/main/active-view-preference.test.ts",
+      "original_line": 81,
+      "current_line": 80,
+      "title": "rejects inherited object keys from a corrupt sidecar",
+      "decision": "keep",
+      "proposed_lines": [
+        80
+      ],
+      "proposed_titles": [
+        "rejects inherited object keys from a corrupt sidecar"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        80
+      ]
+    },
+    {
+      "path": "src/main/agent-auth-restart-preservation.test.ts",
+      "original_line": 11,
+      "current_line": 11,
+      "title": "syncs Codex and flushes the store",
+      "decision": "keep",
+      "proposed_lines": [
+        11
+      ],
+      "proposed_titles": [
+        "syncs Codex and flushes the store"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        11
+      ]
+    },
+    {
+      "path": "src/main/agent-auth-restart-preservation.test.ts",
+      "original_line": 30,
+      "current_line": 30,
+      "title": "drains retained WSL Codex auth before flushing the store",
+      "decision": "keep",
+      "proposed_lines": [
+        30
+      ],
+      "proposed_titles": [
+        "drains retained WSL Codex auth before flushing the store"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        30
+      ]
+    },
+    {
+      "path": "src/main/agent-auth-restart-preservation.test.ts",
+      "original_line": 52,
+      "current_line": 52,
+      "title": "does not release restart while the bounded WSL drain is still running",
+      "decision": "keep",
+      "proposed_lines": [
+        52
+      ],
+      "proposed_titles": [
+        "does not release restart while the bounded WSL drain is still running"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        52
+      ]
+    },
+    {
+      "path": "src/main/agent-auth-restart-preservation.test.ts",
+      "original_line": 83,
+      "current_line": 83,
+      "title": "continues after the bounded WSL drain fails without logging secrets",
+      "decision": "keep",
+      "proposed_lines": [
+        83
+      ],
+      "proposed_titles": [
+        "continues after the bounded WSL drain fails without logging secrets"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        83
+      ]
+    },
+    {
+      "path": "src/main/agent-auth-restart-preservation.test.ts",
+      "original_line": 104,
+      "current_line": 104,
+      "title": "checkpoints admitted state without waiting for ongoing edits when auth services are missing",
+      "decision": "keep",
+      "proposed_lines": [
+        104
+      ],
+      "proposed_titles": [
+        "checkpoints admitted state without waiting for ongoing edits when auth services are missing"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        104
+      ]
+    },
+    {
+      "path": "src/main/agent-auth-restart-preservation.test.ts",
+      "original_line": 114,
+      "current_line": 114,
+      "title": "logs secret-free warnings and does not throw when sync fails",
+      "decision": "keep",
+      "proposed_lines": [
+        114
+      ],
+      "proposed_titles": [
+        "logs secret-free warnings and does not throw when sync fails"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        114
+      ]
+    },
+    {
+      "path": "src/main/agent-auth-restart-preservation.test.ts",
+      "original_line": 134,
+      "current_line": 134,
+      "title": "bounds a store flush that never settles",
+      "decision": "fix",
+      "proposed_lines": [
+        134
+      ],
+      "proposed_titles": [
+        "bounds a store flush that never settles"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        134
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service-platform-assertions.test.ts",
+      "original_line": 27,
+      "current_line": 27,
+      "title": "does not observe rows appended to the caller array after setStatuses",
+      "decision": "fix",
+      "proposed_lines": [
+        27
+      ],
+      "proposed_titles": [
+        "does not observe rows appended to the caller array after setStatuses"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        27
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service-platform-assertions.test.ts",
+      "original_line": 85,
+      "current_line": 85,
+      "title": "uses caffeinate without Electron display blocking on macOS",
+      "decision": "keep",
+      "proposed_lines": [
+        98
+      ],
+      "proposed_titles": [
+        "uses caffeinate without Electron display blocking on macOS"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        100
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service-platform-assertions.test.ts",
+      "original_line": 97,
+      "current_line": 97,
+      "title": "keeps Electron blocker active when macOS assertion start fails",
+      "decision": "keep",
+      "proposed_lines": [
+        110
+      ],
+      "proposed_titles": [
+        "keeps Electron blocker active when macOS assertion start fails"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        112
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service-platform-assertions.test.ts",
+      "original_line": 117,
+      "current_line": 117,
+      "title": "drops the display-blocking fallback after caffeinate recovers",
+      "decision": "keep",
+      "proposed_lines": [
+        130
+      ],
+      "proposed_titles": [
+        "drops the display-blocking fallback after caffeinate recovers"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        132
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service-platform-assertions.test.ts",
+      "original_line": 131,
+      "current_line": 131,
+      "title": "keeps Electron blocker active when Linux assertion start fails",
+      "decision": "keep",
+      "proposed_lines": [
+        144
+      ],
+      "proposed_titles": [
+        "keeps Electron blocker active when Linux assertion start fails"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        146
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service-platform-assertions.test.ts",
+      "original_line": 151,
+      "current_line": 151,
+      "title": "starts platform assertions when Electron blocker start fails",
+      "decision": "keep",
+      "proposed_lines": [
+        164
+      ],
+      "proposed_titles": [
+        "starts platform assertions when Electron blocker start fails"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        166
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 103,
+      "current_line": 103,
+      "title": "does not start when disabled even with a running status",
+      "decision": "keep",
+      "proposed_lines": [
+        113
+      ],
+      "proposed_titles": [
+        "does not start when disabled even with a running status"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        115
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 112,
+      "current_line": 112,
+      "title": "starts Electron and platform assertions when enabled with a fresh working status",
+      "decision": "keep",
+      "proposed_lines": [
+        122
+      ],
+      "proposed_titles": [
+        "starts Electron and platform assertions when enabled with a fresh working status"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        124
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 127,
+      "current_line": 127,
+      "title": "stays awake in On mode without a working agent",
+      "decision": "keep",
+      "proposed_lines": [
+        137
+      ],
+      "proposed_titles": [
+        "stays awake in On mode without a working agent"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        139
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 137,
+      "current_line": 137,
+      "title": "publishes Auto activity changes to status subscribers",
+      "decision": "keep",
+      "proposed_lines": [
+        147
+      ],
+      "proposed_titles": [
+        "publishes Auto activity changes to status subscribers"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        149
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 163,
+      "current_line": 163,
+      "title": "starts and stops from settings flips around an already-running status",
+      "decision": "keep",
+      "proposed_lines": [
+        173
+      ],
+      "proposed_titles": [
+        "starts and stops from settings flips around an already-running status"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        175
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 181,
+      "current_line": 181,
+      "title": "ignores startup-hydrated working statuses that were not observed in this runtime",
+      "decision": "keep",
+      "proposed_lines": [
+        191
+      ],
+      "proposed_titles": [
+        "ignores startup-hydrated working statuses that were not observed in this runtime"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        193
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 191,
+      "current_line": 191,
+      "title": "does not start for blocked, waiting, or done statuses",
+      "decision": "keep",
+      "proposed_lines": [
+        201
+      ],
+      "proposed_titles": [
+        "does not start for blocked, waiting, or done statuses"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        203
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 205,
+      "current_line": 205,
+      "title": "does not start a second blocker when one working status replaces another",
+      "decision": "keep",
+      "proposed_lines": [
+        215
+      ],
+      "proposed_titles": [
+        "does not start a second blocker when one working status replaces another"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        217
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 216,
+      "current_line": 216,
+      "title": "stops when the last running status is dropped",
+      "decision": "keep",
+      "proposed_lines": [
+        226
+      ],
+      "proposed_titles": [
+        "stops when the last running status is dropped"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        228
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 231,
+      "current_line": 231,
+      "title": "does not start for a stale working status",
+      "decision": "keep",
+      "proposed_lines": [
+        241
+      ],
+      "proposed_titles": [
+        "does not start for a stale working status"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        243
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 241,
+      "current_line": 241,
+      "title": "stops when the only running status becomes stale without another event",
+      "decision": "keep",
+      "proposed_lines": [
+        251
+      ],
+      "proposed_titles": [
+        "stops when the only running status becomes stale without another event"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        253
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 260,
+      "current_line": 260,
+      "title": "reschedules stale expiry for a newer running status",
+      "decision": "keep",
+      "proposed_lines": [
+        270
+      ],
+      "proposed_titles": [
+        "reschedules stale expiry for a newer running status"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        272
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 283,
+      "current_line": 283,
+      "title": "renews a working lease across two hours without semantic status churn",
+      "decision": "keep",
+      "proposed_lines": [
+        293
+      ],
+      "proposed_titles": [
+        "renews a working lease across two hours without semantic status churn"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        295
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 312,
+      "current_line": 312,
+      "title": "keeps the blocker id when stop fails and Electron reports it is still started",
+      "decision": "keep",
+      "proposed_lines": [
+        322
+      ],
+      "proposed_titles": [
+        "keeps the blocker id when stop fails and Electron reports it is still started"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        324
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 328,
+      "current_line": 328,
+      "title": "disposes by clearing timers and stopping an active blocker once",
+      "decision": "keep",
+      "proposed_lines": [
+        338
+      ],
+      "proposed_titles": [
+        "disposes by clearing timers and stopping an active blocker once"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        340
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 346,
+      "current_line": 346,
+      "title": "reconciles assertions on power resume while work is still eligible",
+      "decision": "keep",
+      "proposed_lines": [
+        356
+      ],
+      "proposed_titles": [
+        "reconciles assertions on power resume while work is still eligible"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        358
+      ]
+    },
+    {
+      "path": "src/main/agent-awake-service.test.ts",
+      "original_line": 363,
+      "current_line": 363,
+      "title": "unsubscribes the resume listener on dispose",
+      "decision": "fix",
+      "proposed_lines": [
+        373
+      ],
+      "proposed_titles": [
+        "unsubscribes the resume listener on dispose"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        375
+      ]
+    },
+    {
+      "path": "src/main/agent-cli-version-probe.test.ts",
+      "original_line": 24,
+      "current_line": 24,
+      "title": "asks the program for its version, bounded, where and as the launch would run it",
+      "decision": "keep",
+      "proposed_lines": [
+        25
+      ],
+      "proposed_titles": [
+        "asks the program for its version, bounded, where and as the launch would run it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        25
+      ]
+    },
+    {
+      "path": "src/main/agent-cli-version-probe.test.ts",
+      "original_line": 39,
+      "current_line": 39,
+      "title": "reads a version printed with a name, prefix or slash: %j",
+      "decision": "keep",
+      "proposed_lines": [
+        40
+      ],
+      "proposed_titles": [
+        "reads a version printed with a name, prefix or slash: %j"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        40
+      ]
+    },
+    {
+      "path": "src/main/agent-cli-version-probe.test.ts",
+      "original_line": 47,
+      "current_line": 47,
+      "title": "holds OpenCode %s to its minimum (too old for %s)",
+      "decision": "keep",
+      "proposed_lines": [
+        48
+      ],
+      "proposed_titles": [
+        "holds OpenCode %s to its minimum (too old for %s)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        48
+      ]
+    },
+    {
+      "path": "src/main/agent-cli-version-probe.test.ts",
+      "original_line": 63,
+      "current_line": 63,
+      "title": "reads a version printed only on stderr, as Pi 0.73 does",
+      "decision": "keep",
+      "proposed_lines": [
+        64
+      ],
+      "proposed_titles": [
+        "reads a version printed only on stderr, as Pi 0.73 does"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        64
+      ]
+    },
+    {
+      "path": "src/main/agent-cli-version-probe.test.ts",
+      "original_line": 72,
+      "current_line": 72,
+      "title": "cannot tell after %s",
+      "decision": "keep",
+      "proposed_lines": [
+        73
+      ],
+      "proposed_titles": [
+        "cannot tell after %s"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        73
+      ]
+    },
+    {
+      "path": "src/main/agent-cli-version-probe.test.ts",
+      "original_line": 85,
+      "current_line": 85,
+      "title": "calls a program that does not start missing",
+      "decision": "keep",
+      "proposed_lines": [
+        86
+      ],
+      "proposed_titles": [
+        "calls a program that does not start missing"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        86
+      ]
+    },
+    {
+      "path": "src/main/agent-cli-version-probe.test.ts",
+      "original_line": 95,
+      "current_line": 95,
+      "title": "says why it refused, with what the binary printed",
+      "decision": "fix",
+      "proposed_lines": [
+        96
+      ],
+      "proposed_titles": [
+        "says why it refused, with what the binary printed"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        96
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 45,
+      "current_line": 45,
+      "title": "uses the login-shell GROK_HOME and normalizes trailing separators",
+      "decision": "keep",
+      "proposed_lines": [
+        45
+      ],
+      "proposed_titles": [
+        "uses the login-shell GROK_HOME and normalizes trailing separators"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        45
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 57,
+      "current_line": 57,
+      "title": "passes -lc to a login shell that supports it",
+      "decision": "keep",
+      "proposed_lines": [
+        57
+      ],
+      "proposed_titles": [
+        "passes -lc to a login shell that supports it"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        57
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 68,
+      "current_line": 68,
+      "title": "falls back when the login-shell GROK_HOME is not an absolute POSIX path",
+      "decision": "keep",
+      "proposed_lines": [
+        68
+      ],
+      "proposed_titles": [
+        "falls back when the login-shell GROK_HOME is not an absolute POSIX path"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        68
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 77,
+      "current_line": 77,
+      "title": "falls back when the probe fails or times out",
+      "decision": "fix",
+      "proposed_lines": [
+        77
+      ],
+      "proposed_titles": [
+        "falls back when the probe fails or times out: %s"
+      ],
+      "mapping": "renamed; behavior retained",
+      "final_lines": [
+        77
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 86,
+      "current_line": 86,
+      "title": "reads KIRO_HOME from the login shell",
+      "decision": "keep",
+      "proposed_lines": [
+        89
+      ],
+      "proposed_titles": [
+        "reads KIRO_HOME from the login shell"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        89
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 94,
+      "current_line": 94,
+      "title": "falls back to ~/.kiro when KIRO_HOME is unset or the probe fails",
+      "decision": "keep",
+      "proposed_lines": [
+        97
+      ],
+      "proposed_titles": [
+        "falls back to ~/.kiro when KIRO_HOME is unset or the probe fails"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        97
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 105,
+      "current_line": 105,
+      "title": "adopts profile-only agent homes and keeps ones already set",
+      "decision": "keep",
+      "proposed_lines": [
+        108
+      ],
+      "proposed_titles": [
+        "adopts profile-only agent homes and keeps ones already set"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        108
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "original_line": 116,
+      "current_line": 116,
+      "title": "leaves the environment alone when the login shell has no override",
+      "decision": "keep",
+      "proposed_lines": [
+        119
+      ],
+      "proposed_titles": [
+        "leaves the environment alone when the login shell has no override"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        119
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 59,
+      "current_line": 59,
+      "title": "$name",
+      "decision": "keep",
+      "proposed_lines": [
+        59
+      ],
+      "proposed_titles": [
+        "$name"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        59
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 72,
+      "current_line": 72,
+      "title": "moves a pane to done at a session boundary without naming a finish",
+      "decision": "keep",
+      "proposed_lines": [
+        72
+      ],
+      "proposed_titles": [
+        "moves a pane to done at a session boundary without naming a finish"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        72
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 88,
+      "current_line": 88,
+      "title": "names the pane and its host-qualified workspace: local, SSH host, folder",
+      "decision": "keep",
+      "proposed_lines": [
+        88
+      ],
+      "proposed_titles": [
+        "names the pane and its host-qualified workspace: local, SSH host, folder"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        88
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 125,
+      "current_line": 125,
+      "title": "seeds a status present at attach, never as a transition",
+      "decision": "keep",
+      "proposed_lines": [
+        125
+      ],
+      "proposed_titles": [
+        "seeds a status present at attach, never as a transition"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        125
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 144,
+      "current_line": 144,
+      "title": "seeds rows hydrated without a mutation once asked, and only those",
+      "decision": "keep",
+      "proposed_lines": [
+        144
+      ],
+      "proposed_titles": [
+        "seeds rows hydrated without a mutation once asked, and only those"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        144
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 163,
+      "current_line": 163,
+      "title": "rests a pane whose row goes",
+      "decision": "keep",
+      "proposed_lines": [
+        163
+      ],
+      "proposed_titles": [
+        "rests a pane whose row goes"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        163
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 176,
+      "current_line": 176,
+      "title": "still tells every reader when one throws",
+      "decision": "keep",
+      "proposed_lines": [
+        176
+      ],
+      "proposed_titles": [
+        "still tells every reader when one throws"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        176
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 199,
+      "current_line": 199,
+      "title": "reports every live look at a pane, changed or not, with or without a workspace",
+      "decision": "keep",
+      "proposed_lines": [
+        199
+      ],
+      "proposed_titles": [
+        "reports every live look at a pane, changed or not, with or without a workspace"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        199
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 219,
+      "current_line": 219,
+      "title": "stops observing once detached",
+      "decision": "keep",
+      "proposed_lines": [
+        219
+      ],
+      "proposed_titles": [
+        "stops observing once detached"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        219
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 231,
+      "current_line": 231,
+      "title": "seeds a first title, then names its turns, and rests the pane with its terminal",
+      "decision": "keep",
+      "proposed_lines": [
+        231
+      ],
+      "proposed_titles": [
+        "seeds a first title, then names its turns, and rests the pane with its terminal"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        231
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 250,
+      "current_line": 250,
+      "title": "rests a pane where it was before seeding it in the workspace of a row present at attach",
+      "decision": "keep",
+      "proposed_lines": [
+        250
+      ],
+      "proposed_titles": [
+        "rests a pane where it was before seeding it in the workspace of a row present at attach"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        250
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/agent-transition-detector.test.ts",
+      "original_line": 262,
+      "current_line": 262,
+      "title": "finishes a title-tracked turn when the first hook row reports done",
+      "decision": "keep",
+      "proposed_lines": [
+        262
+      ],
+      "proposed_titles": [
+        "finishes a title-tracked turn when the first hook row reports done"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        262
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/branch-rename-failure-output.test.ts",
+      "original_line": 20,
+      "current_line": 20,
+      "title": "returns the formatted capture for a remembered worktree",
+      "decision": "keep",
+      "proposed_lines": [
+        20
+      ],
+      "proposed_titles": [
+        "returns the formatted capture for a remembered worktree"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        20
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/branch-rename-failure-output.test.ts",
+      "original_line": 27,
+      "current_line": 27,
+      "title": "returns null for unknown worktrees and after clearing",
+      "decision": "keep",
+      "proposed_lines": [
+        27
+      ],
+      "proposed_titles": [
+        "returns null for unknown worktrees and after clearing"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        27
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/branch-rename-failure-output.test.ts",
+      "original_line": 34,
+      "current_line": 34,
+      "title": "evicts the least recently recorded worktree beyond the cap",
+      "decision": "keep",
+      "proposed_lines": [
+        34
+      ],
+      "proposed_titles": [
+        "evicts the least recently recorded worktree beyond the cap"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        34
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/branch-rename-failure-output.test.ts",
+      "original_line": 42,
+      "current_line": 42,
+      "title": "re-recording refreshes recency so the entry survives eviction",
+      "decision": "keep",
+      "proposed_lines": [
+        42
+      ],
+      "proposed_titles": [
+        "re-recording refreshes recency so the entry survives eviction"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        42
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/cursor-replay-guard.test.ts",
+      "original_line": 68,
+      "current_line": 68,
+      "title": "drops imported Claude events while preserving the hook protocol response",
+      "decision": "keep",
+      "proposed_lines": [
+        68
+      ],
+      "proposed_titles": [
+        "drops imported Claude events while preserving the hook protocol response"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        68
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/cursor-replay-guard.test.ts",
+      "original_line": 74,
+      "current_line": 74,
+      "title": "still delivers Claude hooks when only part of the Cursor environment is present: %j",
+      "decision": "keep",
+      "proposed_lines": [
+        74
+      ],
+      "proposed_titles": [
+        "still delivers Claude hooks when only part of the Cursor environment is present: %j"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        74
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/cursor-replay-guard.test.ts",
+      "original_line": 83,
+      "current_line": 83,
+      "title": "keeps Cursor native hooks reporting in the same environment",
+      "decision": "keep",
+      "proposed_lines": [
+        83
+      ],
+      "proposed_titles": [
+        "keeps Cursor native hooks reporting in the same environment"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        83
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/cursor-replay-guard.test.ts",
+      "original_line": 87,
+      "current_line": 87,
+      "title": "does not suppress a hook service that did not opt in to the Claude import guard",
+      "decision": "keep",
+      "proposed_lines": [
+        87
+      ],
+      "proposed_titles": [
+        "does not suppress a hook service that did not opt in to the Claude import guard"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        87
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/ended-process-reconciliation.test.ts",
+      "original_line": 62,
+      "current_line": 62,
+      "title": "retires a working row whose process is certifiably dead",
+      "decision": "keep",
+      "proposed_lines": [
+        67
+      ],
+      "proposed_titles": [
+        "retires a working row whose process is certifiably dead"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        69
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/ended-process-reconciliation.test.ts",
+      "original_line": 76,
+      "current_line": 76,
+      "title": "clears Claude latches even when the stored row already reads done",
+      "decision": "fix",
+      "proposed_lines": [
+        81
+      ],
+      "proposed_titles": [
+        "clears Claude latches even when the stored row already reads done"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        83
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/ended-process-reconciliation.test.ts",
+      "original_line": 95,
+      "current_line": 95,
+      "title": "is a no-op for a pane with nothing to retire",
+      "decision": "keep",
+      "proposed_lines": [
+        103
+      ],
+      "proposed_titles": [
+        "is a no-op for a pane with nothing to retire"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        105
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/ended-process-reconciliation.test.ts",
+      "original_line": 104,
+      "current_line": 104,
+      "title": "keeps the resume identity a paired dismissal minted when the shell outlived the agent",
+      "decision": "fix",
+      "proposed_lines": [
+        112
+      ],
+      "proposed_titles": [
+        "keeps the resume identity a paired dismissal minted when the shell outlived the agent"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        114
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/ended-process-reconciliation.test.ts",
+      "original_line": 140,
+      "current_line": 140,
+      "title": "takes the resume identity too on a certified PTY exit, where no pane is left to resume into",
+      "decision": "keep",
+      "proposed_lines": [
+        148
+      ],
+      "proposed_titles": [
+        "takes the resume identity too on a certified PTY exit, where no pane is left to resume into"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        150
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/ended-process-reconciliation.test.ts",
+      "original_line": 154,
+      "current_line": 154,
+      "title": "drops the session owner so a rebound pane is not read as a session replacement",
+      "decision": "fix",
+      "proposed_lines": [
+        162
+      ],
+      "proposed_titles": [
+        "drops the session owner so a rebound pane is not read as a session replacement"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        164
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "original_line": 81,
+      "current_line": 81,
+      "title": "backs off before any git command and keeps the rename pending",
+      "decision": "keep",
+      "proposed_lines": [
+        82
+      ],
+      "proposed_titles": [
+        "backs off before any git command and keeps the rename pending"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        82
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "original_line": 101,
+      "current_line": 101,
+      "title": "backs off when the move starts during generation",
+      "decision": "keep",
+      "proposed_lines": [
+        102
+      ],
+      "proposed_titles": [
+        "backs off when the move starts during generation"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        102
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "original_line": 121,
+      "current_line": 121,
+      "title": "backs off when the move starts after generation but before git branch -m",
+      "decision": "keep",
+      "proposed_lines": [
+        122
+      ],
+      "proposed_titles": [
+        "backs off when the move starts after generation but before git branch -m"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        122
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "original_line": 159,
+      "current_line": 159,
+      "title": "settles the rename but leaves the folder in place when the move starts during git branch -m",
+      "decision": "keep",
+      "proposed_lines": [
+        160
+      ],
+      "proposed_titles": [
+        "settles the rename but leaves the folder in place when the move starts during git branch -m"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        160
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "original_line": 191,
+      "current_line": 191,
+      "title": "renames a project the move is not taking",
+      "decision": "keep",
+      "proposed_lines": [
+        192
+      ],
+      "proposed_titles": [
+        "renames a project the move is not taking"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        192
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "original_line": 201,
+      "current_line": 201,
+      "title": "leaves the same repo id on another host to its own host",
+      "decision": "fix",
+      "proposed_lines": [
+        202
+      ],
+      "proposed_titles": [
+        "leaves the same repo id on another host to its own host"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        202
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "original_line": 214,
+      "current_line": 214,
+      "title": "keeps a moving folder workspace title pending",
+      "decision": "fix",
+      "proposed_lines": [
+        218
+      ],
+      "proposed_titles": [
+        "keeps a moving folder workspace title pending"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        218
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 89,
+      "current_line": 89,
+      "title": "renames %s workspace %s on live work without a subscriber, preserving replay, dedupe and retries",
+      "decision": "keep",
+      "proposed_lines": [
+        89
+      ],
+      "proposed_titles": [
+        "renames %s workspace %s on live work without a subscriber, preserving replay, dedupe and retries"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        89
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 192,
+      "current_line": 192,
+      "title": "does not probe git for a folder-project structured session with a synthetic worktree id",
+      "decision": "keep",
+      "proposed_lines": [
+        192
+      ],
+      "proposed_titles": [
+        "does not probe git for a folder-project structured session with a synthetic worktree id"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        192
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 249,
+      "current_line": 249,
+      "title": "keeps incidental work-item markers from overriding the generated display name",
+      "decision": "keep",
+      "proposed_lines": [
+        249
+      ],
+      "proposed_titles": [
+        "keeps incidental work-item markers from overriding the generated display name"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        249
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 266,
+      "current_line": 266,
+      "title": "asks to align the on-disk folder with the generated slug after renaming",
+      "decision": "keep",
+      "proposed_lines": [
+        266
+      ],
+      "proposed_titles": [
+        "asks to align the on-disk folder with the generated slug after renaming"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        266
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 272,
+      "current_line": 272,
+      "title": "keeps branch and display rename working when folder rename is disabled",
+      "decision": "keep",
+      "proposed_lines": [
+        272
+      ],
+      "proposed_titles": [
+        "keeps branch and display rename working when folder rename is disabled"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        272
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 283,
+      "current_line": 283,
+      "title": "skips the redundant branch-rename notify when the folder rename succeeded",
+      "decision": "keep",
+      "proposed_lines": [
+        283
+      ],
+      "proposed_titles": [
+        "skips the redundant branch-rename notify when the folder rename succeeded"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        283
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 291,
+      "current_line": 291,
+      "title": "survives a folder-rename failure without undoing the branch/display rename",
+      "decision": "keep",
+      "proposed_lines": [
+        291
+      ],
+      "proposed_titles": [
+        "survives a folder-rename failure without undoing the branch/display rename"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        291
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 306,
+      "current_line": 306,
+      "title": "strips a prefix the model leaked into the slug from both branch and display name",
+      "decision": "keep",
+      "proposed_lines": [
+        306
+      ],
+      "proposed_titles": [
+        "strips a prefix the model leaked into the slug from both branch and display name"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        306
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 320,
+      "current_line": 320,
+      "title": "skips the rename when the model echoes only the configured prefix",
+      "decision": "keep",
+      "proposed_lines": [
+        320
+      ],
+      "proposed_titles": [
+        "skips the rename when the model echoes only the configured prefix"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        320
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 335,
+      "current_line": 335,
+      "title": "leaves a user-customized display name untouched while still renaming the branch",
+      "decision": "keep",
+      "proposed_lines": [
+        335
+      ],
+      "proposed_titles": [
+        "leaves a user-customized display name untouched while still renaming the branch"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        335
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 345,
+      "current_line": 345,
+      "title": "runs Git against the backing folder for a folder-workspace instance id",
+      "decision": "keep",
+      "proposed_lines": [
+        345
+      ],
+      "proposed_titles": [
+        "runs Git against the backing folder for a folder-workspace instance id"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        345
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 358,
+      "current_line": 358,
+      "title": "skips when no worktree can be resolved for the tab",
+      "decision": "keep",
+      "proposed_lines": [
+        358
+      ],
+      "proposed_titles": [
+        "skips when no worktree can be resolved for the tab"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        358
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 364,
+      "current_line": 364,
+      "title": "does nothing when the setting is off",
+      "decision": "keep",
+      "proposed_lines": [
+        364
+      ],
+      "proposed_titles": [
+        "does nothing when the setting is off"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        364
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 371,
+      "current_line": 371,
+      "title": "renames a pending folder workspace title without touching git",
+      "decision": "keep",
+      "proposed_lines": [
+        371
+      ],
+      "proposed_titles": [
+        "renames a pending folder workspace title without touching git"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        371
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 392,
+      "current_line": 392,
+      "title": "preserves a manual folder name during generation (pending=%s)",
+      "decision": "keep",
+      "proposed_lines": [
+        392
+      ],
+      "proposed_titles": [
+        "preserves a manual folder name during generation (pending=%s)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        392
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 416,
+      "current_line": 416,
+      "title": "does not rename folder workspace titles without the pending marker",
+      "decision": "keep",
+      "proposed_lines": [
+        416
+      ],
+      "proposed_titles": [
+        "does not rename folder workspace titles without the pending marker"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        416
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 430,
+      "current_line": 430,
+      "title": "ignores replayed events and non-working states",
+      "decision": "keep",
+      "proposed_lines": [
+        430
+      ],
+      "proposed_titles": [
+        "ignores replayed events and non-working states"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        430
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 438,
+      "current_line": 438,
+      "title": "does not re-attempt after a successful rename",
+      "decision": "keep",
+      "proposed_lines": [
+        438
+      ],
+      "proposed_titles": [
+        "does not re-attempt after a successful rename"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        438
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 446,
+      "current_line": 446,
+      "title": "bounds settled worktree dedupe while keeping recent entries",
+      "decision": "fix",
+      "proposed_lines": [
+        446
+      ],
+      "proposed_titles": [
+        "bounds settled worktree dedupe while keeping recent entries"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        446
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 481,
+      "current_line": 481,
+      "title": "retries on a later event after a transient failure (does not poison the worktree)",
+      "decision": "keep",
+      "proposed_lines": [
+        485
+      ],
+      "proposed_titles": [
+        "retries on a later event after a transient failure (does not poison the worktree)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        485
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 497,
+      "current_line": 497,
+      "title": "records a user-facing error and the full CLI output when generation fails",
+      "decision": "keep",
+      "proposed_lines": [
+        501
+      ],
+      "proposed_titles": [
+        "records a user-facing error and the full CLI output when generation fails"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        501
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 509,
+      "current_line": 509,
+      "title": "records a user-facing error when no generation agent is configured",
+      "decision": "keep",
+      "proposed_lines": [
+        513
+      ],
+      "proposed_titles": [
+        "records a user-facing error when no generation agent is configured"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        513
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 519,
+      "current_line": 519,
+      "title": "clears any stale error after a successful rename",
+      "decision": "keep",
+      "proposed_lines": [
+        523
+      ],
+      "proposed_titles": [
+        "clears any stale error after a successful rename"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        523
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 525,
+      "current_line": 525,
+      "title": "leaves a user-named branch untouched",
+      "decision": "keep",
+      "proposed_lines": [
+        529
+      ],
+      "proposed_titles": [
+        "leaves a user-named branch untouched"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        529
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 538,
+      "current_line": 538,
+      "title": "clears a stale error when a retryable worktree later reaches a benign stop",
+      "decision": "keep",
+      "proposed_lines": [
+        542
+      ],
+      "proposed_titles": [
+        "clears a stale error when a retryable worktree later reaches a benign stop"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        542
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 554,
+      "current_line": 554,
+      "title": "does not raise the failure badge when generation is canceled by the user",
+      "decision": "fix",
+      "proposed_lines": [
+        558
+      ],
+      "proposed_titles": [
+        "does not raise the failure badge when generation is canceled by the user"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        558
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 565,
+      "current_line": 565,
+      "title": "refuses to rename a branch that already has an upstream",
+      "decision": "keep",
+      "proposed_lines": [
+        573
+      ],
+      "proposed_titles": [
+        "refuses to rename a branch that already has an upstream"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        573
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 575,
+      "current_line": 575,
+      "title": "surfaces a failed upstream probe and retries instead of settling silently (issue #7808)",
+      "decision": "keep",
+      "proposed_lines": [
+        583
+      ],
+      "proposed_titles": [
+        "surfaces a failed upstream probe and retries instead of settling silently (issue #7808)"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        583
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 609,
+      "current_line": 609,
+      "title": "leaves ineligible branches untouched even when their leaf is a creature name",
+      "decision": "keep",
+      "proposed_lines": [
+        617
+      ],
+      "proposed_titles": [
+        "leaves ineligible branches untouched even when their leaf is a creature name"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        617
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 616,
+      "current_line": 616,
+      "title": "suffixes the branch, display name, and folder together on collision",
+      "decision": "keep",
+      "proposed_lines": [
+        624
+      ],
+      "proposed_titles": [
+        "suffixes the branch, display name, and folder together on collision"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        624
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 636,
+      "current_line": 636,
+      "title": "does not rename when the branch changes while generation is running",
+      "decision": "fix",
+      "proposed_lines": [
+        644
+      ],
+      "proposed_titles": [
+        "does not rename when the branch changes while generation is running"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        644
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 663,
+      "current_line": 663,
+      "title": "does not rename when the branch gains an upstream while generation is running",
+      "decision": "fix",
+      "proposed_lines": [
+        673
+      ],
+      "proposed_titles": [
+        "does not rename when the branch gains an upstream while generation is running"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        673
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 693,
+      "current_line": 693,
+      "title": "retries without local git for a row naming its SSH owner by %s",
+      "decision": "fix",
+      "proposed_lines": [
+        705
+      ],
+      "proposed_titles": [
+        "skips local generation and git for a row naming its SSH owner by %s"
+      ],
+      "mapping": "renamed; behavior retained",
+      "final_lines": [
+        705
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-branch-rename.test.ts",
+      "original_line": 706,
+      "current_line": 706,
+      "title": "never dials a paired server's nested SSH target from this client",
+      "decision": "keep",
+      "proposed_lines": [
+        718
+      ],
+      "proposed_titles": [
+        "never dials a paired server's nested SSH target from this client"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        721
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-folder-rename.test.ts",
+      "original_line": 36,
+      "current_line": 36,
+      "title": "moves the folder and migrates identity on the happy path",
+      "decision": "keep",
+      "proposed_lines": [
+        36
+      ],
+      "proposed_titles": [
+        "moves the folder and migrates identity on the happy path"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        36
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-folder-rename.test.ts",
+      "original_line": 61,
+      "current_line": 61,
+      "title": "preserves the folder-workspace instance suffix in the migrated identity",
+      "decision": "keep",
+      "proposed_lines": [
+        61
+      ],
+      "proposed_titles": [
+        "preserves the folder-workspace instance suffix in the migrated identity"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        61
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-folder-rename.test.ts",
+      "original_line": 80,
+      "current_line": 80,
+      "title": "skips (no move) when the destination already exists",
+      "decision": "keep",
+      "proposed_lines": [
+        80
+      ],
+      "proposed_titles": [
+        "skips (no move) when the destination already exists"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        80
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-folder-rename.test.ts",
+      "original_line": 87,
+      "current_line": 87,
+      "title": "skips remote worktrees without moving",
+      "decision": "keep",
+      "proposed_lines": [
+        87
+      ],
+      "proposed_titles": [
+        "skips remote worktrees without moving"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        87
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-folder-rename.test.ts",
+      "original_line": 93,
+      "current_line": 93,
+      "title": "skips runtime-owned worktrees without moving",
+      "decision": "keep",
+      "proposed_lines": [
+        93
+      ],
+      "proposed_titles": [
+        "skips runtime-owned worktrees without moving"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        93
+      ]
+    },
+    {
+      "path": "src/main/agent-hooks/first-work-folder-rename.test.ts",
+      "original_line": 101,
+      "current_line": 101,
+      "title": "returns false when the repo is unknown",
+      "decision": "keep",
+      "proposed_lines": [
+        101
+      ],
+      "proposed_titles": [
+        "returns false when the repo is unknown"
+      ],
+      "mapping": "same title",
+      "final_lines": [
+        101
+      ]
+    }
+  ],
+  "integration_corrections": {
+    "mode": "Static source controls for the integrated corrections; runtime suite validation is recorded in commands and timer counterexamples in clock_controls.",
+    "env": {
+      "path": "src/main/acp/acp-structured-session-adapter.test.ts",
+      "expected_literals": [
+        "ORCA_PANE_KEY",
+        "ORCA_TAB_ID",
+        "ORCA_WORKTREE_ID",
+        "ORCA_AGENT_LAUNCH_TOKEN",
+        "ORCA_AGENT_PANE",
+        "ORCA_AGENT_LAUNCH",
+        "ORCA_AGENT_HOOK_PORT",
+        "ORCA_AGENT_HOOK_TOKEN",
+        "ORCA_AGENT_HOOK_ENV",
+        "ORCA_AGENT_HOOK_VERSION",
+        "ORCA_AGENT_HOOK_TRANSPORT",
+        "ORCA_AGENT_HOOK_ENDPOINT",
+        "ORCA_CLAUDE_AGENT_STATUS_SETTINGS"
+      ],
+      "original_resolved_domain": [
+        "ORCA_PANE_KEY",
+        "ORCA_TAB_ID",
+        "ORCA_WORKTREE_ID",
+        "ORCA_AGENT_LAUNCH_TOKEN",
+        "ORCA_AGENT_PANE",
+        "ORCA_AGENT_LAUNCH",
+        "ORCA_AGENT_HOOK_PORT",
+        "ORCA_AGENT_HOOK_TOKEN",
+        "ORCA_AGENT_HOOK_ENV",
+        "ORCA_AGENT_HOOK_VERSION",
+        "ORCA_AGENT_HOOK_TRANSPORT",
+        "ORCA_AGENT_HOOK_ENDPOINT",
+        "ORCA_CLAUDE_AGENT_STATUS_SETTINGS"
+      ],
+      "independent_expected_literals": true,
+      "all_original_keys_retained": true,
+      "all_required_keys_seeded": true,
+      "spawn_seal_assertions_retained": true
+    },
+    "unknown_stop": {
+      "path": "src/main/acp/acp-timeline-generic.test.ts",
+      "exact_input": "future_stop",
+      "route": "AcpTimelineTranslator.promptResult -> assembler -> rig.turns",
+      "expected": "completed turn without outcome",
+      "bounded_frame_assertions_retained_before_prompt": true
+    },
+    "steer": [
+      {
+        "title": "waits as long as Grok takes to answer a steer cancel, and a Stop then still ends it",
+        "line": 158,
+        "fake_before_tested_send": true,
+        "all_remaining_assertions_inside_try": true,
+        "real_timers_restored_in_finally": true,
+        "polling_under_stationary_fake_timers": false
+      },
+      {
+        "title": "cuts Grok's turn on a second send and runs both messages, never ending Grok",
+        "line": 214,
+        "fake_before_tested_send": true,
+        "all_remaining_assertions_inside_try": true,
+        "real_timers_restored_in_finally": true,
+        "polling_under_stationary_fake_timers": false
+      }
+    ]
+  },
+  "clock_controls": {
+    "results": [
+      {
+        "variant": "late-clock-timer-mutant",
+        "exit_code": 0,
+        "passed": 2,
+        "failed": 0,
+        "failures": [],
+        "test_sha256": "532f5af964655db04b5a15d7789c7d27e6a43a0a04ed3d4dc00af3313d9207cb",
+        "report": "/tmp/orca-audit8-main-late-clock-timer-mutant.json",
+        "log": "/tmp/orca-audit8-main-late-clock-timer-mutant.log",
+        "command": [
+          "pnpm",
+          "test",
+          "src/main/acp/acp-structured-steer.test.ts",
+          "-t",
+          "waits as long as Grok|cuts Grok",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-audit8-main-late-clock-timer-mutant.json"
+        ],
+        "report_sha256": "6c358e387622dc2ec1792207366cc867929e7222ed66079fc18b49cb17d34695",
+        "log_sha256": "d849134325b06b15128357d283ef3290c8f2b81df7dc54f39c6553f004dee273"
+      },
+      {
+        "variant": "timer-mutant",
+        "exit_code": 1,
+        "passed": 0,
+        "failed": 2,
+        "failures": [
+          "waits as long as Grok takes to answer a steer cancel, and a Stop then still ends it",
+          "cuts Grok's turn on a second send and runs both messages, never ending Grok"
+        ],
+        "test_sha256": "4568ae88152e060699f872a5bc826ae0e5421257cbfe710e92e38b65ece5cead",
+        "report": "/tmp/orca-audit8-main-timer-mutant.json",
+        "log": "/tmp/orca-audit8-main-timer-mutant.log",
+        "command": [
+          "pnpm",
+          "test",
+          "src/main/acp/acp-structured-steer.test.ts",
+          "-t",
+          "waits as long as Grok|cuts Grok",
+          "--maxWorkers=1",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/tmp/orca-audit8-main-timer-mutant.json"
+        ],
+        "report_sha256": "f5da8d3960eca128b357737d936f6c61cb80c817dc9af64629d60273cf7d6546",
+        "log_sha256": "ab4a41f30e0007d6a3fed8203fd3ce36fe133d7903b69fa4f91eee6aae017aff"
+      }
+    ],
+    "reviewed_source_restored": true,
+    "scope": "Injected 30-second close in child.cancel test port; tests only. No production code mutation."
+  },
+  "limitations": [
+    "All selected runnable suites passed on Linux with controlled filesystem and loopback fixtures; no native OS or live provider/SSH run was performed.",
+    "Fixtures have zero independent cases; all four known capture-loader consumer suites were additionally run.",
+    "Clock counterexamples inject a 30-second close at the controlled child.cancel port; this is a test-port defect demonstration, not production code mutation.",
+    "Initial lint failed on three unbraced cleanup loops; root added braces and lint/format passed. No behavior was changed by that lint correction.",
+    "Archived source snapshots remain pinned; upstream source changes in six reviewed scopes were comments only and were independently reread."
+  ],
+  "integration_base_commit": "f1157821ce03d7c59323f95a4bac521f13bb841e",
+  "proposal_source_files": 24,
+  "proposal_source_edits": 68,
+  "proposal_counts_scope": "Counts from the immutable 68-edit, 24-file proposal before integration corrections and formatting; final source bytes are identified by reviewed_source_hashes.",
+  "historical_proposal_checks": {
+    "status": "passed",
+    "kind": "isolated immutable-loader counterexamples and source syntax only",
+    "checkout_mutations": false,
+    "repo_test_suites_run": 0,
+    "typechecks_run": 0,
+    "counterexamples": [
+      {
+        "name": "OSC0-ST then repeated OSC0-BEL title",
+        "original_error": "Captured OSC title frame missing from transcript",
+        "proposed_exact_chunks": true
+      },
+      {
+        "name": "OSC2-BEL then repeated OSC0-BEL title",
+        "original_error": "Captured OSC title frame missing from transcript",
+        "proposed_exact_chunks": true
+      },
+      {
+        "name": "OSC1 recognized by production scanner",
+        "original_error": "Captured OSC title frame missing from transcript",
+        "proposed_exact_chunks": true
+      },
+      {
+        "name": "ordinary repeated same-encoding frames",
+        "original_error": null,
+        "original_chunks": [
+          "\u001b]0;Same\u0007",
+          "\u001b]0;Same\u0007"
+        ],
+        "proposed_exact_chunks": true
+      }
+    ],
+    "source_syntax_files": [
+      "src/main/acp/acp-structured-opencode-recordings.test.ts",
+      "src/main/acp/acp-structured-private-temp.test.ts",
+      "src/main/acp/acp-structured-request-admission.test.ts",
+      "src/main/acp/acp-structured-session-adapter-lifecycle.test.ts",
+      "src/main/acp/acp-structured-session-adapter-recordings.test.ts",
+      "src/main/acp/acp-structured-session-adapter-resume.test.ts",
+      "src/main/acp/acp-structured-session-adapter-teardown.test.ts",
+      "src/main/acp/acp-structured-session-adapter.test.ts",
+      "src/main/acp/acp-structured-steer.test.ts",
+      "src/main/acp/acp-timeline-background-task-words.test.ts",
+      "src/main/acp/acp-timeline-generic.test.ts",
+      "src/main/acp/acp-timeline-opencode-dialect.test.ts",
+      "src/main/acp/acp-timeline-recovery.test.ts",
+      "src/main/active-view-preference-sync-flush-veto.test.ts",
+      "src/main/agent-auth-restart-preservation.test.ts",
+      "src/main/agent-awake-service-platform-assertions.test.ts",
+      "src/main/agent-awake-service.test.ts",
+      "src/main/agent-cli-version-probe.test.ts",
+      "src/main/agent-hooks/agent-home-login-shell.test.ts",
+      "src/main/agent-hooks/claude-cancel-capture.test-fixture.ts",
+      "src/main/agent-hooks/claude-terminal-interrupt-capture.test-fixture.ts",
+      "src/main/agent-hooks/ended-process-reconciliation.test.ts",
+      "src/main/agent-hooks/first-work-branch-rename-wsl-move.test.ts",
+      "src/main/agent-hooks/first-work-branch-rename.test.ts"
+    ],
+    "phase": "pre-integration static validation",
+    "scope": "Historical proposal checks only. Runtime implementation validation is recorded in commands and clock_controls."
+  },
+  "historical_proposal_schema_check": {
+    "status": "passed",
+    "purpose": "At proposal time, 46 immutable capture rows satisfied the field schema subsequently integrated.",
+    "captures": [
+      {
+        "capture": "claude-cancel-shell-hooks",
+        "records": 32,
+        "kinds": [
+          "hook",
+          "cancel",
+          "kill"
+        ]
+      },
+      {
+        "capture": "claude-cancel-subagent-hooks",
+        "records": 14,
+        "kinds": [
+          "hook",
+          "cancel"
+        ]
+      }
+    ],
+    "tests_of_production_interrupt_settlement": false,
+    "repo_test_suites_run": 0,
+    "notes": "This isolated proposal check stubbed the interrupt settle constant to examine loader parsing. Final fixture-consumer suite validation is recorded in commands.",
+    "phase": "pre-integration isolated loader validation"
+  },
+  "case_line_reconciliation_scope": {
+    "original_line": "Immutable source_commit declaration line.",
+    "current_line": "Declaration line at integration_base_commit before implementation.",
+    "proposed_lines": "Archived revised-draft lines before final integration and formatting.",
+    "final_lines": "Committed declaration lines in the implemented source at d514d6155256aa3a65b499023f20b5d88e0c2b92; source hashes are recorded in reviewed_source_hashes.",
+    "proposed_titles": "Draft destination titles, retained unchanged in the final source."
+  }
+}

@@ -162,7 +162,6 @@ describe('headless automation agent launch', () => {
 
     const launched = await launch(runtime, { agentId: 'aider' })
 
-    // The run is recorded while the agent is still coming up, as before.
     expect(launched.terminalPaneKey).toBe('tab-1:leaf-1')
     expect(runtime.launchAgentTerminal).toHaveBeenCalledWith(
       'id:wt-1',

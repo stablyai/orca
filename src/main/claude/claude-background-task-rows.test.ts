@@ -14,8 +14,6 @@ describe('claude background task rows', () => {
     rows.observe(FAILED_UPDATE)
     rows.observe(FAILED_NOTIFICATION)
 
-    // One durable identity, not one row per frame: the same failure arrived on
-    // two frames and printed twice before this owner existed.
     const identities = new Set(
       items.map((item) =>
         item.identity.provider === 'orca' ? item.identity.clientMessageId : item.identity.provider
@@ -31,15 +29,11 @@ describe('claude background task rows', () => {
       summary: FAILED_NOTIFICATION.summary,
       outputFile: FAILED_NOTIFICATION.output_file
     })
-    // The visible text is the provider's own sentence, never the wire opcode.
     expect(latestTwin()).toBe(FAILED_NOTIFICATION.summary)
     expect(latestTwin()).not.toContain('task_notification')
   })
 
   it('lands the captured failure on its row when the announcement carried no tool id', () => {
-    // An announcement naming NO tool is admitted — absence of the field is not
-    // evidence of an unforwarded parent — so by the time this REAL captured
-    // frame arrives its row already exists and simply takes the sentence.
     const { rows, latestTwin } = harness()
     rows.observe({
       type: 'system',
@@ -96,7 +90,6 @@ describe('claude background task rows', () => {
       description: 'Running Bash',
       usage: { total_tokens: 1_200 }
     })
-    // Progress `description` is the CURRENT ACTIVITY, not the task's name.
     expect(latest()).toMatchObject({ label: 'Wait for the verification verdict', tokens: 1_200 })
   })
 
@@ -214,8 +207,7 @@ describe('claude background task rows', () => {
     expect(latest()).toMatchObject({ state: 'blocked', summary: 'second run failed' })
   })
 
-  // Entries carry `{task_id, task_type, description, ambient?}` and NOTHING
-  // else — no per-entry status — so these use the real payload shape.
+  // Aggregate entries carry identity fields without per-task status.
   it('takes identity from the aggregate roster', () => {
     const { rows, latest } = harness()
     rows.observe({ ...START_BASH, task_id: 'aggregate-1', description: undefined })
@@ -230,11 +222,6 @@ describe('claude background task rows', () => {
     expect(latest()).toMatchObject({ label: 'Named by roster', state: 'working' })
   })
 
-  // NOT an ablation of the status-read removal: that removal is behaviour-neutral
-  // on every real payload, which is exactly why the branch it fed was dead. This
-  // pins the standing latch rule instead — presence is a level signal whose
-  // ordering against the start/stop edges is unspecified and which carries no
-  // evidence of a new run, so a row that reported its own outcome keeps it.
   it('does not let mere presence in the live set revive a settled row', () => {
     const { rows, latest } = harness()
     rows.observe({ ...START_BASH, task_id: 'aggregate-2' })
@@ -298,9 +285,6 @@ describe('claude background task rows', () => {
   })
 
   it('rejects overlong tool-use aliases instead of clipping them into collisions', () => {
-    // The row is opened under a usable alias; a later frame carrying an
-    // oversized one must resolve to NO task rather than being clipped into this
-    // one and attaching another task's failure to it.
     const { rows, items, latest } = harness()
     rows.observe({ ...START_BASH, task_id: 'task-a' })
     const afterStart = items.length
@@ -365,7 +349,6 @@ describe('claude background task rows', () => {
         status: 'completed'
       })
     }
-    // The first settled row is evicted to make room for this one.
     rows.observe({ ...START_BASH, task_id: 'evictor' })
     rows.observe({
       ...START_BASH,
@@ -433,9 +416,6 @@ describe('claude background task rows', () => {
   })
 
   it('declines coverage so the fallback still reports when every row slot is live', () => {
-    // The row map is bounded. A task that cannot be admitted for lack of a slot
-    // is not silently swallowed: coverage is declined so the generic fallback
-    // reports it instead.
     const { rows } = harness()
     for (let index = 0; index < 64; index += 1) {
       rows.observe({ ...START_BASH, task_id: `live-${index}` })
@@ -555,9 +535,7 @@ describe('claude background task rows', () => {
       })
     ).toBe(true)
 
-    // Make a typed slot available for the new invocation. The alias from the
-    // first terminal edge is still needed to distinguish this restart from a
-    // redelivery of the completed fallback run.
+    // Free a slot; retain the prior terminal alias so the new invocation can prove a restart.
     rows.observe({
       type: 'system',
       subtype: 'task_notification',
@@ -639,8 +617,7 @@ describe('claude background task rows', () => {
     rows.observe(START_BASH)
     rows.dispose()
     expect(latest()).toMatchObject({ state: 'unverifiable' })
-    // The frozen sentence a client without the block type reads must not assert
-    // a liveness only the dead process could have observed.
+    // Older clients read this sentence without understanding the typed task block.
     expect(latestTwin()).toBe(
       'Background command "Wait for the verification verdict" stopped reporting'
     )
@@ -690,9 +667,7 @@ describe('claude background task rows', () => {
   })
 
   it('does not re-open a task that is already running', () => {
-    // A redelivered announcement is not a second run. The row it would revise
-    // is one the user is already reading, so it yields no deltas at all — even
-    // when the redelivery carries metadata the first announcement lacked.
+    // Redelivery cannot revise metadata on an already visible run.
     const { rows, items, latest } = harness()
     rows.observe({ ...START_BASH, description: undefined })
     const afterStart = items.length

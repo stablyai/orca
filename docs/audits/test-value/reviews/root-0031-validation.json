@@ -1,0 +1,27 @@
+{
+  "original_declaration_sites": 0,
+  "retention_experiments": 24,
+  "manual_control_records": 23,
+  "review_scope": "Complete driver/source loader/before config and current parser/ring supporting implementations; all four variants/six memory axes explicitly expanded.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc docs/audits/plugin-worker-output-retention/reproduce.cjs --output /tmp/orca-root-0031-plugin-worker-results.json",
+      "exit_code": 1,
+      "result": "Reviewed dependency plugin-log-buffer.ts changed:06df6ea2 versus recorded c378984b; rejects before bundle/control/heap phases.",
+      "log": "/tmp/orca-root-0031-plugin-worker.log"
+    }
+  ],
+  "limitations": [
+    "47 case/control records include 24 manual memory experiments, not runtime test declarations.",
+    "Heap is forced-GC/synthetic and threshold-based, not process RSS or incident allocation attribution.",
+    "Behavior three-row content checks do not assert exact ring order after205 inputs in memory experiment.",
+    "Fallback selection temporarily removes Buffer; it does not render UI or exercise a packaged platform."
+  ],
+  "batch": "root-0031",
+  "reviewer": "root",
+  "source_commit": "92dfb4fda69e746e96786ea7af417813ac441394",
+  "reviewed_files": 3,
+  "case_records": 47,
+  "production_changes": false,
+  "test_source_changes": false
+}

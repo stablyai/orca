@@ -16,7 +16,7 @@ import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath
 } from '../local-file-access-resolution'
-import { isENOENT } from '../filesystem-path-containment'
+import { isPathAbsentError } from '../filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
@@ -157,7 +157,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
               await stat(await resolveDesktopAuthorizedPath(filePath, store))
               return true
             } catch (error) {
-              if (isENOENT(error)) {
+              if (isPathAbsentError(error)) {
                 return false
               }
               throw error
@@ -182,7 +182,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         await stat(filePath)
         return true
       } catch (error) {
-        if (isENOENT(error)) {
+        if (isPathAbsentError(error)) {
           return false
         }
         throw error

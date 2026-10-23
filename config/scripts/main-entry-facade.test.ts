@@ -46,15 +46,16 @@ it('keeps main code and asset paths working after a CLI build replaces its publi
     await writeFile(join(root, 'dist', 'controls.js'), 'exports.getStatus = () => 0')
     const result = await runProcess({
       program: process.execPath,
-      args: [join(root, 'dist', 'index.js')]
+      args: [join(root, 'dist', 'index.js')],
+      env: { ...process.env, ORCA_FIXTURE_BOOT_LABEL: 'fixture-boot' }
     })
     expect(result.code, result.stderr).toBe(0)
     expect(JSON.parse(await readFile(join(root, 'dist', 'result.json'), 'utf8'))).toEqual({
       status: 0,
       tracker: { count: 0 },
       directory: join(root, 'dist'),
-      label: 'boot',
-      lateLabel: 'boot'
+      label: 'fixture-boot',
+      lateLabel: 'fixture-boot'
     })
   } finally {
     await rm(root, { recursive: true, force: true })

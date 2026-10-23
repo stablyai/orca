@@ -14,7 +14,6 @@ const pairingCode = encodePairingOffer({
   publicKeyB64: 'fixture-key',
   scope: 'runtime'
 })
-// Each selector names a real paired server, so honouring it routes there.
 const selection = {
   ORCA_ENVIRONMENT: 'other-server',
   ORCA_PAIRING_CODE: pairingCode,
@@ -27,7 +26,6 @@ afterEach(() => {
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
 })
 
-/** This server's profile, with another server paired in it; the CLI starts with `env`. */
 function serverProfileWith(env: Partial<Record<(typeof SELECTORS)[number], string>>): string {
   const root = mkdtempSync(join(tmpdir(), 'cli-owner-'))
   roots.push(root)
@@ -40,7 +38,7 @@ function serverProfileWith(env: Partial<Record<(typeof SELECTORS)[number], strin
 }
 
 it("stays on its own server with an agent's empty selectors, and explicit flags still route", () => {
-  // The agent environment sets all three empty so a profile's export cannot win.
+  // Empty selectors prevent profile exports from routing the agent to another server.
   const root = serverProfileWith({
     ORCA_ENVIRONMENT: '',
     ORCA_PAIRING_CODE: '',

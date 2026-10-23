@@ -349,9 +349,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
 })
 
 describe('isDangerousWorktreeRemovalPath on an execution host', () => {
-  // #18275: these verdicts are about the machine that runs the delete. The
-  // client home is `homedir()` here — a macOS/Linux path that recognises none
-  // of the Windows rows, and must not be what decides them either way.
   it.each([
     ['/Users', '/opt/src', true],
     ['/Users/alice', '/opt/src', true],
@@ -361,8 +358,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
     ['C:\\Users', 'C:\\src\\repo', true],
     ['C:\\Users\\bob\\wt\\foo', 'C:\\src\\repo', false]
   ])('%s under %s -> dangerous=%s', (worktreePath, repoPath, expected) => {
-    // `/var/empty` is a resolved host home that matches no row, so each verdict comes from the
-    // path rules alone — the same verdicts the client authority reaches.
+    // Choose an unrelated resolved home to isolate path-shape rules.
     expect(
       isDangerousWorktreeRemovalPath(worktreePath, repoPath, executionHostRemovalHome('/var/empty'))
     ).toBe(expected)
@@ -372,11 +368,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
   })
 
   it('refuses a registered worktree while the execution host home is unanswered', () => {
-    // `git worktree add` accepts a pre-existing empty directory, and that directory can afterwards
-    // be somebody's `$HOME` (a build account's home, a container's `HOME=/workspace`). So the
-    // host's own Git registry proves provenance, not "this is not a home" — and `git worktree
-    // remove --force` deletes the checkout. With the host's answer the path is caught by
-    // containment; without it there is nothing left to catch a non-standard home shape.
+    // Git registration proves provenance, not that a checkout is outside a nonstandard home.
     const registered = [makeGitWorktree('/opt/src/repo', true), makeGitWorktree('/srv/homes/alice')]
 
     expect(() =>
@@ -395,8 +387,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
         executionHostRemovalHome('/srv/homes/alice')
       )
     ).toThrow('Refusing to delete protected worktree path: /srv/homes/alice')
-    // An answering host whose home is elsewhere still deletes it: the refusals above are the
-    // missing answer and the matching answer, not the path.
+    // An unrelated resolved home permits the same path.
     expect(
       findRegisteredDeletableWorktree(
         '/opt/src/repo',
@@ -418,8 +409,6 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
   })
 
   it('recognises a POSIX home when the repo path drags the pair into win32 path ops', () => {
-    // `getPathOps` reads both paths, so a `//`-rooted repo path put `/home/alice` under
-    // Windows-only shape rules and the last guard on a recursive delete stopped matching.
     expect(
       isDangerousWorktreeRemovalPath(
         '/home/alice',
@@ -445,8 +434,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
 })
 
 describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => {
-  // A proven-orphan .git file is exactly the state that unlocks the recursive
-  // delete, so the home guard is the only thing left standing in front of it.
+  // The orphan marker satisfies Git provenance, leaving the home guard to refuse unsafe targets.
   const provenOrphan = {
     statPath: makeStatPath(['C:\\Users\\bob\\.git'], ['C:\\src\\repo\\.git']),
     readPath: makeReadPath([
@@ -498,8 +486,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => 
   })
 
   it('refuses a proven orphan of any shape while the host home is unanswered', async () => {
-    // A bare-repo dotfiles checkout puts exactly this `.git` file at the top of a home directory,
-    // and `/srv/homes/alice` has no home shape to fall back on. Unanswered is not permission.
     const orphan = {
       statPath: makeStatPath(['/srv/homes/alice/.git'], ['/opt/src/repo/.git']),
       readPath: makeReadPath([
@@ -517,8 +503,6 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => 
         orphan.readPath
       )
     ).resolves.toBe(false)
-    // The same call with an answer that does not match still removes it, so the refusal above is
-    // the missing answer and not the path.
     await expect(
       canSafelyRemoveOrphanedWorktreeDirectory(
         '/srv/homes/alice',

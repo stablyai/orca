@@ -1,0 +1,1560 @@
+{
+  "batch": "mobile-0006",
+  "reviewer": "audit_mobile",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "validation_worktree": "/home/neil/orca/workspaces/orca/comprehensive-test-audit-6",
+  "scope": {
+    "files_reviewed": 50,
+    "original_declarations_reviewed": 566,
+    "case_decisions": {
+      "keep": 393,
+      "fix": 96,
+      "consolidate": 62,
+      "remove": 15
+    },
+    "classification_counts": {
+      "automated-vitest": 50
+    },
+    "table_records_reviewed": 64,
+    "table_decisions": {
+      "keep": 39,
+      "consolidate": 10,
+      "remove": 2,
+      "fix": 13
+    },
+    "expanded_domain_row_decisions": 315,
+    "expanded_row_decisions": {
+      "keep": 201,
+      "consolidate": 46,
+      "remove": 18,
+      "fix": 50
+    },
+    "runtime_every_element_policies": 15,
+    "source_expanded_instances": 680,
+    "source_expanded_instances_note": "566 static declarations plus114 extra instances from it.each/describe.each and named for-of declaration tables, including24 client accepted rows after five haptics spread expansion. Not an executed runtime count.",
+    "auxiliary_cases_reviewed": 0,
+    "manual_cases_claimed_as_executed": 0,
+    "first_path": "mobile/src/host-screen/host-ssh-health-badge-wiring.test.ts",
+    "last_path": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts"
+  },
+  "review_method": "Full original test bodies and relevant implementations were reviewed before authorization; exact original line/title/source hashes, every expanded domain row and every runtime every-element policy are retained. Final AST declarations are independently enumerated using the refresh parser. Supporting sources are evidence and are not promoted as extra completed file reviews.",
+  "changes": {
+    "modified_test_files": [
+      "mobile/src/host-screen/host-ssh-health-badge-wiring.test.ts",
+      "mobile/src/host-screen/host-view-changes-reconnect.test.ts",
+      "mobile/src/host-screen/host-workspace-list-action-error.test.tsx",
+      "mobile/src/host-screen/host-workspace-list-reopen.test.tsx",
+      "mobile/src/host-screen/host-workspace-list-row-memo.test.tsx",
+      "mobile/src/host-screen/host-worktree-catalog-action-error.test.ts",
+      "mobile/src/host-screen/host-worktree-child-navigation.test.tsx",
+      "mobile/src/host-screen/use-host-pending-view-changes.test.ts",
+      "mobile/src/host-screen/use-host-project-sections.test.tsx",
+      "mobile/src/host-screen/use-host-sidebar-feed.test.ts",
+      "mobile/src/host-screen/use-slow-pending-keys.test.tsx",
+      "mobile/src/host-screen/workspace-options-sheet.test.tsx",
+      "mobile/src/layout/host-sidebar-reveal.test.tsx",
+      "mobile/src/layout/side-safe-area.test.tsx",
+      "mobile/src/mobile-release/prepare-android-release-script.test.ts",
+      "mobile/src/mobile-web-shell/MobileWebShellScreen.test.tsx",
+      "mobile/src/mobile-web-shell/ShellWaitingFrame.test.tsx",
+      "mobile/src/mobile-web-shell/bridge-diagnostic-log.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host-back.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host-init.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host-media-verbs.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host-notifications.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host-screencast.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host-subscription-start-cleanup.test.ts",
+      "mobile/src/mobile-web-shell/bridge-host.test.ts",
+      "mobile/src/mobile-web-shell/bridge-terminal-output-backlog.test.ts",
+      "mobile/src/mobile-web-shell/bridge-terminal-output-merge.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-audio-verbs.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-back-round-trip.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-caps.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-client-frame-cap-boundary.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-client-frame-cap-unit.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-client-inbound-frames.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-client-notifications.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-client-unsendable-frame.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-error-capture.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-execution-host.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-keyboard-inset.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-media-verbs.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts"
+    ],
+    "removed_test_files": [
+      "mobile/src/mobile-web-shell/bridge/bridge-native-verbs.test.ts",
+      "mobile/src/mobile-web-shell/bridge/bridge-notify-grants.test.ts"
+    ],
+    "supporting_test_config_changes": [
+      {
+        "path": "mobile/src/mobile-web-shell/bridge-host-test-harness.ts",
+        "classification": "test-support-only; not promoted as an additional completed file review",
+        "source_sha256": "8c0e9b44662fff9a7ed44b153a73820a0570a8865e7032cc53831fec30d7d07f",
+        "reviewed_sha256": "dc9fd203a141af7f0e17327ae1efeb14e30f1bebea48183d3b6cef2dce946a76",
+        "change": "Tracks actual native handler calls and disposes every fixture-created host after each test.",
+        "validation": "All selected consumers plus browser-screencast-budget-at-the-shell passed."
+      }
+    ],
+    "production_files_modified": [],
+    "added_test_support_lines": 1488,
+    "deleted_test_support_lines": 1503,
+    "net_test_support_lines": -15,
+    "original_keep_or_fix_decisions": 489,
+    "original_remove_or_consolidate_decisions": 77,
+    "final_static_declarations": 490,
+    "declaration_count_note": "Original keep/fix versus remove/consolidate decisions describe review disposition, not a mechanical retained-declaration count: the consolidated audio inventory keeps its unique manifest-grant grammar as a smaller declaration.",
+    "summary": [
+      "Require actual initialized/live requests, subscription ownership and occupancy before collision/cap/throwing-subscribe refusals.",
+      "Use entered permission/open gates, complete seeded audio/media payloads, actual frame-reader caps and independent UTF8 envelopes.",
+      "Transfer unique private native/notify/identity/route/chunk controls into actual host and public-reader behavior before deleting suites.",
+      "Replace fabricated catalog outcomes and copied numeric inventories with real transport interpretation and observable results; guarantee renderer/client/host/capture teardown."
+    ],
+    "post_validation_prose_cleanup": {
+      "authorized_by": "Root final review",
+      "paths": [
+        "mobile/src/mobile-web-shell/bridge/bridge-client-notifications.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-screencast.test.ts",
+        "mobile/src/mobile-web-shell/bridge-terminal-output-backlog.test.ts"
+      ],
+      "change": "Removed three orphan comment blocks only; all post-cleanup lint/format/diff checks passed; root stated no behavioral rerun needed."
+    }
+  },
+  "before_private_suite_removal": {
+    "result": "passed",
+    "test_files": 50,
+    "tests": 639,
+    "report": "/tmp/orca-mobile-0006-before-prune-tests.json",
+    "transfer_groups_verified_before_deletion": 13,
+    "note": "This is a post-implementation/pre-deletion run, not an original-source baseline."
+  },
+  "commands": [
+    {
+      "id": "mobile-batch-and-support-consumer-vitest-final",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "--config",
+        "vitest.config.ts",
+        "src/host-screen/host-ssh-health-badge-wiring.test.ts",
+        "src/host-screen/host-view-changes-reconnect.test.ts",
+        "src/host-screen/host-workspace-list-action-error.test.tsx",
+        "src/host-screen/host-workspace-list-reopen.test.tsx",
+        "src/host-screen/host-workspace-list-row-memo.test.tsx",
+        "src/host-screen/host-worktree-catalog-action-error.test.ts",
+        "src/host-screen/host-worktree-child-navigation.test.tsx",
+        "src/host-screen/phone-card-property-choices.test.ts",
+        "src/host-screen/use-host-pending-view-changes.test.ts",
+        "src/host-screen/use-host-project-sections.test.tsx",
+        "src/host-screen/use-host-sidebar-feed.test.ts",
+        "src/host-screen/use-slow-pending-keys.test.tsx",
+        "src/host-screen/workspace-details-sheet.test.tsx",
+        "src/host-screen/workspace-option-values.test.ts",
+        "src/host-screen/workspace-options-sheet.test.tsx",
+        "src/layout/host-sidebar-reveal.test.tsx",
+        "src/layout/responsive-layout-metrics.test.ts",
+        "src/layout/side-safe-area.test.tsx",
+        "src/mobile-release/prepare-android-release-script.test.ts",
+        "src/mobile-web-shell/MobileWebShellScreen.test.tsx",
+        "src/mobile-web-shell/ShellWaitingFrame.test.tsx",
+        "src/mobile-web-shell/bridge-diagnostic-log.test.ts",
+        "src/mobile-web-shell/bridge-host-back.test.ts",
+        "src/mobile-web-shell/bridge-host-init.test.ts",
+        "src/mobile-web-shell/bridge-host-media-verbs.test.ts",
+        "src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+        "src/mobile-web-shell/bridge-host-notifications.test.ts",
+        "src/mobile-web-shell/bridge-host-screencast.test.ts",
+        "src/mobile-web-shell/bridge-host-subscription-start-cleanup.test.ts",
+        "src/mobile-web-shell/bridge-host.test.ts",
+        "src/mobile-web-shell/bridge-terminal-output-backlog.test.ts",
+        "src/mobile-web-shell/bridge-terminal-output-merge.test.ts",
+        "src/mobile-web-shell/bridge/bridge-audio-verbs.test.ts",
+        "src/mobile-web-shell/bridge/bridge-back-round-trip.test.ts",
+        "src/mobile-web-shell/bridge/bridge-caps.test.ts",
+        "src/mobile-web-shell/bridge/bridge-client-frame-cap-boundary.test.ts",
+        "src/mobile-web-shell/bridge/bridge-client-frame-cap-unit.test.ts",
+        "src/mobile-web-shell/bridge/bridge-client-inbound-frames.test.ts",
+        "src/mobile-web-shell/bridge/bridge-client-notifications.test.ts",
+        "src/mobile-web-shell/bridge/bridge-client-unsendable-frame.test.ts",
+        "src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+        "src/mobile-web-shell/bridge/bridge-error-capture.test.ts",
+        "src/mobile-web-shell/bridge/bridge-execution-host.test.ts",
+        "src/mobile-web-shell/bridge/bridge-keyboard-inset.test.ts",
+        "src/mobile-web-shell/bridge/bridge-media-verbs.test.ts",
+        "src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+        "src/mobile-web-shell/bridge/bridge-port-pair-test-harness.test.ts",
+        "src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+        "src/browser/browser-screencast-budget-at-the-shell.test.ts",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/tmp/orca-mobile-0006-verified-tests.json"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0006-verified-tests.log",
+      "test_files": 49,
+      "tests": 621,
+      "selected_remaining_test_files": 48,
+      "selected_remaining_tests": 614,
+      "additional_support_consumer_tests": 7
+    },
+    {
+      "id": "mobile-tests-typecheck-ratchet-final",
+      "working_directory": "mobile",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": ["pnpm", "run", "check:tests-typecheck"],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0006-verified-typecheck.log",
+      "test_files_in_program": 1106,
+      "grandfathered_files": 115,
+      "intentionally_excluded_files": 5,
+      "note": "No baseline entries changed."
+    },
+    {
+      "id": "changed-tests-support-lint-final",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "mobile/src/host-screen/host-ssh-health-badge-wiring.test.ts",
+        "mobile/src/host-screen/host-view-changes-reconnect.test.ts",
+        "mobile/src/host-screen/host-workspace-list-action-error.test.tsx",
+        "mobile/src/host-screen/host-workspace-list-reopen.test.tsx",
+        "mobile/src/host-screen/host-workspace-list-row-memo.test.tsx",
+        "mobile/src/host-screen/host-worktree-catalog-action-error.test.ts",
+        "mobile/src/host-screen/host-worktree-child-navigation.test.tsx",
+        "mobile/src/host-screen/use-host-pending-view-changes.test.ts",
+        "mobile/src/host-screen/use-host-project-sections.test.tsx",
+        "mobile/src/host-screen/use-host-sidebar-feed.test.ts",
+        "mobile/src/host-screen/use-slow-pending-keys.test.tsx",
+        "mobile/src/host-screen/workspace-options-sheet.test.tsx",
+        "mobile/src/layout/host-sidebar-reveal.test.tsx",
+        "mobile/src/layout/side-safe-area.test.tsx",
+        "mobile/src/mobile-release/prepare-android-release-script.test.ts",
+        "mobile/src/mobile-web-shell/MobileWebShellScreen.test.tsx",
+        "mobile/src/mobile-web-shell/ShellWaitingFrame.test.tsx",
+        "mobile/src/mobile-web-shell/bridge-diagnostic-log.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-back.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-init.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-media-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-notifications.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-screencast.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-subscription-start-cleanup.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host.test.ts",
+        "mobile/src/mobile-web-shell/bridge-terminal-output-backlog.test.ts",
+        "mobile/src/mobile-web-shell/bridge-terminal-output-merge.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-audio-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-back-round-trip.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-caps.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-frame-cap-boundary.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-frame-cap-unit.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-inbound-frames.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-notifications.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-unsendable-frame.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-error-capture.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-execution-host.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-keyboard-inset.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-media-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-test-harness.ts"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0006-verified-lint.log",
+      "files": 45
+    },
+    {
+      "id": "changed-tests-support-format-final",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "pnpm",
+        "exec",
+        "oxfmt",
+        "--check",
+        "mobile/src/host-screen/host-ssh-health-badge-wiring.test.ts",
+        "mobile/src/host-screen/host-view-changes-reconnect.test.ts",
+        "mobile/src/host-screen/host-workspace-list-action-error.test.tsx",
+        "mobile/src/host-screen/host-workspace-list-reopen.test.tsx",
+        "mobile/src/host-screen/host-workspace-list-row-memo.test.tsx",
+        "mobile/src/host-screen/host-worktree-catalog-action-error.test.ts",
+        "mobile/src/host-screen/host-worktree-child-navigation.test.tsx",
+        "mobile/src/host-screen/use-host-pending-view-changes.test.ts",
+        "mobile/src/host-screen/use-host-project-sections.test.tsx",
+        "mobile/src/host-screen/use-host-sidebar-feed.test.ts",
+        "mobile/src/host-screen/use-slow-pending-keys.test.tsx",
+        "mobile/src/host-screen/workspace-options-sheet.test.tsx",
+        "mobile/src/layout/host-sidebar-reveal.test.tsx",
+        "mobile/src/layout/side-safe-area.test.tsx",
+        "mobile/src/mobile-release/prepare-android-release-script.test.ts",
+        "mobile/src/mobile-web-shell/MobileWebShellScreen.test.tsx",
+        "mobile/src/mobile-web-shell/ShellWaitingFrame.test.tsx",
+        "mobile/src/mobile-web-shell/bridge-diagnostic-log.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-back.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-init.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-media-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-notifications.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-screencast.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-subscription-start-cleanup.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host.test.ts",
+        "mobile/src/mobile-web-shell/bridge-terminal-output-backlog.test.ts",
+        "mobile/src/mobile-web-shell/bridge-terminal-output-merge.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-audio-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-back-round-trip.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-caps.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-frame-cap-boundary.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-frame-cap-unit.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-inbound-frames.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-notifications.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-client-unsendable-frame.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-error-capture.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-execution-host.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-keyboard-inset.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-media-verbs.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-port-pair-test-harness.test.ts",
+        "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+        "mobile/src/mobile-web-shell/bridge-host-test-harness.ts"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0006-verified-format-check.log",
+      "files": 45
+    },
+    {
+      "id": "changed-code-quality-final",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": ["pnpm", "run", "check:code-quality:changed"],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0006-verified-code-quality.log",
+      "note": "All scans report zero new findings across the shared checkout. Root will rerun after integration/rebase."
+    },
+    {
+      "id": "mobile-diff-whitespace-final",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": ["git", "diff", "--check", "HEAD", "--", "mobile"],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0006-verified-diff-check.log"
+    },
+    {
+      "id": "review-record-integrity",
+      "working_directory": ".",
+      "environment": {
+        "ORCA_BACKGROUND_LAUNCH": "1"
+      },
+      "command": [
+        "node",
+        "/tmp/orca-mobile-0006-verify-records.mjs",
+        "--checkout",
+        "/home/neil/orca/workspaces/orca/comprehensive-test-audit-6",
+        "--records",
+        "/tmp/orca-mobile-0006.jsonl",
+        "--validation",
+        "/tmp/orca-mobile-0006-validation.json"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "log": "/tmp/orca-mobile-0006-record-integrity.log",
+      "files": 50,
+      "original_declarations": 566,
+      "final_declarations": 490,
+      "expanded_row_decisions": 315,
+      "runtime_policies": 15
+    }
+  ],
+  "transfers": {
+    "artifact": "/tmp/orca-mobile-0006-transfer-verification.json",
+    "sha256": "bf163533a969f2c8267595ab163c74a17a57dee3e0e85a05e2102008249e5dac",
+    "groups": [
+      {
+        "id": 1,
+        "from": [
+          {
+            "file_index": 46,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-native-verbs.test.ts",
+            "case_index": 1,
+            "line": 15,
+            "title": "claims every name under the prefix, whether or not this build serves it"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+            "original_case_index": 13,
+            "final_titles": [
+              "refuses a verb this shell has no row for, before anything is forwarded"
+            ],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Known/unknown native request fence plus unique bare native. => specific unknown-native error and zero desktop/native-handler dispatch."
+      },
+      {
+        "id": 2,
+        "from": [
+          {
+            "file_index": 46,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-native-verbs.test.ts",
+            "case_index": 2,
+            "line": 23,
+            "title": "claims nothing else, so every desktop method still forwards"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+            "original_case_index": 10,
+            "final_titles": ["is answered by the shell and never forwarded to the desktop"],
+            "statuses": ["passed"]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host.test.ts",
+            "original_case_index": 1,
+            "final_titles": ["replays the arity the page used"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Valid nativeish.clipboard.read near-prefix request must reach desktop adapter unchanged; ordinary desktop controls retained; omit empty method (invalid envelope)."
+      },
+      {
+        "id": 3,
+        "from": [
+          {
+            "file_index": 46,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-native-verbs.test.ts",
+            "case_index": 6,
+            "line": 67,
+            "title": "names params the verb does not take, before any handler sees them"
+          },
+          {
+            "file_index": 46,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-native-verbs.test.ts",
+            "case_index": 7,
+            "line": 87,
+            "title": "no longer takes an image on the clipboard verb, because a verb now serves one"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+            "original_case_index": 14,
+            "final_titles": [
+              "refuses malformed clipboard params before any handler or desktop call"
+            ],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "All five write params {}, missing value, wrong MIME, null, extra key; image MIME clipboard-read refusal. Establish ready and matching grant; assert specific params refusal and zero handler/desktop calls."
+      },
+      {
+        "id": 4,
+        "from": [
+          {
+            "file_index": 46,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-native-verbs.test.ts",
+            "case_index": 10,
+            "line": 140,
+            "title": "refuses each media verb to a page granted only the clipboard"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+            "original_case_index": 22,
+            "final_titles": ["refuses a verb that route never asked for"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Ungrant each media.pick/read/release through actual host using valid per-verb params, not the same invalid pick params for all verbs."
+      },
+      {
+        "id": 5,
+        "from": [
+          {
+            "file_index": 47,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-notify-grants.test.ts",
+            "case_index": 1,
+            "line": 14,
+            "title": "refuses every name from a page that has not been told anything"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-notifications.test.ts",
+            "original_case_index": 3,
+            "final_titles": ["refuses a notify from a page it has told nothing, grant or no grant"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Unique otherwise-valid terminalViewport before-ready frame => exact before-ready diagnostic and zero actual viewport dispatch, alongside existing fault/foreground controls."
+      },
+      {
+        "id": 6,
+        "from": [
+          {
+            "file_index": 47,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-notify-grants.test.ts",
+            "case_index": 4,
+            "line": 36,
+            "title": "serves the protocol's own names against a page that holds no grant at all"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-notifications.test.ts",
+            "original_case_index": 1,
+            "final_titles": [
+              "forwards foreground with the arity the page used, and the viewport whole"
+            ],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Foreground arity and whole viewport still delivered on a real ready host with routeGrants[] (protocol grants remain automatic)."
+      },
+      {
+        "id": 7,
+        "from": [
+          {
+            "file_index": 47,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-notify-grants.test.ts",
+            "case_index": 5,
+            "line": 52,
+            "title": "is served by a host that issued navigate, and refused by one that did not"
+          },
+          {
+            "file_index": 47,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-notify-grants.test.ts",
+            "case_index": 8,
+            "line": 95,
+            "title": "holds navigate and storage to their own grants, not just navigate-back"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-native-verbs.test.ts",
+            "original_case_index": 24,
+            "final_titles": ["refuses valid notifications without their route grants"],
+            "statuses": ["passed"]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-notifications.test.ts",
+            "original_case_index": 13,
+            "final_titles": ["pops the shell stack and asks the client for nothing"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Real ready route without navigate/storage refuses valid navigate, navigate-back and storage callbacks, alongside existing externalLink refusal. Actual positive navigate-back must run with navigate-only route grant."
+      },
+      {
+        "id": 8,
+        "from": [
+          {
+            "file_index": 48,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "case_index": 2,
+            "line": 43,
+            "title": "becomes the device identity in both fields a page carries one in"
+          },
+          {
+            "file_index": 48,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "case_index": 3,
+            "line": 60,
+            "title": "leaves an id that is not the placeholder alone"
+          },
+          {
+            "file_index": 48,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "case_index": 4,
+            "line": 67,
+            "title": "replays params that claim nothing byte-exact, by identity"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "original_case_index": 7,
+            "final_titles": ["on a request, which is where terminal.send leaves"],
+            "statuses": ["passed"]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "original_case_index": 8,
+            "final_titles": ["on a stream start, which is where terminal.subscribe leaves"],
+            "statuses": ["passed"]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host.test.ts",
+            "original_case_index": 1,
+            "final_titles": ["replays the arity the page used"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Both client/mobileClient placeholder substitution, sibling values, non-placeholder spoof preservation, semantic unclaimed params/null/array and absent/options arity through actual host calls."
+      },
+      {
+        "id": 9,
+        "from": [
+          {
+            "file_index": 48,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "case_index": 6,
+            "line": 89,
+            "title": "lets a call that claims nothing through on a shell with no identity"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "original_case_index": 11,
+            "final_titles": ["refuses a request when the shell has no identity, sending none"],
+            "statuses": ["passed"]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.test.ts",
+            "original_case_index": 12,
+            "final_titles": [
+              "rejects the page's own call, as an ordinary RPC failure naming the reason"
+            ],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "No-identity host still forwards otherwise-valid ordinary request lacking placeholder; only identity claim rejects."
+      },
+      {
+        "id": 10,
+        "from": [
+          {
+            "file_index": 45,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-media-verbs.test.ts",
+            "case_index": 2,
+            "line": 32,
+            "title": "holds a handle to 64 characters and a mime to 128"
+          },
+          {
+            "file_index": 45,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-media-verbs.test.ts",
+            "case_index": 9,
+            "line": 106,
+            "title": "derives its byte length from the upload path, never from a second number"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-media-verbs.test.ts",
+            "original_case_index": 8,
+            "final_titles": ["accepts exact handle and MIME limits and refuses unusable items"],
+            "statuses": ["passed"]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge-host-media-verbs.test.ts",
+            "original_case_index": 1,
+            "final_titles": ["picks, reads every chunk in order to eof, and releases"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Handle/MIME exact cap/+1 as actual schemas; largest actual read full byte equality and encoded upload-result budget rather than constants-only math."
+      },
+      {
+        "id": 11,
+        "from": [
+          {
+            "file_index": 41,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+            "case_index": 22,
+            "line": 673,
+            "title": "refuses a dot segment in either position, however it is spelled"
+          },
+          {
+            "file_index": 41,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+            "case_index": 24,
+            "line": 689,
+            "title": "takes an escape that is part of a name, in either position"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+            "original_case_index": 1,
+            "final_titles": [
+              "accepts ready",
+              "accepts a page painted notify",
+              "accepts a back claim",
+              "accepts a back claim being let go",
+              "accepts request without params",
+              "accepts request with params",
+              "accepts request with options",
+              "accepts subscribe",
+              "accepts subscribe wanting binary",
+              "accepts cancel of a request",
+              "accepts cancel of a subscription",
+              "accepts ack",
+              "accepts foreground notify",
+              "accepts foreground notify with a reason",
+              "accepts terminal viewport notify",
+              "accepts a terminal viewport notify of exactly the bounds",
+              "accepts a page fault notify",
+              "accepts a navigate-back notify",
+              "accepts a mediumImpact haptics notify",
+              "accepts a selection haptics notify",
+              "accepts a success haptics notify",
+              "accepts a error haptics notify",
+              "accepts a edgeBump haptics notify",
+              "accepts an escaped-name navigate notify",
+              "accepts close",
+              "accepts a method of exactly the cap",
+              "accepts init",
+              "accepts an init naming the screen the page should open",
+              "accepts an init whose segments merely contain dots, which are names and not navigation",
+              "accepts an init whose segments merely carry percent escapes, which are text and not navigation",
+              "accepts state",
+              "accepts a back press handed to the page",
+              "accepts a whole reply",
+              "accepts a failure reply, which is data and not a rejection",
+              "accepts a reply part",
+              "accepts an event",
+              "accepts a binary event",
+              "accepts an unsubscribed end",
+              "accepts a closed end",
+              "accepts an overflow end",
+              "accepts an error",
+              "accepts an error whose code is an object",
+              "accepts a part index of exactly one below the part cap",
+              "accepts a reply carrying more values than the page-to-shell node cap"
+            ],
+            "statuses": [
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed"
+            ]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+            "original_case_index": 3,
+            "final_titles": [
+              "refuses a version this shell does not speak",
+              "refuses a missing version",
+              "refuses an unknown type",
+              "refuses an id of the wrong length",
+              "refuses a method over the cap",
+              "refuses an empty method",
+              "refuses an unknown cancel target",
+              "refuses a negative ack sequence",
+              "refuses a fractional ack sequence",
+              "refuses an unknown notify name",
+              "refuses an unknown foreground reason",
+              "refuses a viewport of zero columns",
+              "refuses a viewport one column over the bound",
+              "refuses a viewport one row over the bound",
+              "refuses a page fault carrying no error",
+              "refuses a page fault whose error is not a capture",
+              "refuses a haptic this app has no function for",
+              "refuses a haptics notify naming no kind",
+              "refuses a navigate dot segment /h/../a",
+              "refuses a navigate dot segment /h/%2e%2e/a",
+              "refuses a navigate dot segment /h/%2E%2E/a",
+              "refuses a navigate dot segment /h/.%2e/a",
+              "refuses a navigate dot segment /h/%2e/a",
+              "refuses a bare array",
+              "refuses a bare string",
+              "refuses an init without a build id",
+              "refuses a connection state the transport does not have",
+              "refuses a connection snapshot missing its generation",
+              "refuses a reply whose payload is not an envelope",
+              "refuses a part index past the part cap",
+              "refuses a part count of zero",
+              "refuses a binary event carrying only its bytes",
+              "refuses a binary event without the screencast frame seq",
+              "refuses a binary event in a format the screencast cannot produce",
+              "refuses a binary event whose metadata is not an object",
+              "refuses an end for a reason that is not one of the three",
+              "refuses an init route that is not rooted",
+              "refuses an init route that is protocol-relative",
+              "refuses an init route that is backslash-relative",
+              "refuses an init route carrying its own query",
+              "refuses an init route carrying a fragment",
+              "refuses an init route that climbs out of its prefix",
+              "refuses an init route with an interior dot segment",
+              "refuses an init route ending in a dot segment",
+              "refuses an init route with a single dot segment",
+              "refuses an init route with an interior backslash",
+              "refuses an init route that climbs out of its prefix percent-encoded",
+              "refuses an init route that climbs out of its prefix in capitals",
+              "refuses an init route with a half-encoded dot segment",
+              "refuses an init route with a single encoded dot segment",
+              "refuses an init route with a literal parent segment",
+              "refuses an init route with a lower encoded parent segment",
+              "refuses an init route with an upper encoded parent segment",
+              "refuses an init route with an empty interior segment",
+              "refuses an init route with an empty pathname",
+              "refuses an init route over the pathname cap",
+              "refuses an init route with more params than the cap",
+              "refuses an init route with a param value over the cap",
+              "refuses an init route whose param is not a string",
+              "refuses numeric strings in screencast metadata",
+              "refuses the page sending that many values back the other way",
+              "refuses query-ended dot segments through the navigate reader"
+            ],
+            "statuses": [
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed"
+            ]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+            "original_case_index": 9,
+            "final_titles": [
+              "accepts ready",
+              "accepts a page painted notify",
+              "accepts a back claim",
+              "accepts a back claim being let go",
+              "accepts request without params",
+              "accepts request with params",
+              "accepts request with options",
+              "accepts subscribe",
+              "accepts subscribe wanting binary",
+              "accepts cancel of a request",
+              "accepts cancel of a subscription",
+              "accepts ack",
+              "accepts foreground notify",
+              "accepts foreground notify with a reason",
+              "accepts terminal viewport notify",
+              "accepts a terminal viewport notify of exactly the bounds",
+              "accepts a page fault notify",
+              "accepts a navigate-back notify",
+              "accepts a mediumImpact haptics notify",
+              "accepts a selection haptics notify",
+              "accepts a success haptics notify",
+              "accepts a error haptics notify",
+              "accepts a edgeBump haptics notify",
+              "accepts an escaped-name navigate notify",
+              "accepts close",
+              "accepts a method of exactly the cap",
+              "accepts init",
+              "accepts an init naming the screen the page should open",
+              "accepts an init whose segments merely contain dots, which are names and not navigation",
+              "accepts an init whose segments merely carry percent escapes, which are text and not navigation",
+              "accepts state",
+              "accepts a back press handed to the page",
+              "accepts a whole reply",
+              "accepts a failure reply, which is data and not a rejection",
+              "accepts a reply part",
+              "accepts an event",
+              "accepts a binary event",
+              "accepts an unsubscribed end",
+              "accepts a closed end",
+              "accepts an overflow end",
+              "accepts an error",
+              "accepts an error whose code is an object",
+              "accepts a part index of exactly one below the part cap",
+              "accepts a reply carrying more values than the page-to-shell node cap"
+            ],
+            "statuses": [
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed"
+            ]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+            "original_case_index": 12,
+            "final_titles": [
+              "refuses a version this shell does not speak",
+              "refuses a missing version",
+              "refuses an unknown type",
+              "refuses an id of the wrong length",
+              "refuses a method over the cap",
+              "refuses an empty method",
+              "refuses an unknown cancel target",
+              "refuses a negative ack sequence",
+              "refuses a fractional ack sequence",
+              "refuses an unknown notify name",
+              "refuses an unknown foreground reason",
+              "refuses a viewport of zero columns",
+              "refuses a viewport one column over the bound",
+              "refuses a viewport one row over the bound",
+              "refuses a page fault carrying no error",
+              "refuses a page fault whose error is not a capture",
+              "refuses a haptic this app has no function for",
+              "refuses a haptics notify naming no kind",
+              "refuses a navigate dot segment /h/../a",
+              "refuses a navigate dot segment /h/%2e%2e/a",
+              "refuses a navigate dot segment /h/%2E%2E/a",
+              "refuses a navigate dot segment /h/.%2e/a",
+              "refuses a navigate dot segment /h/%2e/a",
+              "refuses a bare array",
+              "refuses a bare string",
+              "refuses an init without a build id",
+              "refuses a connection state the transport does not have",
+              "refuses a connection snapshot missing its generation",
+              "refuses a reply whose payload is not an envelope",
+              "refuses a part index past the part cap",
+              "refuses a part count of zero",
+              "refuses a binary event carrying only its bytes",
+              "refuses a binary event without the screencast frame seq",
+              "refuses a binary event in a format the screencast cannot produce",
+              "refuses a binary event whose metadata is not an object",
+              "refuses an end for a reason that is not one of the three",
+              "refuses an init route that is not rooted",
+              "refuses an init route that is protocol-relative",
+              "refuses an init route that is backslash-relative",
+              "refuses an init route carrying its own query",
+              "refuses an init route carrying a fragment",
+              "refuses an init route that climbs out of its prefix",
+              "refuses an init route with an interior dot segment",
+              "refuses an init route ending in a dot segment",
+              "refuses an init route with a single dot segment",
+              "refuses an init route with an interior backslash",
+              "refuses an init route that climbs out of its prefix percent-encoded",
+              "refuses an init route that climbs out of its prefix in capitals",
+              "refuses an init route with a half-encoded dot segment",
+              "refuses an init route with a single encoded dot segment",
+              "refuses an init route with a literal parent segment",
+              "refuses an init route with a lower encoded parent segment",
+              "refuses an init route with an upper encoded parent segment",
+              "refuses an init route with an empty interior segment",
+              "refuses an init route with an empty pathname",
+              "refuses an init route over the pathname cap",
+              "refuses an init route with more params than the cap",
+              "refuses an init route with a param value over the cap",
+              "refuses an init route whose param is not a string",
+              "refuses numeric strings in screencast metadata",
+              "refuses the page sending that many values back the other way",
+              "refuses query-ended dot segments through the navigate reader"
+            ],
+            "statuses": [
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed",
+              "passed"
+            ]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-envelope.test.ts",
+            "original_case_index": 23,
+            "final_titles": ["refuses query-ended dot segments through the navigate reader"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Every unique dot spelling/valid escaped name moves through actual init-route/navigate reader; query-ended dot refusal remains distinct. Existing exact duplicate accepted percent-name pathname need not be added again."
+      },
+      {
+        "id": 12,
+        "from": [
+          {
+            "file_index": 50,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+            "case_index": 9,
+            "line": 142,
+            "title": "stays under the frame cap when every byte escapes to six"
+          },
+          {
+            "file_index": 50,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+            "case_index": 14,
+            "line": 193,
+            "title": "round-trips an astral payload at every cut parity"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+            "original_case_index": 12,
+            "final_titles": [
+              "reassembles a small reply byte for byte",
+              "reassembles a reply spanning several frames byte for byte",
+              "reassembles a reply of astral characters byte for byte",
+              "reassembles a reply of control characters byte for byte",
+              "reassembles a reply of mixed widths byte for byte"
+            ],
+            "statuses": ["passed", "passed", "passed", "passed", "passed"]
+          },
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+            "original_case_index": 5,
+            "final_titles": ["never cuts a frame inside a surrogate pair, at any cut parity"],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Control-character payload per-frame byte acceptance joins full roundtrip table row; all four cut parities get both cut-integrity and full roundtrip in one case."
+      },
+      {
+        "id": 13,
+        "from": [
+          {
+            "file_index": 35,
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-caps.test.ts",
+            "case_index": 16,
+            "line": 173,
+            "title": "allows enough parts for a ceiling-sized reply whose every byte re-escapes"
+          }
+        ],
+        "destinations": [
+          {
+            "path": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+            "original_case_index": 4,
+            "final_titles": [
+              "splits the worst reply the ceiling admits into fewer parts than the schema allows"
+            ],
+            "statuses": ["passed"]
+          }
+        ],
+        "preserved_control": "Actual near-ceiling worst re-escaping split must satisfy admitted part count/reader frame cap/full roundtrip; no derived inequality inventory."
+      }
+    ]
+  },
+  "mutations": {
+    "artifact": "/tmp/orca-mobile-0006-mutations/results.json",
+    "sha256": "75f74bb106a52dfadbc9c77e9000722cae03bc21fd2cc64ebe646390ceb3b8db",
+    "result": "passed",
+    "checks": [
+      {
+        "id": "request-subscription-id-collision",
+        "source": "mobile/src/mobile-web-shell/bridge-host-requests.ts",
+        "defect": "Ignores live subscription ownership when admitting requests.",
+        "expected_failing_titles": [
+          "refuses a subscription id as a request id, because one ledger answers for both"
+        ],
+        "original_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+        "restored_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+        "baseline": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/request-subscription-id-collision-baseline.json"
+        },
+        "mutant": {
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "json": "/tmp/orca-mobile-0006-mutations/request-subscription-id-collision-mutant.json"
+        },
+        "restored": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/request-subscription-id-collision-restored.json"
+        }
+      },
+      {
+        "id": "close-reopen-request-cap",
+        "source": "mobile/src/mobile-web-shell/bridge-host-requests.ts",
+        "defect": "Resets actual in-flight occupancy when a document closes.",
+        "expected_failing_titles": ["holds the cap against a page that closes between batches"],
+        "original_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+        "restored_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+        "baseline": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/close-reopen-request-cap-baseline.json"
+        },
+        "mutant": {
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "json": "/tmp/orca-mobile-0006-mutations/close-reopen-request-cap-mutant.json"
+        },
+        "restored": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/close-reopen-request-cap-restored.json"
+        }
+      },
+      {
+        "id": "throwing-subscription-retry",
+        "source": "mobile/src/mobile-web-shell/bridge-host-subscriptions.ts",
+        "defect": "Keeps a failed subscribe ID live and blocks the second actual attempt.",
+        "expected_failing_titles": ["answers a client whose subscribe throws and holds no slot"],
+        "original_sha256": "a9e903307f287da51f1c66758191762a3095c5fbff58339798dcd4feb9f7ec1d",
+        "restored_sha256": "a9e903307f287da51f1c66758191762a3095c5fbff58339798dcd4feb9f7ec1d",
+        "baseline": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/throwing-subscription-retry-baseline.json"
+        },
+        "mutant": {
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "json": "/tmp/orca-mobile-0006-mutations/throwing-subscription-retry-mutant.json"
+        },
+        "restored": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/throwing-subscription-retry-restored.json"
+        }
+      },
+      {
+        "id": "late-audio-open-device-teardown",
+        "source": "mobile/src/platform/native-audio.ts",
+        "defect": "Leaves the device session open when disposal wins an entered permission/open race.",
+        "expected_failing_titles": [
+          "does not open a capture for a start that lands after the session ended",
+          "tears the device down for a start that lost the race after opening"
+        ],
+        "original_sha256": "3b846a0dbb3caa13ca1faa81a287d814035f68dee0cf9b291c430bb6785f3683",
+        "restored_sha256": "3b846a0dbb3caa13ca1faa81a287d814035f68dee0cf9b291c430bb6785f3683",
+        "baseline": {
+          "exit_code": 0,
+          "passed": 2,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/late-audio-open-device-teardown-baseline.json"
+        },
+        "mutant": {
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 2,
+          "json": "/tmp/orca-mobile-0006-mutations/late-audio-open-device-teardown-mutant.json"
+        },
+        "restored": {
+          "exit_code": 0,
+          "passed": 2,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/late-audio-open-device-teardown-restored.json"
+        }
+      },
+      {
+        "id": "fault-port-send-diagnostic",
+        "source": "mobile/src/mobile-web-shell/bridge/bridge-rpc-client.ts",
+        "defect": "Suppresses the new send-failed diagnostic after an initialized fault port throws.",
+        "expected_failing_titles": [
+          "answers false for a port that refused the frame, and reports it once"
+        ],
+        "original_sha256": "ce91832366b9c48dbda40ad819892994be9f82df540d10914e25b765c0b051aa",
+        "restored_sha256": "ce91832366b9c48dbda40ad819892994be9f82df540d10914e25b765c0b051aa",
+        "baseline": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/fault-port-send-diagnostic-baseline.json"
+        },
+        "mutant": {
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "json": "/tmp/orca-mobile-0006-mutations/fault-port-send-diagnostic-mutant.json"
+        },
+        "restored": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/fault-port-send-diagnostic-restored.json"
+        }
+      },
+      {
+        "id": "reply-refusal-tombstone",
+        "source": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.ts",
+        "defect": "Allows a full valid restart partition to reuse a refused reply ID.",
+        "expected_failing_titles": [
+          "keeps a refused id refused, so a sender cannot start over on the next part"
+        ],
+        "original_sha256": "a5f639f76372c319ae6de2b002554bbc91d6515f1edd9674e0c05370b683b5c6",
+        "restored_sha256": "a5f639f76372c319ae6de2b002554bbc91d6515f1edd9674e0c05370b683b5c6",
+        "baseline": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/reply-refusal-tombstone-baseline.json"
+        },
+        "mutant": {
+          "exit_code": 1,
+          "passed": 0,
+          "failed": 1,
+          "json": "/tmp/orca-mobile-0006-mutations/reply-refusal-tombstone-mutant.json"
+        },
+        "restored": {
+          "exit_code": 0,
+          "passed": 1,
+          "failed": 0,
+          "json": "/tmp/orca-mobile-0006-mutations/reply-refusal-tombstone-restored.json"
+        }
+      }
+    ]
+  },
+  "production_restoration_proofs": [
+    {
+      "path": "mobile/src/mobile-web-shell/bridge-host-requests.ts",
+      "current_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+      "head_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+      "unchanged": true
+    },
+    {
+      "path": "mobile/src/mobile-web-shell/bridge-host-requests.ts",
+      "current_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+      "head_sha256": "440bb494362029fb16038217cbdf49ac2856b4dc2c963641ab415eab85320302",
+      "unchanged": true
+    },
+    {
+      "path": "mobile/src/mobile-web-shell/bridge-host-subscriptions.ts",
+      "current_sha256": "a9e903307f287da51f1c66758191762a3095c5fbff58339798dcd4feb9f7ec1d",
+      "head_sha256": "a9e903307f287da51f1c66758191762a3095c5fbff58339798dcd4feb9f7ec1d",
+      "unchanged": true
+    },
+    {
+      "path": "mobile/src/platform/native-audio.ts",
+      "current_sha256": "3b846a0dbb3caa13ca1faa81a287d814035f68dee0cf9b291c430bb6785f3683",
+      "head_sha256": "3b846a0dbb3caa13ca1faa81a287d814035f68dee0cf9b291c430bb6785f3683",
+      "unchanged": true
+    },
+    {
+      "path": "mobile/src/mobile-web-shell/bridge/bridge-rpc-client.ts",
+      "current_sha256": "ce91832366b9c48dbda40ad819892994be9f82df540d10914e25b765c0b051aa",
+      "head_sha256": "ce91832366b9c48dbda40ad819892994be9f82df540d10914e25b765c0b051aa",
+      "unchanged": true
+    },
+    {
+      "path": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.ts",
+      "current_sha256": "a5f639f76372c319ae6de2b002554bbc91d6515f1edd9674e0c05370b683b5c6",
+      "head_sha256": "a5f639f76372c319ae6de2b002554bbc91d6515f1edd9674e0c05370b683b5c6",
+      "unchanged": true
+    }
+  ],
+  "independent_root_verification": {
+    "artifact": "/tmp/orca-mobile-0006-root-verification.json",
+    "sha256": "81a4ac0835d0d11ecef90408cc2a2b0ea52784527c685b19bb88e78b4432229f",
+    "result": {
+      "batch": "mobile-0006",
+      "reviewer": "root",
+      "original_source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+      "files": 50,
+      "original_declarations": 566,
+      "tables": 64,
+      "explicit_row_decisions": 315,
+      "runtime_policy_records": 15,
+      "artifact_hashes": 14,
+      "transfer_groups": 13,
+      "mutation_checks": 6,
+      "passing_runtime_cases": 621,
+      "errors": []
+    }
+  },
+  "unavailable_or_manual_validation": [
+    {
+      "scope": "Native/device ports",
+      "result": "not-run-on-device",
+      "reason": "No real microphone, OS permission/interruption, keep-awake lock, haptic, clipboard/picker/cache, IME/keyboard or native Back/router UI was launched."
+    },
+    {
+      "scope": "Visible application/focus",
+      "result": "not-run",
+      "reason": "All React/native/transport boundaries use deterministic injected ports and node rendering; no visible window or native focus changes."
+    },
+    {
+      "scope": "Remote or service sessions",
+      "result": "not-run",
+      "reason": "No authenticated desktop/SSH/remote server, external network or live service was used."
+    },
+    {
+      "scope": "Android release publishing/signing",
+      "result": "not-run",
+      "reason": "Only actual shell/temp-directory preparation behavior was exercised."
+    }
+  ],
+  "integrity": {
+    "records_path": "docs/audits/test-value/reviews/mobile-0006.jsonl",
+    "records_sha256": "5e167b5d419f8322d3e875713b4d4eff17b0c1844aa8968e3b6e56f3686cfcf5",
+    "original_hashes_verified_against_source_commit": 50,
+    "final_hashes_verified": 50,
+    "exact_original_ast_declarations_verified": 566,
+    "current_ast_declarations_verified": 490,
+    "source_and_current_evidence_file_hashes": 95,
+    "evidence_source_drift": [],
+    "original_table_records_verified": 64,
+    "expanded_row_decisions_verified": 315,
+    "runtime_policy_records_verified": 15,
+    "refresh_declaration_parser_sha256": "8eced726500958f3b4cfd5687cf2f0cc98d1190dfd83570c31706ad182332f90",
+    "selection_checkpoint": "c6b84f3ee358997cdfb4b9c9062a124fbc653720",
+    "selection_exclusion_record_count": 91,
+    "selection_exclusion_records_artifact": "/tmp/orca-mobile-0006-plan.json",
+    "selection_integrity": {
+      "source_base": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+      "selection_checkpoint": "c6b84f3ee358997cdfb4b9c9062a124fbc653720",
+      "fresh_checkout_observed_head": "b60d1ca1b1903172a66607b857cfbfd22a8b0a0c",
+      "files": 50,
+      "source_snapshots_match": 50,
+      "source_base_hash_matches": 50,
+      "selection_checkpoint_hash_matches": 50,
+      "fresh_checkout_head_hash_matches": 50,
+      "supporting_source_paths": 95,
+      "supporting_source_drift": [],
+      "exclusion_records_match_capture": 91,
+      "excluded_completed_paths": 839,
+      "ordered_selection_reproduces": true,
+      "selection_first": "mobile/src/host-screen/host-ssh-health-badge-wiring.test.ts",
+      "selection_last": "mobile/src/mobile-web-shell/bridge/bridge-reply-chunking.test.ts",
+      "pending_cases": 0,
+      "pending_table_records": 0,
+      "inventory_refresh_performed": false
+    },
+    "no_staging_commits_rebases_or_source_edits_during_record_preparation": true,
+    "frozen_implementation_artifacts": {
+      "/tmp/orca-mobile-0006-implementation.json": "d2f050a6c7255a99a082a29d8eaaca55a79728b8bde3872fa99cddf01b15a489",
+      "/tmp/orca-mobile-0006-implementation-files.json": "e61d7986b61fb8a8a3671ed4509812df77a31ea9b54e0fe7899f0236a5ef5702",
+      "/tmp/orca-mobile-0006-implementation.md": "6fdb05fa849c33caddc7d36538c230b6b8ad56dcf3a82775f67ad19972dc7de5",
+      "/tmp/orca-mobile-0006-implementation.patch": "4a520b7bc82943a6684149165cf59023f08dec7826af200482ce0cae0ddae12e",
+      "/tmp/orca-mobile-0006-plan.json": "8f39d51290a17335dcd46f0a8fc54099bf2b0cbe7b7141885876b2dd93cee496",
+      "/tmp/orca-mobile-0006-verified-tests.log": "771889c445a7fa3e73a402942a154549e3625556ab82221097da1ebefe59a07c",
+      "/tmp/orca-mobile-0006-verified-typecheck.log": "43026b0b0a767ba9ad8228ecd12b4436960f9f25f531ef21535085e11e64d0f8",
+      "/tmp/orca-mobile-0006-verified-code-quality.log": "b5a16fd59592f32870016c3dc59cdc319e11f0b7a81456599ac6b33ab67c3f0b",
+      "/tmp/orca-mobile-0006-verified-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "/tmp/orca-mobile-0006-verified-format-check.log": "24df3a8bb03079f202a288232e1800564ee867dd2cd8a75d2b1d3924f2a38a1a",
+      "/tmp/orca-mobile-0006-verified-diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "/tmp/orca-mobile-0006-verified-tests.json": "1d1711b07fd0bc8ffe557a989c4e457309057ef1d66a6c5a8724902efba46211",
+      "/tmp/orca-mobile-0006-transfer-verification.json": "bf163533a969f2c8267595ab163c74a17a57dee3e0e85a05e2102008249e5dac",
+      "/tmp/orca-mobile-0006-mutations/results.json": "75f74bb106a52dfadbc9c77e9000722cae03bc21fd2cc64ebe646390ceb3b8db"
+    },
+    "frozen_implementation_path": "/tmp/orca-mobile-0006-implementation.json",
+    "frozen_implementation_sha256": "d2f050a6c7255a99a082a29d8eaaca55a79728b8bde3872fa99cddf01b15a489",
+    "review_plan_sha256": "8f39d51290a17335dcd46f0a8fc54099bf2b0cbe7b7141885876b2dd93cee496",
+    "review_record_verifier_sha256": "ac1420627bca7fc218b7f339084a27852c8aa62e4342baa7913aef91e188c22c",
+    "post_ci_record_verifier": {
+      "path": "/tmp/orca-mobile-0006-verify-post-ci-records.mjs",
+      "sha256": "919110f17b6344f53a226a43b99fea90b2168d3a645add421454339d36bb7934",
+      "derived_from": "/tmp/orca-mobile-0006-verify-records.mjs",
+      "derivation": "Retains all frozen original review/table/transfer/mutation checks; permits exactly the two recorded and re-executed style substitutions."
+    }
+  },
+  "post_ci_style_validation": {
+    "path": "docs/audits/test-value/reviews/mobile-0006-post-ci-validation.json",
+    "sha256": "1d86e869ff982802c6b53bdb482af5782e7ee80a8545871b13499a781f695820",
+    "passing_runtime_cases": 23,
+    "suites": 2
+  }
+}

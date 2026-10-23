@@ -1,0 +1,42 @@
+{
+  "batch": "root-0051",
+  "reviewer": "root",
+  "source_commit": "8f6283b32bcdefa746613e4c28d04bb1fe954eb9",
+  "reviewed_files": 4,
+  "case_records": 53,
+  "production_changes": false,
+  "test_source_changes": true,
+  "review_scope": "Read every original declaration, fixture body, parameter table and process loop. Additional table/loop rows are explicit controls, not runtime test totals.",
+  "checks": [
+    {
+      "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/cli/agent-context.test.ts src/cli/agent-launch-process.test.ts src/cli/agent-session-search-format.test.ts src/cli/args-repeatable-flags.test.ts src/cli/args.test.ts src/cli/automation-format.test.ts src/cli/automation-owner-conflict-recovery.test.ts",
+      "result": "Seven suites / 95 tests passed after all source changes and production restoration.",
+      "log": "/tmp/orca-root-0051-0052-final-tests.log"
+    },
+    {
+      "command": "Temporary production mutation with original versus reviewed existing tests, restored in finally.",
+      "mutation": {
+        "mutation": "Drop any untrusted field containing ESC instead of preserving sanitized text.",
+        "results": {
+          "original": {
+            "exit_code": 0,
+            "log": "/tmp/orca-root-0051-mutation-original.log"
+          },
+          "reviewed": {
+            "exit_code": 1,
+            "log": "/tmp/orca-root-0051-mutation-reviewed.log"
+          }
+        },
+        "restored": true
+      }
+    }
+  ],
+  "limitations": [
+    "Linux local runtime only; real CLI process tests use a temporary RPC peer rather than a running desktop/remote host.",
+    "Formatter tests establish output projection, not remote authorization or transport behavior."
+  ],
+  "integrity": {
+    "records_sha256": "240efc46d02c82fbbc936d2ec284f0410759e60bbc340dd12e023265f85b3f4e",
+    "original_and_final_hashes_verified": true
+  }
+}

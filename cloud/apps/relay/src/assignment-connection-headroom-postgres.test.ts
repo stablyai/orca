@@ -41,6 +41,10 @@ describePostgres('PostgreSQL assignment connection headroom', () => {
          WHERE user_id LIKE 'connection-headroom-postgres-%'`
       )
       await database.query(
+        `DELETE FROM relay_assignment_migrations
+         WHERE user_id LIKE 'connection-headroom-postgres-%'`
+      )
+      await database.query(
         `DELETE FROM relay_assignments
          WHERE user_id LIKE 'connection-headroom-postgres-%'`
       )

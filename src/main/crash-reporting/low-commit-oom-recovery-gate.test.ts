@@ -7,7 +7,7 @@ import {
 
 const OOM: Electron.RenderProcessGoneDetails = { reason: 'oom', exitCode: -536870904 }
 const CRASHED: Electron.RenderProcessGoneDetails = { reason: 'crashed', exitCode: 5 }
-// Launch 22912 (Scan-30 1790622432/1790622459): OOM at 19:06:54.6, reload OOMed again at 19:07:28.7.
+// Field launch 22912 repeated its OOM 34.1 seconds after recovery.
 const FIRST_OOM = Date.parse('2026-09-28T19:06:54.600Z')
 const RELOAD_OOM = Date.parse('2026-09-28T19:07:28.700Z')
 
@@ -18,7 +18,6 @@ function sample(swapFreeMB: number | undefined, ageMs = 4_000) {
   })
 }
 
-// A gone-time read that resolved no commit field, as off-Electron.
 const NO_GONE_TIME_READING = () => ({})
 
 function goneTime(swapFreeMB: number) {
@@ -70,7 +69,6 @@ describe('createLowCommitOomRecoveryGate', () => {
     expect(observeTwice(read, second, gapMs, platform)[1]).toBeNull()
   })
 
-  // Launch 13084 (Scan-31): 12:20:37.207 then 12:22:59.975; each OOM restarts the window.
   it('measures the window from the most recent OOM', () => {
     const verdicts = withPlatform('win32', () => {
       const gate = createLowCommitOomRecoveryGate(sample(60, 2_000), NO_GONE_TIME_READING)
@@ -88,7 +86,6 @@ describe('createLowCommitOomRecoveryGate', () => {
     expect(verdicts.map((v) => v?.sincePreviousOomMs ?? null)).toEqual([null, null, 3_458, 139_310])
   })
 
-  // Launch 13084: the repeat OOM came 3.458 s after the previous one, inside one 10 s sampler tick.
   describe('when no sampler tick landed since the previous OOM', () => {
     const gapMs = 3_458
 

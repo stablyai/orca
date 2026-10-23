@@ -56,7 +56,6 @@ describe('push-target bookkeeping under a WSL move', () => {
   async function push(worktreeId: string, hostId?: ExecutionHostId) {
     const setWorktreeMeta = vi.fn()
     const meta = hostId ? { [worktreeId]: mergeWorktreeMetaForWrite(undefined, { hostId }) } : {}
-    // The record lands only on a host that registers the copy's repo.
     const repos = [
       { id: 'repo-1', path: '/ws/repo-1', displayName: 'r', badgeColor: '#000', addedAt: 0 },
       {

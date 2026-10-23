@@ -49,7 +49,6 @@ export function registerJournalUnsentSendHoldTests(): void {
     surface: 'rejection'
   })
   /** The live host process the cards are written for. */
-  const HOST = 'host-instance-2'
 
   let root: string
   let clock = 1_000
@@ -78,7 +77,7 @@ export function registerJournalUnsentSendHoldTests(): void {
   }
 
   function hold(journal: AgentSessionJournal, settle: UnsentSendHold = { cause: 'hostRestarted' }) {
-    return holdUnsentSends(journal, { fence: 0, hostInstance: HOST, hold: settle })
+    return holdUnsentSends(journal, { fence: 0, hold: settle })
   }
 
   /** Orchestration mail as the mailbox sends it: from another agent, naming its sender. */
@@ -190,10 +189,8 @@ export function registerJournalUnsentSendHoldTests(): void {
         expect(reopened.queuedMessages.get(id)).toMatchObject({
           state: 'waiting',
           holdReason: null,
-          hostInstance: HOST,
           body: message(`text of ${id}`),
           fingerprint: fingerprint(message(`text of ${id}`)),
-          carriedFrom: null,
           queuedAt: { epoch: 'epoch-1', sequence: reopened.submission(id)?.acceptedSequence }
         })
       }
@@ -255,9 +252,7 @@ export function registerJournalUnsentSendHoldTests(): void {
         const journal = await afterRestart(async (earlier) => {
           await earlier.queuedMessages.insert({
             messageId: 'card',
-            body: message('card text'),
-            fingerprint: fingerprint(message('card text')),
-            hostInstance: 'proc-1'
+            body: message('card text')
           })
           await earlier.appendSubmission(
             {
@@ -268,7 +263,7 @@ export function registerJournalUnsentSendHoldTests(): void {
               handoverRecorded: true,
               origin
             },
-            { messageId: 'card', expect: 'waiting', settledByOp: null }
+            { messageId: 'card', expect: 'waiting' }
           )
         })
         await hold(journal)
@@ -355,15 +350,11 @@ export function registerJournalUnsentSendHoldTests(): void {
         const journal = await afterRestart(async (earlier) => {
           await earlier.queuedMessages.insert({
             messageId: 'H',
-            body: message('H'),
-            fingerprint: fingerprint(message('H')),
-            hostInstance: 'proc-1'
+            body: message('H')
           })
           await earlier.queuedMessages.insert({
             messageId: 'C',
-            body: message('C'),
-            fingerprint: fingerprint(message('C')),
-            hostInstance: 'proc-1'
+            body: message('C')
           })
           await accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
           await earlier.appendSubmission(
@@ -375,7 +366,7 @@ export function registerJournalUnsentSendHoldTests(): void {
               handoverRecorded: true,
               origin
             },
-            { messageId: 'H', expect: 'waiting', settledByOp: null }
+            { messageId: 'H', expect: 'waiting' }
           )
           await accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
         })
@@ -389,9 +380,7 @@ export function registerJournalUnsentSendHoldTests(): void {
       const interrupted = await afterRestart(async (earlier) => {
         await earlier.queuedMessages.insert({
           messageId: 'C',
-          body: message('C'),
-          fingerprint: fingerprint(message('C')),
-          hostInstance: 'proc-1'
+          body: message('C')
         })
         await accept(earlier, 'A', { origin: 'client', source: USER_MESSAGE_SOURCE })
         await accept(earlier, 'B', { origin: 'client', source: USER_MESSAGE_SOURCE })
@@ -406,22 +395,21 @@ export function registerJournalUnsentSendHoldTests(): void {
           recovered: true,
           keptAsQueuedMessageId: 'A'
         },
-        (db) => {
-          interrupted.queuedMessages.holdInTransaction(db, {
-            card: {
+        () =>
+          interrupted.queuedMessages.plan([
+            {
               messageId: 'A',
-              body: message('text of A'),
-              fingerprint: fingerprint(message('text of A')),
-              hostInstance: HOST,
-              queuedAt: {
-                epoch: 'epoch-1',
-                sequence: interrupted.submission('A')!.acceptedSequence!
-              },
-              position: 5
-            },
-            positions: []
-          })
-        }
+              change: {
+                op: 'queued',
+                body: message('text of A'),
+                queuedAt: {
+                  epoch: 'epoch-1',
+                  sequence: interrupted.submission('A')!.acceptedSequence!
+                },
+                position: 5
+              }
+            }
+          ])
       )
       await interrupted.close()
       const journal = await open()
@@ -439,10 +427,7 @@ export function registerJournalUnsentSendHoldTests(): void {
       await hold(journal, { cause: 'chatClosed' })
 
       expect(cardOrder(journal)).toEqual(['person'])
-      expect(journal.queuedMessages.get('person')).toMatchObject({
-        holdReason: null,
-        hostInstance: HOST
-      })
+      expect(journal.queuedMessages.get('person')).toMatchObject({ holdReason: null })
       for (const id of ['person', 'mail']) {
         expect(journal.submission(id)).toMatchObject({ dispatchState: 'rejected', ...CHAT_CLOSED })
       }

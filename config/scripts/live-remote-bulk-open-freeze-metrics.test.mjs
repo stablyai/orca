@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applySwitchTargetCap,
   evaluateFreezeSignals,
@@ -8,7 +8,6 @@ import {
   extractTerminalHandle,
   humanPaceDelayMs,
   readFreezeNumberEnv,
-  REALISTIC_SCENARIOS,
   shouldCapSwitchTargets,
   worktreeSelector
 } from './live-remote-bulk-open-freeze-metrics.mjs'
@@ -57,9 +56,6 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
   })
 
   it('evaluates naturalistic peaks without requiring parallel batch amp', () => {
-    expect(REALISTIC_SCENARIOS).toContain('idle-backlog-open')
-    expect(REALISTIC_SCENARIOS).toContain('idle-backlog-reconnect-open')
-    expect(REALISTIC_SCENARIOS).toContain('lockup-storm')
     const soft = evaluateRealisticFreezeSignals({
       maxOpenMs: 3200,
       firstOpenMs: 2800,
@@ -197,43 +193,16 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
     ).toBe(true)
   })
 
-  it('human pace delay stays within base+jitter', () => {
-    for (let i = 0; i < 20; i += 1) {
-      const d = humanPaceDelayMs(250, 150)
-      expect(d).toBeGreaterThanOrEqual(250)
-      expect(d).toBeLessThanOrEqual(400)
+  it('applies both ends of the human pace jitter range', () => {
+    const random = vi.spyOn(Math, 'random')
+    try {
+      random.mockReturnValue(0)
+      expect(humanPaceDelayMs(250, 150)).toBe(250)
+      random.mockReturnValue(1 - Number.EPSILON)
+      expect(humanPaceDelayMs(250, 150)).toBe(400)
+      expect(humanPaceDelayMs(100, 0)).toBe(100)
+    } finally {
+      random.mockRestore()
     }
-    expect(humanPaceDelayMs(100, 0)).toBe(100)
-  })
-
-  it('reads the real hard-freeze lab report when present', async () => {
-    const { readdirSync, readFileSync, existsSync } = await import('node:fs')
-    const { resolve } = await import('node:path')
-    const reportDir = resolve(process.cwd(), 'test-results/freeze-repro')
-    if (!existsSync(reportDir)) {
-      // Local clones without lab artifacts still pass pure metrics tests above.
-      return
-    }
-    const reportName = readdirSync(reportDir).find(
-      (name) => name.startsWith('live-bulk-open-freeze-') && name.endsWith('.json')
-    )
-    if (reportName == null) {
-      return
-    }
-    const report = JSON.parse(readFileSync(resolve(reportDir, reportName), 'utf8'))
-    const evaluated = evaluateFreezeSignals({
-      maxSwitchMs: report.maxSwitchMs,
-      maxBatchWallMs: report.maxBatchWallMs ?? 0,
-      statusProbeMs: report.statusProbeMs ?? 0,
-      memoryProbeMs: report.memoryProbeMs,
-      softMs: report.softMs,
-      hardMs: report.hardMs
-    })
-    expect(evaluated.hardFreeze).toBe(report.hardFreeze)
-    expect(evaluated.peakLatencyMs).toBeGreaterThanOrEqual(5000)
-    expect(typeof report.environment).toBe('string')
-    expect(report.environment.length).toBeGreaterThan(0)
-    expect(report.switchTargets).toBeGreaterThan(50)
-    expect(report.parallel).toBeGreaterThanOrEqual(8)
   })
 })

@@ -10,7 +10,6 @@ import {
   TEST_REPO_PATH
 } from './hooks-test-fixtures'
 
-// Mock fs used by loadHooks
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   existsSync: vi.fn(),
@@ -28,7 +27,6 @@ vi.mock('child_process', () => ({
   exec: vi.fn(),
   execFile: vi.fn(),
   execFileSync: vi.fn(),
-  // runner.ts imports spawn from child_process transitively.
   spawn: vi.fn()
 }))
 
@@ -203,7 +201,7 @@ describe('createIssueCommandRunnerScript', () => {
         ['rev-parse', '--git-path', 'orca/issue-command-runner.cmd'],
         { cwd: 'C:\\repo-worktree' }
       )
-      // Why: the runner file is batch (.cmd) while the pane that launches it is still Git Bash.
+      // The pane remains Git Bash even when it launches a batch runner.
       expect(result.shell).toEqual({ family: 'posix' })
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })

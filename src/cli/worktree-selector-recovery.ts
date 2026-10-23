@@ -1,8 +1,4 @@
-// Why: the runtime answers an unresolvable `--worktree` with a bare
-// `selector_not_found` — no offending value and no grammar — so a caller who passed
-// a repo id where a worktree id belongs cannot tell what was wrong (#16904). The CLI
-// is the only layer that still knows what the caller typed, so it shapes the recovery
-// here, in the same validFlags/suggestions/nextSteps shape as an unknown-flag error.
+// The runtime omits the typed selector from not-found errors; add it and its grammar at the CLI boundary.
 
 export const WORKTREE_SELECTOR_FORMS = [
   'id:<repo-id>::<absolute-path>',

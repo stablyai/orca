@@ -8,9 +8,7 @@ import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 
-// The execution host labels each turn end by what it can prove now: an identified end (an unused
-// opening or a new turn id) or revision (a verified re-entered Stop) mints; a proven repeat keeps
-// the end; anything else is ambiguous, never mints, and leaves main's title behavior to the renderer.
+// Only identified turns or verified Stop revisions mint an end; repeats and ambiguity never mint another.
 describe('the host-stamped turn end', () => {
   let server: AgentHookServer
   let directory: string
@@ -29,7 +27,7 @@ describe('the host-stamped turn end', () => {
 
   async function post(payload: Record<string, unknown>, path = '/hook/claude'): Promise<void> {
     expect((await postHookEvent(server, buildBody(payload), path)).status).toBe(204)
-    // Distinct host stamps: each event lands on a later millisecond.
+    // Separate host timestamps by advancing real time between events.
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
   const row = () => server.getStatusSnapshot()[0]
@@ -109,8 +107,7 @@ describe('the host-stamped turn end', () => {
     const first = row()?.turnEndedAt
     expect(first).toEqual(expect.any(Number))
 
-    // Its turn id and continuation flag prove an unflagged same-turn Stop is a duplicate, even
-    // after a tool reopen.
+    // A known turn ID without continuation proves duplicate Stop even after tool work reopens the row.
     await codex({ hook_event_name: 'Stop', turn_id: 'turn-a', last_assistant_message: 'Planned.' })
     await codex({ hook_event_name: 'PreToolUse', turn_id: 'turn-a', tool_name: 'Bash' })
     await codex({ hook_event_name: 'Stop', turn_id: 'turn-a', last_assistant_message: 'Planned.' })
@@ -178,7 +175,6 @@ describe('the host-stamped turn end', () => {
     server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath: directory })
     expect(row()).toMatchObject({ turnEndedAt: ended, turnEndDisposition: 'identified' })
-    // The saved turn record still knows turn-a ended, through a working reopen too.
     await post(
       { hook_event_name: 'PreToolUse', turn_id: 'turn-a', tool_name: 'Bash' },
       '/hook/codex'
@@ -234,7 +230,7 @@ describe('the host-stamped turn end', () => {
     expect(row()).toMatchObject({ state: 'done', stateStartedAt: cancelled?.stateStartedAt })
     expect(row()).not.toHaveProperty('turnEndedAt')
 
-    // A late plain stop carries no cancel, yet it and every relay restatement of it keep none.
+    // A late plain Stop cannot replace the locally inferred cancellation end.
     const lateStop = {
       ...stop,
       turnEndedAt: 50,

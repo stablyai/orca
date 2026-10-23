@@ -5,22 +5,12 @@ import type { AgentSessionCancelOutcome } from '../native-chat/agent-session-wir
 import type { CodexSession } from './codex-structured-session-state'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
 
-/**
- * Codex's interrupt handler answers -32600 when the named turn is not its running one (no turn,
- * another turn, thread not loaded) and -32603 when it could not submit the interrupt. A request it
- * could not parse, or one before initialize, also answers -32600: read as not running, it keeps the
- * child, as before.
- */
+/** -32600 covers inactive turns and invalid/uninitialized requests; -32603 means interrupt submission failed. */
 function isCodexTurnNotRunningRefusal(error: unknown): boolean {
   return isCodexAppServerRequestError(error) && error.code === -32600
 }
 
-/**
- * Codex answers a turn's interrupt only as that turn ends, so the answer is what confirms the
- * Stop. An answered interrupt is the whole Stop: Codex kills the turn's one-shot commands itself
- * and keeps its background terminals running until the thread ends. One Codex could not carry out,
- * or never answered, leaves the host to end the child (`performCancel`).
- */
+/** Interrupt acknowledgement confirms Stop; Codex kills one-shot commands and retains background terminals. */
 export async function interruptCodexTurn(input: {
   session: CodexSession
   threadId: string

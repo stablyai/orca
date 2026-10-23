@@ -13,10 +13,7 @@ async function loadModule() {
   const { setSecretStore } = await import('../../shared/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
-    // Why a binary prefix and not an identity function: real safeStorage ciphertext is
-    // not printable UTF-8, and the at-rest protection reporter distinguishes sealed from
-    // plaintext by exactly that. An identity double writes a readable token and would
-    // make this suite assert that a sealed credential is exposed.
+    // A binary prefix lets the protection reporter distinguish sealed data from plaintext.
     encryptString: (value) => Buffer.concat([Buffer.from([0x00]), Buffer.from(value)]),
     decryptString: (value) => value.subarray(1).toString('utf-8'),
     describeProtectionGap: () => null
@@ -109,8 +106,6 @@ describe('Bitbucket credential connection', () => {
     const rejected = await conn.connectBitbucket({ authMode: 'token', accessToken: 'bad' })
     expect(!rejected.ok && rejected.error).toMatch(/rejected these credentials/i)
 
-    // Why: a timeout or 5xx says nothing about the token; calling it invalid
-    // sends the user off to regenerate a credential that still works.
     for (const failure of [
       async () => {
         throw new Error('network down')
@@ -168,8 +163,6 @@ describe('Bitbucket credential connection', () => {
       baseUrl: 'https://stored.example.com/2.0'
     })
 
-    // Only the base URL is in the env, so `hasAuth(env)` is false — precedence
-    // is per-setting, not all-or-nothing.
     process.env.ORCA_BITBUCKET_API_BASE_URL = 'https://env.example.com/2.0'
     const { resolveBitbucketAuthConfig } = await import('./resolve-auth')
     expect(resolveBitbucketAuthConfig().baseUrl).toBe('https://env.example.com/2.0')

@@ -11,10 +11,7 @@ import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-ov
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
-import {
-  isDisconnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
@@ -207,16 +204,7 @@ export function useWorktreeCardFoundation({
     : null
   // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
   // which is not the same verdict as a probe that came back unreachable.
-  const isRuntimeDisconnected = useAppStore((s) => {
-    if (!runtimeOwnerEnvironmentId) {
-      return false
-    }
-    return isDisconnectedRuntimeHostState(
-      runtimeHostConnectionStateForEntry(
-        s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
-      )
-    )
-  })
+  const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.

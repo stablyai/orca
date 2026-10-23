@@ -25,8 +25,7 @@ describe('parseCdpKeyEvent', () => {
   ])(
     'gives %s the US-layout key code %i instead of its own char code',
     (ch: string, keyCode: number) => {
-      // Why: charCodeAt-derived codes put '&' on VK_UP (38) and '.' on VK_DELETE (46),
-      // which Blink executes as caret commands that swallow the character.
+      // '&' and '.' character codes invoke Up and Delete instead of typing.
       expect(parseCdpKeyEvent(ch)).toMatchObject({ keyCode, text: ch })
     }
   )

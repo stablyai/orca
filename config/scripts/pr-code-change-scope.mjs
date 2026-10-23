@@ -173,6 +173,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
 ]
 
 const MOBILE_WEB_APP_PREFIXES = [
+  '.github/scripts/prepare-ubuntu-apt.sh',
   'config/scripts/build-mobile-web-app',
   'config/scripts/run-mobile-web-app-checks',
   'src/packages/process-host/',

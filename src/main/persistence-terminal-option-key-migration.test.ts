@@ -12,7 +12,6 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 
-// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -64,10 +63,9 @@ describe('Store', () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
-  // ── terminalMacOptionAsAlt migration (issue #903) ───────────────────
 
   it('migrates legacy "true" terminalMacOptionAsAlt to "auto" on first load', async () => {
-    // Why: legacy 'true' (old default) is indistinguishable from an explicit choice; flip un-migrated installs to 'auto' so non-US layouts keep @ / € / [ ].
+    // The old true default cannot reveal user intent; migrate it once to auto for non-US layouts.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -188,7 +186,7 @@ describe('Store', () => {
   })
 
   it('preserves explicit "false" terminalMacOptionAsAlt through migration', async () => {
-    // 'false' never matched the old default — it was an explicit choice.
+    // Legacy false differed from the default and therefore proves an explicit choice.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -219,7 +217,6 @@ describe('Store', () => {
   })
 
   it('respects already-migrated settings with explicit "true"', async () => {
-    // A deliberate 'true' ('Both') choice post-migration is preserved on later launches.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -235,15 +232,13 @@ describe('Store', () => {
   })
 
   it('fresh install defaults terminalMacOptionAsAlt to "auto" and marks migrated', async () => {
-    // No data file: 'auto' is the new default and migration is complete (nothing legacy to migrate).
     const store = await createStore()
     expect(store.getSettings().terminalMacOptionAsAlt).toBe('auto')
-    // Fresh install: migrated stays false (migration code never ran); a later load with legacy 'true' still migrates correctly.
+    // No migration ran on a new profile; a later legacy true value must still migrate.
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(false)
   })
 
   it('missing terminalMacOptionAsAlt in persisted file defaults to "auto" and flags migrated', async () => {
-    // Existing file predates the setting: land on 'auto' and mark migrated so we don't re-examine.
     writeDataFile({
       schemaVersion: 1,
       repos: [],

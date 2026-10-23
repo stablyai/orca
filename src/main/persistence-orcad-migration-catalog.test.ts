@@ -43,7 +43,6 @@ vi.mock('electron', () => ({
 vi.mock('./telemetry/client', () => ({ track: trackMock }))
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
 
-/** Stage then commit: the only path a destination publishes a catalog through. */
 function commitCatalog(
   store: ReturnType<typeof createStore>,
   input: ReturnType<typeof manifest>,
@@ -437,7 +436,6 @@ describe('orcad migration catalog persistence', () => {
     ).toThrow('orcad_migration_staging_capacity_exceeded')
     expect(store.getRepos()).toEqual([])
 
-    // A week later no client came back: the stages expire and stop holding the server awake.
     const later = () => new Date(Date.now() + 8 * 24 * 60 * 60 * 1000)
     expect(store.hasStagedOrcadMigrationCatalog(later().getTime())).toBe(false)
     expect(
