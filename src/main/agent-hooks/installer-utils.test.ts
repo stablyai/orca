@@ -29,6 +29,7 @@ import {
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
+import { wrapWindowsCmdShellHookCommand } from './windows-cmd-shell-hook-command'
 import { buildPosixAgentHookPostCommand } from './hook-post-command'
 import { WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
@@ -693,6 +694,23 @@ describe('wrapWindowsHookCommand', () => {
       expect(result.code).toBe(7)
     }
   )
+})
+
+describe('wrapWindowsCmdShellHookCommand', () => {
+  it('quotes a safe path and drains stdin when the script is missing', () => {
+    const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\junie-hook.cmd'
+    const command = wrapWindowsCmdShellHookCommand(scriptPath)
+    expect(command).toBe(
+      `if exist "${scriptPath}" (call "${scriptPath}") else ("%SystemRoot%\\System32\\more.com" >nul 2>nul)`
+    )
+  })
+
+  it('falls back to the encoded launcher when the path contains percent signs', () => {
+    const scriptPath = 'C:\\Users\\%ORCA_TEST%\\agent-hooks\\junie-hook.cmd'
+    const command = wrapWindowsCmdShellHookCommand(scriptPath)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+  })
 })
 
 describe('wrapRuntimeHomeHookCommand', () => {

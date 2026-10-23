@@ -28,6 +28,7 @@ const MANAGED_SCRIPTS = [
   ['droid-hook.sh', 'droid'],
   ['gemini-hook.sh', 'gemini'],
   ['grok-hook.sh', 'grok'],
+  ['junie-hook.sh', 'junie'],
   ['kimi-hook.sh', 'kimi'],
   ['openclaude-hook.sh', 'claude']
 ]

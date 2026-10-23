@@ -3,18 +3,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  KimiSessionIndexCache,
-  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
-  KIMI_WORK_DIR_CACHE_TTL_MS,
-  type KimiSessionIndexIdentity
-} from './session-scanner-kimi-index-cache'
+  SessionIndexCache,
+  SESSION_INDEX_CACHE_MAX_PATHS,
+  SESSION_INDEX_CACHE_TTL_MS,
+  type SessionIndexIdentity
+} from './session-scanner-session-index-cache'
 import {
   clearKimiSessionIndexCache,
   hasKimiSessionIndexCacheEntryForTests,
   readKimiWorkDirBySessionId
 } from './session-scanner-kimi-paths'
 
-const IDENTITY: KimiSessionIndexIdentity = {
+const IDENTITY: SessionIndexIdentity = {
   changeTimeMs: 1,
   mtimeMs: 1,
   sizeBytes: 1
@@ -28,18 +28,18 @@ afterEach(async () => {
   tempDirs = []
 })
 
-describe('KimiSessionIndexCache', () => {
+describe('SessionIndexCache', () => {
   it('bounds prolonged path churn and retains a reused index', async () => {
-    const cache = new KimiSessionIndexCache()
+    const cache = new SessionIndexCache()
 
-    for (let index = 0; index < KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS; index += 1) {
+    for (let index = 0; index < SESSION_INDEX_CACHE_MAX_PATHS; index += 1) {
       const path = `home-${index}/session_index.jsonl`
       await cache.get(path, IDENTITY, cache.beginRead(), async () => new Map([[path, path]]))
     }
     const reusedPath = 'home-0/session_index.jsonl'
     await cache.get(reusedPath, IDENTITY, cache.beginRead(), async () => new Map())
 
-    const firstOverflowPath = `home-${KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS}/session_index.jsonl`
+    const firstOverflowPath = `home-${SESSION_INDEX_CACHE_MAX_PATHS}/session_index.jsonl`
     await cache.get(
       firstOverflowPath,
       IDENTITY,
@@ -49,13 +49,13 @@ describe('KimiSessionIndexCache', () => {
     expect(cache.has(reusedPath)).toBe(true)
     expect(cache.has('home-1/session_index.jsonl')).toBe(false)
 
-    for (let index = KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS + 1; index < 640; index += 1) {
+    for (let index = SESSION_INDEX_CACHE_MAX_PATHS + 1; index < 640; index += 1) {
       const path = `home-${index}/session_index.jsonl`
       await cache.get(path, IDENTITY, cache.beginRead(), async () => new Map([[path, path]]))
     }
 
     expect(cache.has(reusedPath)).toBe(false)
-    expect(cache.size).toBe(KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS)
+    expect(cache.size).toBe(SESSION_INDEX_CACHE_MAX_PATHS)
     expect(cache.has('home-576/session_index.jsonl')).toBe(true)
     expect(cache.has('home-575/session_index.jsonl')).toBe(false)
     cache.clear()
@@ -63,15 +63,15 @@ describe('KimiSessionIndexCache', () => {
 
   it('refreshes active entries and expires them after an idle TTL', async () => {
     vi.useFakeTimers()
-    const cache = new KimiSessionIndexCache()
+    const cache = new SessionIndexCache()
     const path = 'active/session_index.jsonl'
     const value = new Map([['session', '/repo']])
 
     await cache.get(path, IDENTITY, cache.beginRead(), async () => value)
-    await vi.advanceTimersByTimeAsync(KIMI_WORK_DIR_CACHE_TTL_MS - 1)
+    await vi.advanceTimersByTimeAsync(SESSION_INDEX_CACHE_TTL_MS - 1)
     expect(await cache.get(path, IDENTITY, cache.beginRead(), async () => new Map())).toBe(value)
 
-    await vi.advanceTimersByTimeAsync(KIMI_WORK_DIR_CACHE_TTL_MS - 1)
+    await vi.advanceTimersByTimeAsync(SESSION_INDEX_CACHE_TTL_MS - 1)
     expect(cache.has(path)).toBe(true)
     await vi.advanceTimersByTimeAsync(1)
     expect(cache.has(path)).toBe(false)
@@ -79,7 +79,7 @@ describe('KimiSessionIndexCache', () => {
   })
 
   it('deduplicates concurrent reads of the same file identity', async () => {
-    const cache = new KimiSessionIndexCache()
+    const cache = new SessionIndexCache()
     const load = vi.fn(async () => new Map([['session', '/repo']]))
     const first = cache.get('index', IDENTITY, cache.beginRead(), load)
     const second = cache.get('index', IDENTITY, cache.beginRead(), load)
@@ -91,7 +91,7 @@ describe('KimiSessionIndexCache', () => {
   })
 
   it('does not let an older mutation race replace a newer identity', async () => {
-    const cache = new KimiSessionIndexCache()
+    const cache = new SessionIndexCache()
     const oldGeneration = cache.beginRead()
     const newGeneration = cache.beginRead()
     const newerIdentity = { ...IDENTITY, changeTimeMs: 2, mtimeMs: 2, sizeBytes: 2 }
@@ -107,7 +107,7 @@ describe('KimiSessionIndexCache', () => {
   })
 
   it('does not repopulate after an owner clears an in-flight read', async () => {
-    const cache = new KimiSessionIndexCache()
+    const cache = new SessionIndexCache()
     const staleGeneration = cache.beginRead()
     cache.clear()
 

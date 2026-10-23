@@ -184,6 +184,13 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       cmd: 'jcode',
       faviconDomain: 'jcode.sh',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'junie',
+      label: translate('auto.lib.agent.catalog.junie_label', 'Junie'),
+      cmd: 'junie',
+      faviconDomain: 'jetbrains.com',
+      homepageUrl: 'https://www.jetbrains.com/junie/'
     }
   ]
 }
