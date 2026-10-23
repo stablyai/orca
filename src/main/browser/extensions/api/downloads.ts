@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/browser-extension-url'
 import { browserManager } from '../../browser-manager'
 import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+import { chooseDownloadSavePath } from './downloads-save-as'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -18,6 +19,9 @@ const WILL_DOWNLOAD_TIMEOUT_MS = 15_000
 let nextDownloadId = 1
 /** Owner + URL → the start in flight; will-download names no caller, so identical starts take turns. */
 const startsInFlight = new Map<string, Promise<unknown>>()
+
+/** A name inside Downloads, or with saveAs, the exact path the user chose. */
+type DownloadPlace = { filename?: string; savePath?: string }
 
 const optionsSchema = z
   .object({
@@ -148,7 +152,7 @@ function startDownload(
   owner: Electron.WebContents,
   url: string,
   options: z.infer<typeof optionsSchema>,
-  filename: string | undefined
+  place: DownloadPlace
 ): Promise<number> {
   const id = nextDownloadId++
   const started = new Promise<number>((resolve, reject) => {
@@ -166,8 +170,10 @@ function startDownload(
       }
       clearTimeout(timer)
       caller.session.off('will-download', onWillDownload)
-      if (filename !== undefined) {
-        browserManager.requestDownloadFilename(item, filename)
+      if (place.savePath !== undefined) {
+        browserManager.requestDownloadSavePath(item, place.savePath)
+      } else if (place.filename !== undefined) {
+        browserManager.requestDownloadFilename(item, place.filename)
       }
       track(caller, id, item)
       resolve(id)
@@ -189,21 +195,27 @@ async function download(
   if (options.method === 'POST') {
     throw new BrowserExtensionApiError('Orca downloads only with GET')
   }
-  // Why reject: Orca saves every download into Downloads under a unique name, without asking.
-  if (options.saveAs === true) {
-    throw new BrowserExtensionApiError('Orca cannot ask where to save a download')
-  }
-  if (options.conflictAction !== undefined && options.conflictAction !== 'uniquify') {
+  const saveAs = options.saveAs === true
+  // Why only without saveAs: the save dialog asks before replacing a file itself.
+  if (!saveAs && options.conflictAction !== undefined && options.conflictAction !== 'uniquify') {
     throw new BrowserExtensionApiError('Orca saves downloads only with conflictAction "uniquify"')
   }
   const filename = requestedFilename(options.filename)
   const url = resolveDownloadUrl(caller, options.url)
   const owner = downloadOwner(caller)
+  const place: DownloadPlace = { filename }
+  if (saveAs) {
+    const savePath = await chooseDownloadSavePath(owner, url, filename)
+    if (savePath === null) {
+      throw new BrowserExtensionApiError('Download canceled by the user')
+    }
+    place.savePath = savePath
+  }
   const key = `${owner.id} ${url}`
   const previous = startsInFlight.get(key) ?? Promise.resolve()
   const start = previous.then(
-    () => startDownload(caller, owner, url, options, filename),
-    () => startDownload(caller, owner, url, options, filename)
+    () => startDownload(caller, owner, url, options, place),
+    () => startDownload(caller, owner, url, options, place)
   )
   startsInFlight.set(key, start)
   try {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
 import { routeBrowserClientDownload } from './browser-client-download-routing'
 import {
@@ -12,6 +13,7 @@ import { BrowserManagerQueries } from './browser-manager-queries'
 export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueries {
   private unownedDownloadOwnerResolver: ((webContentsId: number) => string | null) | null = null
   private readonly requestedFilenames = new WeakMap<Electron.DownloadItem, string>()
+  private readonly requestedSavePaths = new WeakMap<Electron.DownloadItem, string>()
 
   /**
    * Extension pages and workers are never registered as tabs, so their downloads would wait
@@ -24,6 +26,11 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
   /** chrome.downloads `filename`: names the item before its destination is reserved. */
   requestDownloadFilename(item: Electron.DownloadItem, filename: string): void {
     this.requestedFilenames.set(item, filename)
+  }
+
+  /** chrome.downloads `saveAs`: the path the user chose in the save dialog, used as is. */
+  requestDownloadSavePath(item: Electron.DownloadItem, savePath: string): void {
+    this.requestedSavePaths.set(item, savePath)
   }
 
   handleGuestWillDownload(args: { guestWebContentsId: number; item: Electron.DownloadItem }): void {
@@ -83,6 +90,10 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       // Never fall back to local Downloads for an unresolved remote destination.
       if (decision.kind === 'blocked') {
         return null
+      }
+      const chosenPath = this.requestedSavePaths.get(item)
+      if (chosenPath) {
+        return { filename: path.basename(chosenPath), savePath: chosenPath, reservationKey: null }
       }
       try {
         return browserDownloadDestinationReservations.reserve(requestedFilename)

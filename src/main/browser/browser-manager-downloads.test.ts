@@ -231,6 +231,17 @@ describe('browserManager', () => {
     expect(item.setSavePath).toHaveBeenCalledWith(join('/downloads', 'summary.csv'))
   })
 
+  it('saves exactly where the user chose in the save dialog, outside Downloads', () => {
+    const item = createDownloadItem()
+    webContentsFromIdMock.mockReturnValue(null)
+    const chosen = join('/elsewhere', 'backup.json')
+
+    browserManager.requestDownloadSavePath(item, chosen)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: 413, item })
+
+    expect(item.setSavePath).toHaveBeenCalledWith(chosen)
+  })
+
   it('flushes started and terminal snapshots for downloads that finish before registration', () => {
     const rendererSendMock = vi.fn()
     const guest = {

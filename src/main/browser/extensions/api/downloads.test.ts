@@ -4,14 +4,21 @@ import type { BrowserExtensionCaller } from '../browser-extension-namespace-regi
 
 const mocks = vi.hoisted(() => {
   const emitted: { event: string; args: unknown[] }[] = []
-  return { emitted, requestDownloadFilename: vi.fn() }
+  return {
+    emitted,
+    requestDownloadFilename: vi.fn(),
+    requestDownloadSavePath: vi.fn(),
+    chooseSavePath: vi.fn(async (): Promise<string | null> => null)
+  }
 })
 
 vi.mock('electron', () => ({ webContents: { fromId: () => undefined } }))
+vi.mock('./downloads-save-as', () => ({ chooseDownloadSavePath: mocks.chooseSavePath }))
 vi.mock('../../browser-manager', () => ({
   browserManager: {
     getTabIdForWebContentsId: () => 'tab-1',
-    requestDownloadFilename: mocks.requestDownloadFilename
+    requestDownloadFilename: mocks.requestDownloadFilename,
+    requestDownloadSavePath: mocks.requestDownloadSavePath
   }
 }))
 vi.mock('../browser-extension-api-host', () => ({
@@ -64,6 +71,7 @@ function setup() {
 beforeEach(() => {
   mocks.emitted.length = 0
   mocks.requestDownloadFilename.mockReset()
+  mocks.requestDownloadSavePath.mockReset()
   registerDownloadsNamespace()
 })
 
@@ -138,11 +146,42 @@ describe('downloads.download', () => {
     })
   })
 
+  it('asks where to save first, then downloads to exactly that path', async () => {
+    const { owner, download, willDownload } = setup()
+    mocks.chooseSavePath.mockResolvedValueOnce('/Users/me/Desktop/backup.json')
+    const url = 'https://site.test/export'
+    const pending = download({
+      url,
+      filename: 'backup.json',
+      saveAs: true,
+      conflictAction: 'overwrite'
+    })
+    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalled())
+    expect(mocks.chooseSavePath).toHaveBeenCalledWith(owner, url, 'backup.json')
+    const item = fakeItem(url, '/Users/me/Desktop/backup.json')
+    willDownload(item)
+
+    await expect(pending).resolves.toEqual(expect.any(Number))
+    expect(mocks.requestDownloadSavePath).toHaveBeenCalledWith(
+      item,
+      '/Users/me/Desktop/backup.json'
+    )
+    expect(mocks.requestDownloadFilename).not.toHaveBeenCalled()
+  })
+
+  it('downloads nothing when the save dialog is cancelled', async () => {
+    const { owner, download } = setup()
+    mocks.chooseSavePath.mockResolvedValueOnce(null)
+    await expect(download({ url: 'https://site.test/f', saveAs: true })).rejects.toThrow(
+      'Download canceled by the user'
+    )
+    expect(owner.downloadURL).not.toHaveBeenCalled()
+  })
+
   it.each([
     [{ filename: '../escape.txt' }, 'Invalid filename'],
     [{ filename: '/etc/passwd' }, 'Invalid filename'],
     [{ filename: 'C:\\x.txt' }, 'Invalid filename'],
-    [{ saveAs: true }, 'Orca cannot ask where to save a download'],
     [{ conflictAction: 'overwrite' }, 'conflictAction']
   ])('rejects options it cannot honour: %j', async (options, message) => {
     const { owner, download } = setup()
