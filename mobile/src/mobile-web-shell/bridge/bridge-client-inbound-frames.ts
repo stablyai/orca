@@ -1,4 +1,5 @@
 import { utf8ByteLength } from './bridge-caps'
+import type { BridgeTerminalKeyId } from './bridge-terminal-key'
 import { BridgeReplyRefusedError } from './bridge-client-errors'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import type { BridgeClientRequests } from './bridge-client-requests'
@@ -19,6 +20,7 @@ export type BridgeInboundFramePort = {
   acceptState: (connection: BridgeConnectionSnapshot) => void
   /** One Back press from the shell, for whoever in this document claimed the key. */
   acceptBack: () => void
+  acceptTerminalKey: (key: BridgeTerminalKeyId) => void
 }
 
 /** The shell's own words where it had any, the way the native client passes an RPC error message
@@ -77,6 +79,9 @@ export function createBridgeInboundFrameReader(
         return
       case 'back':
         port.acceptBack()
+        return
+      case 'terminalKey':
+        port.acceptTerminalKey(message.key)
         return
       case 'reply':
         if (!requests.has(message.id)) {

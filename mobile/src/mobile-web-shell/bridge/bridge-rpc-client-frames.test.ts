@@ -131,6 +131,8 @@ describe('bridge client handshake', () => {
       // And no insets, which is the shell that reserves the bar strips outside the view.
       safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
       keyboardInset: 0,
+      foldDivision: null,
+      terminalKeyRail: [],
       // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
       host: null,
       storage: {},
