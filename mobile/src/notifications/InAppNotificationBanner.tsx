@@ -1,0 +1,209 @@
+import { useEffect, useSyncExternalStore } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import * as Notifications from 'expo-notifications'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import {
+  dismissInAppNotificationBanner,
+  getCurrentInAppNotificationBanner,
+  subscribeInAppNotificationBanner
+} from './in-app-notification-banner-store'
+import { getNotificationNavigationTarget } from './notification-routing'
+import { useOpenNotificationRoute } from './use-open-notification-route'
+
+const URGENT_AUTO_DISMISS_MS = 8000
+const COMPLETE_AUTO_DISMISS_MS = 6000
+
+export function InAppNotificationBanner() {
+  const banner = useSyncExternalStore(
+    subscribeInAppNotificationBanner,
+    getCurrentInAppNotificationBanner,
+    getCurrentInAppNotificationBanner
+  )
+  const insets = useSafeAreaInsets()
+  const openNotificationRoute = useOpenNotificationRoute()
+
+  useEffect(() => {
+    if (!banner) {
+      return
+    }
+    const timeoutMs = banner.tone === 'urgent' ? URGENT_AUTO_DISMISS_MS : COMPLETE_AUTO_DISMISS_MS
+    const timer = setTimeout(() => {
+      dismissInAppNotificationBanner(banner.id)
+    }, timeoutMs)
+    return () => clearTimeout(timer)
+  }, [banner])
+
+  if (!banner) {
+    return null
+  }
+
+  const isUrgent = banner.tone === 'urgent'
+  const accentColor = isUrgent ? colors.statusAmber : colors.statusGreen
+  const badgeText = isUrgent ? '⚡ Needs input' : '✅ Completed'
+  const canNavigate = typeof banner.hostId === 'string' && banner.hostId.length > 0
+
+  const handlePress = () => {
+    dismissInAppNotificationBanner(banner.id)
+    if (banner.osNotificationIdentifier) {
+      void Notifications.dismissNotificationAsync(banner.osNotificationIdentifier).catch(() => {})
+    }
+    if (!canNavigate) {
+      return
+    }
+    const target = getNotificationNavigationTarget({
+      hostId: banner.hostId,
+      worktreeId: banner.worktreeId,
+      paneKey: banner.paneKey,
+      executionHost: banner.executionHost
+    })
+    if (target) {
+      openNotificationRoute(target)
+    }
+  }
+
+  const handleDismiss = () => {
+    dismissInAppNotificationBanner(banner.id)
+  }
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[styles.overlay, { top: Math.max(insets.top, spacing.sm) + spacing.xs }]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${badgeText}: ${banner.title}. ${banner.body}`}
+        onPress={handlePress}
+        style={({ pressed }) => [
+          styles.capsule,
+          isUrgent ? styles.capsuleUrgent : styles.capsuleComplete,
+          pressed && styles.capsulePressed
+        ]}
+      >
+        <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
+        <View style={styles.content}>
+          <View style={styles.headerRow}>
+            <View style={[styles.badge, isUrgent ? styles.badgeUrgent : styles.badgeComplete]}>
+              <Text style={[styles.badgeText, { color: accentColor }]}>{badgeText}</Text>
+            </View>
+            <Text numberOfLines={1} style={styles.hostName}>
+              {banner.hostName}
+            </Text>
+            {canNavigate ? <Text style={styles.jumpHint}>Jump →</Text> : null}
+          </View>
+          <Text numberOfLines={1} style={styles.title}>
+            {banner.title}
+          </Text>
+          {banner.body.length > 0 ? (
+            <Text numberOfLines={2} style={styles.body}>
+              {banner.body}
+            </Text>
+          ) : null}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss notification banner"
+          hitSlop={8}
+          onPress={handleDismiss}
+          style={styles.closeButton}
+        >
+          <Text style={styles.closeText}>✕</Text>
+        </Pressable>
+      </Pressable>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 9999,
+    elevation: 24
+  },
+  capsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgRaised,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 12
+  },
+  capsuleUrgent: {
+    borderColor: colors.statusAmber
+  },
+  capsuleComplete: {
+    borderColor: colors.statusGreen
+  },
+  capsulePressed: {
+    opacity: 0.9
+  },
+  accentBar: {
+    width: 4,
+    alignSelf: 'stretch'
+  },
+  content: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    gap: 2
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.row
+  },
+  badgeUrgent: {
+    backgroundColor: 'rgba(245, 158, 11, 0.16)'
+  },
+  badgeComplete: {
+    backgroundColor: 'rgba(34, 197, 94, 0.16)'
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  hostName: {
+    flex: 1,
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
+  jumpHint: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600'
+  },
+  title: {
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    fontWeight: '700'
+  },
+  body: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    lineHeight: 16
+  },
+  closeButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    alignSelf: 'flex-start'
+  },
+  closeText: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  }
+})

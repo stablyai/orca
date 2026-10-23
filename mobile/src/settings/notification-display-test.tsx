@@ -8,6 +8,24 @@ import { getDevicePushToken } from '../notifications/push-token'
 import type { RpcFailure } from '../transport/types'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
+const TOKEN_PROBE_TIMEOUT_MS = 1500
+
+async function readPushTokenQuickly() {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      getDevicePushToken().catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), TOKEN_PROBE_TIMEOUT_MS)
+      })
+    ])
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer)
+    }
+  }
+}
+
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
   const busy = useRef(false)
   const [hostIds, setHostIds] = useState<string[]>([])
@@ -66,7 +84,7 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
             : 'Could not send through Orca’s push service. Try again.'
         )
       }
-      if (sawNotRegistered && (await getDevicePushToken().catch(() => null)) === null) {
+      if (sawNotRegistered && (await readPushTokenQuickly()) === null) {
         await sendLocalNotificationDisplayTest()
         setMessage(
           'Sent a local test notification. Live connection alerts are active on this device.'
@@ -94,11 +112,15 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
         onPress={() => void run()}
       >
         <View>
-          <Text accessible={false} style={[styles.buttonText, styles.sizingLabel]}>
+          <Text
+            accessible={false}
+            numberOfLines={1}
+            style={[styles.buttonText, styles.sizingLabel]}
+          >
             Send test notification
           </Text>
           <View pointerEvents="none" style={styles.buttonLabel}>
-            <Text accessible={false} style={styles.buttonText}>
+            <Text accessible={false} numberOfLines={1} style={styles.buttonText}>
               {sending ? 'Sending…' : 'Send test notification'}
             </Text>
           </View>

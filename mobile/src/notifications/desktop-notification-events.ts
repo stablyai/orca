@@ -4,6 +4,7 @@ export type DesktopNotificationDispatchEvent = {
   desktopAllowed?: boolean
   desktopAway?: boolean
   source?: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
+  agentState?: string
   title?: string
   body?: string
   worktreeId?: string
