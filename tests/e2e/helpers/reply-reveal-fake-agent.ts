@@ -111,7 +111,7 @@ function wake() {
     // Codex opens a mail-woken turn with no submission hook; its first tool call marks it working.
     void hook({ hook_event_name: 'PreToolUse', turn_id: id, tool_name: 'shell', tool_input: { command: 'ls' } })
   }
-  setTimeout(() => void stopHook(id, 'Woke up and reported'), 600)
+  void stopHook(id, 'Woke up and reported')
 }
 function compact() {
   if (!current || provider !== 'claude') return

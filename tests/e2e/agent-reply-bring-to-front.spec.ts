@@ -1,8 +1,9 @@
 /**
  * "Bring Orca to Front" in the running app: a completion reveals its tab only when the turn that
  * just ended carries a person's submission. Stand-in agents post provider-shaped hooks while the
- * test writes to their PTYs as a person (keys through xterm) or as Orca (terminal.send). Windowless
- * launch keeps every reveal off the desktop; the renderer IPC and destination tab are observable.
+ * test writes to their PTYs as a person (keys through xterm) or as Orca (terminal.send, dictation
+ * paste). Windowless launch keeps every reveal off the desktop; the reveal's renderer IPC and the
+ * tab it lands on are the observable outcome.
  *
  * macOS only, like the setting: today's CI e2e jobs run on Linux and Windows, so CI skips this file.
  */
@@ -14,7 +15,7 @@ import { waitForSessionReady } from './helpers/store'
 import { writeFakeReplyAgent } from './helpers/reply-reveal-fake-agent'
 import { setUpReplyRevealHarness } from './helpers/reply-reveal-harness'
 import { installReplyRevealProbes } from './helpers/reply-reveal-probes'
-import { runReplyScenarios } from './helpers/reply-reveal-scenarios'
+import { runClaudeReplyScenarios, runCodexReplyScenarios } from './helpers/reply-reveal-scenarios'
 
 test.describe('Bring Orca to Front on a person-submitted reply', () => {
   test.skip(process.platform !== 'darwin', 'The setting exists only on macOS')
@@ -32,9 +33,9 @@ test.describe('Bring Orca to Front on a person-submitted reply', () => {
     orcaPage,
     electronApp
   }) => {
-    await runReplyScenarios(
-      await setUpReplyRevealHarness(orcaPage, electronApp, fakeDir, agentScript),
-      'claude'
+    test.setTimeout(360_000)
+    await runClaudeReplyScenarios(
+      await setUpReplyRevealHarness(orcaPage, electronApp, fakeDir, agentScript)
     )
   })
 
@@ -42,9 +43,9 @@ test.describe('Bring Orca to Front on a person-submitted reply', () => {
     orcaPage,
     electronApp
   }) => {
-    await runReplyScenarios(
-      await setUpReplyRevealHarness(orcaPage, electronApp, fakeDir, agentScript),
-      'codex'
+    test.setTimeout(300_000)
+    await runCodexReplyScenarios(
+      await setUpReplyRevealHarness(orcaPage, electronApp, fakeDir, agentScript)
     )
   })
 
