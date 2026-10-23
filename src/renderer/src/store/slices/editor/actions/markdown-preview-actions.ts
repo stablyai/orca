@@ -50,7 +50,7 @@ export function createMarkdownPreviewActions(
   | 'pinFile'
 > {
   return {
-    openNewMarkdownInActiveWorkspace: async (groupId) => {
+    openNewMarkdownInActiveWorkspace: async (groupId, options) => {
       const state = get()
       const worktreeId = state.activeWorktreeId
       if (!worktreeId) {
@@ -89,7 +89,8 @@ export function createMarkdownPreviewActions(
         get().openFile(fileInfo, {
           preview: false,
           targetGroupId: groupId,
-          focusEditor: true
+          focusEditor: true,
+          ...(options?.placementFixed ? { placementFixed: true } : {})
         })
         get().recordFeatureInteraction('markdown-file-created')
       } catch (err) {

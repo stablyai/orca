@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resolveAutoAckTabTargets } from '@/hooks/agent-auto-ack-targets'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, makeOpenFile } from './store-test-helpers'
+import { createTestStore, makeOpenFile, seedThreePaneLayout } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -86,6 +86,8 @@ describe('TabsSlice', () => {
 
     // Why (regression): activateTab gets a *unified* tabId but the bell is keyed by entityId, so the on-screen read must name the entityId.
     it('puts the terminal tab on screen by entityId and leaves its marker to the on-screen read', () => {
+      // Why: keeps t1 and t2 in one pane; the lone-pane auto-split would put both on screen.
+      seedThreePaneLayout(store, WT)
       const t1 = store.getState().createUnifiedTab(WT, 'terminal')
       const t2 = store.getState().createUnifiedTab(WT, 'terminal')
       // t2 is active after creation; move focus to t1 so we can mark t2 unread.

@@ -1,3 +1,4 @@
+import { releasePointerCaptureIfHeld } from './drag-pointer-session'
 import type { DropZone, ManagedPaneInternal, PaneExternalDropTarget } from './pane-manager-types'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import {
@@ -45,16 +46,7 @@ export function beginPaneDragFromPointerDown(
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
     }
-    if (pointerId !== null) {
-      try {
-        if (handle.hasPointerCapture(pointerId)) {
-          handle.releasePointerCapture(pointerId)
-        }
-      } catch {
-        // Best effort: Electron/Chromium can drop capture before our cleanup
-        // runs, but the terminal must never stay pointer-inert.
-      }
-    }
+    releasePointerCaptureIfHeld(handle, pointerId)
     if (!dragging) {
       return
     }

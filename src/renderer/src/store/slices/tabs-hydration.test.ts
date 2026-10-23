@@ -55,6 +55,9 @@ describe('buildHydratedTabState – unified format', () => {
     expect(result.unifiedTabsByWorktree.w1).toHaveLength(2)
     expect(result.groupsByWorktree.w1).toHaveLength(1)
     expect(result.activeGroupIdByWorktree.w1).toBe('g1')
+    // Why: restore replays a layout; a second restored tab must not be split beside the first.
+    expect(result.unifiedTabsByWorktree.w1.map((tab) => tab.groupId)).toEqual(['g1', 'g1'])
+    expect(result.layoutByWorktree.w1).toEqual({ type: 'leaf', groupId: 'g1' })
   })
 
   // Why this shape exists at all: a preview used to be an editor tab whose id encoded the document,

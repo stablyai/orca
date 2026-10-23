@@ -97,7 +97,8 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
 
     expect(mocks.runtimeCall).not.toHaveBeenCalled()
     expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, GROUP_ID, 'powershell.exe', {
-      id: expect.any(String)
+      id: expect.any(String),
+      placementFixed: true
     })
     expect(mocks.setActiveTab).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3].id)
   })

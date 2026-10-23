@@ -193,8 +193,11 @@ async function redrawFromMain(): Promise<void> {
 }
 
 async function seedTabs() {
+  // Why: seeds tabs of one pane; the lone-pane auto-split would open S and B beside E.
   const seeded = ['E', 'S', 'B'].map((id) =>
-    useAppStore.getState().createUnifiedTab('wt-1', 'editor', { id, entityId: id })
+    useAppStore
+      .getState()
+      .createUnifiedTab('wt-1', 'editor', { id, entityId: id, placementFixed: true })
   )
   await redrawFromMain()
   return seeded
@@ -405,7 +408,7 @@ describe('CLI identity resume through the existing launch owner', () => {
       expect(order).toEqual([e.id, source.id, browser.id, slotId])
       const later = useAppStore
         .getState()
-        .createUnifiedTab('wt-1', 'editor', { id: 'R', entityId: 'R' })
+        .createUnifiedTab('wt-1', 'editor', { id: 'R', entityId: 'R', placementFixed: true })
       await redrawFromMain()
       const beforeNoop = useAppStore.getState()
       move({

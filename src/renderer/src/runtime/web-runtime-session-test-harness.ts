@@ -200,6 +200,7 @@ export function stubTerminalCreateEnvironment(mocks: WebRuntimeSessionMocks): vo
     browserPagesByWorkspace: {},
     remoteBrowserPageHandlesByPageId: {},
     createBrowserTab: mocks.createBrowserTab,
+    closeEmptyGroup: mocks.closeEmptyGroup,
     setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
     focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
     setActiveWorktree: mocks.setActiveWorktree

@@ -100,7 +100,14 @@ export function applyOpenFileToState(
   // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
   const requestedGroupId =
     linkPlacement?.kind === 'group' ? linkPlacement.groupId : options?.targetGroupId
-  const targetGroupId = resolveEditorOpenTargetGroupId(s, worktreeId, requestedGroupId) ?? undefined
+  const targetGroupId =
+    resolveEditorOpenTargetGroupId(s, worktreeId, requestedGroupId, {
+      // Why: "open in this group" names its pane; never redirect it beside a lone pane.
+      placementFixed:
+        options?.placementFixed ||
+        Boolean(linkIntent?.targetGroupId) ||
+        (options?.selection ?? 'focus') !== 'focus'
+    }) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
     options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)

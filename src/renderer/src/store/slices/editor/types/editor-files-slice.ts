@@ -45,6 +45,8 @@ export type OpenFileOptions = {
   selection?: EditorTabSelection
   /** Where in its group a reopened tab goes back to, when the open makes a new tab. */
   groupIndex?: number
+  /** This call's placement is already decided (reopen replay); never redirect it beside a lone pane. */
+  placementFixed?: boolean
 }
 
 export type EditorFilesSlice = {
@@ -88,7 +90,10 @@ export type EditorFilesSlice = {
     intent: EditorOpenLinkIntent | null,
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
-  openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewMarkdownInActiveWorkspace: (
+    groupId: string,
+    options?: { placementFixed?: boolean }
+  ) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,

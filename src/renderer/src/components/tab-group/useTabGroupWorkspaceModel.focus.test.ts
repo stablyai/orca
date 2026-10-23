@@ -264,7 +264,8 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     await vi.waitFor(() => expect(mocks.createTab).toHaveBeenCalled())
 
     expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-1', 'zsh', {
-      id: expect.any(String)
+      id: expect.any(String),
+      placementFixed: false
     })
     expect(mocks.setActiveTab).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3].id)
   })

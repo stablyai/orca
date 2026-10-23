@@ -1,7 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
+import type { TabContentType } from '../../../../shared/tab-types'
+
+/** A drag test needs one group already holding two tabs — the state the second one would have
+ *  had before the beside-a-lone-pane rule started splitting it into its own group. */
+function seedOneGroupWithTwoTabs(
+  store: ReturnType<typeof createTestStore>,
+  groupId: string,
+  tabs: readonly [
+    { id: string; contentType: TabContentType; label: string },
+    { id: string; contentType: TabContentType; label: string }
+  ]
+): void {
+  store.setState({
+    unifiedTabsByWorktree: {
+      [WT]: tabs.map((tab, index) =>
+        makeUnifiedTab({ ...tab, worktreeId: WT, groupId, sortOrder: index })
+      )
+    },
+    groupsByWorktree: {
+      [WT]: [
+        makeTabGroup({
+          id: groupId,
+          worktreeId: WT,
+          activeTabId: tabs[1].id,
+          tabOrder: [tabs[0].id, tabs[1].id]
+        })
+      ]
+    },
+    activeGroupIdByWorktree: { [WT]: groupId },
+    layoutByWorktree: { [WT]: { type: 'leaf', groupId } }
+  })
+}
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -151,15 +183,13 @@ describe('TabsSlice', () => {
     })
 
     it('drops a unified tab onto a pane edge to create a sibling split', () => {
-      const first = store.getState().createUnifiedTab(WT, 'editor', {
-        id: 'file-a.ts',
-        label: 'file-a.ts'
-      })
-      const second = store.getState().createUnifiedTab(WT, 'editor', {
-        id: 'file-b.ts',
-        label: 'file-b.ts'
-      })
-      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const sourceGroupId = 'g-source'
+      seedOneGroupWithTwoTabs(store, sourceGroupId, [
+        { id: 'file-a.ts', contentType: 'editor', label: 'file-a.ts' },
+        { id: 'file-b.ts', contentType: 'editor', label: 'file-b.ts' }
+      ])
+      const first = { id: 'file-a.ts' }
+      const second = { id: 'file-b.ts' }
 
       const moved = store.getState().dropUnifiedTab(second.id, {
         groupId: sourceGroupId,
@@ -294,15 +324,12 @@ describe('TabsSlice', () => {
     })
 
     it('treats splitting the only tab onto the adjacent sibling edge as a no-op', () => {
-      store.getState().createUnifiedTab(WT, 'editor', {
-        id: 'file-a.ts',
-        label: 'file-a.ts'
-      })
-      const right = store.getState().createUnifiedTab(WT, 'terminal', {
-        id: 'terminal-1',
-        label: 'Terminal 1'
-      })
-      const leftGroupId = store.getState().groupsByWorktree[WT][0].id
+      const leftGroupId = 'g-left'
+      seedOneGroupWithTwoTabs(store, leftGroupId, [
+        { id: 'file-a.ts', contentType: 'editor', label: 'file-a.ts' },
+        { id: 'terminal-1', contentType: 'terminal', label: 'Terminal 1' }
+      ])
+      const right = { id: 'terminal-1' }
 
       expect(
         store.getState().dropUnifiedTab(right.id, {

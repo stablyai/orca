@@ -13,6 +13,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-ow
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
+import { findLonePaneSourceGroupId } from '@/store/slices/tabs/lone-pane-split-source'
 
 export function useTabGroupCreationCommands({
   groupId,
@@ -37,10 +38,15 @@ export function useTabGroupCreationCommands({
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
 
+  // Why: once split, a panel's own + opens in that panel; a lone pane's + still opens beside it.
+  const plusPlacement = () => ({
+    placementFixed: findLonePaneSourceGroupId(useAppStore.getState(), worktreeId, groupId) === null
+  })
+
   // Why: these stay unmemoized plain lambdas — the original built them inline in the returned commands object.
   return {
     newBrowserTab: () => {
-      void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
+      void openNewBrowserTabInActiveWorkspace(groupId, plusPlacement()).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error))
       })
     },
@@ -106,13 +112,14 @@ export function useTabGroupCreationCommands({
     },
     // Why: target the owning group explicitly; the "+" menu can fire from an unfocused panel without updating global group focus.
     newFileTab: async () => {
-      await openNewMarkdownInActiveWorkspace(groupId)
+      await openNewMarkdownInActiveWorkspace(groupId, plusPlacement())
     },
     newTerminalTab: () => {
-      void openNewTerminalTabInActiveWorkspace(groupId)
+      void openNewTerminalTabInActiveWorkspace(groupId, plusPlacement())
     },
     newTerminalWithShell: (shellOverride: string) => {
       void (async () => {
+        const placement = plusPlacement()
         const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(
           useAppStore.getState(),
           worktreeId
@@ -122,13 +129,14 @@ export function useTabGroupCreationCommands({
           environmentId,
           targetGroupId: groupId,
           shell: shellOverride,
-          activate: true
+          activate: true,
+          ...placement
         })
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
           return
         }
         const tabId = createBrowserUuid()
-        createTab(worktreeId, groupId, shellOverride, { id: tabId })
+        createTab(worktreeId, groupId, shellOverride, { id: tabId, ...placement })
         setActiveTab(tabId)
         setActiveTabType('terminal', worktreeId)
         focusTerminalTabSurface(tabId)

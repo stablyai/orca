@@ -17,7 +17,7 @@ import { selectWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { findSiblingGroupId } from '@/store/slices/tabs'
+import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import { browserPageDocLocationsEqual } from '../../../shared/browser-page-doc-location'
 import type { BrowserPageDocLocation } from '../../../shared/browser-workspace-types'
@@ -148,7 +148,7 @@ export function useWorkspaceFileBrowserActionPredicate(
 function openDocPreviewTab(
   state: AppState,
   params: { filePath: string; worktreeId: string; activate: boolean },
-  placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split'>
+  placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split' | 'placementFixed'>
 ): void {
   const docLocation = {
     kind: 'workspace-doc' as const,
@@ -328,15 +328,21 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  const layout = state.layoutByWorktree[worktreeId] ?? null
-  const existingSibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
-
+  // Why the right sibling only: the preview must sit to the RIGHT of its source.
+  const existingSibling = findReusableRightSplitGroupId(
+    state.layoutByWorktree[worktreeId],
+    sourceGroupId
+  )
   // Why the unfocused split on a paired workspace: the preview opens in the background, and a host
   // snapshot reads an activated empty group as a terminal pane.
   const activate = !runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-  const placement = existingSibling
-    ? { targetGroupId: existingSibling }
-    : { split: { sourceGroupId, splitDirection: 'right' as const, activate } }
+  // Why placementFixed: the right split was chosen on purpose; automatic placement must not flip it.
+  const placement = {
+    ...(existingSibling
+      ? { targetGroupId: existingSibling }
+      : { split: { sourceGroupId, splitDirection: 'right' as const, activate } }),
+    placementFixed: true
+  }
 
   if (plan.status === 'doc-preview') {
     openDocPreviewTab(state, { filePath: params.filePath, worktreeId, activate: false }, placement)

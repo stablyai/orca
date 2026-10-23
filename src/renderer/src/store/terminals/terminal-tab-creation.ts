@@ -17,6 +17,7 @@ import {
   updateGroup
 } from '../slices/tab-group-state'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
+import { resolveAutoPlacementGroupId } from '../slices/tabs/lone-pane-split-source'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../global-selection-owner'
@@ -57,6 +58,11 @@ export function createTerminalTabCreationActions(
       let tab!: TerminalTab
       const split = options?.split
       const splitGroupId = split ? createBrowserUuid() : undefined
+      // Why: terminals bypass createUnifiedTab, so automatic placement lives here too.
+      const besideGroupId =
+        options?.placementFixed || split
+          ? null
+          : resolveAutoPlacementGroupId(get(), worktreeId, targetGroupId, 'terminal')
       set((current) => {
         const s =
           split && splitGroupId
@@ -70,7 +76,7 @@ export function createTerminalTabCreationActions(
                 )
               }
             : current
-        const requestedGroupId = splitGroupId ?? targetGroupId
+        const requestedGroupId = splitGroupId ?? besideGroupId ?? targetGroupId
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
         const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
