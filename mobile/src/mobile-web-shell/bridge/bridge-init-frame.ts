@@ -14,6 +14,8 @@ import {
   ZERO_SAFE_AREA_INSETS,
   type BridgeSafeAreaInsets
 } from './bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 
 /**
  * Every grant this app implements, which is the ceiling a session's own list is drawn from. A page
@@ -45,6 +47,10 @@ export function createBridgeInitFrame(args: {
   safeAreaInsets?: BridgeSafeAreaInsets
   /** The keyboard height native screens read on the shell's OS. */
   keyboardInset?: number
+  /** The fold splitting the page, in its px; null or absent when none does. */
+  foldDivision?: BridgeFoldDivision | null
+  /** The keys the shell's rail shows beside the page; omitted while none does. */
+  terminalKeyRail?: BridgeTerminalKeyRail
   /** What each of those patterns declared, so the page can tell a hop it may keep from one it
    *  must hand back. Omitted by a shell that has none, which leaves the page on its old rule. */
   pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
@@ -85,6 +91,12 @@ export function createBridgeInitFrame(args: {
     ...(args.keyboardInset === undefined || args.keyboardInset === 0
       ? {}
       : { keyboardInset: args.keyboardInset }),
+    ...(args.foldDivision === undefined || args.foldDivision === null
+      ? {}
+      : { foldDivision: { ...args.foldDivision } }),
+    ...(args.terminalKeyRail === undefined || args.terminalKeyRail.length === 0
+      ? {}
+      : { terminalKeyRail: [...args.terminalKeyRail] }),
     pageRoutes: [...args.pageRoutes],
     // Copied entry by entry for the reason the grants are: nothing the shell keeps may be
     // reachable through a frame it hands out.

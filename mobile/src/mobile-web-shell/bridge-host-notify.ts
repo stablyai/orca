@@ -11,6 +11,7 @@ import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
+import { BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY } from './bridge/bridge-terminal-key'
 import type { BridgeHostOptions } from './bridge-host-contract'
 import { pageMayWriteStorageKey } from './page-storage-keys'
 
@@ -35,6 +36,7 @@ export function createBridgeNotifyForwarder(args: {
   /** The screen this host is serving, which decides which storage keys the page may write. */
   route: () => BridgeInitRoute | null
   onBackClaim: (claimed: boolean) => void
+  onTerminalKeyRailClaim: (claimed: boolean) => void
 }): (message: NotifyMessage) => void {
   const { options, granted } = args
   const { client, host } = options
@@ -56,6 +58,10 @@ export function createBridgeNotifyForwarder(args: {
       // Local, and the one notify that changes what a device key does. Carried up rather than
       // acted on here: the key belongs to the screen, and this host serves one document of it.
       args.onBackClaim(message.claimed)
+      return
+    }
+    if (message.name === BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY) {
+      args.onTerminalKeyRailClaim(message.claimed)
       return
     }
     if (message.name === 'foreground') {

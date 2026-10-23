@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from './bridge/bridge-terminal-key'
 import { z } from 'zod'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
@@ -199,6 +200,7 @@ describe('the grants this app implements', () => {
       'screencastBinary',
       'haptics',
       'externalNavigation',
+      'terminalKeyRail',
       'native.clipboard.write',
       'native.clipboard.read',
       'native.media.pick',
@@ -237,7 +239,7 @@ describe('the grants this app implements', () => {
    * list -- and a page reads `init.grants.native` for all of them alike. Named against the modules
    * that declare them rather than as strings, so a rename has to change both sides.
    */
-  it('names exactly three behaviours that are not verbs, each from its own module', () => {
+  it('names exactly four behaviours that are not verbs, each from its own module', () => {
     const tokens = MOBILE_WEB_SHELL_GRANTS.filter(
       (grant) => !grant.startsWith(BRIDGE_NATIVE_METHOD_PREFIX)
     )
@@ -247,7 +249,8 @@ describe('the grants this app implements', () => {
       'externalLink',
       BRIDGE_SCREENCAST_BINARY_GRANT,
       BRIDGE_HAPTICS_GRANT,
-      BRIDGE_EXTERNAL_NAVIGATION_GRANT
+      BRIDGE_EXTERNAL_NAVIGATION_GRANT,
+      BRIDGE_TERMINAL_KEY_RAIL_GRANT
     ])
     // Not a verb spelling, and not a notify's dotted name: the grammar would refuse either.
     expect(BRIDGE_EXTERNAL_NAVIGATION_GRANT).toBe('externalNavigation')

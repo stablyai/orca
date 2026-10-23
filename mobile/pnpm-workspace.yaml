@@ -66,3 +66,4 @@ patchedDependencies:
   react-native@0.83.10: patches/react-native@0.83.10.patch
   braces@3.0.3: patches/braces@3.0.3.patch
   node-forge@1.4.0: patches/node-forge@1.4.0.patch
+  expo-router@55.0.18: patches/expo-router@55.0.18.patch

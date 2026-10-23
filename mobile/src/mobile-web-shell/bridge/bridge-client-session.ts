@@ -5,6 +5,8 @@ import type {
   BridgeInitRoute
 } from './bridge-envelope'
 import { ZERO_SAFE_AREA_INSETS, type BridgeSafeAreaInsets } from './bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge-fold-division'
+import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 
 /** What `init` said this page is attached to. `grants` is what a call site checks before it posts. */
 export type BridgeShellSession = {
@@ -29,6 +31,11 @@ export type BridgeShellSession = {
   safeAreaInsets: BridgeSafeAreaInsets
   /** The keyboard height native screens read on the shell's OS; 0 while it is closed. */
   keyboardInset: number
+  /** The fold splitting the page on a partially folded device; null when none does, which is
+   *  every device that does not fold and every shell before the field. */
+  foldDivision: BridgeFoldDivision | null
+  /** The keys the shell's rail shows beside this page; empty for every shell before the field. */
+  terminalKeyRail: BridgeTerminalKeyRail
   /** Null for a shell too old to name it; the page's own `loadHosts()` then answers with nothing. */
   host: BridgeInitHost | null
   /** The allowlisted keys as the app held them when this page opened. */
@@ -58,6 +65,8 @@ export function readShellSession(
     pageRouteGrants: message.pageRouteGrants ?? null,
     safeAreaInsets: message.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS,
     keyboardInset: message.keyboardInset ?? 0,
+    foldDivision: message.foldDivision ?? null,
+    terminalKeyRail: message.terminalKeyRail ?? [],
     host: message.host ?? null,
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],
