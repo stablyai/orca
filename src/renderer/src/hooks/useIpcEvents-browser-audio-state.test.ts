@@ -4,9 +4,10 @@ import { createHarnessStoreState, loadIpcEventsHarness } from './ipc-events-test
 type AudioStateEvent = { browserPageId: string; audible: boolean }
 
 // A rebuilt guest (eviction, crash recovery, client-hosted rebind) starts unmuted; main's
-// registration report is the renderer's only cue to carry the tab's mute over to it.
+// registration report is the renderer's only cue to carry the tab's mute over to it. Local pages
+// (e.g. floating browser tabs) still report while a remote environment is active.
 describe('browser audio state', () => {
-  it('re-applies a muted tab to each page that reports, and leaves other tabs alone', async () => {
+  it('re-applies a muted tab to each reporting page, even with a remote environment active', async () => {
     const setBrowserPageAudible = vi.fn()
     const setPageAudioMuted = vi.fn(() => Promise.resolve(true))
     let audioStateChanged: (event: AudioStateEvent) => void = () => {}
@@ -19,7 +20,12 @@ describe('browser audio state', () => {
           'tab-loud': [{ id: 'page-loud', workspaceId: 'tab-loud' }]
         },
         browserAudioMutedTabIds: { 'tab-muted': true },
-        setBrowserPageAudible
+        setBrowserPageAudible,
+        settings: {
+          terminalFontSize: 13,
+          experimentalNativeChat: false,
+          activeRuntimeEnvironmentId: 'env-a'
+        }
       }),
       {
         browserApi: {

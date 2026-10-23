@@ -110,13 +110,21 @@ vi.mock('@/store', () => ({
       settings: null
       unreadTerminalTabs: Record<string, boolean>
       agentStatusByPaneKey: Record<string, never>
+      browserPagesByWorkspace: Record<string, never>
+      browserAudiblePageIds: Record<string, never>
+      browserAudioMutedTabIds: Record<string, never>
+      setBrowserTabAudioMuted: () => void
     }) => unknown
   ) =>
     selector({
       openMarkdownPreview: vi.fn(),
       settings: null,
       unreadTerminalTabs: {},
-      agentStatusByPaneKey: {}
+      agentStatusByPaneKey: {},
+      browserPagesByWorkspace: {},
+      browserAudiblePageIds: {},
+      browserAudioMutedTabIds: {},
+      setBrowserTabAudioMuted: vi.fn()
     })
 }))
 

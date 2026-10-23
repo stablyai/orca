@@ -63,11 +63,9 @@ export function registerBrowserStateIpcBridge(
   if (unsubscribeCertificateFailure) {
     unsubs.push(unsubscribeCertificateFailure)
   }
+  // Why no runtime guard: only guests in this process report, and streamed pages have none here.
   const unsubscribeAudioState = window.api.browser.onAudioStateChanged?.(
     ({ browserPageId, audible }) => {
-      if (isRuntimeEnvironmentActive() && !isClientHostedBrowserPage(browserPageId)) {
-        return
-      }
       const store = useAppStore.getState()
       store.setBrowserPageAudible(browserPageId, audible)
       // Why: main reports each newly registered guest, and a new guest (eviction, crash) starts unmuted.
