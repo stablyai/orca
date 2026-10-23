@@ -36,17 +36,21 @@ const STATE_DB_CREATE_TIMEOUT_MS = 15_000
 const failedThreadIdsByHome = new Map<string, Set<string>>()
 
 /**
- * Starts Codex once on an empty home so it creates and indexes its state DB
- * before any history is bridged in. False when Codex could not start.
+ * Starts Codex once so the home's state DB exists and its startup backfill is
+ * complete: app-server answers `initialize` only after both. Run on an empty
+ * home before any history is bridged in. False when Codex could not start.
  */
 export async function createCodexAccountStateDb(
   codexHomePath: string,
-  options: Pick<CodexSessionIndexHealOptions, 'buildInvocation' | 'runSession'> = {}
+  options: Pick<CodexSessionIndexHealOptions, 'buildInvocation' | 'runSession'> & {
+    timeoutMs?: number
+  } = {}
 ): Promise<boolean> {
   const buildInvocation = options.buildInvocation ?? buildNativeHealInvocation
   const runSession = options.runSession ?? runCodexAppServerSession
+  const timeoutMs = options.timeoutMs ?? STATE_DB_CREATE_TIMEOUT_MS
   try {
-    await runSession(buildInvocation(codexHomePath, STATE_DB_CREATE_TIMEOUT_MS), async () => {})
+    await runSession(buildInvocation(codexHomePath, timeoutMs), async () => {})
     return true
   } catch (error) {
     // Why: a Codex without app-server predates the state DB, so linking cannot stall it.
@@ -68,28 +72,36 @@ export async function healCodexAccountSessionIndex(
   bridgedThreads: ReadonlyMap<string, string>,
   options: CodexAccountSessionIndexHealOptions = {}
 ): Promise<CodexAccountSessionIndexHealSummary> {
-  const summary: CodexAccountSessionIndexHealSummary = {
-    outcome: 'up-to-date',
-    healedThreads: 0,
-    missingThreads: 0,
-    failedThreads: 0
-  }
   if (bridgedThreads.size === 0) {
-    return summary
+    return upToDateSummary()
   }
   // Why: with no DB in the home, Codex keeps none (older CLI) or uses a
   // `sqlite_home` shared by every Orca home, which already indexes these threads.
   const indexed = (options.readIndexedThreadIds ?? readIndexedCodexThreadIds)(codexHomePath)
   if (!indexed) {
-    return { ...summary, outcome: 'no-index' }
+    return { ...upToDateSummary(), outcome: 'no-index' }
   }
+  const unindexed = new Map([...bridgedThreads].filter(([threadId]) => !indexed.has(threadId)))
+  return healPendingCodexAccountThreads(codexHomePath, unindexed, options)
+}
+
+/**
+ * Indexes `pendingThreads` (thread id -> rollout timestamp), newest rollout
+ * first, skipping threads that already failed in this home since Orca started.
+ */
+export async function healPendingCodexAccountThreads(
+  codexHomePath: string,
+  pendingThreads: ReadonlyMap<string, string>,
+  options: CodexSessionIndexHealOptions = {}
+): Promise<CodexAccountSessionIndexHealSummary> {
+  const summary = upToDateSummary()
   const homeKey = normalizeRuntimePathForComparison(codexHomePath)
   const failed = failedThreadIdsByHome.get(homeKey) ?? new Set<string>()
   failedThreadIdsByHome.set(homeKey, failed)
   // Why: a large history takes minutes to index, and /resume hides unindexed
   // threads once a directory has any indexed one, so recent work goes first.
-  const pending = [...bridgedThreads]
-    .filter(([threadId]) => !indexed.has(threadId) && !failed.has(threadId))
+  const pending = [...pendingThreads]
+    .filter(([threadId]) => !failed.has(threadId))
     .sort(([, left], [, right]) => (left < right ? 1 : left > right ? -1 : 0))
     .map(([threadId]) => ({ threadId }))
   if (pending.length === 0) {
@@ -113,6 +125,10 @@ export async function healCodexAccountSessionIndex(
     options
   )
   return summary
+}
+
+function upToDateSummary(): CodexAccountSessionIndexHealSummary {
+  return { outcome: 'up-to-date', healedThreads: 0, missingThreads: 0, failedThreads: 0 }
 }
 
 export const _internals = {
